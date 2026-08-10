@@ -30,7 +30,6 @@ describe('security pool state engine', () => {
 				'approveRep',
 				'depositRepToVault',
 				'queueWithdrawRep',
-				'queueSetCoverageCommitmentAttoEth',
 				'redeemFees',
 				'createCompleteSet',
 				'redeemCompleteSet',

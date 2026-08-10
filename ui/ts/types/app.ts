@@ -53,7 +53,7 @@ export type SecurityPoolFormState = {
 
 export type SecurityVaultFormState = {
 	depositAmount: string
-	coverageCommitmentEthAmount: string
+	targetHealthFactor: string
 	repWithdrawAmount: string
 	selectedVaultOwner: string
 	securityPoolAddress: string

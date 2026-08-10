@@ -18,7 +18,9 @@ export type DemoMarket = Readonly<{
 		awaitingForkContinuation: boolean
 		statoblastSecurityMultiplierBps: bigint
 		initialReportPriorityFeeGwei: bigint
-		feeEligibleCoverageCommitmentAttoEth: bigint
+		totalCapacityOwnershipAttoRep: bigint
+		feeEligibleCapacityOwnershipAttoRep: bigint
+		currentMintingCapacityAttoEth: bigint
 		settlementCollateralAttoEth: bigint
 		shareTokenSupplyAttoShares: bigint
 		activeVaultCount: bigint
@@ -84,7 +86,9 @@ export function demoMarket(scenario: string): DemoMarket {
 			awaitingForkContinuation: false,
 			statoblastSecurityMultiplierBps: 20_000n,
 			initialReportPriorityFeeGwei: 2n,
-			feeEligibleCoverageCommitmentAttoEth: 25n * 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 10_000n * 10n ** 18n,
+			feeEligibleCapacityOwnershipAttoRep: 9_500n * 10n ** 18n,
+			currentMintingCapacityAttoEth: 7_531_500_000_000_000_000_000n,
 			settlementCollateralAttoEth: 2_468_500_000_000_000_000_000n,
 			shareTokenSupplyAttoShares: 2_500_000_000_000_000_000_000n,
 			activeVaultCount: 3n,

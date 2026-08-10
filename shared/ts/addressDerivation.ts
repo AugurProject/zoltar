@@ -100,7 +100,9 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 		const repToken = config.getRepTokenAddress(universeId)
 		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
 			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeAttoEthPerGas),
-			from: infraContracts.priceOracleManagerAndOperatorQueuerFactory,
+			// The factory creates the registry deployer first and the coordinator
+			// deployment worker second in its constructor.
+			from: getCreateAddress({ from: infraContracts.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }),
 			salt: securityPoolSaltWithMsgSender,
 		})
 		const shareToken = getCreate2Address({

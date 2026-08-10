@@ -112,7 +112,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active coverage commitment. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -230,7 +230,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active coverage commitment. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()

@@ -7,15 +7,20 @@ execution requires an explicit signer, independent read RPC quorum, execution
 flag, and non-zero deployment addresses.
 
 The bot owns an ordinary vault under its signer address in each selected pool. A
-liquidation transfers coverage commitment and a 5%-bonus vault REP backing award,
-represented by REP backing units, from the target into that vault. Because this REP
-backing award is deliberately insufficient to collateralize the transferred coverage commitment
-by itself, the bot deposits the minimum additional REP
-needed to reach its configured target health before submitting an immediate
-liquidation. For stale prices it pre-funds against a configurable higher price
-bound before queueing the operation, so settlement within that operator-approved
-bound cannot consume an unfunded liquidation. It later withdraws surplus REP when the vault is safely above the
-withdrawal threshold.
+liquidation moves ETH-denominated open-interest debt, the proportional attoREP
+capacity ownership, and a 5%-bonus REP backing award from the target into that
+vault. When the award would not satisfy both protocol health branches, the bot
+first makes a backing-only REP top-up using `MAX_UINT256` as the target health
+factor, which adds REP backing while rounding new capacity ownership to zero. It
+then ends the cycle and reloads the target, receiver, aggregate
+capacity ownership, and live open interest before deciding whether to stage the liquidation. Ordinary
+fee-earning deposits create price-independent capacity ownership, and the pool's
+live REP/ETH price converts that ownership into current ETH minting capacity.
+Actual ETH open interest comes from settlement collateral and is allocated among
+vaults in proportion to their capacity ownership. For stale prices the bot
+pre-funds against a configurable higher price bound before queueing the operation.
+It later withdraws surplus REP when the vault is safely above the withdrawal
+threshold.
 
 ## Operator setup
 
@@ -82,7 +87,7 @@ forked parent pool where its signer has non-escrowed vault accounting and one de
 child universe is approved. During the protocol's eight-week migration window
 it calls the
 parent's `SecurityPoolForker.migrateVault(parent, outcomeIndex)`. The migration
-moves the signer's REP backing units and coverage commitment to the chosen child
+moves the signer's REP backing units and capacity ownership to the chosen child
 and atomically creates the child security pool when it does not exist. Claimable
 fees remain redeemable from the parent, while escalation accounting follows its
 separate migration path described in the
@@ -229,7 +234,7 @@ the total-source quorum.
 
 Amounts use 18-decimal ETH or REP units in the operator JSON.
 
-- `minimumLiquidationCoverageCommitmentEth` and `maximumLiquidationCoverageCommitmentEth` bound the human-readable ETH values accepted at the configuration boundary for a target coverage-commitment transfer; parsing produces internal `minimumLiquidationCoverageCommitmentAttoEth` and `maximumLiquidationCoverageCommitmentAttoEth` values.
+- `minimumLiquidationDebtEth` and `maximumLiquidationDebtEth` bound the human-readable ETH debt requested from a target; parsing produces internal `minimumLiquidationDebtAttoEth` and `maximumLiquidationDebtAttoEth` values.
 - `minimumRewardValueEth` filters the fixed-bonus value before gas.
 - `maximumGasCostEth` caps the padded EIP-1559 gas limit actually signed for
   every automated action.
@@ -263,6 +268,13 @@ exact protocol floor and rounding behavior, and selects at most one action:
 3. Withdraw REP that is safely above the configured threshold.
 4. Redeem accrued ETH fees.
 5. Pre-fund a liquidation vault and submit the best liquidation candidate.
+
+The first bot version uses the backward-compatible self-receiving route: the
+signer is both operator and receiver vault, the target is distinct, and the
+approval ID is zero. The operator therefore pays gas and any oracle costs and its
+own receiver vault receives the debt, capacity ownership, and REP award. The
+contracts also support separately authorized receiver vaults, but this bot does
+not install or consume delegated receiver approvals.
 
 Transaction intent and outcomes are written to `runtime.stateFile`. The activity
 journal is restored on restart. A signed intent, nonce, serialized transaction,
@@ -321,6 +333,6 @@ The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 retry, and transaction-submission primitives live in `../shared`.
 
 > Live liquidation is experimental. Use a dedicated low-balance signer, begin on
-> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool coverage commitment
+> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool open interest
 > remains an economic obligation even when the fixed liquidation bonus is
 > positive.

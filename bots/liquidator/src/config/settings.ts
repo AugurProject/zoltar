@@ -7,7 +7,7 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
-export type CandidatePriority = 'largest-bonus' | 'largest-coverage-commitment' | 'lowest-top-up'
+export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
 export type DesiredPoolSettings = {
 	initialReportPriorityFeeAttoEthPerGas: bigint
@@ -24,11 +24,11 @@ export type StrategySettings = {
 	candidatePriority: CandidatePriority
 	fallbackRepPerEthPrice: bigint
 	maximumGasCostAttoEth: bigint
-	maximumLiquidationCoverageCommitmentAttoEth: bigint
+	maximumLiquidationDebtAttoEth: bigint
 	maximumOracleRequestCostAttoEth: bigint
 	maximumAttoRepPerPool: bigint
 	maximumTotalDeployedRep: bigint
-	minimumLiquidationCoverageCommitmentAttoEth: bigint
+	minimumLiquidationDebtAttoEth: bigint
 	minimumRepWithdrawalAttoRep: bigint
 	minimumRewardValueAttoEth: bigint
 	redeemFeesAboveAttoEth: bigint
@@ -42,11 +42,11 @@ export type StrategySettings = {
 
 type AtomicStrategyAmountKey =
 	| 'maximumGasCostAttoEth'
-	| 'maximumLiquidationCoverageCommitmentAttoEth'
+	| 'maximumLiquidationDebtAttoEth'
 	| 'maximumOracleRequestCostAttoEth'
 	| 'maximumAttoRepPerPool'
 	| 'maximumTotalDeployedRep'
-	| 'minimumLiquidationCoverageCommitmentAttoEth'
+	| 'minimumLiquidationDebtAttoEth'
 	| 'minimumRepWithdrawalAttoRep'
 	| 'minimumRewardValueAttoEth'
 	| 'redeemFeesAboveAttoEth'
@@ -56,11 +56,11 @@ export type StoredStrategySettings = {
 	[K in Exclude<keyof StrategySettings, AtomicStrategyAmountKey>]: StrategySettings[K] extends bigint ? string | number : StrategySettings[K]
 } & {
 	maximumGasCostEth: string | number
-	maximumLiquidationCoverageCommitmentEth: string | number
+	maximumLiquidationDebtEth: string | number
 	maximumOracleRequestCostEth: string | number
 	maximumPerPoolRep: string | number
 	maximumTotalDeployedRep: string | number
-	minimumLiquidationCoverageCommitmentEth: string | number
+	minimumLiquidationDebtEth: string | number
 	minimumRepWithdrawalRep: string | number
 	minimumRewardValueEth: string | number
 	redeemFeesAboveEth: string | number
@@ -168,7 +168,7 @@ function parseNetworkName(value: unknown): NetworkName {
 }
 
 function parseCandidatePriority(value: unknown): CandidatePriority {
-	if (value === 'largest-bonus' || value === 'largest-coverage-commitment' || value === 'lowest-top-up') return value
+	if (value === 'largest-bonus' || value === 'largest-debt' || value === 'lowest-top-up') return value
 	throw new Error('strategy.candidatePriority is invalid')
 }
 
@@ -214,11 +214,11 @@ export function parseStrategy(value: unknown): StrategySettings {
 		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
 		fallbackRepPerEthPrice: parseDecimalAmount(strategy['fallbackRepPerEthPrice'], 'strategy.fallbackRepPerEthPrice'),
 		maximumGasCostAttoEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
-		maximumLiquidationCoverageCommitmentAttoEth: parseDecimalAmount(strategy['maximumLiquidationCoverageCommitmentEth'], 'strategy.maximumLiquidationCoverageCommitmentEth'),
+		maximumLiquidationDebtAttoEth: parseDecimalAmount(strategy['maximumLiquidationDebtEth'], 'strategy.maximumLiquidationDebtEth'),
 		maximumOracleRequestCostAttoEth: parseDecimalAmount(strategy['maximumOracleRequestCostEth'], 'strategy.maximumOracleRequestCostEth'),
 		maximumAttoRepPerPool: parseDecimalAmount(strategy['maximumPerPoolRep'], 'strategy.maximumPerPoolRep'),
 		maximumTotalDeployedRep: parseDecimalAmount(strategy['maximumTotalDeployedRep'], 'strategy.maximumTotalDeployedRep'),
-		minimumLiquidationCoverageCommitmentAttoEth: parseDecimalAmount(strategy['minimumLiquidationCoverageCommitmentEth'], 'strategy.minimumLiquidationCoverageCommitmentEth'),
+		minimumLiquidationDebtAttoEth: parseDecimalAmount(strategy['minimumLiquidationDebtEth'], 'strategy.minimumLiquidationDebtEth'),
 		minimumRepWithdrawalAttoRep: parseDecimalAmount(strategy['minimumRepWithdrawalRep'], 'strategy.minimumRepWithdrawalRep'),
 		minimumRewardValueAttoEth: parseDecimalAmount(strategy['minimumRewardValueEth'], 'strategy.minimumRewardValueEth'),
 		redeemFeesAboveAttoEth: parseDecimalAmount(strategy['redeemFeesAboveEth'], 'strategy.redeemFeesAboveEth'),
@@ -229,7 +229,7 @@ export function parseStrategy(value: unknown): StrategySettings {
 		vaultWithdrawHealthBps: BigInt(integer(strategy['vaultWithdrawHealthBps'], 'strategy.vaultWithdrawHealthBps', 10_001, 1_000_000)),
 		walletAttoRepReserve: parseDecimalAmount(strategy['walletReserveRep'], 'strategy.walletReserveRep'),
 	}
-	if (parsed.minimumLiquidationCoverageCommitmentAttoEth > parsed.maximumLiquidationCoverageCommitmentAttoEth) throw new Error('Minimum liquidation coverage commitment cannot exceed the maximum')
+	if (parsed.minimumLiquidationDebtAttoEth > parsed.maximumLiquidationDebtAttoEth) throw new Error('Minimum liquidation debt cannot exceed the maximum')
 	if (parsed.vaultTopUpHealthBps > parsed.vaultTargetHealthBps) throw new Error('Top-up health must not exceed target health')
 	if (parsed.vaultTargetHealthBps >= parsed.vaultWithdrawHealthBps) throw new Error('Withdrawal health must exceed target health')
 	if (parsed.maximumAttoRepPerPool > parsed.maximumTotalDeployedRep) throw new Error('Per-pool REP limit cannot exceed the total deployed REP limit')
@@ -358,11 +358,11 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			candidatePriority: settings.strategy.candidatePriority,
 			fallbackRepPerEthPrice: formatDecimalAmount(settings.strategy.fallbackRepPerEthPrice),
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),
-			maximumLiquidationCoverageCommitmentEth: formatDecimalAmount(settings.strategy.maximumLiquidationCoverageCommitmentAttoEth),
+			maximumLiquidationDebtEth: formatDecimalAmount(settings.strategy.maximumLiquidationDebtAttoEth),
 			maximumOracleRequestCostEth: formatDecimalAmount(settings.strategy.maximumOracleRequestCostAttoEth),
 			maximumPerPoolRep: formatDecimalAmount(settings.strategy.maximumAttoRepPerPool),
 			maximumTotalDeployedRep: formatDecimalAmount(settings.strategy.maximumTotalDeployedRep),
-			minimumLiquidationCoverageCommitmentEth: formatDecimalAmount(settings.strategy.minimumLiquidationCoverageCommitmentAttoEth),
+			minimumLiquidationDebtEth: formatDecimalAmount(settings.strategy.minimumLiquidationDebtAttoEth),
 			minimumRepWithdrawalRep: formatDecimalAmount(settings.strategy.minimumRepWithdrawalAttoRep),
 			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueAttoEth),
 			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveAttoEth),

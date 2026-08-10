@@ -7,7 +7,6 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'depositRepToVault',
 	'queueWithdrawRep',
 	'redeemRepFromVault',
-	'queueSetCoverageCommitmentAttoEth',
 	'redeemFees',
 	'createCompleteSet',
 	'redeemCompleteSet',
@@ -34,7 +33,7 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'settleForkedEscalation',
 ]
 
-export const LIFECYCLE_ACTIONS: ActionList = ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'queueSetCoverageCommitmentAttoEth', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'migrateShares', 'redeemShares', 'requestPrice', 'executeStagedOperation', 'queueLiquidation']
+export const LIFECYCLE_ACTIONS: ActionList = ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'migrateShares', 'redeemShares', 'requestPrice', 'executeStagedOperation', 'queueLiquidation']
 
 export const REPORTING_ACTIONS: ActionList = ['reportOutcome', 'withdrawEscalation']
 
@@ -56,7 +55,7 @@ export const FORK_ACTIONS: ActionList = [
 ]
 
 export const ENABLED_ACTIONS_BY_LIFECYCLE: Record<SecurityPoolLifecycleState, ActionList> = {
-	operational: ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'queueSetCoverageCommitmentAttoEth', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
+	operational: ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
 	ended: ['redeemRepFromVault', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'],
 	poolForked: ['redeemFees'],
 	forkMigration: ['redeemFees'],

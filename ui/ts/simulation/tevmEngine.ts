@@ -355,11 +355,12 @@ export async function createSimulationEngine({ initialization }: { initializatio
 		const sendTransaction = async ({ account, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest) => {
 			const senderAddress = normalizeRequestedAccount(account, accountAddress)
 			await memoryClientInstance.impersonateAccount({ address: senderAddress })
+			const blockGasLimit = (await memoryClientInstance.getBlock()).gasLimit
 			const result = await memoryClientInstance.tevmCall(
 				createTevmTransactionRequest({
 					data: data ?? '0x',
 					from: senderAddress,
-					gas,
+					gas: gas ?? blockGasLimit,
 					gasPrice,
 					maxFeePerGas,
 					maxPriorityFeePerGas,
@@ -487,11 +488,12 @@ export async function createSimulationEngine({ initialization }: { initializatio
 	}) => {
 		const senderAddress = normalizeRequestedAccount(account, selectedAccount)
 		await ensureImpersonated(senderAddress)
+		const blockGasLimit = (await memoryClient.getBlock()).gasLimit
 		const result = await memoryClient.tevmCall(
 			createTevmTransactionRequest({
 				data: data ?? '0x',
 				from: senderAddress,
-				gas,
+				gas: gas ?? blockGasLimit,
 				gasPrice,
 				maxFeePerGas,
 				maxPriorityFeePerGas,

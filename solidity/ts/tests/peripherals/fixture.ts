@@ -65,7 +65,7 @@ import {
 	getSystemState,
 	getTotalAccruedFees,
 	getTotalClaimableVaultFeesAttoEth,
-	getTotalCoverageCommitmentAttoEth,
+	getTotalCapacityOwnershipAttoRep,
 	getVaultCount,
 	getVaults,
 	backingUnitsToAttoRep,
@@ -122,9 +122,9 @@ function usePeripheralsTestFixture() {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	const reportBond = 1n * 10n ** 18n
+	const reportBond = 70n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
-	const repDeposit = 1000n * 10n ** 18n
+	const repDeposit = 10_000n * 10n ** 18n
 	let securityPoolAddresses: {
 		securityPool: Address
 		priceOracleManagerAndOperatorQueuer: Address
@@ -391,7 +391,7 @@ function usePeripheralsTestFixture() {
 		getSystemState,
 		getTotalAccruedFees,
 		getTotalClaimableVaultFeesAttoEth,
-		getTotalCoverageCommitmentAttoEth,
+		getTotalCapacityOwnershipAttoRep,
 		getVaultCount,
 		getVaults,
 		backingUnitsToAttoRep,
@@ -575,7 +575,7 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'getSecurityPoolsEscalationGame',
 		'getSecurityVault',
 		'getSystemState',
-		'getTotalCoverageCommitmentAttoEth',
+		'getTotalCapacityOwnershipAttoRep',
 		'backingUnitsToAttoRep',
 		'withdrawFromEscalationGame',
 		'peripherals_EscalationGame_EscalationGame',
@@ -680,7 +680,7 @@ export function usePeripheralsForkMigrationFixture() {
 		'getSystemState',
 		'getTotalAccruedFees',
 		'getTotalClaimableVaultFeesAttoEth',
-		'getTotalCoverageCommitmentAttoEth',
+		'getTotalCapacityOwnershipAttoRep',
 		'backingUnitsToAttoRep',
 		'redeemCompleteSet',
 		'redeemFees',
@@ -822,7 +822,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'getSystemState',
 		'getTotalAccruedFees',
 		'getTotalClaimableVaultFeesAttoEth',
-		'getTotalCoverageCommitmentAttoEth',
+		'getTotalCapacityOwnershipAttoRep',
 		'getVaultCount',
 		'backingUnitsToAttoRep',
 		'redeemFees',

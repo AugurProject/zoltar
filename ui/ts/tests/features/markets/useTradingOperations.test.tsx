@@ -177,10 +177,12 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
 			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
@@ -213,9 +215,9 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
-	test('blocks complete-set mint writes when total coverage commitment exists but none is fee eligible', async () => {
+	test('blocks complete-set mint writes when total capacity ownership exists but none is fee eligible', async () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
-			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction coverage commitment')
+			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction capacity ownership')
 		})
 		const onTransactionFailed = mock(() => undefined)
 		const dependencies = createTradingOperationsDependencies({
@@ -223,10 +225,12 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 0n,
-				feeEligibleCoverageCommitmentAttoEth: 0n,
+				feeEligibleCapacityOwnershipAttoRep: 0n,
+				mintingCapacityAttoEth: 0n,
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
 			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
@@ -255,7 +259,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active coverage commitment')
+		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active capacity ownership')
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
@@ -276,10 +280,12 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () =>
 				createTradingDetails({
@@ -368,10 +374,12 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
 			})),
 			loadTradingDetails,
 			loadZoltarUniverseSummary,
@@ -450,10 +458,12 @@ describe('useTradingOperations', () => {
 		const poolB = getAddress('0x00000000000000000000000000000000000000e2')
 		const deferredMintCapacity = createDeferred<{
 			settlementCollateralAttoEth: bigint
-			feeEligibleCoverageCommitmentAttoEth: bigint
+			feeEligibleCapacityOwnershipAttoRep: bigint
+			mintingCapacityAttoEth: bigint
 			shareTokenSupplyAttoShares: bigint
 			totalPoolHeldAttoRep: bigint
-			totalCoverageCommitmentAttoEth: bigint
+			totalCapacityOwnershipAttoRep: bigint
+			isPriceValid: boolean
 		}>()
 		const detailsA = createTradingDetails({ universeId: 1n })
 		const detailsB = createTradingDetails({ universeId: 2n })
@@ -546,10 +556,12 @@ describe('useTradingOperations', () => {
 		await act(async () => {
 			deferredMintCapacity.resolve({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				isPriceValid: true,
 			})
 			await createPromise
 		})
@@ -575,10 +587,12 @@ describe('useTradingOperations', () => {
 		const onTransactionRequested = mock(() => undefined)
 		const loadSecurityPoolMintCapacity = mock(async () => ({
 			settlementCollateralAttoEth: 1n * 10n ** 18n,
-			feeEligibleCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+			feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+			mintingCapacityAttoEth: 2n * 10n ** 18n,
 			shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 			totalPoolHeldAttoRep: 20n * 10n ** 18n,
-			totalCoverageCommitmentAttoEth: 2n * 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+			isPriceValid: true,
 		}))
 		const loadTradingDetails = mock(async () => createTradingDetails())
 		const loadZoltarUniverseSummary = mock(async () => createUniverseSummary())

@@ -860,11 +860,11 @@ assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by 
 assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling tick|tick rounds up[\s\S]*exact integer fills can be slightly lower/i, 'auction worked examples should not attribute proportional REP allocation to the reserve tick price')
 
 const operatorReferenceText = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
-assert.match(operatorReferenceText, /parent vault is checkpointed before its coverage commitment is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
+assert.match(operatorReferenceText, /parent vault is checkpointed before its capacity ownership is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
 assert.match(operatorReferenceText, /statoblast\.html#migration/i, 'operator reference should delegate migration derivations to the whitepaper')
 assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
 assert.match(operatorReferenceText, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to settlement collateral/i, 'operator reference should document final aggregate-only fee reserve release')
-assert.match(operatorReferenceText, /each claimed auction coverage commitment joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
+assert.match(operatorReferenceText, /each claimed auction capacity ownership joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
 assert.match(operatorReferenceText, /Security Pool Guardrails[\s\S]*totalClaimableVaultFeesAttoEth[\s\S]*totalAccruedFeesAttoEth\(\)[\s\S]*Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
 const contractInteractionReferenceText = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))

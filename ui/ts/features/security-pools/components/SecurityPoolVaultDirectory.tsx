@@ -40,7 +40,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 						selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
-						coverageCommitmentAttoEth={vault.coverageCommitmentAttoEth}
+						capacityOwnershipAttoRep={vault.capacityOwnershipAttoRep}
 						claimableFeesAttoEth={vault.claimableFeesAttoEth}
 					/>
 					<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>

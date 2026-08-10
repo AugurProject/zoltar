@@ -57,12 +57,12 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const securityPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
+		lastOraclePrice: 10n ** 18n,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
@@ -75,7 +75,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 5n * 10n ** 18n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -182,17 +182,32 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
+	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
+		const pool = createSecurityPool({
+			lastOraclePrice: 3n * 10n ** 18n,
+			settlementCollateralAttoEth: 5n * 10n ** 18n,
+			statoblastSecurityMultiplierBps: 20_000n,
+			totalCapacityOwnershipAttoRep: 80n * 10n ** 18n,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const card = getSecurityPoolCard('Will this resolve?')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max ≈ 13.33 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('Max ≈ 80.00 ETH')
+	})
+
 	test('does not present pool-held vault REP backing alone as a pool health gauge when dispute-staked REP changes ordinary coverage', async () => {
 		const pool = createSecurityPool({
 			statoblastSecurityMultiplierBps: 20_000n,
 			totalPoolHeldAttoRep: 16n * 10n ** 18n,
-			totalCoverageCommitmentAttoEth: 10n * 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 10n * 10n ** 18n,
 			vaultCount: 1n,
 			vaults: [
 				{
 					disputeStakedAttoRep: 4n * 10n ** 18n,
 					vaultAttoRepBacking: 16n * 10n ** 18n,
-					coverageCommitmentAttoEth: 10n * 10n ** 18n,
+					capacityOwnershipAttoRep: 10n * 10n ** 18n,
 					claimableFeesAttoEth: 0n,
 					vaultAddress: '0x0000000000000000000000000000000000000100',
 				},
@@ -945,7 +960,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 5n,
+									capacityOwnershipAttoRep: 5n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000501',
 								},
@@ -982,21 +997,21 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 1n,
+									capacityOwnershipAttoRep: 1n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000701',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 9n,
+									capacityOwnershipAttoRep: 9n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000702',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 5n,
+									capacityOwnershipAttoRep: 5n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000703',
 								},
@@ -1031,28 +1046,28 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 8n,
+									capacityOwnershipAttoRep: 8n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000601',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 7n,
+									capacityOwnershipAttoRep: 7n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000602',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 6n,
+									capacityOwnershipAttoRep: 6n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000603',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									coverageCommitmentAttoEth: 1n,
+									capacityOwnershipAttoRep: 1n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: viewerVaultAddress,
 								},

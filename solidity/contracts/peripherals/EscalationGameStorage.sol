@@ -61,30 +61,14 @@ abstract contract EscalationGameStorage {
 		return (amountAttoRep * truthAuctionRepRemainingAttoRep) / truthAuctionRepBeforeAttoRep;
 	}
 
-	function _applyInheritedSourceRetention(
-		uint256 amountAttoRep,
-		uint256 parentDepositIndex
-	) internal view returns (uint256 retainedAmountAttoRep) {
-		(bool success, bytes memory retentionData) = address(this).staticcall(
-			abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amountAttoRep, parentDepositIndex)
-		);
+	function _applyInheritedSourceRetention(uint256 amountAttoRep, uint256 parentDepositIndex) internal view returns (uint256 retainedAmountAttoRep) {
+		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amountAttoRep, parentDepositIndex));
 		if (!success || retentionData.length != 32) revert();
 		return abi.decode(retentionData, (uint256));
 	}
 
-	function _applyInheritedSourceStorageBasis(
-		uint256 amountAttoRep,
-		uint256 cumulativeAmountAttoRep,
-		uint256 parentDepositIndex
-	) internal view returns (uint256) {
-		(bool success, bytes memory retentionData) = address(this).staticcall(
-			abi.encodeWithSignature(
-				'applyInheritedSourceStorageBasis(uint256,uint256,uint256)',
-				amountAttoRep,
-				cumulativeAmountAttoRep,
-				parentDepositIndex
-			)
-		);
+	function _applyInheritedSourceStorageBasis(uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 parentDepositIndex) internal view returns (uint256) {
+		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedSourceStorageBasis(uint256,uint256,uint256)', amountAttoRep, cumulativeAmountAttoRep, parentDepositIndex));
 		if (!success || retentionData.length != 32) revert();
 		return abi.decode(retentionData, (uint256));
 	}

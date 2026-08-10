@@ -14,7 +14,7 @@ type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
 	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
 	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Required support threshold / attrition cost (REP)' },
-	'fig-statoblast-retention-utilization': { x: 'Fee-eligible coverage commitment utilization (%)', y: 'Annualized open-interest fee (%)' },
+	'fig-statoblast-retention-utilization': { x: 'Live ETH minting-capacity utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
 	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
 }

@@ -506,7 +506,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
 					if (selected !== undefined) {
-						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.coverageCommitmentToTransferAttoEth.toString()}:${selected.pool.lastPrice.toString()}`
+						const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.requestedDebtAttoEth.toString()}:${selected.pool.lastPrice.toString()}`
 						if (dryRunKey !== lastDryRunKey) {
 							dryRunCandidate(state, selected.candidate)
 							lastDryRunKey = dryRunKey

@@ -1154,6 +1154,19 @@ function setDiagramExpanded(overflowEnvelope: HTMLElement, button: HTMLButtonEle
 	}
 	overflowEnvelope.classList.toggle('plot-figure-expanded', expanded)
 	document.body.classList.toggle('docs-diagram-expanded', expanded)
+	const scrollSurface = overflowEnvelope.querySelector<HTMLElement>(':scope > .plot-chart')
+	if (scrollSurface !== null) {
+		if (expanded) {
+			scrollSurface.tabIndex = 0
+			scrollSurface.setAttribute('role', 'region')
+			const diagramLabel = overflowEnvelope.getAttribute('aria-label') ?? 'diagram'
+			scrollSurface.setAttribute('aria-label', `Scrollable ${diagramLabel}. Use Left and Right Arrow keys to inspect.`)
+		} else {
+			scrollSurface.removeAttribute('tabindex')
+			scrollSurface.removeAttribute('role')
+			scrollSurface.removeAttribute('aria-label')
+		}
+	}
 	if (expanded) {
 		const background = isolateDiagramBackground(overflowEnvelope)
 		expandedDiagram = {
@@ -1319,8 +1332,7 @@ function restoreDocumentFragment(): void {
 	if (target instanceof HTMLDetailsElement) target.open = true
 	const containingDetails = target.closest('details')
 	if (containingDetails instanceof HTMLDetailsElement) containingDetails.open = true
-	const targetTop = target.getBoundingClientRect().top + window.scrollY
-	window.scrollTo({ behavior: 'instant', top: Math.max(0, targetTop - 16) })
+	target.scrollIntoView({ behavior: 'instant', block: 'start' })
 }
 
 requestAnimationFrame(() => {

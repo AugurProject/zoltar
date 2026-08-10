@@ -14,13 +14,7 @@ import {
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 contract EscalationGameProofVerifier {
-	function computeIterativeAttritionCostAttoRep(
-		uint256 startBondAttoRep,
-		uint256 nonDecisionThresholdAttoRep,
-		uint256 lnRatioScaled,
-		uint256 timeSinceStart,
-		uint256 escalationTimeLength
-	) external pure returns (uint256) {
+	function computeIterativeAttritionCostAttoRep(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 lnRatioScaled, uint256 timeSinceStart, uint256 escalationTimeLength) external pure returns (uint256) {
 		require(timeSinceStart <= escalationTimeLength, 'Time too high');
 		if (timeSinceStart == 0) return startBondAttoRep;
 		if (timeSinceStart == escalationTimeLength) return nonDecisionThresholdAttoRep;
@@ -43,43 +37,19 @@ contract EscalationGameProofVerifier {
 		return cost > nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep : cost;
 	}
 
-	function computeAcceptedDepositAmount(
-		uint256 outcomeIndex,
-		uint256 requestedAmountAttoRep,
-		uint256 currentBalanceAttoRep,
-		uint256 roomAttoRep,
-		uint256 startBondAttoRep,
-		uint256 nonDecisionThresholdAttoRep,
-		uint256[3] calldata balancesAttoRep
-	) external pure returns (uint256 acceptedAmountAttoRep, uint256 newBalanceAttoRep) {
+	function computeAcceptedDepositAmount(uint256 outcomeIndex, uint256 requestedAmountAttoRep, uint256 currentBalanceAttoRep, uint256 roomAttoRep, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256[3] calldata balancesAttoRep) external pure returns (uint256 acceptedAmountAttoRep, uint256 newBalanceAttoRep) {
 		acceptedAmountAttoRep = requestedAmountAttoRep > roomAttoRep ? roomAttoRep : requestedAmountAttoRep;
 		newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
 		uint256 maxBalanceAttoRep = _maxOutcomeBalance(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2]);
-		bool otherHasMax = _otherOutcomeHasBalance(
-			outcomeIndex,
-			balancesAttoRep[0],
-			balancesAttoRep[1],
-			balancesAttoRep[2],
-			maxBalanceAttoRep
-		);
+		bool otherHasMax = _otherOutcomeHasBalance(outcomeIndex, balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2], maxBalanceAttoRep);
 		if (newBalanceAttoRep == maxBalanceAttoRep && otherHasMax && maxBalanceAttoRep < nonDecisionThresholdAttoRep) {
 			acceptedAmountAttoRep -= 1;
 			newBalanceAttoRep = currentBalanceAttoRep + acceptedAmountAttoRep;
 		}
-		require(
-			acceptedAmountAttoRep >= startBondAttoRep || newBalanceAttoRep == nonDecisionThresholdAttoRep,
-			'Below start bond'
-		);
+		require(acceptedAmountAttoRep >= startBondAttoRep || newBalanceAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
 	}
 
-	function computeWinningWithdrawal(
-		uint256 depositAmountAttoRep,
-		uint256 cumulativeAmountAttoRep,
-		uint256 bindingCapitalAttoRep,
-		uint256 winningOutcomeBalanceAttoRep,
-		uint256 actualForkThresholdAttoRep,
-		uint256 nonDecisionThresholdAttoRep
-	) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 depositStartAttoRep = cumulativeAmountAttoRep - depositAmountAttoRep;
 		uint256 rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / EXCESS_REWARD_WINDOW_DIVISOR;
 		uint256 rewardEligiblePrincipalAttoRep =
@@ -107,17 +77,9 @@ contract EscalationGameProofVerifier {
 		}
 	}
 
-	function resolveQuestion(
-		uint256[3] calldata balancesAttoRep,
-		uint256 currentTotalCostAttoRep
-	) external pure returns (BinaryOutcomes.BinaryOutcome) {
+	function resolveQuestion(uint256[3] calldata balancesAttoRep, uint256 currentTotalCostAttoRep) external pure returns (BinaryOutcomes.BinaryOutcome) {
 		if (
-			_countBalancesAtLeast(
-				balancesAttoRep[0],
-				balancesAttoRep[1],
-				balancesAttoRep[2],
-				currentTotalCostAttoRep
-			) >= 2
+			_countBalancesAtLeast(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2], currentTotalCostAttoRep) >= 2
 		) {
 			return BinaryOutcomes.BinaryOutcome.None;
 		}
@@ -127,17 +89,9 @@ contract EscalationGameProofVerifier {
 		return _getStrictLeaderOrNone(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2]);
 	}
 
-	function hasReachedNonDecision(
-		uint256[3] calldata balancesAttoRep,
-		uint256 nonDecisionThresholdAttoRep
-	) external pure returns (bool) {
+	function hasReachedNonDecision(uint256[3] calldata balancesAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (bool) {
 		return
-			_countBalancesAtLeast(
-				balancesAttoRep[0],
-				balancesAttoRep[1],
-				balancesAttoRep[2],
-				nonDecisionThresholdAttoRep
-			) >= 2;
+			_countBalancesAtLeast(balancesAttoRep[0], balancesAttoRep[1], balancesAttoRep[2], nonDecisionThresholdAttoRep) >= 2;
 	}
 
 	function medianBalanceAttoRep(uint256[3] calldata balancesAttoRep) external pure returns (uint256 medianAttoRep) {
@@ -178,10 +132,7 @@ contract EscalationGameProofVerifier {
 		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
 	}
 
-	function getCurrentCarryPeakForLeaf(
-		uint256 leafCount,
-		uint256 leafIndex
-	) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
+	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
 		for (uint256 reverseHeight = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; reverseHeight > 0; ) {
 			unchecked {
 				--reverseHeight;
@@ -195,10 +146,7 @@ contract EscalationGameProofVerifier {
 		revert('Carry peak absent');
 	}
 
-	function bagCarryPeaks(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes,
-		uint256 leafCount
-	) external pure returns (bytes32) {
+	function bagCarryPeaks(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes, uint256 leafCount) external pure returns (bytes32) {
 		if (leafCount == 0) return bytes32(0);
 
 		uint256 peakCount = 0;
@@ -220,13 +168,7 @@ contract EscalationGameProofVerifier {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function computeMerkleMountainRangeRootFromProof(
-		bytes32 leafHash,
-		uint256 leafCount,
-		uint256 leafIndex,
-		uint256 peakHeight,
-		bytes32[] calldata siblings
-	) external pure returns (bytes32) {
+	function computeMerkleMountainRangeRootFromProof(bytes32 leafHash, uint256 leafCount, uint256 leafIndex, uint256 peakHeight, bytes32[] calldata siblings) external pure returns (bytes32) {
 		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'Bad carry peak');
 		require(((leafCount >> peakHeight) & 1) == 1, 'Carry peak absent');
 		require(leafIndex < (uint256(1) << peakHeight), 'Bad carry leaf');
@@ -265,11 +207,7 @@ contract EscalationGameProofVerifier {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function computeNullifierRoot(
-		uint256 parentDepositIndex,
-		bytes32[] calldata siblings,
-		bytes32 leafValue
-	) external pure returns (bytes32 root) {
+	function computeNullifierRoot(uint256 parentDepositIndex, bytes32[] calldata siblings, bytes32 leafValue) external pure returns (bytes32 root) {
 		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
 		root = leafValue;
 		uint256 path = uint256(keccak256(abi.encode(parentDepositIndex)));
@@ -298,34 +236,19 @@ contract EscalationGameProofVerifier {
 		}
 	}
 
-	function _countBalancesAtLeast(
-		uint256 invalidBalanceAttoRep,
-		uint256 yesBalanceAttoRep,
-		uint256 noBalanceAttoRep,
-		uint256 threshold
-	) private pure returns (uint8 count) {
+	function _countBalancesAtLeast(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep, uint256 threshold) private pure returns (uint8 count) {
 		if (invalidBalanceAttoRep >= threshold) count += 1;
 		if (yesBalanceAttoRep >= threshold) count += 1;
 		if (noBalanceAttoRep >= threshold) count += 1;
 	}
 
-	function _maxOutcomeBalance(
-		uint256 invalidBalanceAttoRep,
-		uint256 yesBalanceAttoRep,
-		uint256 noBalanceAttoRep
-	) private pure returns (uint256 maximumBalanceAttoRep) {
+	function _maxOutcomeBalance(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) private pure returns (uint256 maximumBalanceAttoRep) {
 		maximumBalanceAttoRep = invalidBalanceAttoRep;
 		if (yesBalanceAttoRep > maximumBalanceAttoRep) maximumBalanceAttoRep = yesBalanceAttoRep;
 		if (noBalanceAttoRep > maximumBalanceAttoRep) maximumBalanceAttoRep = noBalanceAttoRep;
 	}
 
-	function _otherOutcomeHasBalance(
-		uint256 outcomeIndex,
-		uint256 invalidBalanceAttoRep,
-		uint256 yesBalanceAttoRep,
-		uint256 noBalanceAttoRep,
-		uint256 targetBalanceAttoRep
-	) private pure returns (bool) {
+	function _otherOutcomeHasBalance(uint256 outcomeIndex, uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep, uint256 targetBalanceAttoRep) private pure returns (bool) {
 		if (outcomeIndex == 0)
 			return yesBalanceAttoRep == targetBalanceAttoRep || noBalanceAttoRep == targetBalanceAttoRep;
 		if (outcomeIndex == 1)
@@ -333,11 +256,7 @@ contract EscalationGameProofVerifier {
 		return invalidBalanceAttoRep == targetBalanceAttoRep || yesBalanceAttoRep == targetBalanceAttoRep;
 	}
 
-	function _getStrictLeaderOrNone(
-		uint256 invalidBalanceAttoRep,
-		uint256 yesBalanceAttoRep,
-		uint256 noBalanceAttoRep
-	) private pure returns (BinaryOutcomes.BinaryOutcome) {
+	function _getStrictLeaderOrNone(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) private pure returns (BinaryOutcomes.BinaryOutcome) {
 		if (invalidBalanceAttoRep > yesBalanceAttoRep && invalidBalanceAttoRep > noBalanceAttoRep)
 			return BinaryOutcomes.BinaryOutcome.Invalid;
 		if (yesBalanceAttoRep > invalidBalanceAttoRep && yesBalanceAttoRep > noBalanceAttoRep)

@@ -6,7 +6,7 @@ import type { SimulationScenario } from '../../simulation/scenarios.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
 
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SEEDED_COVERAGE_COMMITMENT_ATTO_ETH = 80n * 10n ** 18n
+const SEEDED_CAPACITY_OWNERSHIP_ATTO_REP = 80n * 10n ** 18n
 
 void describe('security-pool simulation backends', () => {
 	let securityPoolBackend: SimulationBackend
@@ -66,8 +66,8 @@ void describe('security-pool simulation backends', () => {
 		expect(pools).toHaveLength(1)
 		expect(seededPool.vaultCount).toBe(1n)
 		expect(seededPool.totalPoolHeldAttoRep).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededPool.totalCoverageCommitmentAttoEth).toBe(SEEDED_COVERAGE_COMMITMENT_ATTO_ETH)
+		expect(seededPool.totalCapacityOwnershipAttoRep).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
 		expect(seededVault.vaultAttoRepBacking).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededVault.coverageCommitmentAttoEth).toBe(SEEDED_COVERAGE_COMMITMENT_ATTO_ETH)
+		expect(seededVault.capacityOwnershipAttoRep).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
 	}, 60_000)
 })

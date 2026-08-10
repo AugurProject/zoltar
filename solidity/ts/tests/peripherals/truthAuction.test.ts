@@ -1,6 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/shared/liquidation'
 import {
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_EscalationGame_EscalationGame,
@@ -12,10 +11,11 @@ import {
 } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
-import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()
@@ -87,7 +87,7 @@ describe('Peripherals: truth auction', () => {
 		getSystemState,
 		getTotalAccruedFees,
 		getTotalClaimableVaultFeesAttoEth,
-		getTotalCoverageCommitmentAttoEth,
+		getTotalCapacityOwnershipAttoRep,
 		getVaultCount,
 		backingUnitsToAttoRep,
 		redeemFees,
@@ -184,9 +184,9 @@ describe('Peripherals: truth auction', () => {
 		await mockWindow.advanceTime(10n * DAY)
 	}
 
-	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCoverageCommitmentAttoEth?: bigint) => {
-		const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint) => {
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
@@ -206,8 +206,8 @@ describe('Peripherals: truth auction', () => {
 		const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
-		if (forcedSurplusAboveCoverageCommitmentAttoEth !== undefined) {
-			await mockWindow.setBalance(yesSecurityPool.securityPool, securityPoolCoverageCommitmentAttoEth + forcedSurplusAboveCoverageCommitmentAttoEth)
+		if (forcedSurplusAboveCapacityOwnershipAttoRep !== undefined) {
+			await mockWindow.setBalance(yesSecurityPool.securityPool, securityPoolCapacityOwnershipAttoRep + forcedSurplusAboveCapacityOwnershipAttoRep)
 		}
 		await mockWindow.advanceTime(7n * DAY + DAY)
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -286,8 +286,8 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 			const losingReporter = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await approveAndDepositRepToVault(losingReporter, repDeposit, questionId)
@@ -389,18 +389,48 @@ describe('Peripherals: truth auction', () => {
 			assert.ok((await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).claimableFeesAttoEth < oneBlockFeeTolerance, 'the first child fee update should charge at most the post-activation block interval')
 		})
 
-		test('coverage commitment', async () => {
-			const { auctionParticipant, auctionTick, yesSecurityPool } = await setupLongDatedChildAuction('coverage commitment')
+		test('unclaimed auction ownership provides minting capacity and its claim does not change retention', async () => {
+			const { auctionParticipant, auctionTick, yesSecurityPool } = await setupLongDatedChildAuction('capacity ownership')
 			await mockWindow.advanceTime(DAY)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 
 			const migratedVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), migratedVault.claimableFeesAttoEth, 'coverage commitment')
+			const poolSnapshotBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			})
+			const migratedOpenInterestBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getVaultOpenInterestAttoEth',
+				args: [client.account.address],
+			})
+			const expectedMigratedOpenInterest = (poolSnapshotBeforeClaim.settlementCollateralAttoEth * migratedVault.capacityOwnershipAttoRep + poolSnapshotBeforeClaim.totalCapacityOwnershipAttoRep - 1n) / poolSnapshotBeforeClaim.totalCapacityOwnershipAttoRep
+			strictEqualTypeSafe(migratedOpenInterestBeforeClaim, expectedMigratedOpenInterest, 'unclaimed auction capacity must retain its proportional share of child open interest')
+			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), migratedVault.claimableFeesAttoEth, 'capacity ownership')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 			const auctionVaultAtClaim = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			strictEqualTypeSafe(auctionVaultAtClaim.claimableFeesAttoEth, 0n, 'coverage commitment')
-			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), migratedVault.claimableFeesAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(auctionVaultAtClaim.claimableFeesAttoEth, 0n, 'capacity ownership')
+			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), migratedVault.claimableFeesAttoEth, 'capacity ownership')
+			const poolSnapshotAfterClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			})
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesSecurityPool.securityPool,
+					functionName: 'getVaultOpenInterestAttoEth',
+					args: [client.account.address],
+				}),
+				(poolSnapshotAfterClaim.settlementCollateralAttoEth * migratedVault.capacityOwnershipAttoRep + poolSnapshotAfterClaim.totalCapacityOwnershipAttoRep - 1n) / poolSnapshotAfterClaim.totalCapacityOwnershipAttoRep,
+				'claiming already-counted auction capacity must preserve proportional migrated vault open interest',
+			)
 		})
 
 		test('nonzero fee redemption cannot reclassify forced child ETH as collateral', async () => {
@@ -418,8 +448,8 @@ describe('Peripherals: truth auction', () => {
 		test('startTruthAuction waits for the parent migration window instead of the child universe fork time', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration window fork source')
@@ -435,8 +465,8 @@ describe('Peripherals: truth auction', () => {
 		test('startTruthAuction keeps migration open at the exact parent deadline and starts one second later', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration deadline boundary fork source')
@@ -524,7 +554,7 @@ describe('Peripherals: truth auction', () => {
 		test('startTruthAuction splits and sweeps the complete child REP inventory before pricing it', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, repDeposit / 4n)
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, repDeposit / 4n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'auction inventory funding fork source')
@@ -643,16 +673,16 @@ describe('Peripherals: truth auction', () => {
 		})
 
 		const forcedBalanceCases = [
-			{ name: 'coverage commitment', surplusAboveCoverageCommitmentAttoEth: 0n },
-			{ name: 'coverage commitment', surplusAboveCoverageCommitmentAttoEth: 1n },
-			{ name: 'coverage commitment', surplusAboveCoverageCommitmentAttoEth: 10n ** 30n },
+			{ name: 'capacity ownership', surplusAboveCapacityOwnershipAttoRep: 0n },
+			{ name: 'capacity ownership', surplusAboveCapacityOwnershipAttoRep: 1n },
+			{ name: 'capacity ownership', surplusAboveCapacityOwnershipAttoRep: 10n ** 30n },
 		]
 
-		test.each(forcedBalanceCases)('forced ETH at $name after the deadline cannot contaminate or block finalization', async ({ name, surplusAboveCoverageCommitmentAttoEth }) => {
+		test.each(forcedBalanceCases)('forced ETH at $name after the deadline cannot contaminate or block finalization', async ({ name, surplusAboveCapacityOwnershipAttoRep }) => {
 			const { yesSecurityPool } = await setupStartedTruthAuction(`forced ETH ${name} finalization source`)
 			const legitimateCollateral = await getETHBalance(client, yesSecurityPool.securityPool)
-			const parentCoverageCommitmentAttoEth = await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)
-			const forcedBalance = parentCoverageCommitmentAttoEth + surplusAboveCoverageCommitmentAttoEth
+			const parentCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
+			const forcedBalance = parentCapacityOwnershipAttoRep + surplusAboveCapacityOwnershipAttoRep
 
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await mockWindow.setBalance(yesSecurityPool.securityPool, forcedBalance)
@@ -669,8 +699,8 @@ describe('Peripherals: truth auction', () => {
 		test('forced ETH during bidding stays outside collateral while auction proceeds remain accounted', async () => {
 			const { yesSecurityPool, expectedEthToBuy } = await setupTruthAuctionWithMixedBids(false)
 			const legitimateCollateralBeforeAuction = await getETHBalance(client, yesSecurityPool.securityPool)
-			const parentCoverageCommitmentAttoEth = await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)
-			const forcedBalance = parentCoverageCommitmentAttoEth + 10n ** 30n
+			const parentCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
+			const forcedBalance = parentCapacityOwnershipAttoRep + 10n ** 30n
 
 			await mockWindow.setBalance(yesSecurityPool.securityPool, forcedBalance)
 			await mockWindow.advanceTime(7n * DAY + DAY)
@@ -697,29 +727,30 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolForker), forkerBalanceBeforeForce + forcedForkerSurplus, 'forced forker ETH should remain isolated after forwarding auction proceeds')
 		})
 
-		test('coverage commitment', async () => {
+		test('auction claims move cumulative bad debt with capacity ownership independent of claim order', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const parentCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, parentCoverageCommitmentAttoEth)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, parentCoverageCommitmentAttoEth)
+			const parentCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, parentCapacityOwnershipAttoRep)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, parentCapacityOwnershipAttoRep)
 
 			await triggerExternalForkForSecurityPool(undefined, 'non-divisible fully utilized fork source')
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
+			const fullyUtilizedCapacityOwnershipAttoRep = (parentSettlementCollateralAtForkAttoEth * statoblastSecurityMultiplierBps) / 10_000n
 			const parentVaultSlot = getMappingStorageSlot(client.account.address, 16n)
 			await mockWindow.addStateOverrides({
 				[securityPoolAddresses.securityPool]: {
 					stateDiff: {
-						[formatStorageSlot(1n)]: parentSettlementCollateralAtForkAttoEth,
-						[formatStorageSlot(parentVaultSlot + 1n)]: parentSettlementCollateralAtForkAttoEth,
+						[formatStorageSlot(1n)]: fullyUtilizedCapacityOwnershipAttoRep,
+						[formatStorageSlot(parentVaultSlot + 1n)]: fullyUtilizedCapacityOwnershipAttoRep,
 					},
 				},
 			})
-			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool), parentSettlementCollateralAtForkAttoEth, 'the parent must be fully utilized at the fork snapshot')
+			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool), fullyUtilizedCapacityOwnershipAttoRep, 'the parent must be fully utilized at the fork snapshot')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -738,14 +769,14 @@ describe('Peripherals: truth auction', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'rounding must not block finalization')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), parentSettlementCollateralAtForkAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), parentSettlementCollateralAtForkAttoEth, 'capacity ownership')
 		})
 
 		test('startTruthAuction skips auction startup when all REP is already migrated', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
@@ -795,8 +826,8 @@ describe('Peripherals: truth auction', () => {
 		})
 
 		test('own-fork truth auction uses only vault REP as the pool auction basis', async () => {
-			const securityPoolCoverageCommitmentAttoEth = 1n * 10n ** 18n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = 2n * 10n ** 18n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -836,8 +867,8 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -874,8 +905,8 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
@@ -969,8 +1000,8 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
@@ -1269,8 +1300,8 @@ describe('Peripherals: truth auction', () => {
 		test('redeemRepFromVault should stay blocked until the own-fork child pool becomes operational', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 
@@ -1288,18 +1319,18 @@ describe('Peripherals: truth auction', () => {
 	})
 
 	describe('auction bidding and claim settlement', () => {
-		const setupFinalizedAuctionWithUnclaimedCoverageCommitmentAttoEth = async (forkSource: string) => {
-			const unmigratedCoverageCommitmentAttoEthHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep = async (forkSource: string) => {
+			const unmigratedCapacityOwnershipAttoRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			await approveAndDepositRepToVault(unmigratedCoverageCommitmentAttoEthHolder, repDeposit, questionId)
+			await approveAndDepositRepToVault(unmigratedCapacityOwnershipAttoRepHolder, repDeposit, questionId)
 
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 8n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
-			await manipulatePriceOracleAndPerformOperation(unmigratedCoverageCommitmentAttoEthHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, unmigratedCoverageCommitmentAttoEthHolder.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 8n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+			await manipulatePriceOracleAndPerformOperation(unmigratedCapacityOwnershipAttoRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, unmigratedCapacityOwnershipAttoRepHolder.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -1335,8 +1366,8 @@ describe('Peripherals: truth auction', () => {
 			return {
 				auctionParticipant,
 				auctionTick,
-				auctionedCoverageCommitmentAttoEth: forkData.auctionedCoverageCommitmentAttoEth,
-				migratedCoverageCommitmentAttoEth: securityPoolCoverageCommitmentAttoEth,
+				auctionedCapacityOwnershipAttoRep: forkData.auctionedCapacityOwnershipAttoRep,
+				migratedCapacityOwnershipAttoRep: securityPoolCapacityOwnershipAttoRep,
 				yesSecurityPool,
 			}
 		}
@@ -1346,13 +1377,13 @@ describe('Peripherals: truth auction', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			// Set coverage commitment and deposit extra REP for capacity
+			// Set capacity ownership and deposit extra REP for capacity
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, repDeposit, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1414,8 +1445,8 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1458,7 +1489,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'finalized losing bidder should receive their full ETH refund')
 			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'refund-only finalized claim should not mint REP backing units')
-			strictEqualTypeSafe(losingVaultAfterClaim.coverageCommitmentAttoEth, losingVaultBeforeClaim.coverageCommitmentAttoEth, 'refund-only finalized claim should not assign coverage commitment')
+			strictEqualTypeSafe(losingVaultAfterClaim.capacityOwnershipAttoRep, losingVaultBeforeClaim.capacityOwnershipAttoRep, 'refund-only finalized claim should not assign capacity ownership')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'refund-only finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'refund-only finalized claim should not create a new vault')
 		})
@@ -1572,8 +1603,8 @@ describe('Peripherals: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1623,15 +1654,15 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'zero-REP finalized claim should release the full ETH refund')
 			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'zero-REP finalized claim should not mint REP backing units')
-			strictEqualTypeSafe(losingVaultAfterClaim.coverageCommitmentAttoEth, losingVaultBeforeClaim.coverageCommitmentAttoEth, 'zero-REP finalized claim should not assign coverage commitment')
+			strictEqualTypeSafe(losingVaultAfterClaim.capacityOwnershipAttoRep, losingVaultBeforeClaim.capacityOwnershipAttoRep, 'zero-REP finalized claim should not assign capacity ownership')
 			strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'zero-REP finalized claim should not alter fee accounting')
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
 		})
 
 		test('minimum-bid underfunded winner receives the full auction REP without an uncompensated repair contribution', async () => {
-			const unmigratedCoverageCommitmentAttoEthHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			await approveAndDepositRepToVault(unmigratedCoverageCommitmentAttoEthHolder, repDeposit, questionId)
-			await manipulatePriceOracleAndPerformOperation(unmigratedCoverageCommitmentAttoEthHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, unmigratedCoverageCommitmentAttoEthHolder.account.address, repDeposit / 8n)
+			const unmigratedCapacityOwnershipAttoRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			await approveAndDepositRepToVault(unmigratedCapacityOwnershipAttoRepHolder, repDeposit, questionId)
+			await manipulatePriceOracleAndPerformOperation(unmigratedCapacityOwnershipAttoRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, unmigratedCapacityOwnershipAttoRepHolder.account.address, repDeposit / 8n)
 			const { yesSecurityPool, expectedEthToBuy } = await setupStartedTruthAuction('minimum bid extraction fork source')
 			const auctionCap = await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction)
 			const minBidSizeAttoEth = await getMinBidSizeAttoEth(client, yesSecurityPool.truthAuction)
@@ -1639,7 +1670,7 @@ describe('Peripherals: truth auction', () => {
 			const attackerTick = await participateAuction(attacker, yesSecurityPool.truthAuction, 1n, minBidSizeAttoEth)
 			assert.ok(minBidSizeAttoEth < expectedEthToBuy / 1_000n, 'test setup should keep the minimum bid economically tiny relative to the target raise')
 			const finalizerVaultBefore = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const parentCoverageCommitmentAttoEth = await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)
+			const parentCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
 
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -1648,26 +1679,26 @@ describe('Peripherals: truth auction', () => {
 			const expectedAttackerRep = auctionCap
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction), expectedAttackerRep, 'one qualifying minimum bid should buy the complete auction REP cap at the weak-demand clearing price')
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
-			const unmigratedCoverageCommitmentAttoEth = parentCoverageCommitmentAttoEth - finalizerVaultBefore.coverageCommitmentAttoEth
-			const expectedAuctionedCoverageCommitmentAttoEth = unmigratedCoverageCommitmentAttoEth
-			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			const unmigratedCapacityOwnershipAttoRep = parentCapacityOwnershipAttoRep - finalizerVaultBefore.capacityOwnershipAttoRep
+			const expectedAuctionedCapacityOwnershipAttoRep = unmigratedCapacityOwnershipAttoRep
+			strictEqualTypeSafe(forkData.auctionedCapacityOwnershipAttoRep, expectedAuctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			const finalizerVaultAfter = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			strictEqualTypeSafe(finalizerVaultAfter.repBackingUnits, finalizerVaultBefore.repBackingUnits, 'finalizing an underfunded auction must not issue REP backing units to the finalizer')
-			strictEqualTypeSafe(finalizerVaultAfter.coverageCommitmentAttoEth, finalizerVaultBefore.coverageCommitmentAttoEth, 'finalizing an underfunded auction must not assign coverage commitment to the finalizer')
+			strictEqualTypeSafe(finalizerVaultAfter.capacityOwnershipAttoRep, finalizerVaultBefore.capacityOwnershipAttoRep, 'finalizing an underfunded auction must not assign capacity ownership to the finalizer')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, attacker.account.address, [{ tick: attackerTick, bidIndex: 0n }])
 
 			const attackerVault = await getSecurityVault(client, yesSecurityPool.securityPool, attacker.account.address)
 			const attackerRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, attackerVault.repBackingUnits)
 			strictEqualTypeSafe(attackerRepClaim, expectedAttackerRep, 'settling the only qualifying bid should credit the complete auction REP cap')
-			strictEqualTypeSafe(attackerVault.coverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(attackerVault.capacityOwnershipAttoRep, expectedAuctionedCapacityOwnershipAttoRep, 'capacity ownership')
 		})
 
 		test('zero-migration full-cap settlement keeps backingUnits conversion and fresh deposits usable', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'zero-migration backingUnits normalization source')
@@ -1694,8 +1725,9 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winnerVault.repBackingUnits), auctionCap, 'the complete-cap winner should be able to convert every backingUnits unit back to REP')
 
 			const freshVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			const freshDeposit = 10n * 10n ** 18n
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
+			const supplyBasedMinimumDeposit = (await getTotalTheoreticalSupplyAttoRep(client, childRepToken)) / 100_000n
+			const freshDeposit = supplyBasedMinimumDeposit > 10n * 10n ** 18n ? supplyBasedMinimumDeposit : 10n * 10n ** 18n
 			const freshVaultBalanceSlot = formatStorageSlot(getMappingStorageSlot(freshVault.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
@@ -1711,7 +1743,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, freshVaultState.repBackingUnits), freshDeposit, 'a minimum fresh deposit should remain exactly convertible after zero-migration auction settlement')
 		})
 
-		test('coverage commitment', async () => {
+		test('capacity ownership', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -1719,10 +1751,10 @@ describe('Peripherals: truth auction', () => {
 
 			const unmigratedVault = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await approveAndDepositRepToVault(unmigratedVault, 2n * forkThresholdAttoRep, questionId)
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await mockWindow.advanceTime(10n * 60n)
-			await manipulatePriceOracleAndPerformOperation(unmigratedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, unmigratedVault.account.address, securityPoolCoverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(unmigratedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, unmigratedVault.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[2], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'rejecting auction winner capacity source')
@@ -1752,7 +1784,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			const forkDataBeforeClaim = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
-			assert.ok(forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth > 0n, 'coverage commitment')
+			assert.ok(forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep > 0n, 'capacity ownership')
 			await client.writeContract({
 				abi: rejectingEthReceiverArtifact.abi,
 				address: rejectingWinner,
@@ -1766,15 +1798,7 @@ describe('Peripherals: truth auction', () => {
 				functionName: 'getPoolAccountingSnapshot',
 				args: [],
 			})
-			strictEqualTypeSafe(snapshotBeforeClaim.totalCoverageCommitmentAttoEth - snapshotBeforeClaim.feeEligibleCoverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			const assignedHeadroom = snapshotBeforeClaim.feeEligibleCoverageCommitmentAttoEth > snapshotBeforeClaim.settlementCollateralAttoEth ? snapshotBeforeClaim.feeEligibleCoverageCommitmentAttoEth - snapshotBeforeClaim.settlementCollateralAttoEth : 0n
-			const capacityProbe = assignedHeadroom + 1n
-			const retentionRateBeforeClaim = await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'currentRetentionRate',
-				args: [],
-			})
+			strictEqualTypeSafe(snapshotBeforeClaim.totalCapacityOwnershipAttoRep - snapshotBeforeClaim.feeEligibleCapacityOwnershipAttoRep, forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 			const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
 			await mockWindow.addStateOverrides({
@@ -1785,22 +1809,21 @@ describe('Peripherals: truth auction', () => {
 				},
 			})
 			await manipulatePriceOracle(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
-			const assignedVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			assert.ok(snapshotBeforeClaim.totalCoverageCommitmentAttoEth - assignedVaultBeforeClaim.coverageCommitmentAttoEth >= snapshotBeforeClaim.settlementCollateralAttoEth, 'coverage commitment')
-			await assert.rejects(
-				client.call({
-					account: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
-					data: encodeFunctionData({
-						abi: peripherals_SecurityPool_SecurityPool.abi,
-						functionName: 'executeCoverageCommitmentUpdate',
-						args: [client.account.address, 0n],
-					}),
-					to: yesSecurityPool.securityPool,
-				}),
-				/Over capacity/,
-			)
+			const mintingCapacityBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getCurrentMintingCapacityAttoEth',
+				args: [],
+			})
+			assert.ok(mintingCapacityBeforeClaim > snapshotBeforeClaim.settlementCollateralAttoEth, 'aggregate capacity ownership should provide minting headroom before its auction winner claims')
+			const capacityProbe = mintingCapacityBeforeClaim - snapshotBeforeClaim.settlementCollateralAttoEth
+			const retentionRateBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'currentRetentionRate',
+				args: [],
+			})
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-			await assert.rejects(createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe), /Over capacity/)
 
 			const claimHash = await client.writeContract({
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
@@ -1812,7 +1835,7 @@ describe('Peripherals: truth auction', () => {
 			await client.waitForTransactionReceipt({ hash: claimHash })
 			const winnerVault = await getSecurityVault(client, yesSecurityPool.securityPool, rejectingWinner)
 			assert.ok(winnerVault.repBackingUnits > 0n, 'permissionless settlement should assign the winner REP backingUnits')
-			strictEqualTypeSafe(winnerVault.coverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(winnerVault.capacityOwnershipAttoRep, forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			const pendingRefund = await client.readContract({
 				abi: auctionAbi,
 				address: yesSecurityPool.truthAuction,
@@ -1827,15 +1850,16 @@ describe('Peripherals: truth auction', () => {
 				functionName: 'getPoolAccountingSnapshot',
 				args: [],
 			})
-			strictEqualTypeSafe(snapshotAfterClaim.feeEligibleCoverageCommitmentAttoEth - snapshotBeforeClaim.feeEligibleCoverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			assert.ok(
-				(await client.readContract({
+			strictEqualTypeSafe(snapshotAfterClaim.feeEligibleCapacityOwnershipAttoRep - snapshotBeforeClaim.feeEligibleCapacityOwnershipAttoRep, forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
+			strictEqualTypeSafe(
+				await client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
 					address: yesSecurityPool.securityPool,
 					functionName: 'currentRetentionRate',
 					args: [],
-				})) > retentionRateBeforeClaim,
-				'coverage commitment',
+				}),
+				retentionRateBeforeClaim,
+				'assigning already-counted aggregate capacity should not change pool utilization',
 			)
 			await createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe)
 
@@ -1927,7 +1951,7 @@ describe('Peripherals: truth auction', () => {
 			const expectedWinningRep = (expectedEthToBuy * PRICE_PRECISION) / tickToPrice(winningTick)
 
 			approximatelyEqual(winningRep, expectedWinningRep, 1_000n, 'winning claims should still receive the expected REP after a losing refund settles first')
-			strictEqualTypeSafe(winningVault.coverageCommitmentAttoEth, forkData.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(winningVault.capacityOwnershipAttoRep, forkData.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 		})
 
 		test('claimAuctionProceeds allows a third party to settle a finalized losing refund for the bidder', async () => {
@@ -1978,10 +2002,10 @@ describe('Peripherals: truth auction', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await mockWindow.advanceTime(10n * 60n)
-			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, passiveRepHolder.account.address, securityPoolCoverageCommitmentAttoEth / 2n)
+			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, passiveRepHolder.account.address, securityPoolCapacityOwnershipAttoRep / 2n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'liquidated unclaimed auction proceeds fork source')
@@ -2004,7 +2028,7 @@ describe('Peripherals: truth auction', () => {
 				await mockWindow.addStateOverrides({
 					[childRepToken]: {
 						stateDiff: {
-							[liquidatorChildRepBalanceSlot]: repDeposit,
+							[liquidatorChildRepBalanceSlot]: forcedPrice * 1_000n,
 						},
 					},
 				})
@@ -2016,17 +2040,31 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			await mockWindow.advanceTime(10n * 60n)
+			await mockWindow.addStateOverrides({
+				[childRepToken]: {
+					stateDiff: {
+						[liquidatorChildRepBalanceSlot]: 10n ** 30n,
+					},
+				},
+			})
+			await approveToken(liquidatorClient, childRepToken, yesSecurityPool.securityPool)
+			await depositRepToVault(liquidatorClient, yesSecurityPool.securityPool, 10n ** 27n, 1n << 255n)
 
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepBeforeLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultBeforeLiquidation.repBackingUnits)
-			const totalRepBeforeLiquidation = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', args: [] })
-			const denominatorBeforeLiquidation = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
-			const liquidationThresholdPrice = (targetRepBeforeLiquidation * PRICE_PRECISION * 10_000n) / (targetVaultBeforeLiquidation.coverageCommitmentAttoEth * statoblastSecurityMultiplierBps)
+			const targetOpenInterestAttoEth = await client.readContract({ address: yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', args: [client.account.address] })
+			const valueScale = PRICE_PRECISION * 10_000n
+			const associatedRepThreshold = ((targetRepBeforeLiquidation + targetVaultBeforeLiquidation.disputeStakedAttoRep) * valueScale) / (targetOpenInterestAttoEth * statoblastSecurityMultiplierBps)
+			const migrationSecurityMultiplierBps = 10_000n + (statoblastSecurityMultiplierBps - 10_000n) / 2n
+			const liquidationReserveMultiplierBps = 10_500n
+			const effectiveMigrationMultiplierBps = migrationSecurityMultiplierBps > liquidationReserveMultiplierBps ? migrationSecurityMultiplierBps : liquidationReserveMultiplierBps
+			const migrationThreshold = (targetRepBeforeLiquidation * valueScale) / (targetOpenInterestAttoEth * effectiveMigrationMultiplierBps)
+			const liquidationThresholdPrice = associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold
 			const forcedPrice = (liquidationThresholdPrice + 1n) * 2n
-			const liquidationChunk = targetVaultBeforeLiquidation.coverageCommitmentAttoEth / 10n
+			const liquidationChunk = targetVaultBeforeLiquidation.capacityOwnershipAttoRep / 10n
 
-			strictEqualTypeSafe(targetVaultBeforeLiquidation.coverageCommitmentAttoEth > 0n, true, 'coverage commitment')
+			strictEqualTypeSafe(targetVaultBeforeLiquidation.capacityOwnershipAttoRep > 0n, true, 'capacity ownership')
 			assert.ok(targetRepBeforeLiquidation > 0n, 'migrated bidder vault should carry REP before liquidation')
 			strictEqualTypeSafe(liquidationChunk > 0n, true, 'test setup needs a positive liquidation chunk')
 
@@ -2037,7 +2075,7 @@ describe('Peripherals: truth auction', () => {
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepAfterLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterLiquidation.repBackingUnits)
 
-			if (targetVaultAfterLiquidation.coverageCommitmentAttoEth >= targetVaultBeforeLiquidation.coverageCommitmentAttoEth) {
+			if (targetVaultAfterLiquidation.capacityOwnershipAttoRep >= targetVaultBeforeLiquidation.capacityOwnershipAttoRep) {
 				const coordinatorLogs = await client.getLogs({
 					address: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
 					fromBlock: liquidationAttemptStartBlock,
@@ -2057,31 +2095,25 @@ describe('Peripherals: truth auction', () => {
 					})
 					.filter(log => log?.eventName === 'ExecutedStagedOperation')
 					.map(log => `${log?.args.success === true ? 'success' : 'failure'}:${log?.args.errorMessage ?? ''}`)
-				throw new Error(`pre-claim liquidation did not reduce coverageCommitmentAttoEth; coordinator results=${executionReasons.join('|')}`)
+				throw new Error(`pre-claim liquidation did not reduce capacityOwnershipAttoRep; coordinator results=${executionReasons.join('|')}`)
 			}
 
-			const coverageCommitmentTransferredAttoEth = targetVaultBeforeLiquidation.coverageCommitmentAttoEth - targetVaultAfterLiquidation.coverageCommitmentAttoEth
+			const capacityOwnershipTransferredAttoRep = targetVaultBeforeLiquidation.capacityOwnershipAttoRep - targetVaultAfterLiquidation.capacityOwnershipAttoRep
 
-			const settledLiquidationPrice = await getLastPrice(client, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
-			const quotedRepMove = getLiquidationVaultRepBackingToTransfer(coverageCommitmentTransferredAttoEth, settledLiquidationPrice)
-			const expectedBackingUnitsMove = (quotedRepMove * denominatorBeforeLiquidation) / totalRepBeforeLiquidation
-			const expectedRepMove = (expectedBackingUnitsMove * totalRepBeforeLiquidation) / denominatorBeforeLiquidation
-			strictEqualTypeSafe(coverageCommitmentTransferredAttoEth > 0n, true, 'coverage commitment')
-			approximatelyEqual(targetRepAfterLiquidation, targetRepBeforeLiquidation - expectedRepMove, 2n, 'liquidation should transfer migrated vault REP backing before claim')
-			approximatelyEqual(
-				await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultAfterLiquidation.repBackingUnits),
-				(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultBeforeLiquidation.repBackingUnits)) + expectedRepMove,
-				2n,
-				'liquidation should transfer migrated vault REP backing into the liquidator vault',
-			)
-			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.coverageCommitmentAttoEth, liquidatorVaultBeforeLiquidation.coverageCommitmentAttoEth + coverageCommitmentTransferredAttoEth, 'coverage commitment')
+			const targetRepMoved = targetRepBeforeLiquidation - targetRepAfterLiquidation
+			const liquidatorRepBeforeLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultBeforeLiquidation.repBackingUnits)
+			const liquidatorRepAfterLiquidation = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, liquidatorVaultAfterLiquidation.repBackingUnits)
+			strictEqualTypeSafe(capacityOwnershipTransferredAttoRep > 0n, true, 'capacity ownership')
+			strictEqualTypeSafe(targetRepMoved > 0n, true, 'liquidation should transfer migrated vault REP backing before claim')
+			approximatelyEqual(liquidatorRepAfterLiquidation - liquidatorRepBeforeLiquidation, targetRepMoved, 2n, 'liquidation should conserve migrated vault REP backing between target and receiver')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.capacityOwnershipAttoRep, liquidatorVaultBeforeLiquidation.capacityOwnershipAttoRep + capacityOwnershipTransferredAttoRep, 'capacity ownership')
 
 			const childCollateralAfterLiquidation = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
-			const childCoverageCommitmentAttoEthAfterLiquidation = await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool)
+			const childCapacityOwnershipAttoRepAfterLiquidation = await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool)
 			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
 			const forkDataBeforeClaim = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 
-			strictEqualTypeSafe(forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth > 0n, true, 'coverage commitment')
+			strictEqualTypeSafe(forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep > 0n, true, 'capacity ownership')
 			strictEqualTypeSafe(totalAttoRepPurchased > 0n, true, 'test setup should leave finalized auction REP for the bidder to claim')
 
 			await claimAuctionProceeds(settlementCaller, yesSecurityPool.securityPool, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
@@ -2091,16 +2123,16 @@ describe('Peripherals: truth auction', () => {
 			const targetRepAfterClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterClaim.repBackingUnits)
 
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation, 'claim timing should not change child collateral totals after liquidation')
-			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool), childCoverageCommitmentAttoEthAfterLiquidation, 'coverage commitment')
+			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool), childCapacityOwnershipAttoRepAfterLiquidation, 'capacity ownership')
 			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalAttoRepPurchased, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
-			strictEqualTypeSafe(targetVaultAfterClaim.coverageCommitmentAttoEth - targetVaultAfterLiquidation.coverageCommitmentAttoEth, forkDataBeforeClaim.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(targetVaultAfterClaim.capacityOwnershipAttoRep - targetVaultAfterLiquidation.capacityOwnershipAttoRep, forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.repBackingUnits, liquidatorVaultAfterLiquidation.repBackingUnits, 'unclaimed finalized auction proceeds should not be swept into the liquidator vault')
-			strictEqualTypeSafe(liquidatorVaultAfterClaim.coverageCommitmentAttoEth, liquidatorVaultAfterLiquidation.coverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(liquidatorVaultAfterClaim.capacityOwnershipAttoRep, liquidatorVaultAfterLiquidation.capacityOwnershipAttoRep, 'capacity ownership')
 
 			await mockWindow.advanceTime(DAY)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			await updateVaultFees(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
-			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'coverage commitments')
+			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'capacity ownerships')
 		})
 
 		test('settleAuctionBids does not emit ClaimAuctionProceeds for finalized refund-only settlements', async () => {
@@ -2135,16 +2167,16 @@ describe('Peripherals: truth auction', () => {
 			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /Bid has already been claimed or does not exist/)
 		})
 
-		test('coverage commitment', async () => {
+		test('capacity ownership', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await mockWindow.advanceTime(10n * 60n)
-			await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, attackerClient.account.address, securityPoolCoverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -2153,7 +2185,7 @@ describe('Peripherals: truth auction', () => {
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
-			await triggerExternalForkForSecurityPool(undefined, 'coverage commitment')
+			await triggerExternalForkForSecurityPool(undefined, 'capacity ownership')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2165,7 +2197,7 @@ describe('Peripherals: truth auction', () => {
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
 			const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
-			const parentCoverageCommitmentAttoEthAtFork = await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)
+			const parentCapacityOwnershipAttoRepAtFork = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 
@@ -2174,50 +2206,50 @@ describe('Peripherals: truth auction', () => {
 
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
-			const expectedAuctionedCoverageCommitmentAttoEth = parentCoverageCommitmentAttoEthAtFork - migratedVaultBeforeClaim.coverageCommitmentAttoEth
-			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth, expectedAuctionedCoverageCommitmentAttoEth, 'coverage commitment')
+			const expectedAuctionedCapacityOwnershipAttoRep = parentCapacityOwnershipAttoRepAtFork - migratedVaultBeforeClaim.capacityOwnershipAttoRep
+			strictEqualTypeSafe(forkData.auctionedCapacityOwnershipAttoRep, expectedAuctionedCapacityOwnershipAttoRep, 'capacity ownership')
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			const migratedVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const expectedCoverageCommitmentAttoEthAfterClaim = migratedVaultBeforeClaim.coverageCommitmentAttoEth + (forkData.auctionedCoverageCommitmentAttoEth * totalAttoRepPurchased) / totalAttoRepPurchased
+			const expectedCapacityOwnershipAttoRepAfterClaim = migratedVaultBeforeClaim.capacityOwnershipAttoRep + (forkData.auctionedCapacityOwnershipAttoRep * totalAttoRepPurchased) / totalAttoRepPurchased
 
-			strictEqualTypeSafe(forkData.auctionedCoverageCommitmentAttoEth > 0n, true, 'coverage commitment')
-			strictEqualTypeSafe(migratedVaultAfterClaim.coverageCommitmentAttoEth, expectedCoverageCommitmentAttoEthAfterClaim, 'coverage commitment')
+			strictEqualTypeSafe(forkData.auctionedCapacityOwnershipAttoRep > 0n, true, 'capacity ownership')
+			strictEqualTypeSafe(migratedVaultAfterClaim.capacityOwnershipAttoRep, expectedCapacityOwnershipAttoRepAfterClaim, 'capacity ownership')
 		})
 
-		test('coverage commitment', async () => {
-			const { auctionParticipant, auctionTick, auctionedCoverageCommitmentAttoEth, migratedCoverageCommitmentAttoEth, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCoverageCommitmentAttoEth('coverage commitment')
-			const decreasedMigratedCoverageCommitmentAttoEth = migratedCoverageCommitmentAttoEth / 2n
+		test('capacity ownership', async () => {
+			const { auctionParticipant, auctionTick, auctionedCapacityOwnershipAttoRep, migratedCapacityOwnershipAttoRep, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep('capacity ownership')
+			const decreasedMigratedCapacityOwnershipAttoRep = migratedCapacityOwnershipAttoRep / 2n
 
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, decreasedMigratedCoverageCommitmentAttoEth)
-			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool), auctionedCoverageCommitmentAttoEth + decreasedMigratedCoverageCommitmentAttoEth, 'coverage commitment')
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, decreasedMigratedCapacityOwnershipAttoRep)
+			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool), auctionedCapacityOwnershipAttoRep + decreasedMigratedCapacityOwnershipAttoRep, 'capacity ownership')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			strictEqualTypeSafe(participantVault.coverageCommitmentAttoEth, auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(await getTotalCoverageCommitmentAttoEth(client, yesSecurityPool.securityPool), auctionedCoverageCommitmentAttoEth + decreasedMigratedCoverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(participantVault.capacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, 'capacity ownership')
+			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool), auctionedCapacityOwnershipAttoRep + decreasedMigratedCapacityOwnershipAttoRep, 'capacity ownership')
 		})
 
-		test('coverage commitment', async () => {
-			const { auctionParticipant, auctionTick, migratedCoverageCommitmentAttoEth, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCoverageCommitmentAttoEth('coverage commitment')
-			const increasedMigratedCoverageCommitmentAttoEth = migratedCoverageCommitmentAttoEth * 2n
+		test('capacity ownership', async () => {
+			const { auctionParticipant, auctionTick, migratedCapacityOwnershipAttoRep, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep('capacity ownership')
+			const increasedMigratedCapacityOwnershipAttoRep = migratedCapacityOwnershipAttoRep * 2n
 
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, increasedMigratedCoverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, increasedMigratedCapacityOwnershipAttoRep)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			await mockWindow.advanceTime(DAY)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			await updateVaultFees(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'coverage commitment')
+			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'capacity ownership')
 		})
 
 		test('claimAuctionProceeds initializes fee accounting for a newly auction-funded vault at the current pool fee index', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -2258,8 +2290,8 @@ describe('Peripherals: truth auction', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -2302,18 +2334,18 @@ describe('Peripherals: truth auction', () => {
 			assert.ok(repAfterSecondClaim > repAfterFirstClaim, 'second claim should be able to add the remaining winning bid')
 		})
 
-		test('coverage commitment', async () => {
+		test('capacity ownership', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const baseSecurityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-			const securityPoolCoverageCommitmentAttoEth = baseSecurityPoolCoverageCommitmentAttoEth - (baseSecurityPoolCoverageCommitmentAttoEth % 3n) + 1n
+			const baseSecurityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+			const securityPoolCapacityOwnershipAttoRep = baseSecurityPoolCapacityOwnershipAttoRep - (baseSecurityPoolCapacityOwnershipAttoRep % 3n) + 1n
 
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, passiveRepHolder.account.address, securityPoolCoverageCommitmentAttoEth)
+			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, passiveRepHolder.account.address, securityPoolCapacityOwnershipAttoRep)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
@@ -2321,7 +2353,7 @@ describe('Peripherals: truth auction', () => {
 			const secondBidder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
-			await triggerExternalForkForSecurityPool(undefined, 'coverage commitment')
+			await triggerExternalForkForSecurityPool(undefined, 'capacity ownership')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2347,7 +2379,7 @@ describe('Peripherals: truth auction', () => {
 
 			const firstVaultFirstOrder = await getSecurityVault(client, yesSecurityPool.securityPool, firstBidder.account.address)
 			const secondVaultFirstOrder = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
-			const firstOrderCoverageCommitmentAttoEthTotal = firstVaultFirstOrder.coverageCommitmentAttoEth + secondVaultFirstOrder.coverageCommitmentAttoEth
+			const firstOrderCapacityOwnershipAttoRepTotal = firstVaultFirstOrder.capacityOwnershipAttoRep + secondVaultFirstOrder.capacityOwnershipAttoRep
 
 			await mockWindow.anvilRevert(claimsSnapshot)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, secondBidder.account.address, [{ tick: secondAuctionTick, bidIndex: secondBidIndex }])
@@ -2355,15 +2387,15 @@ describe('Peripherals: truth auction', () => {
 
 			const firstVaultReverseOrder = await getSecurityVault(client, yesSecurityPool.securityPool, firstBidder.account.address)
 			const secondVaultReverseOrder = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
-			const reverseOrderCoverageCommitmentAttoEthTotal = firstVaultReverseOrder.coverageCommitmentAttoEth + secondVaultReverseOrder.coverageCommitmentAttoEth
+			const reverseOrderCapacityOwnershipAttoRepTotal = firstVaultReverseOrder.capacityOwnershipAttoRep + secondVaultReverseOrder.capacityOwnershipAttoRep
 
-			strictEqualTypeSafe(firstOrderCoverageCommitmentAttoEthTotal, forkDataBeforeClaims.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(reverseOrderCoverageCommitmentAttoEthTotal, forkDataBeforeClaims.auctionedCoverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(firstVaultReverseOrder.coverageCommitmentAttoEth, firstVaultFirstOrder.coverageCommitmentAttoEth, 'coverage commitment')
-			strictEqualTypeSafe(secondVaultReverseOrder.coverageCommitmentAttoEth, secondVaultFirstOrder.coverageCommitmentAttoEth, 'coverage commitment')
+			strictEqualTypeSafe(firstOrderCapacityOwnershipAttoRepTotal, forkDataBeforeClaims.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
+			strictEqualTypeSafe(reverseOrderCapacityOwnershipAttoRepTotal, forkDataBeforeClaims.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
+			strictEqualTypeSafe(firstVaultReverseOrder.capacityOwnershipAttoRep, firstVaultFirstOrder.capacityOwnershipAttoRep, 'capacity ownership')
+			strictEqualTypeSafe(secondVaultReverseOrder.capacityOwnershipAttoRep, secondVaultFirstOrder.capacityOwnershipAttoRep, 'capacity ownership')
 		})
 
-		test('coverage commitment', async () => {
+		test('capacity ownership', async () => {
 			const poolDeploymentHash = await client.sendTransaction({
 				data: `0x${test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.evm.bytecode.object}`,
 			})
@@ -2384,12 +2416,12 @@ describe('Peripherals: truth auction', () => {
 
 			const zeroRepVault = addressString(TEST_ADDRESSES[1])
 			const positiveRepVault = addressString(TEST_ADDRESSES[2])
-			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, coverageCommitmentAttoEthAmount: bigint) => {
+			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, capacityOwnershipAttoRepAmount: bigint) => {
 				const hash = await client.writeContract({
 					address: forkerAddress,
 					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
 					functionName: 'creditAuctionProceeds',
-					args: [poolAddress, vault, attoRepAmount, coverageCommitmentAttoEthAmount],
+					args: [poolAddress, vault, attoRepAmount, capacityOwnershipAttoRepAmount],
 				})
 				await client.waitForTransactionReceipt({ hash })
 			}
@@ -2400,32 +2432,53 @@ describe('Peripherals: truth auction', () => {
 					functionName: 'securityVaults',
 					args: [vault],
 				})
+			const auctionedBadDebtAttoEth = 9n
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: poolAddress,
+					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
+					functionName: 'setTotalBadDebtAttoEth',
+					args: [auctionedBadDebtAttoEth],
+				}),
+			)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: forkerAddress,
+					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
+					functionName: 'configureAuctionBadDebt',
+					args: [poolAddress, auctionedBadDebtAttoEth],
+				}),
+			)
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
 			await credit(zeroRepVault, 0n, 1n)
 			await credit(positiveRepVault, 1n, 2n)
 			const zeroRepForward = await readVault(zeroRepVault)
 			const positiveRepForward = await readVault(positiveRepVault)
-			strictEqualTypeSafe(zeroRepForward[0], 0n, 'coverage commitment')
-			strictEqualTypeSafe(zeroRepForward[1], 1n, 'coverage commitment')
+			strictEqualTypeSafe(zeroRepForward[0], 0n, 'capacity ownership')
+			strictEqualTypeSafe(zeroRepForward[1], 1n, 'capacity ownership')
 			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
-			strictEqualTypeSafe(positiveRepForward[1], 2n, 'coverage commitment')
+			strictEqualTypeSafe(positiveRepForward[1], 2n, 'capacity ownership')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 3n, 'auctioned bad debt should follow the first vault capacity award')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }), 6n, 'auctioned bad debt should follow the second vault capacity award')
 
 			await mockWindow.anvilRevert(settlementSnapshot)
 			await credit(positiveRepVault, 1n, 2n)
 			await credit(zeroRepVault, 0n, 1n)
 			const zeroRepReverse = await readVault(zeroRepVault)
 			const positiveRepReverse = await readVault(positiveRepVault)
-			strictEqualTypeSafe(zeroRepReverse[1], zeroRepForward[1], 'coverage commitment')
-			strictEqualTypeSafe(positiveRepReverse[1], positiveRepForward[1], 'coverage commitment')
+			strictEqualTypeSafe(zeroRepReverse[1], zeroRepForward[1], 'capacity ownership')
+			strictEqualTypeSafe(positiveRepReverse[1], positiveRepForward[1], 'capacity ownership')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 3n, 'auctioned bad-debt allocation should be independent of claim order')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }), 6n, 'auctioned bad-debt allocation should consume the full cumulative amount')
 
-			const totalEligibleCoverageCommitmentAttoEth = await client.readContract({
+			const totalEligibleCapacityOwnershipAttoRep = await client.readContract({
 				address: poolAddress,
 				abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
-				functionName: 'feeEligibleCoverageCommitmentAttoEth',
+				functionName: 'feeEligibleCapacityOwnershipAttoRep',
 				args: [],
 			})
-			strictEqualTypeSafe(totalEligibleCoverageCommitmentAttoEth, 3n, 'coverage commitment')
+			strictEqualTypeSafe(totalEligibleCapacityOwnershipAttoRep, 3n, 'capacity ownership')
 		})
 	})
 })

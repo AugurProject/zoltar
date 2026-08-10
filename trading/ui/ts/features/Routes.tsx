@@ -84,8 +84,12 @@ export function MarketList({ market }: { market: DemoMarket }) {
 								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
 							</div>
 							<div>
-								<dt>Fee-eligible coverage commitment</dt>
-								<dd>{formatUnits(market.securityPool.feeEligibleCoverageCommitmentAttoEth)} ETH</dd>
+								<dt>Fee-eligible capacity ownership</dt>
+								<dd>{formatUnits(market.securityPool.feeEligibleCapacityOwnershipAttoRep)} REP</dd>
+							</div>
+							<div>
+								<dt>Available minting capacity</dt>
+								<dd>{formatUnits(market.securityPool.currentMintingCapacityAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Collateral</dt>

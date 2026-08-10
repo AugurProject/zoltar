@@ -68,15 +68,15 @@ describe('Truth-auction REP donation rounding regression', () => {
 			await approveAndDepositRepToVault(vaultClient, repDeposit, questionId)
 		}
 
-		const coverageCommitmentAttoEthPerVault = repDeposit / 2n
+		const capacityOwnershipAttoRepPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, vaultClient.account.address, coverageCommitmentAttoEthPerVault)
+			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
-		const totalCoverageCommitmentAttoEth = coverageCommitmentAttoEthPerVault * BigInt(vaultClients.length)
+		const totalCapacityOwnershipAttoRep = capacityOwnershipAttoRepPerVault * BigInt(vaultClients.length)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalCoverageCommitmentAttoEth)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalCapacityOwnershipAttoRep / 10n)
 
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), totalVaultRep, 'test setup should start with exactly six equal vault deposits')
 
@@ -107,7 +107,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, vaultClients[0].account.address)
 		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits)
 		strictEqualTypeSafe(honestRep, repDeposit, 'the migrated vault should retain its full 1,000 REP claim')
-		strictEqualTypeSafe(honestVault.coverageCommitmentAttoEth, coverageCommitmentAttoEthPerVault, 'the migrated vault should retain its coverage commitment')
+		strictEqualTypeSafe(honestVault.capacityOwnershipAttoRep, capacityOwnershipAttoRepPerVault, 'the migrated vault should retain its capacity ownership')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)

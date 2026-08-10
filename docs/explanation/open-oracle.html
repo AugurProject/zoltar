@@ -16,7 +16,7 @@
 			<section id="openoracle-role">
 				<h2>Why Statoblast uses OpenOracle</h2>
 
-				<p>Statoblast needs a REP/ETH price to ensure its security assumptions are maintained. This is implemented in Statoblast contracts by gating REP and open interest operations behind a REP/ETH price oracle gate. This includes REP withdrawals, coverage-commitment changes, liquidations, and certain Escalation Game deposits. A stale or easily manipulated price could allow an unsafe withdrawal, incorrectly change a vault's capacity, or make a healthy vault appear liquidatable.</p>
+				<p>Statoblast needs a REP/ETH price to enforce live backing and convert price-independent REP capacity ownership into ETH minting capacity. Price-gated operations include REP withdrawals, liquidations, and certain Escalation Game deposits. A stale or easily manipulated price could allow an unsafe withdrawal or make a healthy vault appear liquidatable. A price change updates aggregate ETH capacity arithmetically and never requires a vault scan.</p>
 
 				<p>Statoblast therefore uses <a href="https://docs.openoracle.org">OpenOracle</a> to obtain a fresh, economically contestable REP/ETH price. OpenOracle does not prove a price by consulting a trusted source. Instead, a reporter posts a WETH/REP position, and other participants can replace an inaccurate report through an, economically motivated correction trade.</p>
 
@@ -60,7 +60,7 @@
 			<section id="report-lifecycle">
 				<h2>Price request lifecycle</h2>
 
-				<p>A liquidation, REP withdrawal, or coverage-commitment update begins at the pool's coordinator. The coordinator first validates and stages the operation, then either uses a cached price or opens an OpenOracle report.</p>
+				<p>A liquidation or REP withdrawal begins at the pool's coordinator. REP deposits create capacity ownership directly from the selected target health factor and do not use this staged oracle path. The coordinator first validates and stages a withdrawal or liquidation, then either uses a cached price or opens an OpenOracle report.</p>
 
 				<ol>
 					<li><strong>Validate and stage the operation.</strong> The coordinator checks the caller, target vault, requested amount, and validity window before any report is requested.</li>
@@ -78,14 +78,13 @@
 
 				<ul>
 					<li>Liquidation and withdrawal amounts must be nonzero.</li>
-					<li>A coverage-commitment update may set the commitment to zero.</li>
 					<li><code>validForSeconds</code> must be positive and no greater than five minutes.</li>
-					<li>A liquidation must target a vault other than the caller's vault.</li>
+					<li>A liquidation's receiver vault must differ from its target vault. The operator may be the target; operator identity is not used as a Sybil-resistant boundary.</li>
 					<li>Non-liquidation operations must target the caller's own vault.</li>
 					<li>Staging is disabled after the security pool's local Escalation Game has resolved.</li>
 				</ul>
 
-				<p>A same-vault liquidation is rejected with <code>Caller bad</code> before the coordinator requests or consumes an oracle report.</p>
+				<p>A liquidation whose receiver equals its target is rejected with <code>Receiver is target</code> before the coordinator requests or consumes an oracle report. A self-receiving operator uses a zero approval ID; a distinct receiver requires a bounded approval.</p>
 
 				<h3>Execution batches</h3>
 
@@ -95,7 +94,7 @@
 
 				<h3>Escalation Game deposits</h3>
 
-				<p>Escalation Game REP deposits do not use the staged callback path. When a pool has active coverage commitment, <code>depositToEscalationGame</code> requires an already-fresh coordinator price and reverts when the price is stale. After previewing the accepted REP deposit, the pool uses <code>lastPrice</code> for the post-transfer vault and pool coverage checks.</p>
+				<p>Escalation Game REP deposits do not use the staged callback path. When a pool has active capacity ownership, <code>depositToEscalationGame</code> requires an already-fresh coordinator price and reverts when the price is stale. After previewing the accepted REP deposit, the pool uses <code>lastPrice</code> for the post-transfer vault and pool coverage checks.</p>
 			</section>
 
 			<section id="request-funding">
@@ -365,15 +364,15 @@
 
 				<p>These checks establish only that the final WETH position meets the modeled security floor and that the callback data is structurally acceptable. They do not prove that the accepted price is externally correct, that an independent corrector exists, or that a correcting transaction will obtain inclusion.</p>
 
-				<h3>Rejected-price continuation</h3>
+				<h3>Rejected-price cleanup</h3>
 
-				<p>A rejected report does not replay the pending settlement operations. Those operations remain queued for a later valid price. If the pending settlement list is empty, another staged request can fund a replacement report. If operation ids remain, an operator or user must call <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth)</code> directly with the bounty and initial-position funding, then allow that report to settle successfully.</p>
+				<p>A rejected report does not replay its pending settlement operations. Instead, the coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation exactly once. A caller must stage a new operation to try again with a later price.</p>
 
 				<h3>Recovering a settled report after callback failure</h3>
 
-				<p>When OpenOracle has already settled but the coordinator remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report and base-fee cap, withdraws coordinator-owned OpenOracle balances, deactivates and removes the live staged operation identified by <code>pendingOperationSlotId</code>, and advances the slot.</p>
+				<p>When OpenOracle has already settled but the coordinator remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap; withdraws coordinator-owned OpenOracle balances; and terminally fails every pending settlement operation attached to the report.</p>
 
-				<p>Recovery does not treat the removed operation as executed and does not accept the report as a new price. Other staged operations remain active and require a later valid-price path.</p>
+				<p>Recovery does not treat those operations as successful and does not accept the report as a new price. Each affected liquidation reservation is released during the same cleanup, so no approval quota remains locked.</p>
 			</section>
 
 			<section id="intentional-economic-tradeoffs">

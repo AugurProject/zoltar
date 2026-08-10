@@ -9,7 +9,6 @@ export type SecurityPoolActionId =
 	| 'depositRepToVault'
 	| 'queueWithdrawRep'
 	| 'redeemRepFromVault'
-	| 'queueSetCoverageCommitmentAttoEth'
 	| 'redeemFees'
 	| 'createCompleteSet'
 	| 'redeemCompleteSet'

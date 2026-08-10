@@ -199,8 +199,8 @@
 					</div>
 					<form id="strategy-form">
 						<fieldset id="strategy-fields" class="form-grid" disabled>
-							<label>Minimum coverage commitment (ETH)<input name="minimumLiquidationCoverageCommitmentEth" inputmode="decimal" /></label>
-							<label>Maximum coverage commitment (ETH)<input name="maximumLiquidationCoverageCommitmentEth" inputmode="decimal" /></label>
+							<label>Minimum liquidation debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Maximum liquidation debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
 							<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
 							<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
 							<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
@@ -219,7 +219,7 @@
 								>Candidate priority
 								<select name="candidatePriority">
 									<option value="largest-bonus">Largest bonus</option>
-									<option value="largest-coverage-commitment">Largest coverage commitment</option>
+									<option value="largest-debt">Largest debt moved</option>
 									<option value="lowest-top-up">Lowest REP top-up</option>
 								</select>
 							</label>

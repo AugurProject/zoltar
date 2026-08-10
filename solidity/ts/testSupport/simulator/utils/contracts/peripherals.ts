@@ -1,4 +1,4 @@
-import type { Address, Hex, TransactionLog } from '@zoltar/shared/ethereum'
+import type { Address, Hash, Hex, TransactionLog } from '@zoltar/shared/ethereum'
 import {
 	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
@@ -31,7 +31,7 @@ import { requireAddress } from '../utilities'
 export enum OperationType {
 	Liquidation = 0,
 	WithdrawRep = 1,
-	SetCoverageCommitment = 2,
+	PriceRefresh = 2,
 }
 
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
@@ -138,9 +138,25 @@ export const requestPriceIfNeededAndStageOperation = async (client: WriteClient,
 	return await requestPriceIfNeededAndStageOperationWithValue(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, costAttoEth)
 }
 
-export const queueLiquidationAtForcedPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, coverageCommitmentTransferAttoEth: bigint, forcedPrice: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
+export const queueLiquidationAtForcedPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, liquidationDebtAttoEth: bigint, forcedPrice: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
 	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
-	return await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetVault, coverageCommitmentTransferAttoEth, validForSeconds, forcedPrice, costAttoEth)
+	return await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetVault, liquidationDebtAttoEth, validForSeconds, forcedPrice, costAttoEth)
+}
+
+export const queueDelegatedLiquidationAtForcedPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, receiverVault: Address, requestedDebtAttoEth: bigint, approvalId: Hash, forcedPrice: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
+	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
+	if (shouldRequestPrice) await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, forcedPrice)
+	const costAttoEth = shouldRequestPrice ? await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer) : 0n
+	return await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPriceIfNeededAndStageLiquidation',
+			address: priceOracleManagerAndOperatorQueuer,
+			args: [targetVault, receiverVault, requestedDebtAttoEth, approvalId, validForSeconds, forcedPrice, 0n],
+			value: costAttoEth,
+			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
+		}),
+	)
 }
 
 export const executeStagedOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operationId: bigint) =>

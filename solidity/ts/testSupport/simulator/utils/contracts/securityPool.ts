@@ -1,9 +1,9 @@
-import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import type { Address } from '@zoltar/shared/ethereum'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { getClientAnvilWindow, ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 
 const getAwaitingForkContinuationAbi = [
@@ -18,7 +18,7 @@ const getAwaitingForkContinuationAbi = [
 
 type SecurityVault = {
 	repBackingUnits: bigint
-	coverageCommitmentAttoEth: bigint
+	capacityOwnershipAttoRep: bigint
 	claimableFeesAttoEth: bigint
 	feeIndex: bigint
 	disputeStakedAttoRep: bigint
@@ -64,19 +64,71 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	return hash
 }
 
-export const depositRepToVault = async (client: WriteClient, securityPoolAddress: Address, amount: bigint) =>
+export const depositRepToVault = async (client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'depositRepToVault',
 			address: securityPoolAddress,
-			args: [amount],
+			args: [amount, targetHealthFactorBps],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint) =>
-	await writeContractAndWait(client, () =>
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false) => {
+	if (!preserveStalePriceForTest) {
+		const priceOracleManagerAndOperatorQueuer = requireAddress(
+			await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPoolAddress,
+				functionName: 'priceOracleManagerAndOperatorQueuer',
+				args: [],
+			}),
+			'Price coordinator',
+		)
+		const isPriceValid = requireBoolean(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: priceOracleManagerAndOperatorQueuer,
+				functionName: 'isPriceValid',
+				args: [],
+			}),
+			'Oracle price validity',
+		)
+		if (!isPriceValid) {
+			const mockWindow = getClientAnvilWindow(client)
+			if (mockWindow === undefined) throw new Error('Test complete-set mint requires a fresh oracle price')
+			const currentTimestamp = await mockWindow.getTime()
+			const lastPrice = requireBigInt(
+				await client.readContract({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					address: priceOracleManagerAndOperatorQueuer,
+					functionName: 'lastPrice',
+					args: [],
+				}),
+				'Cached oracle price',
+			)
+			await mockWindow.addStateOverrides({
+				[priceOracleManagerAndOperatorQueuer]: {
+					stateDiff: {
+						[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
+						...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
+					},
+				},
+			})
+			const refreshedPriceIsValid = requireBoolean(
+				await client.readContract({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					address: priceOracleManagerAndOperatorQueuer,
+					functionName: 'isPriceValid',
+					args: [],
+				}),
+				'Refreshed oracle price validity',
+			)
+			if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
+		}
+	}
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'createCompleteSet',
@@ -86,6 +138,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
+}
 
 export const updateSettlementCollateral = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>
@@ -109,15 +162,15 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
-export const getTotalCoverageCommitmentAttoEth = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalCapacityOwnershipAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalCoverageCommitmentAttoEth',
+			functionName: 'totalCapacityOwnershipAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		}),
-		'Coverage commitment',
+		'Capacity ownership',
 	)
 
 export const getSettlementCollateralAttoEth = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
@@ -185,7 +238,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		'Security vault',
 	)
 	const repBackingUnits = requireBigInt(securityVaultData[0], 'Security vault REP backing units')
-	const coverageCommitmentAttoEth = requireBigInt(securityVaultData[1], 'Security vault coverage commitment')
+	const capacityOwnershipAttoRep = requireBigInt(securityVaultData[1], 'Security vault capacity ownership')
 	const claimableFeesAttoEth = requireBigInt(securityVaultData[2], 'Security vault unpaid ETH fees')
 	const feeIndex = requireBigInt(securityVaultData[3], 'Security vault fee index')
 	const escalationGameAddress = requireAddress(
@@ -209,7 +262,7 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 					}),
 					'Dispute-staked REP by vault',
 				)
-	return { repBackingUnits, coverageCommitmentAttoEth, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
+	return { repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>

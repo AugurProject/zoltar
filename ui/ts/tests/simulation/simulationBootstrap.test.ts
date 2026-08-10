@@ -158,7 +158,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	}
 	const poolPlan = scenario === 'security-pool' ? [{ question: 'Will this resolve?' }] : [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
 	const repDeposits: Record<Address, Record<Address, bigint>> = {}
-	const coverageCommitmentAttoEths: Record<Address, Record<Address, bigint>> = {}
+	const capacityOwnershipAttoReps: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
 	const pendingReportIds: Record<Address, bigint> = {}
 	type PendingReportMock = { currentAmount1: bigint; currentAmount2: bigint; currentReporter: Address; reportTimestamp: bigint; settlementTime: bigint }
@@ -173,12 +173,12 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		repDeposits[poolAddress] = {
 			[primaryVault]: scenario === 'security-pool' ? primaryVaultRepDeposit : x2PrimaryVaultRepDeposit,
 		}
-		coverageCommitmentAttoEths[poolAddress] = {
+		capacityOwnershipAttoReps[poolAddress] = {
 			[primaryVault]: 0n,
 		}
 		if (secondaryVault !== undefined) {
 			repDeposits[poolAddress][secondaryVault] = x2SecondaryVaultRepDeposit
-			coverageCommitmentAttoEths[poolAddress][secondaryVault] = 0n
+			capacityOwnershipAttoReps[poolAddress][secondaryVault] = 0n
 		}
 	}
 
@@ -199,6 +199,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			loadZoltarUniverseSummary: 0,
 			migrateRepToZoltarFromSecurityPool: 0,
 			queueOracleManagerOperation: 0,
+			requestOraclePrice: 0,
 			reportOutcomeInSecurityPool: 0,
 			settleOracleReport: 0,
 			startTruthAuctionForSecurityPool: 0,
@@ -225,13 +226,13 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		return nextManager
 	}
 
-	const settleCoverageCommitmentAttoEth = (managerAddress: Address, accountAddress: Address) => {
+	const settleCapacityOwnershipAttoRep = (managerAddress: Address, accountAddress: Address) => {
 		const operation = pendingOperations[managerAddress]
 		if (operation === undefined || operation.targetVault !== accountAddress) return
 		const ownerPool = managerToPool.get(managerAddress)
 		if (ownerPool === undefined) return
-		coverageCommitmentAttoEths[ownerPool] ??= {}
-		coverageCommitmentAttoEths[ownerPool][accountAddress] = operation.amount
+		capacityOwnershipAttoReps[ownerPool] ??= {}
+		capacityOwnershipAttoReps[ownerPool][accountAddress] = operation.amount
 		delete pendingOperations[managerAddress]
 		delete pendingReportIds[managerAddress]
 	}
@@ -286,12 +287,14 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					universeId: 1n,
 				}) as never,
 		),
-		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint) => {
+		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) => {
 			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
+				capacityOwnershipAttoReps[poolAddress] ??= {}
+				capacityOwnershipAttoReps[poolAddress][vaultAddress] = (amount * 10_000n) / targetHealthFactorBps
 			}
 			return {
 				action: 'depositRepToVault',
@@ -343,10 +346,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			const parentPools = poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
-				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; coverageCommitmentAttoEth: bigint }> = vaultAddresses.map(vaultAddress => ({
+				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; capacityOwnershipAttoRep: bigint }> = vaultAddresses.map(vaultAddress => ({
 					vaultAddress,
 					vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
-					coverageCommitmentAttoEth: coverageCommitmentAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
+					capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				}))
 				return {
 					marketDetails: {
@@ -357,7 +360,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
 					totalPoolHeldAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.vaultAttoRepBacking, 0n),
-					totalCoverageCommitmentAttoEth: vaultRows.reduce<bigint>((sum, row) => sum + row.coverageCommitmentAttoEth, 0n),
+					totalCapacityOwnershipAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.capacityOwnershipAttoRep, 0n),
 					vaults: vaultRows,
 				} as never
 			})
@@ -370,7 +373,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					securityPoolAddress: yesChildPoolAddress,
 					systemState: 'forkTruthAuction',
 					totalPoolHeldAttoRep: 0n,
-					totalCoverageCommitmentAttoEth: 0n,
+					totalCapacityOwnershipAttoRep: 0n,
 					vaultCount: 0n,
 					vaults: [],
 				} as never,
@@ -409,8 +412,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				pendingOperation: pendingOperation
 					? {
 							amount: pendingOperation.amount,
-							initiatorVault: pendingOperation.targetVault,
-							operation: 'setCoverageCommitment',
+							operator: pendingOperation.targetVault,
+							operation: 'withdrawRep',
 							operationId: pendingOperation.operationId,
 							targetVault: pendingOperation.targetVault,
 						}
@@ -457,9 +460,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				totalRepBackingUnits: 0n,
 				vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				repToken: profile.genesisRepTokenAddress,
-				coverageCommitmentAttoEth: coverageCommitmentAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
+				capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				securityPoolAddress,
-				totalCoverageCommitmentAttoEth: Object.values(coverageCommitmentAttoEths[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
+				totalCapacityOwnershipAttoRep: Object.values(capacityOwnershipAttoReps[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
 				claimableFeesAttoEth: 0n,
 				universeId: 0n,
 				vaultAddress,
@@ -482,7 +485,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		}),
 		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => {
 			state.callLog.queueOracleManagerOperation += 1
-			if (operation === 'setCoverageCommitment') {
+			if (operation === 'withdrawRep') {
 				if (proposedRepPerEthPrice !== expectedProposedRepPerEthPrice) throw new Error(`Unexpected seeded REP per ETH price ${proposedRepPerEthPrice?.toString() ?? 'undefined'}`)
 				pendingOperations[managerAddress] = {
 					targetVault,
@@ -517,6 +520,25 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				},
 				hash: '0x01',
 			} as never
+		}),
+		requestOraclePrice: mock(async (client: { account?: Address }, managerAddress: Address, proposedRepPerEthPrice?: bigint) => {
+			state.callLog.requestOraclePrice += 1
+			if (proposedRepPerEthPrice !== expectedProposedRepPerEthPrice) throw new Error(`Unexpected seeded REP per ETH price ${proposedRepPerEthPrice?.toString() ?? 'undefined'}`)
+			const reporter = client.account ?? zeroAddress
+			const reportId = nextPendingReportId
+			nextPendingReportId += 1n
+			pendingReportIds[managerAddress] = reportId
+			const reportOpenOracleAddress = openOracleByManager.get(managerAddress) ?? openOracleAddress
+			const reportKey = getReportKey(reportOpenOracleAddress, reportId)
+			state.pendingReportSnapshots.push({ managerAddress, openOracleAddress: reportOpenOracleAddress, reportId, currentReporter: reporter, currentAmount2: expectedInitialReportAmount2 })
+			pendingReports[reportKey] = {
+				currentAmount1: coordinatorExactToken1Report,
+				currentAmount2: expectedInitialReportAmount2,
+				currentReporter: reporter,
+				reportTimestamp: SIMULATION_INITIAL_TIMESTAMP,
+				settlementTime: 1n,
+			}
+			return { action: 'requestPrice', hash: '0x01' } as never
 		}),
 		reportOutcomeInSecurityPool: mock(async () => {
 			state.callLog.reportOutcomeInSecurityPool += 1
@@ -629,7 +651,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				state.callLog.writeContract += 1
 				const pending = pendingOperations[address]
 				if (pending !== undefined) {
-					settleCoverageCommitmentAttoEth(address, pending.targetVault)
+					settleCapacityOwnershipAttoRep(address, pending.targetVault)
 				}
 				return '0x01'
 			},
@@ -978,17 +1000,12 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(state.callLog.loadAllSecurityPools).toBe(1)
 		expect(state.callLog.settleOracleReport).toBe(1)
-		expect(state.callLog.writeContract).toBe(1)
-		expect(contractWriteCalls).toContainEqual(
-			expect.objectContaining({
-				functionName: 'executeStagedOperation',
-				gas: 5_000_000n,
-			}),
-		)
+		expect(state.callLog.requestOraclePrice).toBe(1)
+		expect(contractWriteCalls).toHaveLength(0)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
-	test('boots the securitypoolx2 simulation path with secondary vault coverage commitment execution', async () => {
+	test('boots the securitypoolx2 simulation path with secondary vault capacity ownership execution', async () => {
 		const profile = createBaselineProfile()
 		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
@@ -1010,14 +1027,15 @@ describe('simulation bootstrap', () => {
 
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)
-		expect(state.callLog.settleOracleReport).toBe(4)
-		expect(state.callLog.loadOpenOracleReportDetails).toBe(8)
-		expect(state.callLog.writeContract).toBe(4)
-		expect(state.callLog.queueOracleManagerOperation).toBe(4)
+		expect(state.callLog.settleOracleReport).toBe(2)
+		expect(state.callLog.loadOpenOracleReportDetails).toBe(4)
+		expect(state.callLog.writeContract).toBe(0)
+		expect(state.callLog.requestOraclePrice).toBe(2)
+		expect(state.callLog.queueOracleManagerOperation).toBe(0)
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.reportId.toString())).size).toBe(state.pendingReportSnapshots.length)
 		expect(state.pendingReportSnapshots.every(snapshot => snapshot.currentAmount2 === state.expectedInitialReportAmount2)).toBe(true)
-		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.currentReporter.toLowerCase())).size).toBeGreaterThan(1)
+		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.currentReporter.toLowerCase()))).toEqual(new Set([MOCK_PRIMARY_ACCOUNT.toLowerCase()]))
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 

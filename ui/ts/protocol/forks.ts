@@ -158,7 +158,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCoverageCommitmentAttoEth, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
+	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtForkAttoRep, escalationChildRepPerSelectedOutcomeAttoRep, escrowSourceRepAtForkAttoRep] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
@@ -284,7 +284,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		}
 	}
 	return {
-		auctionedCoverageCommitmentAttoEth,
+		auctionedCapacityOwnershipAttoRep,
 		claimingAvailable: systemState === 'operational' && truthAuctionAddress !== zeroAddress,
 		settlementCollateralAttoEth,
 		currentTime: block.timestamp,

@@ -134,7 +134,7 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCoverageCommitmentAttoEth: 8n * ONE_UNIT,
+		auctionedCapacityOwnershipAttoRep: 8n * ONE_UNIT,
 		claimingAvailable: true,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 700_000n,
@@ -161,7 +161,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 0n,
+		feeEligibleCapacityOwnershipAttoRep: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
@@ -179,7 +179,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		truthAuctionAddress: TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -323,7 +323,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		}
 	})
 
-	test('shows selected-bid settlement estimates for REP, assigned coverage commitment, and refunds', async () => {
+	test('shows selected-bid settlement estimates for REP, assigned capacity ownership, and refunds', async () => {
 		const truthAuction = createTruthAuction()
 		const childPool = createChildPool()
 		mockedForkAuctionDetails = createForkAuctionDetails({
@@ -361,10 +361,10 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected-bid settlement preview.')).not.toBeNull()
-		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned coverage commitment, while refund rows return locked ETH\./)).not.toBeNull()
-		expect(documentQueries.getByText('Estimated Auctioned coverage commitment')).not.toBeNull()
+		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned capacity ownership, while refund rows return locked ETH\./)).not.toBeNull()
+		expect(documentQueries.getByText('Estimated Auctioned capacity ownership')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 1.50 REP')).not.toBeNull()
-		expect(documentQueries.getByText('≈ 3.00 ETH')).not.toBeNull()
+		expect(documentQueries.getByText('≈ 3.00 REP')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 1.50 ETH')).not.toBeNull()
 		expect(documentQueries.getByText('These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.')).not.toBeNull()
 		expect(documentQueries.getByText('Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.')).not.toBeNull()

@@ -38,7 +38,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = fixture.addressString(fixture.TEST_ADDRESSES[0])
-		await fixture.manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.SetCoverageCommitment, fixture.client.account.address, fixture.repDeposit / 4n)
+		await fixture.manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, fixture.client.account.address, fixture.repDeposit / 4n)
 		factory = await deploy(factoryArtifact, [fixture.getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
@@ -52,7 +52,9 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const poolSettings = await loadLiveSecurityPoolSettings(fixture.client, fixture.securityPoolAddresses.securityPool)
 		expect(poolSettings.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
 		expect(poolSettings.settlementCollateralAttoEth).toBe(1n)
-		expect(poolSettings.totalCoverageCommitmentAttoEth).toBeGreaterThanOrEqual(poolSettings.settlementCollateralAttoEth)
+		expect(poolSettings.totalCapacityOwnershipAttoRep).toBeGreaterThan(0n)
+		expect(poolSettings.feeEligibleCapacityOwnershipAttoRep).toBeGreaterThan(0n)
+		expect(poolSettings.currentMintingCapacityAttoEth).toBeGreaterThan(0n)
 		expect(await shareBalance(pair, 0n)).toBe(0n)
 		const invalidBefore = await shareBalance(account, 0n)
 		const expectedMint = await fixture.client.readContract({ abi: attoEthToAttoSharesAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoEthToAttoShares', args: [1n] })

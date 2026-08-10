@@ -810,10 +810,14 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 									<dd>{formatUnits(selected.currentRetentionRate, 18, 12)}×</dd>
 								</div>
 								<div>
-									<dt>Total / fee-eligible coverage commitment</dt>
+									<dt>Total / fee-eligible capacity ownership</dt>
 									<dd>
-										{formatUnits(selected.totalCoverageCommitmentAttoEth)} / {formatUnits(selected.feeEligibleCoverageCommitmentAttoEth)} ETH
+										{formatUnits(selected.totalCapacityOwnershipAttoRep)} / {formatUnits(selected.feeEligibleCapacityOwnershipAttoRep)} REP
 									</dd>
+								</div>
+								<div>
+									<dt>Available complete-set minting capacity</dt>
+									<dd>{formatUnits(selected.currentMintingCapacityAttoEth)} ETH</dd>
 								</div>
 								<div>
 									<dt>Checkpointed collateral / share ratio</dt>

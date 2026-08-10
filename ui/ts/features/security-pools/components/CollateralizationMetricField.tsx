@@ -11,7 +11,7 @@ type CollateralizationMetricFieldProps = {
 	label?: ComponentChildren
 	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
-	coverageCommitmentAttoEth: bigint | undefined
+	capacityOwnershipAttoRep: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	unavailableCopy?: string | undefined
 }
@@ -24,9 +24,9 @@ function getDefaultLabel(repPerEthSource: RepPriceSource | undefined, repPerEthS
 		</span>
 	)
 }
-export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, coverageCommitmentAttoEth, statoblastSecurityMultiplierBps, unavailableCopy = pricingCopy.awaitingRepEthPrice }: CollateralizationMetricFieldProps) {
-	const displayState = getCollateralizationDisplayState(coverageCommitmentAttoEth, collateralizationPercent)
-	const tone = displayState === 'noActiveCoverageCommitment' ? undefined : getCollateralizationTone(collateralizationPercent, statoblastSecurityMultiplierBps)
+export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep, statoblastSecurityMultiplierBps, unavailableCopy = pricingCopy.awaitingRepEthPrice }: CollateralizationMetricFieldProps) {
+	const displayState = getCollateralizationDisplayState(capacityOwnershipAttoRep, collateralizationPercent)
+	const tone = displayState === 'noActiveCapacityOwnership' ? undefined : getCollateralizationTone(collateralizationPercent, statoblastSecurityMultiplierBps)
 	const valueClassName = (() => {
 		if (tone === 'success') return 'metric-value-success'
 		if (tone === 'danger') return 'metric-value-danger'
@@ -36,7 +36,7 @@ export function CollateralizationMetricField({ className, collateralizationPerce
 	return (
 		<MetricField className={className} label={label ?? getDefaultLabel(repPerEthSource, repPerEthSourceUrl)} valueClassName={valueClassName}>
 			{(() => {
-				if (displayState === 'noActiveCoverageCommitment') return pricingCopy.noActiveCoverageCommitment
+				if (displayState === 'noActiveCapacityOwnership') return pricingCopy.noActiveCapacityOwnership
 				if (displayState === 'unavailable') return unavailableCopy
 
 				return <CurrencyValue value={collateralizationPercent} suffix={commonCopy.percent} copyable={false} />
