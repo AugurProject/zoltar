@@ -30,6 +30,10 @@
 		</header>
 
 		<main>
+			<div id="freshness-banner" class="freshness-banner" role="alert" hidden>
+				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
+				<button id="refresh-stale" class="secondary compact" type="button">Retry now</button>
+			</div>
 			<section aria-labelledby="network-heading">
 				<div class="section-heading">
 					<div>
@@ -42,6 +46,11 @@
 					</div>
 				</div>
 				<div id="network-cards" class="network-cards" aria-live="polite" aria-busy="true"></div>
+				<details class="diagnostics">
+					<summary>Operator diagnostics</summary>
+					<div class="diagnostics-bar"><span>Safe to include in a bug report; RPC URLs are never exposed.</span><button id="copy-diagnostics" class="secondary compact" type="button">Copy diagnostics</button></div>
+					<pre id="diagnostics-output">Waiting for network status…</pre>
+				</details>
 			</section>
 
 			<section id="activity" class="activity" aria-labelledby="activity-heading">

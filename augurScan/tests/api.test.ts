@@ -75,7 +75,14 @@ test('rejects non-decimal contract chain identifiers before querying', async () 
 test('rejects non-decimal integer query parameters before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
-	for (const path of ['logs?chainId=1e2', 'logs?limit=0x10', 'state/catalog?chainId=0x10', 'actions?chainId=1e2']) {
+	for (const path of [
+		'logs?chainId=1e2',
+		'logs?limit=0x10',
+		'state/catalog?chainId=0x10',
+		'state/catalog?limit=-1',
+		'state/universes/1/0?limit=unbounded',
+		'actions?chainId=1e2',
+	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}

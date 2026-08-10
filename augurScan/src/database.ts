@@ -29,6 +29,18 @@ export type IndexedBlock = {
 	readonly logs: readonly StoredLog[]
 }
 
+export type LiveEvent = {
+	readonly id: number
+	readonly event: string
+	readonly payload: unknown
+}
+
+export type IntegrityIssue = {
+	readonly chainId: number
+	readonly code: string
+	readonly detail: string
+}
+
 type StoredCheckpoint = {
 	readonly startBlock: bigint
 	readonly indexedBlock?: bigint
@@ -70,6 +82,14 @@ export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | unde
 	if (ancestorHash === undefined || !targetIsCanonical) throw new DatabaseConsistencyError('The rewind target is not a canonical stored block')
 }
 
+export const rewindDepth = (previousBlock: bigint, startBlock: bigint, ancestor: bigint): bigint => previousBlock - (ancestor < 0n ? startBlock - 1n : ancestor)
+
+export const replayWindowExpired = (cursor: number, prunedThroughId: number): boolean => cursor < prunedThroughId
+
+export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
+	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
+}
+
 export type IndexerLease = {
 	readonly backendPid: number
 	readonly connection: ReservedSQL
@@ -80,12 +100,91 @@ export type IndexerLease = {
 export class ScannerDatabase {
 	readonly sql: SQL
 
-	constructor(url: string) {
-		this.sql = new SQL(url, { max: 10, idleTimeout: 30 })
+	constructor(url: string, maxConnections = 10, connectionTimeoutSeconds = 5) {
+		this.sql = new SQL(url, { max: maxConnections, idleTimeout: 30, connectionTimeout: connectionTimeoutSeconds })
 	}
 
 	async close(): Promise<void> {
 		await this.sql.close()
+	}
+
+	async read<T>(operation: (sql: SQL) => Promise<T>, timeoutMs = 10_000): Promise<T> {
+		return await this.sql.begin(async (transaction) => {
+			await transaction.unsafe('SET TRANSACTION READ ONLY')
+			await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
+			await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
+			return await operation(transaction)
+		})
+	}
+
+	async latestEventId(): Promise<number> {
+		return await this.read(async (sql) => {
+			const rows = await sql`SELECT COALESCE(max(id), 0) AS id FROM live_events`
+			return Number(rows[0]?.['id'] ?? 0)
+		}, 3_000)
+	}
+
+	async eventsAfter(id: number, limit = 250): Promise<readonly LiveEvent[]> {
+		return await this.read(async (sql) => {
+			const rows = await sql`
+				WITH window AS (
+					SELECT state.pruned_through_id,
+						GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS latest_id
+					FROM live_event_state state WHERE singleton
+				), requested AS (
+					SELECT event.id, event.event, event.payload
+					FROM live_events event, window
+					WHERE ${id} >= window.pruned_through_id AND event.id > ${id}
+					ORDER BY event.id LIMIT ${limit}
+				)
+				SELECT id, event, payload FROM requested
+				UNION ALL
+				SELECT latest_id AS id, 'reset' AS event,
+					jsonb_build_object('reason', 'replay-window-expired', 'refreshRequired', true) AS payload
+				FROM window WHERE ${id} < pruned_through_id
+				ORDER BY id
+			`
+			return rows.map((row: Record<string, unknown>) => ({ id: Number(row['id']), event: String(row['event']), payload: row['payload'] }))
+		}, 3_000)
+	}
+
+	async pruneLiveEvents(): Promise<void> {
+		await this.sql.begin(async (transaction) => {
+			await lockLiveEventWriter(transaction)
+			const rows = await transaction`SELECT COALESCE(max(id), 0) AS id FROM live_events WHERE created_at < now() - interval '7 days'`
+			const prunedThroughId = String(rows[0]?.['id'] ?? 0)
+			await transaction`DELETE FROM live_events WHERE id <= ${prunedThroughId}`
+			await transaction`
+				UPDATE live_event_state SET pruned_through_id = GREATEST(pruned_through_id, ${prunedThroughId}), updated_at = now()
+				WHERE singleton
+			`
+		})
+	}
+
+	async auditIntegrity(sql: SQL = this.sql): Promise<readonly IntegrityIssue[]> {
+		const rows = await sql`
+			WITH checkpoint_issues AS (
+				SELECT n.chain_id, 'checkpoint_missing'::text AS code,
+					'The indexed checkpoint does not identify a canonical stored block'::text AS detail
+				FROM networks n
+				LEFT JOIN blocks b ON b.chain_id = n.chain_id AND b.number = n.indexed_block AND b.hash = n.indexed_hash AND b.canonical
+				WHERE n.indexed_block IS NOT NULL AND b.hash IS NULL
+			), recent_canonical_blocks AS (
+				SELECT b.* FROM blocks b JOIN networks n USING (chain_id)
+				WHERE b.canonical AND b.number >= GREATEST(n.start_block, n.indexed_block - 10000)
+			), continuity_issues AS (
+				SELECT chain_id, 'canonical_discontinuity'::text AS code,
+					'Canonical block ' || number || ' does not extend the preceding stored block' AS detail
+				FROM (
+					SELECT chain_id, number, parent_hash, lag(hash) OVER (PARTITION BY chain_id ORDER BY number) AS previous_hash,
+						lag(number) OVER (PARTITION BY chain_id ORDER BY number) AS previous_number
+					FROM recent_canonical_blocks
+				) ordered
+				WHERE previous_number IS NOT NULL AND (number <> previous_number + 1 OR parent_hash <> previous_hash)
+			)
+			SELECT * FROM checkpoint_issues UNION ALL SELECT * FROM continuity_issues ORDER BY chain_id, code LIMIT 100
+		`
+		return rows.map((row: Record<string, unknown>) => ({ chainId: Number(row['chain_id']), code: String(row['code']), detail: String(row['detail']) }))
 	}
 
 	async tryAcquireIndexerLock(chainId: number): Promise<IndexerLease | undefined> {
@@ -243,7 +342,7 @@ export class ScannerDatabase {
 	async rewind(chainId: number, ancestor: bigint, ancestorHash: Hash | undefined, lease: IndexerLease): Promise<void> {
 		await lease.assertHeld()
 		await lease.connection.begin(async (transaction) => {
-			const checkpointRows = await transaction`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const checkpoint = checkpointRows[0]
 			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before rewinding`)
 			const targetRows =
@@ -303,10 +402,18 @@ export class ScannerDatabase {
 					AND metadata.block_hash = previous.block_hash
 					AND NOT metadata.canonical
 			`
+			const previousBlock = BigInt(String(checkpoint['indexed_block']))
+			const reorgDepth = rewindDepth(previousBlock, BigInt(String(checkpoint['start_block'])), ancestor)
 			await transaction`
 				UPDATE networks SET indexed_block = ${ancestor < 0n ? null : ancestor.toString()}, indexed_hash = ${ancestorHash ?? null},
-					indexed_timestamp = (SELECT timestamp FROM blocks WHERE chain_id = ${chainId} AND hash = ${ancestorHash ?? null}), phase = 'backfilling', updated_at = now()
+					indexed_timestamp = (SELECT timestamp FROM blocks WHERE chain_id = ${chainId} AND hash = ${ancestorHash ?? null}), phase = 'backfilling',
+					last_reorg_at = now(), last_reorg_depth = ${reorgDepth.toString()}, updated_at = now()
 				WHERE chain_id = ${chainId}
+			`
+			await lockLiveEventWriter(transaction)
+			await transaction`
+				INSERT INTO live_events (event, payload)
+				VALUES ('reorg', ${JSON.stringify({ chainId, previousBlock: previousBlock.toString(), ancestor: ancestor.toString(), depth: reorgDepth.toString() })}::jsonb)
 			`
 		})
 	}
@@ -425,19 +532,41 @@ export class ScannerDatabase {
 			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND number <= ${block.finalizedThrough.toString()}`
 			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND block_number <= ${block.finalizedThrough.toString()}`
 			await transaction`
-				UPDATE networks SET indexed_block = ${block.number.toString()}, indexed_hash = ${block.hash}, indexed_timestamp = ${block.timestamp}, observed_block = ${block.observedHead.toString()}, finalized_block = ${block.finalizedThrough.toString()}, phase = ${block.number >= block.observedHead ? 'live' : 'backfilling'}, last_poll_at = now(), last_error = null, updated_at = now()
+				UPDATE networks SET indexed_block = ${block.number.toString()}, indexed_hash = ${block.hash}, indexed_timestamp = ${block.timestamp}, observed_block = ${block.observedHead.toString()}, finalized_block = ${block.finalizedThrough.toString()}, phase = ${block.number >= block.observedHead ? 'live' : 'backfilling'}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now()
 				WHERE chain_id = ${chainId}
+			`
+			await lockLiveEventWriter(transaction)
+			await transaction`
+				INSERT INTO live_events (event, payload)
+				VALUES ('block', ${JSON.stringify({ chainId, blockNumber: block.number.toString(), logs: block.logs.length })}::jsonb)
 			`
 		})
 	}
 
 	async updateObservedHead(chainId: number, head: bigint, phase: string, lease: IndexerLease): Promise<void> {
 		await lease.assertHeld()
-		await lease.connection`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_error = null, updated_at = now() WHERE chain_id = ${chainId}`
+		await lease.connection.begin(async (transaction) => {
+			await transaction`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now() WHERE chain_id = ${chainId}`
+			await lockLiveEventWriter(transaction)
+			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', ${JSON.stringify({ chainId, blockNumber: head.toString() })}::jsonb)`
+		})
 	}
 
-	async recordFailure(chainId: number, message: string, lease: IndexerLease): Promise<void> {
+	async recordFailure(chainId: number, message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
 		await lease.assertHeld()
-		await lease.connection`UPDATE networks SET phase = 'degraded', last_error = ${message.slice(0, 2000)}, last_poll_at = now(), updated_at = now() WHERE chain_id = ${chainId}`
+		await lease.connection.begin(async (transaction) => {
+			const rows = await transaction`
+				UPDATE networks SET phase = 'degraded', last_error = ${message.slice(0, 2000)}, last_poll_at = now(),
+					failure_started_at = COALESCE(failure_started_at, now()), consecutive_failures = consecutive_failures + 1,
+					next_retry_at = ${nextRetryAt}, updated_at = now()
+				WHERE chain_id = ${chainId}
+				RETURNING consecutive_failures
+			`
+			await lockLiveEventWriter(transaction)
+			await transaction`
+				INSERT INTO live_events (event, payload)
+				VALUES ('status', ${JSON.stringify({ chainId, phase: 'degraded', nextRetryAt: nextRetryAt.toISOString(), failures: Number(rows[0]?.['consecutive_failures'] ?? 1) })}::jsonb)
+			`
+		})
 	}
 }

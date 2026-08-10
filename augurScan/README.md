@@ -17,6 +17,8 @@ Open <http://localhost:3000>. PostgreSQL is included and stored in the `augursca
 
 Set private or higher-capacity RPC endpoints in `.env` for reliable historical indexing. The included public defaults are convenient for evaluation but can rate-limit large backfills. Set `MAINNET_START_BLOCK` and `SEPOLIA_START_BLOCK` to the verified earliest project deployment blocks before relying on the database as a complete production history. The conservative default of block `0` cannot omit protocol history but is expensive.
 
+Each RPC variable may contain an ordered, comma-separated provider pool, for example `SEPOLIA_RPC_URL=https://primary.example,https://fallback.example`. augurScan verifies each provider's chain independently. Requests use bounded retries on one verified provider; if the polling operation still fails, augurScan resumes from the last committed checkpoint with the next matching provider.
+
 To enable only one network, set `NETWORKS=mainnet` or `NETWORKS=sepolia` on the app service. `config/networks.json` defines each network and selects its manifest. A manifest contains a `contracts` array whose entries are `[address, label, kind]`. Copy kinds from the checked-in manifests or the canonical `kindToContractName` decoder registry in `src/metadata.ts`; examples include `zoltar`, `openOracle`, `securityPoolFactory`, `reputationToken`, and `weth`. `config/abis.json` stores the Solidity-contract ABI snapshot to which that registry maps. A seed address or earlier start boundary added after indexing does not retroactively fill its earlier history. For complete history after either change, start with a fresh database or deliberately rebuild the named volume from the configured start block.
 
 All quantities and identifiers are stored losslessly. Protocol fields explicitly named `attoREP`, `attoETH`, or `attoShares`, the OpenOracle ETH sentinel, and known REP/share/WETH contract kinds use fixed 18-decimal protocol units. Other token amounts use the referenced token's discovered on-chain decimals and symbol. Only an arbitrary token without metadata is labeled in exact base units instead of being guessed. Raw values remain available in details.
@@ -62,7 +64,7 @@ The script reads Solidity sources from the parent repository but only writes `co
 
 - Every enabled network has an independent loop. Chain IDs are verified before indexing.
 - Historical batches run continuously until caught up; live networks poll their RPC head every 12 seconds and ingest every missed block.
-- Each JSON-RPC request has a timeout and bounded transport retries. If verification or a poll still fails, that network reports a redacted degraded error without advancing its checkpoint and retries on the next polling interval; other enabled networks continue independently. The provider must retain every block and receipt from the configured `startBlock` for a complete backfill.
+- Each JSON-RPC request has a timeout and bounded transport retries on its selected provider. If verification or a polling operation still fails across the provider pool, that network reports a redacted degraded error and retries indefinitely with jittered exponential backoff capped at five minutes. Blocks committed earlier in the operation remain durable, and the next attempt resumes from their checkpoint; a block whose database transaction fails does not advance it. Other enabled networks continue independently. Every provider used for backfill must retain each block and receipt from the configured `startBlock`.
 - Logs from protocol activity sources and successful or failed top-level calls to those sources select relevant receipts. Shared WETH, REP, Multicall3, and permissionless proxy-deployer addresses remain labeled and ABI/token-aware but never select receipts from unrelated public traffic; their known logs are retained after either activity-source selection path makes the receipt relevant.
 - Factory and registry events discover pools, share tokens, price coordinators, truth auctions, escalation games, and child REP tokens. Receipts are decoded to a fixed point so constructor/initializer logs that precede the registration event are retained.
 - Token name, symbol, and decimals are read at the indexed block and cached for known/discovered tokens and token-bearing OpenOracle logs or calls. Failed reads retry with bounded backoff and metadata observations follow canonical reorg state. Known REP/share/WETH kinds and the OpenOracle ETH sentinel have fixed 18-decimal protocol units; only arbitrary tokens whose metadata is unavailable fall back to exact base units.
@@ -78,17 +80,20 @@ Version 0.1 indexes top-level actions sent to protocol activity sources and ever
 
 - Liveness: `GET /health/live`
 - Database readiness: `GET /health/ready`
+- Indexer freshness and recent canonical-integrity audit: `GET /health/indexers`
 - Network status: `GET /api/v1/networks`
 - Paginated logs: `GET /api/v1/logs`
 - Full log occurrence: `GET /api/v1/logs/:chainId/:blockHash/:txHash/:logIndex`
 - Top-level protocol actions: `GET /api/v1/actions`
 - Contract identity: `GET /api/v1/contracts/:chainId/:address`
-- Live commit notifications: `GET /api/v1/stream`
+- Durable live commit/reorg/status notifications with seven-day `Last-Event-ID` replay: `GET /api/v1/stream`. A cursor older than that window receives a reset event so the UI reloads current canonical state.
 - Pools, questions, vaults, and universes: `GET /api/v1/state/catalog`
 - Pool history: `GET /api/v1/state/pools/:chainId/:poolAddress`
 - Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`
 - Question usage: `GET /api/v1/state/questions/:chainId/:questionId`
 - Universe history: `GET /api/v1/state/universes/:chainId/:universeId`
+
+State catalog responses default to 500 and cap at 1,000 rows per entity class. History endpoints default `limit` to 1,000 and cap it at 2,000 records per returned series; `truncated` is true when any series has more records. Use `chainId` on the catalog to narrow large registries. These bounds keep database transactions, JSON normalization, and graph rendering predictable.
 
 Back up the named volume with normal PostgreSQL tooling (`pg_dump`/`pg_restore`). Stop the app gracefully before infrastructure maintenance. `docker compose down` preserves history; `docker compose down --volumes` intentionally deletes it.
 

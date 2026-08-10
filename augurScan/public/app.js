@@ -38,6 +38,14 @@ let lastNetworkSuccessAt
 let stream
 let networkLoadPromise
 let networkFollowUpPromise
+let latestNetworks = []
+let lastStreamEventAt
+let logsAbortController
+let serverClockOffsetMs = 0
+let networkFreshnessThresholdMs = 48_000
+let lastNetworkRequestFailed = false
+let activeReorgRecovery
+let canonicalRefreshRequired = false
 
 const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 const demoNetworks = [
@@ -52,6 +60,8 @@ const demoNetworks = [
 		finalized_block: '23184648',
 		phase: 'live',
 		last_poll_at: new Date().toISOString(),
+		last_success_at: new Date().toISOString(),
+		consecutive_failures: 0,
 		last_error: null,
 		explorer_base_url: 'https://etherscan.io',
 	},
@@ -66,6 +76,8 @@ const demoNetworks = [
 		finalized_block: '8972402',
 		phase: 'backfilling',
 		last_poll_at: new Date().toISOString(),
+		last_success_at: new Date().toISOString(),
+		consecutive_failures: 0,
 		last_error: null,
 		explorer_base_url: 'https://sepolia.etherscan.io',
 	},
@@ -463,15 +475,20 @@ const time = (value) =>
 		: '—'
 const age = (value) => {
 	if (!value) return 'not indexed'
-	const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000))
+	const seconds = Math.max(0, Math.floor((Date.now() + serverClockOffsetMs - new Date(value).getTime()) / 1000))
 	if (seconds < 60) return `${seconds}s ago`
 	if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
 	if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
 	return `${Math.floor(seconds / 86400)}d ago`
 }
 const exactTimestamp = (value) => (value ? new Date(value).toISOString() : 'No indexed timestamp')
+const until = (value) => {
+	if (!value) return 'time unknown'
+	const seconds = Math.ceil((new Date(value).getTime() - Date.now()) / 1000)
+	return seconds <= 0 ? 'now' : seconds < 60 ? `in ${seconds}s` : `in ${Math.ceil(seconds / 60)}m`
+}
 
-const api = async (path) => {
+const api = async (path, { signal } = {}) => {
 	if (isDemo) {
 		if (path.startsWith('/api/v1/networks')) {
 			if (networkState === 'error') throw new Error('Network status could not be refreshed')
@@ -538,13 +555,16 @@ const api = async (path) => {
 			return { items: demoState === 'empty' ? [] : demoLogs }
 		}
 	}
-	const response = await fetch(path)
-	const payload = await response.json()
+	const timeout = AbortSignal.timeout(15_000)
+	const response = await fetch(path, { signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]) })
+	const payload = await response.json().catch(() => ({}))
 	if (!response.ok) throw new Error(payload.error ?? `Request failed (${response.status})`)
 	return payload
 }
 
 const renderNetworks = (networks) => {
+	latestNetworks = networks
+	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
 	for (const network of networks) {
 		const card = element('article', 'network-card')
@@ -581,10 +601,71 @@ const renderNetworks = (networks) => {
 				: `${Math.max(0, Number(network.observed_block) - Number(network.indexed_block))} blocks behind`
 		meta.append(indexedTime, ageNode, element('span', '', lag))
 		card.append(title, block, meta)
+		if (Number(network.consecutive_failures) > 0) {
+			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
+			card.append(element('p', 'network-retry', `${number(network.consecutive_failures)} consecutive failures · ${retry}`))
+		}
 		if (network.last_error) card.append(element('p', 'network-error', network.last_error))
 		networkCards.append(card)
 	}
 	networkCards.setAttribute('aria-busy', 'false')
+}
+
+const updateDiagnostics = () => {
+	const report = {
+		generatedAt: new Date().toISOString(),
+		page: location.pathname,
+		stream: stream?.readyState === EventSource.OPEN ? 'connected' : stream?.readyState === EventSource.CONNECTING ? 'connecting' : 'closed',
+		lastStreamEventAt: lastStreamEventAt?.toISOString(),
+		networks: latestNetworks.map((network) => ({
+			chainId: network.chain_id,
+			id: network.id,
+			phase: network.phase,
+			indexedBlock: network.indexed_block,
+			observedBlock: network.observed_block,
+			indexedTimestamp: network.indexed_timestamp,
+			lastSuccessAt: network.last_success_at,
+			consecutiveFailures: network.consecutive_failures,
+			nextRetryAt: network.next_retry_at,
+			lastReorgAt: network.last_reorg_at,
+			lastReorgDepth: network.last_reorg_depth,
+			lastError: network.last_error,
+		})),
+	}
+	$('#diagnostics-output').textContent = JSON.stringify(report, null, 2)
+}
+
+const updateFreshness = () => {
+	if (activeReorgRecovery !== undefined) return
+	const retryCanonical = $('#refresh-stale')
+	if (canonicalRefreshRequired) {
+		const banner = $('#freshness-banner')
+		banner.hidden = false
+		retryCanonical.hidden = false
+		$('#freshness-title').textContent = 'Canonical refresh incomplete'
+		$('#freshness-detail').textContent = 'A chain update was recorded, but the canonical content refresh failed. Retry before debugging current state.'
+		return
+	}
+	if (lastNetworkRequestFailed) {
+		const banner = $('#freshness-banner')
+		banner.hidden = false
+		retryCanonical.hidden = true
+		$('#freshness-title').textContent = 'Status API unavailable'
+		$('#freshness-detail').textContent = 'Showing the last committed data already on screen; automatic retries continue.'
+		return
+	}
+	const stale = latestNetworks.filter(
+		(network) => !network.last_success_at || Date.now() + serverClockOffsetMs - new Date(network.last_success_at).getTime() > networkFreshnessThresholdMs,
+	)
+	const banner = $('#freshness-banner')
+	retryCanonical.hidden = true
+	if (stale.length === 0) {
+		banner.hidden = true
+		return
+	}
+	banner.hidden = false
+	$('#freshness-title').textContent = `${stale.length} network${stale.length === 1 ? '' : 's'} not updating`
+	$('#freshness-detail').textContent = `${stale.map((network) => network.name).join(', ')} · showing the last committed database state.`
 }
 
 const reconcileNetworkOptions = (select, items, initialValue = '') => {
@@ -626,33 +707,41 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 	if (manual) setManualNetworkRefreshBusy(true)
 	const run = (async () => {
 		try {
-			const { items } = await api('/api/v1/networks')
+			const { items, serverTime, freshnessThresholdMs } = await api('/api/v1/networks')
+			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
+			if (Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousActivityNetwork = networkFilter.value
 			const previousSystemNetwork = $('#system-network-filter').value
 			renderNetworks(items)
+			lastNetworkRequestFailed = false
+			updateFreshness()
+			updateDiagnostics()
 			reconcileNetworkOptions(networkFilter, items, initialActivityFilters.network)
 			reconcileNetworkOptions($('#system-network-filter'), items)
 			lastNetworkSuccessAt = new Date()
 			$('#last-updated').classList.remove('error')
 			$('#last-updated').textContent = `Status checked ${time(lastNetworkSuccessAt)} UTC`
 			$('#last-updated').title = lastNetworkSuccessAt.toISOString()
-			connection.className = 'connection live'
-			$('#connection-label').textContent = isDemo ? 'Demo fixture' : 'Live connection'
+			if (isDemo) {
+				connection.className = 'connection live'
+				$('#connection-label').textContent = 'Demo fixture'
+			}
 			if (!isSystem && synchronizeActivity && previousActivityNetwork !== networkFilter.value) {
 				syncActivityFilterUrl()
 				if (validateAddressFilter()) await loadLogs()
 				else showInvalidAddressFilter()
 			}
 			if (isSystem && previousSystemNetwork !== $('#system-network-filter').value) await loadSystemState()
-		} catch (error) {
-			connection.className = 'connection error'
-			$('#connection-label').textContent = 'Status unavailable'
+			return true
+		} catch {
+			lastNetworkRequestFailed = true
 			$('#last-updated').classList.add('error')
-			$('#last-updated').textContent = lastNetworkSuccessAt
-				? `Last checked ${time(lastNetworkSuccessAt)} UTC · refresh failed, retrying`
-				: 'Status unavailable · retrying automatically'
+			$('#last-updated').textContent = lastNetworkSuccessAt ? `Last checked ${time(lastNetworkSuccessAt)} UTC` : 'Status unavailable'
 			networkCards.setAttribute('aria-busy', 'false')
-			if (networkCards.childElementCount === 0) networkCards.append(element('p', 'network-error', error.message))
+			if (networkCards.childElementCount === 0) networkCards.classList.add('empty')
+			updateFreshness()
+			updateDiagnostics()
+			return false
 		}
 	})()
 	const tracked = run.finally(() => {
@@ -746,20 +835,26 @@ const setLogControlsBusy = (busy) => {
 }
 
 const loadLogs = async ({ append = false } = {}) => {
+	if (!append) {
+		logsAbortController?.abort()
+		logsAbortController = new AbortController()
+	}
+	const requestSignal = logsAbortController?.signal
 	const requestVersion = ++logsRequestVersion
 	const moreButton = $('#more')
+	const hadRows = feed.querySelector('.log-row') !== null
 	feed.setAttribute('aria-busy', 'true')
 	setLogControlsBusy(true)
 	if (append) {
 		moreButton.setAttribute('aria-busy', 'true')
 		moreButton.textContent = 'Loading more…'
 	}
-	if (!append) $('#more').hidden = true
+	if (!append && !hadRows) $('#more').hidden = true
 	feedState.hidden = false
-	feedState.textContent = append ? 'Loading more activity…' : 'Loading indexed activity…'
-	if (!append) feed.replaceChildren(...Array.from({ length: 6 }, () => element('div', 'loading-line')))
+	feedState.textContent = append ? 'Loading more activity…' : hadRows ? 'Refreshing indexed activity…' : 'Loading indexed activity…'
+	if (!append && !hadRows) feed.replaceChildren(...Array.from({ length: 6 }, () => element('div', 'loading-line')))
 	try {
-		const payload = await api(queryPath(append ? nextCursor : undefined))
+		const payload = await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
 		if (requestVersion !== logsRequestVersion) return
 		if (!append) feed.replaceChildren()
 		for (const log of payload.items) feed.append(rowFor(log))
@@ -771,17 +866,20 @@ const loadLogs = async ({ append = false } = {}) => {
 			feed.childElementCount === 0 ? 'No logs shown' : `${feed.childElementCount} canonical log${feed.childElementCount === 1 ? '' : 's'} shown`
 		newLogCount = 0
 		$('#new-logs').hidden = true
+		return true
 	} catch (error) {
-		if (requestVersion !== logsRequestVersion) return
-		if (!append) feed.replaceChildren()
-		$('#more').hidden = true
+		if (error.name === 'AbortError') return false
+		if (requestVersion !== logsRequestVersion) return false
+		if (!append && !hadRows) feed.replaceChildren()
+		$('#more').hidden = !nextCursor
 		feedState.hidden = false
 		const message = element('span', '', `Activity unavailable: ${error.message}`)
-		$('#activity-summary').textContent = 'Activity unavailable'
+		$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : 'Activity unavailable'
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
 		retry.addEventListener('click', () => loadLogs())
 		feedState.replaceChildren(message, retry)
+		return false
 	} finally {
 		if (requestVersion === logsRequestVersion) {
 			feed.setAttribute('aria-busy', 'false')
@@ -1483,6 +1581,7 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion)
 		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion)
 		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion)
+		return requestVersion === stateDetailRequestVersion
 	} catch (error) {
 		if (requestVersion === stateDetailRequestVersion) {
 			if (replaceWithLoading) {
@@ -1502,12 +1601,13 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 				refreshStatus.append(retry)
 			}
 		}
+		return false
 	} finally {
 		if (requestVersion === stateDetailRequestVersion) $('#state-detail').setAttribute('aria-busy', 'false')
 	}
 }
 
-const renderEntityList = ({ refreshSelected = false } = {}) => {
+const renderEntityList = async ({ refreshSelected = false } = {}) => {
 	const query = $('#entity-search').value.trim().toLowerCase()
 	const network = $('#system-network-filter').value
 	const catalogItems = stateData[activeStateType]
@@ -1533,16 +1633,17 @@ const renderEntityList = ({ refreshSelected = false } = {}) => {
 	list.setAttribute('aria-busy', 'false')
 	const selected = items.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
 	if (selected !== undefined) {
-		if (refreshSelected) selectEntity(selected, { preserveDetail: true })
-		return
+		if (refreshSelected) return await selectEntity(selected, { preserveDetail: true })
+		return true
 	}
-	if (items[0] !== undefined) selectEntity(items[0])
+	if (items[0] !== undefined) return await selectEntity(items[0])
 	else {
 		stateDetailRequestVersion++
 		selectedEntityKey = undefined
 		$('#state-detail').setAttribute('aria-busy', 'false')
 		$('#state-detail').replaceChildren(element('div', 'state-placeholder', `No indexed ${activeStateType} match this view.`))
 	}
+	return true
 }
 
 const renderStateStats = () => {
@@ -1583,7 +1684,7 @@ const loadSystemState = async () => {
 	try {
 		const chainId = $('#system-network-filter').value
 		const nextStateData = await api(`/api/v1/state/catalog${chainId ? `?chainId=${chainId}` : ''}`)
-		if (requestVersion !== catalogRequestVersion) return
+		if (requestVersion !== catalogRequestVersion) return false
 		stateData = nextStateData
 		for (const poolItem of stateData.pools) poolItem.current_state = {}
 		const orderedPoolStates = stateData.poolStates.toSorted(
@@ -1596,8 +1697,17 @@ const loadSystemState = async () => {
 			if (poolItem !== undefined) Object.assign(poolItem.current_state, state.state)
 		}
 		renderStateStats()
-		renderEntityList({ refreshSelected: true })
+		const detailRefreshed = await renderEntityList({ refreshSelected: true })
+		if (requestVersion !== catalogRequestVersion) return false
 		status.hidden = true
+		const truncated = Object.entries(stateData.truncated ?? {})
+			.filter(([, value]) => value)
+			.map(([name]) => name)
+		if (truncated.length > 0) {
+			alert.hidden = false
+			alert.append(element('span', '', `Large registry: showing ${stateData.limit} ${truncated.join(', ')} records. Select one network to narrow the result.`))
+		}
+		return detailRefreshed
 	} catch (error) {
 		if (requestVersion === catalogRequestVersion) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
@@ -1617,6 +1727,7 @@ const loadSystemState = async () => {
 				$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'State details are unavailable.'))
 			}
 		}
+		return false
 	} finally {
 		if (requestVersion === catalogRequestVersion) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
@@ -1660,6 +1771,41 @@ $('#filters').addEventListener('input', () => {
 	$('#clear-filters').disabled = !hasActivityFilters()
 })
 $('#refresh-networks').addEventListener('click', () => loadNetworks({ manual: true }))
+$('#refresh-stale').addEventListener('click', async () => {
+	const button = $('#refresh-stale')
+	if (button.disabled) return
+	button.disabled = true
+	button.setAttribute('aria-busy', 'true')
+	button.textContent = 'Retrying…'
+	try {
+		if (canonicalRefreshRequired) {
+			const refreshed = await refreshAfterUpdates(1, true)
+			if (refreshed) canonicalRefreshRequired = false
+			updateFreshness()
+		} else {
+			await loadNetworks({ manual: true, refreshAfterCurrent: true })
+			if (isSystem) await loadSystemState()
+			else if (validateAddressFilter()) await loadLogs()
+		}
+	} finally {
+		button.disabled = false
+		button.removeAttribute('aria-busy')
+		button.textContent = 'Retry now'
+	}
+})
+$('#copy-diagnostics').addEventListener('click', async (event) => {
+	updateDiagnostics()
+	const button = event.currentTarget
+	try {
+		await navigator.clipboard.writeText($('#diagnostics-output').textContent)
+		button.textContent = 'Copied'
+	} catch {
+		button.textContent = 'Copy failed'
+	}
+	setTimeout(() => {
+		button.textContent = 'Copy diagnostics'
+	}, 1200)
+})
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
 $('#new-logs').addEventListener('click', () => loadLogs())
 $('#close-detail').addEventListener('click', closeDetail)
@@ -1695,19 +1841,49 @@ $('#entity-search').addEventListener('keydown', (event) => {
 })
 $('#system-network-filter').addEventListener('change', loadSystemState)
 
-const refreshAfterUpdates = (count) => {
-	loadNetworks()
+const refreshAfterUpdates = async (count, forceContentRefresh = false) => {
+	const networkRefresh = loadNetworks()
 	if (isSystem) {
-		loadSystemState()
-		return
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState()])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
+			canonicalRefreshRequired = false
+			updateFreshness()
+		}
+		return contentRefreshed
 	}
-	if (window.scrollY < 420) {
-		loadLogs()
-		return
+	if (forceContentRefresh || window.scrollY < 420) {
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadLogs()])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
+			canonicalRefreshRequired = false
+			updateFreshness()
+		}
+		return contentRefreshed
 	}
+	await networkRefresh
 	newLogCount += count
 	$('#new-logs').textContent = `Show ${newLogCount} new update${newLogCount === 1 ? '' : 's'}`
 	$('#new-logs').hidden = false
+	return true
+}
+
+const refreshCanonicalViews = async (title, detail) => {
+	const recovery = Symbol('canonical-recovery')
+	activeReorgRecovery = recovery
+	canonicalRefreshRequired = true
+	const banner = $('#freshness-banner')
+	banner.hidden = false
+	$('#freshness-title').textContent = title
+	$('#freshness-detail').textContent = detail
+	updateDiagnostics()
+	const refreshed = await refreshAfterUpdates(1, true)
+	if (activeReorgRecovery !== recovery) return
+	activeReorgRecovery = undefined
+	if (!refreshed) {
+		updateFreshness()
+		return
+	}
+	canonicalRefreshRequired = false
+	updateFreshness()
 }
 
 const queueBlockRefresh = () => {
@@ -1717,25 +1893,51 @@ const queueBlockRefresh = () => {
 		const count = pendingBlockUpdates
 		pendingBlockUpdates = 0
 		blockRefreshTimer = undefined
-		refreshAfterUpdates(count)
+		void refreshAfterUpdates(count)
 	}, 1_000)
 }
 
 const connectStream = () => {
-	if (isDemo || stream !== undefined) return
+	if (isDemo) {
+		connection.className = 'connection live'
+		$('#connection-label').textContent = 'Demo fixture'
+		return
+	}
+	if (stream !== undefined) return
 	const nextStream = new EventSource('/api/v1/stream')
 	stream = nextStream
 	nextStream.addEventListener('open', () => {
+		lastStreamEventAt = new Date()
 		connection.className = 'connection live'
 		$('#connection-label').textContent = 'Live connection'
-		if (streamHasOpened) refreshAfterUpdates(1)
+		if (streamHasOpened) void refreshAfterUpdates(1)
 		streamHasOpened = true
 	})
 	nextStream.addEventListener('error', () => {
 		connection.className = 'connection error'
 		$('#connection-label').textContent = 'Reconnecting'
 	})
-	nextStream.addEventListener('block', queueBlockRefresh)
+	const liveUpdate = () => {
+		lastStreamEventAt = new Date()
+		updateDiagnostics()
+		queueBlockRefresh()
+	}
+	nextStream.addEventListener('block', liveUpdate)
+	nextStream.addEventListener('status', liveUpdate)
+	nextStream.addEventListener('reorg', async (event) => {
+		lastStreamEventAt = new Date()
+		let depth = 'unknown'
+		try {
+			depth = JSON.parse(event.data).depth ?? depth
+		} catch {
+			// A malformed notification still triggers a canonical refresh.
+		}
+		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; canonical views are refreshing.`)
+	})
+	nextStream.addEventListener('reset', async () => {
+		lastStreamEventAt = new Date()
+		await refreshCanonicalViews('Live replay window expired', 'Refreshing canonical views from the current database state.')
+	})
 }
 
 connectStream()
@@ -1761,7 +1963,12 @@ setInterval(() => {
 		node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset.time)} · ${age(node.dataset.time)}` : age(node.dataset.time)
 }, 1000)
 setInterval(() => {
-	if (!document.hidden) loadNetworks()
+	if (document.hidden) return
+	loadNetworks()
+	if (!isDemo && (!lastStreamEventAt || Date.now() - lastStreamEventAt.getTime() > 30_000)) {
+		if (isSystem) loadSystemState()
+		else if (window.scrollY < 420 && validateAddressFilter()) loadLogs()
+	}
 }, 12_000)
 document.addEventListener('visibilitychange', () => {
 	if (!document.hidden) loadNetworks({ refreshAfterCurrent: true })

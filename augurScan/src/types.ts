@@ -6,7 +6,7 @@ export type NetworkConfig = {
 	readonly id: string
 	readonly name: string
 	readonly chainId: number
-	readonly rpcUrl: string
+	readonly rpcUrls: readonly string[]
 	readonly startBlock: bigint
 	readonly explorerBaseUrl: string
 	readonly confirmationDepth: bigint

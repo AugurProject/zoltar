@@ -149,16 +149,19 @@ const logDetail = async (sql: SQL, parts: readonly string[]): Promise<Response> 
 
 const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 500
+	const limit = Math.min(Math.max(requestedLimit, 1), 1_000)
+	const queryLimit = limit + 1
 	const questions =
 		chainId === undefined
 			? await sql`SELECT q.*, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical ORDER BY q.created_timestamp DESC`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical ORDER BY q.created_timestamp DESC LIMIT ${queryLimit}`
 			: await sql`SELECT q.*, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} ORDER BY q.created_timestamp DESC`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} ORDER BY q.created_timestamp DESC LIMIT ${queryLimit}`
 	const pools =
 		chainId === undefined
 			? await sql`SELECT p.*, n.id AS network_id, q.title AS question_title,
@@ -168,7 +171,7 @@ const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 				FROM pools p JOIN networks n USING (chain_id)
 				LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true
-				WHERE p.canonical ORDER BY p.block_number DESC`
+				WHERE p.canonical ORDER BY p.block_number DESC LIMIT ${queryLimit}`
 			: await sql`SELECT p.*, n.id AS network_id, q.title AS question_title,
 				ps.settlement_collateral_atto_eth, ps.total_coverage_commitment_atto_eth, ps.fee_eligible_coverage_commitment_atto_eth, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block,
 				(SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count,
@@ -176,15 +179,15 @@ const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 				FROM pools p JOIN networks n USING (chain_id)
 				LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true
-				WHERE p.canonical AND p.chain_id = ${chainId} ORDER BY p.block_number DESC`
+				WHERE p.canonical AND p.chain_id = ${chainId} ORDER BY p.block_number DESC LIMIT ${queryLimit}`
 	const vaults =
 		chainId === undefined
 			? await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, n.id AS network_id, q.title AS question_title
 				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
-				WHERE v.canonical ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC`
+				WHERE v.canonical ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit}`
 			: await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, n.id AS network_id, q.title AS question_title
 				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
-				WHERE v.canonical AND v.chain_id = ${chainId} ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC`
+				WHERE v.canonical AND v.chain_id = ${chainId} ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit}`
 	const universes =
 		chainId === undefined
 			? await sql`WITH identity AS (
@@ -196,7 +199,7 @@ const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 			) SELECT i.*, n.id AS network_id, s.theoretical_supply_atto_rep, s.supply_block, f.fork_question_id AS active_fork_question_id, f.fork_time AS active_fork_time, f.forker_address, f.fork_threshold_atto_rep, f.migration_rep_balance_atto_rep,
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
-				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) ORDER BY i.chain_id, i.block_number`
+				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) ORDER BY i.chain_id, i.block_number LIMIT ${queryLimit}`
 			: await sql`WITH identity AS (
 				SELECT DISTINCT ON (chain_id, universe_id) * FROM universe_events WHERE canonical AND event_name IN ('UniverseInitialized', 'DeployChild') AND chain_id = ${chainId} ORDER BY chain_id, universe_id, block_number, log_index
 			), latest_supply AS (
@@ -206,26 +209,45 @@ const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
 			) SELECT i.*, n.id AS network_id, s.theoretical_supply_atto_rep, s.supply_block, f.fork_question_id AS active_fork_question_id, f.fork_time AS active_fork_time, f.forker_address, f.fork_threshold_atto_rep, f.migration_rep_balance_atto_rep,
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
-				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) ORDER BY i.chain_id, i.block_number`
+				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id) ORDER BY i.chain_id, i.block_number LIMIT ${queryLimit}`
 	const poolStates =
 		chainId === undefined
-			? await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC`
-			: await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical AND chain_id = ${chainId} ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC`
-	return json({ questions, pools, vaults, universes, poolStates })
+			? await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC LIMIT ${queryLimit}`
+			: await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical AND chain_id = ${chainId} ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC LIMIT ${queryLimit}`
+	const truncate = (rows: readonly unknown[]): readonly unknown[] => rows.slice(0, limit)
+	return json({
+		questions: truncate(questions),
+		pools: truncate(pools),
+		vaults: truncate(vaults),
+		universes: truncate(universes),
+		poolStates: truncate(poolStates),
+		limit,
+		truncated: {
+			questions: questions.length > limit,
+			pools: pools.length > limit,
+			vaults: vaults.length > limit,
+			universes: universes.length > limit,
+			poolStates: poolStates.length > limit,
+		},
+	})
 }
 
-const stateHistory = async (sql: SQL, parts: readonly string[]): Promise<Response> => {
+const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const type = parts[0]
 	const chainId = routeInteger(parts[1])
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 1_000
+	const limit = Math.min(Math.max(requestedLimit, 1), 2_000)
+	const queryLimit = limit + 1
+	const chronological = <T>(rows: readonly T[]): T[] => rows.slice(0, limit).reverse()
 	if (chainId === undefined) return json({ error: 'Invalid state identifier' }, 400)
 	if (type === 'pools') {
 		const address = parts[2]?.toLowerCase()
 		if (parts.length !== 3 || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: 'Invalid pool address' }, 400)
 		const [snapshots, events] = await Promise.all([
-			sql`SELECT s.*, b.timestamp FROM pool_snapshots s JOIN blocks b ON b.chain_id = s.chain_id AND b.hash = s.block_hash WHERE s.chain_id = ${chainId} AND s.pool_address = ${address} AND s.canonical ORDER BY s.block_number, s.log_index`,
-			sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical ORDER BY e.block_number, e.log_index`,
+			sql`SELECT s.*, b.timestamp FROM pool_snapshots s JOIN blocks b ON b.chain_id = s.chain_id AND b.hash = s.block_hash WHERE s.chain_id = ${chainId} AND s.pool_address = ${address} AND s.canonical ORDER BY s.block_number DESC, s.log_index DESC LIMIT ${queryLimit}`,
+			sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical ORDER BY e.block_number DESC, e.log_index DESC LIMIT ${queryLimit}`,
 		])
-		return json({ snapshots, events })
+		return json({ snapshots: chronological(snapshots), events: chronological(events), truncated: snapshots.length > limit || events.length > limit, limit })
 	}
 	if (type === 'vaults') {
 		const pool = parts[2]?.toLowerCase()
@@ -233,41 +255,41 @@ const stateHistory = async (sql: SQL, parts: readonly string[]): Promise<Respons
 		if (parts.length !== 4 || pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault))
 			return json({ error: 'Invalid vault identifier' }, 400)
 		const snapshots =
-			await sql`SELECT v.*, b.timestamp FROM vault_snapshots v JOIN blocks b ON b.chain_id = v.chain_id AND b.hash = v.block_hash WHERE v.chain_id = ${chainId} AND v.pool_address = ${pool} AND v.vault_address = ${vault} AND v.canonical ORDER BY v.block_number, v.log_index`
-		return json({ snapshots })
+			await sql`SELECT v.*, b.timestamp FROM vault_snapshots v JOIN blocks b ON b.chain_id = v.chain_id AND b.hash = v.block_hash WHERE v.chain_id = ${chainId} AND v.pool_address = ${pool} AND v.vault_address = ${vault} AND v.canonical ORDER BY v.block_number DESC, v.log_index DESC LIMIT ${queryLimit}`
+		return json({ snapshots: chronological(snapshots), truncated: snapshots.length > limit, limit })
 	}
 	if (type === 'universes') {
 		const universeId = parts[2]
 		if (parts.length !== 3 || universeId === undefined || !/^\d+$/.test(universeId)) return json({ error: 'Invalid universe identifier' }, 400)
 		const events =
-			await sql`SELECT u.*, b.timestamp FROM universe_events u JOIN blocks b ON b.chain_id = u.chain_id AND b.hash = u.block_hash WHERE u.chain_id = ${chainId} AND u.universe_id = ${universeId} AND u.canonical ORDER BY u.block_number, u.log_index`
-		return json({ events })
+			await sql`SELECT u.*, b.timestamp FROM universe_events u JOIN blocks b ON b.chain_id = u.chain_id AND b.hash = u.block_hash WHERE u.chain_id = ${chainId} AND u.universe_id = ${universeId} AND u.canonical ORDER BY u.block_number DESC, u.log_index DESC LIMIT ${queryLimit}`
+		return json({ events: chronological(events), truncated: events.length > limit, limit })
 	}
 	if (type === 'questions') {
 		const questionId = parts[2]
 		if (parts.length !== 3 || questionId === undefined || !/^\d+$/.test(questionId)) return json({ error: 'Invalid question identifier' }, 400)
 		const [pools, forks] = await Promise.all([
-			sql`SELECT p.pool_address, p.universe_id, p.block_number, b.timestamp FROM pools p JOIN blocks b ON b.chain_id = p.chain_id AND b.hash = p.block_hash WHERE p.chain_id = ${chainId} AND p.question_id = ${questionId} AND p.canonical ORDER BY p.block_number`,
-			sql`SELECT u.universe_id, u.block_number, u.fork_time AS timestamp FROM universe_events u WHERE u.chain_id = ${chainId} AND u.fork_question_id = ${questionId} AND u.event_name = 'UniverseForked' AND u.canonical ORDER BY u.block_number`,
+			sql`SELECT p.pool_address, p.universe_id, p.block_number, b.timestamp FROM pools p JOIN blocks b ON b.chain_id = p.chain_id AND b.hash = p.block_hash WHERE p.chain_id = ${chainId} AND p.question_id = ${questionId} AND p.canonical ORDER BY p.block_number DESC LIMIT ${queryLimit}`,
+			sql`SELECT u.universe_id, u.block_number, u.fork_time AS timestamp FROM universe_events u WHERE u.chain_id = ${chainId} AND u.fork_question_id = ${questionId} AND u.event_name = 'UniverseForked' AND u.canonical ORDER BY u.block_number DESC LIMIT ${queryLimit}`,
 		])
-		return json({ pools, forks })
+		return json({ pools: chronological(pools), forks: chronological(forks), truncated: pools.length > limit || forks.length > limit, limit })
 	}
 	return json({ error: 'Unknown state history type' }, 404)
 }
 
-export const handleApi = async (request: Request, sql: SQL): Promise<Response | undefined> => {
+export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000): Promise<Response | undefined> => {
 	const url = new URL(request.url)
 	if (request.method !== 'GET') return json({ error: 'Read-only API' }, 405)
 	try {
 		if (url.pathname === '/api/v1/networks') {
 			const rows =
-				await sql`SELECT chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp, observed_block, finalized_block, phase, last_poll_at, last_error, updated_at FROM networks ORDER BY chain_id`
-			return json({ items: rows })
+				await sql`SELECT chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp, observed_block, finalized_block, phase, last_poll_at, last_success_at, failure_started_at, consecutive_failures, next_retry_at, last_reorg_at, last_reorg_depth, last_error, updated_at FROM networks ORDER BY chain_id`
+			return json({ items: rows, serverTime: new Date(), freshnessThresholdMs })
 		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
 		if (url.pathname.startsWith('/api/v1/logs/')) return await logDetail(sql, url.pathname.slice('/api/v1/logs/'.length).split('/'))
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
-		if (url.pathname.startsWith('/api/v1/state/')) return await stateHistory(sql, url.pathname.slice('/api/v1/state/'.length).split('/'))
+		if (url.pathname.startsWith('/api/v1/state/')) return await stateHistory(sql, url.pathname.slice('/api/v1/state/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/actions') {
 			const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 			const rows =

@@ -7,10 +7,12 @@ import {
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
+	retryDelayMs,
 	runIndexerOwnershipLifecycle,
 	runNetworkLifecycle,
 	safeIndexerFailure,
 	tokenMetadataNeedsRead,
+	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, TokenMetadata } from '../src/types.ts'
 
@@ -40,6 +42,38 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('backs off exponentially with bounded jitter and a five-minute ceiling', () => {
+		expect(retryDelayMs(1, 12_000, () => 0.5)).toBe(12_000)
+		expect(retryDelayMs(4, 12_000, () => 0.5)).toBe(96_000)
+		expect(retryDelayMs(20, 12_000, () => 0.5)).toBe(300_000)
+		expect(retryDelayMs(20, 12_000, () => 1)).toBe(300_000)
+		expect(retryDelayMs(1, 12_000, () => 0)).toBe(9_600)
+		expect(retryDelayMs(1, 12_000, () => 1)).toBe(14_400)
+	})
+
+	test('never runs an indexing operation against a mismatched fallback provider', async () => {
+		const operations: string[] = []
+		const providers = [
+			{ name: 'correct-but-offline', getChainId: async () => 1, read: async () => Promise.reject(new Error('offline')) },
+			{ name: 'wrong-chain', getChainId: async () => 11155111, read: async () => 'wrong data' },
+		]
+		await expect(
+			withVerifiedProvider(providers, 1, async (provider) => {
+				operations.push(provider.name)
+				return await provider.read()
+			}),
+		).rejects.toThrow('RPC chain mismatch')
+		expect(operations).toEqual(['correct-but-offline'])
+	})
+
+	test('fails over an entire operation to another verified provider', async () => {
+		const providers = [
+			{ name: 'primary', getChainId: async () => 1, read: async () => Promise.reject(new Error('offline')) },
+			{ name: 'fallback', getChainId: async () => 1, read: async () => 'canonical data' },
+		]
+		expect(await withVerifiedProvider(providers, 1, (provider) => provider.read())).toBe('canonical data')
+	})
+
 	test('redacts arbitrary transport failures to a stable public message', () => {
 		const secret = 'provider-key-sentinel'
 		const message = safeIndexerFailure(new Error(`HTTP request failed at https://rpc.example/${secret}?token=${secret}`))
@@ -76,6 +110,7 @@ describe('network indexer lifecycle', () => {
 			},
 			intervalMs: 1,
 			signal: controller.signal,
+			random: () => 0.5,
 		})
 
 		expect(verificationAttempts).toBe(2)
@@ -101,6 +136,7 @@ describe('network indexer lifecycle', () => {
 			},
 			intervalMs: 1,
 			signal: controller.signal,
+			random: () => 0.5,
 		})
 
 		expect(attempts).toBe(4)

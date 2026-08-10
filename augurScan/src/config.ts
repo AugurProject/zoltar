@@ -49,14 +49,22 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 		definitions
 			.filter(({ id }) => enabled.has(id))
 			.map(async (definition) => {
-				const rpcUrl = process.env[definition.rpcUrlEnv] ?? definition.defaultRpcUrl
+				const rpcUrls = (process.env[definition.rpcUrlEnv] ?? definition.defaultRpcUrl)
+					.split(',')
+					.map((value) => value.trim())
+					.filter(Boolean)
+				if (rpcUrls.length === 0) throw new Error(`${definition.rpcUrlEnv} must contain at least one RPC URL`)
+				for (const rpcUrl of rpcUrls) {
+					const parsed = new URL(rpcUrl)
+					if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error(`${definition.rpcUrlEnv} must contain HTTP(S) URLs`)
+				}
 				const startBlock = BigInt(process.env[definition.startBlockEnv] ?? '0')
 				if (startBlock < 0n) throw new Error(`${definition.startBlockEnv} must not be negative`)
 				return {
 					id: definition.id,
 					name: definition.name,
 					chainId: definition.chainId,
-					rpcUrl,
+					rpcUrls,
 					startBlock,
 					explorerBaseUrl: definition.explorerBaseUrl,
 					confirmationDepth: BigInt(definition.confirmationDepth),

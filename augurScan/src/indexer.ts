@@ -12,7 +12,6 @@ import {
 	type Transaction,
 	type TransactionReceipt,
 } from './ethereum.ts'
-import type { LiveBus } from './live.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 
@@ -145,6 +144,28 @@ class ChainContinuityError extends Error {}
 class ChainConfigurationError extends Error {}
 class LeaseLostError extends Error {}
 
+type ChainProvider = { readonly getChainId: () => Promise<number> }
+
+export const withVerifiedProvider = async <TProvider extends ChainProvider, TResult>(
+	providers: readonly TProvider[],
+	chainId: number,
+	operation: (provider: TProvider) => Promise<TResult>,
+	stopFailover = (_error: unknown): boolean => false,
+): Promise<TResult> => {
+	let lastFailure: unknown
+	for (const provider of providers) {
+		try {
+			const remoteChainId = await provider.getChainId()
+			if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
+			return await operation(provider)
+		} catch (error) {
+			if (stopFailover(error)) throw error
+			lastFailure = error
+		}
+	}
+	throw lastFailure ?? new ChainConfigurationError('No RPC provider is available for the configured network')
+}
+
 export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, lookup: (blockNumber: bigint) => Promise<Hash>): Promise<void> => {
 	const observedHash = await lookup(number)
 	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
@@ -163,27 +184,39 @@ export const safeIndexerFailure = (error: unknown): string => {
 type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
-	readonly failure: (message: string) => Promise<void>
+	readonly failure: (message: string, nextRetryAt: Date) => Promise<void>
 	readonly intervalMs: number
 	readonly signal: AbortSignal
+	readonly random?: () => number
 }
 
-export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal }: NetworkLifecycle): Promise<void> => {
+export const retryDelayMs = (consecutiveFailures: number, intervalMs: number, random = Math.random): number => {
+	const exponent = Math.min(Math.max(consecutiveFailures - 1, 0), 8)
+	const base = Math.min(intervalMs * 2 ** exponent, 300_000)
+	return Math.min(Math.round(base * (0.8 + random() * 0.4)), 300_000)
+}
+
+export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random }: NetworkLifecycle): Promise<void> => {
 	let verified = false
+	let consecutiveFailures = 0
 	while (!signal.aborted) {
 		const startedAt = Date.now()
 		let caughtUp = true
+		let delayAfterFailure: number | undefined
 		try {
 			if (!verified) {
 				await verify()
 				verified = true
 			}
 			caughtUp = await poll()
+			consecutiveFailures = 0
 		} catch (error) {
 			if (error instanceof LeaseLostError) throw error
-			await failure(safeIndexerFailure(error))
+			consecutiveFailures++
+			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
+			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure))
 		}
-		await wait(caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0, signal)
+		await wait(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
 	}
 }
 
@@ -267,17 +300,19 @@ const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, bl
 class NetworkIndexer {
 	readonly #network: NetworkConfig
 	readonly #database: ScannerDatabase
-	readonly #bus: LiveBus
-	readonly #client: PublicClient
+	readonly #clients: readonly PublicClient[]
+	#client: PublicClient
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
-	constructor(network: NetworkConfig, database: ScannerDatabase, bus: LiveBus, signal: AbortSignal) {
+	constructor(network: NetworkConfig, database: ScannerDatabase, signal: AbortSignal) {
 		this.#network = network
 		this.#database = database
-		this.#bus = bus
 		this.#signal = signal
-		this.#client = createPublicClient({ transport: http(network.rpcUrl, { timeout: 20_000, retryCount: 2 }) })
+		this.#clients = network.rpcUrls.map((rpcUrl) => createPublicClient({ transport: http(rpcUrl, { timeout: 20_000, retryCount: 2 }) }))
+		const firstClient = this.#clients[0]
+		if (firstClient === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
+		this.#client = firstClient
 	}
 
 	async run(): Promise<void> {
@@ -288,14 +323,9 @@ class NetworkIndexer {
 				this.#lease = lease
 				try {
 					await runNetworkLifecycle({
-						verify: async () => {
-							const remoteChainId = await this.#client.getChainId()
-							if (remoteChainId !== this.#network.chainId) {
-								throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.#network.chainId}, received ${remoteChainId}`)
-							}
-						},
-						poll: () => this.#poll(),
-						failure: (message) => this.#recordFailure(message, this.#requireLease()),
+						verify: () => this.#withProviderFailover(async () => undefined),
+						poll: () => this.#withProviderFailover(() => this.#poll()),
+						failure: (message, nextRetryAt) => this.#recordFailure(message, nextRetryAt, this.#requireLease()),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,
 					})
@@ -308,7 +338,7 @@ class NetworkIndexer {
 					console.error(`[${this.#network.id}] ownership unavailable: ${message}`)
 					return
 				}
-				await this.#recordFailure(message, lease)
+				await this.#recordFailure(message, new Date(Date.now() + runtimeConfig.pollIntervalMs), lease)
 			},
 			standby: () => console.info(`[${this.#network.id}] standby: another replica owns the network indexer lock`),
 			intervalMs: runtimeConfig.pollIntervalMs,
@@ -316,9 +346,27 @@ class NetworkIndexer {
 		})
 	}
 
-	async #recordFailure(message: string, lease: IndexerLease): Promise<void> {
-		await this.#database.recordFailure(this.#network.chainId, message, lease)
-		this.#bus.publish('status', { chainId: this.#network.chainId })
+	async #withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
+		return await withVerifiedProvider(
+			this.#clients,
+			this.#network.chainId,
+			async (client) => {
+				this.#client = client
+				return await operation()
+			},
+			(error) => error instanceof LeaseLostError || errorChainIncludes(error, databaseFailureNames),
+		)
+	}
+
+	async #verifyRemoteChain(): Promise<void> {
+		const remoteChainId = await this.#client.getChainId()
+		if (remoteChainId !== this.#network.chainId) {
+			throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.#network.chainId}, received ${remoteChainId}`)
+		}
+	}
+
+	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
+		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
 		console.error(`[${this.#network.id}] ${message}`)
 	}
 
@@ -359,14 +407,15 @@ class NetworkIndexer {
 
 	async #poll(): Promise<boolean> {
 		await this.#assertLease()
+		await this.#verifyRemoteChain()
 		await this.#reconcileReorg()
 		const observedHead = await this.#client.getBlockNumber()
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId)
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
+			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
-			this.#bus.publish('status', { chainId: this.#network.chainId, blockNumber: observedHead.toString() })
 			return true
 		}
 
@@ -388,12 +437,12 @@ class NetworkIndexer {
 				}
 				throw error
 			}
+			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.storeBlock(this.#network.chainId, indexed.block, this.#requireLease())
 			contracts = indexed.contracts
 			tokenMetadata = indexed.tokenMetadata
 			expectedParentHash = indexed.block.hash
-			this.#bus.publish('block', { chainId: this.#network.chainId, blockNumber: nextBlock.toString(), logs: indexed.block.logs.length })
 			nextBlock++
 		}
 		return end >= observedHead
@@ -586,10 +635,10 @@ class NetworkIndexer {
 	}
 }
 
-export const startIndexers = (networks: readonly NetworkConfig[], database: ScannerDatabase, bus: LiveBus, signal: AbortSignal): readonly Promise<void>[] =>
+export const startIndexers = (networks: readonly NetworkConfig[], database: ScannerDatabase, signal: AbortSignal): readonly Promise<void>[] =>
 	networks.map(async (network) => {
 		try {
-			await new NetworkIndexer(network, database, bus, signal).run()
+			await new NetworkIndexer(network, database, signal).run()
 		} catch (error) {
 			const message = safeIndexerFailure(error)
 			console.error(`[${network.id}] indexer stopped: ${message}`)

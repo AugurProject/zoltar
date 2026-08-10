@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { handleApi } from '../src/api.ts'
-import { assertBlockAppend, assertRewindTarget, type IndexedBlock, ScannerDatabase, type StoredTransaction } from '../src/database.ts'
+import {
+	assertBlockAppend,
+	assertRewindTarget,
+	type IndexedBlock,
+	lockLiveEventWriter,
+	replayWindowExpired,
+	rewindDepth,
+	ScannerDatabase,
+	type StoredTransaction,
+} from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
 import { migrate } from '../src/migrate.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -78,6 +87,17 @@ const indexedBlock = (
 }
 
 describe('database checkpoint fencing', () => {
+	test('measures a full rewind from the configured history boundary', () => {
+		expect(rewindDepth(1_250n, 1_000n, -1n)).toBe(251n)
+		expect(rewindDepth(1_250n, 1_000n, 1_200n)).toBe(50n)
+	})
+
+	test('requires a canonical refresh only when an event cursor predates retained history', () => {
+		expect(replayWindowExpired(8, 9)).toBe(true)
+		expect(replayWindowExpired(9, 9)).toBe(false)
+		expect(replayWindowExpired(0, 0)).toBe(false)
+	})
+
 	test('accepts only the configured first block or the direct checkpoint child', () => {
 		const parentHash = blockHash('parent')
 		const otherHash = blockHash('other')
@@ -118,11 +138,49 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			await concurrentMigrator.close()
 		}
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
+		await database.sql.unsafe('TRUNCATE TABLE live_events RESTART IDENTITY')
+		await database.sql`UPDATE live_event_state SET pruned_through_id = 0, updated_at = now() WHERE singleton`
+		const concurrentWriter = new ScannerDatabase(postgresUrl)
+		try {
+			let firstLocked: (() => void) | undefined
+			let releaseFirst: (() => void) | undefined
+			const locked = new Promise<void>((resolve) => {
+				firstLocked = resolve
+			})
+			const release = new Promise<void>((resolve) => {
+				releaseFirst = resolve
+			})
+			const firstWrite = database.sql.begin(async (transaction) => {
+				await lockLiveEventWriter(transaction)
+				const rows = await transaction`INSERT INTO live_events (event, payload) VALUES ('status', '{"writer":1}'::jsonb) RETURNING id`
+				firstLocked?.()
+				await release
+				return Number(rows[0]?.['id'])
+			})
+			await locked
+			let secondInserted = false
+			const secondWrite = concurrentWriter.sql.begin(async (transaction) => {
+				await lockLiveEventWriter(transaction)
+				const rows = await transaction`INSERT INTO live_events (event, payload) VALUES ('status', '{"writer":2}'::jsonb) RETURNING id`
+				secondInserted = true
+				return Number(rows[0]?.['id'])
+			})
+			await Bun.sleep(25)
+			expect(secondInserted).toBe(false)
+			releaseFirst?.()
+			expect(await Promise.all([firstWrite, secondWrite])).toEqual([1, 2])
+		} finally {
+			await concurrentWriter.close()
+		}
+		await database.sql.unsafe('TRUNCATE TABLE live_events RESTART IDENTITY')
+		await database.sql`INSERT INTO live_events (event, payload, created_at) VALUES ('status', '{}'::jsonb, now() - interval '8 days')`
+		await database.pruneLiveEvents()
+		expect(await database.eventsAfter(0)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'replay-window-expired', refreshRequired: true } }])
 		const network: NetworkConfig = {
 			id: 'integration',
 			name: 'Integration chain',
 			chainId,
-			rpcUrl: 'http://127.0.0.1:8545',
+			rpcUrls: ['http://127.0.0.1:8545'],
 			startBlock: 1n,
 			explorerBaseUrl: 'https://example.invalid',
 			confirmationDepth: 8n,
@@ -297,7 +355,7 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			await failover.storeBlock(chainId, third, takeoverWriteLease)
 			expect(await failover.checkpoint(chainId)).toEqual({ number: 3n, hash: third.hash })
 			await takeoverWriteLease.release()
-			await expect(database.recordFailure(chainId, 'stale former owner', lostWriteLease)).rejects.toThrow()
+			await expect(database.recordFailure(chainId, 'stale former owner', new Date(), lostWriteLease)).rejects.toThrow()
 			const statusRows = await failover.sql`SELECT phase, last_error FROM networks WHERE chain_id = ${chainId}`
 			expect(statusRows[0]).toMatchObject({ phase: 'live', last_error: null })
 		} finally {
