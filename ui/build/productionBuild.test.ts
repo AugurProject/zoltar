@@ -774,7 +774,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
 			await driver.waitForBodyText('REP BACKING')
-			await driver.setInputByLabel('REP backing', '20000000')
+			await driver.setInputByLabel('REP backing', '2000000')
 			let reportingDepositReady = false
 			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
 				const readiness = await driver.evaluate(

@@ -6,6 +6,7 @@ import {
 	IUniformPriceDualCapBatchAuctionEvents
 } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Constants } from '../Constants.sol';
 
 // Gas bound: finalize() descends AVL aggregate paths and never scans bids. The
 // tick range admits at most 1,048,577 distinct price levels, so an AVL tree over
@@ -26,9 +27,9 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 	struct Bid {
 		address bidder;
-		uint256 bidAmountAttoEth;
-		uint256 cumulativeBidAttoEth;
 		bool claimed;
+		uint128 bidAmountAttoEth;
+		uint128 cumulativeBidAttoEth;
 	}
 
 	struct BidRef {
@@ -52,17 +53,17 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	uint256 private root;
 	uint256 private nextId = 1;
 
-	uint256 public maxAttoRepBeingSold;
-	uint256 public attoEthRaiseCap;
+	uint88 public maxAttoRepBeingSold;
+	uint128 public attoEthRaiseCap;
 
 	bool public finalized;
-	int256 public clearingTick;
-	uint256 public ethFilledAtClearingAttoEth;
+	int24 public clearingTick;
+	uint128 public ethFilledAtClearingAttoEth;
+	uint88 public totalAttoRepPurchased;
 	uint256 public attoEthRaised;
-	uint256 public totalAttoRepPurchased;
 
-	uint256 public auctionStarted;
-	uint256 public minBidSizeAttoEth;
+	uint48 public auctionStarted;
+	uint128 public minBidSizeAttoEth;
 	address public immutable owner;
 
 	bool public underfunded;
@@ -93,12 +94,15 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		require(owner == msg.sender, 'Only the auction owner can start the auction');
 		require(auctionStarted == 0, 'Auction has already been started');
 		require(_attoEthRaiseCap > 0 && _maxAttoRepBeingSold > 0, 'Auction ETH raise cap and REP sale cap must both be positive');
+		require(_attoEthRaiseCap <= type(uint128).max, 'Auction ETH raise cap too high');
+		require(_maxAttoRepBeingSold <= Constants.MAX_ATTO_REP, 'Auction REP sale cap too high');
 
-		maxAttoRepBeingSold = _maxAttoRepBeingSold;
-		attoEthRaiseCap = _attoEthRaiseCap;
+		maxAttoRepBeingSold = uint88(_maxAttoRepBeingSold);
+		attoEthRaiseCap = uint128(_attoEthRaiseCap);
 		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
-		auctionStarted = block.timestamp;
-		minBidSizeAttoEth = _attoEthRaiseCap / MIN_BID_SIZE_DIVISOR;
+		require(block.timestamp <= type(uint48).max, 'Auction timestamp too high');
+		auctionStarted = uint48(block.timestamp);
+		minBidSizeAttoEth = uint128(_attoEthRaiseCap / MIN_BID_SIZE_DIVISOR);
 		if (minBidSizeAttoEth < 1) minBidSizeAttoEth = 1;
 
 		emit AuctionStarted(auctionStarted, auctionStarted + AUCTION_TIME, _attoEthRaiseCap, _maxAttoRepBeingSold, minBidSizeAttoEth);
@@ -106,6 +110,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSizeAttoEth, 'Auction bid is smaller than the minimum bid size');
+		require(msg.value <= type(uint128).max, 'Auction bid too high');
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
 		require(tickToPrice(tick) > 0, 'Auction tick price rounds down to zero');
 		// Same-price rationing is intentionally time-priority, not pro-rata. Bids at
@@ -135,12 +140,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			uint256 raisedAttoEthToSend
 		) = _computeFinalizationOutcome(hitCap, foundTick, accumulatedBidAttoEth);
 		finalized = true;
-		clearingTick = finalClearingTick;
-		ethFilledAtClearingAttoEth = bidAtClearingTickAttoEth;
+		clearingTick = int24(finalClearingTick);
+		ethFilledAtClearingAttoEth = uint128(bidAtClearingTickAttoEth);
 		attoEthRaised = accumulatedBidAttoEth;
 		underfunded = !hitCap;
 		underfundedWinningAttoEth = finalUnderfundedWinningAttoEth;
-		totalAttoRepPurchased = finalRepPurchasedAttoRep;
+		totalAttoRepPurchased = uint88(finalRepPurchasedAttoRep);
 
 		emit AuctionFinalized(clearingTick, raisedAttoEthToSend, totalAttoRepPurchased, ethFilledAtClearingAttoEth, hitCap);
 		(bool sent, ) = payable(owner).call{value: raisedAttoEthToSend}('');
@@ -603,12 +608,13 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		bidIndex = bidsAtTick[tick].length;
 		uint256 cumulativeBidAttoEth =
 			bidIndex == 0 ? bidAmountAttoEth : bidsAtTick[tick][bidIndex - 1].cumulativeBidAttoEth + bidAmountAttoEth;
+		require(cumulativeBidAttoEth <= type(uint128).max, 'Auction tick ETH total too high');
 		uint256 treeIndex = bidIndex + 1;
 		uint256 leastSignificantBit = _leastSignificantBit(treeIndex);
 		refundedBidPrefixTree[tick][treeIndex] =
 			_getRefundedCumulativeBidBeforeAttoEthIndex(tick, bidIndex) -
 			_getRefundedCumulativeBidBeforeAttoEthIndex(tick, treeIndex - leastSignificantBit);
-		bidsAtTick[tick].push(Bid({bidder: bidder, bidAmountAttoEth: bidAmountAttoEth, cumulativeBidAttoEth: cumulativeBidAttoEth, claimed: false}));
+		bidsAtTick[tick].push(Bid({bidder: bidder, claimed: false, bidAmountAttoEth: uint128(bidAmountAttoEth), cumulativeBidAttoEth: uint128(cumulativeBidAttoEth)}));
 		if (!hasSeenTick[tick]) {
 			hasSeenTick[tick] = true;
 			seenTicks.push(tick);
