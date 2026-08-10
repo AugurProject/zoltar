@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 
 class ApiRequestError extends Error {}
+class ApiConflictError extends Error {}
 
 const integer = (value: string | null, name: string): number | undefined => {
 	if (value === null || value === '') return undefined
@@ -71,6 +72,55 @@ export const cursorFor = (row: Record<string, unknown>): string =>
 		JSON.stringify([row['block_timestamp'], Number(row['chain_id']), Number(row['block_number']), Number(row['transaction_index']), Number(row['log_index'])]),
 	)
 
+type AddressTransactionCursor = readonly [
+	chainId: number,
+	address: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	total: number,
+	block: string,
+	transaction: number,
+]
+
+const isPostgresBigint = (value: unknown): value is string => {
+	if (typeof value !== 'string' || !/^(0|[1-9]\d{0,18})$/.test(value)) return false
+	return BigInt(value) <= 9_223_372_036_854_775_807n
+}
+
+const parseAddressTransactionCursor = (value: string | null): AddressTransactionCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const parsed = JSON.parse(atob(value)) as unknown
+		const parts = Array.isArray(parsed) ? parsed : []
+		if (
+			parts.length !== 7 ||
+			!isNonNegativeSafeInteger(parts[0]) ||
+			typeof parts[1] !== 'string' ||
+			!/^0x[0-9a-f]{40}$/.test(parts[1]) ||
+			!isPostgresBigint(parts[2]) ||
+			typeof parts[3] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
+			!isNonNegativeSafeInteger(parts[4]) ||
+			!isPostgresBigint(parts[5]) ||
+			!isPostgresInteger(parts[6]) ||
+			BigInt(parts[5]) > BigInt(parts[2])
+		)
+			throw new Error('shape')
+		return parts as [number, string, string, string, number, string, number]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const addressTransactionCursorFor = (
+	chainId: number,
+	address: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	total: number,
+	row: Record<string, unknown>,
+): string => btoa(JSON.stringify([chainId, address, snapshotBlock, snapshotHash, total, String(row['block_number']), Number(row['transaction_index'])]))
+
 const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
@@ -88,7 +138,22 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	}
 	if (chainId !== undefined) clauses.push(`l.chain_id = ${bind(chainId)}`)
 	if (event !== undefined) clauses.push(`l.event_name ILIKE ${bind(`%${event}%`)}`)
-	if (address !== undefined) clauses.push(`(l.emitter_address = ${bind(address)} OR l.arguments::text ILIKE ${bind(`%${address}%`)})`)
+	if (address !== undefined) {
+		const addressParameter = bind(address)
+		const addressPatternParameter = bind(`%${address}%`)
+		clauses.push(`(
+			l.emitter_address = ${addressParameter}
+			OR l.arguments::text ILIKE ${addressPatternParameter}
+			OR EXISTS (
+				SELECT 1 FROM address_activity activity
+				WHERE activity.canonical
+					AND activity.chain_id = l.chain_id
+					AND activity.block_hash = l.block_hash
+					AND activity.tx_hash = l.tx_hash
+					AND activity.address = ${addressParameter}
+			)
+		)`)
+	}
 	if (decoded === 'true') clauses.push("l.decode_status = 'decoded'")
 	if (decoded === 'false') clauses.push("l.decode_status <> 'decoded'")
 	if (cursor !== undefined) {
@@ -104,7 +169,7 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash AND t.canonical
 		JOIN networks n ON n.chain_id = l.chain_id
-		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address
+		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address AND c.canonical
 		WHERE ${clauses.join(' AND ')}
 		ORDER BY b.timestamp DESC, l.chain_id DESC, l.block_number DESC, l.transaction_index DESC, l.log_index DESC
 		LIMIT $${values.length}`,
@@ -138,13 +203,14 @@ const logDetail = async (sql: SQL, parts: readonly string[]): Promise<Response> 
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash
 		LEFT JOIN actions a ON a.chain_id = l.chain_id AND a.block_hash = l.block_hash AND a.tx_hash = l.tx_hash
-		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address
+		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address AND c.canonical
 		JOIN networks n ON n.chain_id = l.chain_id
-		WHERE l.chain_id = ${chainId} AND l.block_hash = ${blockHash.toLowerCase()} AND l.tx_hash = ${hash.toLowerCase()} AND l.log_index = ${logIndex}
+		WHERE l.canonical AND b.canonical AND t.canonical
+			AND l.chain_id = ${chainId} AND l.block_hash = ${blockHash.toLowerCase()} AND l.tx_hash = ${hash.toLowerCase()} AND l.log_index = ${logIndex}
 	`
 	if (rows.length === 0) return json({ error: 'Log not found' }, 404)
 	const related =
-		await sql`SELECT log_index, emitter_address, event_name, summary FROM logs WHERE chain_id = ${chainId} AND block_hash = ${blockHash.toLowerCase()} AND tx_hash = ${hash.toLowerCase()} ORDER BY log_index`
+		await sql`SELECT log_index, emitter_address, event_name, summary FROM logs WHERE canonical AND chain_id = ${chainId} AND block_hash = ${blockHash.toLowerCase()} AND tx_hash = ${hash.toLowerCase()} ORDER BY log_index`
 	return json({ ...rows[0], relatedLogs: related })
 }
 
@@ -278,8 +344,138 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 	return json({ error: 'Unknown state history type' }, 404)
 }
 
+const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	if (address === undefined) throw new ApiRequestError('address is required')
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
+	const limit = Math.min(Math.max(requestedLimit, 1), 100)
+	const cursor = parseAddressTransactionCursor(url.searchParams.get('cursor'))
+	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== address)) throw new ApiRequestError('cursor does not match the requested account')
+	const anchorRows =
+		cursor === undefined
+			? await sql`SELECT transaction.block_number AS snapshot_block, transaction.block_hash AS snapshot_hash
+				FROM transactions transaction
+				JOIN blocks block ON block.chain_id = transaction.chain_id AND block.hash = transaction.block_hash AND block.canonical
+				WHERE transaction.canonical AND transaction.chain_id = ${chainId} AND transaction.from_address = ${address}
+				ORDER BY transaction.block_number DESC, transaction.transaction_index DESC LIMIT 1`
+			: []
+	const snapshotBlock = cursor?.[2] ?? String(anchorRows[0]?.['snapshot_block'] ?? 0)
+	const snapshotHash = cursor?.[3] ?? String(anchorRows[0]?.['snapshot_hash'] ?? '')
+	if (cursor !== undefined) {
+		const validationRows = await sql`
+			SELECT
+				EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${snapshotBlock} AND hash = ${snapshotHash} AND canonical) AS snapshot_canonical,
+				(SELECT count(*) FROM transactions transaction
+					JOIN blocks block ON block.chain_id = transaction.chain_id AND block.hash = transaction.block_hash AND block.canonical
+					WHERE transaction.canonical AND transaction.chain_id = ${chainId} AND transaction.from_address = ${address}
+						AND transaction.block_number <= ${snapshotBlock}) AS snapshot_total
+		`
+		if (validationRows[0]?.['snapshot_canonical'] !== true || Number(validationRows[0]?.['snapshot_total'] ?? -1) !== cursor[4])
+			throw new ApiConflictError('Transaction history changed; restart pagination')
+	}
+	const values: Array<string | number> = [chainId, address, snapshotBlock]
+	const cursorClause =
+		cursor === undefined
+			? ''
+			: (() => {
+					values.push(cursor[5], cursor[6])
+					return `AND (t.block_number, t.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
+				})()
+	values.push(limit + 1)
+	const rows = await sql.unsafe(
+		`WITH snapshot_transactions AS (
+			SELECT t.*, count(*) OVER () AS snapshot_total
+			FROM transactions t
+			JOIN blocks canonical_block ON canonical_block.chain_id = t.chain_id AND canonical_block.hash = t.block_hash AND canonical_block.canonical
+			WHERE t.canonical AND t.chain_id = $1 AND t.from_address = $2 AND t.block_number <= $3::bigint
+		)
+		SELECT t.chain_id, t.hash AS tx_hash, t.block_hash, t.block_number, t.transaction_index,
+			t.from_address, t.to_address, t.value, t.status, t.gas_used, t.snapshot_total, b.timestamp AS block_timestamp,
+			a.function_name, a.function_signature, a.arguments AS action_arguments,
+			a.display_arguments AS action_display_arguments, a.argument_schema AS action_argument_schema,
+			a.decode_status AS action_decode_status, a.summary AS action_summary,
+			c.label AS to_label, c.kind AS to_kind, n.explorer_base_url
+		FROM snapshot_transactions t
+		JOIN blocks b ON b.chain_id = t.chain_id AND b.hash = t.block_hash AND b.canonical
+		JOIN networks n ON n.chain_id = t.chain_id
+		LEFT JOIN actions a ON a.chain_id = t.chain_id AND a.block_hash = t.block_hash AND a.tx_hash = t.hash
+		LEFT JOIN contracts c ON c.chain_id = t.chain_id AND c.address = t.to_address AND c.canonical
+		WHERE true ${cursorClause}
+		ORDER BY t.block_number DESC, t.transaction_index DESC
+		LIMIT $${values.length}`,
+		values,
+	)
+	const total = cursor?.[4] ?? Number(rows[0]?.['snapshot_total'] ?? 0)
+	const hasMore = rows.length > limit
+	const pageRows = rows.slice(0, limit)
+	const items = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'snapshot_total')))
+	return json({
+		items,
+		total,
+		limit,
+		snapshotBlock,
+		nextCursor:
+			hasMore && pageRows.length > 0
+				? addressTransactionCursorFor(chainId, address, snapshotBlock, snapshotHash, total, pageRows[pageRows.length - 1] as Record<string, unknown>)
+				: undefined,
+	})
+}
+
+const addressInteractions = async (sql: SQL, url: URL): Promise<Response> => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	if (address === undefined) throw new ApiRequestError('address is required')
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 20
+	const limit = Math.min(Math.max(requestedLimit, 1), 100)
+	const rows = await sql`
+		WITH interactions AS (
+			SELECT activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash,
+				array_agg(DISTINCT activity.role ORDER BY activity.role) AS roles,
+				array_agg(DISTINCT activity.pool_address ORDER BY activity.pool_address)
+					FILTER (WHERE activity.pool_address <> '0x0000000000000000000000000000000000000000') AS pool_addresses
+			FROM address_activity activity
+			JOIN blocks canonical_block ON canonical_block.chain_id = activity.chain_id AND canonical_block.hash = activity.block_hash AND canonical_block.canonical
+			JOIN transactions canonical_transaction ON canonical_transaction.chain_id = activity.chain_id
+				AND canonical_transaction.block_hash = activity.block_hash AND canonical_transaction.hash = activity.tx_hash AND canonical_transaction.canonical
+			WHERE activity.canonical AND activity.role = 'referenced' AND activity.chain_id = ${chainId} AND activity.address = ${address}
+			GROUP BY activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash
+			ORDER BY activity.block_number DESC, max(canonical_transaction.transaction_index) DESC
+			LIMIT ${limit}
+		)
+		SELECT interaction.*, transaction.transaction_index, transaction.from_address, transaction.to_address,
+			transaction.value, transaction.status, transaction.gas_used, block.timestamp AS block_timestamp,
+			action.function_name, action.function_signature, action.arguments AS action_arguments,
+			action.display_arguments AS action_display_arguments, action.argument_schema AS action_argument_schema,
+			action.decode_status AS action_decode_status, action.summary AS action_summary,
+			destination.label AS to_label, destination.kind AS to_kind, network.explorer_base_url
+		FROM interactions interaction
+		JOIN transactions transaction ON transaction.chain_id = interaction.chain_id
+			AND transaction.block_hash = interaction.block_hash AND transaction.hash = interaction.tx_hash AND transaction.canonical
+		JOIN blocks block ON block.chain_id = interaction.chain_id AND block.hash = interaction.block_hash AND block.canonical
+		JOIN networks network ON network.chain_id = interaction.chain_id
+		LEFT JOIN actions action ON action.chain_id = interaction.chain_id AND action.block_hash = interaction.block_hash AND action.tx_hash = interaction.tx_hash
+		LEFT JOIN contracts destination ON destination.chain_id = interaction.chain_id AND destination.address = transaction.to_address AND destination.canonical
+		ORDER BY interaction.block_number DESC, transaction.transaction_index DESC
+	`
+	return json({ items: rows, limit })
+}
+
+const addressIdentity = async (sql: SQL, url: URL): Promise<Response> => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	if (address === undefined) throw new ApiRequestError('address is required')
+	const rows = await sql`SELECT label, kind, provenance FROM contracts WHERE canonical AND chain_id = ${chainId} AND address = ${address}`
+	return json({ chainId, address, ...(rows[0] ?? {}) })
+}
+
 const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	if (address !== undefined && chainId === undefined) throw new ApiRequestError('chainId is required when filtering by address')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
 	const offset = Math.min(integer(url.searchParams.get('offset'), 'offset') ?? 0, 100_000)
@@ -298,6 +494,13 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 					values.push(chainId)
 					return `AND activity.chain_id = $${values.length}`
 				})()
+	const addressClause =
+		address === undefined
+			? ''
+			: (() => {
+					values.push(address)
+					return `AND activity.address = $${values.length}`
+				})()
 	values.push(limit, offset)
 	const rowsPromise = sql.unsafe(
 		`WITH activity_summary AS (
@@ -306,7 +509,7 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 				count(DISTINCT activity.tx_hash) FILTER (WHERE activity.role = 'sender') AS transaction_count,
 				count(DISTINCT activity.tx_hash) AS interaction_count,
 				count(DISTINCT NULLIF(activity.pool_address, '0x0000000000000000000000000000000000000000')) AS pool_count
-			FROM address_activity activity WHERE activity.canonical ${chainClause}
+			FROM address_activity activity WHERE activity.canonical ${chainClause} ${addressClause}
 			GROUP BY activity.chain_id, activity.address
 		), latest_balances AS (
 			SELECT DISTINCT ON (snapshot.chain_id, snapshot.address, snapshot.asset_address)
@@ -420,7 +623,8 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 				COALESCE((
 					SELECT jsonb_agg(jsonb_build_object(
 						'address', token.asset_address, 'balance', token.balance::text, 'blockNumber', token.block_number::text,
-						'name', metadata.name, 'symbol', metadata.symbol, 'decimals', metadata.decimals
+						'name', metadata.name, 'symbol', metadata.symbol, 'decimals', metadata.decimals,
+						'contractLabel', token_contract.label, 'universeId', universe.universe_id::text
 					) ORDER BY token.asset_address)
 					FROM (
 						SELECT * FROM latest_balances rep_token
@@ -428,6 +632,13 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 						ORDER BY rep_token.asset_address LIMIT 100
 					) token
 					LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = token.chain_id AND metadata.address = token.asset_address
+					LEFT JOIN contracts token_contract ON token_contract.chain_id = token.chain_id
+						AND token_contract.address = token.asset_address AND token_contract.canonical
+					LEFT JOIN LATERAL (
+						SELECT event.universe_id FROM universe_events event
+						WHERE event.chain_id = token.chain_id AND event.reputation_token_address = token.asset_address AND event.canonical
+						ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
+					) universe ON true
 				), '[]'::jsonb) AS rep_balances,
 				COALESCE((
 					SELECT jsonb_agg(jsonb_build_object(
@@ -478,6 +689,9 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/')) return await stateHistory(sql, url.pathname.slice('/api/v1/state/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/richlist') return await richList(sql, url)
+		if (url.pathname === '/api/v1/address-identity') return await addressIdentity(sql, url)
+		if (url.pathname === '/api/v1/address-transactions') return await addressTransactions(sql, url)
+		if (url.pathname === '/api/v1/address-interactions') return await addressInteractions(sql, url)
 		if (url.pathname === '/api/v1/actions') {
 			const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 			const rows =
@@ -497,6 +711,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		}
 	} catch (error) {
 		if (error instanceof ApiRequestError) return json({ error: error.message }, 400)
+		if (error instanceof ApiConflictError) return json({ error: error.message }, 409)
 		console.error(`augurScan API request failed (${error instanceof Error ? error.name : typeof error})`)
 		return json({ error: 'Internal server error' }, 500)
 	}

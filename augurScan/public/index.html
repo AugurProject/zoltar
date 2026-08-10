@@ -40,12 +40,9 @@
 				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
 				<button id="refresh-stale" class="secondary compact" type="button">Retry now</button>
 			</div>
-			<section aria-labelledby="network-heading">
+			<section aria-label="Indexer status">
 				<div class="section-heading">
-					<div>
-						<p class="eyebrow">Indexer status</p>
-						<h2 id="network-heading">Network head</h2>
-					</div>
+					<p class="eyebrow">Indexer status</p>
 					<div class="status-actions">
 						<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
 						<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
@@ -130,10 +127,7 @@
 
 			<section id="richlist" class="richlist" aria-labelledby="richlist-heading" hidden>
 				<div class="section-heading richlist-heading">
-					<div>
-						<p class="eyebrow">Known protocol participants</p>
-						<h2 id="richlist-heading">Address rich list</h2>
-					</div>
+					<h2 id="richlist-heading">Address rich list</h2>
 					<div class="richlist-controls">
 						<label
 							><span>Rank by</span
@@ -147,17 +141,27 @@
 				</div>
 				<div id="richlist-status" class="system-status" role="status" aria-live="polite">Loading known addresses…</div>
 				<div class="richlist-shell">
-					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP balances</span><span id="rich-native-heading">ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
+					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP tokens</span><span id="rich-native-heading">ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
 				<div class="richlist-footer"><span id="richlist-summary"></span><button id="richlist-more" class="secondary" type="button" hidden>Show more</button></div>
+			</section>
+
+			<section id="address-profile" class="address-profile" aria-labelledby="address-profile-heading" hidden>
+				<a id="address-back" class="back-link" href="/richlist">← Rich list</a>
+				<div id="address-profile-content" class="address-profile-content" aria-live="polite" aria-busy="true">
+					<div class="state-placeholder">
+						<p class="eyebrow">Address</p>
+						<h2 id="address-profile-heading">Loading address…</h2>
+					</div>
+				</div>
 			</section>
 		</main>
 
 		<dialog id="detail-dialog" aria-labelledby="detail-title">
 			<div class="dialog-bar">
 				<div>
-					<p class="eyebrow">Log evidence</p>
+					<p id="detail-eyebrow" class="eyebrow">Log evidence</p>
 					<h2 id="detail-title">Event details</h2>
 				</div>
 				<button id="close-detail" class="icon-button" type="button" aria-label="Close details">×</button>

@@ -13,7 +13,8 @@ const detailState = pageUrl.searchParams.get('detailState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
 const isRichList = location.pathname === '/richlist'
-const isActivity = !isSystem && !isRichList
+const isAddress = location.pathname === '/address'
+const isActivity = !isSystem && !isRichList && !isAddress
 const initialChainId = pageUrl.searchParams.get('chainId') ?? ''
 const initialActivityFilters = {
 	event: pageUrl.searchParams.get('event') ?? '',
@@ -51,6 +52,11 @@ let canonicalRefreshRequired = false
 let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
+let activeAccount
+let addressProfileRequestVersion = 0
+let currentAddressProfile
+const addressIdentityCache = new Map()
+let polledReorgRefreshTimer
 
 const demoHash = `0x${'7e4b9ad70f2248c48217f9c9ef694017'.repeat(2)}`
 const demoNetworks = [
@@ -121,11 +127,23 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		finalized: index > 4,
 		topics: [demoHash],
 		data: '0x00',
-		arguments: { amountAttoRep: '4250750000000000000000', vault: '0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0' },
-		display_arguments: { amountAttoRep: '4,250.75 REP', vault: 'Market maker (0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0)' },
+		arguments: {
+			amountAttoRep: '4250750000000000000000',
+			vault: '0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0',
+			coordinator: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+		},
+		display_arguments: {
+			amountAttoRep: '4,250.75 REP',
+			vault: 'Market maker (0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0)',
+			coordinator: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
+			recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+		},
 		argument_schema: [
 			{ index: 0, name: 'amountAttoRep', type: 'uint256' },
 			{ index: 1, name: 'vault', type: 'address', indexed: true },
+			{ index: 2, name: 'coordinator', type: 'address' },
+			{ index: 3, name: 'recipients', type: 'address[]' },
 		],
 		origin_address: '0x1A620F3dC4Dba34F365C9233C34A22f8F48D2D34',
 		explorer_base_url: network.explorer_base_url,
@@ -146,12 +164,12 @@ const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		kind: index === 2 ? 'priceCoordinator' : null,
 		weth_balance: (BigInt(18 + index) * 10n ** 17n + (index === 0 ? 987_654_321n : 0n)).toString(),
 		native_balance: (BigInt(4 + (index % 5)) * 10n ** 17n + (index === 0 ? 456_789_123n : 0n)).toString(),
-		rep_token_count: index === 1 ? '2' : '1',
-		sampled_rep_token_count: '1',
+		rep_token_count: index <= 1 ? '2' : '1',
+		sampled_rep_token_count: index === 0 ? '2' : '1',
 		weth_token_count: '1',
 		sampled_weth_token_count: '1',
 		sampled_native_count: '1',
-		returned_rep_token_count: '1',
+		returned_rep_token_count: index === 0 ? '2' : '1',
 		returned_weth_token_count: '1',
 		rep_balances_truncated: false,
 		weth_balances_truncated: false,
@@ -166,10 +184,25 @@ const demoRichList = Array.from({ length: 64 }, (_, index) => {
 			{
 				address: demoNetworks[0].chain_id === network.chain_id ? '0x221657776846890989a759ba2973e427dff5c9bb' : '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
 				balance: repBalance.toString(),
+				contractLabel: 'Genesis REP',
+				universeId: '0',
 				symbol: 'REP',
 				decimals: 18,
 				blockNumber: network.indexed_block,
 			},
+			...(index === 0
+				? [
+						{
+							address: network.id === 'sepolia' ? '0x86a1c70f2d9d6a0794458c4b2d08f2a1bd9289c1' : '0x4a0f2fc79d092e999aaa1e1e86bd4f3fdb68697b',
+							balance: (repBalance / 3n).toString(),
+							contractLabel: 'Child REP',
+							universeId: '2',
+							symbol: 'REP',
+							decimals: 18,
+							blockNumber: network.indexed_block,
+						},
+					]
+				: []),
 		],
 		weth_balances: [
 			{
@@ -553,6 +586,10 @@ const element = (tag, className, text) => {
 }
 
 const short = (value, front = 6, back = 4) => (value ? `${value.slice(0, front)}…${value.slice(-back)}` : '—')
+const shortIdentifier = (value, front = 6, back = 4) => {
+	const text = String(value ?? '')
+	return text.length > front + back + 1 ? short(text, front, back) : text || '—'
+}
 const number = (value) => (value === null || value === undefined ? '—' : new Intl.NumberFormat('en-US').format(Number(value)))
 const counted = (value, singular, plural = `${singular}s`) => `${number(value)} ${Number(value) === 1 ? singular : plural}`
 const time = (value) =>
@@ -578,7 +615,12 @@ const api = async (path, { signal } = {}) => {
 	if (isDemo) {
 		if (path.startsWith('/api/v1/networks')) {
 			if (networkState === 'error') throw new Error('Network status could not be refreshed')
-			return { items: demoNetworks }
+			return {
+				items:
+					networkState === 'stale'
+						? demoNetworks.map((network) => ({ ...network, last_success_at: new Date(Date.now() - 120_000).toISOString() }))
+						: demoNetworks,
+			}
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoState === 'error' && !demoErrorConsumed) {
@@ -602,12 +644,121 @@ const api = async (path, { signal } = {}) => {
 			if (detailState === 'delayed') await new Promise((resolve) => setTimeout(resolve, 800))
 			return demoHistory(path)
 		}
+		if (path.startsWith('/api/v1/address-transactions')) {
+			const request = new URL(path, location.origin)
+			const chainId = request.searchParams.get('chainId')
+			const address = request.searchParams.get('address')?.toLowerCase()
+			const cursor = request.searchParams.get('cursor')
+			const offset = cursor ? Number(JSON.parse(atob(cursor))) : 0
+			const limit = Number(request.searchParams.get('limit') ?? 50)
+			const owner = demoRichList.find((item) => item.chain_id === chainId && item.address.toLowerCase() === address)
+			const total = Number(owner?.transaction_count ?? 0)
+			const network = demoNetworks.find((item) => item.chain_id === chainId)
+			const items = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, itemIndex) => {
+				const index = offset + itemIndex
+				const toAddress = index % 2 === 0 ? '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db' : '0x7777777777777777777777777777777777777777'
+				return {
+					chain_id: chainId,
+					tx_hash: `${demoHash.slice(0, -4)}${index.toString(16).padStart(4, '0')}`,
+					block_hash: network?.indexed_hash,
+					block_number: String(BigInt(network?.indexed_block ?? '0') - BigInt(index)),
+					block_timestamp: new Date(new Date(network?.indexed_timestamp ?? Date.now()).getTime() - index * 14_000).toISOString(),
+					transaction_index: index % 12,
+					from_address: owner?.address,
+					to_address: toAddress,
+					to_label: index % 2 === 0 ? 'OpenOracle' : 'Security Pool',
+					to_kind: index % 2 === 0 ? 'openOracle' : 'securityPool',
+					value: index % 4 === 0 ? '125000000000000000' : '0',
+					status: 'success',
+					gas_used: String(94_000 + index * 117),
+					function_name: index % 2 === 0 ? 'report' : 'checkpointPoolAccounting',
+					function_signature: index % 2 === 0 ? 'report((...),bool,bool,(...))' : 'checkpointPoolAccounting(uint8)',
+					action_summary: index % 2 === 0 ? 'report · reportId=1842' : 'checkpointPoolAccounting · reason=Trade',
+					action_arguments:
+						index % 2 === 0
+							? {
+									reporter: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+									recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+								}
+							: { reason: '1' },
+					action_display_arguments:
+						index % 2 === 0
+							? {
+									reporter: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
+									recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+								}
+							: { reason: 'Trade' },
+					action_argument_schema:
+						index % 2 === 0
+							? [
+									{ index: 0, name: 'reporter', type: 'address' },
+									{ index: 1, name: 'recipients', type: 'address[]' },
+								]
+							: [{ index: 0, name: 'reason', type: 'uint8' }],
+					explorer_base_url: network?.explorer_base_url,
+				}
+			})
+			const nextOffset = offset + items.length
+			return { items, total, limit, snapshotBlock: network?.indexed_block, nextCursor: nextOffset < total ? btoa(JSON.stringify(nextOffset)) : undefined }
+		}
+		if (path.startsWith('/api/v1/address-interactions')) {
+			const transactions = await api(path.replace('/address-interactions', '/address-transactions'))
+			return {
+				...transactions,
+				items: transactions.items
+					.filter((_, index) => index % 3 === 0)
+					.map((transaction, index) => ({
+						...transaction,
+						roles: ['referenced'],
+						pool_addresses: index % 2 === 0 ? ['0x7777777777777777777777777777777777777777'] : [],
+					})),
+			}
+		}
+		if (path.startsWith('/api/v1/address-identity')) {
+			const request = new URL(path, location.origin)
+			const chainId = request.searchParams.get('chainId')
+			const address = request.searchParams.get('address')?.toLowerCase()
+			const owner = demoRichList.find((item) => item.chain_id === chainId && item.address.toLowerCase() === address)
+			const fixedIdentity = {
+				'0xc9b36e44643fc5d882654ffd9791ae7171b0e9db': ['OpenOracle', 'openOracle'],
+				'0x7777777777777777777777777777777777777777': ['Security Pool', 'securityPool'],
+			}[address]
+			const catalogIdentity = [
+				...demoPools.flatMap((pool) => [
+					[pool.chain_id, pool.pool_address, 'Security Pool', 'securityPool'],
+					[pool.chain_id, pool.share_token_address, 'Share token', 'shareToken'],
+					[pool.chain_id, pool.coordinator_address, 'Price coordinator', 'priceCoordinator'],
+					[pool.chain_id, pool.truth_auction_address, 'Truth auction', 'truthAuction'],
+				]),
+				...demoUniverses.map((universe) => [
+					universe.chain_id,
+					universe.reputation_token_address,
+					universe.universe_id === '0' ? 'Genesis REP' : `Child REP · universe ${shortIdentifier(universe.universe_id)}`,
+					'reputationToken',
+				]),
+				...demoRichList.flatMap((item) =>
+					[...(item.rep_balances ?? []), ...(item.weth_balances ?? [])].map((token) => [
+						item.chain_id,
+						token.address,
+						token.contractLabel ?? token.name,
+						token.universeId === undefined ? 'weth' : 'reputationToken',
+					]),
+				),
+			].find(([identityChainId, identityAddress]) => identityChainId === chainId && identityAddress.toLowerCase() === address)
+			return {
+				chainId,
+				address,
+				label: owner?.label ?? fixedIdentity?.[0] ?? catalogIdentity?.[2],
+				kind: owner?.kind ?? fixedIdentity?.[1] ?? catalogIdentity?.[3],
+			}
+		}
 		if (path.startsWith('/api/v1/richlist')) {
 			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
+			const address = request.searchParams.get('address')?.toLowerCase()
 			const offset = Number(request.searchParams.get('offset') ?? 0)
 			const limit = Number(request.searchParams.get('limit') ?? 50)
-			const filtered = demoRichList.filter((item) => !chainId || item.chain_id === chainId)
+			const filtered = demoRichList.filter((item) => (!chainId || item.chain_id === chainId) && (!address || item.address.toLowerCase() === address))
 			return { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
 		}
 		if (path.startsWith('/api/v1/logs/') && path.split('/').length > 7) {
@@ -626,13 +777,24 @@ const api = async (path, { signal } = {}) => {
 				...detailLog,
 				block_timestamp: detailLog.block_timestamp,
 				from_address: '0x1A620F3dC4Dba34F365C9233C34A22f8F48D2D34',
-				to_address: detailLog.emitter_address,
+				to_address: '0x7777777777777777777777777777777777777777',
 				value: '0',
 				input: '0x4f8b2f2d',
 				gas_used: '184220',
 				contract_provenance: 'Security Pool Factory.DeploySecurityPool',
 				explorer_base_url: detailNetwork?.id === 'sepolia' ? 'https://sepolia.etherscan.io' : 'https://etherscan.io',
-				action_argument_schema: [{ index: 0, name: 'reason', type: 'uint8' }],
+				action_arguments: {
+					reason: '1',
+					route: ['0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+				},
+				action_display_arguments: {
+					reason: 'Trade',
+					route: ['OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
+				},
+				action_argument_schema: [
+					{ index: 0, name: 'reason', type: 'uint8' },
+					{ index: 1, name: 'route', type: 'address[]' },
+				],
 				receipt: {
 					transactionHash: detailLog.tx_hash,
 					blockHash: detailLog.block_hash,
@@ -661,21 +823,42 @@ const api = async (path, { signal } = {}) => {
 	const timeout = AbortSignal.timeout(15_000)
 	const response = await fetch(path, { signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]) })
 	const payload = await response.json().catch(() => ({}))
-	if (!response.ok) throw new Error(payload.error ?? `Request failed (${response.status})`)
+	if (!response.ok) {
+		const error = new Error(payload.error ?? `Request failed (${response.status})`)
+		error.status = response.status
+		throw error
+	}
 	return payload
 }
 
 const renderNetworks = (networks) => {
+	let selectedReorgAdvanced = false
+	for (const network of networks) {
+		const previous = latestNetworks.find((item) => String(item.chain_id) === String(network.chain_id))
+		const reorgAdvanced = previous && network.last_reorg_at && previous.last_reorg_at !== network.last_reorg_at
+		if (reorgAdvanced) {
+			invalidateAddressIdentityCache(network.chain_id)
+			if (String(network.chain_id) === selectedChainId()) selectedReorgAdvanced = true
+		} else if (previous && previous.indexed_hash !== network.indexed_hash) invalidateAddressIdentityCache(network.chain_id, true)
+	}
 	latestNetworks = networks
+	if (selectedReorgAdvanced && activeReorgRecovery !== undefined) activeReorgRecovery.pendingRefresh = true
+	else if (selectedReorgAdvanced && polledReorgRefreshTimer === undefined) {
+		const chainId = selectedChainId()
+		polledReorgRefreshTimer = window.setTimeout(() => {
+			polledReorgRefreshTimer = undefined
+			if (selectedChainId() === chainId && activeReorgRecovery === undefined)
+				void refreshCanonicalViews('Chain reorganization detected', 'Canonical address identities and views are refreshing.')
+		}, 0)
+	}
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
 	for (const network of networks.filter((item) => String(item.chain_id) === selectedChainId())) {
 		const card = element('article', 'network-card')
 		card.dataset.phase = network.phase
 		const title = element('div', 'network-title')
-		const heading = element('h3', '', network.name)
 		const badge = element('span', 'badge', network.phase)
-		title.append(heading, badge)
+		title.append(badge)
 		const block = element(
 			network.indexed_block && network.explorer_base_url ? 'a' : 'p',
 			'block-number',
@@ -772,7 +955,7 @@ const updateFreshness = () => {
 	}
 	banner.hidden = false
 	$('#freshness-title').textContent = 'Selected network is not updating'
-	$('#freshness-detail').textContent = `${stale.map((network) => network.name).join(', ')} · showing the last committed database state.`
+	$('#freshness-detail').textContent = 'Showing the last committed database state.'
 }
 
 const selectedChainId = () => (globalNetworkFilter.dataset.restored === 'true' ? globalNetworkFilter.value : initialChainId)
@@ -866,6 +1049,7 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			}
 			if (isSystem && synchronizeActivity && previousNetwork !== selectedChainId()) await loadSystemState()
 			if (isRichList && synchronizeActivity && previousNetwork !== selectedChainId()) await loadRichList()
+			if (isAddress && synchronizeActivity && previousNetwork !== selectedChainId()) await loadAddressProfile()
 			return true
 		} catch (error) {
 			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
@@ -901,15 +1085,17 @@ const rowFor = (log) => {
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
 	const contract = element('span', 'cell')
-	contract.append(element('span', 'contract-name', log.contract_label ?? 'Unknown contract'), element('span', 'contract-address', short(log.emitter_address)))
+	contract.append(
+		protocolAddressLink(log.emitter_address, { knownLabel: log.contract_label, chainId: log.chain_id, className: 'contract-name address-link' }),
+		element('span', 'contract-address', short(log.emitter_address)),
+	)
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Open ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
 	const summary = element('span', 'cell summary', log.summary)
 	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.className = 'cell cell-tx'
-	const origin = explorerLink(log.explorer_base_url, 'address', log.origin_address, short(log.origin_address, 7, 5))
-	origin.className = 'cell cell-origin'
+	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link' })
 	row.append(chain, timestamp, contract, event, summary, tx, origin)
 	row.addEventListener('click', (clickEvent) => {
 		if (clickEvent.target instanceof HTMLAnchorElement) return
@@ -1032,6 +1218,15 @@ const detailCard = (term, description, wide = false) => {
 	return card
 }
 
+const addressDetailCard = (term, address, { knownLabel, chainId, wide = false } = {}) => {
+	const card = element('dl', `detail-card${wide ? ' wide' : ''}`)
+	const description = element('dd')
+	if (address) description.append(protocolAddressLink(address, { knownLabel, chainId }))
+	else description.textContent = '—'
+	card.append(element('dt', '', term), description)
+	return card
+}
+
 const copyButton = (value, label) => {
 	const button = element('button', 'copy-button', `Copy ${label}`)
 	button.type = 'button'
@@ -1058,14 +1253,134 @@ const explorerLink = (base, type, value, label) => {
 	return link
 }
 
+const usableAddressLabel = (label) => (label && !String(label).toLowerCase().startsWith('unknown') ? String(label) : undefined)
+
+const addressIdentityKey = (chainId, address) => `${chainId}:${String(address).toLowerCase()}`
+
+const invalidateAddressIdentityCache = (chainId, missesOnly = false) => {
+	const prefix = `${chainId}:`
+	for (const [key, value] of addressIdentityCache) {
+		if (key.startsWith(prefix) && (!missesOnly || typeof value !== 'string')) addressIdentityCache.delete(key)
+	}
+}
+
+const resolveAddressLabel = async (chainId, address) => {
+	const key = addressIdentityKey(chainId, address)
+	const cached = addressIdentityCache.get(key)
+	if (typeof cached === 'string') return cached
+	if (cached === false) return undefined
+	if (cached) return await cached
+	const pending = api(`/api/v1/address-identity?${new URLSearchParams({ chainId: String(chainId), address })}`)
+		.then((identity) => {
+			const resolved = usableAddressLabel(identity.label)
+			if (addressIdentityCache.get(key) !== pending) return undefined
+			addressIdentityCache.set(key, resolved ?? false)
+			return resolved
+		})
+		.catch(() => {
+			if (addressIdentityCache.get(key) !== pending) return undefined
+			addressIdentityCache.delete(key)
+			return undefined
+		})
+	addressIdentityCache.set(key, pending)
+	return await pending
+}
+
+const protocolAddressLink = (address, { knownLabel, chainId = selectedChainId(), className = 'address-link' } = {}) => {
+	const key = addressIdentityKey(chainId, address)
+	const suppliedLabel = usableAddressLabel(knownLabel)
+	const cachedLabel = addressIdentityCache.get(key)
+	const canonicalLabel = typeof cachedLabel === 'string' ? cachedLabel : undefined
+	const displayLabel = canonicalLabel ?? suppliedLabel
+	const link = element('a', className, displayLabel ?? short(address, 10, 8))
+	const params = new URLSearchParams({ chainId: String(chainId), address })
+	if (isDemo) params.set('demo', '1')
+	link.href = `/address?${params}`
+	link.title = displayLabel ? `${displayLabel} · ${address}` : address
+	if (!canonicalLabel) {
+		void resolveAddressLabel(chainId, address).then((resolvedLabel) => {
+			if (!resolvedLabel) return
+			link.textContent = resolvedLabel
+			link.title = `${resolvedLabel} · ${address}`
+		})
+	}
+	return link
+}
+
+const decodedValueNode = (rawValue, displayValue, chainId) => {
+	const node = element('span', 'decoded-value')
+	if (typeof rawValue === 'string' && /^0x[0-9a-fA-F]{40}$/.test(rawValue)) {
+		node.append(protocolAddressLink(rawValue, { chainId }))
+		return node
+	}
+	if (Array.isArray(rawValue)) {
+		node.append(document.createTextNode('['))
+		rawValue.forEach((value, index) => {
+			if (index > 0) node.append(document.createTextNode(', '))
+			node.append(decodedValueNode(value, Array.isArray(displayValue) ? displayValue[index] : undefined, chainId))
+		})
+		node.append(document.createTextNode(']'))
+		return node
+	}
+	if (rawValue && typeof rawValue === 'object') {
+		node.append(document.createTextNode('{ '))
+		Object.entries(rawValue).forEach(([key, value], index) => {
+			if (index > 0) node.append(document.createTextNode(', '))
+			node.append(document.createTextNode(`${key}: `), decodedValueNode(value, displayValue?.[key], chainId))
+		})
+		node.append(document.createTextNode(' }'))
+		return node
+	}
+	const rendered = displayValue !== undefined && displayValue !== null && typeof displayValue !== 'object' ? displayValue : rawValue
+	node.textContent = rendered === undefined || rendered === null ? '—' : String(rendered)
+	return node
+}
+
+const evidenceText = (value) => (value === undefined || value === null ? '—' : typeof value === 'string' ? value : JSON.stringify(value))
+
+const decodedArgumentsTable = (schema, rawArguments, displayArguments, chainId) => {
+	const raw = rawArguments ?? {}
+	const display = displayArguments ?? {}
+	const entries = schema?.length
+		? schema.toSorted((left, right) => Number(left.index) - Number(right.index))
+		: Object.keys(raw).map((name, index) => ({ index, name, type: 'unknown' }))
+	const table = element('table', 'arguments')
+	const head = element('thead')
+	const headRow = element('tr')
+	for (const label of ['# / Name', 'Solidity type', 'Display value', 'Raw value']) headRow.append(element('th', '', label))
+	head.append(headRow)
+	const body = element('tbody')
+	for (const entry of entries) {
+		const rawValue = raw[entry.name]
+		const row = element('tr')
+		const nameCell = element('td', '', `#${number(entry.index)} · ${entry.name}`)
+		nameCell.dataset.label = '# / Name'
+		const typeCell = element('td', '', `${entry.type}${entry.indexed ? ' · indexed' : ''}`)
+		typeCell.dataset.label = 'Solidity type'
+		const displayCell = element('td')
+		displayCell.dataset.label = 'Display value'
+		displayCell.append(decodedValueNode(rawValue, display[entry.name], chainId))
+		const rawCell = element('td', '', evidenceText(rawValue))
+		rawCell.dataset.label = 'Raw value'
+		row.append(nameCell, typeCell, displayCell, rawCell)
+		body.append(row)
+	}
+	table.append(head, body)
+	return table
+}
+
 const openDetail = async (log) => {
 	const requestVersion = ++detailRequestVersion
+	activeAccount = undefined
 	if (!dialog.open) dialog.showModal()
+	$('#detail-eyebrow').textContent = 'Log evidence'
+	$('#detail-title').textContent = 'Event details'
 	detailContent.setAttribute('aria-busy', 'true')
 	const loading = element('p', 'detail-status', 'Loading event details…')
 	loading.setAttribute('role', 'status')
 	detailContent.replaceChildren(loading, element('div', 'loading-line'))
 	const url = new URL(location.href)
+	url.searchParams.delete('account')
 	url.searchParams.set('log', `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`)
 	history.replaceState(null, '', url)
 	try {
@@ -1074,14 +1389,14 @@ const openDetail = async (log) => {
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
-			detailCard('Contract', `${detail.contract_label ?? 'Unknown'} · ${detail.emitter_address}`, true),
+			addressDetailCard('Contract', detail.emitter_address, { knownLabel: detail.contract_label, chainId: detail.chain_id, wide: true }),
 			detailCard('Contract identity', `${detail.contract_kind ?? 'unknown kind'} · ${detail.contract_provenance ?? 'unknown provenance'}`, true),
 			detailCard('Event signature', detail.event_signature ?? 'No matching ABI', true),
 			detailCard('Block hash', detail.block_hash, true),
 			detailCard('Occurrence position', `transaction ${number(detail.transaction_index)} · log ${number(detail.log_index)}`),
 			detailCard('Transaction', detail.tx_hash, true),
-			detailCard('msg.origin', detail.origin_address),
-			detailCard('To', detail.to_address),
+			addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
+			addressDetailCard('To', detail.to_address, { chainId: detail.chain_id }),
 			detailCard('Gas used', number(detail.gas_used)),
 			detailCard('Decoded action', detail.action_summary ?? 'No decoded calldata'),
 		)
@@ -1097,54 +1412,14 @@ const openDetail = async (log) => {
 		grid.append(tools)
 		const argumentsCard = element('div', 'detail-card wide')
 		argumentsCard.append(element('p', 'eyebrow', 'Decoded arguments'))
-		const table = element('table', 'arguments')
-		const head = element('thead')
-		const headRow = element('tr')
-		for (const label of ['# / Name', 'Solidity type', 'Display value', 'Raw value']) headRow.append(element('th', '', label))
-		head.append(headRow)
-		const body = element('tbody')
-		const rawArgs = detail.arguments ?? {}
-		const displayArgs = detail.display_arguments ?? {}
-		const schema = detail.argument_schema?.length
-			? detail.argument_schema.toSorted((left, right) => Number(left.index) - Number(right.index))
-			: Object.keys(rawArgs).map((name, index) => ({ index, name, type: 'unknown' }))
-		for (const entry of schema) {
-			const name = entry.name
-			const raw = rawArgs[name]
-			const row = element('tr')
-			for (const [label, value] of [
-				['# / Name', `#${number(entry.index)} · ${name}`],
-				['Solidity type', `${entry.type}${entry.indexed ? ' · indexed' : ''}`],
-				['Display value', typeof displayArgs[name] === 'string' ? displayArgs[name] : JSON.stringify(displayArgs[name] ?? raw)],
-				['Raw value', typeof raw === 'string' ? raw : JSON.stringify(raw)],
-			]) {
-				const cell = element('td', '', value)
-				cell.dataset.label = label
-				row.append(cell)
-			}
-			body.append(row)
-		}
-		table.append(head, body)
-		argumentsCard.append(table)
+		argumentsCard.append(decodedArgumentsTable(detail.argument_schema, detail.arguments, detail.display_arguments, detail.chain_id))
 		grid.append(argumentsCard)
 		const action = element('div', 'detail-card wide')
+		action.append(element('p', 'eyebrow', 'Transaction calldata and decoded action'))
+		if (detail.action_arguments && Object.keys(detail.action_arguments).length > 0)
+			action.append(decodedArgumentsTable(detail.action_argument_schema, detail.action_arguments, detail.action_display_arguments, detail.chain_id))
 		action.append(
-			element('p', 'eyebrow', 'Transaction calldata and decoded action'),
-			element(
-				'pre',
-				'raw',
-				JSON.stringify(
-					{
-						input: detail.input,
-						function: detail.function_signature,
-						argumentSchema: detail.action_argument_schema,
-						arguments: detail.action_arguments,
-						display: detail.action_display_arguments,
-					},
-					null,
-					2,
-				),
-			),
+			element('pre', 'raw', JSON.stringify({ input: detail.input, function: detail.function_signature, arguments: detail.action_arguments }, null, 2)),
 		)
 		grid.append(action)
 		const raw = element('div', 'detail-card wide')
@@ -1179,8 +1454,144 @@ const openDetail = async (log) => {
 	}
 }
 
+const openAccountTransactions = async (account) => {
+	const requestVersion = ++detailRequestVersion
+	activeAccount = account
+	if (!dialog.open) dialog.showModal()
+	$('#detail-eyebrow').textContent = 'Account activity'
+	$('#detail-title').textContent = 'Sent transactions'
+	const url = new URL(location.href)
+	url.searchParams.delete('log')
+	if (isRichList) url.searchParams.set('account', `${account.chain_id}:${account.address}`)
+	else url.searchParams.delete('account')
+	history.replaceState(null, '', url)
+	let loaded = []
+	let total = 0
+	let nextPageCursor
+	let pageLoading = false
+	let pageError
+	const render = () => {
+		const header = element('div', 'account-transactions-header')
+		header.append(
+			element('p', 'eyebrow', 'Canonical transactions'),
+			element('h3', '', account.label ?? short(account.address, 12, 8)),
+			element('code', '', account.address),
+			element('p', 'data-note', `${number(loaded.length)} of ${number(total)} sent transactions`),
+		)
+		const list = element('div', 'account-transactions')
+		for (const transaction of loaded) {
+			const card = element('article', 'account-transaction')
+			const cardHeader = element('div', 'account-transaction-header')
+			cardHeader.append(
+				explorerLink(transaction.explorer_base_url, 'tx', transaction.tx_hash, short(transaction.tx_hash, 12, 8)),
+				element('span', `badge${transaction.status === 'success' ? '' : ' transaction-failed'}`, transaction.status ?? 'unknown'),
+			)
+			const destination = transaction.to_label
+				? `${transaction.to_label} · ${short(transaction.to_address, 8, 6)}`
+				: (transaction.to_address ?? 'Contract creation')
+			const detailGrid = element('dl', 'account-transaction-fields')
+			for (const [term, value] of [
+				[
+					'Block',
+					`#${number(transaction.block_number)} · ${exactTimestamp(transaction.block_timestamp).slice(0, 10)} · ${time(transaction.block_timestamp)} UTC`,
+				],
+				['To', destination],
+				['Value', exactUnit(transaction.value, 18, nativeSymbol(transaction.chain_id), 2)],
+				['Gas used', number(transaction.gas_used)],
+				['Action', transaction.action_summary ?? transaction.function_name ?? 'Unknown call'],
+			]) {
+				const field = element('div')
+				const description = element('dd', '', term === 'To' && transaction.to_address ? undefined : value)
+				if (term === 'To' && transaction.to_address)
+					description.append(
+						protocolAddressLink(transaction.to_address, {
+							knownLabel: transaction.to_label,
+							chainId: transaction.chain_id,
+							className: 'address-link',
+						}),
+					)
+				field.append(element('dt', '', term), description)
+				detailGrid.append(field)
+			}
+			card.append(cardHeader, detailGrid)
+			if (transaction.action_display_arguments && Object.keys(transaction.action_display_arguments).length > 0) {
+				const action = element('details', 'account-transaction-action')
+				const argumentsContent = element('div', 'account-transaction-arguments')
+				argumentsContent.append(
+					decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id),
+				)
+				action.append(element('summary', '', 'Decoded arguments'), argumentsContent)
+				card.append(action)
+			}
+			list.append(card)
+		}
+		if (loaded.length === 0) list.append(element('p', 'state-placeholder', 'No canonical sent transactions were found.'))
+		const more = element('button', 'secondary account-transactions-more', pageLoading ? 'Loading more transactions…' : 'Show more transactions')
+		more.type = 'button'
+		more.hidden = nextPageCursor === undefined
+		more.disabled = pageLoading
+		more.addEventListener('click', () => loadPage(true))
+		const content = [header, list]
+		if (pageError) {
+			const alert = element('div', 'detail-error account-transactions-error')
+			alert.setAttribute('role', 'alert')
+			alert.append(element('p', '', pageError))
+			const retry = element('button', 'state-retry', 'Retry loading transactions')
+			retry.type = 'button'
+			retry.addEventListener('click', () => loadPage(loaded.length > 0))
+			alert.append(retry)
+			content.push(alert)
+		}
+		content.push(more)
+		detailContent.replaceChildren(...content)
+	}
+	const loadPage = async (append = false) => {
+		if (pageLoading) return
+		pageLoading = true
+		pageError = undefined
+		detailContent.setAttribute('aria-busy', 'true')
+		if (!append) {
+			const loading = element('p', 'detail-status', 'Loading sent transactions…')
+			loading.setAttribute('role', 'status')
+			detailContent.replaceChildren(loading, element('div', 'loading-line'))
+		} else render()
+		try {
+			const query = new URLSearchParams({
+				chainId: String(account.chain_id),
+				address: account.address,
+				limit: '50',
+			})
+			if (append && nextPageCursor) query.set('cursor', nextPageCursor)
+			const result = await api(`/api/v1/address-transactions?${query}`)
+			if (requestVersion !== detailRequestVersion || String(account.chain_id) !== selectedChainId()) return
+			loaded = append ? [...loaded, ...result.items] : result.items
+			total = result.total
+			nextPageCursor = result.nextCursor
+			pageLoading = false
+			render()
+		} catch (error) {
+			if (requestVersion !== detailRequestVersion) return
+			if (error.status === 409) {
+				pageLoading = false
+				loaded = []
+				total = 0
+				nextPageCursor = undefined
+				await loadPage()
+				return
+			}
+			pageLoading = false
+			pageError = `Could not load sent transactions: ${error.message}`
+			render()
+		} finally {
+			if (requestVersion === detailRequestVersion) detailContent.setAttribute('aria-busy', 'false')
+		}
+	}
+	await loadPage()
+}
+
 const closeDetail = () => {
 	detailRequestVersion++
+	activeAccount = undefined
 	dialog.close()
 	clearDetailUrl()
 }
@@ -1188,6 +1599,7 @@ const closeDetail = () => {
 const clearDetailUrl = () => {
 	const url = new URL(location.href)
 	url.searchParams.delete('log')
+	url.searchParams.delete('account')
 	history.replaceState(null, '', url)
 }
 
@@ -1213,6 +1625,12 @@ const compactValue = (value, decimals = 18) => {
 const staticField = (label, value) => {
 	const field = element('div', 'static-field')
 	field.append(element('span', '', label), element('code', '', value ?? '—'))
+	return field
+}
+
+const staticAddressField = (label, address, chainId) => {
+	const field = element('div', 'static-field')
+	field.append(element('span', '', label), address ? protocolAddressLink(address, { chainId }) : element('code', '', '—'))
 	return field
 }
 
@@ -1339,10 +1757,9 @@ const stateHeader = (eyebrow, title, subtitle, kind) => {
 	return header
 }
 
-const richBalance = (value, symbol, digits = 3) => exactUnit(value ?? '0', 18, symbol, digits)
+const richBalance = (value, symbol, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
 const richFieldLabel = (label) => element('span', 'sr-only rich-field-label', label)
 const nativeSymbol = (chainId = selectedChainId()) => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
-
 const renderRichList = () => {
 	const rows = $('#richlist-rows')
 	const isInitialRender = rows.childElementCount === 0
@@ -1354,12 +1771,9 @@ const renderRichList = () => {
 		const article = element('article', 'rich-row')
 		const main = element('div', 'rich-row-main')
 		const identity = element('div', 'rich-identity')
-		const addressLink = element('a', 'rich-address', item.label ?? short(item.address, 12, 8))
-		addressLink.href = `${item.explorer_base_url}/address/${item.address}`
-		addressLink.target = '_blank'
-		addressLink.rel = 'noreferrer'
+		const addressLink = protocolAddressLink(item.address, { knownLabel: item.label, chainId: item.chain_id, className: 'rich-address address-link' })
 		identity.append(richFieldLabel('Address'), addressLink)
-		const identityMeta = [item.label ? short(item.address, 12, 8) : undefined, item.kind].filter(Boolean).join(' · ')
+		const identityMeta = item.label ? short(item.address, 12, 8) : undefined
 		if (identityMeta) identity.append(element('span', '', identityMeta))
 		const hasNative = Number(item.sampled_native_count) > 0
 		const repComplete = Number(item.sampled_rep_token_count) >= Number(item.rep_token_count)
@@ -1374,12 +1788,15 @@ const renderRichList = () => {
 			element('strong', '', hasNative ? richBalance(item.native_balance, itemNativeSymbol) : `${itemNativeSymbol} pending`),
 			element('span', '', wethComplete ? richBalance(item.weth_balance, 'WETH') : `${richBalance(item.weth_balance, 'WETH')} · partial`),
 		)
-		const transactions = element('div', 'rich-count')
+		const transactions = element('button', 'rich-count rich-transactions')
+		transactions.type = 'button'
+		transactions.setAttribute('aria-label', `View ${number(item.transaction_count)} transactions sent by ${item.label ?? item.address}`)
 		transactions.append(
 			richFieldLabel('Sent transactions'),
 			element('strong', '', number(item.transaction_count)),
-			element('span', '', counted(item.interaction_count, 'observed interaction')),
+			element('span', '', `${counted(item.interaction_count, 'observed interaction')} · View sent transactions`),
 		)
+		transactions.addEventListener('click', () => openAccountTransactions(item))
 		const positions = element('div', 'rich-count')
 		positions.append(
 			richFieldLabel('Protocol involvement'),
@@ -1401,12 +1818,23 @@ const renderRichList = () => {
 			),
 		)
 		const rep = element('div', 'rich-rep')
-		rep.append(richFieldLabel('REP balances'))
+		rep.append(richFieldLabel('REP tokens'))
 		if (repTokens.length === 0) rep.append(element('strong', '', 'REP pending'))
 		for (const token of repTokens) {
 			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
-			const label = token.name ?? token.symbol ?? 'REP'
-			rep.append(element('strong', '', exactUnit(token.balance, decimals, label, 3)))
+			const tokenLine = element('span', 'rich-rep-token')
+			const tokenIdentity = element('span')
+			tokenIdentity.append(
+				protocolAddressLink(token.address, {
+					knownLabel: token.contractLabel,
+					chainId: item.chain_id,
+					className: 'address-link',
+				}),
+			)
+			if (token.universeId !== null && token.universeId !== undefined)
+				tokenIdentity.append(document.createTextNode(` · universe ${shortIdentifier(token.universeId)}`))
+			tokenLine.append(element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? 'REP', 2)), tokenIdentity)
+			rep.append(tokenLine)
 		}
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
 		main.append(identity, rep, wallet, transactions, positions, balanceState)
@@ -1428,7 +1856,7 @@ const renderRichList = () => {
 		if (nativeBalance) {
 			const nativeCard = element('div', 'rich-token')
 			nativeCard.append(
-				element('strong', '', exactUnit(nativeBalance.balance, 18, itemNativeSymbol, 18)),
+				element('strong', '', exactUnit(nativeBalance.balance, 18, itemNativeSymbol, 2)),
 				element('span', '', `${itemNativeSymbol} · block #${number(nativeBalance.blockNumber)}`),
 				element('code', 'rich-token-raw', `${nativeBalance.balance} base units`),
 			)
@@ -1437,13 +1865,18 @@ const renderRichList = () => {
 		for (const [token, fallbackSymbol] of [...wethTokens.map((token) => [token, 'WETH']), ...repTokens.map((token) => [token, 'REP'])]) {
 			const tokenCard = element('div', 'rich-token')
 			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
-			const tokenAddress = element('a', 'rich-token-address', token.address)
-			tokenAddress.href = `${item.explorer_base_url}/address/${token.address}`
-			tokenAddress.target = '_blank'
-			tokenAddress.rel = 'noreferrer'
+			const tokenAddress = protocolAddressLink(token.address, {
+				knownLabel: token.contractLabel,
+				chainId: item.chain_id,
+				className: 'rich-token-address address-link',
+			})
 			tokenCard.append(
-				element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? fallbackSymbol, decimals)),
-				element('span', '', `${token.name ?? token.symbol ?? `${fallbackSymbol} token`} · block #${number(token.blockNumber)}`),
+				element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? fallbackSymbol, 2)),
+				element(
+					'span',
+					'',
+					`${fallbackSymbol === 'REP' && token.universeId !== null && token.universeId !== undefined ? `Universe ${shortIdentifier(token.universeId)} · ` : ''}block #${number(token.blockNumber)}`,
+				),
 				tokenAddress,
 				element('code', 'rich-token-raw', `${token.balance} base units`),
 			)
@@ -1466,10 +1899,11 @@ const renderRichList = () => {
 		const involvementGrid = element('div', 'rich-position-grid')
 		for (const pool of poolAssociations) {
 			const card = element('div', 'rich-position')
-			const link = element('a', 'rich-token-address', pool.address)
-			link.href = `${item.explorer_base_url}/address/${pool.address}`
-			link.target = '_blank'
-			link.rel = 'noreferrer'
+			const link = protocolAddressLink(pool.address, {
+				knownLabel: pool.label,
+				chainId: item.chain_id,
+				className: 'rich-token-address address-link',
+			})
 			card.append(
 				element('span', 'rich-position-kind', 'Pool association'),
 				element('strong', '', pool.questionTitle ?? pool.label ?? 'Associated security pool'),
@@ -1480,16 +1914,13 @@ const renderRichList = () => {
 		}
 		for (const position of vaultPositions) {
 			const card = element('div', 'rich-position')
-			const link = element('a', 'rich-token-address', position.poolAddress)
-			link.href = `${item.explorer_base_url}/address/${position.poolAddress}`
-			link.target = '_blank'
-			link.rel = 'noreferrer'
+			const link = protocolAddressLink(position.poolAddress, { chainId: item.chain_id, className: 'rich-token-address address-link' })
 			card.append(
 				element('span', 'rich-position-kind', 'Vault position'),
 				element('strong', '', position.questionTitle ?? 'Vault position'),
-				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '', 18)}`),
-				element('span', '', `Capacity ownership ${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP', 18)}`),
-				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol, 18)} · block #${number(position.blockNumber)}`),
+				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '', 2)}`),
+				element('span', '', `Capacity ownership ${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP', 2)}`),
+				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol, 2)} · block #${number(position.blockNumber)}`),
 				link,
 			)
 			involvementGrid.append(card)
@@ -1555,6 +1986,215 @@ const loadRichList = async ({ append = false } = {}) => {
 	}
 }
 
+const renderAddressProfile = (item, transactions, interactions) => {
+	const content = $('#address-profile-content')
+	const chainId = String(item.chain_id)
+	const itemNativeSymbol = nativeSymbol(chainId)
+	const header = element('header', 'address-profile-header')
+	const identity = element('div')
+	const heading = element('h2', '', item.label ?? 'Address')
+	heading.id = 'address-profile-heading'
+	identity.append(element('p', 'eyebrow', item.kind ? 'Protocol contract' : 'Account'), heading, element('code', 'address-profile-value', item.address))
+	const actions = element('div', 'address-profile-actions')
+	const logParams = new URLSearchParams({ chainId, address: item.address })
+	if (isDemo) logParams.set('demo', '1')
+	const relatedLogs = element('a', 'explorer-link', 'View related logs')
+	relatedLogs.href = `/?${logParams}`
+	actions.append(copyButton(item.address, 'address'), relatedLogs, explorerLink(item.explorer_base_url, 'address', item.address, 'Open in Etherscan ↗'))
+	header.append(identity, actions)
+	const metrics = element('div', 'state-stats address-profile-stats')
+	for (const [label, value] of [
+		['Sent transactions', number(item.transaction_count)],
+		['Observed interactions', number(item.interaction_count)],
+		['Pools', number(item.pool_count)],
+		['Vault positions', number(item.vault_count)],
+	]) {
+		const card = element('div', 'state-stat')
+		card.append(element('span', '', label), element('strong', '', value))
+		metrics.append(card)
+	}
+	const balances = element('section', 'address-profile-panel')
+	balances.append(element('p', 'eyebrow', 'Balances'), element('h3', '', 'Assets observed by augurScan'))
+	const balanceGrid = element('div', 'address-balance-grid')
+	const nativeCard = element('div', 'rich-token')
+	nativeCard.append(
+		element('strong', '', item.native_balance_detail ? exactUnit(item.native_balance_detail.balance, 18, itemNativeSymbol, 2) : `${itemNativeSymbol} pending`),
+		element('span', '', item.native_balance_detail ? `Block #${number(item.native_balance_detail.blockNumber)}` : 'No balance snapshot yet'),
+	)
+	balanceGrid.append(nativeCard)
+	for (const token of [...(item.weth_balances ?? []), ...(item.rep_balances ?? [])]) {
+		const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
+		const card = element('div', 'rich-token')
+		card.append(
+			element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? 'REP', 2)),
+			element(
+				'span',
+				'',
+				`${token.universeId === undefined || token.universeId === null ? 'Token' : `Universe ${shortIdentifier(token.universeId)}`} · block #${number(token.blockNumber)}`,
+			),
+			protocolAddressLink(token.address, {
+				knownLabel: token.contractLabel,
+				chainId,
+				className: 'rich-token-address address-link',
+			}),
+		)
+		balanceGrid.append(card)
+	}
+	balances.append(balanceGrid)
+	const involvement = element('section', 'address-profile-panel')
+	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Pools and vaults'))
+	const involvementGrid = element('div', 'rich-position-grid')
+	for (const pool of item.pool_associations ?? []) {
+		const card = element('div', 'rich-position')
+		card.append(
+			element('span', 'rich-position-kind', 'Pool'),
+			element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'),
+			protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }),
+		)
+		involvementGrid.append(card)
+	}
+	for (const position of item.vault_positions ?? []) {
+		const card = element('div', 'rich-position')
+		card.append(
+			element('span', 'rich-position-kind', 'Vault'),
+			element('strong', '', position.questionTitle ?? 'Vault position'),
+			element(
+				'span',
+				'',
+				`${exactUnit(position.capacityOwnershipAttoRep, 18, 'REP', 2)} capacity · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol, 2)} claimable`,
+			),
+			protocolAddressLink(position.poolAddress, { chainId, className: 'rich-token-address address-link' }),
+		)
+		involvementGrid.append(card)
+	}
+	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or vault involvement has been indexed.'))
+	involvement.append(involvementGrid)
+	const activity = element('section', 'address-profile-panel')
+	const activityHeader = element('div', 'address-section-heading')
+	const activityCopy = element('div')
+	activityCopy.append(element('p', 'eyebrow', 'Canonical activity'), element('h3', '', 'Recent sent transactions'))
+	activityHeader.append(activityCopy)
+	const allTransactions = element('button', 'secondary', 'View all sent transactions')
+	allTransactions.type = 'button'
+	allTransactions.addEventListener('click', () => openAccountTransactions(item))
+	activityHeader.append(allTransactions)
+	const transactionList = element('div', 'address-transaction-list')
+	for (const transaction of transactions) {
+		const row = element('article', 'address-transaction-row')
+		const destination = transaction.to_address
+			? protocolAddressLink(transaction.to_address, {
+					knownLabel: transaction.to_label,
+					chainId: transaction.chain_id,
+					className: 'address-link',
+				})
+			: element('span', '', 'Contract creation')
+		row.append(
+			explorerLink(transaction.explorer_base_url, 'tx', transaction.tx_hash, short(transaction.tx_hash, 10, 8)),
+			destination,
+			element('span', '', transaction.action_summary ?? transaction.function_name ?? 'Unknown call'),
+			element('span', '', `#${number(transaction.block_number)} · ${time(transaction.block_timestamp)} UTC`),
+			element('strong', '', exactUnit(transaction.value, 18, itemNativeSymbol, 2)),
+		)
+		transactionList.append(row)
+	}
+	if (transactions.length === 0) transactionList.append(element('p', 'data-note', 'No canonical sent transactions have been indexed.'))
+	activity.append(activityHeader, transactionList)
+	const interactionPanel = element('section', 'address-profile-panel')
+	interactionPanel.append(element('p', 'eyebrow', 'Augur activity'), element('h3', '', 'Recent protocol references'))
+	const interactionList = element('div', 'address-transaction-list')
+	for (const transaction of interactions) {
+		const row = element('article', 'address-transaction-row address-interaction-row')
+		const destination = transaction.to_address
+			? protocolAddressLink(transaction.to_address, {
+					knownLabel: transaction.to_label,
+					chainId: transaction.chain_id,
+					className: 'address-link',
+				})
+			: element('span', '', 'Contract creation')
+		row.append(
+			explorerLink(transaction.explorer_base_url, 'tx', transaction.tx_hash, short(transaction.tx_hash, 10, 8)),
+			destination,
+			element('span', '', transaction.action_summary ?? transaction.function_name ?? 'Unknown call'),
+			element('span', '', `#${number(transaction.block_number)} · ${time(transaction.block_timestamp)} UTC`),
+			element('strong', '', exactUnit(transaction.value, 18, itemNativeSymbol, 2)),
+		)
+		if (transaction.action_arguments && Object.keys(transaction.action_arguments).length > 0) {
+			const action = element('details', 'account-transaction-action')
+			const argumentsContent = element('div', 'account-transaction-arguments')
+			argumentsContent.append(
+				decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id),
+			)
+			action.append(element('summary', '', 'Decoded arguments'), argumentsContent)
+			row.append(action)
+		}
+		interactionList.append(row)
+	}
+	if (interactions.length === 0) interactionList.append(element('p', 'data-note', 'No canonical protocol references have been indexed.'))
+	interactionPanel.append(interactionList)
+	content.replaceChildren(header, metrics, balances, involvement, interactionPanel, activity)
+	content.setAttribute('aria-busy', 'false')
+}
+
+const loadAddressProfile = async () => {
+	const requestVersion = ++addressProfileRequestVersion
+	const content = $('#address-profile-content')
+	const address = pageUrl.searchParams.get('address')?.toLowerCase()
+	const backParams = new URLSearchParams({ chainId: requiredChainId() })
+	if (isDemo) backParams.set('demo', '1')
+	$('#address-back').href = `/richlist?${backParams}`
+	if (!/^0x[0-9a-f]{40}$/.test(address ?? '')) {
+		content.replaceChildren(element('div', 'detail-error', 'A complete 20-byte address is required.'))
+		content.setAttribute('aria-busy', 'false')
+		return false
+	}
+	content.setAttribute('aria-busy', 'true')
+	content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
+	try {
+		const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '1' })
+		const [profile, identity, transactions, interactions] = await Promise.all([
+			api(`/api/v1/richlist?${query}`),
+			api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`),
+			api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
+			api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
+		])
+		if (requestVersion !== addressProfileRequestVersion) return false
+		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === selectedChainId())
+		const profileItem = profile.items[0]
+		const item = profileItem
+			? { ...profileItem, label: profileItem.label ?? identity.label, kind: profileItem.kind ?? identity.kind }
+			: {
+					chain_id: selectedChainId(),
+					address,
+					label: identity.label,
+					kind: identity.kind,
+					explorer_base_url: network?.explorer_base_url,
+					transaction_count: transactions.total,
+					interaction_count: transactions.total,
+					pool_count: 0,
+					vault_count: 0,
+					rep_balances: [],
+					weth_balances: [],
+					pool_associations: [],
+					vault_positions: [],
+				}
+		renderAddressProfile(item, transactions.items, interactions.items)
+		currentAddressProfile = item
+		return true
+	} catch (error) {
+		if (requestVersion !== addressProfileRequestVersion) return false
+		const alert = element('div', 'detail-error')
+		alert.setAttribute('role', 'alert')
+		alert.append(element('p', '', `Could not load address: ${error.message}`))
+		const retry = element('button', 'state-retry', 'Retry')
+		retry.type = 'button'
+		retry.addEventListener('click', () => loadAddressProfile())
+		alert.append(retry)
+		content.replaceChildren(alert)
+		content.setAttribute('aria-busy', 'false')
+		return false
+	}
+}
+
 const renderPoolDetail = async (poolItem, requestVersion) => {
 	const history = await api(`/api/v1/state/pools/${poolItem.chain_id}/${poolItem.pool_address}`)
 	if (requestVersion !== stateDetailRequestVersion) return
@@ -1564,7 +2204,7 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 		stateHeader(
 			'Security pool',
 			poolItem.question_title ?? 'Unknown question',
-			`${poolItem.network_id} · ${short(poolItem.pool_address, 10, 6)} · universe ${short(poolItem.universe_id, 8, 6)}`,
+			`${short(poolItem.pool_address, 10, 6)} · universe ${shortIdentifier(poolItem.universe_id, 8, 6)}`,
 			'Latest indexed',
 		),
 	)
@@ -1618,7 +2258,9 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol, 5)),
 		staticField('Current retention rate', exactUnit(poolItem.current_retention_rate, 18, '', 9)),
-		staticField('Escalation game', currentState.escalationGame ?? 'Not set'),
+		currentState.escalationGame
+			? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id)
+			: staticField('Escalation game', 'Not set'),
 	)
 	currentCard.append(currentGrid)
 	fragment.append(currentCard)
@@ -1627,10 +2269,10 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 	const grid = element('div', 'static-grid')
 	grid.append(
 		staticField('Question ID', poolItem.question_id),
-		staticField('Parent pool', poolItem.parent_address),
-		staticField('Share token', poolItem.share_token_address),
-		staticField('Price coordinator', poolItem.coordinator_address),
-		staticField('Truth auction', poolItem.truth_auction_address),
+		staticAddressField('Parent pool', poolItem.parent_address, poolItem.chain_id),
+		staticAddressField('Share token', poolItem.share_token_address, poolItem.chain_id),
+		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
+		staticAddressField('Truth auction', poolItem.truth_auction_address, poolItem.chain_id),
 		staticField('Security multiplier', `${Number(poolItem.security_multiplier_bps) / 100}%`),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'gwei', 2)),
 		staticField('Child pools', number(poolItem.child_count)),
@@ -1645,14 +2287,7 @@ const renderVaultDetail = async (vaultItem, requestVersion) => {
 	if (requestVersion !== stateDetailRequestVersion) return
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
-	fragment.append(
-		stateHeader(
-			'Security vault',
-			short(vaultItem.vault_address, 12, 8),
-			`${vaultItem.network_id} · pool ${short(vaultItem.pool_address, 10, 6)}`,
-			'Latest indexed',
-		),
-	)
+	fragment.append(stateHeader('Security vault', short(vaultItem.vault_address, 12, 8), `Pool ${short(vaultItem.pool_address, 10, 6)}`, 'Latest indexed'))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '', 2)),
@@ -1677,8 +2312,8 @@ const renderVaultDetail = async (vaultItem, requestVersion) => {
 	staticCard.append(element('h4', '', 'Identity and complete current checkpoint'))
 	const grid = element('div', 'static-grid')
 	grid.append(
-		staticField('Vault address', vaultItem.vault_address),
-		staticField('Pool address', vaultItem.pool_address),
+		staticAddressField('Vault address', vaultItem.vault_address, vaultItem.chain_id),
+		staticAddressField('Pool address', vaultItem.pool_address, vaultItem.chain_id),
 		staticField('Question', vaultItem.question_title),
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
@@ -1703,14 +2338,7 @@ const renderQuestionDetail = async (question, requestVersion) => {
 	if (requestVersion !== stateDetailRequestVersion) return
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
-	fragment.append(
-		stateHeader(
-			'Immutable question',
-			question.title,
-			`${question.network_id} · ID ${short(question.question_id, 10, 8)}`,
-			`${kind} · ${questionStatus(question)}`,
-		),
-	)
+	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · ${questionStatus(question)}`))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Status', questionStatus(question)),
@@ -1824,7 +2452,7 @@ const renderLineage = (universes, selected) => {
 		const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 		label.setAttribute('x', '10')
 		label.setAttribute('y', '20')
-		label.textContent = universe.universe_id === '0' ? `${universe.network_id} genesis` : `Universe ${short(universe.universe_id, 7, 5)}`
+		label.textContent = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 7, 5)}`
 		const meta = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 		meta.setAttribute('class', 'node-meta')
 		meta.setAttribute('x', '10')
@@ -1840,12 +2468,12 @@ const renderUniverseDetail = async (universe, requestVersion) => {
 	const history = await api(`/api/v1/state/universes/${universe.chain_id}/${universe.universe_id}`)
 	if (requestVersion !== stateDetailRequestVersion) return
 	const fragment = document.createDocumentFragment()
-	const title = universe.universe_id === '0' ? `${universe.network_id} genesis universe` : `Universe ${short(universe.universe_id, 12, 8)}`
+	const title = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 12, 8)}`
 	fragment.append(
 		stateHeader(
 			'Zoltar universe',
 			title,
-			`${universe.network_id} · outcome ${universe.forking_outcome_index} · parent ${short(universe.parent_universe_id, 8, 6)}`,
+			`Outcome ${universe.forking_outcome_index} · parent ${shortIdentifier(universe.parent_universe_id, 8, 6)}`,
 			universe.active_fork_time ? 'Forked' : 'Active',
 		),
 	)
@@ -1879,10 +2507,10 @@ const renderUniverseDetail = async (universe, requestVersion) => {
 		staticField('Universe ID', universe.universe_id),
 		staticField('Parent universe', universe.parent_universe_id),
 		staticField('Forking outcome', universe.forking_outcome_index),
-		staticField('REP token', universe.reputation_token_address),
+		staticAddressField('REP token', universe.reputation_token_address, universe.chain_id),
 		staticField('Fork question', universe.active_fork_question_id),
 		staticField('Fork time', universe.active_fork_time ? new Date(universe.active_fork_time).toISOString() : 'Not forked'),
-		staticField('Fork initiator', universe.forker_address),
+		staticAddressField('Fork initiator', universe.forker_address, universe.chain_id),
 		staticField('Fork threshold', exactUnit(universe.fork_threshold_atto_rep, 18, 'REP', 3)),
 		staticField('Fork initiator migration balance at fork', exactUnit(universe.migration_rep_balance_atto_rep, 18, 'REP', 3)),
 	)
@@ -1902,13 +2530,13 @@ const entityCopy = (type, item) => {
 	if (type === 'pools')
 		return [
 			item.question_title ?? short(item.pool_address),
-			`${item.network_id} · ${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id), 1)}`,
+			`${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id), 1)}`,
 		]
-	if (type === 'vaults') return [short(item.vault_address, 10, 6), `${item.network_id} · ${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP', 1)} capacity`]
-	if (type === 'questions') return [item.title, `${item.network_id} · ${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
+	if (type === 'vaults') return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP', 1)} capacity`]
+	if (type === 'questions') return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
 	return [
-		item.universe_id === '0' ? `${item.network_id} genesis universe` : `Universe ${short(item.universe_id, 9, 6)}`,
-		`${item.network_id} · ${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`,
+		item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`,
+		`${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`,
 	]
 }
 
@@ -2135,6 +2763,7 @@ $('#refresh-stale').addEventListener('click', async () => {
 			await loadNetworks({ manual: true, refreshAfterCurrent: true })
 			if (isSystem) await loadSystemState()
 			else if (isRichList) await loadRichList()
+			else if (isAddress) await loadAddressProfile()
 			else if (validateAddressFilter()) await loadLogs()
 		}
 	} finally {
@@ -2209,6 +2838,7 @@ globalNetworkFilter.addEventListener('change', async () => {
 	const url = new URL(location.href)
 	url.searchParams.delete('log')
 	url.searchParams.delete('entity')
+	url.searchParams.delete('account')
 	history.replaceState(null, '', url)
 	syncNetworkUrl()
 	updateNetworkLabels()
@@ -2228,6 +2858,8 @@ globalNetworkFilter.addEventListener('change', async () => {
 		richListTotal = 0
 		$('#richlist-rows').replaceChildren()
 		await loadRichList()
+	} else if (isAddress) {
+		await loadAddressProfile()
 	} else if (validateAddressFilter()) {
 		await loadLogs()
 	} else showInvalidAddressFilter()
@@ -2235,7 +2867,8 @@ globalNetworkFilter.addEventListener('change', async () => {
 $('#rich-sort').addEventListener('change', () => loadRichList())
 $('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
-const refreshAfterUpdates = async (count, forceContentRefresh = false) => {
+const refreshAfterUpdates = async (count, forceContentRefresh = false, recovery) => {
+	if (activeReorgRecovery !== undefined && activeReorgRecovery !== recovery) return await activeReorgRecovery.promise
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState()])
@@ -2253,6 +2886,10 @@ const refreshAfterUpdates = async (count, forceContentRefresh = false) => {
 		}
 		return contentRefreshed
 	}
+	if (isAddress) {
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile()])
+		return contentRefreshed
+	}
 	if (forceContentRefresh || window.scrollY < 420) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadLogs()])
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
@@ -2268,8 +2905,20 @@ const refreshAfterUpdates = async (count, forceContentRefresh = false) => {
 	return true
 }
 
-const refreshCanonicalViews = async (title, detail) => {
-	const recovery = { chainId: requiredChainId() }
+const refreshCanonicalViews = (title, detail) => {
+	if (activeReorgRecovery !== undefined) {
+		activeReorgRecovery.pendingRefresh = true
+		$('#freshness-title').textContent = title
+		$('#freshness-detail').textContent = detail
+		return activeReorgRecovery.promise
+	}
+	const recovery = {
+		chainId: requiredChainId(),
+		accountToRefresh: activeAccount && dialog.open ? activeAccount : undefined,
+		pendingRefresh: false,
+		promise: undefined,
+	}
+	if (dialog.open) closeDetail()
 	activeReorgRecovery = recovery
 	canonicalRefreshRequired = true
 	const banner = $('#freshness-banner')
@@ -2277,26 +2926,63 @@ const refreshCanonicalViews = async (title, detail) => {
 	$('#freshness-title').textContent = title
 	$('#freshness-detail').textContent = detail
 	updateDiagnostics()
-	const refreshed = await refreshAfterUpdates(1, true)
-	if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId) return
-	activeReorgRecovery = undefined
-	if (!refreshed) {
-		updateFreshness()
-		return
-	}
-	canonicalRefreshRequired = false
-	updateFreshness()
+	recovery.promise = (async () => {
+		try {
+			while (true) {
+				recovery.pendingRefresh = false
+				const refreshed = await refreshAfterUpdates(1, true, recovery)
+				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId || !refreshed) return false
+				if (recovery.pendingRefresh) continue
+				if (recovery.accountToRefresh && isRichList) {
+					const currentAccount = richListItems.find(
+						(item) =>
+							String(item.chain_id) === String(recovery.accountToRefresh.chain_id) &&
+							item.address.toLowerCase() === recovery.accountToRefresh.address.toLowerCase(),
+					)
+					if (currentAccount) await openAccountTransactions(currentAccount)
+				} else if (
+					recovery.accountToRefresh &&
+					isAddress &&
+					currentAddressProfile &&
+					String(currentAddressProfile.chain_id) === String(recovery.accountToRefresh.chain_id) &&
+					currentAddressProfile.address.toLowerCase() === recovery.accountToRefresh.address.toLowerCase()
+				)
+					await openAccountTransactions(currentAddressProfile)
+				if (recovery.pendingRefresh) {
+					if (dialog.open) closeDetail()
+					continue
+				}
+				canonicalRefreshRequired = false
+				return true
+			}
+		} finally {
+			if (activeReorgRecovery === recovery) {
+				activeReorgRecovery = undefined
+				updateFreshness()
+			}
+		}
+	})()
+	return recovery.promise
+}
+
+const scheduleBlockRefresh = () => {
+	blockRefreshTimer = window.setTimeout(() => {
+		blockRefreshTimer = undefined
+		if (activeReorgRecovery !== undefined) {
+			void activeReorgRecovery.promise.finally(() => {
+				if (pendingBlockUpdates > 0 && blockRefreshTimer === undefined) scheduleBlockRefresh()
+			})
+			return
+		}
+		const count = pendingBlockUpdates
+		pendingBlockUpdates = 0
+		void refreshAfterUpdates(count)
+	}, 1_000)
 }
 
 const queueBlockRefresh = () => {
 	pendingBlockUpdates++
-	if (blockRefreshTimer !== undefined) return
-	blockRefreshTimer = window.setTimeout(() => {
-		const count = pendingBlockUpdates
-		pendingBlockUpdates = 0
-		blockRefreshTimer = undefined
-		void refreshAfterUpdates(count)
-	}, 1_000)
+	if (blockRefreshTimer === undefined) scheduleBlockRefresh()
 }
 
 const connectStream = () => {
@@ -2319,14 +3005,17 @@ const connectStream = () => {
 		connection.className = 'connection error'
 		$('#connection-label').textContent = 'Reconnecting'
 	})
-	const selectedEventPayload = (event, label) => {
+	const eventPayload = (event, label) => {
 		try {
-			const payload = JSON.parse(event.data)
-			return String(payload.chainId) === selectedChainId() ? payload : undefined
+			return JSON.parse(event.data)
 		} catch (error) {
 			console.error(`${label} notification could not be decoded (${error instanceof Error ? error.name : typeof error})`)
 			return undefined
 		}
+	}
+	const selectedEventPayload = (event, label) => {
+		const payload = eventPayload(event, label)
+		return payload !== undefined && String(payload.chainId) === selectedChainId() ? payload : undefined
 	}
 	const liveUpdate = (event) => {
 		lastStreamEventAt = new Date()
@@ -2334,17 +3023,25 @@ const connectStream = () => {
 		updateDiagnostics()
 		queueBlockRefresh()
 	}
-	nextStream.addEventListener('block', liveUpdate)
+	nextStream.addEventListener('block', (event) => {
+		const payload = eventPayload(event, 'Block update')
+		if (payload === undefined) return
+		invalidateAddressIdentityCache(payload.chainId, true)
+		if (String(payload.chainId) === selectedChainId()) liveUpdate(event)
+	})
 	nextStream.addEventListener('status', liveUpdate)
 	nextStream.addEventListener('reorg', async (event) => {
 		lastStreamEventAt = new Date()
-		const payload = selectedEventPayload(event, 'Reorganization')
+		const payload = eventPayload(event, 'Reorganization')
 		if (payload === undefined) return
+		invalidateAddressIdentityCache(payload.chainId)
+		if (String(payload.chainId) !== selectedChainId()) return
 		const depth = payload.depth ?? 'unknown'
 		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; canonical views are refreshing.`)
 	})
 	nextStream.addEventListener('reset', async () => {
 		lastStreamEventAt = new Date()
+		addressIdentityCache.clear()
 		await refreshCanonicalViews('Live replay window expired', 'Refreshing canonical views from the current database state.')
 	})
 }
@@ -2372,6 +3069,7 @@ addEventListener('pageshow', async (event) => {
 	await loadNetworks({ refreshAfterCurrent: true })
 	if (isSystem) await loadSystemState()
 	else if (isRichList) await loadRichList()
+	else if (isAddress) await loadAddressProfile()
 	else if (validateAddressFilter()) await loadLogs()
 	else showInvalidAddressFilter()
 })
@@ -2386,6 +3084,7 @@ setInterval(() => {
 	if (!isDemo && (!lastStreamEventAt || Date.now() - lastStreamEventAt.getTime() > 30_000)) {
 		if (isSystem) loadSystemState()
 		else if (isRichList) loadRichList()
+		else if (isAddress) loadAddressProfile()
 		else if (window.scrollY < 420 && validateAddressFilter()) loadLogs()
 	}
 }, 12_000)
@@ -2400,10 +3099,17 @@ validateAddressFilter()
 $('#clear-filters').disabled = !hasActivityFilters()
 
 const deepLink = pageUrl.searchParams.get('log')
+const accountDeepLink = pageUrl.searchParams.get('account')
+if (!isRichList && accountDeepLink !== null) {
+	const url = new URL(location.href)
+	url.searchParams.delete('account')
+	history.replaceState(null, '', url)
+}
 $('#activity').hidden = !isActivity
 $('#system').hidden = !isSystem
 $('#richlist').hidden = !isRichList
-$('.skip-link').href = isSystem ? '#system' : isRichList ? '#richlist' : '#activity'
+$('#address-profile').hidden = !isAddress
+$('.skip-link').href = isSystem ? '#system' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
 for (const link of document.querySelectorAll('.product-nav a')) if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
 const requestedTab = pageUrl.searchParams.get('tab')
@@ -2414,6 +3120,7 @@ const initialDashboardLoad = (async () => {
 	await loadNetworks({ synchronizeActivity: false })
 	if (isSystem) await loadSystemState()
 	else if (isRichList) await loadRichList()
+	else if (isAddress) await loadAddressProfile()
 	else {
 		syncActivityFilterUrl()
 		if (validateAddressFilter()) await loadLogs()
@@ -2428,6 +3135,24 @@ if (isActivity && deepLink !== null) {
 	else {
 		const url = new URL(location.href)
 		url.searchParams.delete('log')
+		history.replaceState(null, '', url)
+	}
+}
+if (isRichList && accountDeepLink !== null) {
+	const [chainId, address] = accountDeepLink.split(':')
+	if (chainId === selectedChainId() && /^0x[0-9a-fA-F]{40}$/.test(address ?? '')) {
+		const item = richListItems.find((candidate) => candidate.chain_id === chainId && candidate.address.toLowerCase() === address?.toLowerCase())
+		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === chainId)
+		await openAccountTransactions(
+			item ?? {
+				chain_id: chainId,
+				address,
+				explorer_base_url: network?.explorer_base_url,
+			},
+		)
+	} else {
+		const url = new URL(location.href)
+		url.searchParams.delete('account')
 		history.replaceState(null, '', url)
 	}
 }

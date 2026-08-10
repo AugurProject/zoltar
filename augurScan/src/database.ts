@@ -135,7 +135,7 @@ export class ScannerDatabase {
 
 	async read<T>(operation: (sql: SQL) => Promise<T>, timeoutMs = 10_000): Promise<T> {
 		return await this.sql.begin(async (transaction) => {
-			await transaction.unsafe('SET TRANSACTION READ ONLY')
+			await transaction.unsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
 			await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
 			await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
 			return await operation(transaction)

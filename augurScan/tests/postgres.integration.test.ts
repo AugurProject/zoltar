@@ -24,6 +24,7 @@ const rediscoveredAddress = getAddress('0x40000000000000000000000000000000000000
 const orphanOnlyAddress = getAddress('0x5000000000000000000000000000000000000005')
 const wethAddress = getAddress('0x6000000000000000000000000000000000000006')
 const secondWethAddress = getAddress('0x6000000000000000000000000000000000000007')
+const referencedOnlyAddress = getAddress('0x7000000000000000000000000000000000000008')
 const transactionHash = keccak256(stringToHex('augurScan integration transaction'))
 const blockHash = (name: string) => keccak256(stringToHex(name))
 
@@ -417,6 +418,25 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		} finally {
 			await failover.close()
 		}
+		const readIsolation = await database.read(async (sql) => {
+			const rows = await sql`SELECT current_setting('transaction_isolation') AS isolation, current_setting('transaction_read_only') AS read_only`
+			return rows[0]
+		})
+		expect(readIsolation).toMatchObject({ isolation: 'repeatable read', read_only: 'on' })
+		const reorgWriter = new ScannerDatabase(postgresUrl)
+		try {
+			const snapshotStayedCanonical = await database.read(async (sql) => {
+				const before = await sql`SELECT canonical FROM blocks WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+				expect(before[0]?.['canonical']).toBe(true)
+				await reorgWriter.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+				const after = await sql`SELECT canonical FROM blocks WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+				return after[0]?.['canonical']
+			})
+			expect(snapshotStayedCanonical).toBe(true)
+		} finally {
+			await reorgWriter.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+			await reorgWriter.close()
+		}
 		await database.seedNetwork({ ...network, contracts: [[orphanOnlyAddress, 'New child REP', 'reputationToken']] })
 
 		const response = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}`), database.sql)
@@ -425,12 +445,167 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect(payload.items).toHaveLength(2)
 		expect(payload.items).toContainEqual(expect.objectContaining({ summary: 'replacement event', block_hash: replacement.hash }))
 		expect(payload.items[0]?.origin_address).toBe(address.toLowerCase())
+		const orphanDetailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0`), database.sql)
+		expect(orphanDetailResponse?.status).toBe(404)
+		expect(await orphanDetailResponse?.json()).toEqual({ error: 'Log not found' })
+		const senderLogsResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&address=${address.toLowerCase()}`), database.sql)
+		if (senderLogsResponse === undefined) throw new Error('sender-filtered logs API did not return a response')
+		const senderLogs = (await senderLogsResponse.json()) as { items: Array<{ origin_address: string; arguments: Record<string, unknown> }> }
+		expect(senderLogs.items).toHaveLength(2)
+		expect(senderLogs.items.every((item) => item.origin_address === address.toLowerCase())).toBe(true)
+		expect(senderLogs.items.every((item) => !JSON.stringify(item.arguments).toLowerCase().includes(address.toLowerCase()))).toBe(true)
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 		if (detailResponse === undefined) throw new Error('log detail API did not return a response')
 		const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[]; origin_address: string }
 		expect(detail.receipt.logs).toHaveLength(1)
 		expect(detail.argument_schema).toEqual([])
 		expect(detail.origin_address).toBe(address.toLowerCase())
+		await database.sql`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND address = ${discoveredAddress.toLowerCase()}`
+		try {
+			const identitylessListResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}`), database.sql)
+			if (identitylessListResponse === undefined) throw new Error('identityless logs API did not return a response')
+			const identitylessList = (await identitylessListResponse.json()) as { items: Array<Record<string, unknown>> }
+			expect(identitylessList.items.find((item) => item['block_hash'] === replacement.hash)).toMatchObject({
+				contract_label: null,
+				contract_kind: null,
+			})
+			const identitylessDetailResponse = await handleApi(
+				new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`),
+				database.sql,
+			)
+			if (identitylessDetailResponse === undefined) throw new Error('identityless log detail API did not return a response')
+			expect(await identitylessDetailResponse.json()).toMatchObject({
+				contract_label: null,
+				contract_kind: null,
+				contract_provenance: null,
+			})
+		} finally {
+			await database.sql`UPDATE contracts SET canonical = true WHERE chain_id = ${chainId} AND address = ${discoveredAddress.toLowerCase()}`
+		}
+		await database.sql`
+			INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
+			SELECT ${chainId}, '0x' || lpad(to_hex(sequence), 64, '0'), ${third.hash}, 3, sequence, ${address.toLowerCase()},
+				${discoveredAddress.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true
+			FROM generate_series(1, 60) sequence
+		`
+		const referencedOnlyTransactionHash = blockHash('calldata-only-address-reference')
+		await database.sql`
+			INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
+			VALUES (${chainId}, ${referencedOnlyTransactionHash}, ${third.hash}, 3, 61, ${discoveredAddress.toLowerCase()},
+				${address.toLowerCase()}, 0, '0x1234', 'success', 42000, '{}'::jsonb, true)
+		`
+		await database.sql`
+			INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, summary)
+			VALUES (${chainId}, ${third.hash}, ${referencedOnlyTransactionHash}, ${address.toLowerCase()}, 'reportFor', 'reportFor(address)',
+				${JSON.stringify({ participant: referencedOnlyAddress.toLowerCase() })}::jsonb,
+				${JSON.stringify({ participant: referencedOnlyAddress.toLowerCase() })}::jsonb,
+				${JSON.stringify([{ index: 0, name: 'participant', type: 'address' }])}::jsonb, 'decoded', 'reportFor')
+		`
+		await database.sql`
+			INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)
+			VALUES (${chainId}, ${third.hash}, 3, ${referencedOnlyTransactionHash}, ${referencedOnlyAddress.toLowerCase()},
+				'0x0000000000000000000000000000000000000000', 'referenced', true)
+		`
+		const newerSenderTransactionHash = blockHash('newer-sender-only-address-activity')
+		await database.sql`
+			INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
+			VALUES (${chainId}, ${newerSenderTransactionHash}, ${third.hash}, 3, 62, ${referencedOnlyAddress.toLowerCase()},
+				${address.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
+		`
+		await database.sql`
+			INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)
+			VALUES (${chainId}, ${third.hash}, 3, ${newerSenderTransactionHash}, ${referencedOnlyAddress.toLowerCase()},
+				'0x0000000000000000000000000000000000000000', 'sender', true)
+		`
+		const interactionsResponse = await handleApi(
+			new Request(`http://localhost/api/v1/address-interactions?chainId=${chainId}&address=${referencedOnlyAddress}&limit=1`),
+			database.sql,
+		)
+		if (interactionsResponse === undefined) throw new Error('address interactions API did not return a response')
+		expect(await interactionsResponse.json()).toMatchObject({
+			items: [
+				{
+					tx_hash: referencedOnlyTransactionHash,
+					roles: ['referenced'],
+					function_name: 'reportFor',
+					action_arguments: { participant: referencedOnlyAddress.toLowerCase() },
+				},
+			],
+			limit: 1,
+		})
+		const transactionsResponse = await handleApi(
+			new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`),
+			database.sql,
+		)
+		if (transactionsResponse === undefined) throw new Error('address transactions API did not return a response')
+		const transactions = (await transactionsResponse.json()) as {
+			items: Array<Record<string, unknown>>
+			nextCursor: string
+			snapshotBlock: string
+			total: number
+		}
+		expect(transactions).toMatchObject({ total: 61, snapshotBlock: '3' })
+		expect(transactions.items).toHaveLength(50)
+		await database.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+		const staleCursorResponse = await handleApi(
+			new Request(
+				`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`,
+			),
+			database.sql,
+		)
+		expect(staleCursorResponse?.status).toBe(409)
+		expect(await staleCursorResponse?.json()).toEqual({ error: 'Transaction history changed; restart pagination' })
+		const canonicalOnlyTransactionsResponse = await handleApi(
+			new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`),
+			database.sql,
+		)
+		if (canonicalOnlyTransactionsResponse === undefined) throw new Error('canonical-only address transaction page did not return a response')
+		expect(await canonicalOnlyTransactionsResponse.json()).toMatchObject({ total: 1, snapshotBlock: '2' })
+		await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+		const alteredCursorParts = JSON.parse(atob(transactions.nextCursor)) as [number, string, string, string, number, string, number]
+		alteredCursorParts[4]++
+		const alteredTotalResponse = await handleApi(
+			new Request(
+				`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(btoa(JSON.stringify(alteredCursorParts)))}`,
+			),
+			database.sql,
+		)
+		expect(alteredTotalResponse?.status).toBe(409)
+		expect(await alteredTotalResponse?.json()).toEqual({ error: 'Transaction history changed; restart pagination' })
+		const fourthHash = blockHash('block-four-direct')
+		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${chainId}, 4, ${fourthHash}, ${third.hash}, '2026-01-04T00:00:00Z', true)`
+		await database.sql`
+			INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
+			VALUES (${chainId}, ${blockHash('newer-address-transaction')}, ${fourthHash}, 4, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
+		`
+		const secondPageResponse = await handleApi(
+			new Request(
+				`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`,
+			),
+			database.sql,
+		)
+		if (secondPageResponse === undefined) throw new Error('second address transaction page did not return a response')
+		const secondPage = (await secondPageResponse.json()) as { items: Array<Record<string, unknown>>; nextCursor?: string; total: number }
+		const snapshotItems = [...transactions.items, ...secondPage.items]
+		expect(secondPage).toMatchObject({ total: 61 })
+		expect(secondPage.nextCursor).toBeUndefined()
+		expect(snapshotItems).toHaveLength(61)
+		expect(new Set(snapshotItems.map((item) => item['tx_hash'])).size).toBe(61)
+		expect(snapshotItems).toContainEqual(
+			expect.objectContaining({
+				tx_hash: transactionHash,
+				from_address: address.toLowerCase(),
+				block_hash: replacement.hash,
+				action_summary: 'Unknown call',
+			}),
+		)
+		expect(snapshotItems.some((item) => item['block_hash'] === fourthHash)).toBe(false)
+		const currentTransactionsResponse = await handleApi(
+			new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=1`),
+			database.sql,
+		)
+		if (currentTransactionsResponse === undefined) throw new Error('current address transaction page did not return a response')
+		expect(await currentTransactionsResponse.json()).toMatchObject({ total: 62, snapshotBlock: '4' })
 		const richListResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
 		if (richListResponse === undefined) throw new Error('rich-list API did not return a response')
 		const richList = (await richListResponse.json()) as {
@@ -458,8 +633,29 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			rep_token_count: '2',
 			sampled_rep_token_count: '1',
 		})
+		const addressProfileResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&address=${address}`), database.sql)
+		if (addressProfileResponse === undefined) throw new Error('address profile query did not return a response')
+		expect(await addressProfileResponse.json()).toMatchObject({
+			total: 1,
+			items: [expect.objectContaining({ address: address.toLowerCase(), pool_count: '1', vault_count: '1' })],
+		})
+		const addressIdentityResponse = await handleApi(
+			new Request(`http://localhost/api/v1/address-identity?chainId=${chainId}&address=${discoveredAddress}`),
+			database.sql,
+		)
+		if (addressIdentityResponse === undefined) throw new Error('address identity query did not return a response')
+		expect(await addressIdentityResponse.json()).toMatchObject({
+			address: discoveredAddress.toLowerCase(),
+			label: 'Discovered pool',
+			kind: 'securityPool',
+		})
 		expect(richList.items[0]?.rep_balances).toEqual([
-			expect.objectContaining({ address: rediscoveredAddress.toLowerCase(), balance: '3000000000000000000', symbol: 'OLD' }),
+			expect.objectContaining({
+				address: rediscoveredAddress.toLowerCase(),
+				balance: '3000000000000000000',
+				symbol: 'OLD',
+				contractLabel: 'Original discovery',
+			}),
 		])
 		expect(richList.items[0]?.weth_balances).toEqual([
 			expect.objectContaining({ address: wethAddress.toLowerCase(), balance: '1234567890123456789', symbol: 'WETH' }),

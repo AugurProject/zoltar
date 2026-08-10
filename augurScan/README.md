@@ -2,7 +2,9 @@
 
 augurScan is a read-only activity explorer for the Zoltar/Augur protocol. It indexes multiple configured networks from Ethereum JSON-RPC into PostgreSQL while the web UI shows one globally selected network at a time. The indexer decodes canonical project logs and top-level protocol actions with a self-contained ABI catalog, retains raw evidence and orphaned reorg history, and streams committed updates to the UI.
 
-The selector in the top-right header sets the `chainId` URL parameter for Activity, **System state**, and **Rich list**. System state derives bounded canonical registries for indexed security pools, questions, vaults, and Zoltar universes. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the returned universe parent/child graph. The Rich list ranks every observed sender and decoded participant by ETH or SepoliaETH, WETH, or sent transactions and displays separate per-token REP balances, pool associations, and vault positions. Pending and partial labels distinguish incomplete balance sampling from a known zero balance. See [STATE_MODEL.md](STATE_MODEL.md) for the event, balance, and field model.
+The selector in the top-right header sets the `chainId` URL parameter for Activity, **System state**, and **Rich list**. System state derives bounded canonical registries for indexed security pools, questions, vaults, and Zoltar universes. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the returned universe parent/child graph. The Rich list ranks every observed sender and decoded participant by ETH or SepoliaETH, WETH, or sent transactions and displays amounts with at most two decimal places. Each REP token remains separate with its contract identity, alongside pool associations and vault positions. Clicking a sent-transaction count opens the account's canonical transactions with decoded details. Pending and partial labels distinguish incomplete balance sampling from a known zero balance. See [STATE_MODEL.md](STATE_MODEL.md) for the event, balance, and field model.
+
+Address links stay inside augurScan. Known addresses use their protocol name; unknown addresses use a shortened address. `/address?chainId=:chainId&address=:address` shows the address's balances, separate REP tokens, pools, vaults, interaction counts, and recent canonical transactions, with Etherscan available as a secondary link.
 
 ## Start with Docker
 
@@ -89,6 +91,8 @@ Version 0.1 indexes top-level actions sent to protocol activity sources and ever
 - Contract identity: `GET /api/v1/contracts/:chainId/:address`
 - Durable live commit/reorg/status notifications with seven-day `Last-Event-ID` replay: `GET /api/v1/stream`. A cursor older than that window receives a reset event so the UI reloads current canonical state.
 - Bounded address rankings with ETH or SepoliaETH and bounded per-token REP/WETH breakdowns: `GET /api/v1/richlist?chainId=:chainId`
+- Snapshot-bound canonical transactions sent by one address: `GET /api/v1/address-transactions?chainId=:chainId&address=:address`. Follow the opaque `nextCursor` to read later pages without newly indexed blocks shifting the result set. The cursor is bound to the chain, address, snapshot block and hash, and stable transaction total. If a reorg or historical insertion invalidates that snapshot, the endpoint returns `409 Transaction history changed; restart pagination`; restart from the first page without a cursor.
+- Known protocol identity for an address: `GET /api/v1/address-identity?chainId=:chainId&address=:address`
 - Pools, questions, vaults, and universes: `GET /api/v1/state/catalog?chainId=:chainId`
 - Pool history: `GET /api/v1/state/pools/:chainId/:poolAddress`
 - Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`

@@ -20,10 +20,20 @@ test('rejects malformed address filters before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	for (const address of ['0x1234', `0x${'g'.repeat(40)}`, `0x${'1'.repeat(41)}`]) {
-		const response = await handleApi(new Request(`http://localhost/api/v1/logs?address=${address}`), database)
-		expect(response?.status).toBe(400)
-		expect(await response?.json()).toEqual({ error: 'address must be a complete 20-byte EVM address' })
+		for (const path of [
+			`logs?address=${address}`,
+			`richlist?chainId=1&address=${address}`,
+			`address-identity?chainId=1&address=${address}`,
+			`address-interactions?chainId=1&address=${address}`,
+		]) {
+			const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+			expect(response?.status).toBe(400)
+			expect(await response?.json()).toEqual({ error: 'address must be a complete 20-byte EVM address' })
+		}
 	}
+	const response = await handleApi(new Request('http://localhost/api/v1/richlist?address=0x1111111111111111111111111111111111111111'), database)
+	expect(response?.status).toBe(400)
+	expect(await response?.json()).toEqual({ error: 'chainId is required when filtering by address' })
 })
 
 test('rejects unsupported decoded filters before querying', async () => {
@@ -82,11 +92,49 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 		'state/catalog?limit=-1',
 		'state/universes/1/0?limit=unbounded',
 		'actions?chainId=1e2',
+		'address-transactions?chainId=1e2&address=0x1111111111111111111111111111111111111111',
+		'address-interactions?chainId=1e2&address=0x1111111111111111111111111111111111111111',
 		'richlist?offset=-1',
 		'richlist?chainId=0x10',
 	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
+	}
+})
+
+test('requires a complete network and address for account transactions', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of [
+		'address-transactions?address=0x1111111111111111111111111111111111111111',
+		'address-transactions?chainId=1',
+		'address-transactions?chainId=1&address=0x1234',
+		'address-identity?address=0x1111111111111111111111111111111111111111',
+		'address-identity?chainId=1',
+		'address-interactions?address=0x1111111111111111111111111111111111111111',
+		'address-interactions?chainId=1',
+	]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+	for (const cursor of ['not-base64', btoa(JSON.stringify([1, 2, 3])), btoa(JSON.stringify(['3', 2, '4', 1]))]) {
+		const response = await handleApi(
+			new Request(
+				`http://localhost/api/v1/address-transactions?chainId=1&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`,
+			),
+			database,
+		)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'cursor is invalid' })
+	}
+	const cursor = btoa(JSON.stringify([1, '0x1111111111111111111111111111111111111111', '3', `0x${'a'.repeat(64)}`, 2, '2', 1]))
+	for (const request of [
+		`chainId=2&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`,
+		`chainId=1&address=0x2222222222222222222222222222222222222222&cursor=${encodeURIComponent(cursor)}`,
+	]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/address-transactions?${request}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'cursor does not match the requested account' })
 	}
 })
 
