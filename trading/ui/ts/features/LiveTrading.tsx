@@ -11,11 +11,13 @@ import {
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
+	discoverAllLiveMarkets,
 	discoverLiveMarketPage,
 	loadLiveBalances,
 	liveBalancesForMarket,
 	marketAcceptsNewRisk,
 	marketNewRiskBlocker,
+	mapWithConcurrency,
 	settlementAvailability,
 	shareBalanceScope,
 	simulateEntry,
@@ -45,6 +47,7 @@ type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfig
 type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>) & QuoteContext
 type TransactionState = 'idle' | 'simulating' | 'ready' | 'approval' | 'pending' | 'confirmed' | 'error'
 type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
+export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
 
 function statusLabel(market: LiveMarket, nowSeconds: bigint) {
 	if (market.loadError !== undefined) return 'Market data unavailable'
@@ -242,6 +245,10 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	const [balances, setBalances] = useState<LiveBalances>()
 	const [balanceState, setBalanceState] = useState<BalanceState>('disconnected')
 	const [balanceError, setBalanceError] = useState<string>()
+	const [portfolioEntries, setPortfolioEntries] = useState<readonly PortfolioBalanceEntry[]>([])
+	const [portfolioBalanceState, setPortfolioBalanceState] = useState<BalanceState>('disconnected')
+	const [portfolioBalanceError, setPortfolioBalanceError] = useState<string>()
+	const [portfolioRefreshNonce, setPortfolioRefreshNonce] = useState(0)
 	const [mode, setMode] = useState<'entry' | 'exit'>('entry')
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
 	const [amount, setAmount] = useState('0.01')
@@ -253,6 +260,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	const [discoveryError, setDiscoveryError] = useState<string>()
 	const [marketPage, setMarketPage] = useState({ start: 0n, total: 0n, previousStart: undefined as bigint | undefined, nextStart: undefined as bigint | undefined })
 	const marketListRef = useRef<HTMLElement>(null)
+	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
+	const previousRoute = useRef(route)
 	const marketDetailRef = useRef<HTMLElement>(null)
 	const discoveryRequests = useRef(createLatestRequestGuard()).current
 	const balanceRequests = useRef(createLatestRequestGuard()).current
@@ -304,13 +313,19 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			setBalanceError(undefined)
 			setBalances(undefined)
 		}
+		if (route === 'portfolio') {
+			portfolioBalanceRequests.invalidate()
+			setPortfolioEntries([])
+			setPortfolioBalanceState(accountRef.current === undefined ? 'disconnected' : 'loading')
+			setPortfolioBalanceError(undefined)
+		}
 		setDiscoveryState('loading')
 		setDiscoveryError(undefined)
 		try {
 			const client = configuredClient(nextConfiguration)
 			await validateLiveDeployment(client, nextConfiguration)
 			if (!discoveryRequests.isCurrent(request)) return
-			const discovered = await discoverLiveMarketPage(client, nextConfiguration, requestedStart)
+			const discovered = route === 'portfolio' ? await discoverAllLiveMarkets(client, nextConfiguration) : await discoverLiveMarketPage(client, nextConfiguration, requestedStart)
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, positionWorkflowLockedRef.current, liquidityWorkflowLockedRef.current)) {
 				setDiscoveryState('ready')
@@ -329,6 +344,10 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			const detail = error instanceof Error ? error.message : 'SecurityPool discovery failed'
 			setDiscoveryError(detail)
 			setDiscoveryState('error')
+			if (route === 'portfolio') {
+				setPortfolioBalanceState('error')
+				setPortfolioBalanceError(`SecurityPool discovery failed: ${detail}`)
+			}
 			if (accountRef.current !== undefined) {
 				setBalanceState('error')
 				setBalanceError('Market refresh failed before wallet balances could be revalidated')
@@ -375,6 +394,8 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		simulationRequests.invalidate()
 		setQuote(undefined)
 		setState('idle')
+		if (previousRoute.current !== route) void refresh(configuration, 0n)
+		previousRoute.current = route
 	}, [route])
 
 	useEffect(() => {
@@ -412,6 +433,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		if (walletProvider === undefined) return
 		return subscribeToWalletContextChanges(walletProvider, (eventName: WalletContextChangeEvent) => {
 			balanceRequests.invalidate()
+			portfolioBalanceRequests.invalidate()
 			simulationRequests.invalidate()
 			accountRef.current = undefined
 			setWalletProvider(undefined)
@@ -420,6 +442,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			setBalances(undefined)
 			setBalanceState('error')
 			setBalanceError('Wallet context changed; reconnect to refresh balances and approvals')
+			setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			setWalletContextInvalidated(true)
 			setQuote(undefined)
 			if (!positionWorkflowLockedRef.current) setState('error')
@@ -428,7 +451,57 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 	}, [walletProvider])
 
 	useEffect(() => {
+		const request = portfolioBalanceRequests.begin()
+		if (route !== 'portfolio') {
+			setPortfolioEntries([])
+			setPortfolioBalanceState('disconnected')
+			setPortfolioBalanceError(undefined)
+			return
+		}
+		const emptyEntries = markets.map(market => ({ market, balances: undefined, error: market.loadError }))
+		setPortfolioEntries(emptyEntries)
+		if (configuration === undefined || account === undefined) {
+			setPortfolioBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
+			setPortfolioBalanceError(walletContextInvalidated ? 'Wallet context changed; reconnect before loading portfolio positions' : undefined)
+			return
+		}
+		setPortfolioBalanceState('loading')
+		setPortfolioBalanceError(undefined)
+		const client = configuredClient(configuration)
+		void mapWithConcurrency(markets, 6, async (market, index) => {
+			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
+			let entry: PortfolioBalanceEntry
+			try {
+				const loaded = await loadLiveBalances(client, market, account, configuration.router)
+				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
+			} catch (error) {
+				entry = { market, balances: undefined, error: error instanceof Error ? error.message : 'Balance refresh failed' }
+			}
+			if (portfolioBalanceRequests.isCurrent(request) && accountRef.current === account) setPortfolioEntries(current => current.map((currentEntry, currentIndex) => (currentIndex === index ? entry : currentEntry)))
+			return entry
+		})
+			.then(entries => {
+				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
+				setPortfolioEntries(entries)
+				setPortfolioBalanceState('ready')
+				setPortfolioBalanceError(undefined)
+			})
+			.catch(error => {
+				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
+				setPortfolioBalanceState('error')
+				setPortfolioBalanceError(error instanceof Error ? error.message : 'Portfolio balance refresh failed')
+			})
+		return () => portfolioBalanceRequests.invalidate()
+	}, [account, configuration, markets, portfolioBalanceRequests, portfolioRefreshNonce, route, walletContextInvalidated])
+
+	useEffect(() => {
 		const request = balanceRequests.begin()
+		if (route === 'portfolio') {
+			setBalances(undefined)
+			setBalanceState('disconnected')
+			setBalanceError(undefined)
+			return
+		}
 		if (configuration === undefined || account === undefined || selected === undefined || selected.loadError !== undefined) {
 			setBalances(undefined)
 			setBalanceState(walletContextInvalidated || selected?.loadError !== undefined ? 'error' : 'disconnected')
@@ -454,7 +527,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			},
 		)
 		return () => balanceRequests.invalidate()
-	}, [account, configuration, selected, walletContextInvalidated])
+	}, [account, configuration, route, selected, walletContextInvalidated])
 
 	async function retryBalances() {
 		if (configuration === undefined || selected === undefined) return
@@ -480,6 +553,18 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			setBalanceState('error')
 			setBalanceError(error instanceof Error ? error.message : 'Balance refresh failed')
 		}
+	}
+
+	async function retryPortfolioBalances() {
+		if (account === undefined) {
+			await connect()
+			return
+		}
+		if (discoveryState === 'error') {
+			await refresh(configuration, 0n)
+			return
+		}
+		setPortfolioRefreshNonce(value => value + 1)
 	}
 
 	async function connect() {
@@ -733,6 +818,42 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				marketButtons
 			)
 	}
+	if (route === 'portfolio')
+		return (
+			<main class='route' id='main-content'>
+				<header class='route-header'>
+					<div>
+						<span class='eyebrow'>Positions by SecurityPool</span>
+						<h1>Portfolio</h1>
+						<p>{configuration.chainName}</p>
+					</div>
+					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+						{account === undefined ? 'Connect wallet' : shortAddress(account)}
+					</button>
+				</header>
+				{message === undefined ? null : (
+					<p class='error' role='alert'>
+						{message}
+					</p>
+				)}
+				<section class='section' aria-busy={discoveryState === 'loading'}>
+					<div class='section-heading'>
+						<h2>Positions</h2>
+						<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
+							Refresh
+						</button>
+					</div>
+					{discoveryState === 'loading' && markets.length === 0 ? <p role='status'>Discovering every canonical SecurityPool…</p> : null}
+					{discoveryState === 'error' ? (
+						<p class='error' role='alert'>
+							SecurityPool discovery failed: {discoveryError}
+						</p>
+					) : null}
+					{discoveryState === 'ready' && markets.length === 0 ? <p>No SecurityPools are deployed on this configured chain.</p> : null}
+					{discoveryState === 'error' ? null : <LivePortfolio entries={portfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} />}
+				</section>
+			</main>
+		)
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -921,7 +1042,6 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 								/>
 							) : null}
-							{route === 'portfolio' ? <LivePortfolio market={selected} balances={selectedBalances} balanceState={selectedBalanceState} balanceError={balanceError} retryBalances={retryBalances} /> : null}
 							{route !== 'liquidity' && route !== 'portfolio' && selectedPairInitialized ? (
 								<LivePositionControls
 									market={selected}
@@ -1434,19 +1554,35 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 	)
 }
 
-export function LivePortfolio({ market, balances, balanceState, balanceError, retryBalances }: { market: LiveMarket; balances: LiveBalances | undefined; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
-	const errorMessage = balances === undefined ? `Wallet balances are unavailable: ${balanceError ?? 'balance refresh failed'}.` : `Displayed balances are stale because the latest refresh failed: ${balanceError ?? 'balance refresh failed'}.`
+function hasPortfolioBalance(balances: LiveBalances) {
+	return balances.yes > 0n || balances.no > 0n || balances.invalid > 0n || balances.lp > 0n
+}
+
+export function LivePortfolio({ entries, balanceState, balanceError, retryBalances }: { entries: readonly PortfolioBalanceEntry[]; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
+	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	return (
-		<div class='operation-block' aria-busy={balanceState === 'loading'}>
-			<h3>Balances for selected SecurityPool</h3>
-			<p>Only this pool’s ShareToken and universe-specific outcome token IDs are included.</p>
-			<dl class='metrics'>
-				<MarketShareIdentityRows market={market} />
-			</dl>
-			{balanceState === 'disconnected' ? <p>Connect a wallet to load balances for this SecurityPool.</p> : null}
-			{balanceState === 'loading' ? <p role='status'>{balances === undefined ? 'Loading balances for this SecurityPool…' : 'Refreshing this SecurityPool’s balances…'}</p> : null}
-			{balanceState === 'error' ? <BalanceLoadError message={errorMessage} retry={retryBalances} /> : null}
-			{balances === undefined ? null : <LivePortfolioBalanceMetrics market={market} balances={balances} />}
+		<div class='portfolio-groups' aria-busy={balanceState === 'loading'}>
+			<p>Balances are grouped by the SecurityPool and universe that minted their outcome shares.</p>
+			{balanceState === 'disconnected' ? <p>Connect a wallet to load the positions for these SecurityPools.</p> : null}
+			{balanceState === 'loading' ? <p role='status'>Loading balances separately for each SecurityPool…</p> : null}
+			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? 'Portfolio balances could not be loaded.'} retry={retryBalances} /> : null}
+			{balanceState === 'ready' && visibleEntries.length === 0 ? <p>No YES, NO, INVALID, or LP balance was found in the discovered SecurityPools.</p> : null}
+			{visibleEntries.map(entry => (
+				<article class='operation-block' data-portfolio-pool={entry.market.pool} key={entry.market.pool}>
+					<div class='section-heading'>
+						<div>
+							<span class='section-kicker'>SecurityPool position</span>
+							<h3>{entry.market.title}</h3>
+						</div>
+						<Status tone={entry.error === undefined ? 'neutral' : 'warn'}>{entry.error === undefined ? `Universe ${entry.market.universeId.toString()}` : 'Balance unavailable'}</Status>
+					</div>
+					<dl class='metrics'>
+						<MarketShareIdentityRows market={entry.market} />
+					</dl>
+					{entry.error === undefined ? null : <BalanceLoadError message={`This SecurityPool’s balances could not be loaded: ${entry.error}`} retry={retryBalances} />}
+					{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
+				</article>
+			))}
 		</div>
 	)
 }

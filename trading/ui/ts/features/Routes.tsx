@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
-import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
+import { demoAttoEthToAttoShares, demoMarket, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -296,149 +296,113 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 	)
 }
 
-export function Portfolio({ market }: { market: DemoMarket }) {
+type DemoPortfolioBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint }>
+
+function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances: DemoPortfolioBalances }) {
 	const scope = shareBalanceScope(market)
-	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: demoWalletBalances.yes, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: demoWalletBalances.no, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * demoWalletBalances.lp) / market.lpTotalSupply
-	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * demoWalletBalances.lp) / market.lpTotalSupply
+	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: balances.yes, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
+	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
+	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * balances.lp) / market.lpTotalSupply
 	const completeSetClaim = yesClaim < noClaim ? yesClaim : noClaim
-	const coveredClaim = demoWalletBalances.invalid < completeSetClaim ? demoWalletBalances.invalid : completeSetClaim
+	const coveredClaim = balances.invalid < completeSetClaim ? balances.invalid : completeSetClaim
 	const coverageBps = completeSetClaim === 0n ? 0n : (coveredClaim * 10_000n) / completeSetClaim
-	const excessYes = demoWalletBalances.yes > maximumYesExit ? demoWalletBalances.yes - maximumYesExit : 0n
+	return (
+		<section class='section portfolio-pool' data-portfolio-pool={market.pool}>
+			<div class='section-heading'>
+				<div>
+					<span class='section-kicker'>SecurityPool position</span>
+					<h2>{market.question}</h2>
+				</div>
+				<Status tone='neutral'>{market.universe}</Status>
+			</div>
+			<dl class='fact-list'>
+				<div>
+					<dt>SecurityPool</dt>
+					<dd>
+						<AddressValue value={market.pool} />
+					</dd>
+				</div>
+				<div>
+					<dt>ShareToken</dt>
+					<dd>
+						<AddressValue value={market.shareToken} />
+					</dd>
+				</div>
+				<div>
+					<dt>Universe</dt>
+					<dd>
+						{market.universe} · {market.universeId.toString()}
+					</dd>
+				</div>
+				<div>
+					<dt>Outcome token IDs</dt>
+					<dd>
+						INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
+					</dd>
+				</div>
+			</dl>
+			<section class='balance-strip'>
+				<div>
+					<span>YES</span>
+					<strong>{formatShareAmount(balances.yes)}</strong>
+				</div>
+				<div>
+					<span>NO</span>
+					<strong>{formatShareAmount(balances.no)}</strong>
+				</div>
+				<div>
+					<span>INVALID</span>
+					<strong>{formatShareAmount(balances.invalid)}</strong>
+				</div>
+				<div>
+					<span>LP tokens</span>
+					<strong>{formatUnits(balances.lp)} LP</strong>
+				</div>
+			</section>
+			<div class='portfolio-position-metrics'>
+				<dl class='fact-list'>
+					<div>
+						<dt>Maximum insured YES exit</dt>
+						<dd>{formatShareAmount(maximumYesExit)}</dd>
+					</div>
+					<div>
+						<dt>Maximum insured NO exit</dt>
+						<dd>{formatShareAmount(maximumNoExit)}</dd>
+					</div>
+					<div>
+						<dt>LP YES / NO claim</dt>
+						<dd>
+							{formatShareAmount(yesClaim)} / {formatShareAmount(noClaim)}
+						</dd>
+					</div>
+					<div>
+						<dt>LP claim covered by wallet INVALID</dt>
+						<dd>{formatUnits(coverageBps, 2, 1)}%</dd>
+					</div>
+				</dl>
+			</div>
+		</section>
+	)
+}
+
+export function Portfolio({ market }: { market: DemoMarket }) {
+	const otherMarket = market.pool === demoMarket('truth-auction').pool ? demoMarket('baseline') : demoMarket('truth-auction')
+	const otherBalances = { yes: 125n * 10n ** 18n, no: 310n * 10n ** 18n, invalid: 400n * 10n ** 18n, lp: 75n * 10n ** 18n }
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Selected SecurityPool balances</span>
+					<span class='eyebrow'>Positions grouped by SecurityPool</span>
 					<h1>Portfolio</h1>
-					<p>{market.question}</p>
+					<p>Every balance is shown under the pool and universe that minted its outcome shares.</p>
 				</div>
-				<Status tone='neutral'>Demo account</Status>
+				<Status tone='neutral'>Simulated account</Status>
 			</header>
-			<section class='section'>
-				<div class='section-heading'>
-					<h2>Pool identity</h2>
-				</div>
-				<dl class='fact-list'>
-					<div>
-						<dt>SecurityPool</dt>
-						<dd>
-							<AddressValue value={market.pool} />
-						</dd>
-					</div>
-					<div>
-						<dt>ShareToken</dt>
-						<dd>
-							<AddressValue value={market.shareToken} />
-						</dd>
-					</div>
-					<div>
-						<dt>Universe</dt>
-						<dd>
-							{market.universe} · {market.universeId.toString()}
-						</dd>
-					</div>
-					<div>
-						<dt>Outcome token IDs</dt>
-						<dd>
-							INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
-						</dd>
-					</div>
-				</dl>
-				<p>Balances from other SecurityPools are not included.</p>
-			</section>
-			<section class='balance-strip'>
-				<div>
-					<span>YES</span>
-					<strong>{formatShareAmount(demoWalletBalances.yes)}</strong>
-				</div>
-				<div>
-					<span>NO</span>
-					<strong>{formatShareAmount(demoWalletBalances.no)}</strong>
-				</div>
-				<div>
-					<span>INVALID</span>
-					<strong>{formatShareAmount(demoWalletBalances.invalid)}</strong>
-				</div>
-				<div>
-					<span>LP tokens</span>
-					<strong>{formatUnits(demoWalletBalances.lp)} LP</strong>
-				</div>
-			</section>
-			<div class='two-column'>
-				<section class='section'>
-					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>Directional coverage</span>
-							<h2>Insured exits</h2>
-						</div>
-					</div>
-					<div class='coverage-meter'>
-						<div>
-							<span>Maximum insured YES exit</span>
-							<strong>{formatUnits(maximumYesExit)} sets</strong>
-						</div>
-						<progress value={bigintToSafeNumber((maximumYesExit * 10_000n) / demoWalletBalances.invalid, 'YES insurance coverage basis points')} max='10000'>
-							{formatUnits(maximumYesExit)} of {formatUnits(demoWalletBalances.invalid)}
-						</progress>
-					</div>
-					<div class='coverage-meter'>
-						<div>
-							<span>Maximum insured NO exit</span>
-							<strong>{formatUnits(maximumNoExit)} sets</strong>
-						</div>
-						<progress value={bigintToSafeNumber((maximumNoExit * 10_000n) / demoWalletBalances.invalid, 'NO insurance coverage basis points')} max='10000'>
-							{formatUnits(maximumNoExit)} of {formatUnits(demoWalletBalances.invalid)}
-						</progress>
-					</div>
-				</section>
-				<section class='section'>
-					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>LP reserve claim</span>
-							<h2>Liquidity exposure</h2>
-						</div>
-					</div>
-					<dl class='fact-list'>
-						<div>
-							<dt>Claimed YES reserve</dt>
-							<dd>{formatShareAmount(yesClaim)}</dd>
-						</div>
-						<div>
-							<dt>Claimed NO reserve</dt>
-							<dd>{formatShareAmount(noClaim)}</dd>
-						</div>
-						<div>
-							<dt>Wallet INVALID</dt>
-							<dd>{formatShareAmount(demoWalletBalances.invalid)}</dd>
-						</div>
-						<div>
-							<dt>Estimated covered fraction</dt>
-							<dd>{formatUnits(coverageBps, 2, 1)}%</dd>
-						</div>
-					</dl>
-					<p class='muted'>The estimate compares separate wallet INVALID with the complete-set coverage of the reserve claim. The LP token itself is not insured.</p>
-				</section>
+			<div class='portfolio-groups'>
+				<DemoPortfolioGroup market={market} balances={demoWalletBalances} />
+				<DemoPortfolioGroup market={otherMarket} balances={otherBalances} />
 			</div>
-			<section class='section table-section'>
-				<div class='section-heading'>
-					<div>
-						<span class='section-kicker'>One exact branch</span>
-						<h2>{market.question}</h2>
-					</div>
-				</div>
-				<div class='table-row'>
-					<span>Unresolved directional shares</span>
-					<strong>{formatShareAmount(excessYes)} YES above insured exit</strong>
-					<a href='#/market'>Manage</a>
-				</div>
-				<div class='table-row'>
-					<span>Approvals</span>
-					<strong>Router approved for shares · LP approval required</strong>
-					<span class='muted'>Demo approval snapshot</span>
-				</div>
-			</section>
 		</main>
 	)
 }

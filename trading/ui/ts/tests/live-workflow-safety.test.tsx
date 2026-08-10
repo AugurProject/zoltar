@@ -11,6 +11,8 @@ const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
 const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
+const secondPool = `0x${'23'.repeat(20)}` as Address
+const secondShareToken = `0x${'45'.repeat(20)}` as Address
 const factory = `0x${'55'.repeat(20)}` as Address
 const router = `0x${'66'.repeat(20)}` as Address
 const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
@@ -60,6 +62,8 @@ describe('live workflow safety boundary', () => {
 		let approved = false
 		let lpAllowance = 10n ** 18n
 		let rejectBalanceRefresh = false
+		let deferSecondPortfolioBalance = false
+		const secondPortfolioBalance = deferred<undefined>()
 		const walletListeners = new Map<string, (...args: unknown[]) => void>()
 		Reflect.set(window, 'ethereum', {
 			request: async () => undefined,
@@ -75,6 +79,7 @@ describe('live workflow safety boundary', () => {
 		const now = BigInt(Math.floor(Date.now() / 1_000))
 		let discoveredEndTime = 2n ** 255n
 		let discoveredLoadError: string | undefined
+		let rejectDiscovery = false
 		const market: LiveMarket = {
 			pool,
 			pair,
@@ -104,19 +109,37 @@ describe('live workflow safety boundary', () => {
 			noReserve: 50n * 10n ** 18n,
 			lpTotalSupply: 50n * 10n ** 18n,
 		}
+		const secondMarket: LiveMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 2n, questionId: 3n, title: 'Second rendered workflow market' }
 		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory, factory, router, feeBps: 30 }
+		const discoverMarkets = async () => {
+			if (rejectDiscovery) throw new Error('registry RPC unavailable')
+			return {
+				start: 0n,
+				count: 2n,
+				total: 2n,
+				previousStart: undefined,
+				nextStart: undefined,
+				markets: [
+					{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError },
+					{ ...secondMarket, endTime: discoveredEndTime },
+				],
+			}
+		}
 		const actualLive = await import('../protocol/live.ts')
 		mock.module('../protocol/live.ts', () => ({
 			...actualLive,
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
-			discoverLiveMarketPage: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError }] }),
+			discoverLiveMarketPage: discoverMarkets,
+			discoverAllLiveMarkets: discoverMarkets,
 			walletChainId: async () => configuration.chainId,
 			connectWallet: async () => account,
 			createTradingWalletClient: () => walletClient,
-			loadLiveBalances: async () => {
+			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
 				if (rejectBalanceRefresh) throw new Error('balance RPC unavailable')
-				return { scope: actualLive.shareBalanceScope(market), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, approved, lp: 10n ** 18n, lpAllowance }
+				if (deferSecondPortfolioBalance && selectedMarket.pool === secondPool) await secondPortfolioBalance.promise
+				const multiplier = selectedMarket.pool === secondPool ? 4n : 1n
+				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, approved, lp: multiplier * 10n ** 18n, lpAllowance }
 			},
 			approveRouter: async () => {
 				approved = true
@@ -164,6 +187,30 @@ describe('live workflow safety boundary', () => {
 		discoveredEndTime = now + 2n
 
 		await act(async () => button('Connect wallet').click())
+		await flush()
+		deferSecondPortfolioBalance = true
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await Bun.sleep(10)
+		await flush()
+		expect(document.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
+		expect(document.body.textContent).toContain(secondPool)
+		const firstPortfolioCard = document.querySelector(`[data-portfolio-pool="${pool}"]`)
+		const secondPortfolioCard = document.querySelector(`[data-portfolio-pool="${secondPool}"]`)
+		expect(firstPortfolioCard?.textContent).toContain('1 shares')
+		expect(secondPortfolioCard?.textContent).not.toContain('4 shares')
+		secondPortfolioBalance.resolve(undefined)
+		await flush()
+		expect(secondPortfolioCard?.textContent).toContain('4 shares')
+		rejectDiscovery = true
+		await act(async () => button('Refresh').click())
+		await flush()
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('SecurityPool discovery failed') === true)).toHaveLength(1)
+		expect(Array.from(document.querySelectorAll('button')).filter(candidate => candidate.textContent?.trim() === 'Refresh')).toHaveLength(1)
+		expect(document.body.textContent).not.toContain('Retry balances')
+		rejectDiscovery = false
+		await act(async () => button('Refresh').click())
+		await flush()
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
 		await flush()
 		await act(async () => button('Exit').click())
 		rejectBalanceRefresh = true

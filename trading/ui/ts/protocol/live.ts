@@ -359,6 +359,35 @@ export function marketDiscoveryRanges(total: bigint, pageSize = 25n) {
 	return ranges
 }
 
+export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>) {
+	if (!Number.isInteger(maximumConcurrency) || maximumConcurrency <= 0) throw new Error('Async concurrency limit must be a positive integer')
+	const queue = items.map((item, index) => ({ item, index }))
+	const completed: Array<Readonly<{ index: number; value: Output }>> = []
+	let nextQueueIndex = 0
+	async function worker() {
+		while (true) {
+			const job = queue[nextQueueIndex]
+			if (job === undefined) return
+			nextQueueIndex += 1
+			completed.push({ index: job.index, value: await mapper(job.item, job.index) })
+		}
+	}
+	const workerCount = Math.min(maximumConcurrency, queue.length)
+	await Promise.all(Array.from({ length: workerCount }, worker))
+	completed.sort((left, right) => left.index - right.index)
+	return completed.map(result => result.value)
+}
+
+async function settleWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>) {
+	return await mapWithConcurrency(items, maximumConcurrency, async (item, index): Promise<PromiseSettledResult<Output>> => {
+		try {
+			return { status: 'fulfilled', value: await mapper(item, index) }
+		} catch (reason) {
+			return { status: 'rejected', reason }
+		}
+	})
+}
+
 export function marketDiscoveryPage(total: bigint, requestedStart = 0n, pageSize = 25n) {
 	if (total < 0n || requestedStart < 0n || pageSize <= 0n) throw new Error('Invalid market discovery page')
 	if (total === 0n) return { start: 0n, count: 0n, previousStart: undefined, nextStart: undefined }
@@ -493,6 +522,15 @@ export async function discoverLiveMarketPage(client: PublicClient, configuration
 	const deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [page.start, page.count] })
 	const results = await Promise.allSettled(deployments.map(async deployment => await loadLiveMarket(client, configuration, deployment)))
 	return { ...page, total: count, markets: collateMarketDiscoveryResults(deployments, results, configuration.feeBps) }
+}
+
+export async function discoverAllLiveMarkets(client: PublicClient, configuration: DeploymentConfiguration, pageSize = 25n) {
+	const total = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount' })
+	const ranges = marketDiscoveryRanges(total, pageSize)
+	const deploymentPages = await mapWithConcurrency(ranges, 4, async range => await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [range.start, range.count] }))
+	const deployments = deploymentPages.flat()
+	const results = await settleWithConcurrency(deployments, 6, async deployment => await loadLiveMarket(client, configuration, deployment))
+	return { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, markets: collateMarketDiscoveryResults(deployments, results, configuration.feeBps) }
 }
 
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address, routerAddress: Address): Promise<LiveBalances> {

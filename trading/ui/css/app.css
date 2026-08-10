@@ -813,6 +813,26 @@ summary {
 	width: 100%;
 	margin-top: 0.8rem;
 }
+.portfolio-groups {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+.portfolio-groups > p {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+.portfolio-groups > .operation-block {
+	margin: 0;
+	padding: 1rem;
+	border: 1px solid var(--line);
+}
+.portfolio-pool .balance-strip {
+	margin-top: 1rem;
+}
+.portfolio-position-metrics {
+	margin-top: 1rem;
+}
 .balance-strip {
 	display: grid;
 	grid-template-columns: repeat(4, 1fr);
@@ -1085,6 +1105,9 @@ footer {
 	}
 	.balance-strip {
 		grid-template-columns: 1fr 1fr;
+	}
+	.portfolio-groups {
+		grid-template-columns: 1fr;
 	}
 	.balance-strip div:nth-child(2) {
 		border-right: 0;

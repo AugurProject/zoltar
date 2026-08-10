@@ -27,6 +27,7 @@ import {
 	marketDiscoveryPage,
 	marketDiscoveryRanges,
 	marketNewRiskBlocker,
+	mapWithConcurrency,
 	maximumAfterSlippage,
 	minimumAfterSlippage,
 	retainApprovedMaximum,
@@ -203,6 +204,20 @@ describe('standalone trading UI model', () => {
 		expect(marketDiscoveryPage(51n, 99n)).toEqual({ start: 50n, count: 1n, previousStart: 25n, nextStart: undefined })
 		expect(marketDiscoveryPage(0n)).toEqual({ start: 0n, count: 0n, previousStart: undefined, nextStart: undefined })
 		expect(() => marketDiscoveryPage(1n, -1n)).toThrow('Invalid market discovery page')
+	})
+
+	test('bounds asynchronous portfolio work while preserving registry order', async () => {
+		let active = 0
+		let maximumActive = 0
+		const results = await mapWithConcurrency([0, 1, 2, 3, 4], 2, async value => {
+			active += 1
+			maximumActive = Math.max(maximumActive, active)
+			await Bun.sleep((5 - value) * 2)
+			active -= 1
+			return value * 10
+		})
+		expect(maximumActive).toBe(2)
+		expect(results).toEqual([0, 10, 20, 30, 40])
 	})
 
 	test('isolates one failed market read into an explicit unavailable row', () => {
