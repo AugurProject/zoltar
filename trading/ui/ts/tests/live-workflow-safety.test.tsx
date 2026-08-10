@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
@@ -54,16 +55,26 @@ describe('live workflow safety boundary', () => {
 	})
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
-		const receipt = deferred<never>()
+		let contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		let waitForContextApprovalReceipt = false
+		let approved = false
+		let lpAllowance = 10n ** 18n
+		let rejectBalanceRefresh = false
 		const walletListeners = new Map<string, (...args: unknown[]) => void>()
 		Reflect.set(window, 'ethereum', {
 			request: async () => undefined,
 			on: (eventName: string, listener: (...args: unknown[]) => void) => walletListeners.set(eventName, listener),
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
 		})
-		const walletClient = { waitForTransactionReceipt: async () => await receipt.promise }
+		const walletClient = {
+			waitForTransactionReceipt: async () => {
+				if (waitForContextApprovalReceipt) return await contextApprovalReceipt.promise
+				return { status: 'success' as const }
+			},
+		}
 		const now = BigInt(Math.floor(Date.now() / 1_000))
 		let discoveredEndTime = 2n ** 255n
+		let discoveredLoadError: string | undefined
 		const market: LiveMarket = {
 			pool,
 			pair,
@@ -99,11 +110,19 @@ describe('live workflow safety boundary', () => {
 			...actualLive,
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
-			discoverLiveMarketPage: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, endTime: discoveredEndTime }] }),
+			discoverLiveMarketPage: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError }] }),
 			walletChainId: async () => configuration.chainId,
 			connectWallet: async () => account,
 			createTradingWalletClient: () => walletClient,
-			loadLiveBalances: async () => ({ invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, approved: true, lp: 10n ** 18n, lpAllowance: 10n ** 18n }),
+			loadLiveBalances: async () => {
+				if (rejectBalanceRefresh) throw new Error('balance RPC unavailable')
+				return { scope: actualLive.shareBalanceScope(market), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, approved, lp: 10n ** 18n, lpAllowance }
+			},
+			approveRouter: async () => {
+				approved = true
+				return transactionHash
+			},
+			approveLpRouter: async () => transactionHash,
 			simulateEntry: async () => ({
 				blockNumber: 1n,
 				amount: 10n ** 16n,
@@ -131,25 +150,142 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
 		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
+		discoveredLoadError = 'market RPC unavailable'
+		await act(async () => button('Refresh').click())
+		await flush()
+		expect(document.body.textContent).toContain('Market data unavailable')
+		expect(document.body.textContent).toContain(pool)
+		expect(document.body.textContent).toContain(shareToken)
+		expect(document.body.textContent).toContain('1 / 2')
+		expect(document.body.textContent).toContain('INVALID 256 · YES 257 · NO 258')
+		discoveredLoadError = undefined
+		await act(async () => button('Refresh').click())
+		await flush()
 		discoveredEndTime = now + 2n
 
 		await act(async () => button('Connect wallet').click())
 		await flush()
-		await act(async () => button('Simulate authoritative router call').click())
+		await act(async () => button('Exit').click())
+		rejectBalanceRefresh = true
+		await act(async () => button('Approve router for all ShareToken shares').click())
 		await flush()
-		await act(async () => button('Submit transaction').click())
-		expect(button('Refresh').disabled).toBeTrue()
+		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
+		expect(document.body.textContent).toContain('Retry balances')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(document.body.textContent?.split('Share-token approval confirmed').length).toBe(2)
+		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Share-token approval confirmed') === true)).toHaveLength(1)
 
+		rejectBalanceRefresh = false
+		approved = false
+		await act(async () => button('Retry balances').click())
+		await flush()
+		expect(document.body.textContent).not.toContain('balance RPC unavailable')
+		waitForContextApprovalReceipt = true
+		await act(async () => button('Approve router for all ShareToken shares').click())
 		await act(async () => {
 			walletListeners.get('accountsChanged')?.([`0x${'99'.repeat(20)}`])
-			receipt.reject(new Error('receipt polling failed'))
-			await receipt.promise.catch(() => undefined)
+			contextApprovalReceipt.resolve({ status: 'success' })
+			await contextApprovalReceipt.promise
+		})
+		await flush()
+		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(button('Connect wallet').disabled).toBeFalse()
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		lpAllowance = 0n
+		await act(() => render(<LiveTrading route='liquidity' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await act(async () => button('Refresh').click())
+		await flush()
+		await act(async () => button('Remove').click())
+		rejectBalanceRefresh = true
+		await act(async () => button('Approve exact LP amount').click())
+		await flush()
+		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		rejectBalanceRefresh = false
+		await act(() => render(<LiveTrading key='lp-context' route='liquidity' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await flush()
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		await act(async () => button('Remove').click())
+		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await act(async () => button('Approve exact LP amount').click())
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([`0x${'96'.repeat(20)}`])
+			contextApprovalReceipt.resolve({ status: 'success' })
+			await contextApprovalReceipt.promise
+		})
+		await flush()
+		expect(document.body.textContent).toContain('Wallet context changed while the LP-token approval was pending')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		discoveredEndTime = now - 1n
+		approved = false
+		waitForContextApprovalReceipt = false
+		await act(() => render(<LiveTrading key='settlement-refresh' route='market' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await flush()
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		rejectBalanceRefresh = true
+		await act(async () => button('Approve router for complete-set redemption').click())
+		await flush()
+		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		rejectBalanceRefresh = false
+		approved = false
+		await act(async () => button('Retry balances').click())
+		await flush()
+		waitForContextApprovalReceipt = true
+		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await act(async () => button('Approve router for complete-set redemption').click())
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([`0x${'95'.repeat(20)}`])
+			contextApprovalReceipt.resolve({ status: 'success' })
+			await contextApprovalReceipt.promise
+		})
+		await flush()
+		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending')
+		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		approved = false
+		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		await act(async () => button('Approve router for complete-set redemption').click())
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([`0x${'98'.repeat(20)}`])
+			contextApprovalReceipt.resolve({ status: 'reverted' })
+			await contextApprovalReceipt.promise
+		})
+		await flush()
+		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending. Approval transaction reverted.')
+		expect(button('Connect wallet').disabled).toBeFalse()
+		expect(workflowLocks.at(-1)).toBeFalse()
+
+		approved = false
+		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		await act(async () => button('Approve router for complete-set redemption').click())
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([`0x${'97'.repeat(20)}`])
+			contextApprovalReceipt.reject(new Error('approval receipt polling failed'))
+			await contextApprovalReceipt.promise.catch(() => undefined)
 		})
 		await flush()
 
 		const warning = Array.from(document.querySelectorAll('[role="alert"]')).find(candidate => candidate.textContent?.includes(transactionHash) === true)
 		expect(warning?.textContent).toContain('Do not resubmit')
-		expect(button('Simulate authoritative router call').disabled).toBeTrue()
+		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
 		expect(button('Refresh').disabled).toBeTrue()
 		expect(button('Connect wallet').disabled).toBeTrue()
 		expect(workflowLocks.at(-1)).toBeTrue()

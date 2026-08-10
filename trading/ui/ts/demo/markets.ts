@@ -5,6 +5,8 @@ export type DemoMarket = Readonly<{
 	question: string
 	universe: string
 	pool: `0x${string}`
+	shareToken: `0x${string}`
+	universeId: bigint
 	pair?: `0x${string}`
 	endTime: string
 	lifecycle: Lifecycle
@@ -39,6 +41,7 @@ const pool = `0x${'3a'.repeat(20)}` as const
 const pair = `0x${'7c'.repeat(20)}` as const
 const childPool = `0x${'4b'.repeat(20)}` as const
 const childPair = `0x${'8d'.repeat(20)}` as const
+const shareToken = `0x${'5e'.repeat(20)}` as const
 
 export function demoAttoEthToAttoShares(amountAttoEth: bigint, market: DemoMarket) {
 	if (market.securityPool.shareTokenSupplyAttoShares === 0n) return amountAttoEth * 10n ** 18n
@@ -70,11 +73,16 @@ export function demoMarket(scenario: string): DemoMarket {
 	}
 	const selectedPool = scenario === 'truth-auction' ? childPool : pool
 	const selectedPair = scenario === 'truth-auction' ? childPair : pair
+	let universeId = 1n
+	if (scenario === 'truth-auction') universeId = 2n
+	if (scenario === 'max-token-ids') universeId = (1n << 248n) - 1n
 	const common = {
 		id: 'eth-10k-2027',
 		question: 'Will ETH trade above $10,000 before 1 January 2027?',
 		universe,
 		pool: selectedPool,
+		shareToken,
+		universeId,
 		endTime: '31 Dec 2026 · 23:59 UTC',
 		lifecycle,
 		yesReserve: 428_571_000_000_000_000_000n,

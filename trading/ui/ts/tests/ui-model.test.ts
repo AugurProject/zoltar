@@ -20,7 +20,21 @@ import {
 } from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
-import { collateMarketDiscoveryResults, marketAcceptsNewRisk, marketDiscoveryPage, marketDiscoveryRanges, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, retainApprovedMaximum, retainApprovedMinimum, settlementAvailability, type LiveMarket } from '../protocol/live.ts'
+import {
+	collateMarketDiscoveryResults,
+	liveBalancesForMarket,
+	marketAcceptsNewRisk,
+	marketDiscoveryPage,
+	marketDiscoveryRanges,
+	marketNewRiskBlocker,
+	maximumAfterSlippage,
+	minimumAfterSlippage,
+	retainApprovedMaximum,
+	retainApprovedMinimum,
+	settlementAvailability,
+	shareBalanceScope,
+	type LiveMarket,
+} from '../protocol/live.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 describe('standalone trading UI model', () => {
@@ -201,6 +215,36 @@ describe('standalone trading UI model', () => {
 		expect(market.pool).toBe(pool)
 		expect(market.loadError).toBe('RPC read failed')
 		expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
+	})
+
+	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {
+		const first = shareBalanceScope({ pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n })
+		const second = shareBalanceScope({ pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n })
+		expect(first).toEqual({
+			pool: `0x${'11'.repeat(20)}`,
+			shareToken: `0x${'22'.repeat(20)}`,
+			invalidTokenId: 1_792n,
+			yesTokenId: 1_793n,
+			noTokenId: 1_794n,
+		})
+		expect(second.invalidTokenId).not.toBe(first.invalidTokenId)
+		expect(second.shareToken).not.toBe(first.shareToken)
+		expect(second.pool).not.toBe(first.pool)
+	})
+
+	test('keeps maximum universe outcome token IDs within uint256', () => {
+		const scope = shareBalanceScope(demoMarket('max-token-ids'))
+		expect(scope.invalidTokenId).toBe((1n << 256n) - 256n)
+		expect(scope.yesTokenId).toBe((1n << 256n) - 255n)
+		expect(scope.noTokenId).toBe((1n << 256n) - 254n)
+	})
+
+	test('never exposes balances under another SecurityPool identity', () => {
+		const firstMarket = { pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n } as const
+		const secondMarket = { pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n } as const
+		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n, approved: true, lpAllowance: 5n }
+		expect(liveBalancesForMarket(firstBalances, firstMarket)).toBe(firstBalances)
+		expect(liveBalancesForMarket(firstBalances, secondMarket)).toBeUndefined()
 	})
 
 	test('derives bounded settlement actions from lifecycle and aggregate balances', () => {

@@ -234,7 +234,28 @@ export function validateRpcChainId(rpcChainId: number, deploymentChainId: number
 	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
 }
 
-export type LiveBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
+export type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidTokenId: bigint; yesTokenId: bigint; noTokenId: bigint }>
+
+export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
+
+export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {
+	const invalidTokenId = market.universeId << 8n
+	return {
+		pool: market.pool,
+		shareToken: market.shareToken,
+		invalidTokenId,
+		yesTokenId: invalidTokenId | 1n,
+		noTokenId: invalidTokenId | 2n,
+	} as const
+}
+
+export function liveBalancesForMarket(balances: LiveBalances | undefined, market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'> | undefined) {
+	if (balances === undefined || market === undefined) return undefined
+	const scope = shareBalanceScope(market)
+	if (balances.scope.pool !== scope.pool || balances.scope.shareToken !== scope.shareToken) return undefined
+	if (balances.scope.invalidTokenId !== scope.invalidTokenId || balances.scope.yesTokenId !== scope.yesTokenId || balances.scope.noTokenId !== scope.noTokenId) return undefined
+	return balances
+}
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
 export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
@@ -475,16 +496,16 @@ export async function discoverLiveMarketPage(client: PublicClient, configuration
 }
 
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address, routerAddress: Address): Promise<LiveBalances> {
-	const invalidId = market.universeId << 8n
+	const scope = shareBalanceScope(market)
 	const [invalid, yes, no, approved, lp, lpAllowance] = await Promise.all([
-		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId] }),
-		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId | 1n] }),
-		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, invalidId | 2n] }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.invalidTokenId] }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.yesTokenId] }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.noTokenId] }),
 		client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'isApprovedForAll', args: [account, routerAddress] }),
 		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account] }),
 		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'allowance', args: [account, routerAddress] }),
 	])
-	return { invalid, yes, no, approved, lp, lpAllowance }
+	return { scope, invalid, yes, no, approved, lp, lpAllowance }
 }
 
 export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {

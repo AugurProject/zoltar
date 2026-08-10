@@ -13,9 +13,11 @@ import {
 	createTradingWalletClient,
 	discoverLiveMarketPage,
 	loadLiveBalances,
+	liveBalancesForMarket,
 	marketAcceptsNewRisk,
 	marketNewRiskBlocker,
 	settlementAvailability,
+	shareBalanceScope,
 	simulateEntry,
 	simulateExit,
 	simulateLiquidity,
@@ -129,6 +131,38 @@ function BalanceLoadError({ message, retry, disabled = false }: { message: strin
 				Retry balances
 			</button>
 		</div>
+	)
+}
+
+function MarketShareIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'questionId'> }) {
+	const scope = shareBalanceScope(market)
+	return (
+		<>
+			<div>
+				<dt>SecurityPool</dt>
+				<dd>
+					<AddressValue value={scope.pool} />
+				</dd>
+			</div>
+			<div>
+				<dt>ShareToken</dt>
+				<dd>
+					<AddressValue value={scope.shareToken} />
+				</dd>
+			</div>
+			<div>
+				<dt>Universe / question</dt>
+				<dd>
+					{market.universeId.toString()} / {market.questionId.toString()}
+				</dd>
+			</div>
+			<div>
+				<dt>Outcome token IDs</dt>
+				<dd>
+					INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
+				</dd>
+			</div>
+		</>
 	)
 }
 
@@ -246,6 +280,9 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		[onWorkflowLockChange],
 	)
 	const selected = markets.find(market => market.pool === selectedPool) ?? markets[0]
+	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
+	let selectedBalanceState = balanceState
+	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
 	const [nowSeconds, setNowSeconds] = useState(() => BigInt(Math.floor(Date.now() / 1_000)))
 	const parsedAmount = useMemo(() => {
@@ -265,6 +302,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		if (accountRef.current !== undefined) {
 			setBalanceState('loading')
 			setBalanceError(undefined)
+			setBalances(undefined)
 		}
 		setDiscoveryState('loading')
 		setDiscoveryError(undefined)
@@ -399,6 +437,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		}
 		setBalanceState('loading')
 		setBalanceError(undefined)
+		setBalances(undefined)
 		void loadLiveBalances(configuredClient(configuration), selected, account, configuration.router).then(
 			loaded => {
 				if (balanceRequests.isCurrent(request)) {
@@ -429,11 +468,13 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 		if (!positionWorkflowLockedRef.current) setState('idle')
 		setBalanceState('loading')
 		setBalanceError(undefined)
+		setBalances(undefined)
 		try {
 			const loaded = await loadLiveBalances(configuredClient(configuration), selected, account, configuration.router)
 			if (!balanceRequests.isCurrent(request)) return
 			setBalances(loaded)
 			setBalanceState('ready')
+			setMessage(undefined)
 		} catch (error) {
 			if (!balanceRequests.isCurrent(request)) return
 			setBalanceState('error')
@@ -468,6 +509,27 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			await refresh(configuration)
 		} catch (error) {
 			setMessage(error instanceof Error ? error.message : 'Wallet connection failed')
+		}
+	}
+
+	async function refreshBalancesAfterApproval(label: string, expectedMarket: LiveMarket, expectedAccount: Address, request = balanceRequests.begin()): Promise<'ready' | 'refresh-error' | 'context-changed'> {
+		if (configuration === undefined || accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
+		setBalances(undefined)
+		setBalanceState('loading')
+		setBalanceError(undefined)
+		try {
+			const loaded = await loadLiveBalances(configuredClient(configuration), expectedMarket, expectedAccount, configuration.router)
+			if (accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
+			setBalances(loaded)
+			setBalanceState('ready')
+			setBalanceError(undefined)
+			return 'ready'
+		} catch (error) {
+			if (accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
+			const detail = error instanceof Error ? error.message : 'Balance refresh failed'
+			setBalanceState('error')
+			setBalanceError(`${label} confirmed, but balances could not be refreshed: ${detail}`)
+			return 'refresh-error'
 		}
 	}
 
@@ -509,18 +571,29 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 			broadcastHash = await approveRouter(walletClient, selected, configuration, account)
 			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
 			receiptKnown = true
+			if (!balanceRequests.isCurrent(balanceRequest)) {
+				setState('error')
+				if (receipt.status === 'reverted') setMessage(current => `${current ?? 'Wallet context changed.'} Approval transaction reverted.`)
+				return
+			}
 			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
-			setBalanceState('loading')
-			const loaded = await loadLiveBalances(configuredClient(configuration), selected, account, configuration.router)
-			if (balanceRequests.isCurrent(balanceRequest)) {
-				setBalances(loaded)
-				setBalanceState('ready')
-				setBalanceError(undefined)
+			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', selected, account, balanceRequest)
+			if (refreshResult !== 'ready') {
+				setState('error')
+				return
 			}
 			setPositionReceiptWarning(undefined)
 			setMessage(undefined)
 			setState('idle')
 		} catch (error) {
+			if (!balanceRequests.isCurrent(balanceRequest)) {
+				if (broadcastHash !== undefined && !receiptKnown) {
+					keepLocked = true
+					setState('pending')
+					setPositionReceiptWarning(broadcastUncertainMessage('Share-token approval', broadcastHash))
+				} else setState('error')
+				return
+			}
 			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, error, 'Approval failed')
 			keepLocked = failure.keepLocked
 			setState(failure.state)
@@ -666,7 +739,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 				<div>
 					<span class='eyebrow'>Canonical SecurityPools · live RPC</span>
 					<h1>Two-way markets</h1>
-					<p>{configuration.chainName} · conditional prices only · INVALID is insurance and is not priced by this AMM; it provides no invalidity estimate.</p>
+					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
 				<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
 					{account === undefined ? 'Connect wallet' : shortAddress(account)}
@@ -722,24 +795,7 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 									This SecurityPool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: {selected.loadError}
 								</p>
 								<dl class='fact-list'>
-									<div>
-										<dt>SecurityPool</dt>
-										<dd>
-											<AddressValue value={selected.pool} />
-										</dd>
-									</div>
-									<div>
-										<dt>ShareToken</dt>
-										<dd>
-											<AddressValue value={selected.shareToken} />
-										</dd>
-									</div>
-									<div>
-										<dt>Universe / question</dt>
-										<dd>
-											{selected.universeId.toString()} / {selected.questionId.toString()}
-										</dd>
-									</div>
+									<MarketShareIdentityRows market={selected} />
 								</dl>
 							</section>
 						)
@@ -834,13 +890,15 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								<LiveSettlementControls
 									configuration={configuration}
 									market={selected}
-									balances={balances}
-									balanceState={balanceState}
+									balances={selectedBalances}
+									balanceState={selectedBalanceState}
 									balanceError={balanceError}
 									account={account}
 									walletClient={walletClient}
 									externallyLocked={workflowLocked}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
+									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
+									walletContextIsCurrent={expectedAccount => accountRef.current === expectedAccount}
 									retryBalances={retryBalances}
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 								/>
@@ -849,24 +907,26 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								<LiveLiquidityControls
 									configuration={configuration}
 									market={selected}
-									balances={balances}
-									balanceState={balanceState}
+									balances={selectedBalances}
+									balanceState={selectedBalanceState}
 									balanceError={balanceError}
 									account={account}
 									walletClient={walletClient}
 									externallyLocked={workflowLocked}
 									nowSeconds={nowSeconds}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
+									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
+									walletContextIsCurrent={expectedAccount => accountRef.current === expectedAccount}
 									retryBalances={retryBalances}
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 								/>
 							) : null}
-							{route === 'portfolio' ? <LivePortfolio market={selected} balances={balances} balanceState={balanceState} balanceError={balanceError} retryBalances={retryBalances} /> : null}
+							{route === 'portfolio' ? <LivePortfolio market={selected} balances={selectedBalances} balanceState={selectedBalanceState} balanceError={balanceError} retryBalances={retryBalances} /> : null}
 							{route !== 'liquidity' && route !== 'portfolio' && selectedPairInitialized ? (
 								<LivePositionControls
 									market={selected}
-									balances={balances}
-									balanceState={balanceState}
+									balances={selectedBalances}
+									balanceState={selectedBalanceState}
 									balanceError={balanceError}
 									mode={mode}
 									side={side}
@@ -932,6 +992,8 @@ function LiveLiquidityControls({
 	externallyLocked,
 	nowSeconds,
 	refresh,
+	refreshBalancesAfterApproval,
+	walletContextIsCurrent,
 	retryBalances,
 	onWorkflowLockChange,
 }: {
@@ -945,6 +1007,8 @@ function LiveLiquidityControls({
 	externallyLocked: boolean
 	nowSeconds: bigint
 	refresh(): Promise<void>
+	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
+	walletContextIsCurrent(account: Address): boolean
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
 }) {
@@ -1037,12 +1101,34 @@ function LiveLiquidityControls({
 			broadcastHash = await approveLpRouter(walletClient, configuration, market, account, parsed)
 			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
 			receiptKnown = true
+			if (!walletContextIsCurrent(account)) {
+				setState('error')
+				setError(receipt.status === 'reverted' ? 'Wallet context changed while the LP-token approval was pending. Approval transaction reverted.' : 'Wallet context changed while the LP-token approval was pending. Reconnect to refresh balances and approvals.')
+				return
+			}
 			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
-			await refresh()
+			const refreshResult = await refreshBalancesAfterApproval('LP-token approval', market, account)
+			if (refreshResult !== 'ready') {
+				setState('error')
+				if (refreshResult === 'context-changed') setError('Wallet context changed while approved balances were refreshing. Reconnect to continue.')
+				return
+			}
 			setReceiptWarning(undefined)
 			setError(undefined)
 			setState('idle')
 		} catch (caught) {
+			if (!walletContextIsCurrent(account)) {
+				if (broadcastHash !== undefined && !receiptKnown) {
+					keepLocked = true
+					setState('pending')
+					setError(undefined)
+					setReceiptWarning(broadcastUncertainMessage('LP-token approval', broadcastHash))
+				} else {
+					setState('error')
+					setError('Wallet context changed while the LP-token approval was pending. Reconnect to continue.')
+				}
+				return
+			}
 			const failure = approvalFailureTransition('LP-token approval', broadcastHash, receiptKnown, caught, 'LP approval failed')
 			keepLocked = failure.keepLocked
 			setState(failure.state)
@@ -1287,10 +1373,7 @@ function LiveLiquidityControls({
 	)
 }
 
-function LivePortfolio({ market, balances, balanceState, balanceError, retryBalances }: { market: LiveMarket; balances: LiveBalances | undefined; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
-	if (balanceState === 'disconnected') return <p>Connect a wallet to load aggregate YES, NO, INVALID, and LP balances.</p>
-	if (balances === undefined && balanceState === 'loading') return <p role='status'>Loading aggregate wallet balances…</p>
-	if (balances === undefined) return <BalanceLoadError message={`Wallet balances are unavailable: ${balanceError ?? 'balance refresh failed'}.`} retry={retryBalances} />
+function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
 	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * balances.lp) / market.lpTotalSupply
 	let coveredSets = balances.invalid
@@ -1299,10 +1382,7 @@ function LivePortfolio({ market, balances, balanceState, balanceError, retryBala
 	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: balances.yes, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	return (
-		<div class='operation-block' aria-busy={balanceState === 'loading'}>
-			<h3>Aggregate wallet exposure</h3>
-			{balanceState === 'loading' ? <p role='status'>Refreshing aggregate wallet balances…</p> : null}
-			{balanceState === 'error' ? <BalanceLoadError message={`Displayed balances are stale because the latest refresh failed: ${balanceError ?? 'balance refresh failed'}.`} retry={retryBalances} /> : null}
+		<>
 			<dl class='metrics'>
 				<div>
 					<dt>YES</dt>
@@ -1349,7 +1429,24 @@ function LivePortfolio({ market, balances, balanceState, balanceError, retryBala
 					<dd>{formatUnits(balances.lpAllowance)} LP</dd>
 				</div>
 			</dl>
-			<p>Coverage is derived from aggregate wallet balances. Transferring LP tokens does not transfer INVALID.</p>
+			<p>Transferring LP tokens does not transfer INVALID.</p>
+		</>
+	)
+}
+
+export function LivePortfolio({ market, balances, balanceState, balanceError, retryBalances }: { market: LiveMarket; balances: LiveBalances | undefined; balanceState: BalanceState; balanceError: string | undefined; retryBalances(): Promise<void> }) {
+	const errorMessage = balances === undefined ? `Wallet balances are unavailable: ${balanceError ?? 'balance refresh failed'}.` : `Displayed balances are stale because the latest refresh failed: ${balanceError ?? 'balance refresh failed'}.`
+	return (
+		<div class='operation-block' aria-busy={balanceState === 'loading'}>
+			<h3>Balances for selected SecurityPool</h3>
+			<p>Only this pool’s ShareToken and universe-specific outcome token IDs are included.</p>
+			<dl class='metrics'>
+				<MarketShareIdentityRows market={market} />
+			</dl>
+			{balanceState === 'disconnected' ? <p>Connect a wallet to load balances for this SecurityPool.</p> : null}
+			{balanceState === 'loading' ? <p role='status'>{balances === undefined ? 'Loading balances for this SecurityPool…' : 'Refreshing this SecurityPool’s balances…'}</p> : null}
+			{balanceState === 'error' ? <BalanceLoadError message={errorMessage} retry={retryBalances} /> : null}
+			{balances === undefined ? null : <LivePortfolioBalanceMetrics market={market} balances={balances} />}
 		</div>
 	)
 }
@@ -1387,6 +1484,8 @@ function LiveSettlementControls({
 	walletClient,
 	externallyLocked,
 	refresh,
+	refreshBalancesAfterApproval,
+	walletContextIsCurrent,
 	retryBalances,
 	onWorkflowLockChange,
 }: {
@@ -1399,6 +1498,8 @@ function LiveSettlementControls({
 	walletClient: WalletClient | undefined
 	externallyLocked: boolean
 	refresh(): Promise<void>
+	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
+	walletContextIsCurrent(account: Address): boolean
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
 }) {
@@ -1567,10 +1668,32 @@ function LiveSettlementControls({
 			broadcastHash = await approveRouter(walletClient, market, configuration, account)
 			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
 			receiptKnown = true
+			if (!walletContextIsCurrent(account)) {
+				setState('error')
+				setError(receipt.status === 'reverted' ? 'Wallet context changed while the share-token approval was pending. Approval transaction reverted.' : 'Wallet context changed while the share-token approval was pending. Reconnect to refresh balances and approvals.')
+				return
+			}
 			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
-			await refresh()
+			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', market, account)
+			if (refreshResult !== 'ready') {
+				setState('error')
+				if (refreshResult === 'context-changed') setError('Wallet context changed while approved balances were refreshing. Reconnect to continue.')
+				return
+			}
 			setState('idle')
 		} catch (caught) {
+			if (!walletContextIsCurrent(account)) {
+				if (broadcastHash !== undefined && !receiptKnown) {
+					keepLocked = true
+					setState('pending')
+					setError(undefined)
+					setReceiptWarning(broadcastUncertainMessage('Share-token approval', broadcastHash))
+				} else {
+					setState('error')
+					setError('Wallet context changed while the share-token approval was pending. Reconnect to continue.')
+				}
+				return
+			}
 			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, caught, 'Approval failed')
 			keepLocked = failure.keepLocked
 			setState(failure.state)
@@ -1693,7 +1816,12 @@ function LiveSettlementControls({
 				</p>
 			)}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? 'Wallet balances are unavailable'} retry={retryBalances} disabled={workflowLocked} /> : null}
-			{balanceState !== 'error' && receiptWarning === undefined ? (
+			{state === 'error' && error !== undefined ? (
+				<p class='error' role='alert'>
+					{error}
+				</p>
+			) : null}
+			{!(state === 'error' && error !== undefined) && balanceState !== 'error' && receiptWarning === undefined ? (
 				<p class={state === 'error' ? 'error' : undefined} role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'}>
 					{settlementStatus}
 				</p>

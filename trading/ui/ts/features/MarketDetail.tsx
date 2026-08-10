@@ -206,8 +206,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 					◇
 				</span>
 				<div>
-					<strong>INVALID is insurance, not a traded reserve.</strong>
-					<span>This AMM contains no estimate of the probability of an INVALID resolution.</span>
+					<strong>INVALID is not traded or priced by this AMM.</strong>
 				</div>
 			</section>
 
@@ -322,7 +321,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 									<strong>{formatShareAmount(maxExit)}</strong>
 								</div>
 								<p>
-									This demo limit is derived from wallet {side} ({formatShareAmount(longBalance)}), wallet INVALID ({formatShareAmount(demoWalletBalances.invalid)}), and the displayed pair reserves. Excess directional shares remain in the wallet.
+									The limit uses wallet {side} ({formatShareAmount(longBalance)}), wallet INVALID ({formatShareAmount(demoWalletBalances.invalid)}), and the displayed pair reserves. Excess directional shares remain in the wallet.
 								</p>
 								{exitExceedsInsurance ? (
 									<p class='error' role='alert'>

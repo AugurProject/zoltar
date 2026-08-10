@@ -6,6 +6,7 @@ import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, forma
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
+import { shareBalanceScope } from '../protocol/live.ts'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
@@ -37,7 +38,6 @@ export function MarketList({ market }: { market: DemoMarket }) {
 				<div>
 					<span class='eyebrow'>Canonical SecurityPools</span>
 					<h1>Markets</h1>
-					<p>Trade valid-resolution outcomes. INVALID is insurance and is not priced by this AMM.</p>
 				</div>
 				<span class='muted'>Demo discovery snapshot</span>
 			</header>
@@ -161,7 +161,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 				<div>
 					<span class='eyebrow'>Separate insurance accounting</span>
 					<h1>Liquidity</h1>
-					<p>LP tokens represent only YES and NO reserves. INVALID is insurance and is not priced by this AMM.</p>
+					<p>LP tokens represent only YES and NO reserves.</p>
 				</div>
 				<Status tone={liquidityStatusTone}>{actionAvailability.remove ? 'Removal preview' : liquidityStatus}</Status>
 			</header>
@@ -297,6 +297,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 }
 
 export function Portfolio({ market }: { market: DemoMarket }) {
+	const scope = shareBalanceScope(market)
 	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: demoWalletBalances.yes, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: demoWalletBalances.no, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * demoWalletBalances.lp) / market.lpTotalSupply
@@ -309,12 +310,44 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Aggregate wallet balances</span>
+					<span class='eyebrow'>Selected SecurityPool balances</span>
 					<h1>Portfolio</h1>
-					<p>Coverage uses aggregate wallet balances. INVALID is insurance and is not priced by this AMM.</p>
+					<p>{market.question}</p>
 				</div>
 				<Status tone='neutral'>Demo account</Status>
 			</header>
+			<section class='section'>
+				<div class='section-heading'>
+					<h2>Pool identity</h2>
+				</div>
+				<dl class='fact-list'>
+					<div>
+						<dt>SecurityPool</dt>
+						<dd>
+							<AddressValue value={market.pool} />
+						</dd>
+					</div>
+					<div>
+						<dt>ShareToken</dt>
+						<dd>
+							<AddressValue value={market.shareToken} />
+						</dd>
+					</div>
+					<div>
+						<dt>Universe</dt>
+						<dd>
+							{market.universe} · {market.universeId.toString()}
+						</dd>
+					</div>
+					<div>
+						<dt>Outcome token IDs</dt>
+						<dd>
+							INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
+						</dd>
+					</div>
+				</dl>
+				<p>Balances from other SecurityPools are not included.</p>
+			</section>
 			<section class='balance-strip'>
 				<div>
 					<span>YES</span>
@@ -349,7 +382,6 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 						<progress value={bigintToSafeNumber((maximumYesExit * 10_000n) / demoWalletBalances.invalid, 'YES insurance coverage basis points')} max='10000'>
 							{formatUnits(maximumYesExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
-						<small>Derived from wallet INVALID, wallet YES, and the pair’s available NO reserve.</small>
 					</div>
 					<div class='coverage-meter'>
 						<div>
@@ -359,7 +391,6 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 						<progress value={bigintToSafeNumber((maximumNoExit * 10_000n) / demoWalletBalances.invalid, 'NO insurance coverage basis points')} max='10000'>
 							{formatUnits(maximumNoExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
-						<small>Derived from wallet INVALID, wallet NO, and the pair’s available YES reserve.</small>
 					</div>
 				</section>
 				<section class='section'>

@@ -502,8 +502,10 @@ details p,
 }
 .metrics dt,
 .fact-list dt {
+	min-width: 0;
 	color: var(--muted);
 	font-size: 11px;
+	overflow-wrap: anywhere;
 }
 .metrics dd,
 .fact-list dd {
@@ -1054,11 +1056,13 @@ footer {
 	.quote {
 		margin-inline: -0.25rem;
 	}
-	.metrics div {
+	.metrics div,
+	.fact-list div {
 		display: grid;
 		gap: 0.25rem;
 	}
-	.metrics dd {
+	.metrics dd,
+	.fact-list dd {
 		text-align: left;
 	}
 	.metrics div,
