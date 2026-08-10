@@ -1210,6 +1210,9 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
 	const selectedBlocks = [parameters.blockHash, parameters.blockNumber, parameters.blockTag].filter(value => value !== undefined)
 	if (selectedBlocks.length > 1) throw new Error('Contract reads accept only one block selector')
+	let blockSelector: BlockTag | Hex | Readonly<{ blockHash: Hash; requireCanonical: true }> = parameters.blockTag ?? 'latest'
+	if (parameters.blockNumber !== undefined) blockSelector = hexQuantity(parameters.blockNumber)
+	if (parameters.blockHash !== undefined) blockSelector = { blockHash: parameters.blockHash, requireCanonical: true }
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -1227,7 +1230,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				parameters.blockHash === undefined ? (parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)) : { blockHash: parameters.blockHash, requireCanonical: true },
+				blockSelector,
 			],
 		}),
 	)

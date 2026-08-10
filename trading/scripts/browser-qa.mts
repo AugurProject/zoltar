@@ -87,7 +87,7 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `document.body.textContent?.includes('INVALID is insurance and is not priced by this AMM') === true && [...document.querySelectorAll('.row-action')].every(control => control.getBoundingClientRect().height >= 44)`,
+		assertExpression: `(() => { const invalidCopyVisible = document.body.textContent?.includes('INVALID is insurance and is not priced by this AMM') === true; const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); if (!invalidCopyVisible || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ invalidCopyVisible, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
@@ -232,7 +232,7 @@ try {
 		if ('assertExpression' in scenario) {
 			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true })
 			const result = evaluated.result
-			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}`)
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 		}
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })
