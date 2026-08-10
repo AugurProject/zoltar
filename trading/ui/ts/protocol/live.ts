@@ -190,7 +190,8 @@ export type LiveMarket = Readonly<{
 	currentRetentionRate: bigint
 	totalCapacityOwnershipAttoRep: bigint
 	feeEligibleCapacityOwnershipAttoRep: bigint
-	currentMintingCapacityAttoEth: bigint
+	mintingCapacityCeilingAttoEth: bigint
+	availableMintingCapacityAttoEth: bigint
 	feeBps: bigint
 	tradingStatus: number | undefined
 	questionOutcome: number
@@ -299,7 +300,7 @@ export async function switchWalletChain(provider: InjectedEthereum, chainId: num
 }
 
 export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
-	const [questionData, zoltar, shareTokenSupplyAttoShares, currentMintingCapacityAttoEth, accounting, systemState, awaitingForkContinuation, activeVaultCount, forker] = await Promise.all([
+	const [questionData, zoltar, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, activeVaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
@@ -318,7 +319,8 @@ export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: A
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalCapacityOwnershipAttoRep: accounting.totalCapacityOwnershipAttoRep,
 		feeEligibleCapacityOwnershipAttoRep: accounting.feeEligibleCapacityOwnershipAttoRep,
-		currentMintingCapacityAttoEth,
+		mintingCapacityCeilingAttoEth,
+		availableMintingCapacityAttoEth: mintingCapacityCeilingAttoEth > accounting.settlementCollateralAttoEth ? mintingCapacityCeilingAttoEth - accounting.settlementCollateralAttoEth : 0n,
 		systemState,
 		awaitingForkContinuation,
 		activeVaultCount,
@@ -381,7 +383,8 @@ function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, f
 		currentRetentionRate: 0n,
 		totalCapacityOwnershipAttoRep: 0n,
 		feeEligibleCapacityOwnershipAttoRep: 0n,
-		currentMintingCapacityAttoEth: 0n,
+		mintingCapacityCeilingAttoEth: 0n,
+		availableMintingCapacityAttoEth: 0n,
 		feeBps: BigInt(feeBps),
 		tradingStatus: undefined,
 		questionOutcome: 3,
@@ -405,7 +408,8 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	const pool = getAddress(poolAddress)
 	const shareToken = getAddress(shareTokenAddress)
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, currentMintingCapacityAttoEth, systemState, awaitingForkContinuation, activeVaultCount, forker } = poolSettings
+	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, activeVaultCount, forker } =
+		poolSettings
 	const [question, questionOutcome, universeForkTime] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 		client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
@@ -450,7 +454,8 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 		currentRetentionRate,
 		totalCapacityOwnershipAttoRep,
 		feeEligibleCapacityOwnershipAttoRep,
-		currentMintingCapacityAttoEth,
+		mintingCapacityCeilingAttoEth,
+		availableMintingCapacityAttoEth,
 		feeBps,
 		tradingStatus,
 		questionOutcome: bigintToSafeNumber(questionOutcome, 'Question outcome'),

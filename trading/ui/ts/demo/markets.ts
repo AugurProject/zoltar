@@ -20,7 +20,8 @@ export type DemoMarket = Readonly<{
 		initialReportPriorityFeeGwei: bigint
 		totalCapacityOwnershipAttoRep: bigint
 		feeEligibleCapacityOwnershipAttoRep: bigint
-		currentMintingCapacityAttoEth: bigint
+		mintingCapacityCeilingAttoEth: bigint
+		availableMintingCapacityAttoEth: bigint
 		settlementCollateralAttoEth: bigint
 		shareTokenSupplyAttoShares: bigint
 		activeVaultCount: bigint
@@ -88,7 +89,8 @@ export function demoMarket(scenario: string): DemoMarket {
 			initialReportPriorityFeeGwei: 2n,
 			totalCapacityOwnershipAttoRep: 10_000n * 10n ** 18n,
 			feeEligibleCapacityOwnershipAttoRep: 9_500n * 10n ** 18n,
-			currentMintingCapacityAttoEth: 7_531_500_000_000_000_000_000n,
+			mintingCapacityCeilingAttoEth: 10_000_000_000_000_000_000_000n,
+			availableMintingCapacityAttoEth: 7_531_500_000_000_000_000_000n,
 			settlementCollateralAttoEth: 2_468_500_000_000_000_000_000n,
 			shareTokenSupplyAttoShares: 2_500_000_000_000_000_000_000n,
 			activeVaultCount: 3n,

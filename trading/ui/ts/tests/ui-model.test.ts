@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../features/MarketDetail.tsx'
 import {
@@ -116,6 +116,7 @@ describe('standalone trading UI model', () => {
 	test('formats 18-decimal shares and Statoblast settings for display', () => {
 		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
+		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10,000 / 9,500 REP')
 		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
 		expect(formatUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')

@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
-import { bigintToSafeNumber, formatBpsMultiplier, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
@@ -84,12 +84,16 @@ export function MarketList({ market }: { market: DemoMarket }) {
 								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
 							</div>
 							<div>
-								<dt>Fee-eligible capacity ownership</dt>
-								<dd>{formatUnits(market.securityPool.feeEligibleCapacityOwnershipAttoRep)} REP</dd>
+								<dt>Total / fee-eligible capacity ownership</dt>
+								<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
+							</div>
+							<div>
+								<dt>Minting capacity ceiling</dt>
+								<dd>{formatUnits(market.securityPool.mintingCapacityCeilingAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Available minting capacity</dt>
-								<dd>{formatUnits(market.securityPool.currentMintingCapacityAttoEth)} ETH</dd>
+								<dd>{formatUnits(market.securityPool.availableMintingCapacityAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Collateral</dt>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
-import { bigintToSafeNumber, formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
@@ -811,13 +811,15 @@ export function LiveTrading({ route, configuration, configurationError, onWorkfl
 								</div>
 								<div>
 									<dt>Total / fee-eligible capacity ownership</dt>
-									<dd>
-										{formatUnits(selected.totalCapacityOwnershipAttoRep)} / {formatUnits(selected.feeEligibleCapacityOwnershipAttoRep)} REP
-									</dd>
+									<dd>{formatCapacityOwnership(selected.totalCapacityOwnershipAttoRep, selected.feeEligibleCapacityOwnershipAttoRep)}</dd>
+								</div>
+								<div>
+									<dt>Complete-set minting capacity ceiling</dt>
+									<dd>{formatUnits(selected.mintingCapacityCeilingAttoEth)} ETH</dd>
 								</div>
 								<div>
 									<dt>Available complete-set minting capacity</dt>
-									<dd>{formatUnits(selected.currentMintingCapacityAttoEth)} ETH</dd>
+									<dd>{formatUnits(selected.availableMintingCapacityAttoEth)} ETH</dd>
 								</div>
 								<div>
 									<dt>Checkpointed collateral / share ratio</dt>

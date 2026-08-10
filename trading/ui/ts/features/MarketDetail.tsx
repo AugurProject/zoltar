@@ -3,7 +3,7 @@ import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPo
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { bigintToSafeNumber, formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { insuredExitLimitMessage } from './LiveTrading.tsx'
@@ -418,6 +418,18 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 							<div>
 								<dt>Active vaults</dt>
 								<dd>{market.securityPool.activeVaultCount.toString()}</dd>
+							</div>
+							<div>
+								<dt>Total / fee-eligible capacity ownership</dt>
+								<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
+							</div>
+							<div>
+								<dt>Minting capacity ceiling</dt>
+								<dd>{formatUnits(market.securityPool.mintingCapacityCeilingAttoEth)} ETH</dd>
+							</div>
+							<div>
+								<dt>Available minting capacity</dt>
+								<dd>{formatUnits(market.securityPool.availableMintingCapacityAttoEth)} ETH</dd>
 							</div>
 							<div>
 								<dt>Pair</dt>
