@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = 'ea30068bbaf603cb1b2bc09d3458e4526cdb5a70fdb3b93549293fbd116a22fc'
+const expectedProductionSoliditySourceFingerprint = '935d483df0cac6e7338df9cfdc1c7817ad9d7d1ed801b4a9e7762ace48776b01'
 
 const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -520,12 +520,12 @@ assert.equal(productionSoliditySourceFingerprint, expectedProductionSoliditySour
 
 const contractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '5158fa721a2d0c38a3c04c8e2b0e4060904c33dfe65122f20028f13db2fdf4f7',
+		compiledAbiFingerprint: '454ba49fe7c031af00f7eeebd910a19ab2b968a6457cfb90bdda82ef7b63ba7f',
 		name: 'ZoltarQuestionData',
 		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
 		readAbiFingerprint: '5359875c236b41ea3d1b7af175b02ce8c7f00b5d5bf655869b7103ce363168df',
 		readSurface:
-			'Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers.',
+			'Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
 		readDeclarations: [
 			{ name: 'getQuestionId' },
 			{ name: 'getQuestionCount' },
@@ -556,7 +556,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
 		readAbiFingerprint: 'e97b9eb4ca404aff61d3d78e0880d651c06613c0c495f1265592b4aba8bc7673',
 		readSurface:
-			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -638,7 +638,7 @@ const contractReferences: ContractReference[] = [
 				caller: '`Zoltar` only',
 				effect: 'Sets the child token theoretical-supply ceiling used to bound subsequent migration mints.',
 				declarations: [{ name: 'setMaxTheoreticalSupplyAttoRep' }],
-				preconditions: 'Called by Zoltar as part of child-universe creation.',
+				preconditions: 'Called by Zoltar as part of child-universe creation; theoretical supply does not exceed 11 million REP.',
 				signals: '`TheoreticalSupplySet`',
 			},
 			{
@@ -719,7 +719,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
 		readAbiFingerprint: '1d854f25a5b2ccdb83dbaf6ad1c99600c4eebd6b05764f0c8073183e47f585e2',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The two vault-count getters return the same active-vault count, and both vault pagers return the same newest-first active-vault sequence. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 		securityBoundary:
 			'Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -967,7 +967,7 @@ const contractReferences: ContractReference[] = [
 				call: '`configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureVault' }],
-				effect: 'Tracks the vault, replaces its REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.',
+				effect: 'Replaces the vault REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and updates active-vault ordering.',
 				preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},
@@ -1712,10 +1712,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '6f20a0fe018a4bdccffb6fe5fa9e210feffc1fd62175043dcc4012427b1f3b26',
+		compiledAbiFingerprint: '0f7cbe10566e33d0de1300b8613ef64fff72b11845bff8c4f2aa470d1ee1eb16',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readAbiFingerprint: 'fd6ddcfc7a043f79ac1fcdc7dfe1b2697970b0fe5f499a740350165f4a30fb35',
+		readAbiFingerprint: 'e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc',
 		readSurface:
 			'Auction summary getters are `maxAttoRepBeingSold`, `attoEthRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `attoEthRaised`, `totalAttoRepPurchased`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
 		readDeclarations: [
@@ -1755,7 +1755,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Auction owner (`SecurityPoolForker`) only',
 				effect: 'Starts the one-week auction and fixes its two caps and minimum bid.',
 				declarations: [{ name: 'startAuction' }],
-				preconditions: 'Auction not previously started; both caps are positive.',
+				preconditions: 'Auction not previously started; both caps are positive; the REP cap does not exceed 11 million REP; the ETH cap fits in `uint128`; the block timestamp fits in `uint48`.',
 				signals: '`AuctionStarted`',
 			},
 			{
@@ -1763,7 +1763,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Any bidder',
 				effect: "Adds ETH demand at the selected positive-price tick while extending that tick's append-only cumulative bid and refund history, including when a fully refunded tick becomes active again.",
 				declarations: [{ name: 'submitBid' }],
-				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSizeAttoEth`; tick maps to nonzero price.',
+				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSizeAttoEth`; tick maps to nonzero price; the individual bid and the resulting cumulative ETH at that tick each fit in `uint128`.',
 				signals: '`BidSubmitted`',
 			},
 			{

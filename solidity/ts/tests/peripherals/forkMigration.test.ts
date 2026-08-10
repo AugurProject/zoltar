@@ -3484,7 +3484,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.addStateOverrides({
 				[yesEscalationGame]: {
 					stateDiff: {
-						[formatStorageSlot(444n)]: BigInt(QuestionOutcome.No),
+						[formatStorageSlot(441n)]: BigInt(QuestionOutcome.No),
 					},
 				},
 			})

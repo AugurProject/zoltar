@@ -44,6 +44,7 @@ import {
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getSecurityVault, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
+	peripherals_EscalationGame_EscalationGame,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_tokens_ShareToken_ShareToken,
@@ -1689,36 +1690,51 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.deepStrictEqual(await readGuardState(), stateBefore, 'missing-game withdrawal must preserve pool and vault state')
 	})
 
-	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
-		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const escrowAmount = (repDeposit * 3n) / 5n
-
-		await approveToken(counterpartyClient, repToken, securityPool)
-		await depositRepToVault(counterpartyClient, securityPool, repDeposit)
+	test('first escalation deposit REP failure rolls back game deployment and escrow accounting', async () => {
+		const emptyVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await mockWindow.setTime(questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
+
+		const guardedVaults = [client.account.address, emptyVaultClient.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
+		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the REP failure must exercise first-deposit game deployment')
+
+		await assert.rejects(depositToEscalationGame(emptyVaultClient, securityPool, QuestionOutcome.Yes, repDeposit), /REP too low/)
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'REP failure must roll back game deployment, both vaults, pool accounting, backingUnits, REP, and escrow')
+	})
+
+	test('escalation deposit minimum REP failure rolls back escrow accounting', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const minimumVaultRepDepositAttoRep = await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'minimumVaultRepDepositAttoRep',
+			args: [],
+		})
+		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
+		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit)
+		const escalationGame = await client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'escalationGame',
+			args: [],
+		})
+		const [requiredDepositAttoRep] = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGame,
+			functionName: 'previewDepositOnOutcome',
+			args: [QuestionOutcome.No, repDeposit],
+		})
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRepToVault(counterpartyClient, securityPool, minimumVaultRepDepositAttoRep + requiredDepositAttoRep - 1n)
 
 		const guardedVaults = [client.account.address, counterpartyClient.account.address]
 		const stateBefore = await readPoolGuardState(guardedVaults)
-		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the local bond failure must exercise first-deposit game deployment')
+		assert.notStrictEqual(stateBefore.escalationGame, zeroAddress, 'the minimum REP failure requires a live escalation game')
 
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault (backing insufficient|REP below minimum)/)
-		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'local bond failure must roll back game deployment, both vaults, pool accounting, backingUnits, REP, and escrow')
-	})
-
-	test('escalation deposit minimum REP failure rolls back game deployment and escrow accounting', async () => {
-		const remainingDust = 9n * 10n ** 18n
-		const escrowAmount = repDeposit - remainingDust
-		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, priceOracle)
-
-		const guardedVaults = [client.account.address]
-		const stateBefore = await readPoolGuardState(guardedVaults)
-		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the minimum REP failure must exercise first-deposit game deployment')
-
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault REP below minimum/)
-		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'minimum REP failure must roll back game deployment, vault and pool accounting, backingUnits, REP, and escrow')
+		await assert.rejects(depositToEscalationGame(counterpartyClient, securityPool, QuestionOutcome.No, repDeposit), /Vault REP below minimum/)
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'minimum REP failure must roll back vault and pool accounting, backingUnits, REP, and escrow')
 	})
 
 	test('rejecting complete-set redeemer exposes ETH failed and restores every accounting mutation', async () => {

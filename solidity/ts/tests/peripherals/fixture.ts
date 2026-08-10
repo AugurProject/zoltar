@@ -122,7 +122,7 @@ function usePeripheralsTestFixture() {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	const reportBond = 70n * 10n ** 18n
+	const reportBond = 11n * 10n ** 17n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 10_000n * 10n ** 18n
 	let securityPoolAddresses: {

@@ -7,7 +7,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { GenesisReputationToken_GenesisReputationToken } from '../types/contractArtifact'
+import { GenesisReputationToken_GenesisReputationToken, ReputationToken_ReputationToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -74,5 +74,28 @@ describe('GenesisReputationToken', () => {
 		await assert.rejects(deploy(['0x0000000000000000000000000000000000000000'], [1n]), /zero address|reverted/i)
 		await assert.rejects(deploy([client.account.address], [0n]), /balance must be non-zero|reverted/i)
 		await assert.rejects(deploy([client.account.address, client.account.address], [1n, 2n]), /holders must be unique|reverted/i)
+		await assert.rejects(deploy([client.account.address], [11_000_000n * 10n ** 18n + 1n]), /exceeds maximum supply|reverted/i)
+	})
+
+	test('rejects a child theoretical supply above the protocol REP maximum', async () => {
+		const data = encodeDeployData({
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [client.account.address],
+		})
+		const hash = await client.sendTransaction({ data })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		const tokenAddress = receipt.contractAddress as Address | null | undefined
+		if (tokenAddress === undefined || tokenAddress === null) throw new Error('Child REP deployment address missing')
+
+		await assert.rejects(
+			client.writeContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: tokenAddress,
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
+				args: [11_000_000n * 10n ** 18n + 1n],
+			}),
+			/exceeds maximum REP|reverted/i,
+		)
 	})
 })

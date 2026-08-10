@@ -39,8 +39,7 @@ struct OutcomeState {
 	// localHeadNodeId/localUnresolvedTotalAttoRep track local carry added after the inherited snapshot.
 	// Total principal currently assigned to this outcome by local deposits placed directly in this escalation game.
 	uint256 balanceAttoRep;
-	// Local deposits placed directly in this escalation game, preserved in arrival order for payout ordering.
-	Deposit[] deposits;
+	// Local deposits are represented by localNodeIds and the authoritative nodes mapping.
 	// The inherited carry snapshot this escalation game started with for this outcome.
 	uint256 snapshotLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] snapshotPeaks;
