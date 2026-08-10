@@ -7,6 +7,7 @@
 		"startBlockEnv": "MAINNET_START_BLOCK",
 		"defaultRpcUrl": "https://ethereum.dark.florist",
 		"explorerBaseUrl": "https://etherscan.io",
+		"nativeSymbol": "ETH",
 		"confirmationDepth": 64,
 		"manifest": "mainnet.json"
 	},
@@ -18,6 +19,7 @@
 		"startBlockEnv": "SEPOLIA_START_BLOCK",
 		"defaultRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
 		"explorerBaseUrl": "https://sepolia.etherscan.io",
+		"nativeSymbol": "SepoliaETH",
 		"confirmationDepth": 64,
 		"manifest": "sepolia.json"
 	}

@@ -10,6 +10,7 @@ type NetworkFile = {
 	readonly startBlockEnv: string
 	readonly defaultRpcUrl: string
 	readonly explorerBaseUrl: string
+	readonly nativeSymbol: string
 	readonly confirmationDepth: number
 	readonly manifest: string
 }
@@ -67,6 +68,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					rpcUrls,
 					startBlock,
 					explorerBaseUrl: definition.explorerBaseUrl,
+					nativeSymbol: definition.nativeSymbol,
 					confirmationDepth: BigInt(definition.confirmationDepth),
 					contracts: await parseManifest(definition.manifest),
 				} satisfies NetworkConfig

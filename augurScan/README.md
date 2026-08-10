@@ -1,8 +1,8 @@
 # augurScan
 
-augurScan is a read-only, multi-network activity explorer for the Zoltar/Augur protocol. It indexes canonical project logs and top-level protocol actions from Ethereum JSON-RPC into PostgreSQL, decodes them with a self-contained ABI catalog, retains raw evidence and orphaned reorg history, and streams committed updates to a compact web UI.
+augurScan is a read-only activity explorer for the Zoltar/Augur protocol. It indexes multiple configured networks from Ethereum JSON-RPC into PostgreSQL while the web UI shows one globally selected network at a time. The indexer decodes canonical project logs and top-level protocol actions with a self-contained ABI catalog, retains raw evidence and orphaned reorg history, and streams committed updates to the UI.
 
-The **System state** view derives bounded canonical registries for indexed security pools, questions, vaults, and Zoltar universes. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the returned universe parent/child graph. Large registries show a truncation warning and can be narrowed by network. The **Rich list** ranks every observed sender and decoded participant by REP, ETH, WETH, or sent transactions and displays their pool associations and vault positions. Pending and partial labels distinguish incomplete balance sampling from a known zero balance. See [STATE_MODEL.md](STATE_MODEL.md) for the event, balance, and field model.
+The selector in the top-right header sets the `chainId` URL parameter for Activity, **System state**, and **Rich list**. System state derives bounded canonical registries for indexed security pools, questions, vaults, and Zoltar universes. It distinguishes immutable identity/configuration from event-driven accounting, plots pool/vault/REP-supply histories, and renders the returned universe parent/child graph. The Rich list ranks every observed sender and decoded participant by ETH or SepoliaETH, WETH, or sent transactions and displays separate per-token REP balances, pool associations, and vault positions. Pending and partial labels distinguish incomplete balance sampling from a known zero balance. See [STATE_MODEL.md](STATE_MODEL.md) for the event, balance, and field model.
 
 ## Start with Docker
 
@@ -21,7 +21,7 @@ Each RPC variable may contain an ordered, comma-separated provider pool, for exa
 
 To enable only one network, set `NETWORKS=mainnet` or `NETWORKS=sepolia` on the app service. `config/networks.json` defines each network and selects its manifest. A manifest contains a `contracts` array whose entries are `[address, label, kind]`. Copy kinds from the checked-in manifests or the canonical `kindToContractName` decoder registry in `src/metadata.ts`; examples include `zoltar`, `openOracle`, `securityPoolFactory`, `reputationToken`, and `weth`. `config/abis.json` stores the Solidity-contract ABI snapshot to which that registry maps. A seed address or earlier start boundary added after indexing does not retroactively fill its earlier history. For complete history after either change, start with a fresh database or deliberately rebuild the named volume from the configured start block.
 
-All quantities and identifiers are stored losslessly. Protocol fields explicitly named `attoREP`, `attoETH`, or `attoShares`, the OpenOracle ETH sentinel, and known REP/share/WETH contract kinds use fixed 18-decimal protocol units. Other token amounts use the referenced token's discovered on-chain decimals and symbol. Only an arbitrary token without metadata is labeled in exact base units instead of being guessed. Raw values remain available in details.
+All quantities and identifiers are stored losslessly. Protocol fields explicitly named `attoREP`, `attoETH`, or `attoShares`, the OpenOracle native-token sentinel, and known REP/share/WETH contract kinds use fixed 18-decimal protocol units. Native values use the selected network's configured symbol (`ETH` or `SepoliaETH`). Other token amounts use the referenced token's discovered on-chain decimals and symbol. Only an arbitrary token without metadata is labeled in exact base units instead of being guessed. Raw values remain available in details.
 
 ## Local development
 
@@ -73,7 +73,7 @@ The script reads Solidity and deployment-address sources from the parent reposit
 - A connection-scoped PostgreSQL advisory lock elects one active indexer per chain. Additional app replicas serve the UI and wait in standby until that chain's lock is released.
 - A parent-hash mismatch searches the configured 64-block safety window for a common ancestor. Orphaned rows remain stored as noncanonical debugging evidence, and canonical indexing resumes from the ancestor. If no retained ancestor matches, that network safely rewinds to its configured start boundary and rebuilds canonical state.
 - Unknown and failed ABI decodes retain topics, data, and the decoder error. Updating the ABI catalog never removes raw evidence.
-- At the live head, each network refreshes the least-recently measured known addresses in bounded batches. Native ETH and every known WETH/genesis-or-child-REP balance are read at one canonical block and stored historically; the rich list exposes the oldest balance block behind each aggregate.
+- At the live head, each network refreshes the least-recently measured known addresses in bounded batches. ETH (or SepoliaETH), WETH, and every known genesis-or-child REP balance are read at one canonical block and stored historically. REP token balances remain separate so balances with different universe semantics are never summed.
 
 Version 0.1 indexes top-level actions sent to protocol activity sources and every known-contract log in the receipts selected by those actions or protocol-emitter logs. Known shared dependencies do not select unrelated receipts. Internal calls that emit no protocol log require provider-specific trace APIs and are intentionally not claimed as actions.
 
@@ -83,19 +83,19 @@ Version 0.1 indexes top-level actions sent to protocol activity sources and ever
 - Database readiness: `GET /health/ready`
 - Indexer freshness and recent canonical-integrity audit: `GET /health/indexers`
 - Network status: `GET /api/v1/networks`
-- Paginated logs: `GET /api/v1/logs`
+- Paginated logs: `GET /api/v1/logs?chainId=:chainId`
 - Full log occurrence: `GET /api/v1/logs/:chainId/:blockHash/:txHash/:logIndex`
 - Top-level protocol actions: `GET /api/v1/actions`
 - Contract identity: `GET /api/v1/contracts/:chainId/:address`
 - Durable live commit/reorg/status notifications with seven-day `Last-Event-ID` replay: `GET /api/v1/stream`. A cursor older than that window receives a reset event so the UI reloads current canonical state.
-- Bounded address rankings with exact native ETH and bounded per-token REP/WETH breakdowns: `GET /api/v1/richlist`
-- Pools, questions, vaults, and universes: `GET /api/v1/state/catalog`
+- Bounded address rankings with ETH or SepoliaETH and bounded per-token REP/WETH breakdowns: `GET /api/v1/richlist?chainId=:chainId`
+- Pools, questions, vaults, and universes: `GET /api/v1/state/catalog?chainId=:chainId`
 - Pool history: `GET /api/v1/state/pools/:chainId/:poolAddress`
 - Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`
 - Question usage: `GET /api/v1/state/questions/:chainId/:questionId`
 - Universe history: `GET /api/v1/state/universes/:chainId/:universeId`
 
-State catalog responses default to 500 and cap at 1,000 rows per entity class. History endpoints default `limit` to 1,000 and cap it at 2,000 records per returned series; `truncated` is true when any series has more records. Use `chainId` on the catalog to narrow large registries. These bounds keep database transactions, JSON normalization, and graph rendering predictable.
+The UI always sends its selected `chainId` to the logs, rich-list, and state-catalog endpoints. Direct API clients may omit it to query all configured networks. State catalog responses default to 500 and cap at 1,000 rows per entity class. History endpoints default `limit` to 1,000 and cap it at 2,000 records per returned series; `truncated` is true when any series has more records. These bounds keep database transactions, JSON normalization, and graph rendering predictable.
 
 Back up the named volume with normal PostgreSQL tooling (`pg_dump`/`pg_restore`). Stop the app gracefully before infrastructure maintenance. `docker compose down` preserves history; `docker compose down --volumes` intentionally deletes it.
 

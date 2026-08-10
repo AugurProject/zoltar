@@ -62,12 +62,12 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 		arguments: {
 			vault: address,
 			repBackingUnits: '120000000000000000000',
-			capacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
-			claimableFeesAttoEth: (30_000_000_000_000_000n).toString(),
+			capacityOwnershipAttoRep: 85_000_000_000_000_000_000n.toString(),
+			claimableFeesAttoEth: 30_000_000_000_000_000n.toString(),
 			feeIndex: '1',
 			vaultFeeRemainder: '0',
 			resultingTotalRepBackingUnits: '120000000000000000000',
-			resultingFeeEligibleCapacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
+			resultingFeeEligibleCapacityOwnershipAttoRep: 85_000_000_000_000_000_000n.toString(),
 		},
 	},
 })
@@ -206,6 +206,7 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			rpcUrls: ['http://127.0.0.1:8545'],
 			startBlock: 1n,
 			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
 			confirmationDepth: 8n,
 			contracts: [[address, 'Manifest contract', 'zoltar']],
 		}
@@ -420,14 +421,16 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 
 		const response = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}`), database.sql)
 		if (response === undefined) throw new Error('logs API did not return a response')
-		const payload = (await response.json()) as { items: Array<{ summary: string; block_hash: string }> }
+		const payload = (await response.json()) as { items: Array<{ summary: string; block_hash: string; origin_address: string }> }
 		expect(payload.items).toHaveLength(2)
 		expect(payload.items).toContainEqual(expect.objectContaining({ summary: 'replacement event', block_hash: replacement.hash }))
+		expect(payload.items[0]?.origin_address).toBe(address.toLowerCase())
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 		if (detailResponse === undefined) throw new Error('log detail API did not return a response')
-		const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[] }
+		const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[]; origin_address: string }
 		expect(detail.receipt.logs).toHaveLength(1)
 		expect(detail.argument_schema).toEqual([])
+		expect(detail.origin_address).toBe(address.toLowerCase())
 		const richListResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
 		if (richListResponse === undefined) throw new Error('rich-list API did not return a response')
 		const richList = (await richListResponse.json()) as {
@@ -452,7 +455,6 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			weth_balance: '1456790112345679011',
 			weth_token_count: '2',
 			sampled_weth_token_count: '2',
-			rep_balance: '3000000000000000000',
 			rep_token_count: '2',
 			sampled_rep_token_count: '1',
 		})
@@ -469,8 +471,8 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			expect.objectContaining({
 				poolAddress: discoveredAddress.toLowerCase(),
 				repBackingUnits: '120000000000000000000',
-				capacityOwnershipAttoRep: (85_000_000_000_000_000_000n).toString(),
-				claimableFeesAttoEth: (30_000_000_000_000_000n).toString(),
+				capacityOwnershipAttoRep: 85_000_000_000_000_000_000n.toString(),
+				claimableFeesAttoEth: 30_000_000_000_000_000n.toString(),
 				blockNumber: '2',
 			}),
 		])
@@ -495,7 +497,8 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		const refreshedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
 		if (refreshedResponse === undefined) throw new Error('refreshed rich-list API did not return a response')
 		const refreshed = (await refreshedResponse.json()) as { items: Array<Record<string, unknown>> }
-		expect(refreshed.items[0]).toMatchObject({ rep_balance: '7000000000000000000', rep_token_count: '2', sampled_rep_token_count: '2' })
+		expect(refreshed.items[0]).toMatchObject({ rep_token_count: '2', sampled_rep_token_count: '2' })
+		expect(refreshed.items[0]).not.toHaveProperty('rep_balance')
 
 		const extraRepTokens = Array.from({ length: 101 }, (_, index) =>
 			getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`),
@@ -516,9 +519,15 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		await assetLimitLease.release()
 		const cappedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
 		if (cappedResponse === undefined) throw new Error('capped rich-list API did not return a response')
-		const capped = (await cappedResponse.json()) as { items: Array<Record<string, unknown> & { rep_balances: unknown[] }> }
+		const capped = (await cappedResponse.json()) as { items: Array<Record<string, unknown> & { rep_balances: Array<{ address: string }> }> }
 		expect(capped.items[0]).toMatchObject({ sampled_rep_token_count: '103', returned_rep_token_count: '100', rep_balances_truncated: true })
 		expect(capped.items[0]?.rep_balances).toHaveLength(100)
+		expect(capped.items[0]?.rep_balances.map((balance) => balance.address)).toEqual(
+			[rediscoveredAddress, orphanOnlyAddress, ...extraRepTokens]
+				.map((token) => token.toLowerCase())
+				.toSorted()
+				.slice(0, 100),
+		)
 
 		await database.sql`
 			INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)

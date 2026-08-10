@@ -12,7 +12,7 @@ The shipped stack is Bun and TypeScript, `viem` for JSON-RPC and ABI primitives,
 
 Configuration is checked in under `config/`:
 
-- `networks.json` supplies network identity, chain ID, RPC/start-block environment variable names, manifest, explorer, and reorg depth.
+- `networks.json` supplies network identity, chain ID, native currency symbol, RPC/start-block environment variable names, manifest, explorer, and reorg depth.
 - `manifests/*.json` supplies initial `[address, label, kind]` contract entries.
 - `abis.json` is the self-contained contract-kind ABI snapshot used for event and calldata decoding.
 
@@ -35,10 +35,10 @@ Canonical decoded events populate registries for every observed pool, question, 
 The browser provides:
 
 - network indexed block, timestamp, live age, observed head, lag, phase, and errors;
-- a filtered, paginated, one-line activity ledger across networks;
+- a filtered, paginated, one-line activity ledger for the globally selected network;
 - deep-linked evidence with contract provenance, complete receipt, related logs, decoded action/event schemas, exact raw values, copy controls, and explorer links;
 - searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts;
-- a network-filtered rich list ranked by REP, ETH, WETH, or sent transactions with pool/vault participation and explicit pending or partial balance state.
+- a single-network rich list ranked by ETH or SepoliaETH, WETH, or sent transactions, with bounded per-token REP balances, pool/vault participation, and explicit pending or partial balance state.
 
 ## Delivery and validation
 
@@ -50,7 +50,7 @@ The implementation is delivered in these completed slices:
 4. Event-replayed system catalogs and historical charts.
 5. Unit coverage for configuration, lifecycle recovery, metadata/decoding, and projections, plus a PostgreSQL integration scenario for migrations, leases, restart, discovery, receipt evidence, API canonicality, and reorg replacement.
 
-Acceptance requires an empty-volume Compose start to expose the UI and begin each selected network independently; exact head progress and failures must remain visible; restart must resume without duplicate canonical occurrences; a reorg must retain the orphan and serve its replacement; and decoded amounts must always expose both a correctly scaled display value and exact raw evidence.
+Acceptance requires an empty-volume Compose start to expose the UI and begin each configured network independently; exact head progress and failures must remain visible; restart must resume without duplicate canonical occurrences; a reorg must retain the orphan and serve its replacement; and decoded amounts must always expose both a correctly scaled display value and exact raw evidence.
 
 ## Deferred scope
 

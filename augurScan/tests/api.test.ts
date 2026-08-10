@@ -95,7 +95,7 @@ test('rejects unsupported rich-list ordering before querying', async () => {
 	databases.push(database)
 	const response = await handleApi(new Request('http://localhost/api/v1/richlist?sort=private-key'), database)
 	expect(response?.status).toBe(400)
-	expect(await response?.json()).toEqual({ error: 'sort must be rep, eth, weth, or transactions' })
+	expect(await response?.json()).toEqual({ error: 'sort must be eth, weth, or transactions' })
 })
 
 test('rejects empty state chain identifiers before querying', async () => {

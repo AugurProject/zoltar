@@ -641,6 +641,7 @@ class NetworkIndexer {
 		for (const metadata of readTokenMetadata) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 		const displayLabels = new Map(labels)
 		const contractKinds = new Map([...contracts].map(([address, contract]) => [address, contract.kind] as const))
+		const displayContext = { nativeSymbol: this.#network.nativeSymbol }
 		for (const metadata of tokenMetadata.values()) {
 			const label = metadata.name ?? metadata.symbol
 			if (label !== undefined) displayLabels.set(metadata.address.toLowerCase(), metadata.symbol === undefined ? label : `${label} (${metadata.symbol})`)
@@ -656,7 +657,7 @@ class NetworkIndexer {
 					address: getAddress(log.address),
 					topics: log.topics,
 					data: log.data,
-					decoded: decodeLogRecord(contract.kind, log.topics, log.data, displayLabels, tokenMetadata, contract.address, contractKinds),
+					decoded: decodeLogRecord(contract.kind, log.topics, log.data, displayLabels, tokenMetadata, contract.address, contractKinds, displayContext),
 				})
 			}
 		}
@@ -677,7 +678,14 @@ class NetworkIndexer {
 				status: receipt.status,
 				gasUsed: receipt.gasUsed,
 				receipt: jsonEvidence(receipt),
-				decoded: decodeAction(to === null ? undefined : contracts.get(to.toLowerCase()), pair.transaction.input, displayLabels, tokenMetadata, contractKinds),
+				decoded: decodeAction(
+					to === null ? undefined : contracts.get(to.toLowerCase()),
+					pair.transaction.input,
+					displayLabels,
+					tokenMetadata,
+					contractKinds,
+					displayContext,
+				),
 			})
 		}
 

@@ -9,6 +9,7 @@ export type NetworkConfig = {
 	readonly rpcUrls: readonly string[]
 	readonly startBlock: bigint
 	readonly explorerBaseUrl: string
+	readonly nativeSymbol: string
 	readonly confirmationDepth: bigint
 	readonly contracts: readonly ManifestContract[]
 }

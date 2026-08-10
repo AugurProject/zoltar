@@ -92,11 +92,15 @@ const exactUnits = (value: string, decimals: number): string => {
 	return formatted.includes('.') ? formatted.replace(/\.?0+$/, '') : formatted
 }
 
-const semanticUnit = (name: string): { decimals: number; symbol: string } | undefined => {
+type DecodeDisplayContext = { readonly nativeSymbol: string }
+
+const defaultDisplayContext: DecodeDisplayContext = { nativeSymbol: 'ETH' }
+
+const semanticUnit = (name: string, context: DecodeDisplayContext): { decimals: number; symbol: string } | undefined => {
 	const lower = name.toLowerCase()
-	if (lower.includes('attoethpergas')) return { decimals: 18, symbol: 'ETH/gas' }
+	if (lower.includes('attoethpergas')) return { decimals: 18, symbol: `${context.nativeSymbol}/gas` }
 	if (lower.includes('attorep')) return { decimals: 18, symbol: 'REP' }
-	if (lower.includes('attoeth')) return { decimals: 18, symbol: 'ETH' }
+	if (lower.includes('attoeth')) return { decimals: 18, symbol: context.nativeSymbol }
 	if (lower.includes('attoshares')) return { decimals: 18, symbol: 'shares' }
 	return undefined
 }
@@ -153,12 +157,12 @@ const tokenAmountRules: Readonly<Record<string, readonly TokenAmountRule[]>> = {
 	'weth.withdraw': [{ tokenPath: '$emitter', amountPaths: ['wad'] }],
 }
 
-const fixedAmountRules: Readonly<Record<string, readonly { readonly path: string; readonly decimals: number; readonly symbol: string }[]>> = {
-	'openOracle.dispute': [{ path: 'params.settlerReward', decimals: 18, symbol: 'ETH' }],
-	'openOracle.report': [{ path: 'params.settlerReward', decimals: 18, symbol: 'ETH' }],
+const fixedNativeAmountRules: Readonly<Record<string, readonly { readonly path: string; readonly decimals: number }[]>> = {
+	'openOracle.dispute': [{ path: 'params.settlerReward', decimals: 18 }],
+	'openOracle.report': [{ path: 'params.settlerReward', decimals: 18 }],
 }
 
-const displayValue = (name: string, value: unknown, labels: ReadonlyMap<string, string>): unknown => {
+const displayValue = (name: string, value: unknown, labels: ReadonlyMap<string, string>, context: DecodeDisplayContext): unknown => {
 	if (typeof value === 'string') {
 		if (isAddress(value)) {
 			const address = getAddress(value)
@@ -166,13 +170,14 @@ const displayValue = (name: string, value: unknown, labels: ReadonlyMap<string, 
 			return label === undefined ? address : `${label} (${address})`
 		}
 		if (/^-?\d+$/.test(value)) {
-			const unit = semanticUnit(name)
+			const unit = semanticUnit(name, context)
 			if (unit !== undefined) return `${exactUnits(value, unit.decimals)} ${unit.symbol}`
 		}
 		return value
 	}
-	if (Array.isArray(value)) return value.map((item) => displayValue(name, item, labels))
-	if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, displayValue(key, item, labels)]))
+	if (Array.isArray(value)) return value.map((item) => displayValue(name, item, labels, context))
+	if (typeof value === 'object' && value !== null)
+		return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, displayValue(key, item, labels, context)]))
 	return value
 }
 
@@ -236,10 +241,11 @@ const formattedTokenAmount = (
 	emitterAddress: string | undefined,
 	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
 	contractKinds: ReadonlyMap<string, string>,
+	context: DecodeDisplayContext,
 ): unknown => {
-	if (Array.isArray(value)) return value.map((item) => formattedTokenAmount(item, address, kind, emitterAddress, tokenMetadata, contractKinds))
+	if (Array.isArray(value)) return value.map((item) => formattedTokenAmount(item, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
 	if (typeof value !== 'string' || !/^-?\d+$/.test(value)) return value
-	if (address?.toLowerCase() === zeroAddress) return `${exactUnits(value, 18)} ETH`
+	if (address?.toLowerCase() === zeroAddress) return `${exactUnits(value, 18)} ${context.nativeSymbol}`
 	const metadata = address === undefined ? undefined : tokenMetadata.get(address.toLowerCase())
 	const referencedKind = address === undefined ? undefined : contractKinds.get(address.toLowerCase())
 	const protocolUnit =
@@ -258,17 +264,20 @@ const applyTokenFormats = (
 	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
 	contractKinds: ReadonlyMap<string, string>,
 	emitterAddress?: string,
+	context: DecodeDisplayContext = defaultDisplayContext,
 ): void => {
 	for (const rule of tokenAmountRules[`${kind}.${name}`] ?? []) {
 		const address = tokenAddress(rule, argumentsValue, emitterAddress)
 		for (const path of rule.amountPaths) {
 			const value = valueAtPath(argumentsValue, path)
-			if (value !== undefined) setAtPath(displayArguments, path, formattedTokenAmount(value, address, kind, emitterAddress, tokenMetadata, contractKinds))
+			if (value !== undefined)
+				setAtPath(displayArguments, path, formattedTokenAmount(value, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
 		}
 	}
-	for (const rule of fixedAmountRules[`${kind}.${name}`] ?? []) {
+	for (const rule of fixedNativeAmountRules[`${kind}.${name}`] ?? []) {
 		const value = valueAtPath(argumentsValue, rule.path)
-		if (typeof value === 'string' && /^-?\d+$/.test(value)) setAtPath(displayArguments, rule.path, `${exactUnits(value, rule.decimals)} ${rule.symbol}`)
+		if (typeof value === 'string' && /^-?\d+$/.test(value))
+			setAtPath(displayArguments, rule.path, `${exactUnits(value, rule.decimals)} ${context.nativeSymbol}`)
 	}
 }
 
@@ -298,15 +307,16 @@ const decodeWithEvents = (
 	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
 	contractKinds: ReadonlyMap<string, string>,
 	emitterAddress?: string,
+	context: DecodeDisplayContext = defaultDisplayContext,
 ): DecodedRecord => {
 	let lastError: unknown
 	for (const event of events) {
 		try {
 			const result = decodeEventLog({ abi: [event], topics: topics as [Hex, ...Hex[]], data, strict: true })
 			const argumentsValue = serializeArguments(result.args)
-			const displayArguments = argumentsValue === undefined ? undefined : (displayValue('', argumentsValue, labels) as SerializedArguments)
+			const displayArguments = argumentsValue === undefined ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 			if (argumentsValue !== undefined && displayArguments !== undefined)
-				applyTokenFormats(kind, result.eventName, argumentsValue, displayArguments, tokenMetadata, contractKinds, emitterAddress)
+				applyTokenFormats(kind, result.eventName, argumentsValue, displayArguments, tokenMetadata, contractKinds, emitterAddress, context)
 			return {
 				name: result.eventName,
 				signature: formatAbiItem(event),
@@ -367,6 +377,7 @@ const decodePackedReport = (
 	labels: ReadonlyMap<string, string>,
 	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
 	contractKinds: ReadonlyMap<string, string>,
+	context: DecodeDisplayContext = defaultDisplayContext,
 ): DecodedRecord => {
 	if (topics.length !== 2) return { name, status: 'failed', error: `${name} requires exactly two topics`, summary: `Malformed ${name}` }
 	const bytes = data.slice(2)
@@ -380,7 +391,7 @@ const decodePackedReport = (
 		argumentsValue[field] = type === 'address' ? getAddress(`0x${encoded}`) : BigInt(`0x${encoded}`).toString()
 		offset += width
 	}
-	const displayArguments = displayValue('', argumentsValue, labels) as SerializedArguments
+	const displayArguments = displayValue('', argumentsValue, labels, context) as SerializedArguments
 	for (const [amountField, tokenField] of [
 		['currentAmount1', 'token1'],
 		['currentAmount2', 'token2'],
@@ -394,6 +405,7 @@ const decodePackedReport = (
 			undefined,
 			tokenMetadata,
 			contractKinds,
+			context,
 		)
 	}
 	return {
@@ -419,16 +431,17 @@ export const decodeLogRecord = (
 	tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(),
 	emitterAddress?: string,
 	contractKinds: ReadonlyMap<string, string> = new Map(),
+	context: DecodeDisplayContext = defaultDisplayContext,
 ): DecodedRecord => {
 	const topic = topics[0]
 	if (topic === undefined) return { status: 'unknown', summary: 'Anonymous or empty log' }
 	const packedName = kind === 'openOracle' ? packedReportTopics.get(topic) : undefined
-	if (packedName !== undefined) return decodePackedReport(packedName, topics, data, labels, tokenMetadata, contractKinds)
+	if (packedName !== undefined) return decodePackedReport(packedName, topics, data, labels, tokenMetadata, contractKinds, context)
 	const kindAbi = kind === undefined ? undefined : abiForKind(kind)
 	const kindEvents = kindAbi?.filter((item): item is AbiEvent => item.type === 'event' && toEventSelector(item) === topic) ?? []
 	const candidates = kindEvents.length > 0 ? kindEvents : (eventByTopic.get(topic) ?? [])
 	if (candidates.length === 0) return { status: 'unknown', summary: `Unknown event ${topic.slice(0, 10)}…` }
-	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress)
+	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, context)
 }
 
 export const decodeAction = (
@@ -437,6 +450,7 @@ export const decodeAction = (
 	labels: ReadonlyMap<string, string>,
 	tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(),
 	contractKinds: ReadonlyMap<string, string> = new Map(),
+	context: DecodeDisplayContext = defaultDisplayContext,
 ): DecodedRecord => {
 	if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
 	const abi = contract === undefined ? undefined : abiForKind(contract.kind)
@@ -450,9 +464,9 @@ export const decodeAction = (
 		const argumentsValue = Object.fromEntries(
 			functionItem.inputs.map((parameter, index) => [parameter.name || String(index), serializeValue(decodedArguments[index])]),
 		)
-		const displayArguments = Object.keys(argumentsValue).length === 0 ? undefined : (displayValue('', argumentsValue, labels) as SerializedArguments)
+		const displayArguments = Object.keys(argumentsValue).length === 0 ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 		if (displayArguments !== undefined)
-			applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address)
+			applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address, context)
 		return {
 			name: result.functionName,
 			signature: formatAbiItem(functionItem),

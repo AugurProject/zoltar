@@ -21,6 +21,7 @@ describe('network configuration', () => {
 		const networks = await loadNetworks()
 		expect(networks).toHaveLength(1)
 		expect(networks[0]?.chainId).toBe(11155111)
+		expect(networks[0]?.nativeSymbol).toBe('SepoliaETH')
 		expect(networks[0]?.startBlock).toBe(8_123_456n)
 		expect(networks[0]?.contracts.length).toBeGreaterThan(10)
 	})

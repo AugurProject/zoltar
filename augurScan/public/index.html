@@ -6,7 +6,7 @@
 		<meta name="color-scheme" content="dark" />
 		<meta name="description" content="Live, historical, and decoded protocol evidence for Zoltar networks." />
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff6846'/%3E%3Cpath d='M17 48 28 16h8l11 32h-8l-2-7H27l-2 7Zm12-14h6l-3-10Z' fill='%230b0d12'/%3E%3C/svg%3E" />
-		<title>augurScan — protocol observability</title>
+		<title>augurScan</title>
 		<link rel="stylesheet" href="/styles.css" />
 		<script src="/app.js" type="module"></script>
 	</head>
@@ -16,7 +16,6 @@
 			<div class="brand-block">
 				<div class="mark" aria-hidden="true">A</div>
 				<div>
-					<p class="eyebrow">Protocol observability</p>
 					<h1>augurScan</h1>
 				</div>
 			</div>
@@ -26,6 +25,12 @@
 					<a href="/system">System state</a>
 					<a href="/richlist">Rich list</a>
 				</nav>
+				<label class="global-network"
+					><span class="sr-only">Network</span
+					><select id="global-network-filter" aria-label="Network">
+						<option>Loading networks…</option>
+					</select></label
+				>
 				<div class="connection" role="status" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="connection-label">Connecting</span></div>
 			</div>
 		</header>
@@ -39,7 +44,7 @@
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Indexer status</p>
-						<h2 id="network-heading">Network heads</h2>
+						<h2 id="network-heading">Network head</h2>
 					</div>
 					<div class="status-actions">
 						<p class="updated" id="last-updated" role="status" aria-live="polite">Waiting for status</p>
@@ -63,18 +68,12 @@
 					<button id="new-logs" class="new-logs" type="button" hidden>Show new logs</button>
 				</div>
 				<form id="filters" class="filters" role="search">
-					<label
-						><span>Network</span
-						><select id="network-filter">
-							<option value="">All networks</option>
-						</select></label
-					>
 					<label><span>Event</span><input id="event-filter" type="search" placeholder="Transfer, Report…" /></label>
 					<label><span>Address</span><input id="address-filter" type="search" placeholder="0x…" spellcheck="false" /></label>
 					<label
 						><span>Decode</span
 						><select id="decode-filter">
-							<option value="">Any status</option>
+							<option value="">Any result</option>
 							<option value="true">Decoded</option>
 							<option value="false">Unknown</option>
 						</select></label
@@ -85,7 +84,7 @@
 				<p id="activity-summary" class="activity-summary" role="status" aria-live="polite">Waiting for activity</p>
 
 				<div class="feed-shell">
-					<div class="feed-header" aria-hidden="true"><span>Chain / block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>Status</span></div>
+					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>msg.origin</span></div>
 					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true" aria-live="polite"></div>
 				</div>
@@ -98,12 +97,6 @@
 						<p class="eyebrow">Canonical state projections</p>
 						<h2 id="system-heading">Protocol system state</h2>
 					</div>
-					<label class="system-network"
-						><span>Network</span
-						><select id="system-network-filter">
-							<option value="">All networks</option>
-						</select></label
-					>
 				</div>
 				<div id="system-alert" class="system-alert" role="alert" hidden></div>
 				<div id="system-status" class="system-status" role="status" aria-live="polite" hidden></div>
@@ -143,26 +136,18 @@
 					</div>
 					<div class="richlist-controls">
 						<label
-							><span>Network</span
-							><select id="rich-network-filter">
-								<option value="">All networks</option>
-							</select></label
-						>
-						<label
 							><span>Rank by</span
 							><select id="rich-sort">
-								<option value="rep">All REP</option>
-								<option value="eth">ETH</option>
-								<option value="weth">WETH</option>
 								<option value="transactions">Transactions</option>
+								<option id="rich-native-sort-option" value="eth">ETH</option>
+								<option value="weth">WETH</option>
 							</select></label
 						>
 					</div>
 				</div>
-				<p class="richlist-note">Balances are read at canonical indexed blocks. “All REP” sums the latest available snapshots for genesis and child REP tokens known on that network; rows stay marked pending or partial until every known token is sampled.</p>
 				<div id="richlist-status" class="system-status" role="status" aria-live="polite">Loading known addresses…</div>
 				<div class="richlist-shell">
-					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>All REP</span><span>ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
+					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP balances</span><span id="rich-native-heading">ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
 				<div class="richlist-footer"><span id="richlist-summary"></span><button id="richlist-more" class="secondary" type="button" hidden>Show more</button></div>

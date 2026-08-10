@@ -99,9 +99,10 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	}
 	values.push(limit + 1)
 	const rows = await sql.unsafe(
-		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url
+		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, t.from_address AS origin_address, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url
 		FROM logs l
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
+		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash AND t.canonical
 		JOIN networks n ON n.chain_id = l.chain_id
 		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address
 		WHERE ${clauses.join(' AND ')}
@@ -131,7 +132,7 @@ const logDetail = async (sql: SQL, parts: readonly string[]): Promise<Response> 
 		return json({ error: 'Invalid log identifier' }, 400)
 	const rows = await sql`
 		SELECT l.*, b.timestamp AS block_timestamp, c.label AS contract_label, c.kind AS contract_kind, c.provenance AS contract_provenance,
-			t.from_address, t.to_address, t.value, t.input, t.status AS transaction_status, t.gas_used, t.receipt, a.function_name, a.function_signature, a.arguments AS action_arguments, a.display_arguments AS action_display_arguments, a.argument_schema AS action_argument_schema, a.summary AS action_summary,
+			t.from_address AS origin_address, t.to_address, t.value, t.input, t.gas_used, t.receipt, a.function_name, a.function_signature, a.arguments AS action_arguments, a.display_arguments AS action_display_arguments, a.argument_schema AS action_argument_schema, a.summary AS action_summary,
 			n.id AS network_id, n.explorer_base_url
 		FROM logs l
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
@@ -282,14 +283,13 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
 	const offset = Math.min(integer(url.searchParams.get('offset'), 'offset') ?? 0, 100_000)
-	const sort = url.searchParams.get('sort') ?? 'rep'
+	const sort = url.searchParams.get('sort') ?? 'transactions'
 	const orderBy = {
-		rep: 'rep_balance DESC, transaction_count DESC',
 		eth: 'native_balance DESC, transaction_count DESC',
 		weth: 'weth_balance DESC, transaction_count DESC',
 		transactions: 'transaction_count DESC, interaction_count DESC',
 	}[sort]
-	if (orderBy === undefined) throw new ApiRequestError('sort must be rep, eth, weth, or transactions')
+	if (orderBy === undefined) throw new ApiRequestError('sort must be eth, weth, or transactions')
 	const values: Array<string | number> = []
 	const chainClause =
 		chainId === undefined
@@ -323,7 +323,6 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 			ORDER BY snapshot.chain_id, snapshot.address, snapshot.asset_address, snapshot.block_number DESC
 		), balance_summary AS (
 			SELECT chain_id, address,
-				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'rep'), 0) AS rep_balance,
 				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'weth'), 0) AS weth_balance,
 				COALESCE(max(balance) FILTER (WHERE asset_kind = 'native'), 0) AS native_balance,
 				count(*) FILTER (WHERE asset_kind = 'rep') AS sampled_rep_token_count,
@@ -351,7 +350,6 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 			FROM latest_vaults GROUP BY chain_id, vault_address
 		), ranked AS (
 			SELECT activity.*, n.id AS network_id, n.explorer_base_url, c.label, c.kind,
-				COALESCE(balance.rep_balance, 0) AS rep_balance,
 				COALESCE(balance.weth_balance, 0) AS weth_balance,
 				COALESCE(balance.native_balance, 0) AS native_balance,
 				COALESCE(balance.sampled_rep_token_count, 0) AS sampled_rep_token_count,
@@ -423,11 +421,11 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 					SELECT jsonb_agg(jsonb_build_object(
 						'address', token.asset_address, 'balance', token.balance::text, 'blockNumber', token.block_number::text,
 						'name', metadata.name, 'symbol', metadata.symbol, 'decimals', metadata.decimals
-					) ORDER BY token.balance DESC, token.asset_address)
+					) ORDER BY token.asset_address)
 					FROM (
 						SELECT * FROM latest_balances rep_token
 						WHERE rep_token.chain_id = page.chain_id AND rep_token.address = page.address AND rep_token.asset_kind = 'rep'
-						ORDER BY rep_token.balance DESC, rep_token.asset_address LIMIT 100
+						ORDER BY rep_token.asset_address LIMIT 100
 					) token
 					LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = token.chain_id AND metadata.address = token.asset_address
 				), '[]'::jsonb) AS rep_balances,

@@ -55,6 +55,27 @@ describe('ABI metadata', () => {
 		expect(decoded.displayArguments?.['value']).toBe('1.5 REP')
 	})
 
+	test('formats native event and action values with the network currency symbol', () => {
+		const eventAbi = parseAbi([
+			'event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)',
+		])
+		const topics = requireTopics(encodeEventTopics({ abi: eventAbi, eventName: 'CompleteSetCreated', args: { creator: account } }))
+		const data = encodeAbiParameters(
+			[{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+			[2_000_000_000_000_000_000n, 3_000_000_000_000_000_000n, 4_000_000_000_000_000_000n, 5_000_000_000_000_000_000n],
+		)
+		const context = { nativeSymbol: 'SepoliaETH' }
+		const decodedEvent = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), context)
+		expect(decodedEvent.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe('2 SepoliaETH')
+
+		const openOracleAbi = abiForKind('openOracle')
+		if (openOracleAbi === undefined) throw new Error('OpenOracle ABI missing')
+		const contract = { address: account as Address, label: 'OpenOracle', kind: 'openOracle', provenance: 'test' }
+		const input = encodeFunctionData({ abi: openOracleAbi, functionName: 'deposit', args: [zeroAddress, 6_000_000_000_000_000_000n, childToken] })
+		const decodedAction = decodeAction(contract, input, new Map(), new Map(), new Map(), context)
+		expect(decodedAction.displayArguments?.['amount']).toBe('6 SepoliaETH')
+	})
+
 	test('enforces fixed WETH units over misleading metadata for transfer and approval logs', () => {
 		const abi = abiForKind('weth')
 		if (abi === undefined) throw new Error('WETH ABI missing')
@@ -176,6 +197,10 @@ describe('ABI metadata', () => {
 		expect(report.displayArguments).toMatchObject({
 			params: { currentAmount1: '1.500001 USDC', currentAmount2: '2 ETH', settlerReward: '1.25 ETH' },
 		})
+		const sepoliaReport = decodeAction(contract, reportInput, new Map(), metadataByAddress, new Map(), { nativeSymbol: 'SepoliaETH' })
+		expect(sepoliaReport.displayArguments).toMatchObject({
+			params: { currentAmount1: '1.500001 USDC', currentAmount2: '2 SepoliaETH', settlerReward: '1.25 SepoliaETH' },
+		})
 
 		const disputeInput = encodeFunctionData({
 			abi,
@@ -253,8 +278,9 @@ describe('ABI metadata', () => {
 		expect(decoded.displayArguments?.['currentAmount2']).toBe('0.000000000000000022 WETH')
 		expect(decoded.displayArguments?.['currentReporter']).toContain('Reporter')
 		const ethPayload = `${payload.slice(0, 2 + 64 * 2)}${zeroAddress.slice(2)}${payload.slice(2 + (64 + 20) * 2)}` as Hex
-		const ethDecoded = decodeLogRecord('openOracle', topics, ethPayload, new Map())
-		expect(ethDecoded.displayArguments?.['currentAmount1']).toBe('0.000000000000000011 ETH')
+		const ethDecoded = decodeLogRecord('openOracle', topics, ethPayload, new Map(), new Map(), undefined, new Map(), { nativeSymbol: 'SepoliaETH' })
+		expect(ethDecoded.displayArguments?.['currentAmount1']).toBe('0.000000000000000011 SepoliaETH')
+		expect(ethDecoded.displayArguments?.['settlerRewardAttoEth']).toBe('0.000123 SepoliaETH')
 
 		const malformed = decodeLogRecord('openOracle', topics, '0x1234', new Map())
 		expect(malformed).toMatchObject({ name: 'ReportSubmitted', status: 'failed', summary: 'Malformed ReportSubmitted' })
