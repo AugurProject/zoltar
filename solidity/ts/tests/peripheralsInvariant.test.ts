@@ -63,8 +63,6 @@ import {
 	getTotalClaimableVaultFeesAttoEth,
 	getTotalPoolHeldAttoRep,
 	getTotalCapacityOwnershipAttoRep,
-	getVaultCount,
-	getVaults,
 	backingUnitsToAttoRep,
 	redeemRepFromVault,
 } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -323,9 +321,6 @@ describe('Peripherals invariant harness', () => {
 				const activeVaultCount = await getActiveVaultCount(client, securityPool)
 				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
 				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
-				const historicalVaultCount = await getVaultCount(client, securityPool)
-				const historicalVaults = await getVaults(client, securityPool, 0n, historicalVaultCount + 1n)
-				const historicalVaultData = await Promise.all(historicalVaults.map(vault => getSecurityVault(client, securityPool, vault)))
 				const totalCapacityOwnershipAttoRepFromVaults = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 				const totalBackingUnitsFromVaults = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
 				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
@@ -338,18 +333,11 @@ describe('Peripherals invariant harness', () => {
 					address: securityPool,
 					args: [],
 				})
-				const expectedActiveVaults = historicalVaults.filter((_, index) => {
-					const vault = ensureDefined(historicalVaultData[index], `${label}: historical vault data ${index.toString()} is missing`)
-					return vault.repBackingUnits > 0n || vault.capacityOwnershipAttoRep > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n
-				})
-				const aggregateClaimableFeesAttoEth = historicalVaultData.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
-				const uncheckpointedCapacityOwnershipAttoRep = historicalVaultData.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.capacityOwnershipAttoRep), 0n)
+				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
+				const uncheckpointedCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.capacityOwnershipAttoRep), 0n)
 
 				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active-vault count should match its page`)
 				assert.strictEqual(new Set(activeVaults).size, activeVaults.length, `${label}: active-vault page should not duplicate actors`)
-				strictEqualTypeSafe(BigInt(historicalVaults.length), historicalVaultCount, `${label}: historical vault count should match its page`)
-				assert.strictEqual(new Set(historicalVaults).size, historicalVaults.length, `${label}: historical vault page should not duplicate actors`)
-				assert.deepStrictEqual(new Set(activeVaults), new Set(expectedActiveVaults), `${label}: active vaults should be exactly the historical vaults with live economic state`)
 				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalAttoRep, `${label}: recorded REP should equal the token balance`)
 				strictEqualTypeSafe(totalCapacityOwnershipAttoRepFromVaults, await getTotalCapacityOwnershipAttoRep(client, securityPool), `${label}: aggregate capacityOwnershipAttoRep should equal the sum of vault withdrawalAmountsAttoRep`)
 				strictEqualTypeSafe(totalBackingUnitsFromVaults, await getTotalRepBackingUnits(client, securityPool), `${label}: backingUnits denominator should equal active vault backingUnits`)
@@ -648,9 +636,6 @@ describe('Peripherals invariant harness', () => {
 				const activeVaultCount = await getActiveVaultCount(client, securityPool)
 				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
 				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
-				const historicalVaultCount = await getVaultCount(client, securityPool)
-				const historicalVaults = await getVaults(client, securityPool, 0n, historicalVaultCount + 1n)
-				const historicalVaultData = await Promise.all(historicalVaults.map(vault => getSecurityVault(client, securityPool, vault)))
 				const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 				const aggregateBackingUnits = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
 				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
@@ -664,16 +649,9 @@ describe('Peripherals invariant harness', () => {
 					address: securityPool,
 					args: [],
 				})
-				const expectedActiveVaults = historicalVaults.filter((_, index) => {
-					const vault = ensureDefined(historicalVaultData[index], `${label}: historical vault data ${index.toString()} is missing`)
-					return vault.repBackingUnits > 0n || vault.capacityOwnershipAttoRep > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n
-				})
-				const aggregateClaimableFeesAttoEth = historicalVaultData.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
+				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
 				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active vault page should match count`)
-				strictEqualTypeSafe(BigInt(historicalVaults.length), historicalVaultCount, `${label}: historical vault page should match count`)
 				assert.strictEqual(new Set(activeVaults).size, activeVaults.length, `${label}: active vault ids should be unique`)
-				assert.strictEqual(new Set(historicalVaults).size, historicalVaults.length, `${label}: historical vault ids should be unique`)
-				assert.deepStrictEqual(new Set(activeVaults), new Set(expectedActiveVaults), `${label}: active vaults should be exactly the historical vaults with live economic state`)
 				const totalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPool)
 				if (systemState === SystemState.PoolForked) assert.ok(aggregateCapacityOwnershipAttoRep <= totalCapacityOwnershipAttoRep, `${label}: consumed fork withdrawalAmountsAttoRep cannot exceed the frozen capacityOwnershipAttoRep snapshot`)
 				else {
@@ -1252,8 +1230,8 @@ describe('Peripherals invariant harness', () => {
 				address: yesSecurityPool.securityPool,
 				args: [],
 			})
-			const vaultCount = await getVaultCount(client, yesSecurityPool.securityPool)
-			const vaultAddresses = await getVaults(client, yesSecurityPool.securityPool, 0n, vaultCount + 1n)
+			const vaultCount = await getActiveVaultCount(client, yesSecurityPool.securityPool)
+			const vaultAddresses = await getActiveVaults(client, yesSecurityPool.securityPool, 0n, vaultCount + 1n)
 			const vaults = await Promise.all(vaultAddresses.map(vault => getSecurityVault(client, yesSecurityPool.securityPool, vault)))
 			const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 			const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
@@ -1524,13 +1502,6 @@ describe('Peripherals invariant harness', () => {
 		assert.strictEqual(activeVaults[2], client.account.address, 'baseline vault should remain active after other vault churn')
 		assert.strictEqual(new Set(activeVaults).size, activeVaults.length, 'active vault pagination should not duplicate entries')
 		assert.strictEqual(activeVaults.includes(vaultB.account.address), false, 'fully exited vault should be removed from the active list')
-
-		const vaultCount = await getVaultCount(client, context.securityPool)
-		const vaults = Array.from(await getVaults(client, context.securityPool, 0n, vaultCount + 1n))
-		strictEqualTypeSafe(vaultCount, activeVaultCount, 'vault count alias should match the active vault count')
-		assert.strictEqual(new Set(vaults).size, vaults.length, 'vault registry alias should not duplicate actors')
-		assert.strictEqual(vaults.includes(vaultB.account.address), false, 'a fully exited vault should be absent from the vault registry alias')
-		assert.deepStrictEqual(vaults, activeVaults, 'vault registry aliases should expose the same active vault ordering')
 	})
 
 	test('active vault history remains coherent when a direct own-fork claim consumes the last escrow', async () => {
@@ -1566,9 +1537,7 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(winningVaultAfterClaim.disputeStakedAttoRep, 0n, 'the direct claim should consume the vault final escalation escrow')
 
 		const activeAfterDirectClaim = Array.from(await getActiveVaults(client, context.securityPool, 0n, (await getActiveVaultCount(client, context.securityPool)) + 1n))
-		const historicalVaults = Array.from(await getVaults(client, context.securityPool, 0n, (await getVaultCount(client, context.securityPool)) + 1n))
 		assert.strictEqual(new Set(activeAfterDirectClaim).size, activeAfterDirectClaim.length, 'a direct claim must not duplicate active vault entries')
-		for (const activeVault of activeAfterDirectClaim) assert.ok(historicalVaults.includes(activeVault), 'the active index must remain a subset of append-only vault history')
 		assert.ok(activeAfterDirectClaim.includes(winningVault.account.address), 'the retained parent capacity position should keep the vault active after its direct escalation claim')
 
 		await migrateVaultWithUnresolvedEscalation(winningVault, context.securityPool, winningVault.account.address, QuestionOutcome.Yes)

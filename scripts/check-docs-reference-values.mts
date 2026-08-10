@@ -119,7 +119,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	const externalPureFunctions = [...securityPoolUtils.matchAll(/function\s+(\w+)\([^{}]*?\)\s+external\s+pure/g)].map(match => match[1])
 	assert.deepEqual(
 		externalPureFunctions,
-		['calculateCumulativeAuctionBadDebt', 'calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'isLiquidationBeyondMinPriceDistance', 'calculateRetentionRate'],
+		['calculateCumulativeAuctionBadDebt', 'calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'calculateRetentionRate'],
 		'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors',
 	)
 	for (const functionName of externalPureFunctions) {
@@ -538,7 +538,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /securityPoolDeploymentsRange\(startIndex, count\)[\s\S]*reverts rather than truncating/)
 	assert.match(contractInteractionReference, /burnEscalationWinnerHaircut\(amountAttoRep\)[\s\S]*configured escalation game/)
 	assert.match(contractInteractionReference, /getPoolAccountingSnapshot`, `getVaultFeeRemainder`/)
-	assert.match(contractInteractionReference, /securityPoolEventEmitter`, `getVaultCount`/)
+	assert.match(contractInteractionReference, /getActiveVaultCount`, `getActiveVaults`/)
 	assert.match(contractInteractionReference, /getMigratedAttoRep`, `getForkActivationTime`/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`/)
 	assert.match(operatorReference, /factory has no owner role and no later `resumeFromFork` relay/)
@@ -697,10 +697,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(sepoliaRepAllocations, /SEPOLIA_REP_MINT_CAP \/ BigInt\(SEPOLIA_REP_HOLDERS\.length\)/)
 	assert.match(operatorReference, /configured 11 million REP mint cap is divided equally among the listed holders/)
 	assert.match(operatorReference, /total supply no greater than 11 million REP/)
-	assert.match(securityPool, /function getVaultCount\(\) external view returns \(uint256\) \{\s*return activeVaultCount;/)
-	assert.match(securityPool, /function getVaults\([\s\S]*return _sliceActiveVaults\(startIndex, count\);/)
-	assert.match(contractInteractionReference, /two vault-count getters return the same active-vault count, and both vault pagers return the same newest-first active-vault sequence/)
-	assert.match(operatorReference, /getVaults\(startIndex, count\).*getActiveVaults\(startIndex, count\).*both page active vaults in newest-first order/)
+	assert.match(securityPool, /function getActiveVaultCount\(\) external view returns \(uint256\) \{\s*return activeVaultCount;/)
+	assert.match(securityPool, /function getActiveVaults\([\s\S]*return _sliceActiveVaults\(startIndex, count\);/)
+	assert.match(operatorReference, /getActiveVaults\(startIndex, count\).*pages active vaults in newest-first order/)
 	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universes\[universeId\]\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amountAttoRep, msg\.sender, outcomeIndexes\)/)
 	assert.match(zoltar, /function splitRepInternal\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(recipient, amountAttoRep\)[\s\S]*emit MigrationRepSplit\(/)
 	assert.match(reputationToken, /function mint\(address account, uint256 valueAttoRep\)[\s\S]*_mint\(account, valueAttoRep\);[\s\S]*emit Mint\(account, valueAttoRep\)/)

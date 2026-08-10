@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = '935d483df0cac6e7338df9cfdc1c7817ad9d7d1ed801b4a9e7762ace48776b01'
+const expectedProductionSoliditySourceFingerprint = '9918e5b4b116f3d2d828c411ec69993b79d20d63e21718de2ca019e70fe177e2'
 
 const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -520,12 +520,12 @@ assert.equal(productionSoliditySourceFingerprint, expectedProductionSoliditySour
 
 const contractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '454ba49fe7c031af00f7eeebd910a19ab2b968a6457cfb90bdda82ef7b63ba7f',
+		compiledAbiFingerprint: '580109cfcebb3ce505def01895f7b6567e75bbd8e8ccac857bdd00d54f15c37f',
 		name: 'ZoltarQuestionData',
 		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
-		readAbiFingerprint: '5359875c236b41ea3d1b7af175b02ce8c7f00b5d5bf655869b7103ce363168df',
+		readAbiFingerprint: '964d0ce318d2890011ff485c8d78e933cabc8d10e489a0c22f0e266fa2563ded',
 		readSurface:
-			'Use `getQuestionId` before submission; `questionCreatedTimestamp`, `questions`, and `outcomeLabels` for direct lookup; `questionIds`, `getQuestionCount`, and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
+			'Use `getQuestionId` before submission; `questionCreatedTimestamp` and `questions` for direct lookup; `getQuestionCount` and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
 		readDeclarations: [
 			{ name: 'getQuestionId' },
 			{ name: 'getQuestionCount' },
@@ -537,7 +537,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'isMalformedAnswerOption' },
 			{ name: 'getAnswerOptionName' },
 		],
-		readStorageDeclarations: [{ name: 'questionCreatedTimestamp' }, { name: 'questions' }, { name: 'outcomeLabels' }, { name: 'questionIds' }],
+		readStorageDeclarations: [{ name: 'questionCreatedTimestamp' }, { name: 'questions' }],
 		sourcePath: 'solidity/contracts/ZoltarQuestionData.sol',
 		interactions: [
 			{
@@ -551,12 +551,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '9e84361ae5635d4370f85f654efc8a70e0aa805e785544cc5e7835261d38543e',
+		compiledAbiFingerprint: '023e5a38bcf613044e07d23e84095e1125be871017388a0c5a6cf7a41958b350',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: 'e97b9eb4ca404aff61d3d78e0880d651c06613c0c495f1265592b4aba8bc7673',
+		readAbiFingerprint: '1916e3480c70c4ccd5962f4b8069988d7dc36f0ea89337ebe04b8bca089d1492',
 		readSurface:
-			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -569,7 +569,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getDeployedChildUniverses' },
 			{ name: 'getMigrationRepBalanceAttoRep' },
 		],
-		readStorageDeclarations: [{ name: 'universes' }, { name: 'deployedChildOutcomeIndexes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
+		readStorageDeclarations: [{ name: 'universes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
@@ -714,19 +714,16 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'e6f383cffdb24744a67bbbc1f3e6b8a19e496413050ad06e04804159b11e0565',
+		compiledAbiFingerprint: 'f7a5b1fdc11b66e99e432f815054b4dbd5dd7e7acda4ad5e6928d768ffc39ba8',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '1d854f25a5b2ccdb83dbaf6ad1c99600c4eebd6b05764f0c8073183e47f585e2',
+		readAbiFingerprint: '2538771895b69863adbac7f5f7b0380f38570b45f416ba22d96afd29278c07c8',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The two vault-count getters return the same active-vault count, and both vault pagers return the same newest-first active-vault sequence. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getActiveVaultCount`, `getActiveVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 		securityBoundary:
 			'Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
-			{ name: 'securityPoolEventEmitter' },
-			{ name: 'getVaultCount' },
 			{ name: 'getActiveVaultCount' },
-			{ name: 'getVaults' },
 			{ name: 'getActiveVaults' },
 			{ name: 'attoSharesToAttoEth' },
 			{ name: 'attoEthToAttoShares' },
@@ -1606,12 +1603,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '3368fc02187d4992d31cb535e806880c0ff8a3f5c94ebba5f3b294d490b9e928',
+		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: 'a5679a3083163c66545b6f49b69ae74c2736c989ef5252333a1c14296f8b6ec7',
+		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [
 			{ name: 'supportsInterface', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
@@ -1619,7 +1616,6 @@ const contractReferences: ContractReference[] = [
 			{ name: 'balanceOfBatch', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
 			{ name: 'isApprovedForAll', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
 			{ name: 'isAuthorized' },
-			{ name: 'getChildUniverseId' },
 			{ name: 'totalSupplyForOutcome' },
 			{ name: 'maximumOutcomeSupply' },
 			{ name: 'balanceOfOutcome' },

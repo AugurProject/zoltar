@@ -81,7 +81,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -130,7 +130,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -190,7 +190,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -255,7 +255,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getActiveVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -529,12 +529,12 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') {
+				if (request.functionName === 'getActiveVaultCount') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					return getAddress(address) === securityPoolAddress ? 1n : 2n
 				}
-				if (request.functionName === 'getVaults' || request.functionName === 'getActiveVaults') {
+				if (request.functionName === 'getActiveVaults') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					const normalizedAddress = getAddress(address)

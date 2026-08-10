@@ -18,7 +18,7 @@ function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | u
 		if (request.functionName === 'universeId') return 12n
 		if (request.functionName === 'shareToken') return shareTokenAddress
 		if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-		if (request.functionName === 'getVaultCount') return 0n
+		if (request.functionName === 'getActiveVaultCount') return 0n
 		if (request.functionName === 'escalationGame') return escalationGameAddress
 		if (request.functionName === 'getDepositsByOutcomeLength') return 0n
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)

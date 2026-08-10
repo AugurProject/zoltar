@@ -115,8 +115,6 @@ interface ISecurityPool {
 			uint256 claimableFeesAttoEth,
 			uint256 feeIndex
 		);
-	function getVaultCount() external view returns (uint256);
-	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function getActiveVaultCount() external view returns (uint256);
 	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function parent() external view returns (ISecurityPool);
@@ -176,8 +174,6 @@ interface ISecurityPool {
 	function transferEth(address payable receiver, uint256 amountAttoEth) external;
 
 	function securityPoolForker() external view returns (address);
-	function securityPoolEventEmitter() external view returns (address);
-
 	receive() external payable;
 }
 

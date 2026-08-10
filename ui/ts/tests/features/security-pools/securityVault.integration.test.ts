@@ -14,7 +14,7 @@ import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
+import { getSecurityVault, getActiveVaultCount, getActiveVaults, backingUnitsToAttoRep } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -96,9 +96,9 @@ describe('Security vault integration', () => {
 		const endPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
 		expect(endPoolRepBalance - startPoolRepBalance).toEqual(depositAmount)
 
-		const vaultCount = await getVaultCount(client, securityPoolAddress)
+		const vaultCount = await getActiveVaultCount(client, securityPoolAddress)
 		expect(vaultCount).toBe(1n)
-		const vaults = await getVaults(client, securityPoolAddress, 0n, vaultCount)
+		const vaults = await getActiveVaults(client, securityPoolAddress, 0n, vaultCount)
 		expect(vaults).toEqual([walletAddress])
 
 		const vault = await getSecurityVault(client, securityPoolAddress, walletAddress)

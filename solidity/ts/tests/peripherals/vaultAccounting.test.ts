@@ -70,8 +70,6 @@ describe('Peripherals: vault accounting', () => {
 		getActiveVaults,
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
-		getVaultCount,
-		getVaults,
 		backingUnitsToAttoRep,
 		redeemFees,
 		redeemRepFromVault,
@@ -270,10 +268,10 @@ describe('Peripherals: vault accounting', () => {
 		await approveAndDepositRepToVault(thirdClient, repDeposit, questionId)
 		await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
 
-		const vaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
-		const firstPage = await getVaults(client, securityPoolAddresses.securityPool, 0n, 2n)
-		const secondPage = await getVaults(client, securityPoolAddresses.securityPool, 2n, 2n)
-		const emptyPage = await getVaults(client, securityPoolAddresses.securityPool, 3n, 1n)
+		const vaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
+		const firstPage = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 2n)
+		const secondPage = await getActiveVaults(client, securityPoolAddresses.securityPool, 2n, 2n)
+		const emptyPage = await getActiveVaults(client, securityPoolAddresses.securityPool, 3n, 1n)
 
 		strictEqualTypeSafe(vaultCount, 3n, 'vault count should track unique vault addresses')
 		assert.deepStrictEqual(firstPage, [client.account.address, thirdClient.account.address], 'first page should include the two most recently active vaults')
@@ -281,21 +279,18 @@ describe('Peripherals: vault accounting', () => {
 		assert.deepStrictEqual(emptyPage, [], 'out of range paging should return an empty array')
 	})
 
-	test('vault paging aliases expose only active vaults', async () => {
+	test('active vault paging prunes fully exited vaults', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 
-		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), 2n, 'vault count alias should include both active vaults')
 		strictEqualTypeSafe(await getActiveVaultCount(client, securityPoolAddresses.securityPool), 2n, 'active vault count should include both funded vaults')
 
 		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
-		const vaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const activeVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
 		const activeVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeVaultCount)
 
-		strictEqualTypeSafe(vaultCount, 1n, 'vault count alias should prune fully exited vaults')
 		strictEqualTypeSafe(activeVaultCount, 1n, 'active vault count should prune fully exited vaults')
 		assert.deepStrictEqual(activeVaults, [client.account.address], 'active vault paging should only return currently active vaults')
 	})

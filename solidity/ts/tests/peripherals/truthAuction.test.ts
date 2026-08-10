@@ -88,7 +88,7 @@ describe('Peripherals: truth auction', () => {
 		getTotalAccruedFees,
 		getTotalClaimableVaultFeesAttoEth,
 		getTotalCapacityOwnershipAttoRep,
-		getVaultCount,
+		getActiveVaultCount,
 		backingUnitsToAttoRep,
 		redeemFees,
 		redeemRepFromVault,
@@ -1477,7 +1477,7 @@ describe('Peripherals: truth auction', () => {
 			const totalAttoRepPurchased = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
 			strictEqualTypeSafe(totalAttoRepPurchased > 0n, true, 'setup should leave a finalized auction with purchased REP')
 
-			const vaultCountBeforeClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+			const vaultCountBeforeClaim = await getActiveVaultCount(client, yesSecurityPool.securityPool)
 			const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
 
@@ -1485,7 +1485,7 @@ describe('Peripherals: truth auction', () => {
 
 			const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
-			const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+			const vaultCountAfterClaim = await getActiveVaultCount(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'finalized losing bidder should receive their full ETH refund')
 			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'refund-only finalized claim should not mint REP backing units')
@@ -1646,7 +1646,7 @@ describe('Peripherals: truth auction', () => {
 
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction), 0n, 'setup should finalize with zero purchased REP')
 
-			const vaultCountBeforeClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+			const vaultCountBeforeClaim = await getActiveVaultCount(client, yesSecurityPool.securityPool)
 			const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
 
@@ -1654,7 +1654,7 @@ describe('Peripherals: truth auction', () => {
 
 			const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
-			const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+			const vaultCountAfterClaim = await getActiveVaultCount(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'zero-REP finalized claim should release the full ETH refund')
 			strictEqualTypeSafe(losingVaultAfterClaim.repBackingUnits, losingVaultBeforeClaim.repBackingUnits, 'zero-REP finalized claim should not mint REP backing units')

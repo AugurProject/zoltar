@@ -202,10 +202,9 @@
 						</tr>
 						<tr>
 							<td>Vault enumeration</td>
-							<td><code>getVaults(startIndex, count)</code> and <code>getActiveVaults(startIndex, count)</code> both page active vaults in newest-first order by walking the active-vault linked list from <code>latestActiveVault</code>. The matching count getters also return the same active-vault count. Both pagers return an empty array when <code>count == 0</code> or the start index is out of range.</td>
+							<td><code>getActiveVaults(startIndex, count)</code> pages active vaults in newest-first order by walking the active-vault linked list from <code>latestActiveVault</code>. It returns an empty array when <code>count == 0</code> or the start index is out of range; <code>getActiveVaultCount()</code> reports the current length.</td>
 							<td>
-								<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.getVaults</code></a
-								>, <a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.getActiveVaults</code></a>
+								<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.getActiveVaults</code></a>
 							</td>
 						</tr>
 					</tbody>
@@ -748,11 +747,6 @@
 							<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
 							<td>Checks the associated-REP and free pool-held REP requirements against live open interest. Both requirements round upward; zero open interest is healthy. <code>isVaultHealthyAtFactor</code> applies an approval-selected factor of at least 10,000 to both branches.</td>
 							<td><a href="../explanation/liquidations.html#capacity-and-health">Capacity and health</a></td>
-						</tr>
-						<tr>
-							<td><code>isLiquidationBeyondMinPriceDistance(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, poolSecurityMultiplierBps, currentPrice, minPriceDistanceBps)</code></td>
-							<td>Zero configured distance returns true. Otherwise zero open interest or price returns false; the function floors both price thresholds, selects the lower one, requires price strictly above it, and then applies the BPS distance floor.</td>
-							<td><a href="../explanation/open-oracle.html#security-guarantee">OpenOracle liquidation guard</a></td>
 						</tr>
 						<tr>
 							<td><code>calculateRetentionRate(settlementCollateralAttoEth, mintingCapacityAttoEth)</code></td>

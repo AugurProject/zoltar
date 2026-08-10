@@ -140,20 +140,8 @@ contract SecurityPool is SecurityPoolStorage {
 		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(repToken.getTotalTheoreticalSupplyAttoRep(), securityPoolFactory.minimumVaultRepDepositAttoRep());
 	}
 
-	function getVaultCount() external view returns (uint256) {
-		return activeVaultCount;
-	}
-
-	function securityPoolEventEmitter() external view returns (address) {
-		return address(eventEmitter);
-	}
-
 	function getActiveVaultCount() external view returns (uint256) {
 		return activeVaultCount;
-	}
-
-	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
-		return _sliceActiveVaults(startIndex, count);
 	}
 
 	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {

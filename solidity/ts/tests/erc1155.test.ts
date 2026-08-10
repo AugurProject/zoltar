@@ -7,7 +7,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulat
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed, forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { approveToken, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
+import { approveToken, getChildUniverseId, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock, test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
@@ -576,12 +576,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			1n,
 			'rejected migration must retain the source balance',
 		)
-		const childUniverseId = await client.readContract({
-			abi: tokenAbi,
-			address: shareTokenAddress,
-			functionName: 'getChildUniverseId',
-			args: [0n, 1n],
-		})
+		const childUniverseId = getChildUniverseId(0n, 1n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: tokenAbi,
