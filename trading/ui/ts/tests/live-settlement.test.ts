@@ -2,12 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../features/LiveTrading.tsx'
 import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../protocol/live.ts'
+import type { DeploymentConfiguration } from '../protocol/config.ts'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
 const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
+const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
 const migrateAbi = [
 	{
 		type: 'function',
@@ -88,7 +90,7 @@ describe('live settlement contract encoding', () => {
 			}),
 		})
 
-		const quote = await simulateSettlement(client, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndex: 12n })
+		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndex: 12n })
 		const uiQuote = { ...quote, account, walletClient: client, inputRevision: 0 }
 		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', 12n, account, client)).toBeTrue()
 		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', 12n, account, client)).toBeFalse()
@@ -96,7 +98,7 @@ describe('live settlement contract encoding', () => {
 		expect(settlementQuoteCanSubmit('ready', undefined, true)).toBeTrue()
 		expect(settlementQuoteCanSubmit('loading', undefined, true)).toBeFalse()
 		expect(settlementQuoteCanSubmit('error', undefined, true)).toBeFalse()
-		expect(await submitFreshSettlement(client, account, quote)).toBe(transactionHash)
+		expect(await submitFreshSettlement(client, configuration, account, quote)).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
 			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n]] })

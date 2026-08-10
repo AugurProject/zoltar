@@ -4,6 +4,7 @@
 
 - `enterPosition(pair, longOutcome, minLongSharesOut, recipient, deadline)` is payable. It creates actual complete-set shares from `msg.value`, verifies equal INVALID/YES/NO deltas, swaps all opposite shares, and delivers long shares plus INVALID. It returns ETH spent, complete sets, swap amounts, fee, and before/after Conditional YES prices.
 - `exitPosition(pair, longOutcome, completeSetSharesToRedeem, maxLongSharesIn, minEthOut, recipient, deadline)` pulls exactly `q` INVALID and `q + swapInput` long shares, buys exactly `q` opposite shares, redeems `q`, measures ETH, and forwards only that delta.
+- `redeemCompleteSet(pool, completeSetSharesToRedeem, minEthOut, recipient, deadline)` pulls an explicit complete set from the caller, validates the exact canonical SecurityPool, measures the current redemption, and reverts instead of burning shares when the ETH output is zero or below the caller's bound.
 - `createPairAndInitializeWithEth(pool, conditionalYesBps, minLiquidity, recipient, deadline)` creates/reuses the deterministic pair and requires it to be uninitialized before atomically seeding it.
 - `initializeWithEth(pair, conditionalYesBps, minLiquidity, recipient, deadline)` initializes an already created canonical pair.
 - `addLiquidityWithEth(pair, minLiquidity, recipient, deadline)` creates complete sets, deposits the authoritative proportional maximum, and returns INVALID and unused shares.

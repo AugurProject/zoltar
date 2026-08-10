@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../../solidity/contracts/peripherals/BinaryOutcomes.sol';
-import { ISecurityPool } from '../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory } from '../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
 import { IERC1155Receiver } from '../../solidity/contracts/peripherals/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
@@ -134,6 +134,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		pool.redeemCompleteSet(completeSetSharesToRedeem);
 		ethCallbackActive = false;
 		uint256 ethOut = address(this).balance - ethBefore;
+		require(ethOut > 0, 'Zero ETH output');
 		require(ethOut >= minEthOut, 'Minimum ETH output');
 		_endShareOperation(startInvalid, startYes, startNo);
 		(bool success, ) = recipient.call{ value: ethOut }('');
@@ -146,6 +147,30 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			ethOut,
 			feeAmount
 		);
+	}
+
+	function redeemCompleteSet(
+		ISecurityPool pool,
+		uint256 completeSetSharesToRedeem,
+		uint256 minEthOut,
+		address payable recipient,
+		uint256 deadline
+	) external nonReentrant beforeDeadline(deadline) returns (uint256 ethOut) {
+		_validateCanonicalPool(pool);
+		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
+		require(completeSetSharesToRedeem > 0, 'Complete set is zero');
+		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
+		_pullCompleteSet(pool, msg.sender, completeSetSharesToRedeem);
+		uint256 ethBefore = address(this).balance;
+		ethCallbackActive = true;
+		pool.redeemCompleteSet(completeSetSharesToRedeem);
+		ethCallbackActive = false;
+		ethOut = address(this).balance - ethBefore;
+		require(ethOut > 0, 'Zero ETH output');
+		require(ethOut >= minEthOut, 'Minimum ETH output');
+		_endShareOperation(startInvalid, startYes, startNo);
+		(bool success, ) = recipient.call{ value: ethOut }('');
+		require(success, 'ETH transfer failed');
 	}
 
 	function createPairAndInitializeWithEth(
@@ -298,6 +323,21 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(address(factory.getPair(pair.securityPool())) == address(pair), 'Noncanonical pair');
 	}
 
+	function _validateCanonicalPool(ISecurityPool pool) private view {
+		require(address(pool) != address(0), 'Security pool is zero');
+		ISecurityPoolFactory securityPoolFactory = factory.securityPoolFactory();
+		require(address(pool.securityPoolFactory()) == address(securityPoolFactory), 'Wrong security pool factory');
+		bytes32 originId = securityPoolFactory.getSecurityPoolOriginId(pool);
+		require(
+			address(securityPoolFactory.getSecurityPool(originId, pool.universeId())) == address(pool),
+			'Noncanonical security pool'
+		);
+		require(
+			address(pool.shareToken().canonicalPoolByUniverse(pool.universeId())) == address(pool),
+			'Noncanonical share pool'
+		);
+	}
+
 	function _isDirectionalOutcome(BinaryOutcomes.BinaryOutcome outcome) private pure returns (bool longYes) {
 		require(
 			outcome == BinaryOutcomes.BinaryOutcome.Yes || outcome == BinaryOutcomes.BinaryOutcome.No,
@@ -375,6 +415,20 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		);
 		values[0] = invalidAmount;
 		values[1] = longAmount;
+		token.safeBatchTransferFrom(owner, address(this), ids, values, '');
+	}
+
+	function _pullCompleteSet(ISecurityPool pool, address owner, uint256 amount) private {
+		ITradingShareToken token = ITradingShareToken(address(pool.shareToken()));
+		uint248 universe = pool.universeId();
+		uint256[] memory ids = new uint256[](3);
+		uint256[] memory values = new uint256[](3);
+		ids[0] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
+		ids[1] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
+		ids[2] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
+		values[0] = amount;
+		values[1] = amount;
+		values[2] = amount;
 		token.safeBatchTransferFrom(owner, address(this), ids, values, '');
 	}
 

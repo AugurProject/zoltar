@@ -601,12 +601,14 @@ export async function approveLpRouter(client: WalletClient, configuration: Deplo
 	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
 }
 
-export async function simulateSettlement(client: WalletClient, market: LiveMarket, account: Address, operation: SettlementOperation, parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}) {
+export async function simulateSettlement(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: SettlementOperation, parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}) {
 	if (operation === 'redeem-complete-set') {
 		const amount = parameters.amount
 		if (amount === undefined || amount <= 0n) throw new Error('Enter a positive complete-set share amount')
-		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemCompleteSet', account, args: [amount], blockHash: block.blockHash }))
-		return { blockNumber, blockHash, operation, market, amount }
+		const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+		const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash }))
+		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
+		return { blockNumber, blockHash, operation, market, amount, deadline, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result) }
 	}
 	if (operation === 'redeem-winning-shares') {
 		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockHash: block.blockHash }))
@@ -620,14 +622,18 @@ export async function simulateSettlement(client: WalletClient, market: LiveMarke
 	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndex }
 }
 
-export async function submitFreshSettlement(client: WalletClient, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>): Promise<Hash> {
+export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
 	let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
 	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount }
 	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndex: quote.targetOutcomeIndex }
-	const refreshed = await simulateSettlement(client, quote.market, account, quote.operation, parameters)
+	const refreshed = await simulateSettlement(client, configuration, quote.market, account, quote.operation, parameters)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
-	if (quote.operation === 'redeem-complete-set') return await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemCompleteSet', account, args: [quote.amount] })
+	if (quote.operation === 'redeem-complete-set') {
+		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
+		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
+		return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [quote.market.pool, quote.amount, minimumEth, account, quote.deadline] })
+	}
 	if (quote.operation === 'redeem-winning-shares') return await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] })
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(quote.sourceOutcome)
 	return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, [quote.targetOutcomeIndex]] })

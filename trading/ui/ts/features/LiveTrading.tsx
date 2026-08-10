@@ -1427,10 +1427,11 @@ function LiveSettlementControls({
 	let sourceBalance = balances?.no
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
-	const workflowLocked = externallyLocked || state === 'pending' || receiptWarning !== undefined
+	const workflowLocked = externallyLocked || state === 'approval' || state === 'pending' || receiptWarning !== undefined
 	const inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, parsedTargetOutcome, sourceOutcome, sourceBalance)
+	const approvalRequired = operation === 'redeem-complete-set' && balances?.approved === false
 	const quoteMatchesInputs = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, parsedTargetOutcome, account, walletClient)
-	const actionableQuote = settlementQuoteCanSubmit(balanceState, inputBlocker, quoteMatchesInputs) ? quote : undefined
+	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, quoteMatchesInputs) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
 	submitContext.current = { balanceState, inputBlocker, actionableQuote }
 	let settlementStatus = 'Connect a wallet to load balances for settlement'
@@ -1438,12 +1439,15 @@ function LiveSettlementControls({
 	else if (balanceState === 'ready') {
 		if (state === 'confirmed') settlementStatus = 'Settlement transaction confirmed on-chain'
 		else if (account === undefined || walletClient === undefined) settlementStatus = 'Connect a wallet to load balances for settlement'
-		else if (inputBlocker !== undefined) settlementStatus = inputBlocker
-		else if (state === 'simulating') settlementStatus = 'Simulating the authoritative settlement call…'
+		else if (state === 'approval') settlementStatus = 'Share-token approval pending…'
 		else if (state === 'pending') settlementStatus = error ?? 'Settlement transaction pending…'
 		else if (state === 'error') settlementStatus = error ?? 'Settlement workflow needs attention'
+		else if (approvalRequired) settlementStatus = 'Approve the router to pull the explicit complete set before simulation'
+		else if (inputBlocker !== undefined) settlementStatus = inputBlocker
+		else if (state === 'simulating') settlementStatus = 'Simulating the authoritative settlement call…'
 		else if (state === 'ready' && actionableQuote !== undefined) {
 			if (actionableQuote.operation === 'migrate-shares') settlementStatus = migrationSimulationSummary(actionableQuote.blockNumber, actionableQuote.sourceOutcome, actionableQuote.targetOutcomeIndex)
+			else if (actionableQuote.operation === 'redeem-complete-set') settlementStatus = `Authoritative redemption simulation at block ${actionableQuote.blockNumber.toString()}: ${formatUnits(actionableQuote.expectedAttoEth)} ETH expected, ${formatUnits(actionableQuote.minimumAttoEth)} ETH minimum`
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
 		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
 	}
@@ -1490,7 +1494,7 @@ function LiveSettlementControls({
 			let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
 			if (operation === 'redeem-complete-set' && parsedAmount !== undefined) parameters = { amount: parsedAmount }
 			else if (operation === 'migrate-shares' && parsedTargetOutcome !== undefined) parameters = { sourceOutcome, targetOutcomeIndex: parsedTargetOutcome }
-			const simulation = await simulateSettlement(walletClient, market, account, operation, parameters)
+			const simulation = await simulateSettlement(walletClient, configuration, market, account, operation, parameters)
 			if (!simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
 			setQuote({ ...simulation, account, walletClient, inputRevision: revision })
 			setState('ready')
@@ -1519,7 +1523,7 @@ function LiveSettlementControls({
 			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect and simulate again')
 			const current = submitContext.current
 			if (current.balanceState !== 'ready' || current.inputBlocker !== undefined || current.actionableQuote !== selectedQuote) throw new Error('Settlement inputs or balances changed; simulate again')
-			broadcastHash = await submitFreshSettlement(walletClient, account, selectedQuote)
+			broadcastHash = await submitFreshSettlement(walletClient, configuration, account, selectedQuote)
 			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Settlement transaction reverted')
@@ -1540,6 +1544,38 @@ function LiveSettlementControls({
 				setError(failure.message)
 				setReceiptWarning(undefined)
 			}
+		} finally {
+			workflow.finish()
+			if (!keepLocked) onWorkflowLockChange(false)
+		}
+	}
+
+	async function approveCompleteSetRouter() {
+		if (walletClient === undefined || account === undefined || !approvalRequired || externallyLocked) return
+		if (!workflow.begin()) return
+		onWorkflowLockChange(true)
+		setState('approval')
+		setError(undefined)
+		setReceiptWarning(undefined)
+		let broadcastHash: Hash | undefined
+		let receiptKnown = false
+		let keepLocked = false
+		try {
+			const provider = getInjectedEthereum()
+			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; reconnect before approving')
+			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect before approving')
+			broadcastHash = await approveRouter(walletClient, market, configuration, account)
+			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			receiptKnown = true
+			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
+			await refresh()
+			setState('idle')
+		} catch (caught) {
+			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, caught, 'Approval failed')
+			keepLocked = failure.keepLocked
+			setState(failure.state)
+			setError(failure.message)
+			setReceiptWarning(failure.warning)
 		} finally {
 			workflow.finish()
 			if (!keepLocked) onWorkflowLockChange(false)
@@ -1662,15 +1698,24 @@ function LiveSettlementControls({
 					{settlementStatus}
 				</p>
 			) : null}
-			{actionableQuote === undefined ? (
+			{approvalRequired ? (
+				<>
+					<p>This ERC-1155 approval covers every token ID in the pool's ShareToken, including shares on other universe branches. Revoke it through a compatible wallet or ShareToken contract interface when it is no longer needed.</p>
+					<button class='primary-action' disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
+						Approve router for complete-set redemption
+					</button>
+				</>
+			) : null}
+			{!approvalRequired && actionableQuote === undefined ? (
 				<button class='primary-action' disabled={inputBlocker !== undefined || balanceState !== 'ready' || walletClient === undefined || account === undefined || state === 'simulating' || workflowLocked} onClick={() => void simulateCurrent()}>
 					Simulate authoritative settlement
 				</button>
-			) : (
+			) : null}
+			{!approvalRequired && actionableQuote !== undefined ? (
 				<button class='primary-action' disabled={workflowLocked || state !== 'ready'} onClick={() => void submitCurrent()}>
 					{actionableQuote.operation === 'migrate-shares' ? `Submit migration to child outcome ${actionableQuote.targetOutcomeIndex.toString()}` : 'Submit settlement transaction'}
 				</button>
-			)}
+			) : null}
 		</div>
 	)
 }

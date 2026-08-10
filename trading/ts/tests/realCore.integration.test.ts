@@ -67,6 +67,16 @@ describe('trading against authoritative Zoltar contracts', () => {
 		expect(await shareBalance(router, 2n)).toBe(0n)
 	})
 
+	test('rejects an insured exit that would burn fractional shares for zero ETH', async () => {
+		const deadline = fixture.questionData.endTime - 1n
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 3_000n, 1n, account, deadline], value: 1n }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 1n }))
+		const balancesBefore = await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])
+		await expect(fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'exitPosition', args: [pair, 1, 1n, (1n << 256n) - 1n, 0n, account, deadline] })).rejects.toThrow('Zero ETH output')
+		await expect(fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'redeemCompleteSet', args: [fixture.securityPoolAddresses.securityPool, 1n, 0n, account, deadline] })).rejects.toThrow('Zero ETH output')
+		expect(await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])).toEqual(balancesBefore)
+	})
+
 	test('keeps LP removal open after the real question end time', async () => {
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
