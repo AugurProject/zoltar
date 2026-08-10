@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
-import { CarriedDepositProof, Deposit, NonDecisionState } from './EscalationGameTypes.sol';
+import { CarriedDepositProof, Deposit, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 
@@ -97,18 +97,22 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
-		Deposit[] storage outcomeDeposits = outcomeState[uint8(outcome)].deposits;
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeDeposits.length);
+		uint8 outcomeIndex = uint8(outcome);
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, state.localNodeIds.length);
 		if (iterateUntil <= startIndex) return new Deposit[](0);
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 index = startIndex; index < iterateUntil; index++) {
-			returnDeposits[index - startIndex] = outcomeDeposits[index];
+			Node storage node = nodes[state.localNodeIds[index]];
+			uint256 amountAttoRep =
+				state.consumedParentDepositIndexes[node.parentDepositIndex] ? 0 : node.amountAttoRep;
+			returnDeposits[index - startIndex] = Deposit(node.depositor, amountAttoRep, node.cumulativeAmountAttoRep);
 		}
 	}
 
 	function getDepositsByOutcomeLength(BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return 0;
-		return outcomeState[uint8(outcome)].deposits.length;
+		return outcomeState[uint8(outcome)].localNodeIds.length;
 	}
 
 	function _getPayoutQuestionResolution() private view returns (BinaryOutcomes.BinaryOutcome questionResolution) {

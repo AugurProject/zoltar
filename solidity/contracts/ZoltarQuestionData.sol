@@ -9,8 +9,8 @@ contract ZoltarQuestionData {
 	struct QuestionData {
 		string title;
 		string description;
-		uint256 startTime;
-		uint256 endTime;
+		uint48 startTime;
+		uint48 endTime;
 		uint120 numTicks;
 		int256 displayValueMin;
 		int256 displayValueMax;

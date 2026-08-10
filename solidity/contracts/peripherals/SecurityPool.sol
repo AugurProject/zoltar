@@ -141,7 +141,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getVaultCount() external view returns (uint256) {
-		return vaults.length;
+		return activeVaultCount;
 	}
 
 	function securityPoolEventEmitter() external view returns (address) {
@@ -153,22 +153,11 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
-		return _sliceVaults(vaults, startIndex, count);
+		return _sliceActiveVaults(startIndex, count);
 	}
 
 	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
 		return _sliceActiveVaults(startIndex, count);
-	}
-
-	function _sliceVaults(address[] storage sourceVaults, uint256 startIndex, uint256 count) private view returns (address[] memory vaultRange) {
-		if (startIndex >= sourceVaults.length || count == 0) return new address[](0);
-
-		uint256 availableCount = sourceVaults.length - startIndex;
-		uint256 resultCount = count < availableCount ? count : availableCount;
-		vaultRange = new address[](resultCount);
-		for (uint256 index = 0; index < resultCount; index++) {
-			vaultRange[index] = sourceVaults[startIndex + index];
-		}
 	}
 
 	function _sliceActiveVaults(uint256 startIndex, uint256 count) private view returns (address[] memory vaultRange) {
@@ -469,7 +458,6 @@ contract SecurityPool is SecurityPoolStorage {
 		updateVaultFees(msg.sender);
 		uint256 repBackingUnits = attoRepToBackingUnits(attoRepAmount);
 		IERC20(address(repToken)).safeTransferFrom(msg.sender, address(this), attoRepAmount);
-		_trackVault(msg.sender);
 		securityVaults[msg.sender].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		_requireMinimumVaultRep(backingUnitsToAttoRep(securityVaults[msg.sender].repBackingUnits), false, 'Vault REP below minimum');
@@ -547,9 +535,6 @@ contract SecurityPool is SecurityPoolStorage {
 			badDebtAttoEth := mload(add(pointer, 0x40))
 		}
 
-		if (debtMovedAttoEth != 0) {
-			_trackVault(receiverVault);
-		}
 		_syncActiveVault(targetVaultAddress);
 		if (debtMovedAttoEth != 0) _syncActiveVault(receiverVault);
 
@@ -788,7 +773,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_trackVault(vault);
+		require(vault != address(0x0), 'Zero vault');
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (securityVaults[vault].capacityOwnershipAttoRep != capacityOwnershipAttoRep) {
 			_clearFeeIndexRemainder();
@@ -810,13 +795,6 @@ contract SecurityPool is SecurityPoolStorage {
 		updateRetentionRate();
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
-	}
-
-	function _trackVault(address vault) private {
-		require(vault != address(0x0), 'Zero vault');
-		if (vaultIndexesPlusOne[vault] != 0) return;
-		vaults.push(vault);
-		vaultIndexesPlusOne[vault] = vaults.length;
 	}
 
 	function _syncActiveVault(address vault) private {
