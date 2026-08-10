@@ -36,7 +36,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			reportBond,
 			'the canonical pool must apply the supply-based escalation bond floor',
 		)
-		assert.ok(reportBond > DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the supply-based floor must exceed the configured one-attoREP fallback in this fixture')
+		assert.ok(reportBond > DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the supply-based floor must exceed the configured one-REP fallback in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)

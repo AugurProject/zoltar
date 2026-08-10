@@ -137,12 +137,7 @@ contract SecurityPool is SecurityPoolStorage {
 				zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		}
 		shareToken = _shareToken;
-		uint256 configuredMinimumVaultRepDepositAttoRep = securityPoolFactory.minimumVaultRepDepositAttoRep();
-		uint256 supplyBasedMinimumVaultRepDepositAttoRep = repToken.getTotalTheoreticalSupplyAttoRep() / 100_000;
-		minimumVaultRepDepositAttoRep =
-			supplyBasedMinimumVaultRepDepositAttoRep > configuredMinimumVaultRepDepositAttoRep
-				? supplyBasedMinimumVaultRepDepositAttoRep
-				: configuredMinimumVaultRepDepositAttoRep;
+		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(repToken.getTotalTheoreticalSupplyAttoRep(), securityPoolFactory.minimumVaultRepDepositAttoRep());
 	}
 
 	function getVaultCount() external view returns (uint256) {

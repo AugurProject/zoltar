@@ -63,15 +63,17 @@ describe('protocolConfig', () => {
 			...DEFAULT_PROTOCOL_CONFIG,
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDepositAttoRep: 1n,
+			initialEscalationGameDepositAttoRep: 10n ** 18n,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 0n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 attoREP')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 2n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 attoREP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 0n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 2n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
+		expect(validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: 0n }).minimumVaultRepDepositAttoRep).toBe(0n)
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: -1n })).toThrow('minimumVaultRepDepositAttoRep cannot be negative')
 	})
 
 	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {

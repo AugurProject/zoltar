@@ -40,7 +40,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 
 	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _initialEscalationGameDepositAttoRep, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep) {
-		require(_initialEscalationGameDepositAttoRep == 1, 'Initial escalation game deposit must equal 1 attoREP');
+		require(_initialEscalationGameDepositAttoRep == 1e18, 'Initial escalation game deposit must equal 1 REP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -51,7 +51,6 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionData = _questionData;
 		initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep;
 		require(_minimumSecurityBondDebtAttoEth > 0, 'Minimum security bond debt zero');
-		require(_minimumVaultRepDepositAttoRep > 0, 'Minimum vault REP zero');
 		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
 		securityPoolDeployer = new SecurityPoolDeployer();

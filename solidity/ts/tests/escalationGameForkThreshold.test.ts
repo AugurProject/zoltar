@@ -321,6 +321,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			initialTotalSupply / 10_000_000n,
 			'initial escalation deposit should apply the theoretical-supply floor',
 		)
+		assert.strictEqual(await client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 
@@ -343,7 +344,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 			],
 		})
-		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial escalation game deposit must equal 1 attoREP/)
+		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial escalation game deposit must equal 1 REP/)
 	})
 
 	test.each([

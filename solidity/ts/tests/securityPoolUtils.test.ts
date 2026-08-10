@@ -90,12 +90,12 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(capacityAfterRepPriceDoubles, 50n * PRICE_PRECISION, 'live price conversion')
 	})
 
-	test('initial escalation deposit uses a one-attoREP floor below the supply fraction', async () => {
+	test('initial escalation deposit uses a one-REP floor below the supply fraction', async () => {
 		for (const [theoreticalSupplyAttoRep, expectedDepositAttoRep] of [
-			[0n, 1n],
-			[9_999_999n, 1n],
-			[10_000_000n, 1n],
-			[20_000_000n, 2n],
+			[0n, PRICE_PRECISION],
+			[9_999_999n * PRICE_PRECISION, PRICE_PRECISION],
+			[10_000_000n * PRICE_PRECISION, PRICE_PRECISION],
+			[20_000_000n * PRICE_PRECISION, 2n * PRICE_PRECISION],
 		] as const) {
 			strictEqualTypeSafe(
 				await client.readContract({
@@ -106,6 +106,27 @@ describe('SecurityPoolUtils', () => {
 				}),
 				expectedDepositAttoRep,
 				`theoretical supply ${theoreticalSupplyAttoRep.toString()}`,
+			)
+		}
+	})
+
+	test('vault REP deposit uses the supply default while honoring exact constructor overrides', async () => {
+		const theoreticalSupplyAttoRep = 2_000_000n * PRICE_PRECISION
+		for (const [configuredMinimumAttoRep, expectedMinimumAttoRep] of [
+			[0n, 20n * PRICE_PRECISION],
+			[10n * PRICE_PRECISION, 10n * PRICE_PRECISION],
+			[20n * PRICE_PRECISION, 20n * PRICE_PRECISION],
+			[30n * PRICE_PRECISION, 30n * PRICE_PRECISION],
+		] as const) {
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
+					address: securityPoolUtilsAddress,
+					functionName: 'calculateMinimumVaultRepDepositAttoRep',
+					args: [theoreticalSupplyAttoRep, configuredMinimumAttoRep],
+				}),
+				expectedMinimumAttoRep,
+				`configured minimum ${configuredMinimumAttoRep.toString()}`,
 			)
 		}
 	})

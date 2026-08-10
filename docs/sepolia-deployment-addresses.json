@@ -10,9 +10,9 @@
 	"protocolConfig": {
 		"forkBurnDivisor": "5",
 		"forkThresholdDivisor": "20",
-		"initialEscalationGameDepositAttoRep": "1",
+		"initialEscalationGameDepositAttoRep": "1000000000000000000",
 		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
-		"minimumVaultRepDepositAttoRep": "10000000000000000000"
+		"minimumVaultRepDepositAttoRep": "0"
 	},
 	"deploymentSteps": [
 		{
@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x3e75490021cA6E477f52d1B5641Bf477Ed86a870"
+			"address": "0xa1b8d4652a20bCD7E65bb98da08CF6DA43c43603"
 		},
 		{
 			"id": "weth",
@@ -53,7 +53,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x0d39a0935E1A28d4004A0a2533E7acb1d5255844"
+			"address": "0x838DbfdFFEe6Fd2527f0050d3580Dbb3B16eD15A"
 		},
 		{
 			"id": "openOracle",
@@ -83,7 +83,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x1Bd5FB0F89259CADB28b25531eB0921c4c6af327"
+			"address": "0x5eaadC0C3847eEdb193601dc37280dE14146e33b"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xce84c93D9D676529d3355F9FDd6dB0BCcfeF9E34"
+			"address": "0x783000515b2cE8A1a685d22Fc34D18f84df6C18C"
 		}
 	],
 	"derivedContracts": [

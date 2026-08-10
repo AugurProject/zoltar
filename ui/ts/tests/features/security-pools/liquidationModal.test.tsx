@@ -1386,6 +1386,7 @@ describe('LiquidationModal', () => {
 		})
 		const simulation = simulateLiquidation({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			requestedDebtAttoEth: 10n * ATTO_ETH_PER_ETH,
 			totalCapacityOwnershipAttoRep: 22n * ATTO_ETH_PER_ETH,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
@@ -2110,6 +2111,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationDebtEthAmount: '99.6',
 			selectedPool: createSelectedPool({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({

@@ -1,10 +1,10 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/shared/liquidation'
-import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth
-const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep
+const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 
 function getVaultOpenInterestAttoEth(vault: SecurityPoolVaultSummary) {
 	return vault.openInterestAttoEth

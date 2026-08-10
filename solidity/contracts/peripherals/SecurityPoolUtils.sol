@@ -20,7 +20,11 @@ library SecurityPoolUtils {
 
 	function calculateInitialEscalationDepositAttoRep(uint256 theoreticalSupplyAttoRep) public pure returns (uint256) {
 		uint256 supplyBasedDepositAttoRep = theoreticalSupplyAttoRep / 10_000_000;
-		return supplyBasedDepositAttoRep == 0 ? 1 : supplyBasedDepositAttoRep;
+		return supplyBasedDepositAttoRep < 1e18 ? 1e18 : supplyBasedDepositAttoRep;
+	}
+
+	function calculateMinimumVaultRepDepositAttoRep(uint256 theoreticalSupplyAttoRep, uint256 configuredMinimumAttoRep) public pure returns (uint256) {
+		return configuredMinimumAttoRep == 0 ? theoreticalSupplyAttoRep / 100_000 : configuredMinimumAttoRep;
 	}
 
 	function calculateCumulativeAuctionBadDebt(uint256 auctionedBadDebtAttoEth, uint256 nextClaimedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep, uint256 previouslyClaimedBadDebtAttoEth) external pure returns (uint256 badDebtToAssignAttoEth, uint256 nextClaimedBadDebtAttoEth) {

@@ -12,9 +12,9 @@ export type ProtocolConfigInput = Partial<{
 
 export const DEFAULT_FORK_BURN_DIVISOR = 5n
 export const DEFAULT_FORK_THRESHOLD_DIVISOR = 20n
-export const DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT = 1n
+export const DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT = 10n ** 18n
 export const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = 10n ** 18n
-export const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
+export const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 0n
 
 export const DEFAULT_PROTOCOL_CONFIG: ProtocolConfig = {
 	forkBurnDivisor: DEFAULT_FORK_BURN_DIVISOR,
@@ -27,7 +27,7 @@ export const DEFAULT_PROTOCOL_CONFIG: ProtocolConfig = {
 export const MAINNET_PROTOCOL_CONFIG: ProtocolConfig = {
 	forkBurnDivisor: 5n,
 	forkThresholdDivisor: 20n,
-	initialEscalationGameDepositAttoRep: 1n,
+	initialEscalationGameDepositAttoRep: DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT,
 	minimumSecurityBondDebtAttoEth: DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH,
 	minimumVaultRepDepositAttoRep: DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
 }
@@ -115,9 +115,9 @@ export function validateProtocolConfig(config: ProtocolConfigInput): ProtocolCon
 	if (minimumVaultRepDepositAttoRep === undefined) throw new Error('Protocol config minimumVaultRepDepositAttoRep is required')
 	if (forkThresholdDivisor <= 1n) throw new Error('Protocol config forkThresholdDivisor must be greater than 1')
 	if (forkBurnDivisor < 5n) throw new Error('Protocol config forkBurnDivisor must be at least 5')
-	if (initialEscalationGameDepositAttoRep !== 1n) throw new Error('Protocol config initialEscalationGameDepositAttoRep must equal 1 attoREP')
+	if (initialEscalationGameDepositAttoRep !== 10n ** 18n) throw new Error('Protocol config initialEscalationGameDepositAttoRep must equal 1 REP')
 	if (minimumSecurityBondDebtAttoEth <= 0n) throw new Error('Protocol config minimumSecurityBondDebtAttoEth must be positive')
-	if (minimumVaultRepDepositAttoRep < 10n * 10n ** 18n) throw new Error('Protocol config minimumVaultRepDepositAttoRep must be at least 10 REP')
+	if (minimumVaultRepDepositAttoRep < 0n) throw new Error('Protocol config minimumVaultRepDepositAttoRep cannot be negative')
 	return {
 		forkBurnDivisor,
 		forkThresholdDivisor,

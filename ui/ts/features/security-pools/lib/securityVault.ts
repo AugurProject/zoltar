@@ -3,11 +3,10 @@ import type { OracleManagerDetails } from '../../../types/contracts.js'
 import type { SecurityVaultDetails } from '../../../types/contracts.js'
 import { sameAddress } from '../../../lib/address.js'
 import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../protocol/oracleTiming.js'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 
 export { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS }
 
-export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep
+export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n

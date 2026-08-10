@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = '885c83fe5c50c4b3390755c80caf7a00f8be2d18aec131e4ede8131e8df0fa16'
+const expectedProductionSoliditySourceFingerprint = 'ea30068bbaf603cb1b2bc09d3458e4526cdb5a70fdb3b93549293fbd116a22fc'
 
 const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -689,7 +689,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
 		readAbiFingerprint: '855853487a8ab201b9e990820bac4f51ec6ae6520ae2dcf49efcc93e81c9a474',
 		readSurface:
-			'Use `initialEscalationGameDepositAttoRep`, `minimumSecurityBondDebtAttoEth`, and `minimumVaultRepDepositAttoRep` for immutable deployment floors. The factory requires the escalation baseline to equal 1 attoREP, so each pool fixes its effective escalation deposit at construction as exactly `max(1 attoREP, theoretical REP supply / 10,000,000)`. The vault REP floor is `max(configured floor, theoretical REP supply / 100,000)`; the defaults are 1 ETH security-bond debt and 10 REP configured vault floor. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `initialEscalationGameDepositAttoRep`, `minimumSecurityBondDebtAttoEth`, and `minimumVaultRepDepositAttoRep` for immutable deployment floors. The factory requires the escalation baseline to equal 1 REP, so each pool fixes its effective escalation deposit at construction as exactly `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor defaults to 1 ETH. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
 		readStorageDeclarations: [{ name: 'initialEscalationGameDepositAttoRep' }, { name: 'minimumSecurityBondDebtAttoEth' }, { name: 'minimumVaultRepDepositAttoRep' }],
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
@@ -700,7 +700,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the non-decision threshold exceeds the construction-time effective escalation deposit `max(1 attoREP, theoretical REP supply / 10,000,000)`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the non-decision threshold exceeds the construction-time effective escalation deposit `max(1 REP, theoretical REP supply / 10,000,000)`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
