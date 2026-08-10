@@ -4798,6 +4798,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .field-help {
+	display: block;
 	margin: -0.15rem 0 0;
 	color: var(--muted);
 	font-size: var(--font-caption);
@@ -6190,7 +6191,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .security-pool-strip-price span,
 .security-pool-ribbon-stat span,
 .security-pool-hero-oracle-label,
-.vault-preview-coverage-commitment span,
+.vault-preview-capacity-ownership span,
 .vault-preview-side-metrics span,
 .vault-detail-hero span,
 .selected-pool-hero-kicker,
@@ -6206,7 +6207,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .security-pool-strip-price strong,
 .security-pool-ribbon-stat strong,
 .security-pool-hero-oracle-value,
-.vault-preview-coverage-commitment strong,
+.vault-preview-capacity-ownership strong,
 .vault-preview-side-metrics strong,
 .vault-detail-hero strong,
 .trading-holdings-hero strong,

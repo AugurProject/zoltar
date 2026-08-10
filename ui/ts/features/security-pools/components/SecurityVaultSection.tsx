@@ -603,9 +603,9 @@ export function SecurityVaultSection({
 								disabled={!poolCollateralActionsEnabled}
 								invalid={targetHealthFactorGuardMessage !== undefined}
 							/>
-							<span className='detail' id={embeddedTargetHealthFactorDescriptionId}>
+							<small className='field-help' id={embeddedTargetHealthFactorDescriptionId}>
 								{targetHealthFactorGuardMessage ?? securityPoolCopy.targetHealthFactorHelp}
-							</span>
+							</small>
 						</label>
 						<MetricGrid>
 							<MetricField label={securityPoolCopy.walletRep}>
@@ -800,9 +800,9 @@ export function SecurityVaultSection({
 						disabled={!poolCollateralActionsEnabled}
 						invalid={targetHealthFactorGuardMessage !== undefined}
 					/>
-					<span className='detail' id={modalTargetHealthFactorDescriptionId}>
+					<small className='field-help' id={modalTargetHealthFactorDescriptionId}>
 						{targetHealthFactorGuardMessage ?? securityPoolCopy.targetHealthFactorHelp}
-					</span>
+					</small>
 				</label>
 				<TokenApprovalControl
 					actionLabel={securityPoolCopy.depositingRep}

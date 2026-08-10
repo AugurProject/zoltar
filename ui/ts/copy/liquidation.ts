@@ -36,7 +36,7 @@ export const approvalExpiresBeforeExecution = 'The approval expires before this 
 export const receiverLiabilityTitle = 'Receiver accepts liquidation liabilities'
 export const receiverLiabilityDetail =
 	'The staged liquidation debt is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum debt, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.'
-export const receiverOperatorEconomics = 'The receiver accepts liquidation liability; the operator pays gas and oracle costs while the receiver receives REP backing units and capacity ownership.'
+export const receiverOperatorEconomics = 'The operator pays gas and oracle costs; the receiver receives REP backing units and capacity ownership.'
 export const requestedLiquidationDebt = 'Requested liquidation debt'
 export const securityBondDebtMoved = 'Security-bond debt moved'
 export const capacityOwnershipMoved = 'Capacity ownership moved'

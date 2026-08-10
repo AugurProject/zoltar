@@ -531,7 +531,7 @@ export function LiquidationModal({
 							<label className='field'>
 								<span>{liquidationCopy.boundedApprovalId}</span>
 								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
-								<span className='detail'>{liquidationCopy.receiverOperatorEconomics}</span>
+								<small className='field-help'>{liquidationCopy.receiverOperatorEconomics}</small>
 							</label>
 							{loadingLiquidationApproval ? (
 								<p className='detail' role='status'>
@@ -686,7 +686,7 @@ export function LiquidationModal({
 							disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
 							reason: liquidationButtonDisabledReason,
 						}}
-						showDisabledReason={liquidationExecutionMode !== 'queue' && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}
+						showDisabledReason={!(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}
 					/>
 				</div>
 			</section>

@@ -781,6 +781,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7 more ETH in this wallet to queue liquidation.')
+		expect(within(document.body).getByText('Need 7 more ETH in this wallet to queue liquidation.')).not.toBeNull()
 	})
 
 	test('allows queued liquidation when the entered amount exceeds the executable cap because execution will clamp it', async () => {
@@ -1857,7 +1858,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Approval expiration')).not.toBeNull()
 		expect(documentQueries.getByText('1.25× protocol minimum')).not.toBeNull()
 		expect(documentQueries.getByText('Active')).not.toBeNull()
-		expect(documentQueries.getByText('The receiver accepts liquidation liability; the operator pays gas and oracle costs while the receiver receives REP backing units and capacity ownership.')).not.toBeNull()
+		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and capacity ownership.')).not.toBeNull()
 		expect(
 			documentQueries.getByText(
 				'The staged liquidation debt is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum debt, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.',
