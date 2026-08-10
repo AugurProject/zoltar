@@ -5,6 +5,7 @@ import { within } from '../../testUtils/queries'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
 import { getChromiumPath, withChromiumTestLock } from '../../../../build/chromiumPath.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
@@ -116,7 +117,7 @@ describe('CollateralizationCircle', () => {
 		async () =>
 			await withChromiumTestLock(async () => {
 				if (chromiumPath === undefined) throw new Error('Chromium is required for the browser fit test')
-				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar-collateralization-circle-'))
+				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar#collateralization-circle-'))
 				try {
 					const tokensSource = readFileSync('ui/css/tokens.css', 'utf8')
 					const cssSource = readFileSync('ui/css/index.css', 'utf8')
@@ -160,7 +161,7 @@ describe('CollateralizationCircle', () => {
 </html>`,
 					)
 
-					const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', `file://${htmlPath}`], { stderr: 'pipe', stdout: 'pipe', windowsHide: true })
+					const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', pathToFileURL(htmlPath).href], { stderr: 'pipe', stdout: 'pipe', windowsHide: true })
 					let timedOut = false
 					const timeoutId = setTimeout(() => {
 						timedOut = true
