@@ -5,7 +5,7 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalCoverageCommitmentAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getEthRaiseCapAttoEth, getQuestionEndDate, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/peripherals'
@@ -67,7 +67,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		if ((await getTotalCoverageCommitmentAttoEth(client, securityPoolAddresses.securityPool)) > 0n) {
+		if ((await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)) > 0n) {
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		}
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -107,8 +107,8 @@ export function createPeripheralsTruthAuctionScenarioHelpers({
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-		const securityPoolCoverageCommitmentAttoEth = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetCoverageCommitment, client.account.address, securityPoolCoverageCommitmentAttoEth)
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -218,6 +218,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const repBalanceAttoRep = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		if (strayRepBeforeFork > 0n) await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRepBeforeFork)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		return {
 			forkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),

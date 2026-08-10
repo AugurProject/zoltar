@@ -45,13 +45,7 @@ interface IERC1155 is IERC165 {
 	/// be used by clients and exchanges to be added to the "circulating supply" for a given token ID.
 	/// To define multiple token IDs with no initial balance, this SHOULD emit the TransferBatch event
 	/// from `0x0` to `0x0`, with the token creator as `_operator`.
-	event TransferBatch(
-		address indexed operator,
-		address indexed from,
-		address indexed to,
-		uint256[] ids,
-		uint256[] values
-	);
+	event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values);
 
 	/// @dev MUST emit when an approval is updated.
 	event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
@@ -84,13 +78,7 @@ interface IERC1155 is IERC165 {
 	/// @param to      Target addresses
 	/// @param ids     IDs of each token type
 	/// @param values  Transfer amounts per token type
-	function safeBatchTransferFrom(
-		address from,
-		address to,
-		uint256[] calldata ids,
-		uint256[] calldata values,
-		bytes calldata data
-	) external;
+	function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external;
 
 	/// @notice Enable or disable approval for a third party ("operator") to manage all of the caller's tokens.
 	/// @dev MUST emit the ApprovalForAll event on success.
@@ -119,8 +107,5 @@ interface IERC1155 is IERC165 {
 	/// @param owners The addresses of the token holders
 	/// @param ids    ID of the Tokens
 	/// @return balances_      The _owner's balance of the Token types requested
-	function balanceOfBatch(
-		address[] calldata owners,
-		uint256[] calldata ids
-	) external view returns (uint256[] memory balances_);
+	function balanceOfBatch(address[] calldata owners, uint256[] calldata ids) external view returns (uint256[] memory balances_);
 }

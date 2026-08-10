@@ -73,7 +73,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 	return {
 		settlementCollateralAttoEth: 4n,
 		currentRetentionRate: 0n,
-		feeEligibleCoverageCommitmentAttoEth: 4n,
+		feeEligibleCapacityOwnershipAttoRep: 4n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -92,7 +92,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 		shareTokenSupplyAttoShares: 4n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 10n,
-		totalCoverageCommitmentAttoEth: 4n,
+		totalCapacityOwnershipAttoRep: 4n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,

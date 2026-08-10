@@ -9,7 +9,7 @@ export { deriveHasForkActivity }
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
 export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
-export const AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL = 'Auctioned coverage commitment'
+export const AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL = 'Auctioned capacity ownership'
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
 
@@ -49,7 +49,7 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 		case 'forkMigration':
 			return 'Migration is active. Vault state and REP can move into child universes before the truth auction starts. Unresolved escalation is already represented by each child snapshot and aggregate backing; winning parent deposits may instead be claimed directly.'
 		case 'forkTruthAuction':
-			return `Truth auction is active. Winning bidders later claim REP backing units plus a pro-rata share of the ${AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL}, which is the remaining coverage commitment carried into the child pool.`
+			return `Truth auction is active. Winning bidders later claim REP backing units plus a pro-rata share of the ${AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}, which is the remaining capacity ownership carried into the child pool.`
 		default:
 			return assertNever(state)
 	}

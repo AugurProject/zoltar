@@ -18,7 +18,7 @@ test('fork migration empty states are complete templates', () => {
 })
 
 test('vault operation and fork migration copy uses accounting roles without promising queueing', () => {
-	expect(securityPoolCopy.settingCoverageCommitment).toBe('Setting coverage commitment…')
+	expect(securityPoolCopy.settingCapacityOwnership).toBe('Setting capacity ownership…')
 	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
 	expect(forkAuctionCopy.selectedChildPoolRepReadinessLoading).toContain('pool-held REP')
 	expect(forkAuctionCopy.poolRepAlreadyMigratedDetail).toContain('Pool-held REP')
@@ -26,16 +26,16 @@ test('vault operation and fork migration copy uses accounting roles without prom
 })
 
 test('truth-auction settlement copy identifies REP backing-unit credits', () => {
-	const coverageCommitment = 'auctioned coverage commitment'
+	const capacityOwnership = 'auctioned capacity ownership'
 	const settlementCopy = [
-		forkAuctionCopy.formatWinningClaimCoverageCommitmentHeadline(coverageCommitment),
-		forkAuctionCopy.formatWinningClaimSettlementNotice(coverageCommitment),
-		forkAuctionCopy.formatMixedSettlementPreviewDetail(coverageCommitment),
-		forkAuctionCopy.formatWinningSettlementPreviewDetail(coverageCommitment),
-		forkAuctionCopy.formatWinningBidBatchSettlementDetail(coverageCommitment),
-		forkAuctionCopy.formatMixedBidBatchSettlementDetail(coverageCommitment),
-		forkAuctionCopy.formatFinalizedSettlementDetail(coverageCommitment),
-		forkAuctionCopy.formatStartTruthAuctionDetail(coverageCommitment),
+		forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(capacityOwnership),
+		forkAuctionCopy.formatWinningClaimSettlementNotice(capacityOwnership),
+		forkAuctionCopy.formatMixedSettlementPreviewDetail(capacityOwnership),
+		forkAuctionCopy.formatWinningSettlementPreviewDetail(capacityOwnership),
+		forkAuctionCopy.formatWinningBidBatchSettlementDetail(capacityOwnership),
+		forkAuctionCopy.formatMixedBidBatchSettlementDetail(capacityOwnership),
+		forkAuctionCopy.formatFinalizedSettlementDetail(capacityOwnership),
+		forkAuctionCopy.formatStartTruthAuctionDetail(capacityOwnership),
 	]
 	for (const copy of settlementCopy) expect(copy).toContain('REP backing units')
 	expect(forkAuctionCopy.estimatedVaultRepBackingAttoRep).toBe('Estimated REP backing')

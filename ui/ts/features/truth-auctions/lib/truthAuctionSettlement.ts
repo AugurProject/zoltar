@@ -26,7 +26,7 @@ export type TruthAuctionSettlementSelectionState = {
 }
 
 export type TruthAuctionSettlementSelectionEstimate = {
-	estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined
+	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
 	estimatedVaultRepBackingAttoRep: bigint
@@ -83,15 +83,7 @@ export function getTruthAuctionSettlementSelectionState({ selectedBidKeys, settl
 	}
 }
 
-export function getTruthAuctionSettlementSelectionEstimate({
-	auctionedCoverageCommitmentAttoEth,
-	selectedRows,
-	truthAuction,
-}: {
-	auctionedCoverageCommitmentAttoEth: bigint | undefined
-	selectedRows: TruthAuctionSettlementBidRow[]
-	truthAuction: TruthAuctionMetrics | undefined
-}): TruthAuctionSettlementSelectionEstimate {
+export function getTruthAuctionSettlementSelectionEstimate({ auctionedCapacityOwnershipAttoRep, selectedRows, truthAuction }: { auctionedCapacityOwnershipAttoRep: bigint | undefined; selectedRows: TruthAuctionSettlementBidRow[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionSettlementSelectionEstimate {
 	let estimatedRefundedAttoEth = 0n
 	let estimatedVaultRepBackingAttoRep = 0n
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
@@ -110,17 +102,17 @@ export function getTruthAuctionSettlementSelectionEstimate({
 		}
 	}
 
-	let estimatedAssignedCoverageCommitmentAttoEth: bigint | undefined = 0n
+	let estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined = 0n
 	if (estimatedVaultRepBackingAttoRep > 0n) {
-		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionedCoverageCommitmentAttoEth === undefined) {
-			estimatedAssignedCoverageCommitmentAttoEth = undefined
+		if (truthAuction === undefined || truthAuction.totalAttoRepPurchased === 0n || auctionedCapacityOwnershipAttoRep === undefined) {
+			estimatedAssignedCapacityOwnershipAttoRep = undefined
 		} else {
-			estimatedAssignedCoverageCommitmentAttoEth = (auctionedCoverageCommitmentAttoEth * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
+			estimatedAssignedCapacityOwnershipAttoRep = (auctionedCapacityOwnershipAttoRep * estimatedVaultRepBackingAttoRep) / truthAuction.totalAttoRepPurchased
 		}
 	}
 
 	return {
-		estimatedAssignedCoverageCommitmentAttoEth,
+		estimatedAssignedCapacityOwnershipAttoRep,
 		estimatedRefundedAttoEth,
 		estimatedVaultRepBackingAttoRep,
 	}

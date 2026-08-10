@@ -38,13 +38,7 @@ contract SecurityPoolForkerFakePoolMock {
 	address private immutable configuredEventEmitter;
 	address private immutable configuredEscalationGame;
 
-	constructor(
-		uint248 configuredUniverse,
-		ReputationToken configuredRep,
-		uint256 configuredQuestion,
-		address configuredEmitter,
-		address configuredGame
-	) {
+	constructor(uint248 configuredUniverse, ReputationToken configuredRep, uint256 configuredQuestion, address configuredEmitter, address configuredGame) {
 		configuredUniverseId = configuredUniverse;
 		configuredRepToken = configuredRep;
 		configuredQuestionId = configuredQuestion;
@@ -92,15 +86,7 @@ contract SecurityPoolForkerAttackFactoryMock {
 		childTruthAuction = configuredChildTruthAuction;
 	}
 
-	function deployChildSecurityPool(
-		ISecurityPool,
-		IShareToken,
-		uint248,
-		uint256,
-		uint256,
-		uint256,
-		uint256
-	) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
+	function deployChildSecurityPool(ISecurityPool, IShareToken, uint248, uint256, uint256, uint256, uint256) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		return (childPool, childTruthAuction);
 	}
 }
@@ -113,19 +99,10 @@ contract SecurityPoolForkerAttackParentMock {
 	uint256 private immutable configuredQuestionId;
 	uint256 private immutable configuredStatoblastSecurityMultiplierBps;
 	uint256 private immutable configuredSettlementCollateralAttoEth;
-	uint256 private immutable configuredTotalCoverageCommitmentAttoEth;
+	uint256 private immutable configuredTotalCapacityOwnershipAttoRep;
 	uint256 private immutable configuredTotalRepBackingUnits;
 
-	constructor(
-		uint248 configuredUniverse,
-		ISecurityPoolFactory configuredFactory,
-		IShareToken configuredShareTokenAddress,
-		uint256 configuredQuestion,
-		uint256 configuredMultiplier,
-		uint256 settlementCollateralAttoEth_,
-		uint256 configuredCoverageCommitmentAttoEth,
-		uint256 configuredDenominator
-	) {
+	constructor(uint248 configuredUniverse, ISecurityPoolFactory configuredFactory, IShareToken configuredShareTokenAddress, uint256 configuredQuestion, uint256 configuredMultiplier, uint256 settlementCollateralAttoEth_, uint256 configuredCapacityOwnershipAttoRep, uint256 configuredDenominator) {
 		configuredSystemState = SystemState.PoolForked;
 		configuredUniverseId = configuredUniverse;
 		configuredSecurityPoolFactory = configuredFactory;
@@ -133,7 +110,7 @@ contract SecurityPoolForkerAttackParentMock {
 		configuredQuestionId = configuredQuestion;
 		configuredStatoblastSecurityMultiplierBps = configuredMultiplier;
 		configuredSettlementCollateralAttoEth = settlementCollateralAttoEth_;
-		configuredTotalCoverageCommitmentAttoEth = configuredCoverageCommitmentAttoEth;
+		configuredTotalCapacityOwnershipAttoRep = configuredCapacityOwnershipAttoRep;
 		configuredTotalRepBackingUnits = configuredDenominator;
 	}
 
@@ -165,8 +142,8 @@ contract SecurityPoolForkerAttackParentMock {
 		return configuredSettlementCollateralAttoEth;
 	}
 
-	function totalCoverageCommitmentAttoEth() external view returns (uint256) {
-		return configuredTotalCoverageCommitmentAttoEth;
+	function totalCapacityOwnershipAttoRep() external view returns (uint256) {
+		return configuredTotalCapacityOwnershipAttoRep;
 	}
 
 	function totalRepBackingUnits() external view returns (uint256) {
@@ -185,10 +162,7 @@ contract SecurityPoolForkerEscrowAttackFactoryMock {
 	UniformPriceDualCapBatchAuction private childTruthAuction;
 	bytes32 private configuredOriginId = keccak256('fake escalation lineage');
 
-	function configureChild(
-		ISecurityPool configuredChildPool,
-		UniformPriceDualCapBatchAuction configuredChildTruthAuction
-	) external {
+	function configureChild(ISecurityPool configuredChildPool, UniformPriceDualCapBatchAuction configuredChildTruthAuction) external {
 		childPool = configuredChildPool;
 		childTruthAuction = configuredChildTruthAuction;
 	}
@@ -201,15 +175,7 @@ contract SecurityPoolForkerEscrowAttackFactoryMock {
 		return configuredOriginId;
 	}
 
-	function deployChildSecurityPool(
-		ISecurityPool,
-		IShareToken,
-		uint248,
-		uint256,
-		uint256,
-		uint256,
-		uint256
-	) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
+	function deployChildSecurityPool(ISecurityPool, IShareToken, uint248, uint256, uint256, uint256, uint256) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		return (childPool, childTruthAuction);
 	}
 }
@@ -220,12 +186,7 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 	address private immutable configuredDepositor;
 	uint256 private immutable configuredClaimAmount;
 
-	constructor(
-		ISecurityPool securityPoolAddress,
-		ReputationToken repTokenAddress,
-		address depositor,
-		uint256 claimAmount
-	) {
+	constructor(ISecurityPool securityPoolAddress, ReputationToken repTokenAddress, address depositor, uint256 claimAmount) {
 		configuredSecurityPool = securityPoolAddress;
 		configuredRepToken = repTokenAddress;
 		configuredDepositor = depositor;
@@ -285,10 +246,7 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 		return 1;
 	}
 
-	function claimDepositForWinningWithoutTransfer(
-		uint256,
-		BinaryOutcomes.BinaryOutcome
-	) external view returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
+	function claimDepositForWinningWithoutTransfer(uint256, BinaryOutcomes.BinaryOutcome) external view returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		return (configuredDepositor, configuredClaimAmount, configuredClaimAmount);
 	}
 
@@ -310,15 +268,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 	uint256 private immutable configuredMultiplier;
 	SecurityPoolForkerEscrowAttackGameMock private configuredEscalationGame;
 
-	constructor(
-		ReputationToken repTokenAddress,
-		ISecurityPoolFactory factory,
-		IShareToken shareTokenAddress,
-		address forker,
-		uint248 universe,
-		uint256 question,
-		uint256 multiplier
-	) {
+	constructor(ReputationToken repTokenAddress, ISecurityPoolFactory factory, IShareToken shareTokenAddress, address forker, uint248 universe, uint256 question, uint256 multiplier) {
 		configuredRepToken = repTokenAddress;
 		configuredFactory = factory;
 		configuredShareToken = shareTokenAddress;
@@ -381,7 +331,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return 0;
 	}
 
-	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
+	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -389,24 +339,30 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return 0;
 	}
 
+	function totalBadDebtAttoEth() external pure returns (uint256) {
+		return 0;
+	}
+
 	function authorizeChildPool(ISecurityPool) external pure {}
 
 	function updateVaultFees(address) external pure {}
 
-	function securityVaults(
-		address
-	)
+	function securityVaults(address)
 		external
 		pure
 		returns (
 			uint256 repBackingUnits,
-			uint256 coverageCommitmentAttoEth,
+			uint256 capacityOwnershipAttoRep,
 			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
 	{}
 
-	function configureVault(address, uint256, uint256, uint256) external pure {}
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external pure {}
+
+	function vaultTargetHealthFactorBps(address) external pure returns (uint256) {
+		return 0;
+	}
 }
 
 contract SecurityPoolForkerAlternatingChildGameMock {
@@ -446,15 +402,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 	bool private awaitingContinuation;
 	uint256 public forkResumeCount;
 
-	constructor(
-		ISecurityPool parentPool,
-		ISecurityPoolFactory factory,
-		ReputationToken repTokenAddress,
-		address forker,
-		address truthAuctionAddress,
-		address escalationGameAddress,
-		uint248 universe
-	) {
+	constructor(ISecurityPool parentPool, ISecurityPoolFactory factory, ReputationToken repTokenAddress, address forker, address truthAuctionAddress, address escalationGameAddress, uint248 universe) {
 		configuredParent = parentPool;
 		configuredFactory = factory;
 		configuredRepToken = repTokenAddress;
@@ -521,26 +469,16 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		forkResumeCount++;
 	}
 
-	function initializeForkCarrySnapshotWithResolutionBalances(
-		address,
-		bytes32,
-		bytes32[64][3] memory,
-		uint256[3] memory,
-		uint256[3] memory,
-		uint256[3] memory,
-		bytes32[3] memory
-	) external pure {}
+	function initializeForkCarrySnapshotWithResolutionBalances(address, bytes32, bytes32[64][3] memory, uint256[3] memory, uint256[3] memory, uint256[3] memory, bytes32[3] memory) external pure {}
 
 	function updateVaultFees(address) external pure {}
 
-	function securityVaults(
-		address
-	)
+	function securityVaults(address)
 		external
 		pure
 		returns (
 			uint256 repBackingUnits,
-			uint256 coverageCommitmentAttoEth,
+			uint256 capacityOwnershipAttoRep,
 			uint256 disputeStakedAttoRep,
 			uint256 lastUpdatedFeeAccumulator
 		)
@@ -550,15 +488,19 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		return 0;
 	}
 
-	function configureVault(address, uint256, uint256, uint256) external {
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external {
 		if (operationalMode) useSecondOperationalEscalationGame = true;
+	}
+
+	function vaultTargetHealthFactorBps(address) external pure returns (uint256) {
+		return 0;
 	}
 
 	function totalRepBackingUnits() external pure returns (uint256) {
 		return 0;
 	}
 
-	function totalCoverageCommitmentAttoEth() external pure returns (uint256) {
+	function totalCapacityOwnershipAttoRep() external pure returns (uint256) {
 		return 0;
 	}
 }

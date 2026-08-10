@@ -167,7 +167,19 @@ export const getSecurityPoolFactoryByteCode = ({
 		return encodeDeployData({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep],
+			args: [
+				securityPoolForker,
+				zoltarQuestionData,
+				escalationGameFactory,
+				openOracle,
+				zoltar,
+				shareTokenFactory,
+				uniformPriceDualCapBatchAuctionFactory,
+				priceOracleManagerAndOperatorQueuerFactory,
+				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
+				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
+				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
+			],
 		})
 	})()
 

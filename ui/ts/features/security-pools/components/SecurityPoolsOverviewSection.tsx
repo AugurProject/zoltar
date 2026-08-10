@@ -23,7 +23,7 @@ import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCou
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
+import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
@@ -196,6 +196,7 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 								questionOutcome: pool.questionOutcome,
 								lifecycleState: displayState,
 							})
+							const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 							const badgeTone = (() => {
 								if (displayState === 'operational') return 'ok'
 								if (displayState === undefined) return 'muted'
@@ -232,7 +233,7 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 													<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
 													<span className='detail'>
 														{securityPoolCopy.maxLead}
-														<CurrencyValue value={pool.totalCoverageCommitmentAttoEth} suffix={commonCopy.eth} copyable={false} />
+														{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
 													</span>
 												</span>
 											),

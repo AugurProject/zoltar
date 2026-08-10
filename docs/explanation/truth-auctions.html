@@ -15,7 +15,7 @@
 
 				<p>Because collateral follows migration rather than being copied in full, a child pool retains its obligations while lacking enough ETH to reopen cleanly. The truth auction sells child-universe REP to raise as much repair ETH as demand supports. A truth auction does not determine which outcome is true. It sells REP belonging to one already-defined child universe to repair that child pool's collateral.</p>
 
-				<p>The auction has an ETH raise target and a cap on how much child-universe REP it may sell. That cap depends on migrated and dispute-staked REP. Statoblast writes winning claims back into vault state rather than paying simple token transfers, so bidders buy into the child pool and its matching coverage commitment instead of merely receiving REP.</p>
+				<p>The auction has an ETH raise target and a cap on how much child-universe REP it may sell. That cap depends on migrated and dispute-staked REP. Statoblast writes winning claims back into vault state rather than paying simple token transfers, so bidders buy into the child pool and its matching capacity ownership instead of merely receiving REP.</p>
 			</header>
 
 			<section id="lifecycle">
@@ -44,7 +44,7 @@
 				<h3>Bidding end</h3>
 				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders.</p>
 
-				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive REP backing units in the child pool plus their proportional share of the auctioned coverage commitment, rather than a direct REP token transfer.</p>
+				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive REP backing units plus their proportional share of auctioned capacity ownership, rather than a direct REP token transfer. The same capacity share carries its cumulative portion of auctioned bad debt into the winner's vault. Intermediate claims round down, and the final capacity claim receives the exact residual, so settlement order cannot change the total bad debt assigned.</p>
 				<p>The forker tracks collateral received through migration and the auction separately from the child contract's raw ETH balance. ETH forced into the child does not count toward the repair target. Finalization activates the child with migrated collateral plus accepted auction ETH and rejects nonzero finalizer contribution ETH.</p>
 			</section>
 
@@ -84,7 +84,7 @@
 					<p class="equation-note"><code>PRICE_PRECISION = 1e18</code>. The ceiling tick is the bid-eligibility boundary, not an execution-price floor.</p>
 				</div>
 
-				<p>Before a winner claims, its reserved auction coverage commitment remains part of the child's fork balance sheet but is not assigned to a responsible vault. It therefore does not accrue fees, affect retention utilization, or secure newly minted complete sets. Claim settlement adds that coverage commitment to the bidder vault and to <code>feeEligibleCoverageCommitmentAttoEth</code> atomically.</p>
+				<p>Before a winner claims, its reserved auction capacity ownership remains part of the child's total capacity ownership but is not assigned to a responsible vault. It therefore provides live ETH minting headroom and affects retention utilization, but it does not accrue vault fees. Claim settlement assigns that already-counted ownership to the bidder vault and adds it to <code>feeEligibleCapacityOwnershipAttoRep</code> atomically without increasing total ownership again.</p>
 				<p id="zero-migration-full-cap-rep-backing-units"><strong>Zero-migration full-cap REP backing units.</strong> When no vault REP migrated into the child and the auction sells every auctionable REP, the parent's inherited denominator has no migrated child-vault backing-unit attribution. The forker therefore sets <code>auctionRepBackingUnitsPerAttoRep</code> to <code>PRICE_PRECISION</code> and sets the final denominator to <code>repAvailable * PRICE_PRECISION</code>. Each winner's REP backing units then round-trips through <code>backingUnitsToAttoRep</code> to its full purchased REP, and later direct REP deposits join the same live scale. When REP remains unsold behind an inherited denominator, the forker instead derives the backing-unit rate from that residual REP.</p>
 			</section>
 

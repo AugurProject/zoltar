@@ -16,12 +16,12 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 	)
 }
 
-export function VaultMetricGrid({ className = '', layout = 'grid', disputeStakedAttoRep, priceValidUntilTimestamp, vaultAttoRepBacking, coverageCommitmentAttoEth }: VaultMetricGridProps) {
+export function VaultMetricGrid({ className = '', layout = 'grid', disputeStakedAttoRep, priceValidUntilTimestamp, vaultAttoRepBacking, capacityOwnershipAttoRep }: VaultMetricGridProps) {
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
 				<div className='vault-preview-strip-head'>
-					<VaultPrimaryMetric className='vault-preview-coverage-commitment' label={commonCopy.coverageCommitmentAttoEth} value={coverageCommitmentAttoEth} suffix={commonCopy.eth} />
+					<VaultPrimaryMetric className='vault-preview-capacity-ownership' label={commonCopy.capacityOwnershipAttoRep} value={capacityOwnershipAttoRep} suffix={commonCopy.rep} />
 				</div>
 				<div className='vault-preview-side-metrics'>
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
@@ -44,7 +44,7 @@ export function VaultMetricGrid({ className = '', layout = 'grid', disputeStaked
 	return (
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			<div className='vault-detail-hero'>
-				<VaultPrimaryMetric className='vault-detail-hero-primary' label={commonCopy.coverageCommitmentAttoEth} value={coverageCommitmentAttoEth} suffix={commonCopy.eth} />
+				<VaultPrimaryMetric className='vault-detail-hero-primary' label={commonCopy.capacityOwnershipAttoRep} value={capacityOwnershipAttoRep} suffix={commonCopy.rep} />
 				<div className='vault-detail-hero-secondary'>
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>

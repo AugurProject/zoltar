@@ -54,7 +54,7 @@ function createMarketDetails(): MarketDetails {
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCoverageCommitmentAttoEth: 0n,
+		auctionedCapacityOwnershipAttoRep: 0n,
 		claimingAvailable: true,
 		settlementCollateralAttoEth: 1n,
 		currentTime: 250n,

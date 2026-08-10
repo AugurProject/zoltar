@@ -87,6 +87,23 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectSectionVariant('Price Oracle', 'plain')
 	})
 
+	test('derives displayed minting headroom from the pool oracle rather than the market quote', async () => {
+		await renderLoadedPool({
+			repPerEthPrice: 1n * 10n ** 18n,
+			securityPools: [
+				createSelectedPool({
+					lastOraclePrice: 5n * 10n ** 18n,
+					statoblastSecurityMultiplierBps: 20_000n,
+					totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
+				}),
+			],
+		})
+
+		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
+		expect(pageText).toContain('≈ 10.00 ETH')
+		expect(pageText).not.toContain('≈ 50.00 ETH')
+	})
+
 	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
 		const renderOffMainnetOracleView = async (selectedPoolView: 'price-oracle' | 'staged-operations') =>
 			renderIntoDocument(
@@ -242,7 +259,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				securityVaultForm: {
 					depositAmount: '',
 					repWithdrawAmount: '',
-					coverageCommitmentEthAmount: '',
+					targetHealthFactor: '',
 					securityPoolAddress: zeroAddress,
 					selectedVaultOwner: zeroAddress,
 				},
@@ -260,7 +277,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Open Interest Minted')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
-		expect(documentQueries.queryByText('Total Coverage commitment')).toBeNull()
+		expect(documentQueries.queryByText('Total Capacity ownership')).toBeNull()
 		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
@@ -417,7 +434,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						createSelectedPool({
 							statoblastSecurityMultiplierBps: 20_000n,
 							totalPoolHeldAttoRep: 10_000n * 10n ** 18n,
-							totalCoverageCommitmentAttoEth: 2_500n * 10n ** 18n,
+							totalCapacityOwnershipAttoRep: 2_500n * 10n ** 18n,
 						}),
 					],
 				})}
@@ -452,7 +469,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							coverageCommitmentEthAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: vaultAddress,
 						},
@@ -492,7 +509,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							coverageCommitmentEthAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: selectedPoolAddress,
 						},
@@ -523,7 +540,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							coverageCommitmentEthAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: '',
 							selectedVaultOwner: selectedPoolAddress,
 						},
@@ -555,7 +572,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -571,7 +588,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
-		expectTransactionButtonDisabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonDisabled(document.body, 'Claim fees')
 		const refreshReason = documentQueries.getByText('Refresh the vault to use these actions.')
 		const refreshReasonId = refreshReason.getAttribute('id')
@@ -581,8 +597,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
 		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('')
 		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
-		expect((documentQueries.getByRole('button', { name: 'Set coverage commitment' }) as HTMLButtonElement).title).toBe('')
-		expect((documentQueries.getByRole('button', { name: 'Set coverage commitment' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
 		expect((documentQueries.getByRole('button', { name: 'Claim fees' }) as HTMLButtonElement).title).toBe('')
 		expect((documentQueries.getByRole('button', { name: 'Claim fees' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
 		expect((documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement).title).toBe('')
@@ -612,7 +626,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -629,7 +643,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Finalized as Yes')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set coverage commitment')
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
 		expectTransactionButtonDisabled(document.body, 'Review liquidation')
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).title).toBe('')
@@ -648,14 +661,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultDetails: createSecurityVaultDetails({
 							disputeStakedAttoRep: 0n,
 							vaultAttoRepBacking: 0n,
-							coverageCommitmentAttoEth: 0n,
+							capacityOwnershipAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
 						}),
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -670,7 +683,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
-		for (const actionLabel of ['Withdraw REP', 'Set coverage commitment', 'Claim fees', 'Review liquidation']) {
+		for (const actionLabel of ['Withdraw REP', 'Claim fees', 'Review liquidation']) {
 			const actionButton = documentQueries.getByRole('button', { name: actionLabel }) as HTMLButtonElement
 			expect(actionButton.title).toBe('This vault does not exist.')
 		}
@@ -704,7 +717,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -749,7 +762,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: otherVaultAddress,
 						},
@@ -785,14 +798,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultDetails: createSecurityVaultDetails({
 							disputeStakedAttoRep: 1n,
 							vaultAttoRepBacking: 0n,
-							coverageCommitmentAttoEth: 0n,
+							capacityOwnershipAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
 							claimableFeesAttoEth: 0n,
 						}),
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							coverageCommitmentEthAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -887,7 +900,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							coverageCommitmentEthAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},

@@ -131,7 +131,7 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCoverageCommitmentAttoEth: 0n,
+		auctionedCapacityOwnershipAttoRep: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
@@ -158,7 +158,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCoverageCommitmentAttoEth: 0n,
+		feeEligibleCapacityOwnershipAttoRep: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
@@ -176,7 +176,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCoverageCommitmentAttoEth: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -570,7 +570,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(
 			documentQueries.getByText(
-				'First transfers this wallet’s REP backing units and coverage commitment to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
+				'First transfers this wallet’s REP backing units and capacity ownership to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
 			),
 		).not.toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
@@ -635,7 +635,7 @@ describe('ForkAuctionSection', () => {
 				{
 					disputeStakedAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
-					coverageCommitmentAttoEth: 0n,
+					capacityOwnershipAttoRep: 0n,
 					claimableFeesAttoEth: 0n,
 					vaultAddress: walletAddress,
 				},
@@ -756,7 +756,7 @@ describe('ForkAuctionSection', () => {
 							{
 								disputeStakedAttoRep: 0n,
 								vaultAttoRepBacking: 20n,
-								coverageCommitmentAttoEth: 3n,
+								capacityOwnershipAttoRep: 3n,
 								claimableFeesAttoEth: 0n,
 								vaultAddress: walletAddress,
 							},
@@ -1153,7 +1153,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('makes the auctioned coverage commitment transfer explicit during bidding', async () => {
+	test('makes the auctioned capacity ownership transfer explicit during bidding', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1171,7 +1171,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedCoverageCommitmentAttoEth: 7n,
+						auctionedCapacityOwnershipAttoRep: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',
@@ -1209,9 +1209,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned coverage commitment')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned capacity ownership')).not.toBeNull()
 		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
-		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool coverage commitment.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool capacity ownership.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
@@ -1275,6 +1275,13 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
+		const youPayRow = documentQueries.getByText('You Pay').closest('.transaction-review-row')
+		const resultingEthBalanceRow = documentQueries.getByText('Resulting ETH Balance').closest('.transaction-review-detail-row')
+		if (!(youPayRow instanceof HTMLElement) || !(resultingEthBalanceRow instanceof HTMLElement)) throw new Error('Expected ETH bid review rows')
+		expect(youPayRow.textContent).toContain('ETH')
+		expect(youPayRow.textContent).not.toContain('REP')
+		expect(resultingEthBalanceRow.textContent).toContain('ETH')
+		expect(resultingEthBalanceRow.textContent).not.toContain('REP')
 		expect(submitBidButton.getAttribute('title')).toBe('Bid price is outside the supported auction range.')
 		expect(submitBidButton.disabled).toBe(true)
 	})

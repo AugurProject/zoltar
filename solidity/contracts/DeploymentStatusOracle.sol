@@ -7,10 +7,7 @@ contract DeploymentStatusOracle {
 	event DeploymentAddressesSet(address[] deploymentAddresses);
 
 	constructor(address[] memory _deploymentAddresses) {
-		require(
-			_deploymentAddresses.length <= uint256(type(uint8).max) + 1,
-			'DeploymentStatusOracle supports at most 256 deployment steps'
-		);
+		require(_deploymentAddresses.length <= uint256(type(uint8).max) + 1, 'DeploymentStatusOracle supports at most 256 deployment steps');
 		deploymentAddresses = _deploymentAddresses;
 		emit DeploymentAddressesSet(_deploymentAddresses);
 	}

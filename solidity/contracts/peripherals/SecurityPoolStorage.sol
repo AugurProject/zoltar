@@ -6,7 +6,7 @@ import { SecurityVault, SystemState } from './interfaces/ISecurityPool.sol';
 
 abstract contract SecurityPoolStorage {
 	EscalationGame public escalationGame;
-	uint256 public totalCoverageCommitmentAttoEth;
+	uint256 public totalCapacityOwnershipAttoRep;
 	uint256 public settlementCollateralAttoEth;
 	uint256 public totalRepBackingUnits;
 	uint256 public statoblastSecurityMultiplierBps;
@@ -17,8 +17,8 @@ abstract contract SecurityPoolStorage {
 	uint256 internal feeIndexRemainder;
 	uint256 internal totalFeesOwedRemainder;
 	uint256 internal unallocatedAccruedFeesAttoEth;
-	uint256 internal feeEligibleCoverageCommitmentAttoEth;
-	uint256 internal uncheckpointedFeeEligibleCoverageCommitmentAttoEth;
+	uint256 internal feeEligibleCapacityOwnershipAttoRep;
+	uint256 internal uncheckpointedFeeEligibleCapacityOwnershipAttoRep;
 	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
 	mapping(address => SecurityVault) public securityVaults;
@@ -33,4 +33,8 @@ abstract contract SecurityPoolStorage {
 	SystemState public systemState;
 	uint256 public totalBadDebtAttoEth;
 	mapping(address => uint256) public vaultBadDebtAttoEth;
+	// Appended for delegatecall compatibility. Never reorder fields above this line.
+	uint256 public minimumSecurityBondDebtAttoEth;
+	uint256 public minimumVaultRepDepositAttoRep;
+	mapping(address => uint256) public vaultTargetHealthFactorBps;
 }

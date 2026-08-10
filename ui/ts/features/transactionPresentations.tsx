@@ -8,7 +8,7 @@ import { AddressValue } from '../components/AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
 import { UniverseLink } from './universes/components/UniverseLink.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
+import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from './markets/lib/marketType.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
@@ -263,7 +263,6 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action']) {
 	if (actionName === 'depositRepToVault') return securityPoolCopy.depositRepToVault
-	if (actionName === 'queueSetCoverageCommitmentAttoEth') return securityPoolCopy.setCoverageCommitment
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.withdrawRep
 	return humanizeAction(actionName)
 }
@@ -395,7 +394,7 @@ function getLiquidationTransactionRows(context: LiquidationTransactionContext | 
 	return [
 		...(getPoolUniverseTransactionRows(context) ?? []),
 		...(context?.targetVault === undefined || context.targetVault.trim() === '' ? [] : [{ label: commonCopy.targetVault, value: <AddressValue address={context.targetVault} /> }]),
-		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: `${context.amount.trim()} ${commonCopy.rep}` }]),
+		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: `${context.amount.trim()} ${commonCopy.eth}` }]),
 	]
 }
 
@@ -566,12 +565,12 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 				}
-				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_COVERAGE_COMMITMENT_ATTO_ETH_LABEL)
+				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
 			case 'createChildUniverse':
 				return transactionCopy.childUniverseLinkedToForkPathDetail
 			case 'forkWithOwnEscalation':

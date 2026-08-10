@@ -19,12 +19,9 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	}
 
 	function attack(uint256 initialValue, uint256 _reentrantValue) external payable {
-		require(
-			msg.value == initialValue + _reentrantValue,
-			'Reentrant receiver funding must equal initial plus reentrant value'
-		);
+		require(msg.value == initialValue + _reentrantValue, 'Reentrant receiver funding must equal initial plus reentrant value');
 		reentrantValue = _reentrantValue;
-		securityPool.createCompleteSet{ value: initialValue }();
+		securityPool.createCompleteSet{value: initialValue}();
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
@@ -35,16 +32,10 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 		return ERC1155_RECEIVED_SELECTOR;
 	}
 
-	function onERC1155BatchReceived(
-		address,
-		address,
-		uint256[] calldata,
-		uint256[] calldata,
-		bytes calldata
-	) external returns (bytes4) {
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
 		if (reentryCount == 0 && reentrantValue > 0) {
 			reentryCount = 1;
-			securityPool.createCompleteSet{ value: reentrantValue }();
+			securityPool.createCompleteSet{value: reentrantValue}();
 		}
 		return ERC1155_BATCH_RECEIVED_SELECTOR;
 	}

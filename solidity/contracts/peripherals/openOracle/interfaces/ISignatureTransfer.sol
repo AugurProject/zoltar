@@ -24,19 +24,7 @@ interface ISignatureTransfer {
 		uint256 requestedAmount;
 	}
 
-	function permitTransferFrom(
-		PermitTransferFrom calldata permit,
-		SignatureTransferDetails calldata transferDetails,
-		address owner,
-		bytes calldata signature
-	) external;
+	function permitTransferFrom(PermitTransferFrom calldata permit, SignatureTransferDetails calldata transferDetails, address owner, bytes calldata signature) external;
 
-	function permitWitnessTransferFrom(
-		PermitTransferFrom calldata permit,
-		SignatureTransferDetails calldata transferDetails,
-		address owner,
-		bytes32 witness,
-		string calldata witnessTypeString,
-		bytes calldata signature
-	) external;
+	function permitWitnessTransferFrom(PermitTransferFrom calldata permit, SignatureTransferDetails calldata transferDetails, address owner, bytes32 witness, string calldata witnessTypeString, bytes calldata signature) external;
 }

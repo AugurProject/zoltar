@@ -22,14 +22,14 @@ const poolAccountingCheckpointEvent = {
 		{ name: 'reason', type: 'uint8', indexed: false },
 		{ name: 'vault', type: 'address', indexed: true },
 		{ name: 'settlementCollateralAttoEth', type: 'uint256', indexed: false },
-		{ name: 'totalCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
-		{ name: 'feeEligibleCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
+		{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
+		{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
 		{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', indexed: false },
 		{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', indexed: false },
 		{ name: 'feeIndex', type: 'uint256', indexed: false },
 		{ name: 'feeIndexRemainder', type: 'uint256', indexed: false },
 		{ name: 'totalFeesOwedRemainder', type: 'uint256', indexed: false },
-		{ name: 'uncheckpointedFeeEligibleCoverageCommitmentAttoEth', type: 'uint256', indexed: false },
+		{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256', indexed: false },
 		{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', indexed: false },
 		{ name: 'currentRetentionRate', type: 'uint256', indexed: false },
 	],
@@ -47,14 +47,14 @@ const poolAccountingSnapshotAbi = [
 				type: 'tuple',
 				components: [
 					{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-					{ name: 'totalCoverageCommitmentAttoEth', type: 'uint256' },
-					{ name: 'feeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
+					{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256' },
+					{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
 					{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
 					{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
 					{ name: 'feeIndex', type: 'uint256' },
 					{ name: 'feeIndexRemainder', type: 'uint256' },
 					{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-					{ name: 'uncheckpointedFeeEligibleCoverageCommitmentAttoEth', type: 'uint256' },
+					{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
 					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
 					{ name: 'currentRetentionRate', type: 'uint256' },
 				],
@@ -97,14 +97,14 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 			reason: 0n,
 			vault: zeroAddress,
 			settlementCollateralAttoEth: 1n,
-			totalCoverageCommitmentAttoEth: 2n,
-			feeEligibleCoverageCommitmentAttoEth: 2n,
+			totalCapacityOwnershipAttoRep: 2n,
+			feeEligibleCapacityOwnershipAttoRep: 2n,
 			totalClaimableVaultFeesAttoEth: 0n,
 			unallocatedAccruedFeesAttoEth: 0n,
 			feeIndex: 0n,
 			feeIndexRemainder: 0n,
 			totalFeesOwedRemainder: 0n,
-			uncheckpointedFeeEligibleCoverageCommitmentAttoEth: 0n,
+			uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
 			lastUpdatedFeeAccumulator: 1n,
 			currentRetentionRate: 1n,
 		},
@@ -141,12 +141,12 @@ describe('event-only replay', () => {
 				args: {
 					vault,
 					repBackingUnits: 10n,
-					coverageCommitmentAttoEth: 3n,
+					capacityOwnershipAttoRep: 3n,
 					claimableFeesAttoEth: 1n,
 					feeIndex: 4n,
 					vaultFeeRemainder: 7n,
 					resultingTotalRepBackingUnits: 10n,
-					resultingFeeEligibleCoverageCommitmentAttoEth: 3n,
+					resultingFeeEligibleCapacityOwnershipAttoRep: 3n,
 				},
 			}),
 		])
@@ -457,13 +457,13 @@ describe('event-only replay', () => {
 				args: {
 					operationId: 7n,
 					operation: 2n,
-					initiatorVault: forker,
+					operator: forker,
 					targetVault: pool,
 					operationAmountAttoRepOrAttoEth: 3n,
 					queuedAt: 27n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
-					snapshotTargetCoverageCommitmentAttoEth: 12n,
+					snapshotTargetCapacityOwnershipAttoRep: 12n,
 					snapshotTotalPoolHeldAttoRep: 13n,
 					snapshotTotalRepBackingUnits: 14n,
 					isPendingSlot: true,
@@ -516,13 +516,13 @@ describe('event-only replay', () => {
 				args: {
 					operationId: 1n,
 					operation: 0n,
-					initiatorVault: firstVault,
+					operator: firstVault,
 					targetVault: firstVault,
 					operationAmountAttoRepOrAttoEth: 3n,
 					queuedAt: 10n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
-					snapshotTargetCoverageCommitmentAttoEth: 6n,
+					snapshotTargetCapacityOwnershipAttoRep: 6n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -535,13 +535,13 @@ describe('event-only replay', () => {
 				args: {
 					operationId: 1n,
 					operation: 1n,
-					initiatorVault: secondVault,
+					operator: secondVault,
 					targetVault: secondVault,
 					operationAmountAttoRepOrAttoEth: 4n,
 					queuedAt: 11n,
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
-					snapshotTargetCoverageCommitmentAttoEth: 10n,
+					snapshotTargetCapacityOwnershipAttoRep: 10n,
 					snapshotTotalPoolHeldAttoRep: 11n,
 					snapshotTotalRepBackingUnits: 12n,
 					isPendingSlot: false,
@@ -1097,13 +1097,13 @@ describe('event-only replay', () => {
 					migratedRepDeltaAttoRep: 1n,
 					resultingChildMigratedRepTotalAttoRep: 1n,
 					resultingParentRepBackingUnits: 0n,
-					resultingParentCoverageCommitmentAttoEth: 0n,
+					resultingParentCapacityOwnershipAttoRep: 0n,
 					resultingChildRepBackingUnits: 1n,
-					resultingChildCoverageCommitmentAttoEth: 1n,
+					resultingChildCapacityOwnershipAttoRep: 1n,
 					resultingParentTotalRepBackingUnits: 0n,
 					resultingChildTotalRepBackingUnits: 1n,
-					resultingParentTotalCoverageCommitmentAttoEth: 0n,
-					resultingChildTotalCoverageCommitmentAttoEth: 1n,
+					resultingParentTotalCapacityOwnershipAttoRep: 0n,
+					resultingChildTotalCapacityOwnershipAttoRep: 1n,
 					settlementCollateralTransferredAttoEth: 0n,
 					cumulativeSettlementCollateralTransferredAttoEth: 0n,
 				},
@@ -1264,13 +1264,13 @@ describe('event-only replay', () => {
 				args: {
 					operationId: 3n,
 					operation: 1n,
-					initiatorVault: migrator,
+					operator: migrator,
 					targetVault: pool,
 					operationAmountAttoRepOrAttoEth: 2n,
 					queuedAt: 21n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
-					snapshotTargetCoverageCommitmentAttoEth: 6n,
+					snapshotTargetCapacityOwnershipAttoRep: 6n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -1409,7 +1409,7 @@ describe('event-only replay', () => {
 	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const validForSeconds = 300n
-		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.SetCoverageCommitment, client.account.address, fixture.reportBond, validForSeconds)
+		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const replayLogs = (await getContractReplayLogs(coordinator, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
 		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
@@ -1426,16 +1426,16 @@ describe('event-only replay', () => {
 			args: [operationId],
 		})
 		strictEqualTypeSafe(operation.operation, storedOperation[0], 'queued operation type replay mismatch')
-		strictEqualTypeSafe(operation.initiatorVault, storedOperation[1], 'queued initiator replay mismatch')
-		strictEqualTypeSafe(operation.targetVault, storedOperation[2], 'queued target replay mismatch')
-		strictEqualTypeSafe(operation.operationAmountAttoRepOrAttoEth, storedOperation[3], 'queued operation amount replay mismatch')
-		strictEqualTypeSafe(operation.queuedAt, storedOperation[4], 'queued timestamp replay mismatch')
-		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[6], 'queued backingUnits snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetCoverageCommitmentAttoEth, storedOperation[7], 'coverage commitment')
-		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, storedOperation[8], 'queued dispute-staked REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalPoolHeldAttoRep, storedOperation[9], 'queued REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[10], 'queued denominator snapshot replay mismatch')
+		strictEqualTypeSafe(operation.operator, storedOperation[1], 'queued operator replay mismatch')
+		strictEqualTypeSafe(operation.targetVault, storedOperation[3], 'queued target replay mismatch')
+		strictEqualTypeSafe(operation.operationAmountAttoRepOrAttoEth, storedOperation[4], 'queued operation amount replay mismatch')
+		strictEqualTypeSafe(operation.queuedAt, storedOperation[5], 'queued timestamp replay mismatch')
+		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetCapacityOwnershipAttoRep, storedOperation[8], 'capacity ownership')
+		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, storedOperation[10], 'queued dispute-staked REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalPoolHeldAttoRep, storedOperation[11], 'queued REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[12], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1448,6 +1448,7 @@ describe('event-only replay', () => {
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await fixture.manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, client.account.address, 0n)
 		const depositHash = await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
@@ -1478,6 +1479,7 @@ describe('event-only replay', () => {
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await fixture.manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, client.account.address, 0n)
 		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
 		await fixture.migrateRepToZoltar(client, securityPoolAddresses.securityPool, [fixture.QuestionOutcome.Yes])
@@ -1646,14 +1648,14 @@ describe('event-only replay', () => {
 		if (replayedPool === undefined) throw new Error('seeded pool accounting replay state missing')
 		const snapshot = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: poolAccountingSnapshotAbi, functionName: 'getPoolAccountingSnapshot', args: [] })
 		strictEqualTypeSafe(replayedPool.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'seeded collateral replay mismatch')
-		strictEqualTypeSafe(replayedPool.totalCoverageCommitmentAttoEth, snapshot.totalCoverageCommitmentAttoEth, 'coverage commitment')
-		strictEqualTypeSafe(replayedPool.feeEligibleCoverageCommitmentAttoEth, snapshot.feeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayedPool.totalCapacityOwnershipAttoRep, snapshot.totalCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(replayedPool.feeEligibleCapacityOwnershipAttoRep, snapshot.feeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(replayedPool.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'seeded fee liability replay mismatch')
 		strictEqualTypeSafe(replayedPool.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'seeded fee reserve replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndex, snapshot.feeIndex, 'seeded fee-index replay mismatch')
 		strictEqualTypeSafe(replayedPool.feeIndexRemainder, snapshot.feeIndexRemainder, 'seeded fee-index remainder replay mismatch')
 		strictEqualTypeSafe(replayedPool.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'seeded total-fee remainder replay mismatch')
-		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(replayedPool.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'seeded accumulator replay mismatch')
 		strictEqualTypeSafe(replayedPool.currentRetentionRate, snapshot.currentRetentionRate, 'seeded retention-rate replay mismatch')
 
@@ -1668,7 +1670,7 @@ describe('event-only replay', () => {
 				args: [vault],
 			})
 			strictEqualTypeSafe(replayedVault.repBackingUnits, storedVault.repBackingUnits, `seeded backingUnits replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.coverageCommitmentAttoEth, storedVault.coverageCommitmentAttoEth, `seeded coverageCommitmentAttoEth replay mismatch for ${vault}`)
+			strictEqualTypeSafe(replayedVault.capacityOwnershipAttoRep, storedVault.capacityOwnershipAttoRep, `seeded capacityOwnershipAttoRep replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVault.claimableFeesAttoEth, `seeded unpaid-fees replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.feeIndex, storedVault.feeIndex, `seeded vault fee-index replay mismatch for ${vault}`)
 			strictEqualTypeSafe(replayedVault.vaultFeeRemainder, storedVaultFeeRemainder, `seeded vault fee remainder replay mismatch for ${vault}`)
@@ -1788,14 +1790,14 @@ describe('event-only replay', () => {
 				reason: checkpointLog.args.reason,
 				vault: checkpointLog.args.vault,
 				settlementCollateralAttoEth: checkpointLog.args.settlementCollateralAttoEth,
-				totalCoverageCommitmentAttoEth: checkpointLog.args.totalCoverageCommitmentAttoEth,
-				feeEligibleCoverageCommitmentAttoEth: checkpointLog.args.feeEligibleCoverageCommitmentAttoEth,
+				totalCapacityOwnershipAttoRep: checkpointLog.args.totalCapacityOwnershipAttoRep,
+				feeEligibleCapacityOwnershipAttoRep: checkpointLog.args.feeEligibleCapacityOwnershipAttoRep,
 				totalClaimableVaultFeesAttoEth: checkpointLog.args.totalClaimableVaultFeesAttoEth,
 				unallocatedAccruedFeesAttoEth: checkpointLog.args.unallocatedAccruedFeesAttoEth,
 				feeIndex: checkpointLog.args.feeIndex,
 				feeIndexRemainder: checkpointLog.args.feeIndexRemainder,
 				totalFeesOwedRemainder: checkpointLog.args.totalFeesOwedRemainder,
-				uncheckpointedFeeEligibleCoverageCommitmentAttoEth: checkpointLog.args.uncheckpointedFeeEligibleCoverageCommitmentAttoEth,
+				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: checkpointLog.args.uncheckpointedFeeEligibleCapacityOwnershipAttoRep,
 				lastUpdatedFeeAccumulator: checkpointLog.args.lastUpdatedFeeAccumulator,
 				currentRetentionRate: checkpointLog.args.currentRetentionRate,
 			},
@@ -1809,14 +1811,14 @@ describe('event-only replay', () => {
 			args: [],
 		})
 		strictEqualTypeSafe(replayed.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'collateral checkpoint mismatch')
-		strictEqualTypeSafe(replayed.totalCoverageCommitmentAttoEth, snapshot.totalCoverageCommitmentAttoEth, 'coverage commitment')
-		strictEqualTypeSafe(replayed.feeEligibleCoverageCommitmentAttoEth, snapshot.feeEligibleCoverageCommitmentAttoEth, 'coverage commitment')
+		strictEqualTypeSafe(replayed.totalCapacityOwnershipAttoRep, snapshot.totalCapacityOwnershipAttoRep, 'capacity ownership')
+		strictEqualTypeSafe(replayed.feeEligibleCapacityOwnershipAttoRep, snapshot.feeEligibleCapacityOwnershipAttoRep, 'capacity ownership')
 		strictEqualTypeSafe(replayed.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'vault fee liability checkpoint mismatch')
 		strictEqualTypeSafe(replayed.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'unallocated reserve checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndex, snapshot.feeIndex, 'fee-index checkpoint mismatch')
 		strictEqualTypeSafe(replayed.feeIndexRemainder, snapshot.feeIndexRemainder, 'fee-index remainder checkpoint mismatch')
 		strictEqualTypeSafe(replayed.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'total fee remainder checkpoint mismatch')
-		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, snapshot.uncheckpointedFeeEligibleCoverageCommitmentAttoEth, 'uncheckpointed eligibility checkpoint mismatch')
+		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 'uncheckpointed eligibility checkpoint mismatch')
 		strictEqualTypeSafe(replayed.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'fee accumulator checkpoint mismatch')
 		strictEqualTypeSafe(replayed.currentRetentionRate, snapshot.currentRetentionRate, 'retention-rate checkpoint mismatch')
 		strictEqualTypeSafe(replayed.vault, zeroAddress, 'accrual checkpoint should not attribute a vault')
