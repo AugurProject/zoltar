@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x9c1C302B0fb5DfB88a43ee4Ea2251858a4298Afd"
+			"address": "0x808d6B3856EffdC9FBc8a2395d70469F67A2392e"
 		},
 		{
 			"id": "weth",
@@ -53,7 +53,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x838DbfdFFEe6Fd2527f0050d3580Dbb3B16eD15A"
+			"address": "0xCa6b419867cE8ABc211e1E413B8CA1979e931a23"
 		},
 		{
 			"id": "openOracle",
@@ -63,17 +63,17 @@
 		{
 			"id": "zoltarQuestionData",
 			"label": "ZoltarQuestionData",
-			"address": "0x8FdBed968E9CABD82b4419D52AA15b735c41F9D3"
+			"address": "0x98927dA4cD6C97d95c8CC97E77948389a84559fC"
 		},
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x8a41468f23cDC8e268ce91575a515f6bc059b7C9"
+			"address": "0x132bE08534a074242Be03FD46558f97AC8891048"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0xD5c9906b2a38F4FB933075ea60D882dBC0Da51A0"
+			"address": "0x3d4D0c4cACbbae0E3d4B885ce21360158Fa501C9"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
@@ -83,7 +83,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xc337BEef8B0Ce7b47eff910325A0F538583669Ba"
+			"address": "0xc99EbC5895aFD5403429B0E0B7A8b9DDDD19f70c"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xFb2826D0A13CB7ACbAc3f34F0DAfd1baCbF9AA0f"
+			"address": "0xa3109E1D5E1642eE394D27819d59CdC15E738748"
 		}
 	],
 	"derivedContracts": [

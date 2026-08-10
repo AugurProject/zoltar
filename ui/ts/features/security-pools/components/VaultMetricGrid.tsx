@@ -16,7 +16,7 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 	)
 }
 
-export function VaultMetricGrid({ className = '', layout = 'grid', disputeStakedAttoRep, priceValidUntilTimestamp, vaultAttoRepBacking, capacityOwnershipAttoRep }: VaultMetricGridProps) {
+export function VaultMetricGrid({ badDebtAttoEth, className = '', layout = 'grid', disputeStakedAttoRep, priceValidUntilTimestamp, vaultAttoRepBacking, capacityOwnershipAttoRep }: VaultMetricGridProps) {
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
@@ -27,6 +27,11 @@ export function VaultMetricGrid({ className = '', layout = 'grid', disputeStaked
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 				<div className='vault-preview-meta'>
+					{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? (
+						<MetricField label={securityPoolCopy.badDebt}>
+							<CurrencyValue value={badDebtAttoEth} suffix={commonCopy.eth} />
+						</MetricField>
+					) : null}
 					{disputeStakedAttoRep === undefined ? null : (
 						<MetricField label={commonCopy.disputeStakedAttoRep}>
 							<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
@@ -51,6 +56,11 @@ export function VaultMetricGrid({ className = '', layout = 'grid', disputeStaked
 			</div>
 			<div className='vault-detail-meta'>
 				<p className='detail'>{securityPoolCopy.vaultCoverageDetail}</p>
+				{badDebtAttoEth === undefined ? undefined : (
+					<MetricField label={securityPoolCopy.badDebt}>
+						<CurrencyValue value={badDebtAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+				)}
 				{disputeStakedAttoRep === undefined ? undefined : (
 					<MetricField label={commonCopy.disputeStakedAttoRep}>
 						<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />

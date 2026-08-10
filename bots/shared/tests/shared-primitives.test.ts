@@ -8,7 +8,7 @@ import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
-import { createPublicClient, custom, http, parseTransaction, privateKeyToAccount } from '../src/ethereum.ts'
+import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
 
 const temporaryDirectories: string[] = []
@@ -122,6 +122,27 @@ describe('shared bot primitives', () => {
 			),
 		})
 		await expect(client.getChainId()).rejects.toThrow('timed out after 25ms')
+	})
+
+	test('forwards a pinned simulation block to eth_call', async () => {
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_call') throw new Error(`Unexpected RPC method: ${method}`)
+					if (!Array.isArray(params)) throw new Error('Expected eth_call parameters')
+					expect(params[1]).toBe('0x2a')
+					return encodeAbiParameters([{ type: 'uint256' }], [7n])
+				},
+			}),
+		})
+		const result = await client.simulateContract({
+			abi: [{ inputs: [], name: 'value', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' }] as const,
+			address: '0x0000000000000000000000000000000000000001',
+			blockNumber: 42n,
+			functionName: 'value',
+		})
+
+		expect(result.result).toBe(7n)
 	})
 
 	test('rejects JSON-RPC redirects without forwarding the request body', async () => {

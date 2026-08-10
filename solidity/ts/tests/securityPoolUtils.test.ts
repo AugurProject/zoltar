@@ -145,24 +145,6 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(belowFreeBoundary, false, 'free requirement applies the signed factor')
 	})
 
-	test('liquidation distance uses whichever vault-health boundary fails first', async () => {
-		const capacityOwnershipAttoRep = 100n * 10n ** 18n
-		const poolMultiplierBps = 20_000n
-		const minDistanceBps = 1_000n
-		const isBeyondDistance = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedAttoRep: bigint, price: bigint, openInterestAttoEth = capacityOwnershipAttoRep) =>
-			await client.readContract({
-				abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
-				address: securityPoolUtilsAddress,
-				functionName: 'isLiquidationBeyondMinPriceDistance',
-				args: [poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, poolMultiplierBps, price, minDistanceBps],
-			})
-
-		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 11n) / 10n), false, 'associated-REP boundary should enforce the configured distance')
-		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 12n) / 10n), true, 'associated-REP boundary should allow a price beyond the configured distance')
-		strictEqualTypeSafe(await isBeyondDistance(200n * 10n ** 18n, 0n, (PRICE_PRECISION * 12n) / 10n, 90n * PRICE_PRECISION), false, 'reduced live open interest should move the target back inside the configured distance')
-		strictEqualTypeSafe(await isBeyondDistance(100n * 10n ** 18n, 100n * 10n ** 18n, (PRICE_PRECISION * 3n) / 4n), true, 'pool-held vault REP backing migration boundary should bind before the associated-REP boundary')
-	})
-
 	test('liquidation compensation pays the complete 5% pool-held vault REP backing bonus', async () => {
 		const liquidation = await calculateBundledLiquidationTransfer()
 		strictEqualTypeSafe(liquidation[2], (105n * PRICE_PRECISION) / 2n, 'liquidation should receive the complete 5%-bonus pool-held vault REP backing award')

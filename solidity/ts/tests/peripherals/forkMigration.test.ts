@@ -19,7 +19,6 @@ import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackGameMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock,
-	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter,
 } from '../../types/contractArtifact'
 
 const LIQUIDATION_APPROVAL_TYPEHASH = keccak256(
@@ -438,28 +437,17 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(forkData.auctionableAttoRepAtFork, forkDataBeforeStrayRep.auctionableAttoRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
 		})
 
-		test('initiateSecurityPoolFork rejects an unauthorized pool before it can supply a delegate target', async () => {
+		test('initiateSecurityPoolFork rejects an unauthorized pool before it can change canonical pool state', async () => {
 			const collateral = 5n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, repDeposit / 4n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, collateral)
 			await triggerExternalForkForSecurityPool(undefined, 'untrusted fork event emitter attack')
 
-			const maliciousEmitterDeploymentHash = await client.sendTransaction({
-				data: encodeDeployData({
-					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter.abi,
-					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter.evm.bytecode.object}`,
-					args: [securityPoolAddresses.securityPool, addressString(TEST_ADDRESSES[1])],
-				}),
-			})
-			const maliciousEmitterReceipt = await client.waitForTransactionReceipt({ hash: maliciousEmitterDeploymentHash })
-			const maliciousEmitter = maliciousEmitterReceipt.contractAddress
-			if (maliciousEmitter === undefined || maliciousEmitter === null) throw new Error('malicious event emitter address missing')
-
 			const fakePoolDeploymentHash = await client.sendTransaction({
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
-					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, maliciousEmitter, zeroAddress],
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, zeroAddress],
 				}),
 			})
 			const fakePoolReceipt = await client.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
@@ -520,7 +508,7 @@ describe('Peripherals: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
-					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, zeroAddress, escalationGame],
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, escalationGame],
 				}),
 			})
 			const fakePoolReceipt = await attackerClient.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })

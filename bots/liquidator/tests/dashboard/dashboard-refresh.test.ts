@@ -31,7 +31,7 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 		pendingTransactions: [],
 		pools: [
 			{
-				activeVaultCount: '0',
+				knownVaultCount: '0',
 				address: '0x1111111111111111111111111111111111111111',
 				approvedUniverse: true,
 				botVault: { address: '0x2', capacityOwnershipRep: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' },
@@ -159,6 +159,19 @@ async function dashboard() {
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('surfaces an incomplete vault registry scan', async () => {
+		const page = await dashboard()
+		const snapshot = state()
+		const [pool] = snapshot.pools
+		if (pool === undefined) throw new Error('Expected pool snapshot')
+		pool.truncatedVaults = true
+		page.setSnapshot(snapshot)
+
+		await page.refresh()
+
+		expect(page.window.document.body.textContent).toContain('Vault scan capped')
+	})
+
 	test('serializes overlapping polling refreshes and preserves one trailing request', async () => {
 		const page = await dashboard()
 		const before = page.stateRequestCount()

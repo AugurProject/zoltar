@@ -18,9 +18,9 @@ contract ZoltarQuestionData {
 	}
 
 	mapping(uint256 => uint256) public questionCreatedTimestamp;
-	mapping(uint256 => string[]) public outcomeLabels;
+	mapping(uint256 => string[]) private outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
-	uint256[] public questionIds;
+	uint256[] private questionIds;
 
 	event QuestionCreated(uint256 indexed questionId, uint256 createdTimestamp, QuestionData questionData, string[] outcomeOptions);
 

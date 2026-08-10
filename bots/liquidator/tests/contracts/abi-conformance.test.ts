@@ -62,7 +62,7 @@ function expectConformant(botAbi: readonly AbiItem[], contractAbi: readonly AbiI
 
 describe('liquidator contract ABI conformance', () => {
 	test('tracks the generated SecurityPool capacity and health interface', () => {
-		for (const name of ['securityVaults', 'escalationGame', 'getPoolAccountingSnapshot', 'getVaultOpenInterestAttoEth', 'vaultBadDebtAttoEth', 'totalCapacityOwnershipAttoRep', 'minimumSecurityBondDebtAttoEth', 'minimumVaultRepDepositAttoRep', 'depositRepToVault']) {
+		for (const name of ['securityVaults', 'escalationGame', 'getPoolAccountingSnapshot', 'getVaultCount', 'getVaults', 'getVaultOpenInterestAttoEth', 'vaultBadDebtAttoEth', 'totalCapacityOwnershipAttoRep', 'minimumSecurityBondDebtAttoEth', 'minimumVaultRepDepositAttoRep', 'depositRepToVault']) {
 			expectConformant(securityPoolAbi, securityPoolArtifact.abi, 'function', name)
 		}
 		expectConformant(escalationGameAbi, escalationGameArtifact.abi, 'function', 'disputeStakedRepByVaultAttoRep')

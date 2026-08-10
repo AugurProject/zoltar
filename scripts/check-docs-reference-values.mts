@@ -119,7 +119,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	const externalPureFunctions = [...securityPoolUtils.matchAll(/function\s+(\w+)\([^{}]*?\)\s+external\s+pure/g)].map(match => match[1])
 	assert.deepEqual(
 		externalPureFunctions,
-		['calculateCumulativeAuctionBadDebt', 'calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'isLiquidationBeyondMinPriceDistance', 'calculateRetentionRate'],
+		['calculateCumulativeAuctionBadDebt', 'calculateFeeAccrual', 'calculateVaultFee', 'calculateMintingCapacityAttoEth', 'calculateVaultOpenInterestAttoEth', 'calculateBundledLiquidationTransfer', 'isVaultHealthy', 'calculateRetentionRate'],
 		'SecurityPoolUtils external pure surface changed; document every preview and reject obsolete selectors',
 	)
 	for (const functionName of externalPureFunctions) {
@@ -357,11 +357,11 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
 	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
 	assert.ok(capacityOwnershipEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified capacity ownership accounting')
-	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 active-index boundary accounting')
+	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 append-only registry accounting')
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
 	assert.match(capacityOwnershipEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
-	assert.match(vaultEntry, /A direct own-fork claim[\s\S]*may remain indexed with zero live state until its next pool-mediated synchronization/)
+	assert.match(vaultEntry, /href="\.\.\/\.\.\/solidity\/contracts\/peripherals\/SecurityPool\.sol"><code>_registerVault<\/code><\/a>/)
 	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
 	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefundsAttoEth<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*deferred <code>pendingEthRefundsAttoEth<\/code>/)
 }
@@ -531,14 +531,13 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`/)
 	assert.match(contractInteractionReference, /ZoltarQuestionData[\s\S]*createQuestion\(questionData, outcomeOptions\)/)
 	assert.match(contractInteractionReference, /`QuestionData` tuple[\s\S]*`startTime` and `endTime` are `uint48`[\s\S]*`numTicks` is `uint120`[\s\S]*determine the `getQuestionId` and `createQuestion` selectors/)
-	assert.match(invariantsHtml, /id="vault-03"[\s\S]*active vault list is unique and newest-first[\s\S]*<code>_syncActiveVault<\/code>/)
-	assert.doesNotMatch(invariantsHtml, /historical vault registry|active and historical pagination|<code>_trackVault<\/code>/)
+	assert.doesNotMatch(invariantsHtml, /active-vault index|<code>_syncActiveVault<\/code>/)
 	assert.match(contractInteractionReference, /ReputationToken[\s\S]*setMaxTheoreticalSupplyAttoRep[\s\S]*mint\(account, valueAttoRep\)[\s\S]*burn\(account, valueAttoRep\)/)
 	assert.match(contractInteractionReference, /SecurityPoolFactory[\s\S]*deployOriginSecurityPool[\s\S]*statoblastSecurityMultiplierBps > 10_001[\s\S]*initialReportPriorityFeeAttoEthPerGas > 0[\s\S]*labels `Yes`, then `No`/)
 	assert.match(contractInteractionReference, /securityPoolDeploymentsRange\(startIndex, count\)[\s\S]*reverts rather than truncating/)
 	assert.match(contractInteractionReference, /burnEscalationWinnerHaircut\(amountAttoRep\)[\s\S]*configured escalation game/)
 	assert.match(contractInteractionReference, /getPoolAccountingSnapshot`, `getVaultFeeRemainder`/)
-	assert.match(contractInteractionReference, /securityPoolEventEmitter`, `getVaultCount`/)
+	assert.match(contractInteractionReference, /getVaultCount`, `getVaults`/)
 	assert.match(contractInteractionReference, /getMigratedAttoRep`, `getForkActivationTime`/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`/)
 	assert.match(operatorReference, /factory has no owner role and no later `resumeFromFork` relay/)
@@ -584,8 +583,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds dispute-staked REP backing nor authorizes carried proofs/)
 	assert.match(contractInteractionReference, /external fork interrupted the game[\s\S]*winners settle in the child by carried proof[\s\S]*unresolved parent escalation-deposit accounting cleanup is optional/)
 	assert.doesNotMatch(contractInteractionReference, /external-fork timing may require migration instead/)
-	assert.match(securityPool, /function withdrawForkedEscalationDeposits\([\s\S]*for \(uint256 index = 0; index < proofs\.length; index\+\+\)[\s\S]*_syncActiveVault\(beneficiaryVault\)/)
-	assert.match(securityPool, /function withdrawFromEscalationGame\([\s\S]*for \(uint256 index = 0; index < depositIndexes\.length; index\+\+\)[\s\S]*_syncActiveVault\(beneficiaryVault\)/)
+	assert.match(securityPool, /function withdrawForkedEscalationDeposits\([\s\S]*for \(uint256 index = 0; index < proofs\.length; index\+\+\)[\s\S]*_registerVault\(beneficiaryVault\)/)
+	assert.match(securityPool, /function withdrawFromEscalationGame\([\s\S]*for \(uint256 index = 0; index < depositIndexes\.length; index\+\+\)[\s\S]*_registerVault\(beneficiaryVault\)/)
 	assert.match(contractInteractionReference, /withdrawFromEscalationGame\(outcome, depositIndexes\)[\s\S]*An empty list returns after the outer lifecycle checks without settlement, state change, or event[\s\S]*No event for an empty list/)
 	assert.match(contractInteractionReference, /withdrawForkedEscalationDeposits\(outcome, proofs\)[\s\S]*An empty list returns after the outer lifecycle checks without proof verification, state change, or event[\s\S]*No event for an empty list/)
 	assert.match(contractInteractionReference, /Before finalization, refunds only provably losing bids/)
@@ -697,10 +696,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(sepoliaRepAllocations, /SEPOLIA_REP_MINT_CAP \/ BigInt\(SEPOLIA_REP_HOLDERS\.length\)/)
 	assert.match(operatorReference, /configured 11 million REP mint cap is divided equally among the listed holders/)
 	assert.match(operatorReference, /total supply no greater than 11 million REP/)
-	assert.match(securityPool, /function getVaultCount\(\) external view returns \(uint256\) \{\s*return activeVaultCount;/)
-	assert.match(securityPool, /function getVaults\([\s\S]*return _sliceActiveVaults\(startIndex, count\);/)
-	assert.match(contractInteractionReference, /two vault-count getters return the same active-vault count, and both vault pagers return the same newest-first active-vault sequence/)
-	assert.match(operatorReference, /getVaults\(startIndex, count\).*getActiveVaults\(startIndex, count\).*both page active vaults in newest-first order/)
+	assert.match(securityPool, /function getVaultCount\(\) external view returns \(uint256\) \{\s*return vaultAddresses\.length;/)
+	assert.match(securityPool, /function getVaults\([\s\S]*vaultAddresses\[vaultCount - startIndex - index - 1\]/)
+	assert.match(securityPool, /function _registerVault\(address vault\) private \{\s*if \(vault == address\(0x0\) \|\| isKnownVault\[vault\]\) return;\s*isKnownVault\[vault\] = true;\s*vaultAddresses\.push\(vault\);\s*\}/)
 	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universes\[universeId\]\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amountAttoRep, msg\.sender, outcomeIndexes\)/)
 	assert.match(zoltar, /function splitRepInternal\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(recipient, amountAttoRep\)[\s\S]*emit MigrationRepSplit\(/)
 	assert.match(reputationToken, /function mint\(address account, uint256 valueAttoRep\)[\s\S]*_mint\(account, valueAttoRep\);[\s\S]*emit Mint\(account, valueAttoRep\)/)
