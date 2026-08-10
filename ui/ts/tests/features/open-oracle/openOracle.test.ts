@@ -1187,7 +1187,7 @@ describe('Open Oracle helpers', () => {
 			const quotedExactAmounts: bigint[] = []
 			const preparedQueueArguments: Array<readonly unknown[]> = []
 			const onTransactionPrepared: NonNullable<typeof uiWriteClient.onTransactionPrepared> = preview => {
-				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation') && preview.args !== undefined) preparedQueueArguments.push(preview.args)
+				if ((preview.functionName === 'requestPrice' || preview.functionName === 'requestPriceIfNeededAndStageOperation' || preview.functionName === 'requestPriceIfNeededAndStageLiquidation') && preview.args !== undefined) preparedQueueArguments.push(preview.args)
 			}
 			const readContract: typeof uiWriteClient.readContract = async parameters => {
 				if (parameters.functionName === 'lastPrice') return 0n as never
@@ -1230,7 +1230,10 @@ describe('Open Oracle helpers', () => {
 			else await queueOracleManagerOperation(mockClient, managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
 
 			expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
-			const expectedArguments = operation === 'request' ? [400_000_000_000_000_000n, requestedInitialAttoWeth] : [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
+			let expectedArguments: readonly unknown[]
+			if (operation === 'request') expectedArguments = [400_000_000_000_000_000n, requestedInitialAttoWeth]
+			else if (operation === 'liquidation-helper') expectedArguments = [client.account.address, client.account.address, 1n, `0x${'00'.repeat(32)}`, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
+			else expectedArguments = [expect.anything(), client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 400_000_000_000_000_000n, requestedInitialAttoWeth]
 			expect(preparedQueueArguments).toEqual([expectedArguments])
 		}
 
