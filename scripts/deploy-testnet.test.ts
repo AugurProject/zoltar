@@ -318,6 +318,27 @@ describe('testnet deployment plan', () => {
 		expect(estimate).toEqual({ estimatedCostAttoEth: 20_000n, estimatedGas: 2_000n, missingStepIds: ['second'] })
 	})
 
+	test('includes canonical raw-transaction value in the preflight upper bound', async () => {
+		const estimate = await preflightDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => FIRST_HASH,
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'proxyDeployer',
+					label: 'Proxy Deployer',
+				},
+			],
+			{ getCode: async () => undefined },
+			{ proxyDeployer: 500n },
+			10n,
+			10_000_000_000_005_000n,
+		)
+
+		expect(estimate.estimatedCostAttoEth).toBe(10_000_000_000_005_000n)
+	})
+
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
 		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
 		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
@@ -363,6 +384,7 @@ describe('testnet deployment plan', () => {
 		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
+		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
 			expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
