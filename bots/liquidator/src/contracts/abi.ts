@@ -151,7 +151,7 @@ export const securityPoolAbi = [
 	},
 	{
 		inputs: [],
-		name: 'getActiveVaultCount',
+		name: 'getVaultCount',
 		outputs: [{ name: 'count', type: 'uint256' }],
 		stateMutability: 'view',
 		type: 'function',
@@ -161,7 +161,7 @@ export const securityPoolAbi = [
 			{ name: 'startIndex', type: 'uint256' },
 			{ name: 'count', type: 'uint256' },
 		],
-		name: 'getActiveVaults',
+		name: 'getVaults',
 		outputs: [{ name: 'vaults', type: 'address[]' }],
 		stateMutability: 'view',
 		type: 'function',

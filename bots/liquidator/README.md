@@ -104,8 +104,10 @@ Pool-selection inheritance is a configuration reconciliation and remains active
 in dry-run mode and when automatic vault migrations are disabled. Only the
 on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
-The active-vault scan is capped by `runtime.maxVaultsPerPool`. A capped scan is
-marked in the dashboard and must not be treated as a complete opportunity view.
+The current-position scan is capped by `runtime.maxVaultsPerPool`. Known vaults
+with no current economic state are skipped and do not consume the cap. A capped
+scan is marked in the dashboard and must not be treated as a complete
+opportunity view.
 
 ## Independent market consensus
 
@@ -259,7 +261,7 @@ the target, and the withdrawal threshold must be above the target.
 
 ## Execution lifecycle
 
-Each cycle performs an authoritative factory read, loads active vaults, computes
+Each cycle performs an authoritative factory read, loads current positions from the known-vault registry, computes
 exact protocol floor and rounding behavior, and selects at most one action:
 
 1. Migrate an applicable selected parent vault into its one approved child

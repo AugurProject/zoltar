@@ -200,6 +200,7 @@ export type SecurityPoolCreationResult = {
 }
 
 export type SecurityVaultDetails = {
+	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
 	disputeStakedAttoRep: bigint
 	managerAddress: Address

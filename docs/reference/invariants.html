@@ -1082,11 +1082,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="vault-03">
-						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
+						<summary><code>VAULT-03</code><span class="invariant-title">Vault registry coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">The active vault list is unique and newest-first. After a pool-mediated transition synchronizes a vault, membership is exact for nonzero REP backing units, capacity ownership, unpaid fees, or escalation escrow. A direct own-fork claim consumes game escrow through the forker without synchronizing the parent pool, so an escrow-only vault may remain indexed with zero live state until its next pool-mediated synchronization.</div>
-							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in active pagination until optional vault cleanup synchronizes and prunes it.</p>
+							<div class="invariant-property">The vault registry is append-only and contains each address at most once. A vault enters when it first has REP backing units, capacity ownership, unpaid fees, escalation escrow, or bad debt. Pagination is newest-created first; later activity and full exit do not reorder or remove an entry. Consumers read current vault and escalation state to decide which registered vaults to display.</div>
+							<p class="invariant-example"><strong>Example:</strong> A final REP withdrawal leaves the vault address in registry pagination with zero current position, allowing a UI to filter it without losing historical discovery.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1099,9 +1099,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_syncActiveVault</code></a
+										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_registerVault</code></a
 										>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">active-list and direct-claim boundary tests</a>
+										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">registry pagination and direct-claim boundary tests</a>
 									</dd>
 								</div>
 							</dl>

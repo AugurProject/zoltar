@@ -168,6 +168,7 @@ type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends Ab
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
+	blockNumber?: bigint | undefined
 	blockTag?: BlockTag | undefined
 	gas?: bigint | undefined
 	value?: bigint | undefined
@@ -179,7 +180,11 @@ type ContractSimulateParameters<TAbi extends Abi, TFunctionName extends string> 
 	maxPriorityFeePerGas?: bigint | undefined
 }
 
-type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractSimulateParameters<TAbi, TFunctionName>
+type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
+	account?: Account | Address | undefined
+	gas?: bigint | undefined
+	value?: bigint | undefined
+}
 
 type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
@@ -407,8 +412,8 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
-	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
-	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
+	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
+	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
 	simulateContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => Promise<{ result: ContractFunctionResult<TAbi, TFunctionName> }>
 	transport: TTransport
 	waitForTransactionReceipt: (parameters: WaitForTransactionReceiptParameters) => Promise<TransactionReceipt>
@@ -1231,7 +1236,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				parameters.blockTag ?? 'latest',
+				parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber),
 			],
 		}),
 	)
@@ -1364,7 +1369,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${parameters.hash}" could not be found.`)
 			return normalizeReceipt(rawReceipt)
 		},
-		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => {
+		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => {
 			const calls: { allowFailure: boolean; callData: Hex; target: Address }[] = []
 			for (const contract of parameters.contracts) {
 				calls.push({
@@ -1381,6 +1386,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				abi: MULTICALL3_ABI,
 				address: parameters.multicallAddress,
 				args: [calls] as never,
+				blockNumber: parameters.blockNumber,
 				functionName: 'aggregate3',
 			})) as {
 				abiItem: AbiParameter
@@ -1423,7 +1429,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				return decodeFunctionOutput(abiItem, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},
-		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => {
+		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => {
 			const { abiItem, data } = await readContractRaw(transport, parameters)
 			return decodeFunctionOutput(abiItem, data) as ContractFunctionResult<TAbi, TFunctionName>
 		},

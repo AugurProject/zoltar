@@ -6474,6 +6474,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	align-items: start;
 }
 
+.security-pool-browse-vault-row-top-compact:where(.with-bad-debt) {
+	grid-template-columns: minmax(0, 1.45fr) repeat(4, minmax(8.5rem, 0.72fr));
+}
+
 .security-pool-browse-vault-row-id,
 .security-pool-browse-vault-row-kpi {
 	display: grid;

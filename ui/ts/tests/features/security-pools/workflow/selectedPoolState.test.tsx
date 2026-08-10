@@ -62,6 +62,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
 		expect(contextDetails.hasAttribute('open')).toBe(false)
 		expect(contextDetails.querySelector('summary')?.textContent).toBe('Pool context and metrics')
+		expect(within(contextDetails).getByText('Known Vaults')).not.toBeNull()
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
 		expect(routeSurface.querySelectorAll('.section-block.default')).toHaveLength(0)
 		expectSectionVariant('Vault Operations', 'plain')
@@ -324,6 +325,38 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Dispute-staked REP').length).toBeGreaterThan(0)
+	})
+
+	test('distinguishes filtered current positions from an empty known-vault registry', async () => {
+		await renderLoadedPool({
+			securityPools: [createSelectedPool({ vaultCount: 2n, vaults: [] })],
+		})
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+		})
+
+		expect(within(document.body).getByText('No current positions among 2 known vaults.')).not.toBeNull()
+		expect(within(document.body).queryByText('No known vaults in this pool.')).toBeNull()
+	})
+
+	test('renders a selected bad-debt-only known vault as an existing position', async () => {
+		await renderLoadedPool({
+			securityVault: createSecurityVaultProps({
+				securityVaultDetails: createSecurityVaultDetails({
+					badDebtAttoEth: 2n,
+					capacityOwnershipAttoRep: 0n,
+					claimableFeesAttoEth: 0n,
+					disputeStakedAttoRep: 0n,
+					vaultAttoRepBacking: 0n,
+				}),
+			}),
+		})
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
+		expect(documentQueries.getByText('Bad Debt')).not.toBeNull()
+		expect(documentQueries.queryByText('This vault does not exist.')).toBeNull()
 	})
 
 	test('keeps directory liquidation review available when the oracle price is stale', async () => {

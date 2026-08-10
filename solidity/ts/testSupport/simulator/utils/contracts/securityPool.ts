@@ -265,27 +265,27 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 	return { repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
-export const getActiveVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getActiveVaultCount',
+			functionName: 'getVaultCount',
 			address: securityPoolAddress,
 			args: [],
 		}),
-		'Active vault count',
+		'Vault count',
 	)
 
-export const getActiveVaults = async (client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint): Promise<Address[]> =>
+export const getVaults = async (client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint): Promise<Address[]> =>
 	requireArray(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getActiveVaults',
+			functionName: 'getVaults',
 			address: securityPoolAddress,
 			args: [startIndex, count],
 		}),
-		'Active vault page',
-	).map((vault, index) => requireAddress(vault, `Active vault page entry ${index.toString()}`))
+		'Vault page',
+	).map((vault, index) => requireAddress(vault, `Vault page entry ${index.toString()}`))
 
 export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: Address): Promise<Address> =>
 	requireAddress(

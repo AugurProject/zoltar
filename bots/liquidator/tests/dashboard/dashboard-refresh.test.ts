@@ -31,7 +31,7 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 		pendingTransactions: [],
 		pools: [
 			{
-				activeVaultCount: '0',
+				knownVaultCount: '0',
 				address: '0x1111111111111111111111111111111111111111',
 				approvedUniverse: true,
 				botVault: { address: '0x2', capacityOwnershipRep: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' },

@@ -899,7 +899,16 @@ export function SecurityPoolWorkflowSection({
 															return <StateHint presentation={selectedPoolBrowsePresentation} />
 														}
 
-														return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: securityPoolCopy.poolVaultsEmpty }} />
+														return (
+															<StateHint
+																presentation={{
+																	key: 'empty',
+																	badgeLabel: commonCopy.none,
+																	badgeTone: 'muted',
+																	detail: selectedPool.vaultCount === 0n ? securityPoolCopy.poolVaultsEmpty : securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount),
+																}}
+															/>
+														)
 													})()}
 													pool={selectedPool}
 													renderActions={vault => {

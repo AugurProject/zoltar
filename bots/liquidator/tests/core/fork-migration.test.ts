@@ -88,7 +88,7 @@ function settings(approvedUniverses = ['101']) {
 
 function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultAttoRep?: bigint }): PoolObservation {
 	return {
-		activeVaultCount: 0n,
+		knownVaultCount: 0n,
 		address: getAddress(parameters.address),
 		approvedUniverse: parameters.approvedUniverse ?? false,
 		botVault: {

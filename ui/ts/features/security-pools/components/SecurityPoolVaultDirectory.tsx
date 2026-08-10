@@ -32,6 +32,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 						<div className='vault-position-strip-meta'>{renderBadge === undefined ? null : renderBadge(vault)}</div>
 					</div>
 					<VaultMetricGrid
+						badDebtAttoEth={vault.badDebtAttoEth}
 						className='workflow-vault-grid'
 						layout='preview'
 						disputeStakedAttoRep={vault.disputeStakedAttoRep}

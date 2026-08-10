@@ -99,48 +99,52 @@ async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityP
 	return code !== undefined && code !== '0x'
 }
 
-async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
+async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, blockNumber?: bigint) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getActiveVaultCount',
+		functionName: 'getVaultCount',
 		address: securityPoolAddress,
 		args: [],
+		blockNumber,
 	})
 }
 
-async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, startIndex: bigint, count: bigint) {
+async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, startIndex: bigint, count: bigint, blockNumber: bigint) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getActiveVaults',
+		functionName: 'getVaults',
 		address: securityPoolAddress,
 		args: [startIndex, count],
+		blockNumber,
 	})
 }
 
-async function loadEscalationVaultData(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[]) {
+async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[], blockNumber?: bigint) {
 	if (vaultAddresses.length === 0) return []
 	const escalationGameAddress = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'escalationGame',
 		address: securityPoolAddress,
 		args: [],
+		blockNumber,
 	})
 	if (sameAddress(escalationGameAddress, zeroAddress)) {
 		return vaultAddresses.map(() => ({ disputeStakedAttoRep: 0n }))
 	}
-	return await Promise.all(
-		vaultAddresses.map(async vaultAddress => ({
-			disputeStakedAttoRep: await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'disputeStakedRepByVaultAttoRep',
-				address: escalationGameAddress,
-				args: [vaultAddress],
-			}),
-		})),
-	)
+	const disputeStakeContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'disputeStakedRepByVaultAttoRep',
+		address: escalationGameAddress,
+		args: [vaultAddress],
+	}))
+	const disputeStakedAttoRep = await readRequiredMulticall(client, disputeStakeContracts, blockNumber)
+	return disputeStakedAttoRep.map(value => {
+		if (typeof value !== 'bigint') throw new Error('Unexpected escalation vault response')
+		return { disputeStakedAttoRep: value }
+	})
 }
 
-function isActiveSecurityVaultTuple(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
+function hasCurrentSecurityVaultState(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
 	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = vaultData
 	return repBackingUnits > 0n || capacityOwnershipAttoRep > 0n || claimableFeesAttoEth > 0n
 }
@@ -162,71 +166,69 @@ async function loadSecurityPoolVaultSummaries(
 	vaultCount: bigint
 	vaults: ListedSecurityPool['vaults']
 }> {
-	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
+	const blockNumber = await client.getBlockNumber()
+	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress, blockNumber)
 	const previewLimit = options.previewLimit ?? SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT
-	const previewCount = vaultCount < previewLimit ? vaultCount : previewLimit
-	const previewVaultAddresses = previewCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, previewCount)
-	const summaryVaultAddresses = [...previewVaultAddresses]
-	if (options.accountAddress !== undefined && !summaryVaultAddresses.some(vaultAddress => sameAddress(vaultAddress, options.accountAddress))) {
-		summaryVaultAddresses.push(options.accountAddress)
-	}
-	if (summaryVaultAddresses.length === 0) {
+	if (vaultCount === 0n && options.accountAddress === undefined) {
 		return {
 			hasLoadedVaults: true,
 			vaultCount,
 			vaults: [],
 		}
 	}
-	const securityVaultSummaryContracts: ContractFunctionParameters[] = summaryVaultAddresses.map(vaultAddress => ({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'securityVaults',
-		address: securityPoolAddress,
-		args: [vaultAddress],
-	}))
-	const vaultOpenInterestContracts: ContractFunctionParameters[] = summaryVaultAddresses.map(vaultAddress => ({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'getVaultOpenInterestAttoEth',
-		address: securityPoolAddress,
-		args: [vaultAddress],
-	}))
-	const vaultBadDebtContracts: ContractFunctionParameters[] = summaryVaultAddresses.map(vaultAddress => ({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'vaultBadDebtAttoEth',
-		address: securityPoolAddress,
-		args: [vaultAddress],
-	}))
-	const [vaultData, vaultOpenInterest, vaultBadDebt, totalPoolHeldRepBalanceAttoRep, totalRepBackingUnits, escalationVaultData] = await Promise.all([
-		readRequiredMulticall(client, securityVaultSummaryContracts).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
-		readRequiredMulticall(client, vaultOpenInterestContracts),
-		readRequiredMulticall(client, vaultBadDebtContracts),
+	const poolRepBackingTotalsPromise = Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
+			blockNumber,
 		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'totalRepBackingUnits',
 			address: securityPoolAddress,
 			args: [],
+			blockNumber,
 		}),
-		loadEscalationVaultData(client, securityPoolAddress, summaryVaultAddresses),
 	])
-	return {
-		hasLoadedVaults: true,
-		vaultCount,
-		vaults: summaryVaultAddresses.flatMap((vaultAddress, index) => {
+	const loadCurrentVaultSummaries = async (vaultAddresses: Address[]) => {
+		const securityVaultSummaryContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'securityVaults',
+			address: securityPoolAddress,
+			args: [vaultAddress],
+		}))
+		const vaultOpenInterestContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'getVaultOpenInterestAttoEth',
+			address: securityPoolAddress,
+			args: [vaultAddress],
+		}))
+		const vaultBadDebtContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'vaultBadDebtAttoEth',
+			address: securityPoolAddress,
+			args: [vaultAddress],
+		}))
+		const [vaultData, vaultOpenInterest, vaultBadDebt, [totalPoolHeldRepBalanceAttoRep, totalRepBackingUnits], escalationVaultData] = await Promise.all([
+			readRequiredMulticall(client, securityVaultSummaryContracts, blockNumber).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
+			readRequiredMulticall(client, vaultOpenInterestContracts, blockNumber),
+			readRequiredMulticall(client, vaultBadDebtContracts, blockNumber),
+			poolRepBackingTotalsPromise,
+			loadEscalationVaultData(client, securityPoolAddress, vaultAddresses, blockNumber),
+		])
+		return vaultAddresses.flatMap((vaultAddress, index) => {
 			const currentVaultData = vaultData[index]
 			if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
 			const currentEscalationData = escalationVaultData[index]
 			if (currentEscalationData === undefined) throw new Error('Unexpected escalation vault response')
-			if (!previewVaultAddresses.some((currentPreviewAddress: Address) => sameAddress(currentPreviewAddress, vaultAddress)) && !isActiveSecurityVaultTuple(currentVaultData) && currentEscalationData.disputeStakedAttoRep === 0n) return []
-			const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = currentVaultData
-			const openInterestAttoEth = vaultOpenInterest[index]
-			if (typeof openInterestAttoEth !== 'bigint') throw new Error('Unexpected vault open interest response')
 			const badDebtAttoEth = vaultBadDebt[index]
 			if (typeof badDebtAttoEth !== 'bigint') throw new Error('Unexpected vault bad debt response')
+			const openInterestAttoEth = vaultOpenInterest[index]
+			if (typeof openInterestAttoEth !== 'bigint') throw new Error('Unexpected vault open interest response')
+			if (!hasCurrentSecurityVaultState(currentVaultData) && currentEscalationData.disputeStakedAttoRep === 0n && badDebtAttoEth === 0n && openInterestAttoEth === 0n) return []
+			const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = currentVaultData
 			return [
 				{
 					badDebtAttoEth,
@@ -245,7 +247,42 @@ async function loadSecurityPoolVaultSummaries(
 					vaultAddress,
 				},
 			]
-		}),
+		})
+	}
+
+	const vaults: ListedSecurityPool['vaults'] = []
+	const scannedVaultAddresses: Address[] = []
+	let separatelyLoadedAccountVaults: ListedSecurityPool['vaults'] | undefined
+	let registryOffset = 0n
+	while (registryOffset < vaultCount && BigInt(vaults.length) < previewLimit) {
+		const remainingVaultCount = vaultCount - registryOffset
+		const pageSize = remainingVaultCount < previewLimit ? remainingVaultCount : previewLimit
+		const pageVaultAddresses = await getSecurityPoolVaults(client, securityPoolAddress, registryOffset, pageSize, blockNumber)
+		scannedVaultAddresses.push(...pageVaultAddresses)
+		const summaryVaultAddresses = [...pageVaultAddresses]
+		const shouldLoadAccountWithFirstPage = registryOffset === 0n && options.accountAddress !== undefined && !pageVaultAddresses.some(vaultAddress => sameAddress(vaultAddress, options.accountAddress))
+		if (shouldLoadAccountWithFirstPage && options.accountAddress !== undefined) summaryVaultAddresses.push(options.accountAddress)
+		const currentPageVaults = await loadCurrentVaultSummaries(summaryVaultAddresses)
+		for (const vault of currentPageVaults) {
+			if (options.accountAddress !== undefined && sameAddress(vault.vaultAddress, options.accountAddress) && (shouldLoadAccountWithFirstPage || separatelyLoadedAccountVaults !== undefined || BigInt(vaults.length) >= previewLimit)) {
+				separatelyLoadedAccountVaults = [vault]
+				continue
+			}
+			if (BigInt(vaults.length) >= previewLimit) continue
+			vaults.push(vault)
+		}
+		registryOffset += pageSize
+	}
+	if (options.accountAddress !== undefined && !vaults.some(vault => sameAddress(vault.vaultAddress, options.accountAddress))) {
+		if (separatelyLoadedAccountVaults === undefined && !scannedVaultAddresses.some(vaultAddress => sameAddress(vaultAddress, options.accountAddress))) {
+			separatelyLoadedAccountVaults = await loadCurrentVaultSummaries([options.accountAddress])
+		}
+		if (separatelyLoadedAccountVaults !== undefined) vaults.push(...separatelyLoadedAccountVaults)
+	}
+	return {
+		hasLoadedVaults: true,
+		vaultCount,
+		vaults,
 	}
 }
 
@@ -553,7 +590,8 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
 
-	const [currentRetentionRate, managerAddress, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, totalRepBackingUnits, repToken, totalPoolHeldRepBalanceAttoRep, totalCapacityOwnershipAttoRep, universeId, vaultData, disputeStakedRepByVaultAttoRep] = await Promise.all([
+	const [badDebtAttoEth, currentRetentionRate, managerAddress, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, totalRepBackingUnits, repToken, totalPoolHeldRepBalanceAttoRep, totalCapacityOwnershipAttoRep, universeId, vaultData, disputeStakedRepByVaultAttoRep] = await Promise.all([
+		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
 		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [] }),
@@ -575,6 +613,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	})
 
 	return {
+		badDebtAttoEth,
 		currentRetentionRate,
 		disputeStakedAttoRep: disputeStakedRepByVaultAttoRep,
 		managerAddress,

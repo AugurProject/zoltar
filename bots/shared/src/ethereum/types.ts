@@ -163,6 +163,7 @@ export type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent ext
 
 export type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
+	blockNumber?: bigint | undefined
 	blockTag?: BlockTag | undefined
 	gas?: bigint | undefined
 	value?: bigint | undefined
@@ -174,7 +175,11 @@ export type ContractSimulateParameters<TAbi extends Abi, TFunctionName extends s
 	maxPriorityFeePerGas?: bigint | undefined
 }
 
-export type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractSimulateParameters<TAbi, TFunctionName>
+export type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
+	account?: Account | Address | undefined
+	gas?: bigint | undefined
+	value?: bigint | undefined
+}
 
 export type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined

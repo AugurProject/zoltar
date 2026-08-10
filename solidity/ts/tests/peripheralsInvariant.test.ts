@@ -51,8 +51,8 @@ import {
 	createCompleteSet,
 	depositRepToVault,
 	depositToEscalationGame,
-	getActiveVaultCount,
-	getActiveVaults,
+	getVaultCount,
+	getVaults,
 	getAwaitingForkContinuation,
 	getSettlementCollateralAttoEth,
 	getTotalRepBackingUnits,
@@ -318,11 +318,12 @@ describe('Peripherals invariant harness', () => {
 			}
 
 			const assertPoolAccounting = async (securityPool: Address, label: string) => {
-				const activeVaultCount = await getActiveVaultCount(client, securityPool)
-				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
-				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
+				const vaultCount = await getVaultCount(client, securityPool)
+				const vaultAddresses = await getVaults(client, securityPool, 0n, vaultCount + 1n)
+				const vaults = await Promise.all(vaultAddresses.map(vault => getSecurityVault(client, securityPool, vault)))
 				const totalCapacityOwnershipAttoRepFromVaults = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 				const totalBackingUnitsFromVaults = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
+				const repBackingVaultCount = BigInt(vaults.filter(vault => vault.repBackingUnits > 0n).length)
 				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
 				const totalClaims = (await Promise.all(vaults.map(vault => backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)))).reduce((sum, claim) => sum + claim, 0n)
 				const collateral = await getSettlementCollateralAttoEth(client, securityPool)
@@ -336,16 +337,16 @@ describe('Peripherals invariant harness', () => {
 				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
 				const uncheckpointedCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + (vault.feeIndex === accountingSnapshot.feeIndex ? 0n : vault.capacityOwnershipAttoRep), 0n)
 
-				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active-vault count should match its page`)
-				assert.strictEqual(new Set(activeVaults).size, activeVaults.length, `${label}: active-vault page should not duplicate actors`)
+				strictEqualTypeSafe(BigInt(vaultAddresses.length), vaultCount, `${label}: vault count should match its page`)
+				assert.strictEqual(new Set(vaultAddresses).size, vaultAddresses.length, `${label}: vault page should not duplicate actors`)
 				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalAttoRep, `${label}: recorded REP should equal the token balance`)
 				strictEqualTypeSafe(totalCapacityOwnershipAttoRepFromVaults, await getTotalCapacityOwnershipAttoRep(client, securityPool), `${label}: aggregate capacityOwnershipAttoRep should equal the sum of vault withdrawalAmountsAttoRep`)
-				strictEqualTypeSafe(totalBackingUnitsFromVaults, await getTotalRepBackingUnits(client, securityPool), `${label}: backingUnits denominator should equal active vault backingUnits`)
+				strictEqualTypeSafe(totalBackingUnitsFromVaults, await getTotalRepBackingUnits(client, securityPool), `${label}: backingUnits denominator should equal registered vault backingUnits`)
 				strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: aggregate claimable vault fees should equal the pool claimable-fee ledger`)
 				strictEqualTypeSafe(totalCapacityOwnershipAttoRepFromVaults, accountingSnapshot.feeEligibleCapacityOwnershipAttoRep, `${label}: operational vault withdrawalAmountsAttoRep should equal the fee-eligible capacityOwnershipAttoRep ledger`)
 				strictEqualTypeSafe(uncheckpointedCapacityOwnershipAttoRep, accountingSnapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, `${label}: uncheckpointed capacityOwnershipAttoRep should equal vault withdrawalAmountsAttoRep behind the global fee index`)
 				assert.ok(totalClaims <= totalAttoRep, `${label}: rounded vault claims must not exceed pool-held REP`)
-				assert.ok(totalAttoRep - totalClaims <= activeVaultCount, `${label}: aggregate REP rounding dust should be bounded by active vault count`)
+				assert.ok(totalAttoRep - totalClaims <= repBackingVaultCount, `${label}: aggregate REP rounding dust should be bounded by REP-backed vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
 				assert.ok((await getTotalCapacityOwnershipAttoRep(client, securityPool)) >= collateral, `${label}: open interest must remain backed by aggregate capacityOwnershipAttoRep`)
 			}
@@ -633,11 +634,12 @@ describe('Peripherals invariant harness', () => {
 			let actorAFirstEscrowSourceAtFork = 0n
 
 			const assertPoolAccounting = async (securityPool: Address, label: string) => {
-				const activeVaultCount = await getActiveVaultCount(client, securityPool)
-				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
-				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
+				const vaultCount = await getVaultCount(client, securityPool)
+				const vaultAddresses = await getVaults(client, securityPool, 0n, vaultCount + 1n)
+				const vaults = await Promise.all(vaultAddresses.map(vault => getSecurityVault(client, securityPool, vault)))
 				const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 				const aggregateBackingUnits = vaults.reduce((sum, vault) => sum + vault.repBackingUnits, 0n)
+				const repBackingVaultCount = BigInt(vaults.filter(vault => vault.repBackingUnits > 0n).length)
 				const totalAttoRep = await getTotalPoolHeldAttoRep(client, securityPool)
 				const roundedClaims = (await Promise.all(vaults.map(vault => backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)))).reduce((sum, claim) => sum + claim, 0n)
 				const collateral = await getSettlementCollateralAttoEth(client, securityPool)
@@ -650,8 +652,8 @@ describe('Peripherals invariant harness', () => {
 					args: [],
 				})
 				const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
-				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active vault page should match count`)
-				assert.strictEqual(new Set(activeVaults).size, activeVaults.length, `${label}: active vault ids should be unique`)
+				strictEqualTypeSafe(BigInt(vaultAddresses.length), vaultCount, `${label}: vault page should match count`)
+				assert.strictEqual(new Set(vaultAddresses).size, vaultAddresses.length, `${label}: vault ids should be unique`)
 				const totalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPool)
 				if (systemState === SystemState.PoolForked) assert.ok(aggregateCapacityOwnershipAttoRep <= totalCapacityOwnershipAttoRep, `${label}: consumed fork withdrawalAmountsAttoRep cannot exceed the frozen capacityOwnershipAttoRep snapshot`)
 				else {
@@ -664,7 +666,7 @@ describe('Peripherals invariant harness', () => {
 				strictEqualTypeSafe(aggregateClaimableFeesAttoEth, accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: aggregate claimable vault fees should equal the pool claimable-fee ledger`)
 				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalAttoRep, `${label}: REP balance should reconcile`)
 				assert.ok(roundedClaims <= totalAttoRep, `${label}: rounded claims cannot exceed pool-held REP`)
-				assert.ok(totalAttoRep - roundedClaims <= activeVaultCount, `${label}: REP rounding dust should be bounded`)
+				assert.ok(totalAttoRep - roundedClaims <= repBackingVaultCount, `${label}: REP rounding dust should be bounded by REP-backed vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
 				assert.ok(totalCapacityOwnershipAttoRep >= collateral, `${label}: open interest should remain capacityOwnershipAttoRep-backed`)
 			}
@@ -1230,8 +1232,8 @@ describe('Peripherals invariant harness', () => {
 				address: yesSecurityPool.securityPool,
 				args: [],
 			})
-			const vaultCount = await getActiveVaultCount(client, yesSecurityPool.securityPool)
-			const vaultAddresses = await getActiveVaults(client, yesSecurityPool.securityPool, 0n, vaultCount + 1n)
+			const vaultCount = await getVaultCount(client, yesSecurityPool.securityPool)
+			const vaultAddresses = await getVaults(client, yesSecurityPool.securityPool, 0n, vaultCount + 1n)
 			const vaults = await Promise.all(vaultAddresses.map(vault => getSecurityVault(client, yesSecurityPool.securityPool, vault)))
 			const aggregateCapacityOwnershipAttoRep = vaults.reduce((sum, vault) => sum + vault.capacityOwnershipAttoRep, 0n)
 			const aggregateClaimableFeesAttoEth = vaults.reduce((sum, vault) => sum + vault.claimableFeesAttoEth, 0n)
@@ -1488,23 +1490,21 @@ describe('Peripherals invariant harness', () => {
 			if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
 		}
 
-		const activeVaultCount = await getActiveVaultCount(client, context.securityPool)
-		const activeVaults = Array.from(await getActiveVaults(client, context.securityPool, 0n, activeVaultCount + 2n))
-		const firstPage = Array.from(await getActiveVaults(client, context.securityPool, 0n, 2n))
-		const secondPage = Array.from(await getActiveVaults(client, context.securityPool, 2n, 2n))
-		const emptyPage = Array.from(await getActiveVaults(client, context.securityPool, activeVaultCount, 2n))
+		const vaultCount = await getVaultCount(client, context.securityPool)
+		const vaults = Array.from(await getVaults(client, context.securityPool, 0n, vaultCount + 2n))
+		const firstPage = Array.from(await getVaults(client, context.securityPool, 0n, 2n))
+		const secondPage = Array.from(await getVaults(client, context.securityPool, 2n, 2n))
+		const emptyPage = Array.from(await getVaults(client, context.securityPool, vaultCount, 2n))
 
-		strictEqualTypeSafe(activeVaultCount, 3n, 'one fully exited vault should leave three active vaults')
-		assert.deepStrictEqual([...firstPage, ...secondPage], activeVaults, 'paged active vault results should concatenate to the full active set')
-		assert.deepStrictEqual(emptyPage, [], 'pagination past the active set should be empty')
-		assert.strictEqual(activeVaults[0], vaultA.account.address, 'most recently touched active vault should be first')
-		assert.strictEqual(activeVaults[1], vaultC.account.address, 'untouched active vaults should retain newest-first order')
-		assert.strictEqual(activeVaults[2], client.account.address, 'baseline vault should remain active after other vault churn')
-		assert.strictEqual(new Set(activeVaults).size, activeVaults.length, 'active vault pagination should not duplicate entries')
-		assert.strictEqual(activeVaults.includes(vaultB.account.address), false, 'fully exited vault should be removed from the active list')
+		strictEqualTypeSafe(vaultCount, 4n, 'a fully exited vault should remain in the append-only registry')
+		assert.deepStrictEqual([...firstPage, ...secondPage], vaults, 'paged vault results should concatenate to the full registry')
+		assert.deepStrictEqual(emptyPage, [], 'pagination past the vault registry should be empty')
+		assert.deepStrictEqual(vaults, [vaultC.account.address, vaultB.account.address, vaultA.account.address, client.account.address], 'vault registry ordering should remain newest-created first regardless of later activity')
+		assert.strictEqual(new Set(vaults).size, vaults.length, 'vault pagination should not duplicate entries')
+		assert.strictEqual(vaults.includes(vaultB.account.address), true, 'fully exited vaults should remain discoverable for off-chain filtering')
 	})
 
-	test('active vault history remains coherent when a direct own-fork claim consumes the last escrow', async () => {
+	test('vault registry remains coherent when a direct own-fork claim consumes the last escrow', async () => {
 		const winningVault = createClient(1)
 		const losingVault = createClient(2)
 		await mockWindow.setTime(context.questionEndDate + 10n * DAY)
@@ -1524,8 +1524,8 @@ describe('Peripherals invariant harness', () => {
 		const losingRepRemaining = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, losingVault.account.address)).repBackingUnits)
 		await depositToEscalationGame(losingVault, context.securityPool, QuestionOutcome.No, losingRepRemaining)
 
-		const activeBeforeFork = Array.from(await getActiveVaults(client, context.securityPool, 0n, (await getActiveVaultCount(client, context.securityPool)) + 1n))
-		assert.ok(activeBeforeFork.includes(winningVault.account.address), 'an escrow-only vault should remain active before its claim')
+		const registeredBeforeFork = Array.from(await getVaults(client, context.securityPool, 0n, (await getVaultCount(client, context.securityPool)) + 1n))
+		assert.ok(registeredBeforeFork.includes(winningVault.account.address), 'an escrow-only vault should remain registered before its claim')
 		await forkZoltarWithOwnEscalationGame(client, context.securityPool)
 		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
 		await claimForkedEscalationDeposits(winningVault, context.securityPool, winningVault.account.address, QuestionOutcome.Yes, [0n, 1n])
@@ -1536,13 +1536,13 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(winningVaultAfterClaim.claimableFeesAttoEth, 0n, 'the claimed vault should have no parent claimable fees')
 		strictEqualTypeSafe(winningVaultAfterClaim.disputeStakedAttoRep, 0n, 'the direct claim should consume the vault final escalation escrow')
 
-		const activeAfterDirectClaim = Array.from(await getActiveVaults(client, context.securityPool, 0n, (await getActiveVaultCount(client, context.securityPool)) + 1n))
-		assert.strictEqual(new Set(activeAfterDirectClaim).size, activeAfterDirectClaim.length, 'a direct claim must not duplicate active vault entries')
-		assert.ok(activeAfterDirectClaim.includes(winningVault.account.address), 'the retained parent capacity position should keep the vault active after its direct escalation claim')
+		const registeredAfterDirectClaim = Array.from(await getVaults(client, context.securityPool, 0n, (await getVaultCount(client, context.securityPool)) + 1n))
+		assert.strictEqual(new Set(registeredAfterDirectClaim).size, registeredAfterDirectClaim.length, 'a direct claim must not duplicate vault registry entries')
+		assert.ok(registeredAfterDirectClaim.includes(winningVault.account.address), 'the vault should remain registered after its direct escalation claim')
 
 		await migrateVaultWithUnresolvedEscalation(winningVault, context.securityPool, winningVault.account.address, QuestionOutcome.Yes)
-		const activeAfterPoolSync = Array.from(await getActiveVaults(client, context.securityPool, 0n, (await getActiveVaultCount(client, context.securityPool)) + 1n))
-		assert.strictEqual(activeAfterPoolSync.includes(winningVault.account.address), false, 'the next pool-mediated vault synchronization should prune the zero-state vault')
+		const registeredAfterPoolSync = Array.from(await getVaults(client, context.securityPool, 0n, (await getVaultCount(client, context.securityPool)) + 1n))
+		assert.strictEqual(registeredAfterPoolSync.includes(winningVault.account.address), true, 'a later pool synchronization should retain the zero-state vault for off-chain filtering')
 	})
 
 	test('underfunded low-price fills and rejected zero-price bids reconcile without double consumption', async () => {

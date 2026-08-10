@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x03D9b7cc7eC06cE0bF935f93926a6d926B11f093"
+			"address": "0xFC285993F25784cCbeA9274805285E90F0632C4d"
 		},
 		{
 			"id": "weth",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xFbDE9662c302F2af593Ab51418e849ba8DFc2BD5"
+			"address": "0x104cc6F225109088469c792206a033759999bEC1"
 		}
 	],
 	"derivedContracts": [

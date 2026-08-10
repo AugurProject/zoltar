@@ -115,8 +115,8 @@ interface ISecurityPool {
 			uint256 claimableFeesAttoEth,
 			uint256 feeIndex
 		);
-	function getActiveVaultCount() external view returns (uint256);
-	function getActiveVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
+	function getVaultCount() external view returns (uint256);
+	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaults);
 	function parent() external view returns (ISecurityPool);
 	function systemState() external view returns (SystemState);
 	function shareToken() external view returns (IShareToken);
