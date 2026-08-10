@@ -67,7 +67,7 @@ test('Chromium test lock serializes competing owners and releases after failure'
 		},
 		{ port },
 	)
-	await Bun.sleep(25)
+	await Bun.sleep(2_100)
 	expect(secondOwnerAcquired).toBe(false)
 	if (releaseFirstOwner === undefined) throw new Error('Expected first Chromium lock owner release callback')
 	releaseFirstOwner()

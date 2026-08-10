@@ -3,7 +3,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '../../testUtils/queries'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
@@ -161,10 +160,17 @@ describe('CollateralizationCircle', () => {
 </html>`,
 					)
 
-					const browserResult = spawnSync(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', `file://${htmlPath}`], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
-					if (browserResult.error !== undefined) throw browserResult.error
-					if (browserResult.status !== 0) throw new Error(`Chromium gauge fit process exited with status ${browserResult.status?.toString() ?? 'unknown'}: ${browserResult.stderr}`)
-					const resultMatch = browserResult.stdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
+					const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', `file://${htmlPath}`], { stderr: 'pipe', stdout: 'pipe', windowsHide: true })
+					let timedOut = false
+					const timeoutId = setTimeout(() => {
+						timedOut = true
+						browser.kill()
+					}, 30_000)
+					const [exitCode, browserStderr, browserStdout] = await Promise.all([browser.exited, new Response(browser.stderr).text(), new Response(browser.stdout).text()])
+					clearTimeout(timeoutId)
+					if (timedOut) throw new Error('Chromium gauge fit process timed out after 30000ms')
+					if (exitCode !== 0) throw new Error(`Chromium gauge fit process exited with status ${exitCode.toString()}: ${browserStderr}`)
+					const resultMatch = browserStdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
 					expect(resultMatch).not.toBeNull()
 					const resultText = resultMatch?.[1]
 					if (resultText === undefined) throw new Error('Chromium did not return gauge fit measurements')
