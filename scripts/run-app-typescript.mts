@@ -18,24 +18,24 @@ const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
 		if (index >= nodeOptions.length) break
 		const start = index
 		let value = ''
-		let quote: '"' | "'" | undefined
+		let inDoubleQuotes = false
 		while (index < nodeOptions.length) {
 			const character = nodeOptions[index]
 			if (character === undefined) break
-			if (quote !== undefined) {
+			if (inDoubleQuotes) {
 				const nextCharacter = nodeOptions[index + 1]
-				if (character === '\\' && (nextCharacter === quote || nextCharacter === '\\')) {
+				if (character === '\\' && (nextCharacter === '"' || nextCharacter === '\\')) {
 					value += nextCharacter
 					index += 2
 					continue
 				}
-				if (character === quote) quote = undefined
+				if (character === '"') inDoubleQuotes = false
 				else value += character
 				index += 1
 				continue
 			}
-			if (character === '"' || character === "'") {
-				quote = character
+			if (character === '"') {
+				inDoubleQuotes = true
 				index += 1
 				continue
 			}
