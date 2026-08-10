@@ -200,6 +200,7 @@ export type SecurityPoolCreationResult = {
 }
 
 export type SecurityVaultDetails = {
+	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
 	disputeStakedAttoRep: bigint
 	managerAddress: Address
@@ -354,6 +355,7 @@ export type ListedSecurityPool = {
 	universeId: bigint
 	vaultCount: bigint
 	hasLoadedVaults?: boolean
+	vaultScanCapped?: boolean
 	vaults: SecurityPoolVaultSummary[]
 }
 

@@ -81,7 +81,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -130,7 +130,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -190,7 +190,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -255,7 +255,7 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') return 0n
+				if (request.functionName === 'getVaultCount') return 0n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -272,7 +272,7 @@ describe('securityPools protocol client', () => {
 	test('loadAllSecurityPools batches vault summary tuple reads through multicall', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2')] as const
+		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')] as const
 		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
 		const loadedVaultAddresses: Address[] = []
 		let securityVaultSummaryBatchCount = 0
@@ -282,12 +282,19 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'securityVaults' || functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') expect(request.blockNumber).toBe(0n)
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
-				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'vaultBadDebtAttoEth') {
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected vaultBadDebtAttoEth args')
+						return getAddress(args[0]) === previewVaultAddresses[1] ? 7n : 0n
+					})
+				}
 				if (functionName === 'securityVaults') {
 					securityVaultSummaryBatchCount += 1
 					return contracts.map(contract => {
@@ -295,7 +302,14 @@ describe('securityPools protocol client', () => {
 						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected securityVaults args')
 						const currentVaultAddress = getAddress(args[0])
 						loadedVaultAddresses.push(currentVaultAddress)
-						return [2n, 0n, 0n, 0n, 0n]
+						return currentVaultAddress === previewVaultAddresses[0] ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]
+					})
+				}
+				if (functionName === 'disputeStakedRepByVaultAttoRep') {
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected disputeStakedRepByVaultAttoRep args')
+						return getAddress(args[0]) === previewVaultAddresses[0] ? 5n : 0n
 					})
 				}
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
@@ -316,11 +330,11 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getActiveVaultCount') return 2n
-				if (request.functionName === 'getActiveVaults') return previewVaultAddresses
+				if (request.functionName === 'getVaultCount') return 3n
+				if (request.functionName === 'getVaults') return previewVaultAddresses
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 6n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 0n
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -334,8 +348,9 @@ describe('securityPools protocol client', () => {
 
 		expect(securityVaultSummaryBatchCount).toBe(1)
 		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
-		expect(pool.vaults.map(vault => vault.disputeStakedAttoRep)).toEqual([5n, 6n])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([previewVaultAddresses[0], previewVaultAddresses[1]])
+		expect(pool.vaults.map(vault => vault.disputeStakedAttoRep)).toEqual([5n, 0n])
+		expect(pool.vaults.map(vault => vault.badDebtAttoEth)).toEqual([0n, 7n])
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
@@ -343,7 +358,7 @@ describe('securityPools protocol client', () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
-		let getActiveVaultsCallCount = 0
+		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
@@ -379,10 +394,10 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getActiveVaultCount') return 5n
-				if (request.functionName === 'getActiveVaults') {
-					getActiveVaultsCallCount += 1
-					expect(request.args).toEqual([0n, 3n])
+				if (request.functionName === 'getVaultCount') return 5n
+				if (request.functionName === 'getVaults') {
+					getVaultsCallCount += 1
+					expect(request.args).toEqual([0n, 5n])
 					return previewVaultAddresses
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
@@ -398,7 +413,7 @@ describe('securityPools protocol client', () => {
 		const [pool] = page.pools
 		if (pool === undefined) throw new Error('Expected one paged security pool')
 
-		expect(getActiveVaultsCallCount).toBe(1)
+		expect(getVaultsCallCount).toBe(1)
 		expect(securityVaultSummaryMulticallCount).toBe(1)
 		expect(pool.hasLoadedVaults).toBe(true)
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
@@ -407,10 +422,228 @@ describe('securityPools protocol client', () => {
 		expect(pool.questionId).toBe('0x1')
 	})
 
+	test('loadSecurityPoolPage scans past exited known vaults to fill actionable previews', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
+		const currentVaultAddress = knownVaultAddresses[3]
+		if (currentVaultAddress === undefined) throw new Error('Expected a current vault address')
+		const getVaultsCalls: [bigint, bigint][] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'settlementCollateralAttoEth') {
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+				}
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'securityVaults') {
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected securityVaults args')
+						return getAddress(args[0]) === currentVaultAddress ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]
+					})
+				}
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							statoblastSecurityMultiplierBps: 20_000n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') {
+					expect(request.blockNumber).toBe(0n)
+					return BigInt(knownVaultAddresses.length)
+				}
+				if (request.functionName === 'getVaults') {
+					expect(request.blockNumber).toBe(0n)
+					const [startIndex, count] = request.args ?? []
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
+					getVaultsCalls.push([startIndex, count])
+					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 1)
+		const [pool] = page.pools
+		if (pool === undefined) throw new Error('Expected one paged security pool')
+
+		expect(getVaultsCalls).toEqual([[0n, 4n]])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([currentVaultAddress])
+		expect(pool.vaultCount).toBe(4n)
+	})
+
+	test('loadSecurityPoolPage caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
+			getAddress(
+				`0x${BigInt(index + 1)
+					.toString(16)
+					.padStart(40, '0')}`,
+			),
+		)
+		const getVaultsCalls: [bigint, bigint][] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'settlementCollateralAttoEth') {
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+				}
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'securityVaults') return contracts.map(() => [0n, 0n, 0n, 0n, 0n])
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							statoblastSecurityMultiplierBps: 20_000n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') return BigInt(knownVaultAddresses.length)
+				if (request.functionName === 'getVaults') {
+					const [startIndex, count] = request.args ?? []
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
+					getVaultsCalls.push([startIndex, count])
+					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 1)
+		const [pool] = page.pools
+		if (pool === undefined) throw new Error('Expected one paged security pool')
+
+		expect(getVaultsCalls).toHaveLength(10)
+		expect(getVaultsCalls[0]).toEqual([0n, 50n])
+		expect(getVaultsCalls[9]).toEqual([450n, 50n])
+		expect(pool.vaults).toEqual([])
+		expect(pool.vaultScanCapped).toBe(true)
+	})
+
+	test('loadSecurityPoolPage keeps the connected account after later positions fill the preview cap', async () => {
+		const questionId = 1n
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const knownVaultAddresses = [
+			getAddress('0x00000000000000000000000000000000000000c1'),
+			getAddress('0x00000000000000000000000000000000000000c2'),
+			getAddress('0x00000000000000000000000000000000000000c3'),
+			getAddress('0x00000000000000000000000000000000000000c4'),
+			getAddress('0x00000000000000000000000000000000000000c5'),
+			getAddress('0x00000000000000000000000000000000000000c6'),
+		]
+		const firstPreviewVaultAddress = knownVaultAddresses[0]
+		const secondPreviewVaultAddress = knownVaultAddresses[1]
+		const accountAddress = knownVaultAddresses[5]
+		const thirdPreviewVaultAddress = knownVaultAddresses[3]
+		if (firstPreviewVaultAddress === undefined || secondPreviewVaultAddress === undefined || accountAddress === undefined || thirdPreviewVaultAddress === undefined) throw new Error('Expected current vault addresses')
+		const currentVaultAddresses = new Set([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
+		const getVaultsCalls: [bigint, bigint][] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'settlementCollateralAttoEth') {
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
+				}
+				if (functionName === 'questions') return [questionTuple, 1n]
+				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
+				if (functionName === 'securityVaults') {
+					return contracts.map(contract => {
+						const args = Reflect.get(contract, 'args')
+						if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected securityVaults args')
+						return currentVaultAddresses.has(getAddress(args[0])) ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]
+					})
+				}
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					return [
+						{
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+							parent: zeroAddress,
+							priceOracleManagerAndOperatorQueuer: zeroAddress,
+							questionId,
+							statoblastSecurityMultiplierBps: 20_000n,
+							securityPool: securityPoolAddress,
+							truthAuction: zeroAddress,
+							universeId: 1n,
+						},
+					]
+				}
+				if (request.functionName === 'getVaultCount') return BigInt(knownVaultAddresses.length)
+				if (request.functionName === 'getVaults') {
+					const [startIndex, count] = request.args ?? []
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
+					getVaultsCalls.push([startIndex, count])
+					return knownVaultAddresses.slice(Number(startIndex), Number(startIndex + count))
+				}
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
+				if (request.functionName === 'totalRepBackingUnits') return 10n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadSecurityPoolPage(client, 0, 1, accountAddress)
+		const [pool] = page.pools
+		if (pool === undefined) throw new Error('Expected one paged security pool')
+
+		expect(getVaultsCalls).toEqual([[0n, 6n]])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
+	})
+
 	test('loadSecurityPoolPage marks empty browse-page vault sets as already loaded', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		let getActiveVaultsCallCount = 0
+		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
@@ -446,9 +679,9 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getActiveVaultCount') return 0n
-				if (request.functionName === 'getActiveVaults') {
-					getActiveVaultsCallCount += 1
+				if (request.functionName === 'getVaultCount') return 0n
+				if (request.functionName === 'getVaults') {
+					getVaultsCallCount += 1
 					throw new Error('Empty browse-page loads should not fetch preview vault addresses')
 				}
 				if (request.functionName === 'securityVaults') throw new Error('Empty browse-page loads should not fetch per-vault summaries')
@@ -464,7 +697,7 @@ describe('securityPools protocol client', () => {
 		const [pool] = page.pools
 		if (pool === undefined) throw new Error('Expected one paged security pool')
 
-		expect(getActiveVaultsCallCount).toBe(0)
+		expect(getVaultsCallCount).toBe(0)
 		expect(securityVaultSummaryMulticallCount).toBe(0)
 		expect(pool.hasLoadedVaults).toBe(true)
 		expect(pool.vaultCount).toBe(0n)
@@ -529,12 +762,12 @@ describe('securityPools protocol client', () => {
 						},
 					]
 				}
-				if (request.functionName === 'getVaultCount' || request.functionName === 'getActiveVaultCount') {
+				if (request.functionName === 'getVaultCount') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					return getAddress(address) === securityPoolAddress ? 1n : 2n
 				}
-				if (request.functionName === 'getVaults' || request.functionName === 'getActiveVaults') {
+				if (request.functionName === 'getVaults') {
 					const address = Reflect.get(request, 'address')
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					const normalizedAddress = getAddress(address)

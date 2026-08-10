@@ -25,6 +25,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
+		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
@@ -179,6 +180,26 @@ describe('SecurityVaultSection', () => {
 		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
 		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded dispute-staked REP metric')
 		expect(escalationMetric.textContent).toContain('0 REP')
+	})
+
+	test('expands the embedded selected-vault summary grid for nonzero bad debt', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={0n}
+				securityVaultDetails={createSecurityVaultDetails({ badDebtAttoEth: 2n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summaryGrid = document.querySelector('.security-pool-browse-vault-row-top-compact')
+		if (!(summaryGrid instanceof HTMLElement)) throw new Error('Expected the embedded selected-vault summary grid')
+		expect(summaryGrid.classList.contains('with-bad-debt')).toBe(true)
 	})
 
 	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {

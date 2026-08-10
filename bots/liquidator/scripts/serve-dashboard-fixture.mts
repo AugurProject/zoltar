@@ -68,7 +68,7 @@ let strategy = {
 
 function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {
 	return {
-		activeVaultCount: candidateCount === 0 ? '4' : '18',
+		knownVaultCount: candidateCount === 0 ? '4' : '18',
 		address,
 		approvedUniverse,
 		botVault: {

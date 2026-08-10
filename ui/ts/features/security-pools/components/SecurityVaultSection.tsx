@@ -70,7 +70,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
 			<div className='security-pool-browse-vault-row'>
-				<div className='security-pool-browse-vault-row-top security-pool-browse-vault-row-top-compact'>
+				<div className={`security-pool-browse-vault-row-top security-pool-browse-vault-row-top-compact${securityVaultDetails.badDebtAttoEth > 0n ? ' with-bad-debt' : ''}`}>
 					<div className='security-pool-browse-vault-row-title'>
 						<div className='security-pool-browse-vault-row-id'>
 							<strong>
@@ -96,12 +96,21 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 							<CurrencyValue value={securityVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
 						</strong>
 					</div>
+					{securityVaultDetails.badDebtAttoEth > 0n ? (
+						<div className='security-pool-browse-vault-row-kpi'>
+							<span>{securityPoolCopy.badDebt}</span>
+							<strong>
+								<CurrencyValue value={securityVaultDetails.badDebtAttoEth} suffix={commonCopy.eth} />
+							</strong>
+						</div>
+					) : null}
 				</div>
 			</div>
 		</div>
 	)
 	const gridContent = (
 		<VaultMetricGrid
+			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
 			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}

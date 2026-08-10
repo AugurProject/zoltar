@@ -24,7 +24,7 @@ type Candidate = {
 }
 
 type Pool = {
-	activeVaultCount: string
+	knownVaultCount: string
 	address: string
 	approvedUniverse: boolean
 	botVault: Vault
@@ -632,7 +632,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(addressDetails),
 				cell(stacked(`#${pool.questionId}`, `${pool.multiplierBps} bps collateral`)),
 				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
-				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCapacityOwnershipRep} REP capacity ownership · ${pool.activeVaultCount} vaults`)),
+				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCapacityOwnershipRep} REP capacity ownership · ${pool.knownVaultCount} known vaults`)),
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.capacityOwnershipRep} REP capacity ownership · ${pool.botVault.openInterestDisplay} ETH open interest · ${pool.botVault.claimableFeesEth} ETH fees`)),
 				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
 			]

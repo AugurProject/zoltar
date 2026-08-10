@@ -78,8 +78,8 @@ describe('Peripherals: escalation migration', () => {
 		depositToEscalationGame,
 		getRepToken,
 		getAwaitingForkContinuation,
-		getActiveVaultCount,
-		getActiveVaults,
+		getVaultCount,
+		getVaults,
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
@@ -816,12 +816,12 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(parentVaultAfterExport.repBackingUnits, 0n, 'the parent vault should have no remaining REP backing after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.capacityOwnershipAttoRep, 0n, 'the parent vault should have no remaining capacity ownership after migration')
 		strictEqualTypeSafe(parentVaultAfterExport.disputeStakedAttoRep, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
-		const activeParentVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
-		const activeParentVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeParentVaultCount)
+		const parentVaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
+		const parentVaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, parentVaultCount)
 		strictEqualTypeSafe(
-			activeParentVaults.some(vault => vault.toLowerCase() === client.account.address.toLowerCase()),
-			false,
-			'a fully migrated vault should be removed from the parent active-vault index',
+			parentVaults.some(vault => vault.toLowerCase() === client.account.address.toLowerCase()),
+			true,
+			'a fully migrated vault should remain discoverable in the parent vault registry',
 		)
 		strictEqualTypeSafe(await contractExists(client, yesPool.securityPool), true, 'the selected yes child should be created')
 		strictEqualTypeSafe(await contractExists(client, invalidPool.securityPool), false, 'the unused invalid child should not be created')
@@ -1131,7 +1131,7 @@ describe('Peripherals: escalation migration', () => {
 		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtResume, 'child continuation cost should advance without the other vault')
 		const attackerParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 		assert.ok(attackerParentVault.disputeStakedAttoRep > 0n, 'the inactive vault should remain untouched in the parent')
-		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, attackerClient.account.address), 0n, 'the active vault should not migrate another vault into its child')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, attackerClient.account.address), 0n, 'the caller vault should not migrate another vault into its child')
 	})
 
 	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {

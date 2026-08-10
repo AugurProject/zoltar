@@ -159,11 +159,11 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 					</select>
 				</label>
 				<label className='field'>
-					<span>{securityPoolCopy.vaultCoverage}</span>
+					<span>{securityPoolCopy.knownVaultRegistry}</span>
 					<select value={vaultFilter} onChange={event => setVaultFilter(event.currentTarget.value as 'all' | 'has-vaults' | 'empty')}>
 						<option value='all'>{securityPoolCopy.allPools}</option>
-						<option value='has-vaults'>{securityPoolCopy.hasVaults}</option>
-						<option value='empty'>{securityPoolCopy.noVaults}</option>
+						<option value='has-vaults'>{securityPoolCopy.hasKnownVaults}</option>
+						<option value='empty'>{securityPoolCopy.noKnownVaults}</option>
 					</select>
 				</label>
 			</div>
@@ -220,7 +220,7 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 										)
 									}
 									metrics={[
-										{ label: securityPoolCopy.vaults, value: pool.vaultCount.toString() },
+										{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
 										{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
 										{
 											label: commonCopy.openOraclePrice,

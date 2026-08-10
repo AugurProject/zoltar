@@ -66,12 +66,10 @@ describe('Peripherals: vault accounting', () => {
 		getTotalRepBackingUnits,
 		getRepToken,
 		getTotalPoolHeldAttoRep,
-		getActiveVaultCount,
-		getActiveVaults,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
 		getVaultCount,
 		getVaults,
+		getSecurityPoolsEscalationGame,
+		getSecurityVault,
 		backingUnitsToAttoRep,
 		redeemFees,
 		redeemRepFromVault,
@@ -276,58 +274,59 @@ describe('Peripherals: vault accounting', () => {
 		const emptyPage = await getVaults(client, securityPoolAddresses.securityPool, 3n, 1n)
 
 		strictEqualTypeSafe(vaultCount, 3n, 'vault count should track unique vault addresses')
-		assert.deepStrictEqual(firstPage, [client.account.address, thirdClient.account.address], 'first page should include the two most recently active vaults')
-		assert.deepStrictEqual(secondPage, [attackerClient.account.address], 'second page should include the remaining active vault')
+		assert.deepStrictEqual(firstPage, [thirdClient.account.address, attackerClient.account.address], 'first page should include the two newest vault registrations')
+		assert.deepStrictEqual(secondPage, [client.account.address], 'second page should include the oldest vault registration')
 		assert.deepStrictEqual(emptyPage, [], 'out of range paging should return an empty array')
 	})
 
-	test('vault paging aliases expose only active vaults', async () => {
+	test('vault registry retains fully exited vaults for off-chain filtering', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 
-		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), 2n, 'vault count alias should include both active vaults')
-		strictEqualTypeSafe(await getActiveVaultCount(client, securityPoolAddresses.securityPool), 2n, 'active vault count should include both funded vaults')
-
 		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
 		const vaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
-		const activeVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
-		const activeVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeVaultCount)
+		const vaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, vaultCount)
 
-		strictEqualTypeSafe(vaultCount, 1n, 'vault count alias should prune fully exited vaults')
-		strictEqualTypeSafe(activeVaultCount, 1n, 'active vault count should prune fully exited vaults')
-		assert.deepStrictEqual(activeVaults, [client.account.address], 'active vault paging should only return currently active vaults')
+		strictEqualTypeSafe(vaultCount, 2n, 'vault count should retain every economically initialized vault')
+		assert.deepStrictEqual(vaults, [attackerClient.account.address, client.account.address], 'vault paging should retain the fully exited vault in newest-registered-first order')
 	})
 
-	test('active vault paging stays newest-first after vault removal and later vault updates', async () => {
+	test('vault registry order remains stable after exits and later updates', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await approveAndDepositRepToVault(thirdClient, repDeposit, questionId)
 
-		const newestFirstVaultsBeforeRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
-		assert.deepStrictEqual(newestFirstVaultsBeforeRemoval, [thirdClient.account.address, attackerClient.account.address, client.account.address], 'active vault paging should list the most recently activated vaults first')
+		const newestFirstVaultsBeforeRemoval = await getVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsBeforeRemoval, [thirdClient.account.address, attackerClient.account.address, client.account.address], 'vault paging should list newest registrations first')
 
 		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
-		const newestFirstVaultsAfterRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
-		assert.deepStrictEqual(newestFirstVaultsAfterRemoval, [thirdClient.account.address, client.account.address], 'removing a middle vault should preserve newest-first ordering for the remaining active vaults')
+		const newestFirstVaultsAfterRemoval = await getVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsAfterRemoval, newestFirstVaultsBeforeRemoval, 'a fully exited vault should remain in its original registry position')
 
 		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
 
-		const newestFirstVaultsAfterTouch = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
-		assert.deepStrictEqual(newestFirstVaultsAfterTouch, [client.account.address, thirdClient.account.address], 'updating an active vault should move it to the front of the newest-first active vault preview')
+		const newestFirstVaultsAfterTouch = await getVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
+		assert.deepStrictEqual(newestFirstVaultsAfterTouch, newestFirstVaultsBeforeRemoval, 'updating a known vault should not reorder the append-only registry')
 	})
 
-	test('updateVaultFees emits no accounting checkpoints for an empty vault after accrual is capped', async () => {
+	test('updateVaultFees registers an empty vault once without emitting no-op accounting checkpoints', async () => {
 		const emptyVaultPrivateKey = TEST_ADDRESSES[4]
 		if (emptyVaultPrivateKey === undefined) throw new Error('empty vault test address missing')
 		const emptyVault = addressString(emptyVaultPrivateKey)
+		const vaultCountBeforeCheckpoint = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 1n)
 		await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+		const vaultCountAfterCheckpoint = await getVaultCount(client, securityPoolAddresses.securityPool)
+		const registeredVaults = await getVaults(client, securityPoolAddresses.securityPool, 0n, vaultCountAfterCheckpoint)
+
+		strictEqualTypeSafe(vaultCountAfterCheckpoint, vaultCountBeforeCheckpoint + 1n, 'checkpointing a new address should register it without inspecting vault state')
+		assert.strictEqual(registeredVaults[0], emptyVault, 'the newly checkpointed vault should be the newest registry entry')
 
 		const noOpHash = await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
 		const noOpReceipt = await client.getTransactionReceipt({ hash: noOpHash })
