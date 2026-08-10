@@ -1,11 +1,9 @@
 import { expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { applicationTypeScriptNodeOptions } from './run-app-typecheck.mts'
+import { applicationTypeScriptCommand } from './run-app-typecheck.mts'
 
-test('gives the application TypeScript compiler a cross-platform 6 GB heap', () => {
-	expect(applicationTypeScriptNodeOptions(undefined)).toBe('--max-old-space-size=6144')
-	expect(applicationTypeScriptNodeOptions('')).toBe('--max-old-space-size=6144')
-	expect(applicationTypeScriptNodeOptions('--trace-warnings')).toBe('--trace-warnings --max-old-space-size=6144')
+test('passes the heap limit directly to Node instead of relying on bun x environment forwarding', () => {
+	expect(applicationTypeScriptCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc')).toEqual(['C:\\Program Files\\nodejs\\node.exe', '--max-old-space-size=6144', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--noEmit'])
 })
 
 test('routes the application TypeScript command through the heap-aware launcher', async () => {
