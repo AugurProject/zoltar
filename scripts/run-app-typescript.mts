@@ -5,25 +5,46 @@ export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
 const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url))
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size(?:=([0-9]+))?$/
 
-const tokenizeNodeOptions = (nodeOptions: string): string[] => {
-	const tokens: string[] = []
-	let token = ''
-	let quote: '"' | "'" | undefined
-	for (const character of nodeOptions) {
-		if (quote !== undefined) {
-			if (character === quote) quote = undefined
-			else token += character
-			continue
-		}
-		if (character === '"' || character === "'") quote = character
-		else if (/\s/.test(character)) {
-			if (token !== '') {
-				tokens.push(token)
-				token = ''
+type NodeOptionToken = {
+	readonly raw: string
+	readonly value: string
+}
+
+const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
+	const tokens: NodeOptionToken[] = []
+	let index = 0
+	while (index < nodeOptions.length) {
+		while (/\s/.test(nodeOptions[index] ?? '')) index += 1
+		if (index >= nodeOptions.length) break
+		const start = index
+		let value = ''
+		let quote: '"' | "'" | undefined
+		while (index < nodeOptions.length) {
+			const character = nodeOptions[index]
+			if (character === undefined) break
+			if (quote !== undefined) {
+				const nextCharacter = nodeOptions[index + 1]
+				if (character === '\\' && (nextCharacter === quote || nextCharacter === '\\')) {
+					value += nextCharacter
+					index += 2
+					continue
+				}
+				if (character === quote) quote = undefined
+				else value += character
+				index += 1
+				continue
 			}
-		} else token += character
+			if (character === '"' || character === "'") {
+				quote = character
+				index += 1
+				continue
+			}
+			if (/\s/.test(character)) break
+			value += character
+			index += 1
+		}
+		tokens.push({ raw: nodeOptions.slice(start, index), value })
 	}
-	if (token !== '') tokens.push(token)
 	return tokens
 }
 
@@ -32,12 +53,12 @@ const getExplicitHeapLimitMb = (nodeOptions: string | undefined): string | undef
 	const tokens = tokenizeNodeOptions(nodeOptions)
 	let explicitHeapLimitMb: string | undefined
 	for (let index = 0; index < tokens.length; index += 1) {
-		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(tokens[index] ?? '')
+		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(tokens[index]?.value ?? '')
 		if (match === null) continue
 		const inlineValue = match[1]
 		if (inlineValue !== undefined) explicitHeapLimitMb = inlineValue
-		else if (/^[0-9]+$/.test(tokens[index + 1] ?? '')) {
-			explicitHeapLimitMb = tokens[index + 1]
+		else if (/^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) {
+			explicitHeapLimitMb = tokens[index + 1]?.value
 			index += 1
 		}
 	}
@@ -49,16 +70,17 @@ export const getApplicationTypeScriptNodeOptions = (existingNodeOptions: string 
 	const tokens = tokenizeNodeOptions(existingNodeOptions)
 	const retainedTokens: string[] = []
 	for (let index = 0; index < tokens.length; index += 1) {
-		const token = tokens[index] ?? ''
-		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token)
+		const token = tokens[index]
+		if (token === undefined) continue
+		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) {
-			retainedTokens.push(token)
+			retainedTokens.push(token.raw)
 			continue
 		}
-		if (match[1] === undefined && /^[0-9]+$/.test(tokens[index + 1] ?? '')) index += 1
+		if (match[1] === undefined && /^[0-9]+$/.test(tokens[index + 1]?.value ?? '')) index += 1
 	}
 	if (retainedTokens.length === 0) return undefined
-	return retainedTokens.map(token => (/[\s"']/.test(token) ? JSON.stringify(token) : token)).join(' ')
+	return retainedTokens.join(' ')
 }
 
 export function getApplicationTypeScriptHeapOption(existingNodeOptions: string | undefined) {

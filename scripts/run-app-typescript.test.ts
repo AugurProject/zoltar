@@ -33,4 +33,21 @@ describe('application TypeScript process arguments', () => {
 		expect(getApplicationTypeScriptNodeOptions('--trace-warnings --max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--trace-warnings')
 		expect(getApplicationTypeScriptNodeOptions('--max-old-space-size 7168')).toBeUndefined()
 	})
+
+	test('preserves escaped quotes in non-heap NODE_OPTIONS', () => {
+		const nodeExecutablePath = Bun.which('node')
+		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript option-preservation test')
+		const nodeOptions = '--title="hello \\"world\\"" --max-old-space-size=7168'
+		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
+		expect(childNodeOptions).toBe('--title="hello \\"world\\""')
+		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
+			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+		const output = JSON.parse(new TextDecoder().decode(result.stdout)) as { heapLimit: number; title: string }
+		expect(output.title).toBe('hello "world"')
+		expect(output.heapLimit).toBeGreaterThanOrEqual(7168 * 1024 * 1024)
+	})
 })
