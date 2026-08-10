@@ -1,6 +1,5 @@
-import { formatEther, formatUnits } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, formatEther, formatUnits } from '@zoltar/shared/ethereum'
 
-const MILLISECONDS_PER_SECOND = 1000
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
@@ -66,13 +65,15 @@ function formatTimestampPart(value: number) {
 }
 
 function formatUtcTimestamp(timestamp: bigint) {
-	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	if (timestamp < -8_640_000_000_000n || timestamp > 8_640_000_000_000n) return undefined
+	const date = new Date(bigintToSafeNumber(timestamp * 1_000n, 'Timestamp'))
 	if (Number.isNaN(date.getTime())) return undefined
 	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
 }
 
 export function formatTimestampDateTime(timestamp: bigint) {
-	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	if (timestamp < -8_640_000_000_000n || timestamp > 8_640_000_000_000n) return undefined
+	const date = new Date(bigintToSafeNumber(timestamp * 1_000n, 'Timestamp'))
 	return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 

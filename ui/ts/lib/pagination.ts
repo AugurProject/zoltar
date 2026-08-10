@@ -27,7 +27,7 @@ export function resolvePaginationPageIndex(pageIndex: number, pageCount: bigint 
 	const lastPageIndex = pageCount - 1n
 	if (BigInt(pageIndex) <= lastPageIndex) return pageIndex
 	if (lastPageIndex > BigInt(Number.MAX_SAFE_INTEGER)) return pageIndex
-	return Number(lastPageIndex)
+	return bigintToSafeNumber(lastPageIndex, 'Pagination page index')
 }
 
 export function formatPaginationSummary(pageIndex: number, pageCount: bigint | undefined) {
@@ -37,3 +37,4 @@ export function formatPaginationSummary(pageIndex: number, pageCount: bigint | u
 	const displayedPageCount = pageCount === 0n ? 1n : pageCount
 	return `Page ${currentPage.toString()} of ${displayedPageCount.toString()}`
 }
+import { bigintToSafeNumber } from '@zoltar/shared/ethereum'

@@ -542,7 +542,7 @@ function cloneHexPeaksTriple(values: HexPeaksTriple): HexPeaksTriple {
 }
 
 function appendCarryLeaf(state: ReplayState, emitter: Address, deposit: DisputeStakedRepDepositReplay) {
-	const outcomeIndex = Number(deposit.outcome)
+	const outcomeIndex = Number.parseInt(deposit.outcome.toString(), 10)
 	const counts = state.escalationLeafCounts.get(emitter) ?? [0n, 0n, 0n]
 	const peaksByOutcome = state.escalationCarryPeaks.get(emitter) ?? [[], [], []]
 	const peaks = peaksByOutcome[outcomeIndex]
@@ -1079,13 +1079,13 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			attoRepAmount: requireBigInt(log.args, 'attoRepAmount'),
 			parentDepositIndex: requireBigInt(log.args, 'parentDepositIndex'),
 			cumulativeRepAmountAttoRep: requireBigInt(log.args, 'cumulativeRepAmountAttoRep'),
-			carryLeafIndex: state.escalationLeafCounts.get(log.emitter)?.[Number(outcome)] ?? 0n,
+			carryLeafIndex: state.escalationLeafCounts.get(log.emitter)?.[Number.parseInt(outcome.toString(), 10)] ?? 0n,
 			consumed: false,
 		}
 		getOrCreateNestedMap(state.escalationDeposits, log.emitter).set(`${outcome.toString()}:${deposit.parentDepositIndex.toString()}`, deposit)
 		const unresolvedByVault = getOrCreateNestedMap(state.escalationLocalUnresolvedByVault, log.emitter)
 		const vaultTotals = unresolvedByVault.get(deposit.depositor) ?? [0n, 0n, 0n]
-		const outcomeIndex = Number(outcome)
+		const outcomeIndex = Number.parseInt(outcome.toString(), 10)
 		vaultTotals[outcomeIndex] += deposit.attoRepAmount
 		unresolvedByVault.set(deposit.depositor, vaultTotals)
 		const unresolvedTotals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
@@ -1121,7 +1121,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'CarryDepositConsumed') {
 		const outcome = requireBigInt(log.args, 'outcome')
 		if (outcome < 0n || outcome > 2n) throw new Error('carry consumption outcome is out of range')
-		const index = Number(outcome)
+		const index = Number.parseInt(outcome.toString(), 10)
 		const totals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
 		totals[index] = requireBigInt(log.args, 'resultingUnresolvedTotalAttoRep')
 		state.escalationUnresolvedTotals.set(log.emitter, totals)
@@ -1159,7 +1159,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			}
 			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
 			if (leaves !== undefined) {
-				const carryLeafIndex = Number(deposit.carryLeafIndex)
+				const carryLeafIndex = Number.parseInt(deposit.carryLeafIndex.toString(), 10)
 				if (!Number.isSafeInteger(carryLeafIndex) || carryLeafIndex < 0 || carryLeafIndex >= leaves.length) throw new Error('local carry leaf index is out of range')
 				leaves[carryLeafIndex] = ZERO_HASH
 				const peaksByOutcome = state.escalationCarryPeaks.get(log.emitter)
@@ -1219,7 +1219,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter).set(depositor, requireBigInt(log.args, 'disputeStakedRepByVaultAttoRep'))
 		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'totalDisputeStakedAttoRep'))
 		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
-		resolutionBalancesAttoRep[Number(outcome)] = requireBigInt(log.args, 'outcomeBalanceAttoRep')
+		resolutionBalancesAttoRep[Number.parseInt(outcome.toString(), 10)] = requireBigInt(log.args, 'outcomeBalanceAttoRep')
 		state.escalationResolutionBalances.set(log.emitter, resolutionBalancesAttoRep)
 		return
 	}

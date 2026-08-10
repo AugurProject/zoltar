@@ -37,3 +37,13 @@ export function parseCoreDeploymentManifest(manifest: unknown) {
 export function requireMatchingChain(configuredChainId: bigint, rpcChainId: bigint) {
 	if (configuredChainId !== rpcChainId) throw new Error(`Core deployment chain ${configuredChainId} does not match RPC chain ${rpcChainId}`)
 }
+
+export function requireReceiptBlockNumber(value: unknown) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) throw new Error('Deployment receipt is missing a valid block number')
+	return BigInt(value).toString()
+}
+
+export function requireSafeChainId(chainId: bigint) {
+	if (chainId < 0n || chainId > 9_007_199_254_740_991n) throw new Error('Chain ID must fit in a JavaScript safe integer')
+	return Number.parseInt(chainId.toString(), 10)
+}

@@ -1685,8 +1685,8 @@ describe('Peripherals: fork migration', () => {
 			const timePassed = endTime - aMonthFromNow
 			strictEqualTypeSafe(timePassed / 8640n, 3345n, 'not enough time passed')
 			strictEqualTypeSafe(retentionRate, 999999987364000000n, 'retention rate did not match')
-			const settlementCollateralAttoEthPercentage = Number((settlementCollateralAttoEth * 1000n) / openInterestAmount) / 10
-			const expected = Number((1000n * rpow(retentionRate, timePassed, PRICE_PRECISION)) / PRICE_PRECISION) / 10
+			const settlementCollateralAttoEthPercentage = Number.parseInt(((settlementCollateralAttoEth * 1000n) / openInterestAmount).toString(), 10) / 10
+			const expected = Number.parseInt(((1000n * rpow(retentionRate, timePassed, PRICE_PRECISION)) / PRICE_PRECISION).toString(), 10) / 10
 			strictEqualTypeSafe(settlementCollateralAttoEthPercentage, expected, 'return amount did not match')
 			const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(contractBalance + ethBalanceAttoEthAfter - ethBalanceAttoEthBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')

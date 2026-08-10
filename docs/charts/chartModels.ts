@@ -166,18 +166,26 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 }
 
 export const ESCALATION_ACTIVATION_DELAY_DAYS = 3
-export const ESCALATION_TIME_LENGTH_DAYS = Number(ESCALATION_TIME_LENGTH) / 86_400
+export const ESCALATION_TIME_LENGTH_DAYS = Number.parseInt(ESCALATION_TIME_LENGTH.toString(), 10) / 86_400
 export const ESCALATION_TIME_LENGTH_SECONDS = ESCALATION_TIME_LENGTH
 
 const ATTO_REP = 10n ** 18n
 
-export function toAttoRep(value: number) {
+function attoRepToNumber(value: bigint) {
+	const sign = value < 0n ? '-' : ''
+	const magnitude = value < 0n ? -value : value
+	const integer = magnitude / ATTO_REP
+	const fractional = (magnitude % ATTO_REP).toString().padStart(18, '0')
+	return Number.parseFloat(`${sign}${integer.toString()}.${fractional}`)
+}
+
+function toAttoRep(value: number) {
 	return BigInt(Math.round(value * 1_000_000)) * 1_000_000_000_000n
 }
 
 export function computeCanonicalEscalationBindingCapital(startBondRep: number, nonDecisionThresholdRep: number, elapsedDays: number) {
 	const elapsedSeconds = BigInt(Math.round(Math.max(0, elapsedDays - ESCALATION_ACTIVATION_DELAY_DAYS) * 86_400))
-	return Number(computeEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds)) / Number(ATTO_REP)
+	return attoRepToNumber(computeEscalationBindingCapitalAttoRep(toAttoRep(startBondRep), toAttoRep(nonDecisionThresholdRep), elapsedSeconds))
 }
 
 export function computeCanonicalEscalationDeadlineDays(startBondRep: number, nonDecisionThresholdRep: number, bindingCapitalRep: number) {
@@ -187,7 +195,7 @@ export function computeCanonicalEscalationDeadlineDays(startBondRep: number, non
 	if (bindingCapitalAttoRep <= startBondAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS
 	if (bindingCapitalAttoRep >= thresholdAttoRep) return ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS
 	const elapsedSeconds = computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, thresholdAttoRep, bindingCapitalAttoRep)
-	return ESCALATION_ACTIVATION_DELAY_DAYS + Number(elapsedSeconds) / 86_400
+	return ESCALATION_ACTIVATION_DELAY_DAYS + Number.parseInt(elapsedSeconds.toString(), 10) / 86_400
 }
 
 export function projectDocumentationEscalationDeposit(input: { amountRep: number; balances: EscalationBalanceTuple; nonDecisionThresholdRep: number; outcome: EscalationOutcomeKey; startBondRep: number }) {
@@ -209,7 +217,8 @@ export function calculateEscalationDepositModel(input: { invalidBalance: number;
 	const projection = projectEscalationDeposit({ amountAttoRep: toAttoRep(input.proposedDeposit), balancesAttoRep: [toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], nonDecisionThresholdAttoRep: thresholdAttoRep, outcome: 'no', startBondAttoRep: effectiveStartBondAttoRep })
 	const previewReverts = invalidStoredParameters || hasReachedNonDecision([toAttoRep(input.invalidBalance), toAttoRep(input.yesBalance), toAttoRep(input.noBalance)], thresholdAttoRep) || projection === undefined
 	const acceptedAttoRep = previewReverts ? 0n : projection.acceptedAmountAttoRep
-	return { accepted: Number(acceptedAttoRep) / Number(ATTO_REP), acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + Number(acceptedAttoRep) / Number(ATTO_REP), noAfterAttoRep: toAttoRep(input.noBalance) + acceptedAttoRep, previewReverts, threshold, tieAdjusted: projection?.tieAdjusted ?? false }
+	const accepted = attoRepToNumber(acceptedAttoRep)
+	return { accepted, acceptedAttoRep, effectiveStartBondAttoRep, noAfter: input.noBalance + accepted, noAfterAttoRep: toAttoRep(input.noBalance) + acceptedAttoRep, previewReverts, threshold, tieAdjusted: projection?.tieAdjusted ?? false }
 }
 
 export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {

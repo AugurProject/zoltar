@@ -35,6 +35,14 @@ type ChartSpec = {
 	width: number
 }
 
+function attoRepToNumber(value: bigint) {
+	const sign = value < 0n ? '-' : ''
+	const magnitude = value < 0n ? -value : value
+	const integer = magnitude / 10n ** 18n
+	const fractional = (magnitude % 10n ** 18n).toString().padStart(18, '0')
+	return Number.parseFloat(`${sign}${integer.toString()}.${fractional}`)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -1360,7 +1368,7 @@ function updateEscalationSimulator(): void {
 	const depositAmount = Math.max(read('depositAmount', startBond), 0)
 	const beforeBalances: [bigint, bigint, bigint] = [BigInt(Math.round(balances.Invalid * 1e18)), BigInt(Math.round(balances.Yes * 1e18)), BigInt(Math.round(balances.No * 1e18))]
 	const projection = projectDocumentationEscalationDeposit({ amountRep: depositAmount, balances: beforeBalances, nonDecisionThresholdRep: nonDecisionThreshold, outcome: depositOutcome as 'invalid' | 'yes' | 'no', startBondRep: startBond })
-	const afterBalances = projection === undefined ? balances : { Invalid: Number(projection.projectedBalancesAttoRep[0]) / 1e18, Yes: Number(projection.projectedBalancesAttoRep[1]) / 1e18, No: Number(projection.projectedBalancesAttoRep[2]) / 1e18 }
+	const afterBalances = projection === undefined ? balances : { Invalid: attoRepToNumber(projection.projectedBalancesAttoRep[0]), Yes: attoRepToNumber(projection.projectedBalancesAttoRep[1]), No: attoRepToNumber(projection.projectedBalancesAttoRep[2]) }
 	const projectedMedian = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid].sort((left, right) => left - right)[1] ?? 0
 	const afterDeadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, projectedMedian)
 	for (const [name, balance] of Object.entries(balances)) simulator.querySelector<HTMLElement>(`[data-escalation-value="${name.toLowerCase()}"]`)?.replaceChildren(`${balance} REP`)
@@ -1373,7 +1381,7 @@ function updateEscalationSimulator(): void {
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(ordered[0]?.[1] === ordered[1]?.[1] ? 'No strict leader' : (ordered[0]?.[0] ?? 'None'))
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${median} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="balances"]')?.replaceChildren(`Yes ${balances.Yes} → ${afterBalances.Yes} REP; No ${balances.No} → ${afterBalances.No} REP; Invalid ${balances.Invalid} → ${afterBalances.Invalid} REP`)
-	const accepted = projection === undefined ? 0 : Number(projection.acceptedAmountAttoRep) / 1e18
+	const accepted = projection === undefined ? 0 : attoRepToNumber(projection.acceptedAmountAttoRep)
 	let depositState = 'rejected'
 	if (projection !== undefined) {
 		if (projection.tieAdjusted) depositState = `accepted with tie adjustment: ${accepted} REP`

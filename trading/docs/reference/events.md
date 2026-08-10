@@ -11,6 +11,7 @@
 - `LiquidityRemoved(provider, recipient, yesAmount, noAmount, liquidity)` records raw-share output.
 - `Swap(sender, recipient, yesForNo, exactOutput, amountIn, amountOut, feeAmount, resultingYesReserve, resultingNoReserve)` provides authoritative direction, mode, amounts, fee, and resulting state.
 - `Sync(yesReserve, noReserve)` records reserves after synchronization or mutation.
+- `PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount)` records canonical shares removed from a counterfactual pair address during construction. The destination is the factory’s immutable `predeploymentShareSink`.
 - Standard ERC-20 `Transfer` and `Approval` events describe LP ownership and allowances.
 
 For router-mediated operations, pair `provider`/`sender` fields and SecurityPool `creator`/`redeemer` fields identify the router, not the initiating wallet. Pair `recipient` identifies the explicit asset recipient. The router emits no operation-level event, so an indexer must combine the transaction sender, called router method, pair/core logs, and explicit recipient; it must not infer wallet attribution from the immediate-caller fields alone.

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -366,11 +366,11 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			minimumRepWithdrawalRep: formatDecimalAmount(settings.strategy.minimumRepWithdrawalAttoRep),
 			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueAttoEth),
 			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveAttoEth),
-			stalePriceFundingBufferBps: Number(settings.strategy.stalePriceFundingBufferBps),
-			stagedOperationValidForSeconds: Number(settings.strategy.stagedOperationValidForSeconds),
-			vaultTargetHealthBps: Number(settings.strategy.vaultTargetHealthBps),
-			vaultTopUpHealthBps: Number(settings.strategy.vaultTopUpHealthBps),
-			vaultWithdrawHealthBps: Number(settings.strategy.vaultWithdrawHealthBps),
+			stalePriceFundingBufferBps: bigintToSafeNumber(settings.strategy.stalePriceFundingBufferBps, 'Stale-price funding buffer basis points'),
+			stagedOperationValidForSeconds: bigintToSafeNumber(settings.strategy.stagedOperationValidForSeconds, 'Staged-operation validity'),
+			vaultTargetHealthBps: bigintToSafeNumber(settings.strategy.vaultTargetHealthBps, 'Vault target health basis points'),
+			vaultTopUpHealthBps: bigintToSafeNumber(settings.strategy.vaultTopUpHealthBps, 'Vault top-up health basis points'),
+			vaultWithdrawHealthBps: bigintToSafeNumber(settings.strategy.vaultWithdrawHealthBps, 'Vault withdrawal health basis points'),
 			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),
 		},
 		submission: settings.submission,

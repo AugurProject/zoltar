@@ -266,7 +266,7 @@ async function getEscalationGameForkedEscrowByVaultAndOutcome(client: ReadClient
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getForkedEscrowByVaultAndOutcome',
 			address: escalationGame,
-			args: [vault, Number(outcome)],
+			args: [vault, Number.parseInt(outcome.toString(), 10)],
 		}),
 		'Forked escrow by vault and outcome',
 	)
@@ -289,6 +289,6 @@ export const claimForkedEscalationDeposits = async (client: WriteClient, parentS
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'claimForkedEscalationDeposits',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes],
+			args: [parentSecurityPool, vault, Number.parseInt(outcomeIndex.toString(), 10), depositIndexes],
 		}),
 	)

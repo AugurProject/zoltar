@@ -33,7 +33,7 @@ For live use, build with a reviewed deployment manifest and open the same routes
 TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
 ```
 
-The live client validates the manifest, discovers canonical SecurityPools and their exact pairs, displays pool settings and status, connects an injected wallet, and obtains authoritative router simulations before entry, exit, and liquidity transactions. It rejects a quote after the chain advances and re-simulates immediately before wallet submission.
+The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
 
 For a local deployment, first deploy Zoltar core to Anvil, then:
 
@@ -66,7 +66,7 @@ Root aliases use the `trading:*` prefix.
 
 `SecurityPool address → factory → one deterministic pair` is the market identity. Parent and child branch pools always map to different pairs even when they share one `ShareToken`. The pair derives token IDs from its pool’s universe using the local ordering `Invalid`, `Yes`, `No`.
 
-The pair synchronizes valid YES/NO donations before mutations, rejects INVALID and foreign shares in ERC-1155 callbacks, uses `uint256` reserves, and keeps fees in reserves. Initial LP supply uses `min(yesReserve, noReserve)` as an accounting scale and permanently locks 1,000 units. Ownership ratios—not the absolute token count—are authoritative.
+The pair synchronizes valid YES/NO donations before mutations, rejects INVALID and foreign shares in ERC-1155 callbacks, uses `uint256` reserves, and keeps fees in reserves. Its constructor quarantines canonical shares maliciously or accidentally sent to the predictable CREATE2 address before deployment. Initial LP supply uses `min(yesReserve, noReserve)` as an accounting scale and permanently locks 1,000 units. Ownership ratios—not the absolute token count—are authoritative.
 
 The router creates and redeems complete sets using observed balance and attoETH deltas. It never assumes a fixed attoETH-to-attoShares ratio, preserves pre-existing forced ETH and token balances, and restores its starting share balances before completing an operation.
 

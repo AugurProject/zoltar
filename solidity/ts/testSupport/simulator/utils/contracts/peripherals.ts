@@ -337,7 +337,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 		stateHash,
 		callbackContract: state.latest.game.callbackContract,
 		numReports: state.reportCount,
-		callbackGasLimit: Number(state.latest.game.callbackGasLimit),
+		callbackGasLimit: Number.parseInt(state.latest.game.callbackGasLimit.toString(), 10),
 		protocolFeeRecipient: state.latest.game.protocolFeeRecipient,
 		trackDisputes: hasOpenOracleFlag(state.latest.game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
 	}

@@ -1,0 +1,160 @@
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { act } from 'preact/test-utils'
+import type { Address, Hash } from '@zoltar/shared/ethereum'
+import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
+import type { DeploymentConfiguration } from '../protocol/config.ts'
+import type { LiveMarket } from '../protocol/live.ts'
+import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
+
+const account = `0x${'11'.repeat(20)}` as Address
+const pool = `0x${'22'.repeat(20)}` as Address
+const pair = `0x${'33'.repeat(20)}` as Address
+const shareToken = `0x${'44'.repeat(20)}` as Address
+const factory = `0x${'55'.repeat(20)}` as Address
+const router = `0x${'66'.repeat(20)}` as Address
+const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
+const transactionHash = `0x${'88'.repeat(32)}` as Hash
+
+function deferred<T>() {
+	let resolvePromise: (value: T) => void = () => undefined
+	let rejectPromise: (reason: Error) => void = () => undefined
+	const promise = new Promise<T>((resolve, reject) => {
+		resolvePromise = resolve
+		rejectPromise = reject
+	})
+	return { promise, resolve: resolvePromise, reject: rejectPromise }
+}
+
+async function flush() {
+	await act(async () => {
+		await Promise.resolve()
+		await Promise.resolve()
+	})
+}
+
+function button(label: string) {
+	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
+	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
+	return match
+}
+
+describe('live workflow safety boundary', () => {
+	let cleanupDom: (() => void) | undefined
+	let cleanupRendered: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		cleanupDom = installDomEnvironment('http://localhost/?demo=0#/market').cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRendered?.()
+		cleanupRendered = undefined
+		cleanupDom?.()
+		cleanupDom = undefined
+	})
+
+	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
+		const receipt = deferred<never>()
+		const walletListeners = new Map<string, (...args: unknown[]) => void>()
+		Reflect.set(window, 'ethereum', {
+			request: async () => undefined,
+			on: (eventName: string, listener: (...args: unknown[]) => void) => walletListeners.set(eventName, listener),
+			removeListener: (eventName: string) => walletListeners.delete(eventName),
+		})
+		const walletClient = { waitForTransactionReceipt: async () => await receipt.promise }
+		const now = BigInt(Math.floor(Date.now() / 1_000))
+		let discoveredEndTime = 2n ** 255n
+		const market: LiveMarket = {
+			pool,
+			pair,
+			shareToken,
+			universeId: 1n,
+			questionId: 2n,
+			title: 'Rendered workflow market',
+			description: 'Receipt uncertainty fixture',
+			endTime: discoveredEndTime,
+			statoblastSecurityMultiplierBps: 20_000n,
+			initialReportPriorityFeeAttoEthPerGas: 1n,
+			systemState: 0,
+			awaitingForkContinuation: false,
+			universeForkTime: 0n,
+			activeVaultCount: 1n,
+			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
+			settlementCollateralAttoEth: 10n * 10n ** 18n,
+			currentRetentionRate: 10n ** 18n,
+			totalCoverageCommitmentAttoEth: 1n,
+			feeEligibleCoverageCommitmentAttoEth: 1n,
+			feeBps: 30n,
+			tradingStatus: 0,
+			questionOutcome: 3,
+			yesReserve: 50n * 10n ** 18n,
+			noReserve: 50n * 10n ** 18n,
+			lpTotalSupply: 50n * 10n ** 18n,
+		}
+		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory, factory, router, feeBps: 30 }
+		const actualLive = await import('../protocol/live.ts')
+		mock.module('../protocol/live.ts', () => ({
+			...actualLive,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverLiveMarketPage: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, endTime: discoveredEndTime }] }),
+			walletChainId: async () => configuration.chainId,
+			connectWallet: async () => account,
+			createTradingWalletClient: () => walletClient,
+			loadLiveBalances: async () => ({ invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, approved: true, lp: 10n ** 18n, lpAllowance: 10n ** 18n }),
+			simulateEntry: async () => ({
+				blockNumber: 1n,
+				amount: 10n ** 16n,
+				side: 'YES' as const,
+				market,
+				deadline: now + 1_200n,
+				minimumLongShares: 1n,
+				result: {
+					completeSetShares: 1n,
+					oppositeSharesSwapped: 1n,
+					additionalLongShares: 1n,
+					totalLongShares: 2n,
+					invalidInsurance: 1n,
+					feeAmount: 1n,
+					conditionalYesBpsBefore: 5_000n,
+					conditionalYesBpsAfter: 5_001n,
+				},
+			}),
+			submitFreshEntry: async () => transactionHash,
+		}))
+		const { LiveTrading } = await import('../features/LiveTrading.tsx')
+		const workflowLocks: boolean[] = []
+		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} onWorkflowLockChange={locked => workflowLocks.push(locked)} />)
+		cleanupRendered = rendered.cleanup
+		await flush()
+		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
+		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
+		discoveredEndTime = now + 2n
+
+		await act(async () => button('Connect wallet').click())
+		await flush()
+		await act(async () => button('Simulate authoritative router call').click())
+		await flush()
+		await act(async () => button('Submit transaction').click())
+		expect(button('Refresh').disabled).toBeTrue()
+
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([`0x${'99'.repeat(20)}`])
+			receipt.reject(new Error('receipt polling failed'))
+			await receipt.promise.catch(() => undefined)
+		})
+		await flush()
+
+		const warning = Array.from(document.querySelectorAll('[role="alert"]')).find(candidate => candidate.textContent?.includes(transactionHash) === true)
+		expect(warning?.textContent).toContain('Do not resubmit')
+		expect(button('Simulate authoritative router call').disabled).toBeTrue()
+		expect(button('Refresh').disabled).toBeTrue()
+		expect(button('Connect wallet').disabled).toBeTrue()
+		expect(workflowLocks.at(-1)).toBeTrue()
+
+		await Bun.sleep(2_100)
+		await flush()
+		expect(button('Simulate authoritative settlement').disabled).toBeTrue()
+		expect(warning?.textContent).toContain(transactionHash)
+	})
+})

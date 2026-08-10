@@ -1,4 +1,5 @@
 export type Address = `0x${string}`
+export type Hash = `0x${string}`
 
 export type ContractRequest = Readonly<{
 	address: Address
@@ -9,14 +10,21 @@ export type ContractRequest = Readonly<{
 
 export type SimulationResult<T> = Readonly<{
 	blockNumber: bigint
+	blockHash: Hash
 	request: ContractRequest
 	result: T
 }>
 
 export type SimulationClient<T> = Readonly<{
-	getBlockNumber(): Promise<bigint>
-	simulate(request: ContractRequest): Promise<T>
+	getBlock(): Promise<Readonly<{ number: bigint | null; hash: Hash | null }>>
+	simulate(request: ContractRequest, blockHash: Hash): Promise<T>
 }>
+
+async function blockIdentity(client: Pick<SimulationClient<unknown>, 'getBlock'>) {
+	const block = await client.getBlock()
+	if (block.number === null || block.hash === null) throw new Error('Latest block identity is unavailable')
+	return { number: block.number, hash: block.hash }
+}
 
 export function enterPositionRequest(router: Address, pair: Address, longOutcome: 'YES' | 'NO', amountAttoEth: bigint, minimumLongAttoShares: bigint, recipient: Address, deadline: bigint): ContractRequest {
 	return { address: router, functionName: 'enterPosition', args: [pair, longOutcome === 'YES' ? 1 : 2, minimumLongAttoShares, recipient, deadline], value: amountAttoEth }
@@ -38,16 +46,32 @@ export function removeLiquidityRequest(router: Address, pair: Address, liquidity
 	return { address: router, functionName: 'removeLiquidity', args: [pair, liquidity, minimumYes, minimumNo, recipient, deadline] }
 }
 
-export async function simulateAuthoritatively<T>(client: SimulationClient<T>, request: ContractRequest): Promise<SimulationResult<T>> {
-	const blockNumber = await client.getBlockNumber()
-	const result = await client.simulate(request)
-	if ((await client.getBlockNumber()) !== blockNumber) throw new Error('Block changed during simulation; simulate the router call again')
-	return { blockNumber, request, result }
+export function redeemCompleteSetRequest(securityPool: Address, amountAttoShares: bigint): ContractRequest {
+	return { address: securityPool, functionName: 'redeemCompleteSet', args: [amountAttoShares] }
 }
 
-export async function requireFreshSimulation<T>(client: Pick<SimulationClient<T>, 'getBlockNumber'>, simulation: SimulationResult<T>) {
-	const currentBlock = await client.getBlockNumber()
-	if (currentBlock !== simulation.blockNumber) throw new Error('Quote is stale; simulate the router call again')
+export function redeemWinningSharesRequest(securityPool: Address): ContractRequest {
+	return { address: securityPool, functionName: 'redeemShares', args: [] }
+}
+
+export function migrateSharesRequest(shareToken: Address, universeId: bigint, sourceOutcome: 'INVALID' | 'YES' | 'NO', targetOutcomeIndexes: readonly bigint[]): ContractRequest {
+	let outcome = 2n
+	if (sourceOutcome === 'INVALID') outcome = 0n
+	else if (sourceOutcome === 'YES') outcome = 1n
+	return { address: shareToken, functionName: 'migrate', args: [(universeId << 8n) | outcome, targetOutcomeIndexes] }
+}
+
+export async function simulateAuthoritatively<T>(client: SimulationClient<T>, request: ContractRequest): Promise<SimulationResult<T>> {
+	const before = await blockIdentity(client)
+	const result = await client.simulate(request, before.hash)
+	const after = await blockIdentity(client)
+	if (after.number !== before.number || after.hash !== before.hash) throw new Error('Block changed during simulation; simulate the router call again')
+	return { blockNumber: before.number, blockHash: before.hash, request, result }
+}
+
+export async function requireFreshSimulation<T>(client: Pick<SimulationClient<T>, 'getBlock'>, simulation: SimulationResult<T>) {
+	const current = await blockIdentity(client)
+	if (current.number !== simulation.blockNumber || current.hash !== simulation.blockHash) throw new Error('Quote is stale; simulate the router call again')
 	return simulation.request
 }
 

@@ -30,6 +30,11 @@ export function formatBpsMultiplier(value: bigint) {
 	return `${whole}${fraction.length > 0 ? `.${fraction}` : ''}×`
 }
 
+export function bigintToSafeNumber(value: bigint, label = 'Value') {
+	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
+	return Number.parseInt(value.toString(), 10)
+}
+
 export function parseUnits(value: string, decimals = 18) {
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') throw new Error('Enter a valid nonnegative amount')
 	const [whole = '0', fraction = ''] = value.split('.')

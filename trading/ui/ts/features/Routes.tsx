@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
-import { formatBpsMultiplier, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
@@ -30,7 +30,7 @@ function MarketListAction({ market }: { market: DemoMarket }) {
 
 export function MarketList({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
-	const yesPercent = initialized ? Number((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve)) / 10 : 0
+	const yesPercent = initialized ? bigintToSafeNumber((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve), 'Conditional YES tenths') / 10 : 0
 	return (
 		<main class='route' id='main-content'>
 			<header class='route-header'>
@@ -61,7 +61,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 						</div>
 						<div>
 							<dt>Fee</dt>
-							<dd>{Number(market.feeBps) / 100}%</dd>
+							<dd>{formatUnits(market.feeBps, 2, 2)}%</dd>
 						</div>
 					</dl>
 					<MarketListAction market={market} />
@@ -199,7 +199,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 								</small>
 							)}
 						</label>
-						{parsedProbability.value === undefined ? null : <ProbabilityBar yesPercent={Number(parsedProbability.value) / 100} />}
+						{parsedProbability.value === undefined ? null : <ProbabilityBar yesPercent={bigintToSafeNumber(parsedProbability.value, 'Conditional probability basis points') / 100} />}
 						{liquidityQuote === undefined ? null : (
 							<dl class='metrics'>
 								<div>
@@ -338,7 +338,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 							<span>Maximum insured YES exit</span>
 							<strong>{formatUnits(maximumYesExit)} sets</strong>
 						</div>
-						<progress value={Number((maximumYesExit * 10_000n) / demoWalletBalances.invalid)} max='10000'>
+						<progress value={bigintToSafeNumber((maximumYesExit * 10_000n) / demoWalletBalances.invalid, 'YES insurance coverage basis points')} max='10000'>
 							{formatUnits(maximumYesExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
 						<small>Derived from wallet INVALID, wallet YES, and the pair’s available NO reserve.</small>
@@ -348,7 +348,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 							<span>Maximum insured NO exit</span>
 							<strong>{formatUnits(maximumNoExit)} sets</strong>
 						</div>
-						<progress value={Number((maximumNoExit * 10_000n) / demoWalletBalances.invalid)} max='10000'>
+						<progress value={bigintToSafeNumber((maximumNoExit * 10_000n) / demoWalletBalances.invalid, 'NO insurance coverage basis points')} max='10000'>
 							{formatUnits(maximumNoExit)} of {formatUnits(demoWalletBalances.invalid)}
 						</progress>
 						<small>Derived from wallet INVALID, wallet NO, and the pair’s available YES reserve.</small>
@@ -376,7 +376,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 						</div>
 						<div>
 							<dt>Estimated covered fraction</dt>
-							<dd>{(Number(coverageBps) / 100).toFixed(1)}%</dd>
+							<dd>{formatUnits(coverageBps, 2, 1)}%</dd>
 						</div>
 					</dl>
 					<p class='muted'>The estimate compares separate wallet INVALID with the complete-set coverage of the reserve claim. The LP token itself is not insured.</p>

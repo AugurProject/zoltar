@@ -11,6 +11,7 @@ Report a suspected vulnerability through [GitHub private vulnerability reporting
 - Wallets and RPC endpoints accurately report account, chain, balances, approvals, and receipts.
 - ERC-1155 recipients can execute arbitrary code. Pair and router accounting therefore uses reentrancy guards and updates from authoritative balances after callbacks.
 - Direct valid YES/NO donations accrue to current LPs. Direct INVALID and foreign token IDs are rejected.
+- Canonical shares sent to a predicted pair address before deployment are irrecoverably quarantined in the factory’s ownerless sink. Users must not transfer assets to counterfactual addresses.
 - Forced ETH can remain in the router; an exit forwards only its measured operation delta.
 
 ## Known risks

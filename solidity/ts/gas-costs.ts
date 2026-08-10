@@ -1,4 +1,4 @@
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress } from '@zoltar/shared/ethereum'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
@@ -718,7 +718,7 @@ try {
 	}
 
 	const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
-	const gasCostInEth = (gas: bigint) => (Number(gas) * totalGasPriceGwei) / 1_000_000_000
+	const gasCostInEth = (gas: bigint) => (bigintToSafeNumber(gas, 'Gas usage') * totalGasPriceGwei) / 1_000_000_000
 	const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
 
 	console.log(`# Pricing Assumptions`)

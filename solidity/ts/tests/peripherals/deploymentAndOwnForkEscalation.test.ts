@@ -393,7 +393,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const shuffledOutcomes = [...branchOutcomes]
 		for (let index = shuffledOutcomes.length - 1; index > 0; index--) {
 			fuzzState = (fuzzState * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
-			const swapIndex = Number(fuzzState % BigInt(index + 1))
+			const swapIndex = Number.parseInt((fuzzState % BigInt(index + 1)).toString(), 10)
 			const currentOutcome = shuffledOutcomes[index]
 			const swapOutcome = shuffledOutcomes[swapIndex]
 			if (currentOutcome === undefined || swapOutcome === undefined) throw new Error('stateful outcome shuffle failed')
@@ -863,7 +863,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			address: getInfraContractAddresses().securityPoolForker,
 			functionName: 'claimForkedEscalationDeposits',
-			args: [securityPoolAddresses.securityPool, client.account.address, Number(QuestionOutcome.Yes), [0n]],
+			args: [securityPoolAddresses.securityPool, client.account.address, Number.parseInt(QuestionOutcome.Yes.toString(), 10), [0n]],
 		})
 		await client.waitForTransactionReceipt({ hash })
 		const walletChildRepAfterClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)

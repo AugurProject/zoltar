@@ -5,7 +5,7 @@ A generated manifest contains:
 - `network`: decimal and hexadecimal chain IDs plus the deployment RPC;
 - `core`: verified SecurityPoolFactory and source manifest path;
 - `trading`: factory, router, and immutable `feeBps`;
-- `transactions`: factory and router deployment hashes;
+- `transactions`: `factory` and `router` objects shaped as `{ hash, blockNumber: "<base-10 integer string>" }`. `blockNumber` is a JSON string, not a JavaScript number, so large receipt block numbers remain exact;
 - `compiler`: exact version and settings;
 - `bytecodeHashes`: creation-bytecode commitments;
 - `deployer` and `deployedAt`.

@@ -4,11 +4,13 @@ pragma solidity 0.8.35;
 import { ISecurityPool, ISecurityPoolFactory } from '../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
 import { IShareToken } from '../../solidity/contracts/peripherals/interfaces/IShareToken.sol';
 import { TwoWayConstantProductPair } from './TwoWayConstantProductPair.sol';
+import { PredeploymentShareSink } from './PredeploymentShareSink.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 
 contract TwoWayConstantProductFactory {
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	uint256 public immutable feeBps;
+	address public immutable predeploymentShareSink;
 	mapping(ISecurityPool => ITwoWayConstantProductPair) public getPair;
 	mapping(address => bool) public isPair;
 
@@ -25,6 +27,7 @@ contract TwoWayConstantProductFactory {
 		require(_feeBps < 10_000, 'Invalid fee');
 		securityPoolFactory = _securityPoolFactory;
 		feeBps = _feeBps;
+		predeploymentShareSink = address(new PredeploymentShareSink());
 	}
 
 	function createPair(ISecurityPool pool) external returns (ITwoWayConstantProductPair pair) {
@@ -33,7 +36,7 @@ contract TwoWayConstantProductFactory {
 		if (address(pair) != address(0)) return pair;
 		bytes32 salt = keccak256(abi.encode(pool));
 		pair = ITwoWayConstantProductPair(
-			address(new TwoWayConstantProductPair{ salt: salt }(address(this), pool, feeBps))
+			address(new TwoWayConstantProductPair{ salt: salt }(address(this), pool, feeBps, predeploymentShareSink))
 		);
 		getPair[pool] = pair;
 		isPair[address(pair)] = true;
@@ -43,7 +46,10 @@ contract TwoWayConstantProductFactory {
 	function predictPair(ISecurityPool pool) external view returns (address predicted) {
 		bytes32 salt = keccak256(abi.encode(pool));
 		bytes32 initCodeHash = keccak256(
-			abi.encodePacked(type(TwoWayConstantProductPair).creationCode, abi.encode(address(this), pool, feeBps))
+			abi.encodePacked(
+				type(TwoWayConstantProductPair).creationCode,
+				abi.encode(address(this), pool, feeBps, predeploymentShareSink)
+			)
 		);
 		predicted = address(
 			uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash))))

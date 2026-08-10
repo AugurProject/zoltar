@@ -345,6 +345,8 @@ nav a[aria-current="page"] {
 	background: var(--bg);
 }
 .segmented button {
+	flex: 1;
+	min-width: 0;
 	min-height: 44px;
 	border: 0;
 	padding: 0.45rem 0.7rem;
@@ -379,6 +381,12 @@ nav a[aria-current="page"] {
 	color: var(--accent);
 	box-shadow: inset 3px 0 var(--accent);
 }
+.segmented button:disabled,
+.side-picker button:disabled {
+	color: #73808d;
+	cursor: not-allowed;
+	opacity: 0.65;
+}
 .side-picker span {
 	font:
 		700 13px ui-monospace,
@@ -406,8 +414,26 @@ nav a[aria-current="page"] {
 .field small.error {
 	color: var(--bad);
 }
+.field > input,
+.field > select {
+	width: 100%;
+	min-width: 0;
+	border: 1px solid var(--line-strong);
+	padding: 0.75rem 0.85rem;
+	background: var(--bg);
+	color: var(--text);
+	font:
+		500 14px ui-monospace,
+		monospace;
+}
+.field > input:focus,
+.field > select:focus {
+	border-color: var(--accent);
+	outline: 2px solid transparent;
+}
 .error {
 	color: var(--bad);
+	overflow-wrap: anywhere;
 }
 .amount-input {
 	display: flex;
@@ -429,6 +455,10 @@ nav a[aria-current="page"] {
 	font:
 		500 17px ui-monospace,
 		monospace;
+}
+.amount-input input:disabled {
+	color: #73808d;
+	cursor: not-allowed;
 }
 .amount-input span {
 	padding-right: 0.85rem;
@@ -767,6 +797,9 @@ summary {
 	gap: 1rem;
 	align-items: start;
 }
+.two-column--single > .section {
+	grid-column: 1 / -1;
+}
 .operation-block {
 	padding: 1rem 0;
 	border-top: 1px solid var(--line);
@@ -1099,6 +1132,39 @@ footer {
 .live-market-button code {
 	color: var(--muted);
 	overflow-wrap: anywhere;
+}
+
+.market-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+.market-pagination span {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.mobile-return {
+	display: none;
+}
+
+.live-focus-target {
+	scroll-margin-top: 7.5rem;
+}
+
+@media (max-width: 900px) {
+	.live-focus-target {
+		scroll-margin-top: 11rem;
+	}
+
+	.mobile-return {
+		display: inline-flex;
+		margin-bottom: 1rem;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

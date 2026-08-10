@@ -1,11 +1,26 @@
 import { describe, expect, test } from 'bun:test'
-import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../features/MarketDetail.tsx'
-import { insuredExitLimitMessage, liquidityApprovalRequired, liquidityOperationAvailable, livePairInitialized } from '../features/LiveTrading.tsx'
+import {
+	approvalFailureTransition,
+	broadcastUncertainMessage,
+	discoveryCommitAllowed,
+	failedSubmissionTransition,
+	insuredExitLimitMessage,
+	liquidityApprovalRequired,
+	liquidityOperationAvailable,
+	livePairInitialized,
+	marketSelectionAfterDiscovery,
+	migrationSimulationSummary,
+	parseForkOutcomeIndex,
+	positionControlsWorkflowLocked,
+	settlementBalanceLabel,
+	settlementInputBlocker,
+} from '../features/LiveTrading.tsx'
 import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../features/Routes.tsx'
 import { roundedProbabilityLabels } from '../components/ProbabilityBar.tsx'
-import { marketAcceptsNewRisk, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, type LiveMarket } from '../protocol/live.ts'
+import { collateMarketDiscoveryResults, marketAcceptsNewRisk, marketDiscoveryPage, marketDiscoveryRanges, marketNewRiskBlocker, maximumAfterSlippage, minimumAfterSlippage, retainApprovedMaximum, retainApprovedMinimum, settlementAvailability, type LiveMarket } from '../protocol/live.ts'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 describe('standalone trading UI model', () => {
@@ -93,6 +108,11 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
 	})
 
+	test('converts to a number only after proving the bigint is safe', () => {
+		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
+		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
+	})
+
 	test('formats 18-decimal shares and Statoblast settings for display', () => {
 		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
@@ -132,6 +152,13 @@ describe('standalone trading UI model', () => {
 		expect(maximumAfterSlippage(10_001n)).toBe(10_052n)
 	})
 
+	test('never replaces user-approved bounds with refreshed quote bounds', () => {
+		expect(retainApprovedMinimum(100n, 120n, 'long shares')).toBe(100n)
+		expect(() => retainApprovedMinimum(100n, 99n, 'long shares')).toThrow('no longer satisfies')
+		expect(retainApprovedMaximum(100n, 90n, 'long shares')).toBe(100n)
+		expect(() => retainApprovedMaximum(100n, 101n, 'long shares')).toThrow('no longer satisfies')
+	})
+
 	test('blocks new risk for every uninitialized lifecycle guard', () => {
 		const open = { tradingStatus: undefined, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, endTime: 2_000n } satisfies Pick<LiveMarket, 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
 		expect(marketAcceptsNewRisk(open, 1_000n)).toBeTrue()
@@ -147,6 +174,106 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
+	})
+
+	test('bounds market discovery into deterministic RPC pages', () => {
+		expect(marketDiscoveryRanges(0n)).toEqual([])
+		expect(marketDiscoveryRanges(51n)).toEqual([
+			{ start: 0n, count: 25n },
+			{ start: 25n, count: 25n },
+			{ start: 50n, count: 1n },
+		])
+		expect(() => marketDiscoveryRanges(1n, 0n)).toThrow('Invalid market discovery range')
+		expect(marketDiscoveryPage(51n, 25n)).toEqual({ start: 25n, count: 25n, previousStart: 0n, nextStart: 50n })
+		expect(marketDiscoveryPage(51n, 99n)).toEqual({ start: 50n, count: 1n, previousStart: 25n, nextStart: undefined })
+		expect(marketDiscoveryPage(0n)).toEqual({ start: 0n, count: 0n, previousStart: undefined, nextStart: undefined })
+		expect(() => marketDiscoveryPage(1n, -1n)).toThrow('Invalid market discovery page')
+	})
+
+	test('isolates one failed market read into an explicit unavailable row', () => {
+		const pool = `0x${'12'.repeat(20)}` as const
+		const shareToken = `0x${'34'.repeat(20)}` as const
+		const deployments = [{ securityPool: pool, shareToken, universeId: 7n, questionId: 9n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }]
+		const results = [{ status: 'rejected', reason: new Error('RPC read failed') }] satisfies PromiseRejectedResult[]
+		const [market] = collateMarketDiscoveryResults(deployments, results, 30)
+		if (market === undefined) throw new Error('Expected unavailable market row')
+		expect(market.pool).toBe(pool)
+		expect(market.loadError).toBe('RPC read failed')
+		expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
+	})
+
+	test('derives bounded settlement actions from lifecycle and aggregate balances', () => {
+		const open = { tradingStatus: 6, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, endTime: 2_000n }
+		const balances = { invalid: 5n, yes: 7n, no: 6n }
+		expect(settlementAvailability(open, balances)).toEqual({ completeSets: 5n, winningBalance: 0n, canRedeemCompleteSets: true, canRedeemWinningShares: false, canMigrateShares: false })
+		expect(settlementAvailability({ ...open, questionOutcome: 2 }, balances)).toEqual({ completeSets: 5n, winningBalance: 6n, canRedeemCompleteSets: true, canRedeemWinningShares: true, canMigrateShares: false })
+		expect(settlementAvailability({ ...open, universeForkTime: 1n, systemState: 1 }, balances)).toEqual({ completeSets: 5n, winningBalance: 0n, canRedeemCompleteSets: false, canRedeemWinningShares: false, canMigrateShares: true })
+	})
+
+	test('requires an explicit fork branch and names the irreversible consequence', () => {
+		expect(parseForkOutcomeIndex('')).toBeUndefined()
+		expect(parseForkOutcomeIndex('-1')).toBeUndefined()
+		expect(parseForkOutcomeIndex('12')).toBe(12n)
+		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied to child outcome index 12 and locked in the parent universe.')
+	})
+
+	test('preserves same-page market context but selects the first pool after navigation', () => {
+		const first = `0x${'11'.repeat(20)}` as const
+		const selected = `0x${'22'.repeat(20)}` as const
+		const markets = [{ pool: first }, { pool: selected }]
+		expect(marketSelectionAfterDiscovery(markets, selected, true)).toBe(selected)
+		expect(marketSelectionAfterDiscovery(markets, selected, false)).toBe(first)
+		expect(marketSelectionAfterDiscovery([{ pool: first }], selected, true)).toBe(first)
+	})
+
+	test('explains every settlement input that keeps simulation disabled', () => {
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, undefined, 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, undefined, 'YES', 1n)).toContain('complete-set balance of 5 shares')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, undefined, 'YES', 1n)).toContain('explicit non-negative outcome index')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, 0n, 'YES', 0n)).toBe('The selected YES source-share balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, undefined, 'NO', 0n)).toContain('unavailable')
+	})
+
+	test('never presents unavailable settlement balances as zero', () => {
+		expect(settlementBalanceLabel('disconnected', undefined)).toBe('Not loaded')
+		expect(settlementBalanceLabel('loading', 0n)).toBe('Loading…')
+		expect(settlementBalanceLabel('error', 0n)).toBe('Unavailable')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n)).toBe('5 shares')
+	})
+
+	test('discards failed submission quotes so every workflow can simulate again', () => {
+		expect(failedSubmissionTransition(new Error('Quote is stale'), 'Transaction failed')).toEqual({ quote: undefined, state: 'error', message: 'Quote is stale' })
+		expect(failedSubmissionTransition('wallet rejected', 'Transaction failed')).toEqual({ quote: undefined, state: 'error', message: 'Transaction failed' })
+	})
+
+	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {
+		const hash = `0x${'55'.repeat(32)}` as const
+		const warning = broadcastUncertainMessage('Settlement transaction', hash)
+		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
+		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
+		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
+	})
+
+	test('keeps both approval workflows locked after an unconfirmed broadcast', () => {
+		const hash = `0x${'77'.repeat(32)}` as const
+		for (const label of ['Share-token approval', 'LP-token approval']) {
+			const transition = approvalFailureTransition(label, hash, false, new Error('receipt unavailable'), 'Approval failed')
+			expect(transition.keepLocked).toBeTrue()
+			expect(transition.state).toBe('pending')
+			expect(transition.message).toBeUndefined()
+			expect(transition.warning).toContain(hash)
+			expect(transition.warning).toContain('Do not resubmit')
+		}
+		expect(approvalFailureTransition('LP-token approval', hash, true, new Error('reverted'), 'Approval failed')).toEqual({ keepLocked: false, state: 'error', message: 'reverted', warning: undefined })
+	})
+
+	test('does not let an older discovery response replace an active workflow', () => {
+		expect(discoveryCommitAllowed(undefined, true, false)).toBeFalse()
+		expect(discoveryCommitAllowed(undefined, false, true)).toBeFalse()
+		expect(discoveryCommitAllowed(undefined, false, false)).toBeTrue()
+		expect(discoveryCommitAllowed('position', true, false)).toBeTrue()
+		expect(discoveryCommitAllowed('position', true, true)).toBeFalse()
+		expect(discoveryCommitAllowed('liquidity', true, true)).toBeFalse()
 	})
 
 	test('does not present a created pair as initialized before it has reserves and LP supply', () => {

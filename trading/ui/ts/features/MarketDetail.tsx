@@ -3,7 +3,7 @@ import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPo
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
-import { formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { AddressValue, Status } from '../components/Status.tsx'
 import { insuredExitLimitMessage } from './LiveTrading.tsx'
@@ -118,7 +118,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const closedReason = tradingClosedReason(market.lifecycle)
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
 	const conditional = initialized ? conditionalYesProbability(market.yesReserve, market.noReserve) : undefined
-	const yesPercent = conditional === undefined ? undefined : Number((conditional.numerator * 1_000n) / conditional.denominator) / 10
+	const yesPercent = conditional === undefined ? undefined : bigintToSafeNumber((conditional.numerator * 1_000n) / conditional.denominator, 'Conditional YES tenths') / 10
 	const collateralPerShare = formatEthPerShare(market.securityPool.settlementCollateralAttoEth, market.securityPool.shareTokenSupplyAttoShares)
 	const parsed = useMemo(() => {
 		try {
@@ -369,7 +369,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 							</div>
 							<div>
 								<dt>Trading fee</dt>
-								<dd>{Number(market.feeBps) / 100}%</dd>
+								<dd>{formatUnits(market.feeBps, 2, 2)}%</dd>
 							</div>
 							<div>
 								<dt>Collateral rate</dt>

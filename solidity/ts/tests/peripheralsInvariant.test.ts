@@ -131,7 +131,7 @@ const shuffle = <T>(values: readonly T[], seed: bigint): T[] => {
 		return state
 	}
 	for (let index = result.length - 1; index > 0; index -= 1) {
-		const swapIndex = Number(next() % BigInt(index + 1))
+		const swapIndex = Number.parseInt((next() % BigInt(index + 1)).toString(), 10)
 		;[result[index], result[swapIndex]] = [result[swapIndex], result[index]]
 	}
 	return result
@@ -928,7 +928,7 @@ describe('Peripherals invariant harness', () => {
 			for (let step = 0; step < 100 && !requiredTerminalActions.every(name => completed.has(name)); step += 1) {
 				const enabledActions = actions.filter(action => !completed.has(action.name) && action.enabled())
 				if (enabledActions.length === 0) failWithTrace(new Error('action handler reached a nonterminal dead end'))
-				const action = enabledActions[Number(nextRandom() % BigInt(enabledActions.length))]
+				const action = enabledActions[Number.parseInt((nextRandom() % BigInt(enabledActions.length)).toString(), 10)]
 				if (action === undefined) failWithTrace(new Error('seed selected an unavailable action'))
 				trace.push(action.name)
 				try {
@@ -1435,7 +1435,7 @@ describe('Peripherals invariant harness', () => {
 
 			assert.ok(counter >= previousCounter, `${label}: staged operation counter should be append-only`)
 			previousCounter = counter
-			assert.strictEqual(activeIdList.length, Number(activeCount), `${label}: active operation page should match its count`)
+			assert.strictEqual(activeIdList.length, Number.parseInt(activeCount.toString(), 10), `${label}: active operation page should match its count`)
 			assert.strictEqual(activeOperations.length, activeIdList.length, `${label}: active ids and operation records should have the same length`)
 			assert.strictEqual(activeIdSet.size, activeIdList.length, `${label}: active operation ids should be unique`)
 			assert.strictEqual(new Set(pendingIds).size, pendingIds.length, `${label}: pending operation ids should be unique`)

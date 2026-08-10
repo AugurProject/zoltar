@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { maximumInsuredExit, quoteExitPosition } from '../sdk/positions.ts'
+import { inputOutcomeConditionalPriceImpact, maximumInsuredExit, quoteExitPosition } from '../sdk/positions.ts'
+import { quoteExactInput } from '../sdk/math.ts'
 
 describe('maximum insured exit', () => {
 	test('is bounded by both INVALID and long shares', () => {
@@ -27,5 +28,19 @@ describe('maximum insured exit', () => {
 
 		const reserveBound = maximumInsuredExit({ longOutcome: 'NO', longBalance: 10n ** 30n, invalidBalance: 10n ** 30n, yesReserve: 100n, noReserve: 200n, feeBps: 0n })
 		expect(reserveBound).toBe(99n)
+	})
+
+	test('labels conditional reserve impact by the explicit input outcome', () => {
+		const yesInput = quoteExactInput(300n, 700n, 30n, 30n)
+		const yesImpact = inputOutcomeConditionalPriceImpact('YES', 300n, 700n, yesInput)
+		expect(yesImpact.inputOutcome).toBe('YES')
+		expect(yesImpact.before).toEqual({ numerator: 700n, denominator: 1_000n })
+		expect(yesImpact.after.numerator * yesImpact.before.denominator).toBeLessThan(yesImpact.before.numerator * yesImpact.after.denominator)
+
+		const noInput = quoteExactInput(700n, 300n, 70n, 30n)
+		const noImpact = inputOutcomeConditionalPriceImpact('NO', 700n, 300n, noInput)
+		expect(noImpact.inputOutcome).toBe('NO')
+		expect(noImpact.before).toEqual({ numerator: 300n, denominator: 1_000n })
+		expect(noImpact.after.numerator * noImpact.before.denominator).toBeLessThan(noImpact.before.numerator * noImpact.after.denominator)
 	})
 })

@@ -80,12 +80,13 @@ export function maximumAfterSlippage(amount: bigint, slippageBps: bigint) {
 	return (amount * (BPS_DENOMINATOR + slippageBps) + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 }
 
-export function reserveImpact(beforeIn: bigint, beforeOut: bigint, quote: SwapQuote) {
-	const beforeNumerator = beforeOut
-	const beforeDenominator = beforeIn + beforeOut
-	const afterIn = beforeIn + quote.amountIn
-	const afterOut = beforeOut - quote.amountOut
+export function inputOutcomeConditionalPriceImpact(inputOutcome: 'YES' | 'NO', beforeInputReserve: bigint, beforeOutputReserve: bigint, quote: SwapQuote) {
+	const beforeNumerator = beforeOutputReserve
+	const beforeDenominator = beforeInputReserve + beforeOutputReserve
+	const afterIn = beforeInputReserve + quote.amountIn
+	const afterOut = beforeOutputReserve - quote.amountOut
 	return {
+		inputOutcome,
 		before: { numerator: beforeNumerator, denominator: beforeDenominator },
 		after: { numerator: afterOut, denominator: afterIn + afterOut },
 	}

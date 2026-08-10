@@ -68,6 +68,7 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		uint256 resultingNoReserve
 	);
 	event Sync(uint256 yesReserve, uint256 noReserve);
+	event PredeploymentSharesQuarantined(uint256 invalidAmount, uint256 yesAmount, uint256 noAmount);
 
 	modifier nonReentrant() {
 		require(!entered, 'Reentrant call');
@@ -76,10 +77,11 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		entered = false;
 	}
 
-	constructor(address _factory, ISecurityPool _securityPool, uint256 _feeBps) {
+	constructor(address _factory, ISecurityPool _securityPool, uint256 _feeBps, address predeploymentShareSink) {
 		require(_factory != address(0), 'Factory is zero');
 		require(address(_securityPool) != address(0), 'Security pool is zero');
 		require(_feeBps < 10_000, 'Invalid fee');
+		require(predeploymentShareSink != address(0), 'Share sink is zero');
 		factory = _factory;
 		securityPool = _securityPool;
 		shareToken = ITradingShareToken(address(_securityPool.shareToken()));
@@ -89,6 +91,24 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		yesTokenId = shareToken.getTokenId(universeId, BinaryOutcomes.BinaryOutcome.Yes);
 		noTokenId = shareToken.getTokenId(universeId, BinaryOutcomes.BinaryOutcome.No);
 		feeBps = _feeBps;
+		_quarantinePredeploymentShares(predeploymentShareSink);
+	}
+
+	function _quarantinePredeploymentShares(address sink) private {
+		uint256 invalidAmount = _invalidBalance();
+		uint256 yesAmount = _yesBalance();
+		uint256 noAmount = _noBalance();
+		if (invalidAmount == 0 && yesAmount == 0 && noAmount == 0) return;
+		uint256[] memory ids = new uint256[](3);
+		uint256[] memory amounts = new uint256[](3);
+		ids[0] = invalidTokenId;
+		ids[1] = yesTokenId;
+		ids[2] = noTokenId;
+		amounts[0] = invalidAmount;
+		amounts[1] = yesAmount;
+		amounts[2] = noAmount;
+		shareToken.safeBatchTransferFrom(address(this), sink, ids, amounts, '');
+		emit PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount);
 	}
 
 	function approve(address spender, uint256 amount) external returns (bool) {

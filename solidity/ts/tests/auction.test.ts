@@ -1171,7 +1171,7 @@ describe('Auction', () => {
 			for (const [withdrawFor, bidIndex] of winningBids) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 				strictEqualTypeSafe(result.totalRefundAttoEth, 0n, 'winning same-tick bid should not receive an ETH refund')
-				forwardRepByBid[Number(bidIndex)] = result.totalFilledAttoRep
+				forwardRepByBid[Number.parseInt(bidIndex.toString(), 10)] = result.totalFilledAttoRep
 				withdrawnRep += result.totalFilledAttoRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 			}
@@ -1183,7 +1183,7 @@ describe('Auction', () => {
 			let reverseWithdrawnRep = 0n
 			for (const [withdrawFor, bidIndex] of [...winningBids].reverse()) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
-				strictEqualTypeSafe(result.totalFilledAttoRep, forwardRepByBid[Number(bidIndex)], 'underfunded REP allocation should not depend on withdrawal order')
+				strictEqualTypeSafe(result.totalFilledAttoRep, forwardRepByBid[Number.parseInt(bidIndex.toString(), 10)], 'underfunded REP allocation should not depend on withdrawal order')
 				reverseWithdrawnRep += result.totalFilledAttoRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 			}

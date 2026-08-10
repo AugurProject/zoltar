@@ -79,7 +79,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
 		await fixture.finalizeQuestionAsYesWithoutFork()
-		expect(Number(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' }))).toBe(5)
+		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(5n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account] }))
 	})
@@ -90,7 +90,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await fixture.approveToken(fixture.client, fixture.addressString(fixture.GENESIS_REPUTATION_TOKEN), fixture.getZoltarAddress())
 		await fixture.forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
-		expect(Number(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' }))).toBe(4)
+		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(4n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account] }))
 	})

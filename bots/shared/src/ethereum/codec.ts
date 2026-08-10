@@ -42,6 +42,11 @@ function normalizeQuantityValue(value: bigint | number) {
 	return value
 }
 
+export function bigintToSafeNumber(value: bigint, label = 'Value') {
+	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
+	return Number.parseInt(value.toString(), 10)
+}
+
 export function hexQuantity(value: bigint | number) {
 	const normalized = normalizeQuantityValue(value)
 	return normalized === 0n ? '0x0' : ensure0x(normalized.toString(16))

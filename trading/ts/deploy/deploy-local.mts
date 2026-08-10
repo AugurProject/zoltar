@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../artifacts/contractArtifact.ts'
-import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain } from './manifest.ts'
+import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
 const rpcUrl = process.env.TRADING_RPC_URL ?? 'http://127.0.0.1:8545'
@@ -25,7 +25,7 @@ async function deploy(from: Address, data: Hex) {
 		if (isRecord(receipt)) {
 			const address = requireAddress(receipt.contractAddress, 'deployed contract')
 			if (receipt.status !== '0x1') throw new Error(`Deployment ${hash} reverted`)
-			return { address, transactionHash: hash }
+			return { address, transactionHash: hash, blockNumber: requireReceiptBlockNumber(receipt.blockNumber) }
 		}
 		await Bun.sleep(250)
 	}
@@ -44,6 +44,7 @@ const chainIdHex = await rpc('eth_chainId', [])
 if (typeof chainIdHex !== 'string' || !/^0x[0-9a-fA-F]+$/.test(chainIdHex)) throw new Error('eth_chainId returned an invalid value')
 const chainId = BigInt(chainIdHex)
 requireMatchingChain(coreDeployment.chainId, chainId)
+const manifestChainId = requireSafeChainId(chainId)
 const code = await rpc('eth_getCode', [securityPoolFactory, 'latest'])
 if (typeof code !== 'string' || code === '0x') throw new Error('Configured SecurityPoolFactory has no code on the selected RPC chain')
 const accounts = await rpc('eth_accounts', [])
@@ -51,6 +52,7 @@ if (!Array.isArray(accounts) || accounts.length === 0) throw new Error('RPC expo
 const deployer = requireAddress(process.env.TRADING_DEPLOYER ?? accounts[0], 'TRADING_DEPLOYER')
 const feeBps = BigInt(process.env.TRADING_FEE_BPS ?? '30')
 if (feeBps < 0n || feeBps >= 10_000n) throw new Error('TRADING_FEE_BPS must be between 0 and 9999')
+const manifestFeeBps = Number.parseInt(feeBps.toString(), 10)
 const artifactDocument: unknown = JSON.parse(await fs.readFile(path.join(projectRoot, 'artifacts/Contracts.json'), 'utf8'))
 const factoryContract = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const routerContract = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
@@ -61,10 +63,13 @@ const routerDeployment = await deploy(deployer, encodeDeployData({ abi: routerAr
 const compiler = isRecord(artifactDocument) ? artifactDocument.compiler : undefined
 const settings = isRecord(artifactDocument) ? artifactDocument.settings : undefined
 const manifest = {
-	network: { chainId: Number(chainId), chainIdHex, rpcUrl },
+	network: { chainId: manifestChainId, chainIdHex, rpcUrl },
 	core: { securityPoolFactory, sourceManifest: path.resolve(coreManifestPath) },
-	trading: { factory: factoryDeployment.address, router: routerDeployment.address, feeBps: Number(feeBps) },
-	transactions: { factory: factoryDeployment.transactionHash, router: routerDeployment.transactionHash },
+	trading: { factory: factoryDeployment.address, router: routerDeployment.address, feeBps: manifestFeeBps },
+	transactions: {
+		factory: { hash: factoryDeployment.transactionHash, blockNumber: factoryDeployment.blockNumber },
+		router: { hash: routerDeployment.transactionHash, blockNumber: routerDeployment.blockNumber },
+	},
 	compiler: { version: compiler, settings },
 	bytecodeHashes: { factory: keccak256(factoryArtifact.bytecode), router: keccak256(routerArtifact.bytecode) },
 	deployer,

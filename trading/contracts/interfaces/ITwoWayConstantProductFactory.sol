@@ -10,6 +10,7 @@ import { ITwoWayConstantProductPair } from './ITwoWayConstantProductPair.sol';
 interface ITwoWayConstantProductFactory {
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
 	function feeBps() external view returns (uint256);
+	function predeploymentShareSink() external view returns (address);
 	function createPair(ISecurityPool pool) external returns (ITwoWayConstantProductPair pair);
 	function getPair(ISecurityPool pool) external view returns (ITwoWayConstantProductPair pair);
 	function isPair(address candidate) external view returns (bool);

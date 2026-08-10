@@ -1,4 +1,4 @@
-import { decodeEventLog, readContractAtBlock, type Address, type Hex } from '#ethereum'
+import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, type Address, type Hex } from '#ethereum'
 import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
@@ -14,7 +14,7 @@ import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n
 	if (milliseconds < 0n || milliseconds > 8_640_000_000_000_000n) throw new Error('Canonical block timestamp is outside the supported date range')
-	return new Date(Number(milliseconds))
+	return new Date(bigintToSafeNumber(milliseconds, 'Canonical block timestamp'))
 }
 
 export async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
