@@ -1,24 +1,20 @@
 import { expect, test } from 'bun:test'
 import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl } from '../testSupport/simulator/anvilNode'
 
-test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
+test('getAnvilConnectionMode spawns an isolated node on Windows when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
+	const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 
 	try {
 		delete process.env['ANVIL_RPC']
-		if (process.platform === 'win32') {
-			expect(getAnvilConnectionMode()).toEqual({
-				type: 'use-existing',
-				rpcUrl: 'http://127.0.0.1:8545',
-			})
-		} else {
-			expect(getAnvilConnectionMode()).toEqual({
-				type: 'spawn-isolated',
-				rpcUrl: '',
-				port: 0,
-			})
-		}
+		Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+		expect(getAnvilConnectionMode()).toEqual({
+			type: 'spawn-isolated',
+			rpcUrl: '',
+			port: 0,
+		})
 	} finally {
+		if (originalPlatformDescriptor !== undefined) Object.defineProperty(process, 'platform', originalPlatformDescriptor)
 		if (originalAnvilRpc === undefined) {
 			delete process.env['ANVIL_RPC']
 		} else {

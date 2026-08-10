@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
-import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, validateLocalAnvilRpcUrl } from './AnvilWindowEthereum'
+import { getMockedEthSimulateWindowEthereum, validateLocalAnvilRpcUrl } from './AnvilWindowEthereum'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
 const OS_ASSIGNED_PORT = 0
@@ -65,8 +65,6 @@ const getConfiguredAnvilRpc = (): string | undefined => {
 export const getAnvilConnectionMode = (): AnvilConnectionMode => {
 	const anvilRpc = getConfiguredAnvilRpc()
 	if (anvilRpc !== undefined) return { type: 'use-existing', rpcUrl: anvilRpc }
-
-	if (process.platform === 'win32') return { type: 'use-existing', rpcUrl: getDefaultAnvilRpcUrl() }
 
 	return {
 		type: 'spawn-isolated',
