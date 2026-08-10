@@ -1,17 +1,11 @@
-import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
 import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { waitForSubmittedTransactionReceipt } from '../ui/ts/protocol/core.ts'
 import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../ui/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../ui/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
 
-const V3_FACTORY_ARTIFACT = new URL('./artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json', import.meta.resolve('@uniswap/v3-core/package.json'))
-const V3_QUOTER_ARTIFACT = new URL('./artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json', import.meta.resolve('@uniswap/v3-periphery/package.json'))
-const V3_SWAP_ROUTER_ARTIFACT = new URL('./artifacts/contracts/SwapRouter.sol/SwapRouter.json', import.meta.resolve('@uniswap/v3-periphery/package.json'))
-const V4_POOL_MANAGER_ARTIFACT = new URL('./out/PoolManager.sol/PoolManager.json', import.meta.resolve('@uniswap/v4-core/package.json'))
-const V4_QUOTER_ARTIFACT = new URL('./foundry-out/V4Quoter.sol/V4Quoter.json', import.meta.resolve('@uniswap/v4-periphery/package.json'))
-const PERMIT2_ROOT = new URL('./lib/permit2/', import.meta.resolve('@uniswap/v4-periphery/package.json'))
+const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('./artifacts/uniswap-deployment.json', import.meta.url)
+const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '4f3d8c4839675fd70102172a2c82eecee6e60d076f7709af264d733631c6efe6'
 
 export const ARACHNID_CREATE2_DEPLOYER_ADDRESS = getAddress('0x4e59b44847b379578588920ca78fbf26c0b4956c')
 export const ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' satisfies Hex
@@ -24,9 +18,6 @@ const ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH = keccak256(ARACHNID_CREATE
 const ARACHNID_CREATE2_DEPLOYER_FUNDING = 10_000_000_000_000_000n
 const PERMIT2_SALT = '0x0000000000000000000000000000000000000000d3af2663da51c10215000000' satisfies Hex
 
-const require = createRequire(import.meta.url)
-const solc: { compile: (input: string) => string; version: () => string } = require('solc')
-let permit2CompilationPromise: Promise<Permit2Compilation> | undefined
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 
 const ADDRESS_CONSTRUCTOR_ABI = [
@@ -47,8 +38,6 @@ const TWO_ADDRESS_CONSTRUCTOR_ABI = [
 		type: 'constructor',
 	},
 ] as const
-
-type UniswapArtifactLayout = 'hardhat' | 'foundry'
 
 type UniswapDeploymentStep = {
 	address: Address
@@ -72,18 +61,6 @@ export type UniswapDeployment = {
 	steps: readonly UniswapDeploymentStep[]
 }
 
-type SolcOutputContract = {
-	evm: {
-		bytecode: {
-			object: string
-		}
-		deployedBytecode: {
-			immutableReferences: Readonly<Record<string, readonly { length: number; start: number }[]>>
-			object: string
-		}
-	}
-}
-
 type Permit2Compilation = {
 	deployedBytecodeTemplate: Hex
 	immutableReferences: readonly Permit2ImmutableReferences[]
@@ -94,6 +71,24 @@ type Permit2ImmutableReferences = {
 	name: '_CACHED_CHAIN_ID' | '_CACHED_DOMAIN_SEPARATOR'
 	references: readonly { length: number; start: number }[]
 }
+
+type UniswapDeploymentArtifacts = {
+	permit2: Permit2Compilation
+	uniswapV3Factory: Hex
+	uniswapV3Quoter: Hex
+	uniswapV3SwapRouter: Hex
+	uniswapV4PoolManager: Hex
+	uniswapV4Quoter: Hex
+}
+
+const EXPECTED_UNISWAP_ARTIFACT_SOURCES = {
+	'@uniswap/v3-core': '1.0.1',
+	'@uniswap/v3-periphery': '1.4.4',
+	'@uniswap/v4-core': '1.0.2',
+	'@uniswap/v4-periphery': '1.0.3',
+} as const
+
+let uniswapDeploymentArtifactsPromise: Promise<UniswapDeploymentArtifacts> | undefined
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -106,101 +101,66 @@ function parseBytecode(value: unknown, artifactName: string): Hex {
 	return bytecode as Hex
 }
 
-async function loadArtifactBytecode(artifactUrl: URL, artifactName: string, layout: UniswapArtifactLayout) {
-	const artifact: unknown = await Bun.file(artifactUrl).json()
-	if (!isRecord(artifact)) throw new Error(`${artifactName} artifact is not an object`)
-	if (layout === 'hardhat') return parseBytecode(artifact['bytecode'], artifactName)
-	const bytecode = artifact['bytecode']
-	if (!isRecord(bytecode)) throw new Error(`${artifactName} does not contain a Foundry bytecode object`)
-	return parseBytecode(bytecode['object'], artifactName)
-}
-
-function parseSolcContract(output: unknown): SolcOutputContract {
-	if (!isRecord(output)) throw new Error('Permit2 compiler returned an invalid result')
-	const errors = output['errors']
-	if (Array.isArray(errors)) {
-		const failures = errors.flatMap(error => {
-			if (!isRecord(error) || error['severity'] !== 'error') return []
-			return [String(error['formattedMessage'] ?? error['message'])]
-		})
-		if (failures.length > 0) throw new Error(`Permit2 compilation failed:\n${failures.join('\n')}`)
-	}
-	const contracts = output['contracts']
-	if (!isRecord(contracts)) throw new Error('Permit2 compiler did not return contracts')
-	const permit2Source = contracts['src/Permit2.sol']
-	if (!isRecord(permit2Source)) throw new Error('Permit2 compiler did not return src/Permit2.sol')
-	const permit2 = permit2Source['Permit2']
-	if (!isRecord(permit2)) throw new Error('Permit2 compiler did not return the Permit2 contract')
-	const evm = permit2['evm']
-	if (!isRecord(evm)) throw new Error('Permit2 compiler did not return EVM output')
-	const bytecode = evm['bytecode']
-	if (!isRecord(bytecode) || typeof bytecode['object'] !== 'string') throw new Error('Permit2 compiler did not return creation bytecode')
-	const deployedBytecode = evm['deployedBytecode']
-	if (!isRecord(deployedBytecode) || typeof deployedBytecode['object'] !== 'string' || !isRecord(deployedBytecode['immutableReferences'])) throw new Error('Permit2 compiler did not return deployed bytecode and immutable references')
-	const immutableReferences: Record<string, readonly { length: number; start: number }[]> = {}
-	for (const [id, references] of Object.entries(deployedBytecode['immutableReferences'])) {
-		if (!Array.isArray(references)) throw new Error(`Permit2 immutable ${id} does not contain reference ranges`)
-		immutableReferences[id] = references.map(reference => {
-			if (!isRecord(reference) || !Number.isSafeInteger(reference['length']) || !Number.isSafeInteger(reference['start'])) throw new Error(`Permit2 immutable ${id} contains an invalid reference range`)
-			return { length: Number(reference['length']), start: Number(reference['start']) }
-		})
-	}
-	return { evm: { bytecode: { object: bytecode['object'] }, deployedBytecode: { immutableReferences, object: deployedBytecode['object'] } } }
-}
-
-function collectPermit2ImmutableNames(value: unknown, names = new Map<string, string>()) {
-	if (Array.isArray(value)) {
-		for (const item of value) collectPermit2ImmutableNames(item, names)
-		return names
-	}
-	if (!isRecord(value)) return names
-	if (value['nodeType'] === 'VariableDeclaration' && value['mutability'] === 'immutable' && typeof value['id'] === 'number' && typeof value['name'] === 'string') names.set(value['id'].toString(), value['name'])
-	for (const nested of Object.values(value)) collectPermit2ImmutableNames(nested, names)
-	return names
-}
-
 function parsePermit2ImmutableName(name: string | undefined): Permit2ImmutableReferences['name'] {
 	if (name === '_CACHED_CHAIN_ID' || name === '_CACHED_DOMAIN_SEPARATOR') return name
-	throw new Error(`Permit2 compiler returned an unknown immutable ${name ?? '(missing name)'}`)
+	throw new Error(`Permit2 deployment artifact contains an unknown immutable ${name ?? '(missing name)'}`)
 }
 
-async function compilePermit2InitCode() {
-	if (!solc.version().startsWith('0.8.17+')) throw new Error(`Permit2 requires solc 0.8.17, received ${solc.version()}`)
-	const sources: Record<string, { content: string }> = {}
-	const sourceRoot = fileURLToPath(new URL('./src/', PERMIT2_ROOT))
-	for await (const relativePath of new Bun.Glob('**/*.sol').scan({ cwd: sourceRoot })) {
-		sources[`src/${relativePath}`] = { content: await Bun.file(new URL(`./src/${relativePath}`, PERMIT2_ROOT)).text() }
-	}
-	for (const sourcePath of ['solmate/src/tokens/ERC20.sol', 'solmate/src/utils/SafeTransferLib.sol'] as const) {
-		const relativePath = sourcePath.slice('solmate/'.length)
-		sources[sourcePath] = { content: await Bun.file(new URL(`./lib/solmate/${relativePath}`, PERMIT2_ROOT)).text() }
-	}
-	const output: unknown = JSON.parse(
-		solc.compile(
-			JSON.stringify({
-				language: 'Solidity',
-				settings: {
-					metadata: { bytecodeHash: 'none' },
-					optimizer: { enabled: true, runs: 1_000_000 },
-					outputSelection: { '*': { '': ['ast'], '*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'evm.deployedBytecode.immutableReferences'] } },
-					viaIR: true,
-				},
-				sources,
-			}),
-		),
-	)
-	const permit2 = parseSolcContract(output).evm
-	const immutableNames = collectPermit2ImmutableNames(output)
+function parsePermit2Compilation(value: unknown): Permit2Compilation {
+	if (!isRecord(value)) throw new Error('Permit2 deployment artifact is not an object')
+	const references = value['immutableReferences']
+	if (!Array.isArray(references)) throw new Error('Permit2 deployment artifact does not contain immutable references')
 	return {
-		deployedBytecodeTemplate: parseBytecode(permit2.deployedBytecode.object, 'Permit2 deployed bytecode'),
-		immutableReferences: Object.entries(permit2.deployedBytecode.immutableReferences).map(([id, references]) => ({ name: parsePermit2ImmutableName(immutableNames.get(id)), references })),
-		initCode: parseBytecode(permit2.bytecode.object, 'Permit2'),
+		deployedBytecodeTemplate: parseBytecode(value['deployedBytecodeTemplate'], 'Permit2 deployed bytecode'),
+		immutableReferences: references.map((immutable, index) => {
+			if (!isRecord(immutable) || !Array.isArray(immutable['references'])) throw new Error(`Permit2 immutable group ${index.toString()} is invalid`)
+			return {
+				name: parsePermit2ImmutableName(typeof immutable['name'] === 'string' ? immutable['name'] : undefined),
+				references: immutable['references'].map((reference, referenceIndex) => {
+					if (!isRecord(reference) || !Number.isSafeInteger(reference['length']) || !Number.isSafeInteger(reference['start']) || Number(reference['length']) <= 0 || Number(reference['start']) < 0) {
+						throw new Error(`Permit2 immutable group ${index.toString()} reference ${referenceIndex.toString()} is invalid`)
+					}
+					return { length: Number(reference['length']), start: Number(reference['start']) }
+				}),
+			}
+		}),
+		initCode: parseBytecode(value['initCode'], 'Permit2'),
 	}
 }
 
-function getPermit2Compilation() {
-	permit2CompilationPromise ??= compilePermit2InitCode()
-	return permit2CompilationPromise
+function parseUniswapDeploymentArtifacts(contents: string): UniswapDeploymentArtifacts {
+	const actualSha256 = new Bun.CryptoHasher('sha256').update(contents).digest('hex')
+	if (actualSha256 !== UNISWAP_DEPLOYMENT_ARTIFACT_SHA256) {
+		throw new Error(`Uniswap deployment artifact is stale or changed: expected SHA-256 ${UNISWAP_DEPLOYMENT_ARTIFACT_SHA256}, received ${actualSha256}`)
+	}
+	const value: unknown = JSON.parse(contents)
+	if (!isRecord(value) || value['formatVersion'] !== 1) throw new Error('Uniswap deployment artifact has an unsupported format')
+	const sources = value['sources']
+	if (!isRecord(sources)) throw new Error('Uniswap deployment artifact does not identify its sources')
+	for (const [packageName, expectedVersion] of Object.entries(EXPECTED_UNISWAP_ARTIFACT_SOURCES)) {
+		if (sources[packageName] !== expectedVersion) throw new Error(`Uniswap deployment artifact must use ${packageName} ${expectedVersion}`)
+	}
+	return {
+		permit2: parsePermit2Compilation(value['permit2']),
+		uniswapV3Factory: parseBytecode(value['uniswapV3Factory'], 'Uniswap V3 Factory'),
+		uniswapV3Quoter: parseBytecode(value['uniswapV3Quoter'], 'Uniswap V3 QuoterV2'),
+		uniswapV3SwapRouter: parseBytecode(value['uniswapV3SwapRouter'], 'Uniswap V3 SwapRouter'),
+		uniswapV4PoolManager: parseBytecode(value['uniswapV4PoolManager'], 'Uniswap V4 PoolManager'),
+		uniswapV4Quoter: parseBytecode(value['uniswapV4Quoter'], 'Uniswap V4 Quoter'),
+	}
+}
+
+export function assertUniswapDeploymentArtifact(contents: string) {
+	parseUniswapDeploymentArtifacts(contents)
+}
+
+async function loadUniswapDeploymentArtifacts() {
+	return parseUniswapDeploymentArtifacts(await Bun.file(UNISWAP_DEPLOYMENT_ARTIFACT).text())
+}
+
+function getUniswapDeploymentArtifacts() {
+	uniswapDeploymentArtifactsPromise ??= loadUniswapDeploymentArtifacts()
+	return uniswapDeploymentArtifactsPromise
 }
 
 function normalizePermit2RuntimeCode(code: Hex, compilation: Permit2Compilation) {
@@ -397,41 +357,35 @@ async function deployPermit2(client: WriteClient, initCode: Hex) {
 }
 
 export async function getUniswapDeployment(wethAddress: Address): Promise<UniswapDeployment> {
-	const [permit2Compilation, v3FactoryInitCode, v3QuoterBytecode, v3SwapRouterBytecode, v4PoolManagerBytecode, v4QuoterBytecode] = await Promise.all([
-		getPermit2Compilation(),
-		loadArtifactBytecode(V3_FACTORY_ARTIFACT, 'Uniswap V3 Factory', 'hardhat'),
-		loadArtifactBytecode(V3_QUOTER_ARTIFACT, 'Uniswap V3 QuoterV2', 'hardhat'),
-		loadArtifactBytecode(V3_SWAP_ROUTER_ARTIFACT, 'Uniswap V3 SwapRouter', 'hardhat'),
-		loadArtifactBytecode(V4_POOL_MANAGER_ARTIFACT, 'Uniswap V4 PoolManager', 'foundry'),
-		loadArtifactBytecode(V4_QUOTER_ARTIFACT, 'Uniswap V4 Quoter', 'foundry'),
-	])
+	const artifacts = await getUniswapDeploymentArtifacts()
+	const permit2Compilation = artifacts.permit2
 	const permit2InitCode = permit2Compilation.initCode
 	const computedPermit2Address = getCreate2Address({ bytecode: permit2InitCode, from: ARACHNID_CREATE2_DEPLOYER_ADDRESS, salt: PERMIT2_SALT })
 	if (computedPermit2Address !== PERMIT2_ADDRESS) throw new Error(`Compiled Permit2 address ${computedPermit2Address} does not match canonical address ${PERMIT2_ADDRESS}`)
 
-	const uniswapV3FactoryAddress = deterministicAddress(v3FactoryInitCode)
+	const uniswapV3FactoryAddress = deterministicAddress(artifacts.uniswapV3Factory)
 	const v3QuoterInitCode = encodeDeployData({
 		abi: TWO_ADDRESS_CONSTRUCTOR_ABI,
 		args: [uniswapV3FactoryAddress, wethAddress],
-		bytecode: v3QuoterBytecode,
+		bytecode: artifacts.uniswapV3Quoter,
 	})
 	const uniswapV3QuoterAddress = deterministicAddress(v3QuoterInitCode)
 	const v3SwapRouterInitCode = encodeDeployData({
 		abi: TWO_ADDRESS_CONSTRUCTOR_ABI,
 		args: [uniswapV3FactoryAddress, wethAddress],
-		bytecode: v3SwapRouterBytecode,
+		bytecode: artifacts.uniswapV3SwapRouter,
 	})
 	const uniswapV3SwapRouterAddress = deterministicAddress(v3SwapRouterInitCode)
 	const v4PoolManagerInitCode = encodeDeployData({
 		abi: ADDRESS_CONSTRUCTOR_ABI,
 		args: [zeroAddress],
-		bytecode: v4PoolManagerBytecode,
+		bytecode: artifacts.uniswapV4PoolManager,
 	})
 	const uniswapV4PoolManagerAddress = deterministicAddress(v4PoolManagerInitCode)
 	const v4QuoterInitCode = encodeDeployData({
 		abi: ADDRESS_CONSTRUCTOR_ABI,
 		args: [uniswapV4PoolManagerAddress],
-		bytecode: v4QuoterBytecode,
+		bytecode: artifacts.uniswapV4Quoter,
 	})
 	const uniswapV4QuoterAddress = deterministicAddress(v4QuoterInitCode)
 
@@ -464,7 +418,7 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 			{
 				address: uniswapV3FactoryAddress,
 				dependencies: ['proxyDeployer'],
-				deploy: async client => await deployViaProxy(client, v3FactoryInitCode),
+				deploy: async client => await deployViaProxy(client, artifacts.uniswapV3Factory),
 				id: 'uniswapV3Factory',
 				label: 'Uniswap V3 Factory',
 			},

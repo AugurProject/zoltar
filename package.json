@@ -20,10 +20,6 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
-		"@uniswap/v3-core": "1.0.1",
-		"@uniswap/v3-periphery": "1.4.4",
-		"@uniswap/v4-core": "1.0.2",
-		"@uniswap/v4-periphery": "1.0.3",
 		"@zoltar/shared": "file:shared",
 		"solc": "0.8.17",
 		"tevm": "1.0.0-rc.151"
@@ -41,6 +37,7 @@
 		"refresh:shared-dependencies": "bun ./scripts/ensure-shared-package-fresh.mjs --refresh && cd solidity && bun ../scripts/ensure-shared-package-fresh.mjs --refresh && cd ../ui && bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
 		"check:shared-dependencies": "bun run refresh:shared-dependencies",
 		"check:unit-terminology": "bun ./scripts/check-unit-terminology.mts",
+		"check:uniswap-deployment-artifact": "bun ./scripts/check-uniswap-deployment-artifact.mts",
 		"install:anvil": "bash -lc 'if ! command -v anvil >/dev/null 2>&1; then curl -L https://foundry.paradigm.xyz | bash && export PATH=\"$HOME/.foundry/bin:$PATH\" && foundryup; fi'",
 		"ensure-shared-build": "bun ./scripts/ensure-contract-artifacts.mts --ensure-shared-only",
 		"ensure-contract-artifacts": "bun ./scripts/ensure-contract-artifacts.mts",
@@ -118,7 +115,7 @@
 		"docs:check": "bun run docs:check-html && bun run docs:check-charts && bun run docs:check-contract-reference && bun run docs:check-index && bun run docs:check-examples && bun run docs:check-content && bun run docs:check-reference-values && bun run check:mainnet-deployment:generated",
 		"docs:check:current": "bun run docs:check-html && bun run docs:check-charts && bun run docs:check-contract-reference && bun run docs:check-index && bun run docs:check-examples && bun run docs:check-content && bun run docs:check-reference-values && bun run check:mainnet-deployment:current",
 		"check:static": "bunx @biomejs/biome check package.json .prettierrc.json shared/package.json ui/package.json solidity/package.json tsconfig.scripts.json bun-test-setup*.ts README.md AGENTS.md .codex/review-contract.md docs scripts shared/ts solidity/ts ui/AGENTS.md ui/ts ui/build ui/dev-server.ts ui/css && bun scripts/lint-no-bare-catch.mts && bun scripts/lint-no-signal-wrapper-comparisons.mts && bun scripts/lint-no-direct-viem-imports.mts && bun scripts/lint-no-nested-solidity-ternaries.mts && bun run lint:ui-layer-boundaries",
-		"check:repository": "bun run check:unit-terminology && bun run lint:ui-strings && bun run check:agents && bun run check:html-structure && bun run check:html-format && bun run check:solidity-format",
+		"check:repository": "bun run check:unit-terminology && bun run check:uniswap-deployment-artifact && bun run lint:ui-strings && bun run check:agents && bun run check:html-structure && bun run check:html-format && bun run check:solidity-format",
 		"check": "bun run check:static && bun run docs:check && bun run check:repository",
 		"check:ci:current": "bun run check:static && bun run docs:check:current && bun run check:repository",
 		"check:changed": "bun scripts/check-changed.mts && bun run lint:ui-strings && bun run check:agents",

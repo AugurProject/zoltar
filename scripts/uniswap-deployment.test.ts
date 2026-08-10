@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, getUniswapDeployment } from './uniswap-deployment.mts'
+import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment } from './uniswap-deployment.mts'
 
 const WETH = getAddress('0x65156FD21726b8efcB627fa38c506E3f3542F601')
 
@@ -18,6 +18,13 @@ function successReceipt(): TransactionReceipt {
 }
 
 describe('Uniswap testnet deployment', () => {
+	test('rejects a changed deployment artifact before constructing a plan', async () => {
+		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
+		const changedArtifact = artifact.replace('"uniswapV3Factory": "0x60', '"uniswapV3Factory": "0x61')
+		expect(changedArtifact).not.toBe(artifact)
+		expect(() => assertUniswapDeploymentArtifact(changedArtifact)).toThrow('Uniswap deployment artifact is stale or changed')
+	})
+
 	test('rejects a wrong cached Permit2 chain ID even when the domain separator is current', () => {
 		const chainId = `0x${'00'.repeat(31)}01` as Hex
 		const wrongChainId = `0x${'00'.repeat(31)}02` as Hex
@@ -44,6 +51,15 @@ describe('Uniswap testnet deployment', () => {
 		expect(addressById.get('uniswapV3SwapRouter')).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
 		expect(addressById.get('uniswapV4PoolManager')).toBe(deployment.addresses.uniswapV4PoolManagerAddress)
 		expect(addressById.get('uniswapV4Quoter')).toBe(deployment.addresses.uniswapV4QuoterAddress)
+		expect(deployment.addresses).toEqual({
+			arachnidCreate2DeployerAddress: getAddress('0x4e59b44847b379578588920cA78FbF26c0B4956C'),
+			permit2Address: getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3'),
+			uniswapV3FactoryAddress: getAddress('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4'),
+			uniswapV3QuoterAddress: getAddress('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841'),
+			uniswapV3SwapRouterAddress: getAddress('0xC0a0e58Ae39603398D474BFd49d2904dE1464C99'),
+			uniswapV4PoolManagerAddress: getAddress('0x9C27Fce9ad85dE98C7e95031Bf3F0B3D2CD677ad'),
+			uniswapV4QuoterAddress: getAddress('0x29322b72F451C5f4eba5b3C862C76896470c059A'),
+		})
 		expect(deployment.addresses.uniswapV3FactoryAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3FactoryAddress)
 		expect(deployment.addresses.uniswapV3QuoterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress)
 		expect(deployment.addresses.uniswapV3SwapRouterAddress).not.toBe(SEPOLIA_NETWORK_PROFILE.uniswapV3QuoterAddress)
