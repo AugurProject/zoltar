@@ -24,7 +24,7 @@ const tokenizeNodeOptions = (nodeOptions: string): NodeOptionToken[] => {
 			if (character === undefined) break
 			if (inDoubleQuotes) {
 				const nextCharacter = nodeOptions[index + 1]
-				if (character === '\\' && (nextCharacter === '"' || nextCharacter === '\\')) {
+				if (character === '\\' && nextCharacter !== undefined) {
 					value += nextCharacter
 					index += 2
 					continue
