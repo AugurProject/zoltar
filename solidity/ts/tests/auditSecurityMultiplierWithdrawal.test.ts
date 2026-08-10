@@ -26,8 +26,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const targetRepBefore = await getVaultRep(client.account.address)
 		assert.strictEqual(targetRepBefore * PRICE_PRECISION * BPS_DENOMINATOR, capacityOwnershipAttoRep * statoblastSecurityMultiplierBps * reportedRepEthPrice, 'target should begin exactly at the multiplier-adjusted non-liquidatable boundary')
 
-		const faceValueRep = (capacityOwnershipAttoRep * reportedRepEthPrice) / PRICE_PRECISION
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, targetRepBefore - faceValueRep, reportedRepEthPrice)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, targetRepBefore - 1n, reportedRepEthPrice)
 
 		const targetAfterWithdrawal = await getSecurityVault(client, securityPool, client.account.address)
 		const targetRepAfterWithdrawal = await getVaultRep(client.account.address)
@@ -61,7 +60,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, coordinator, reportedRepEthPrice)
 
-		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 2n), /Vault REP below minimum|Vault backing insufficient/)
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit - 1n), /Vault REP below minimum|Vault backing insufficient/)
 		const target = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, target.repBackingUnits), repDeposit, 'rejected escalation deposit should preserve multiplier backing')
 	})

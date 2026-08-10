@@ -55,13 +55,13 @@ contract Zoltar {
 		// the genesis universe to an external REP deployment.
 		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupplyAttoRep();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
+		require(genesisSupply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
 		universeTheoreticalSupplies[0] = genesisSupply;
 		emit UniverseInitialized(0, 0, 0, 0, _genesisReputationToken, 0, genesisSupply);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
-		Universe memory universe = universes[universeId];
-		return universe.forkTime;
+		return universes[universeId].forkTime;
 	}
 
 	function forkQuestionMatches(uint248 universeId, uint256 questionId) external view returns (bool) {
@@ -69,8 +69,7 @@ contract Zoltar {
 	}
 
 	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
-		Universe memory universe = universes[universeId];
-		return universe.reputationToken;
+		return universes[universeId].reputationToken;
 	}
 
 	function getForkThresholdAttoRep(uint248 universeId) public view returns (uint256) {
@@ -87,7 +86,7 @@ contract Zoltar {
 	}
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
-		Universe memory universe = universes[universeId];
+		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
 		require(universeTheoreticalSupplies[universeId] != 0, 'Universe theoretical REP supply must be non-zero');
@@ -118,7 +117,7 @@ contract Zoltar {
 	// own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
 		require(amountAttoRep > 0, 'Burn amount zero');
-		Universe memory universe = universes[universeId];
+		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
 		_burnRep(universe.reputationToken, msg.sender, amountAttoRep);
@@ -144,7 +143,7 @@ contract Zoltar {
 	}
 
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
-		Universe memory universe = universes[universeId];
+		Universe storage universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so child universes are unavailable');
 		require(!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex), 'Malformed outcome index for the universe fork question');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
@@ -197,8 +196,7 @@ contract Zoltar {
 		emit MigrationRepAdded(msg.sender, universeId, amountAttoRep, migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
-		Universe memory universe = universes[universeId];
-		require(universe.forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
+		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
 		splitRepInternal(universeId, amountAttoRep, msg.sender, outcomeIndexes);
 	}
 

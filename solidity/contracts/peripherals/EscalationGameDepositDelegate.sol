@@ -49,8 +49,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		totalLocalUnresolvedAttoRep += attoRepAmount;
 		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += attoRepAmount;
 
-		selectedOutcomeState.deposits.push(Deposit({depositor: depositor, amountAttoRep: attoRepAmount, cumulativeAmountAttoRep: expectedCumulativeRepAmountAttoRep}));
-		uint256 depositIndex = selectedOutcomeState.deposits.length - 1;
+		uint256 depositIndex = selectedOutcomeState.localNodeIds.length;
 		parentDepositIndex = depositIndex;
 		if (forkContinuation) {
 			require(depositIndex < (uint256(1) << 88), 'Deposit index high');

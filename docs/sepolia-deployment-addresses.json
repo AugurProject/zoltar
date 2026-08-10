@@ -2,7 +2,7 @@
 	"network": {
 		"chainId": 11155111,
 		"chainIdHex": "0xaa36a7",
-		"genesisRepTokenAddress": "0x754bc4Ca2539560f1B48a9c3D2DEF5b9718F2C82",
+		"genesisRepTokenAddress": "0xA9Ce71bA72319c82794e1d0f8C81834eC8000b06",
 		"id": "sepolia",
 		"name": "Sepolia",
 		"wethAddress": "0x65156FD21726b8efcB627fa38c506E3f3542F601"
@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xa1b8d4652a20bCD7E65bb98da08CF6DA43c43603"
+			"address": "0x803f5f806fC31e4fcB60A8B6E122FB06c1deA823"
 		},
 		{
 			"id": "weth",
@@ -33,7 +33,7 @@
 		{
 			"id": "reputationToken",
 			"label": "Genesis Reputation Token",
-			"address": "0x754bc4Ca2539560f1B48a9c3D2DEF5b9718F2C82"
+			"address": "0xA9Ce71bA72319c82794e1d0f8C81834eC8000b06"
 		},
 		{
 			"id": "multicall3",
@@ -43,7 +43,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x0dC46042E6749234F8Ea477e20c95c5A7852fe41"
+			"address": "0xb404c94A12f3b61a730DC6faDA1689d6daB1Aa8F"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -63,17 +63,17 @@
 		{
 			"id": "zoltarQuestionData",
 			"label": "ZoltarQuestionData",
-			"address": "0x2E39068E56aaA81dC56849b1C97e1ac7E79D2399"
+			"address": "0x8FdBed968E9CABD82b4419D52AA15b735c41F9D3"
 		},
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x9886E8E6465622510933b5A7ABad8f2997624cfa"
+			"address": "0x0eb1543c04af87A483d6a41C5BBC83A97e141D6D"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x7dfE91f113610e47F8c0f77802ddeAC2CCA473B5"
+			"address": "0x6D6221C83Bc0aAdc12Fb96c67d92d05D90E9d0c1"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
@@ -83,29 +83,29 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x5eaadC0C3847eEdb193601dc37280dE14146e33b"
+			"address": "0x75DD4faA861D79656Be6c3B1aa0C80d48f3C804B"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
 			"label": "Escalation Claim Checkpoint Delegate",
-			"address": "0x2299D3caD8B1c72143A8D99c98607cDEDE38D90B"
+			"address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x048B47AeA0fd18B55411eAEaF2115649Dee8Fcf9"
+			"address": "0x1c6dF6C76900B56015D0d064EC8B4E14c9578c95"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x783000515b2cE8A1a685d22Fc34D18f84df6C18C"
+			"address": "0xFE844d4A06D240ffE38189490891B32cAD241D7B"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0xE458F5490f75473f6064b59014D2645435ff1782"
+			"address": "0x2EB24844ad3465D6d73De963944A5b7A4A374063"
 		}
 	]
 }

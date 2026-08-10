@@ -1632,10 +1632,14 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
+			const packedFinalizationSlot = formatStorageSlot(6n)
+			const packedFinalizationState = await mockWindow.request({ method: 'eth_getStorageAt', params: [yesSecurityPool.truthAuction, packedFinalizationSlot, 'latest'] })
+			if (typeof packedFinalizationState !== 'string') throw new Error('Auction finalization storage unavailable')
+			const totalAttoRepPurchasedMask = ((1n << 88n) - 1n) << 128n
 			await mockWindow.addStateOverrides({
 				[yesSecurityPool.truthAuction]: {
 					stateDiff: {
-						[`0x${11n.toString(16)}`]: 0n,
+						[packedFinalizationSlot]: BigInt(packedFinalizationState) & ~totalAttoRepPurchasedMask,
 					},
 				},
 			})

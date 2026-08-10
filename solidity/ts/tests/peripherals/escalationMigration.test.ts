@@ -686,7 +686,7 @@ describe('Peripherals: escalation migration', () => {
 			address: yesGame,
 			functionName: 'getEscalationGameEndDate',
 		})
-		await mockWindow.setTime(escalationEndDate + 1n)
+		await mockWindow.setTime(escalationEndDate + DAY)
 		strictEqualTypeSafe(await getQuestionResolution(client, yesGame), QuestionOutcome.Yes, 'the unrelated continuation should resolve from its escalation deposits')
 
 		const winningProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {

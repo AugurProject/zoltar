@@ -23,8 +23,6 @@ abstract contract SecurityPoolStorage {
 	bool public awaitingForkContinuation;
 	mapping(address => SecurityVault) public securityVaults;
 	mapping(address => uint256) internal vaultFeeRemainders;
-	address[] internal vaults;
-	mapping(address => uint256) internal vaultIndexesPlusOne;
 	uint256 internal activeVaultCount;
 	address internal latestActiveVault;
 	mapping(address => address) internal olderActiveVaults;

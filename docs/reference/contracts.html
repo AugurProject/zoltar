@@ -36,7 +36,7 @@
 				<p>Read surface: Use <code>getQuestionId</code> before submission; <code>questionCreatedTimestamp</code>, <code>questions</code>, and <code>outcomeLabels</code> for direct lookup; <code>questionIds</code>, <code>getQuestionCount</code>, and <code>getQuestions</code> for indexed or paged discovery; and <code>getQuestionEndDate</code>, <code>getOutcomeLabels</code>, <code>splitUint256IntoTwoWithInvalid</code>, <code>hasNonZeroScalarReservedBits</code>, <code>isMalformedAnswerOption</code>, and <code>getAnswerOptionName</code> when validating or displaying answers.</p>
 
 				<!-- Validated read ABI fingerprint: 5359875c236b41ea3d1b7af175b02ce8c7f00b5d5bf655869b7103ce363168df -->
-				<!-- Validated complete compiled ABI fingerprint: 5158fa721a2d0c38a3c04c8e2b0e4060904c33dfe65122f20028f13db2fdf4f7 -->
+				<!-- Validated complete compiled ABI fingerprint: 454ba49fe7c031af00f7eeebd910a19ab2b968a6457cfb90bdda82ef7b63ba7f -->
 				<table>
 					<thead>
 						<tr>
@@ -59,7 +59,7 @@
 				</table>
 				<h2 id="zoltar">Zoltar</h2>
 				<p>Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. <a href="../../solidity/contracts/Zoltar.sol">Source</a></p>
-				<p>Read surface: Use <code>universes</code>, <code>deployedChildOutcomeIndexes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe and migration state. Construction requires a deployed genesis REP token with nonzero theoretical supply and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
+				<p>Read surface: Use <code>universes</code>, <code>deployedChildOutcomeIndexes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
 
 				<p>Security boundaries for these calls are <a href="./security-model.html#assumption-a15">A15 intended question selection</a> and <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
 				<!-- Validated read ABI fingerprint: e97b9eb4ca404aff61d3d78e0880d651c06613c0c495f1265592b4aba8bc7673 -->
@@ -132,7 +132,7 @@
 						<tr>
 							<td><code>setMaxTheoreticalSupplyAttoRep(totalTheoreticalSupplyAttoRep)</code></td>
 							<td><code>Zoltar</code> only</td>
-							<td>Called by Zoltar as part of child-universe creation.</td>
+							<td>Called by Zoltar as part of child-universe creation; theoretical supply does not exceed 11 million REP.</td>
 							<td>Sets the child token theoretical-supply ceiling used to bound subsequent migration mints.</td>
 							<td><code>TheoreticalSupplySet</code></td>
 						</tr>
@@ -208,7 +208,7 @@
 				</table>
 				<h2 id="securitypool">SecurityPool</h2>
 				<p>Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation. <a href="../../solidity/contracts/peripherals/SecurityPool.sol">Source</a></p>
-				<p>Read surface: Immutable relationship and configuration getters are <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, and <code>statoblastSecurityMultiplierBps</code>; the current game is <code>escalationGame</code>. Accounting getters include <code>totalCapacityOwnershipAttoRep</code>, <code>settlementCollateralAttoEth</code>, <code>totalRepBackingUnits</code>, <code>shareTokenSupplyAttoShares</code>, <code>securityVaults</code>, <code>minimumSecurityBondDebtAttoEth</code>, <code>minimumVaultRepDepositAttoRep</code>, <code>vaultTargetHealthFactorBps</code>, <code>totalBadDebtAttoEth</code>, and <code>vaultBadDebtAttoEth</code>. Use <code>getCurrentMintingCapacityAttoEth</code> for price-converted aggregate capacity and <code>getVaultOpenInterestAttoEth</code> for a vault’s live proportional obligation. Other derived and paged reads are <code>securityPoolEventEmitter</code>, <code>getVaultCount</code>, <code>getActiveVaultCount</code>, <code>getVaults</code>, <code>getActiveVaults</code>, <code>attoSharesToAttoEth</code>, <code>attoEthToAttoShares</code>, <code>attoRepToBackingUnits</code>, <code>backingUnitsToAttoRep</code>, <code>getTotalPoolHeldAttoRep</code>, <code>totalAccruedFeesAttoEth</code>, <code>getPoolAccountingSnapshot</code>, <code>getVaultFeeRemainder</code>, and <code>isEscalationResolved</code>. <code>isEscalationResolved()</code> is true only when a local escalation game is configured and the forker routes a non-<code>None</code> outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are <code>totalClaimableVaultFeesAttoEth</code>, <code>lastUpdatedFeeAccumulator</code>, <code>feeIndex</code>, <code>currentRetentionRate</code>, <code>awaitingForkContinuation</code>, and <code>systemState</code>.</p>
+				<p>Read surface: Immutable relationship and configuration getters are <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, and <code>statoblastSecurityMultiplierBps</code>; the current game is <code>escalationGame</code>. Accounting getters include <code>totalCapacityOwnershipAttoRep</code>, <code>settlementCollateralAttoEth</code>, <code>totalRepBackingUnits</code>, <code>shareTokenSupplyAttoShares</code>, <code>securityVaults</code>, <code>minimumSecurityBondDebtAttoEth</code>, <code>minimumVaultRepDepositAttoRep</code>, <code>vaultTargetHealthFactorBps</code>, <code>totalBadDebtAttoEth</code>, and <code>vaultBadDebtAttoEth</code>. Use <code>getCurrentMintingCapacityAttoEth</code> for price-converted aggregate capacity and <code>getVaultOpenInterestAttoEth</code> for a vault’s live proportional obligation. Other derived and paged reads are <code>securityPoolEventEmitter</code>, <code>getVaultCount</code>, <code>getActiveVaultCount</code>, <code>getVaults</code>, <code>getActiveVaults</code>, <code>attoSharesToAttoEth</code>, <code>attoEthToAttoShares</code>, <code>attoRepToBackingUnits</code>, <code>backingUnitsToAttoRep</code>, <code>getTotalPoolHeldAttoRep</code>, <code>totalAccruedFeesAttoEth</code>, <code>getPoolAccountingSnapshot</code>, <code>getVaultFeeRemainder</code>, and <code>isEscalationResolved</code>. The two vault-count getters return the same active-vault count, and both vault pagers return the same newest-first active-vault sequence. <code>isEscalationResolved()</code> is true only when a local escalation game is configured and the forker routes a non-<code>None</code> outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are <code>totalClaimableVaultFeesAttoEth</code>, <code>lastUpdatedFeeAccumulator</code>, <code>feeIndex</code>, <code>currentRetentionRate</code>, <code>awaitingForkContinuation</code>, and <code>systemState</code>.</p>
 
 				<p>Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>. User-initiated pool calls additionally depend on <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
 				<!-- Validated read ABI fingerprint: 1d854f25a5b2ccdb83dbaf6ad1c99600c4eebd6b05764f0c8073183e47f585e2 -->
@@ -936,8 +936,8 @@
 				<p>Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">Source</a></p>
 				<p>Read surface: Auction summary getters are <code>maxAttoRepBeingSold</code>, <code>attoEthRaiseCap</code>, <code>finalized</code>, <code>clearingTick</code>, <code>ethFilledAtClearingAttoEth</code>, <code>attoEthRaised</code>, <code>totalAttoRepPurchased</code>, <code>auctionStarted</code>, <code>minBidSizeAttoEth</code>, <code>owner</code>, <code>underfunded</code>, <code>underfundedThreshold</code>, <code>underfundedWinningAttoEth</code>, and <code>activeTickCount</code>. <code>pendingEthRefundsAttoEth</code> reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use <code>computeClearing</code>, <code>previewFinalization</code>, <code>tickToPrice</code>, <code>getTickSummary</code>, <code>getTickCount</code>, <code>getTickPage</code>, <code>getActiveTickPage</code>, <code>getBidCountAtTick</code>, <code>getBidPageAtTick</code>, <code>getBidderBidCount</code>, and <code>getBidderBidPage</code> before finalizing or submitting settlement indexes.</p>
 
-				<!-- Validated read ABI fingerprint: fd6ddcfc7a043f79ac1fcdc7dfe1b2697970b0fe5f499a740350165f4a30fb35 -->
-				<!-- Validated complete compiled ABI fingerprint: 6f20a0fe018a4bdccffb6fe5fa9e210feffc1fd62175043dcc4012427b1f3b26 -->
+				<!-- Validated read ABI fingerprint: e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc -->
+				<!-- Validated complete compiled ABI fingerprint: 0f7cbe10566e33d0de1300b8613ef64fff72b11845bff8c4f2aa470d1ee1eb16 -->
 				<table>
 					<thead>
 						<tr>
@@ -952,14 +952,14 @@
 						<tr>
 							<td><code>startAuction(attoEthRaiseCap, maxAttoRepBeingSold)</code></td>
 							<td>Auction owner (<code>SecurityPoolForker</code>) only</td>
-							<td>Auction not previously started; both caps are positive.</td>
+							<td>Auction not previously started; both caps are positive; the REP cap does not exceed 11 million REP; the ETH cap fits in <code>uint128</code>; the block timestamp fits in <code>uint48</code>.</td>
 							<td>Starts the one-week auction and fixes its two caps and minimum bid.</td>
 							<td><code>AuctionStarted</code></td>
 						</tr>
 						<tr>
 							<td><code>submitBid(tick)</code> with ETH</td>
 							<td>Any bidder</td>
-							<td>Auction active and unfinalized; before one-week deadline; bid meets <code>minBidSizeAttoEth</code>; tick maps to nonzero price.</td>
+							<td>Auction active and unfinalized; before one-week deadline; bid meets <code>minBidSizeAttoEth</code>; tick maps to nonzero price; the individual bid and the resulting cumulative ETH at that tick each fit in <code>uint128</code>.</td>
 							<td>Adds ETH demand at the selected positive-price tick while extending that tick's append-only cumulative bid and refund history, including when a fully refunded tick becomes active again.</td>
 							<td><code>BidSubmitted</code></td>
 						</tr>

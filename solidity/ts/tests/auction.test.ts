@@ -50,14 +50,16 @@ const DEFAULT_TOLERANCE = 1000n
 
 const DEFAULT_ETH_RAISE_CAP = 25n
 const DEFAULT_MAX_REP = 100n
+const MAX_ATTO_REP = 11_000_000n * ATTOETH_PER_ETH
 const AUCTION_NODES_SLOT = 0n
 const AUCTION_BIDS_AT_TICK_SLOT = 1n
 const AUCTION_REFUNDED_BID_PREFIX_TREE_SLOT = 2n
 const AUCTION_ROOT_SLOT = 3n
 const AUCTION_NEXT_ID_SLOT = 4n
 const AUCTION_MAX_REP_BEING_SOLD_SLOT = 5n
-const AUCTION_ETH_RAISE_CAP_SLOT = 6n
-const BID_STRUCT_SLOT_COUNT = 4n
+const BID_STRUCT_SLOT_COUNT = 2n
+const UINT128_BITS = 128n
+const BID_CLAIMED_OFFSET_BITS = 160n
 const NODE_STRUCT_SLOT_COUNT = 8n
 const MAX_DISTINCT_TICK_COUNT = MAX_TICK - MIN_TICK + 1n
 const FINALIZE_GAS_LIMIT = 20_000_000n
@@ -314,10 +316,10 @@ describe('Auction', () => {
 		}
 
 		for (let bidIndex = 0n; bidIndex < bidCount - 1n; bidIndex++) {
-			const claimedSlot = bidDataStartSlot + bidIndex * BID_STRUCT_SLOT_COUNT + 3n
+			const claimedSlot = bidDataStartSlot + bidIndex * BID_STRUCT_SLOT_COUNT
 			const ethAmountSlot = bidDataStartSlot + bidIndex * BID_STRUCT_SLOT_COUNT + 1n
-			stateDiff[`0x${claimedSlot.toString(16)}`] = 1n
-			stateDiff[`0x${ethAmountSlot.toString(16)}`] = 0n
+			stateDiff[`0x${claimedSlot.toString(16)}`] = BigInt(ownerClient.account.address) | (1n << BID_CLAIMED_OFFSET_BITS)
+			stateDiff[`0x${ethAmountSlot.toString(16)}`] = ((bidIndex + 1n) * bidAmount) << UINT128_BITS
 		}
 
 		for (const [treeIndex, value] of buildFenwickTreeEntries(bidCount, bidCount - 1n, bidAmount)) {
@@ -393,8 +395,7 @@ describe('Auction', () => {
 		const stateDiff: Record<string, bigint> = {
 			[formatStorageSlot(AUCTION_ROOT_SLOT)]: 1n,
 			[formatStorageSlot(AUCTION_NEXT_ID_SLOT)]: height + 1n,
-			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: maxAttoRepBeingSold,
-			[formatStorageSlot(AUCTION_ETH_RAISE_CAP_SLOT)]: attoEthRaiseCap,
+			[formatStorageSlot(AUCTION_MAX_REP_BEING_SOLD_SLOT)]: maxAttoRepBeingSold | (attoEthRaiseCap << 88n),
 		}
 
 		for (let nodeId = 1n; nodeId <= height; nodeId++) {
@@ -855,7 +856,7 @@ describe('Auction', () => {
 			await mockWindow.addStateOverrides({
 				[auctionAddress]: {
 					stateDiff: {
-						[firstBidEthAmountSlot]: 0n,
+						[firstBidEthAmountSlot]: bidAmount << UINT128_BITS,
 						[nodeTotalEthSlot]: activeTotalEth,
 						[nodeSubtreeEthSlot]: activeTotalEth,
 						...refundedTreeStateDiff,
@@ -1011,7 +1012,7 @@ describe('Auction', () => {
 
 		test('accepted positive-price bids below the cap-implied reserve are refunded', async () => {
 			const attoEthRaiseCap = 100n * 10n ** 18n
-			const maxAttoRepBeingSold = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = MAX_ATTO_REP
 			const bidAmount = 1n * 10n ** 18n
 			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
@@ -2123,6 +2124,8 @@ describe('Auction', () => {
 			await assert.rejects(async () => await startAuction(attacker, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold), /Only the auction owner can start the auction/)
 			await assert.rejects(async () => await startAuction(client, auctionAddress, 0n, maxAttoRepBeingSold), /Auction ETH raise cap and REP sale cap must both be positive/)
 			await assert.rejects(async () => await startAuction(client, auctionAddress, attoEthRaiseCap, 0n), /Auction ETH raise cap and REP sale cap must both be positive/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, attoEthRaiseCap, MAX_ATTO_REP + 1n), /Auction REP sale cap too high/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, 1n << 128n, maxAttoRepBeingSold), /Auction ETH raise cap too high/)
 
 			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 
@@ -2748,7 +2751,7 @@ describe('Auction', () => {
 	describe('Zero-price bid boundary', () => {
 		test('underfunded auction rejects a zero-price bid and refunds a lowest-positive bid below reserve', async () => {
 			const attoEthRaiseCap = 1000n * ATTOETH_PER_ETH
-			const maxAttoRepBeingSold = 2n * ATTOETH_PER_ETH * ATTOETH_PER_ETH
+			const maxAttoRepBeingSold = MAX_ATTO_REP
 			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
 			const zeroPriceTick = LOWEST_POSITIVE_PRICE_TICK - 1n
 			const lowPositiveTick = LOWEST_POSITIVE_PRICE_TICK
