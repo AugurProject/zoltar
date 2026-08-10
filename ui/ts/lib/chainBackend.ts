@@ -9,10 +9,13 @@ import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcO
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
 	PublicActions<Transport, NetworkProfile['chain']> & {
+		assertCanonicalRawTransactionCost?: (signer: Address, costAttoEth: bigint) => void
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
+		recordCanonicalFunding?: (signer: Address, amountAttoEth: bigint) => void
+		recordCanonicalRawTransaction?: (signer: Address, costAttoEth: bigint) => void
 		requiresWalletConfirmation?: boolean | undefined
 	}
 
