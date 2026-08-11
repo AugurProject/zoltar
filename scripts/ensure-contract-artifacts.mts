@@ -20,6 +20,8 @@ const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifac
 const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
+const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
+const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
 
 function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
 	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
@@ -56,6 +58,20 @@ async function getFilesRecursively(directoryPath: string): Promise<string[]> {
 		if (entry.isFile()) files.push(entryPath)
 	}
 	return files
+}
+
+export async function removeUnexpectedSharedSourceOutputs(root = repositoryRoot): Promise<void> {
+	const sourceRoot = path.join(root, 'shared', 'ts')
+	const sourceFiles = await getFilesRecursively(sourceRoot)
+	const sourceFileSet = new Set(sourceFiles)
+	for (const sourceFile of sourceFiles) {
+		const outputSuffix = unexpectedSharedSourceOutputSuffixes.find(suffix => sourceFile.endsWith(suffix))
+		if (outputSuffix === undefined) continue
+		const sourceBasePath = sourceFile.slice(0, -outputSuffix.length)
+		if (!sharedTypeScriptSourceSuffixes.some(suffix => sourceFileSet.has(`${sourceBasePath}${suffix}`))) continue
+		await fs.rm(sourceFile, { force: true })
+		console.log(`Removed compiled output from shared source directory: ${path.relative(root, sourceFile)}`)
+	}
 }
 
 async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boolean> {
@@ -165,11 +181,13 @@ async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
 }
 
 async function syncSharedFreshnessHash(): Promise<void> {
+	await removeUnexpectedSharedSourceOutputs()
 	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
 	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
 }
 
 export async function ensureSharedBuildIsCurrent(): Promise<void> {
+	await removeUnexpectedSharedSourceOutputs()
 	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReason === undefined) return
 

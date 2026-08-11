@@ -234,7 +234,8 @@ function isBunStringLiteral(node: ts.Node) {
 
 function getSourceLocation(sourceFile: ts.SourceFile, node: ts.Node) {
 	const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-	return `${path.relative(repositoryRootPath, sourceFile.fileName)}:${line + 1}:${character + 1}`
+	const relativePath = path.relative(repositoryRootPath, sourceFile.fileName).replaceAll(path.sep, '/')
+	return `${relativePath}:${line + 1}:${character + 1}`
 }
 
 function collectBareBunStringLiterals(sourceFile: ts.SourceFile) {

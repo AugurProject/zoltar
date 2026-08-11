@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
@@ -24,29 +24,19 @@ const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server | undefined
 
-function getChromiumPath() {
-	for (const commandName of ['chromium', 'chromium-browser', 'google-chrome']) {
-		const result = spawnSync('sh', ['-lc', `command -v ${commandName}`], {
-			encoding: 'utf8',
-		})
-		const commandPath = result.stdout.trim()
-		if (result.status === 0 && commandPath !== '') return commandPath
-	}
-	return undefined
-}
-
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = test
 const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
-		const result = spawnSync('bun', ['run', 'ui:build:prod'], {
+		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
 			cwd: repositoryRootPath,
-			encoding: 'utf8',
+			stderr: 'pipe',
+			stdout: 'pipe',
 		})
-		if (result.status !== 0) {
-			throw new Error(`ui:build:prod failed\n${result.stdout}${result.stderr}`)
+		if (result.exitCode !== 0) {
+			throw new Error(`ui:build:prod failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
 		}
 	}
 
@@ -97,8 +87,8 @@ test('production javascript is self-contained for deploys', async () => {
 	expect(appBundle).toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
 	expect(workerBundle).not.toContain('./vendor/')
 	expect(workerBundle).not.toContain('./js/')
-	expect(appSourceMap.sources.some(source => source.startsWith('../../ts/'))).toBe(true)
-	expect(workerSourceMap.sources.some(source => source.startsWith('../../ts/'))).toBe(true)
+	expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
+	expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
 })
 
 test('production build can be served as static files', async () => {
@@ -543,7 +533,7 @@ type ProductionBrowserDriver = {
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
-async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-production-browser-'))
 	const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stderr: 'pipe', stdout: 'ignore' })
@@ -676,6 +666,10 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 		await browserStderr
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
+}
+
+async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact))
 }
 
 const productionBrowserScenarios = [
