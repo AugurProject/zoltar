@@ -11,6 +11,8 @@ import {
 	reorgSearchFloor,
 	requiresParentLookup,
 	retryDelayMs,
+	rpcFailureLogMessage,
+	rpcProviderLabel,
 	runIndexerOwnershipLifecycle,
 	runNetworkLifecycle,
 	safeIndexerFailure,
@@ -127,6 +129,32 @@ describe('network indexer lifecycle', () => {
 		expect(message).toBe('RPC request failed; retrying')
 		expect(message).not.toContain(secret)
 		expect(message).not.toContain('rpc.example')
+	})
+
+	test('identifies same-origin RPC providers during failover without exposing URL credentials or paths', async () => {
+		const secret = 'provider-key-sentinel'
+		const providers = [`https://rpc-user:${secret}@rpc.example/first`, `https://rpc.example/${secret}?token=${secret}`].map((rpcUrl, index) => ({
+			endpoint: rpcProviderLabel(rpcUrl, index),
+			getChainId: async () => 1,
+			read: async () => Promise.reject(new Error('offline')),
+		}))
+		let attemptedEndpoint = ''
+		await expect(
+			withVerifiedProvider(
+				providers,
+				1,
+				(provider) => provider.read(),
+				() => false,
+				(provider) => {
+					attemptedEndpoint = provider.endpoint
+				},
+			),
+		).rejects.toThrow('offline')
+		const message = rpcFailureLogMessage('RPC request failed; retrying', attemptedEndpoint)
+
+		expect(message).toBe('RPC request failed; retrying (RPC: #2 https://rpc.example)')
+		expect(message).not.toContain(secret)
+		expect(message).not.toContain('rpc-user')
 	})
 
 	test('reports database failures separately without leaking details', () => {

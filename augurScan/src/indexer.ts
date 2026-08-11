@@ -185,14 +185,22 @@ class LeaseLostError extends Error {}
 
 type ChainProvider = { readonly getChainId: () => Promise<number> }
 
+export const rpcEndpointLabel = (rpcUrl: string): string => new URL(rpcUrl).origin
+
+export const rpcProviderLabel = (rpcUrl: string, index: number): string => `#${index + 1} ${rpcEndpointLabel(rpcUrl)}`
+
+export const rpcFailureLogMessage = (message: string, endpoint: string): string => `${message} (RPC: ${endpoint})`
+
 export const withVerifiedProvider = async <TProvider extends ChainProvider, TResult>(
 	providers: readonly TProvider[],
 	chainId: number,
 	operation: (provider: TProvider) => Promise<TResult>,
 	stopFailover = (_error: unknown): boolean => false,
+	onAttempt = (_provider: TProvider): void => {},
 ): Promise<TResult> => {
 	let lastFailure: unknown
 	for (const provider of providers) {
+		onAttempt(provider)
 		try {
 			const remoteChainId = await provider.getChainId()
 			if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
@@ -352,8 +360,9 @@ const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, bl
 class NetworkIndexer {
 	readonly #network: NetworkConfig
 	readonly #database: ScannerDatabase
-	readonly #clients: readonly PublicClient[]
+	readonly #providers: readonly { readonly client: PublicClient; readonly endpoint: string; readonly getChainId: () => Promise<number> }[]
 	#client: PublicClient
+	#activeRpcEndpoint: string
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
@@ -361,13 +370,18 @@ class NetworkIndexer {
 		this.#network = network
 		this.#database = database
 		this.#signal = signal
-		this.#clients = network.rpcUrls.map((rpcUrl) => createPublicClient({ transport: http(rpcUrl, { timeout: 20_000, retryCount: 2 }) }))
-		const firstClient = this.#clients[0]
-		if (firstClient === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
-		this.#client = firstClient
+		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
+			const client = createPublicClient({ transport: http(rpcUrl, { timeout: 20_000, retryCount: 2 }) })
+			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId() }
+		})
+		const firstProvider = this.#providers[0]
+		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
+		this.#client = firstProvider.client
+		this.#activeRpcEndpoint = firstProvider.endpoint
 	}
 
 	async run(): Promise<void> {
+		console.info(`[${this.#network.id}] RPC providers: ${this.#providers.map(({ endpoint }) => endpoint).join(', ')}`)
 		await runIndexerOwnershipLifecycle({
 			acquire: () => this.#database.tryAcquireIndexerLock(this.#network.chainId),
 			seed: (lease) => this.#database.seedNetwork(this.#network, lease),
@@ -400,13 +414,16 @@ class NetworkIndexer {
 
 	async #withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
 		return await withVerifiedProvider(
-			this.#clients,
+			this.#providers,
 			this.#network.chainId,
-			async (client) => {
+			async ({ client }) => {
 				this.#client = client
 				return await operation()
 			},
 			(error) => error instanceof LeaseLostError || errorChainIncludes(error, databaseFailureNames),
+			(provider) => {
+				this.#activeRpcEndpoint = provider.endpoint
+			},
 		)
 	}
 
@@ -419,7 +436,8 @@ class NetworkIndexer {
 
 	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
 		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
-		console.error(`[${this.#network.id}] ${message}`)
+		const logMessage = message === databaseFailureMessage ? message : rpcFailureLogMessage(message, this.#activeRpcEndpoint)
+		console.error(`[${this.#network.id}] ${logMessage}`)
 	}
 
 	async #assertLease(): Promise<void> {
