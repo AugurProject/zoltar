@@ -139,7 +139,7 @@ export function parseRpcUrl(value: string | undefined) {
 }
 
 export function parsePrivateKey(value: string | undefined) {
-	if (!isPrivateKey(value)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed private key')
+	if (!isPrivateKey(value)) throw new Error('PRIVATE_KEY or --private-key must be a 32-byte 0x-prefixed private key')
 	return value
 }
 
@@ -168,7 +168,7 @@ export function parseDeploymentCommandLine(argv = process.argv.slice(2), environ
 		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
 		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-gwei', 'MAX_FEE_PER_GAS_GWEI', argv) ?? environment['MAX_FEE_PER_GAS_GWEI']),
 		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
-		privateKey: parsePrivateKey(environment['PRIVATE_KEY']),
+		privateKey: parsePrivateKey(option('private-key', [...argv]) ?? environment['PRIVATE_KEY']),
 		rpcUrl: parseRpcUrl(commandLineValue('rpc-url', 'RPC_URL', argv) ?? environment['RPC_URL']),
 	}
 }
@@ -517,10 +517,12 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 export function getDeploymentHelp() {
 	return `Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
 
-Load PRIVATE_KEY into the environment from a secret manager or hidden prompt.
+Load PRIVATE_KEY into the environment from a secret manager or hidden prompt,
+or pass --private-key=0x... if shell history exposure is acceptable.
 Pass RPC and cost limits as uppercase assignments after --, for example:
   bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
 
+  --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
   --max-fee-per-gas-gwei=100  Rejects higher RPC fee suggestions
