@@ -190,7 +190,8 @@ const splittableLogRangeErrorFragments = [
 	'please reduce',
 	'query timeout',
 	'response size',
-	'too many',
+	'too many logs',
+	'too many results',
 	'too wide',
 ]
 
@@ -198,15 +199,32 @@ const splittableLogRangeErrorNames = new Set(['ResponseBodyTooLargeError', 'Time
 
 export const isSplittableLogRangeError = (error: unknown): boolean => {
 	const seen = new Set<unknown>()
+	const chain: unknown[] = []
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
 		seen.add(current)
-		if ('name' in current && typeof current.name === 'string' && splittableLogRangeErrorNames.has(current.name)) return true
-		if ('code' in current && current.code === -32005) return true
+		chain.push(current)
+		if ('status' in current && current.status === 429) return false
 		const descriptions = [
 			'details' in current ? current.details : undefined,
 			'message' in current ? current.message : undefined,
 			'shortMessage' in current ? current.shortMessage : undefined,
+		]
+		for (const description of descriptions) {
+			if (typeof description !== 'string') continue
+			const normalized = description.toLowerCase()
+			if (normalized.includes('rate limit') || normalized.includes('too many requests')) return false
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	for (const item of chain) {
+		if (typeof item !== 'object' || item === null) continue
+		if ('name' in item && typeof item.name === 'string' && splittableLogRangeErrorNames.has(item.name)) return true
+		if ('code' in item && item.code === -32005) return true
+		const descriptions = [
+			'details' in item ? item.details : undefined,
+			'message' in item ? item.message : undefined,
+			'shortMessage' in item ? item.shortMessage : undefined,
 		]
 		for (const description of descriptions) {
 			if (typeof description === 'string') {
@@ -214,7 +232,6 @@ export const isSplittableLogRangeError = (error: unknown): boolean => {
 				if (splittableLogRangeErrorFragments.some((fragment) => normalized.includes(fragment))) return true
 			}
 		}
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }
@@ -281,6 +298,18 @@ const requireLogPosition = (log: Log): { transactionHash: Hash; transactionIndex
 class ChainContinuityError extends Error {}
 class ChainConfigurationError extends Error {}
 class LeaseLostError extends Error {}
+
+export const queryCanonicalLogRange = async <T>(
+	throughBlock: bigint,
+	readEndBlockHash: () => Promise<Hash>,
+	query: () => Promise<readonly T[]>,
+): Promise<{ readonly items: readonly T[]; readonly endBlockHash: Hash }> => {
+	const before = await readEndBlockHash()
+	const items = await query()
+	const after = await readEndBlockHash()
+	if (before !== after) throw new ChainContinuityError(`Canonical chain changed while querying logs through block ${throughBlock}`)
+	return { items, endBlockHash: after }
+}
 
 type ChainProvider = { readonly getChainId: () => Promise<number> }
 type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string }
@@ -818,13 +847,24 @@ class NetworkIndexer {
 			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock)
 				throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
 		}
-		const segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses)
+		let segment: { readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }
+		let headers: readonly RpcBlockHeader[]
+		try {
+			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses)
+			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
+			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
+			const endHeader = headers.at(-1)
+			if (endHeader === undefined) throw new Error(`RPC did not return block ${segment.toBlock}`)
+			if (segment.endBlockHash !== undefined && endHeader.hash !== segment.endBlockHash)
+				throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
+		} catch (error) {
+			if (error instanceof ChainContinuityError) return false
+			throw error
+		}
 		const end = segment.toBlock
 		console.info(`[${this.#network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
 		const logsByBlock = new Map<bigint, Log[]>()
 		this.#mergeLogs(logsByBlock, segment.logs)
-		const blockNumbers = Array.from({ length: Number(end - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
-		const headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
 		let expectedParentHash = checkpoint?.hash
 		if (expectedParentHash === undefined && requiresParentLookup(nextBlock, this.#network.startBlock)) {
 			expectedParentHash = (await this.#client.getBlock({ blockNumber: nextBlock - 1n })).hash
@@ -847,7 +887,19 @@ class NetworkIndexer {
 				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
 				.map(([, contract]) => contract.address)
 			if (newlyDiscoveredActivityAddresses.length > 0 && nextBlock < end) {
-				this.#mergeLogs(logsByBlock, await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses))
+				try {
+					this.#mergeLogs(
+						logsByBlock,
+						await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses, (blockNumber) => {
+							const expected = headers[Number(blockNumber - batchStart)]
+							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
+							return expected.hash
+						}),
+					)
+				} catch (error) {
+					if (error instanceof ChainContinuityError) return false
+					throw error
+				}
 			}
 			const isSegmentEnd = nextBlock === end
 			const block = isSegmentEnd
@@ -875,47 +927,65 @@ class NetworkIndexer {
 		return end >= observedHead
 	}
 
-	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<Log[]> {
-		const groups = rpcLogAddressGroups(addresses)
-		const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
-		const unique = new Map<string, Log>()
-		for (const log of pages.flat()) {
-			const position = requireLogPosition(log)
-			if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
-				throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
-			unique.set(`${position.transactionHash}:${position.logIndex}`, log)
-		}
-		return [...unique.values()].sort((left, right) => {
-			const a = requireLogPosition(left)
-			const b = requireLogPosition(right)
-			return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
-		})
+	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+		const range = await queryCanonicalLogRange(
+			toBlock,
+			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
+			async () => {
+				const groups = rpcLogAddressGroups(addresses)
+				const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
+				const unique = new Map<string, Log>()
+				for (const log of pages.flat()) {
+					const position = requireLogPosition(log)
+					if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
+						throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
+					unique.set(`${position.transactionHash}:${position.logIndex}`, log)
+				}
+				return [...unique.values()].sort((left, right) => {
+					const a = requireLogPosition(left)
+					const b = requireLogPosition(right)
+					return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
+				})
+			},
+		)
+		return { logs: range.items, endBlockHash: range.endBlockHash }
 	}
 
 	async #getNextLogSegment(
 		fromBlock: bigint,
 		maximumToBlock: bigint,
 		addresses: readonly Address[],
-	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[] }> {
+	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }> {
 		if (addresses.length === 0) {
 			const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
 			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [] }
 		}
+		let endBlockHash: Hash | undefined
 		const segment = await queryAdaptiveLogRange(
 			fromBlock,
 			maximumToBlock,
 			runtimeConfig.logScanRangeSize,
-			(rangeStart, rangeEnd) => this.#getLogs(rangeStart, rangeEnd, addresses),
+			async (rangeStart, rangeEnd) => {
+				const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+				endBlockHash = range.endBlockHash
+				return range.logs
+			},
 			(failedFrom, failedTo, retryTo, error) =>
 				console.warn(
 					`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
 				),
 			isSplittableLogRangeError,
 		)
-		return { toBlock: segment.toBlock, logs: segment.items }
+		if (endBlockHash === undefined) throw new Error(`RPC did not anchor log range through block ${segment.toBlock}`)
+		return { toBlock: segment.toBlock, logs: segment.items, endBlockHash }
 	}
 
-	async #getAllLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<readonly Log[]> {
+	async #getAllLogs(
+		fromBlock: bigint,
+		toBlock: bigint,
+		addresses: readonly Address[],
+		expectedBlockHash: (blockNumber: bigint) => Hash,
+	): Promise<readonly Log[]> {
 		const logs: Log[] = []
 		let cursor = fromBlock
 		while (cursor <= toBlock) {
@@ -923,7 +993,12 @@ class NetworkIndexer {
 				cursor,
 				toBlock,
 				runtimeConfig.logScanRangeSize,
-				(rangeStart, rangeEnd) => this.#getLogs(rangeStart, rangeEnd, addresses),
+				async (rangeStart, rangeEnd) => {
+					const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+					if (range.endBlockHash !== expectedBlockHash(rangeEnd))
+						throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
+					return range.logs
+				},
 				(failedFrom, failedTo, retryTo, error) =>
 					console.warn(
 						`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
@@ -958,11 +1033,12 @@ class NetworkIndexer {
 	}
 
 	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
-		const logs = await this.#getLogs(blockNumber, blockNumber, addresses)
-		for (const log of logs) {
+		const range = await this.#getLogs(blockNumber, blockNumber, addresses)
+		if (range.endBlockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
+		for (const log of range.logs) {
 			if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
 		}
-		return logs
+		return [...range.logs]
 	}
 
 	async #indexBlock(

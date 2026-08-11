@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
-import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, TimeoutError, toHex } from '../src/ethereum.ts'
+import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, HttpRequestError, parseAbi, TimeoutError, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -18,6 +18,7 @@ import {
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
 	queryAdaptiveLogRange,
+	queryCanonicalLogRange,
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
@@ -104,6 +105,51 @@ describe('network indexer lifecycle', () => {
 		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
 		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
 		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('does not split viem HTTP rate-limit failures', async () => {
+		for (const details of ['rate limit exceeded', 'Too Many Requests']) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new HttpRequestError({ details, status: 429, url: 'https://rpc.example' })
+			await expect(
+				queryAdaptiveLogRange(
+					0n,
+					100n,
+					101,
+					async (fromBlock, toBlock) => {
+						attempts.push([fromBlock, toBlock])
+						throw failure
+					},
+					undefined,
+					isSplittableLogRangeError,
+				),
+			).rejects.toBe(failure)
+			expect(attempts).toEqual([[0n, 100n]])
+		}
+	})
+
+	test('rejects an empty log range when its canonical endpoint changes before commit', async () => {
+		const oldHash = `0x${'1'.repeat(64)}` as const
+		const replacementHash = `0x${'2'.repeat(64)}` as const
+		const hashes = [oldHash, replacementHash]
+		let commits = 0
+		let failure: unknown
+		try {
+			await queryCanonicalLogRange(
+				100n,
+				async () => {
+					const hash = hashes.shift()
+					if (hash === undefined) throw new Error('Unexpected endpoint hash read')
+					return hash
+				},
+				async () => [],
+			)
+			commits++
+		} catch (error) {
+			failure = error
+		}
+		expect(String(failure)).toContain('changed while querying logs through block 100')
+		expect(commits).toBe(0)
 	})
 
 	test('splits viem timeout and oversized-response failures at exact inclusive boundaries', async () => {
