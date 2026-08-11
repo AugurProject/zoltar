@@ -1185,9 +1185,9 @@ function getReplacementReason(originalTransaction: BlockTransaction, replacement
 
 const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
 
-async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }) {
+async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
 	for (let blockNumber = parameters.fromBlock; blockNumber <= parameters.toBlock; blockNumber += 1n) {
-		const block = await actions.getBlock({
+		const block = await blockReader.getBlock({
 			blockNumber,
 			includeTransactions: true,
 		})
@@ -1460,9 +1460,9 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport })
-			const waitForNextPoll = async () => {
+			const waitForNextPoll = async (delayMilliseconds = pollingInterval) => {
 				await new Promise(resolve => {
-					setTimeout(resolve, pollingInterval)
+					setTimeout(resolve, delayMilliseconds)
 				})
 			}
 			const retryRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
@@ -1470,8 +1470,11 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					try {
 						return await operation()
 					} catch (error) {
-						if (!isRateLimitError(error) || Date.now() - startTime >= timeoutMilliseconds) throw error
-						await waitForNextPoll()
+						if (!isRateLimitError(error)) throw error
+						const remainingMilliseconds = timeoutMilliseconds - (Date.now() - startTime)
+						if (remainingMilliseconds <= 0) throw error
+						await waitForNextPoll(Math.min(pollingInterval, remainingMilliseconds))
+						if (Date.now() - startTime >= timeoutMilliseconds) throw error
 					}
 				}
 			}
@@ -1518,7 +1521,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
 							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 						}
-						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await retryRateLimited(async () => await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }))
+						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryRateLimited(async () => await actions.getBlock(parameters)) })
 						lastScannedReplacementBlock = latestBlockNumber
 						if (replacementTransaction !== undefined) {
 							const transactionReceipt = await retryRateLimited(
