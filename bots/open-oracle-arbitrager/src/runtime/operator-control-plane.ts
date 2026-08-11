@@ -27,6 +27,11 @@ export type PendingOperatorUpdates = {
 	tokenAddresses: Address[] | undefined
 }
 
+export async function deployExecutorFromConnectivity(parameters: { chain: Configuration['network']['chain']; connectivity: ConnectivitySettings; privateKey: Hex; salt: unknown }, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
+	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
+	return await deploy({ chain: parameters.chain, privateKey: parameters.privateKey, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
+}
+
 export function startOperatorControlPlane(parameters: { config: Configuration; fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }; getCursor: () => SyncCursor | undefined; lockManager: ExecutionLockManager | undefined; signerOperationGate: SignerOperationGate; state: OperatorState }) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const pending: PendingOperatorUpdates = {
@@ -134,13 +139,12 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
 			if (config.execute && !state.paused) throw new Error('Pause execution before deploying with the active signer')
 			if (config.privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
-			const deploymentRpcUrl = (pending.connectivity ?? config.connectivity).publicRpcUrls[0]
-			if (deploymentRpcUrl === undefined) throw new Error('Configure a public submission RPC before deploying the executor')
+			const deploymentConnectivity = pending.connectivity ?? config.connectivity
 			const plan = executorDeploymentPlan(value['salt'])
 			if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
 			let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
 			try {
-				deployed = await deployExecutorCreate2({ chain: config.network.chain, privateKey: config.privateKey, rpcUrl: deploymentRpcUrl, salt: plan.salt })
+				deployed = await deployExecutorFromConnectivity({ chain: config.network.chain, connectivity: deploymentConnectivity, privateKey: config.privateKey, salt: plan.salt })
 			} finally {
 				signerOperationGate.release('deployment')
 			}

@@ -11,6 +11,7 @@ import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction
 import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount } from '../src/ethereum.ts'
 import { bigintToSafeNumber } from '../src/ethereum/codec.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
+import { rpcConfigurationWithEnvironmentOverride } from '../src/monitoring/connectivity.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -19,6 +20,40 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
+	test('maps an environment RPC list to read, broadcast, and quorum roles', () => {
+		const overridden = rpcConfigurationWithEnvironmentOverride(
+			{
+				publicRpcUrls: ['https://saved-public.example'],
+				readRpcUrl: 'https://saved-read.example',
+			},
+			['https://saved-quorum.example'],
+			'https://primary.example/rpc, https://secondary.example/key,https://third.example',
+		)
+
+		expect(overridden).toEqual({
+			connectivity: {
+				publicRpcUrls: ['https://primary.example/rpc', 'https://secondary.example/key', 'https://third.example/'],
+				readRpcUrl: 'https://primary.example/rpc',
+			},
+			quorumRpcUrls: ['https://secondary.example/key', 'https://third.example/'],
+		})
+	})
+
+	test('keeps saved RPC roles when the environment override is blank', () => {
+		const connectivity = { publicRpcUrls: ['https://saved-public.example'], readRpcUrl: 'https://saved-read.example' }
+		const quorumRpcUrls = ['https://saved-quorum.example']
+		expect(rpcConfigurationWithEnvironmentOverride(connectivity, quorumRpcUrls, '')).toEqual({ connectivity, quorumRpcUrls })
+	})
+
+	test('rejects ambiguous or non-independent environment RPC lists', () => {
+		const connectivity = { publicRpcUrls: ['https://saved-public.example'], readRpcUrl: 'https://saved-read.example' }
+		expect(() => rpcConfigurationWithEnvironmentOverride(connectivity, [], 'https://one.example,')).toThrow('must not contain empty entries')
+		expect(() => rpcConfigurationWithEnvironmentOverride(connectivity, [], 'https://one.example,https://one.example')).toThrow('independent origins')
+		expect(() => rpcConfigurationWithEnvironmentOverride(connectivity, [], 'https://one.example/a,https://one.example/b')).toThrow('independent origins')
+		expect(() => rpcConfigurationWithEnvironmentOverride(connectivity, [], 'https://one.example,https://two.example,https://two.example')).toThrow('independent origins')
+		expect(() => rpcConfigurationWithEnvironmentOverride(connectivity, [], 'https://one.example,https://two.example,https://three.example,https://two.example')).toThrow('independent origins')
+	})
+
 	test('converts bigint values only inside the safe integer range', () => {
 		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
 		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
