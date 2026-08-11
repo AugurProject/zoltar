@@ -1,5 +1,13 @@
 import { runtimeConfig } from './config.ts'
-import type { AddressActivity, IndexedBlock, IndexerLease, RichListBalance, ScannerDatabase, StoredTransaction } from './database.ts'
+import {
+	type AddressActivity,
+	DatabaseConsistencyError,
+	type IndexedBlock,
+	type IndexerLease,
+	type RichListBalance,
+	type ScannerDatabase,
+	type StoredTransaction,
+} from './database.ts'
 import {
 	type Address,
 	createPublicClient,
@@ -17,6 +25,12 @@ import {
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+
+type RpcBlockHeader = {
+	readonly hash: Hash
+	readonly parentHash: Hash
+	readonly timestamp: bigint
+}
 
 const erc20MetadataAbi = parseAbi([
 	'function decimals() view returns (uint8)',
@@ -142,6 +156,64 @@ const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (it
 	})
 	await Promise.all(workers)
 	return result
+}
+
+export const queryAdaptiveLogRange = async <T>(
+	fromBlock: bigint,
+	maximumToBlock: bigint,
+	maximumBlockCount: number,
+	query: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>,
+	onSplit?: (failedFromBlock: bigint, failedToBlock: bigint, retryToBlock: bigint, error: unknown) => void,
+	shouldSplit: (error: unknown) => boolean = () => true,
+): Promise<{ readonly fromBlock: bigint; readonly toBlock: bigint; readonly items: readonly T[] }> => {
+	if (!Number.isSafeInteger(maximumBlockCount) || maximumBlockCount <= 0) throw new Error('The maximum log range must be a positive safe integer')
+	if (fromBlock > maximumToBlock) throw new Error('The log range start must not exceed its end')
+	const remaining = maximumToBlock - fromBlock + 1n
+	let blockCount = remaining < BigInt(maximumBlockCount) ? Number(remaining) : maximumBlockCount
+	while (true) {
+		const toBlock = fromBlock + BigInt(blockCount - 1)
+		try {
+			return { fromBlock, toBlock, items: await query(fromBlock, toBlock) }
+		} catch (error) {
+			if (blockCount === 1 || !shouldSplit(error)) throw error
+			blockCount = Math.ceil(blockCount / 2)
+			onSplit?.(fromBlock, toBlock, fromBlock + BigInt(blockCount - 1), error)
+		}
+	}
+}
+
+const splittableLogRangeErrorFragments = [
+	'block range',
+	'exceed maximum',
+	'limit exceeded',
+	'more than',
+	'please reduce',
+	'query timeout',
+	'response size',
+	'too many',
+	'too wide',
+]
+
+export const isSplittableLogRangeError = (error: unknown): boolean => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if ('code' in current && current.code === -32005) return true
+		const descriptions = [
+			'details' in current ? current.details : undefined,
+			'message' in current ? current.message : undefined,
+			'shortMessage' in current ? current.shortMessage : undefined,
+		]
+		for (const description of descriptions) {
+			if (typeof description === 'string') {
+				const normalized = description.toLowerCase()
+				if (splittableLogRangeErrorFragments.some((fragment) => normalized.includes(fragment))) return true
+			}
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
 }
 
 const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
@@ -555,7 +627,7 @@ class NetworkIndexer {
 		this.#database = database
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
-			const client = createPublicClient({ transport: http(rpcUrl, { timeout: 20_000, retryCount: 2 }) })
+			const client = createPublicClient({ transport: http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 }) })
 			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId() }
 		})
 		const firstProvider = this.#providers[0]
@@ -734,17 +806,33 @@ class NetworkIndexer {
 			this.#indexingStartReported = true
 		}
 		const batchStart = nextBlock
-		const end = nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) < observedHead ? nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) : observedHead
 		let contracts = await this.#database.contracts(this.#network.chainId)
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId)
+		const storedCursors = await this.#database.logScanCursors(this.#network.chainId)
+		const initialAddresses = [...contracts.values()].filter(isProtocolActivitySource).map(({ address }) => address)
+		for (const address of initialAddresses) {
+			const cursor = storedCursors.get(address.toLowerCase())
+			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock)
+				throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
+		}
+		const segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses)
+		const end = segment.toBlock
+		console.info(`[${this.#network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
+		const logsByBlock = new Map<bigint, Log[]>()
+		this.#mergeLogs(logsByBlock, segment.logs)
+		const blockNumbers = Array.from({ length: Number(end - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
+		const headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
 		let expectedParentHash = checkpoint?.hash
 		if (expectedParentHash === undefined && requiresParentLookup(nextBlock, this.#network.startBlock)) {
 			expectedParentHash = (await this.#client.getBlock({ blockNumber: nextBlock - 1n })).hash
 		}
 		while (nextBlock <= end && !this.#signal.aborted) {
+			const header = headers[Number(nextBlock - batchStart)]
+			if (header === undefined) throw new Error(`RPC did not return block ${nextBlock}`)
+			const contractsBeforeBlock = new Set(contracts.keys())
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 			try {
-				indexed = await this.#indexBlock(nextBlock, observedHead, contracts, tokenMetadata, expectedParentHash)
+				indexed = await this.#indexBlock(nextBlock, observedHead, contracts, tokenMetadata, expectedParentHash, header, logsByBlock.get(nextBlock) ?? [])
 			} catch (error) {
 				if (error instanceof ChainContinuityError) {
 					await this.#reconcileReorg()
@@ -752,8 +840,25 @@ class NetworkIndexer {
 				}
 				throw error
 			}
+			const newlyDiscoveredActivityAddresses = [...indexed.contracts]
+				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
+				.map(([, contract]) => contract.address)
+			if (newlyDiscoveredActivityAddresses.length > 0 && nextBlock < end) {
+				this.#mergeLogs(logsByBlock, await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses))
+			}
+			const isSegmentEnd = nextBlock === end
+			const block = isSegmentEnd
+				? {
+						...indexed.block,
+						logScanCursors: [...indexed.contracts.values()].filter(isProtocolActivitySource).map((contract) => ({
+							contractAddress: contract.address,
+							startBlock: contract.discoveryBlock ?? this.#network.startBlock,
+							lastRetrievedBlock: end,
+						})),
+					}
+				: indexed.block
 			await this.#assertLease()
-			await this.#database.storeBlock(this.#network.chainId, indexed.block, this.#requireLease())
+			await this.#database.storeBlock(this.#network.chainId, block, this.#requireLease())
 			contracts = indexed.contracts
 			tokenMetadata = indexed.tokenMetadata
 			expectedParentHash = indexed.block.hash
@@ -767,15 +872,14 @@ class NetworkIndexer {
 		return end >= observedHead
 	}
 
-	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
+	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<Log[]> {
 		const groups = rpcLogAddressGroups(addresses)
-		const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock: blockNumber, toBlock: blockNumber }))
+		const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
 		const unique = new Map<string, Log>()
 		for (const log of pages.flat()) {
 			const position = requireLogPosition(log)
-			if (position.blockHash !== blockHash || position.blockNumber !== blockNumber) {
-				throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
-			}
+			if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
+				throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
 			unique.set(`${position.transactionHash}:${position.logIndex}`, log)
 		}
 		return [...unique.values()].sort((left, right) => {
@@ -785,39 +889,119 @@ class NetworkIndexer {
 		})
 	}
 
+	async #getNextLogSegment(
+		fromBlock: bigint,
+		maximumToBlock: bigint,
+		addresses: readonly Address[],
+	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[] }> {
+		if (addresses.length === 0) {
+			const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
+			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [] }
+		}
+		const segment = await queryAdaptiveLogRange(
+			fromBlock,
+			maximumToBlock,
+			runtimeConfig.logScanRangeSize,
+			(rangeStart, rangeEnd) => this.#getLogs(rangeStart, rangeEnd, addresses),
+			(failedFrom, failedTo, retryTo, error) =>
+				console.warn(
+					`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+				),
+			isSplittableLogRangeError,
+		)
+		return { toBlock: segment.toBlock, logs: segment.items }
+	}
+
+	async #getAllLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<readonly Log[]> {
+		const logs: Log[] = []
+		let cursor = fromBlock
+		while (cursor <= toBlock) {
+			const segment = await queryAdaptiveLogRange(
+				cursor,
+				toBlock,
+				runtimeConfig.logScanRangeSize,
+				(rangeStart, rangeEnd) => this.#getLogs(rangeStart, rangeEnd, addresses),
+				(failedFrom, failedTo, retryTo, error) =>
+					console.warn(
+						`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+					),
+				isSplittableLogRangeError,
+			)
+			logs.push(...segment.items)
+			cursor = segment.toBlock + 1n
+		}
+		return logs
+	}
+
+	#mergeLogs(target: Map<bigint, Log[]>, logs: readonly Log[]): void {
+		for (const log of logs) {
+			const position = requireLogPosition(log)
+			const existing = target.get(position.blockNumber) ?? []
+			if (
+				!existing.some((candidate) => {
+					const candidatePosition = requireLogPosition(candidate)
+					return candidatePosition.transactionHash === position.transactionHash && candidatePosition.logIndex === position.logIndex
+				})
+			) {
+				existing.push(log)
+				existing.sort((left, right) => {
+					const a = requireLogPosition(left)
+					const b = requireLogPosition(right)
+					return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
+				})
+				target.set(position.blockNumber, existing)
+			}
+		}
+	}
+
+	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
+		const logs = await this.#getLogs(blockNumber, blockNumber, addresses)
+		for (const log of logs) {
+			if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
+		}
+		return logs
+	}
+
 	async #indexBlock(
 		number: bigint,
 		observedHead: bigint,
 		currentContracts: ReadonlyMap<string, ContractMetadata>,
 		currentTokenMetadata: ReadonlyMap<string, TokenMetadata>,
 		expectedParentHash: Hash | undefined,
+		block: RpcBlockHeader,
+		prefetchedLogs: readonly Log[],
 	): Promise<{ block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }> {
-		const block = await this.#client.getBlock({ blockNumber: number, includeTransactions: true })
 		if (expectedParentHash !== undefined && block.parentHash !== expectedParentHash) {
 			throw new ChainContinuityError(`Block ${number} does not extend the indexed canonical chain`)
 		}
 		const contracts = new Map(currentContracts)
-		const knownAddresses = [...contracts.values()].filter(isProtocolActivitySource).map(({ address }) => address)
-		const knownLogs = knownAddresses.length === 0 ? [] : await this.#getKnownLogs(number, knownAddresses, block.hash)
+		const knownLogs = [...prefetchedLogs]
+		for (const log of knownLogs) {
+			const position = requireLogPosition(log)
+			if (position.blockHash !== block.hash || position.blockNumber !== number)
+				throw new ChainContinuityError(`RPC log response changed while indexing block ${number}`)
+		}
 		const relevantHashes = new Set<Hash>(knownLogs.map((log) => requireLogPosition(log).transactionHash))
 		const transactionByHash = new Map<Hash, { transaction: Transaction; index: number }>()
-		block.transactions.forEach((transaction, index) => {
-			if (typeof transaction === 'string') return
-			transactionByHash.set(transaction.hash, { transaction, index })
-			if (transaction.to !== null && isProtocolActivitySource(contracts.get(transaction.to.toLowerCase()))) relevantHashes.add(transaction.hash)
-		})
 
 		const receipts: TransactionReceipt[] = []
 		const receiptByHash = new Map<Hash, TransactionReceipt>()
-		const fetchMissingReceipts = async (): Promise<void> => {
+		const fetchMissingEvidence = async (): Promise<void> => {
 			const missing = [...relevantHashes].filter((hash) => !receiptByHash.has(hash))
-			for (const receipt of await mapLimit(missing, 8, (hash) => this.#client.getTransactionReceipt({ hash }))) {
+			for (const { receipt, transaction } of await mapLimit(missing, 8, async (hash) => {
+				const [receipt, transaction] = await Promise.all([this.#client.getTransactionReceipt({ hash }), this.#client.getTransaction({ hash })])
+				return { receipt, transaction }
+			})) {
 				requireReceiptPosition(receipt, block.hash, number)
+				if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
+				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === null)
+					throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
 				receipts.push(receipt)
 				receiptByHash.set(receipt.transactionHash, receipt)
+				transactionByHash.set(transaction.hash, { transaction, index: transaction.transactionIndex })
 			}
 		}
-		await fetchMissingReceipts()
+		await fetchMissingEvidence()
 		const discovered: ContractMetadata[] = []
 		while (true) {
 			const discoveredAddresses: Address[] = []
@@ -870,10 +1054,7 @@ class NetworkIndexer {
 			for (const log of activityAddresses.length === 0 ? [] : await this.#getKnownLogs(number, activityAddresses, block.hash)) {
 				relevantHashes.add(requireLogPosition(log).transactionHash)
 			}
-			for (const { transaction } of transactionByHash.values()) {
-				if (transaction.to !== null && isProtocolActivitySource(contracts.get(transaction.to.toLowerCase()))) relevantHashes.add(transaction.hash)
-			}
-			await fetchMissingReceipts()
+			await fetchMissingEvidence()
 		}
 
 		const labels = labelsFrom(contracts)
@@ -972,6 +1153,7 @@ class NetworkIndexer {
 				transactions: storedTransactions,
 				logs: storedLogs,
 				addressActivity: addressActivityFrom(storedTransactions, storedLogs, contracts),
+				logScanCursors: [],
 			},
 		}
 	}

@@ -32,7 +32,7 @@ services:
       SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-https://sepolia.gateway.tenderly.co}
       SEPOLIA_START_BLOCK: ${SEPOLIA_START_BLOCK:-0}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
-      BLOCK_BATCH_SIZE: ${BLOCK_BATCH_SIZE:-20}
+      LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-2000}
     ports:
       - "${AUGURSCAN_PORT:-3000}:3000"
     stop_grace_period: 30s

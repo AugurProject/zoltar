@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { handleApi } from '../src/api.ts'
 import {
 	assertBlockAppend,
+	assertLogScanCursorUpdate,
 	assertRewindTarget,
 	assertStartBlockCompatible,
 	type IndexedBlock,
@@ -94,6 +95,7 @@ const indexedBlock = (
 		contracts,
 		tokenMetadata,
 		addressActivity: [],
+		logScanCursors: [],
 		transactions:
 			summary === undefined
 				? []
@@ -156,6 +158,13 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertBlockAppend({ number: 11n, parentHash: otherHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
 			'does not extend the current database checkpoint',
 		)
+	})
+
+	test('persists a log dataset cursor only at the block committed with it', () => {
+		const cursor = { contractAddress: address, startBlock: 10n, lastRetrievedBlock: 25n }
+		expect(() => assertLogScanCursorUpdate(25n, cursor)).not.toThrow()
+		expect(() => assertLogScanCursorUpdate(24n, cursor)).toThrow('must advance to committed block 24')
+		expect(() => assertLogScanCursorUpdate(25n, { ...cursor, startBlock: 26n })).toThrow('invalid retrieval boundary')
 	})
 
 	test('rejects changing the configured start boundary after indexing has begun', () => {
@@ -293,13 +302,19 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			address: secondWethAddress,
 			label: 'Wrapped Ether v2',
 		}
-		const first = indexedBlock('block-one', genesisHash, [initialDiscovery, wethDiscovery, secondWethDiscovery], undefined, [
-			{ address: rediscoveredAddress, name: 'Original token', symbol: 'OLD', decimals: 18, readBlock: 1n },
-			{ address: wethAddress, name: 'Wrapped Ether', symbol: 'WETH', decimals: 18, readBlock: 1n },
-			{ address: secondWethAddress, name: 'Wrapped Ether v2', symbol: 'WETH2', decimals: 18, readBlock: 1n },
-		])
+		const first: IndexedBlock = {
+			...indexedBlock('block-one', genesisHash, [initialDiscovery, wethDiscovery, secondWethDiscovery], undefined, [
+				{ address: rediscoveredAddress, name: 'Original token', symbol: 'OLD', decimals: 18, readBlock: 1n },
+				{ address: wethAddress, name: 'Wrapped Ether', symbol: 'WETH', decimals: 18, readBlock: 1n },
+				{ address: secondWethAddress, name: 'Wrapped Ether v2', symbol: 'WETH2', decimals: 18, readBlock: 1n },
+			]),
+			logScanCursors: [{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }],
+		}
 		await database.storeBlock(chainId, first, writeLease)
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		expect(await database.logScanCursors(chainId)).toEqual(
+			new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]),
+		)
 		await expect(database.seedNetwork({ ...network, startBlock: 3n }, writeLease)).rejects.toThrow(
 			'Cannot change the configured start block from 1 to 3 while checkpoint 1 exists; rebuild the augurScan database from the new start block',
 		)
@@ -356,10 +371,16 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			address: orphanOnlyAddress,
 			label: 'Orphan-only helper',
 		}
-		const orphan = indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery, laterRediscovery, orphanOnlyDiscovery], 'orphan event', [
-			{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
-			{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
-		])
+		const orphan: IndexedBlock = {
+			...indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery, laterRediscovery, orphanOnlyDiscovery], 'orphan event', [
+				{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
+				{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
+			]),
+			logScanCursors: [
+				{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },
+				{ contractAddress: discoveredAddress, startBlock: 2n, lastRetrievedBlock: 2n },
+			],
+		}
 		await database.storeBlock(chainId, orphan, writeLease)
 		await database.seedNetwork(
 			{
@@ -382,6 +403,9 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		await database.recordContractDeployment(chainId, address, 2n, { block: 2n, timestamp: new Date('2026-01-02T00:00:00Z'), exact: true }, writeLease)
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).toMatchObject({ deploymentBlock: 2n, deploymentCheckedBlock: 2n })
 		await database.rewind(chainId, 1n, first.hash, writeLease)
+		expect(await database.logScanCursors(chainId)).toEqual(
+			new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]),
+		)
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentBlock')
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentCheckedBlock')
 		expect((await database.contracts(chainId)).get(promotedAddress.toLowerCase())?.provenance).toBe('manifest')
@@ -406,6 +430,10 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			...replacementBase,
 			logs: [...replacementBase.logs, vaultCheckpoint(replacementBase.hash)],
 			addressActivity: [{ transactionHash, address, poolAddress: discoveredAddress, role: 'sender' }],
+			logScanCursors: [
+				{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },
+				{ contractAddress: discoveredAddress, startBlock: 2n, lastRetrievedBlock: 2n },
+			],
 		}
 		await database.storeBlock(chainId, replacement, writeLease)
 		await database.storeRichListBalances(

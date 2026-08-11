@@ -1,5 +1,5 @@
 import { type ReservedSQL, SQL } from 'bun'
-import type { Address, Hash, Hex } from './ethereum.ts'
+import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
 import type { ContractMetadata, DecodedRecord, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 
@@ -10,7 +10,7 @@ export type StoredTransaction = {
 	readonly to: Address | null
 	readonly value: bigint
 	readonly input: Hex
-	readonly status: 'success' | 'reverted'
+	readonly status: 'success'
 	readonly gasUsed: bigint
 	readonly receipt: unknown
 	readonly decoded: DecodedRecord
@@ -28,6 +28,13 @@ export type IndexedBlock = {
 	readonly transactions: readonly StoredTransaction[]
 	readonly logs: readonly StoredLog[]
 	readonly addressActivity: readonly AddressActivity[]
+	readonly logScanCursors: readonly LogScanCursor[]
+}
+
+export type LogScanCursor = {
+	readonly contractAddress: Address
+	readonly startBlock: bigint
+	readonly lastRetrievedBlock: bigint
 }
 
 export type AddressActivity = {
@@ -99,7 +106,7 @@ type RewindCheckpoint = {
 	readonly indexedHash?: string
 }
 
-class DatabaseConsistencyError extends Error {
+export class DatabaseConsistencyError extends Error {
 	override name = 'DatabaseConsistencyError'
 }
 
@@ -127,6 +134,13 @@ export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedS
 	throw new DatabaseConsistencyError(
 		`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`,
 	)
+}
+
+export const assertLogScanCursorUpdate = (blockNumber: bigint, cursor: LogScanCursor): void => {
+	if (cursor.lastRetrievedBlock !== blockNumber)
+		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} must advance to committed block ${blockNumber}`)
+	if (cursor.startBlock < 0n || cursor.lastRetrievedBlock < cursor.startBlock)
+		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} has an invalid retrieval boundary`)
 }
 
 export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | undefined, checkpoint: RewindCheckpoint, targetIsCanonical: boolean): void => {
@@ -232,6 +246,12 @@ export class ScannerDatabase {
 				FROM networks n
 				LEFT JOIN blocks b ON b.chain_id = n.chain_id AND b.number = n.indexed_block AND b.hash = n.indexed_hash AND b.canonical
 				WHERE n.indexed_block IS NOT NULL AND b.hash IS NULL
+			), cursor_issues AS (
+				SELECT cursor.chain_id, 'log_cursor_ahead'::text AS code,
+					'Log cursor for ' || cursor.contract_address || ' is ahead of the network checkpoint' AS detail
+				FROM log_scan_cursors cursor
+				JOIN networks network USING (chain_id)
+				WHERE network.indexed_block IS NULL OR cursor.last_retrieved_block > network.indexed_block
 			), recent_canonical_blocks AS (
 				SELECT b.* FROM blocks b JOIN networks n USING (chain_id)
 				WHERE b.canonical AND b.number >= GREATEST(n.start_block, n.indexed_block - 10000)
@@ -245,7 +265,10 @@ export class ScannerDatabase {
 				) ordered
 				WHERE previous_number IS NOT NULL AND (number <> previous_number + 1 OR parent_hash <> previous_hash)
 			)
-			SELECT * FROM checkpoint_issues UNION ALL SELECT * FROM continuity_issues ORDER BY chain_id, code LIMIT 100
+			SELECT * FROM checkpoint_issues
+			UNION ALL SELECT * FROM cursor_issues
+			UNION ALL SELECT * FROM continuity_issues
+			ORDER BY chain_id, code LIMIT 100
 		`
 		return rows.map((row: Record<string, unknown>) => ({ chainId: Number(row['chain_id']), code: String(row['code']), detail: String(row['detail']) }))
 	}
@@ -425,6 +448,28 @@ export class ScannerDatabase {
 		)
 	}
 
+	async logScanCursors(chainId: number): Promise<Map<string, LogScanCursor>> {
+		const rows = await this.sql`
+			SELECT contract_address, start_block, last_retrieved_block
+			FROM log_scan_cursors
+			WHERE chain_id = ${chainId}
+			ORDER BY contract_address
+		`
+		return new Map(
+			rows.map((row: Record<string, unknown>) => {
+				const contractAddress = getAddress(String(row['contract_address']))
+				return [
+					contractAddress.toLowerCase(),
+					{
+						contractAddress,
+						startBlock: BigInt(String(row['start_block'])),
+						lastRetrievedBlock: BigInt(String(row['last_retrieved_block'])),
+					},
+				]
+			}),
+		)
+	}
+
 	async richListBalanceTargets(chainId: number, limit = 10): Promise<RichListBalanceTargets> {
 		const [addressRows, assetRows] = await Promise.all([
 			this.sql`
@@ -524,6 +569,13 @@ export class ScannerDatabase {
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
+			await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${chainId} AND start_block > ${ancestor.toString()}`
+			await transaction`
+				UPDATE log_scan_cursors SET
+					last_retrieved_block = GREATEST(start_block - 1, ${ancestor.toString()}::bigint),
+					updated_at = now()
+				WHERE chain_id = ${chainId} AND last_retrieved_block > ${ancestor.toString()}
+			`
 			await transaction`
 				UPDATE contracts SET
 					deployment_block = CASE WHEN deployment_block > ${ancestor.toString()} THEN NULL ELSE deployment_block END,
@@ -703,6 +755,18 @@ export class ScannerDatabase {
 						ON CONFLICT (chain_id, block_hash, tx_hash, log_index, universe_id) DO UPDATE SET canonical = true
 					`
 				}
+			}
+			for (const cursor of block.logScanCursors) {
+				assertLogScanCursorUpdate(block.number, cursor)
+				await transaction`
+					INSERT INTO log_scan_cursors (chain_id, contract_address, start_block, last_retrieved_block, updated_at)
+					VALUES (${chainId}, ${cursor.contractAddress.toLowerCase()}, ${cursor.startBlock.toString()}, ${cursor.lastRetrievedBlock.toString()}, now())
+					ON CONFLICT (chain_id, contract_address) DO UPDATE SET
+						start_block = LEAST(log_scan_cursors.start_block, EXCLUDED.start_block),
+						last_retrieved_block = EXCLUDED.last_retrieved_block,
+						updated_at = now()
+					WHERE log_scan_cursors.last_retrieved_block <= EXCLUDED.last_retrieved_block
+				`
 			}
 			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND number <= ${block.finalizedThrough.toString()}`
 			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND block_number <= ${block.finalizedThrough.toString()}`

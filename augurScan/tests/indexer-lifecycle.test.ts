@@ -16,6 +16,8 @@ import {
 	indexingCompletion,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
+	isSplittableLogRangeError,
+	queryAdaptiveLogRange,
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
@@ -60,6 +62,68 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('splits oversized inclusive log ranges without gaps or duplicate boundary blocks', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		const query = async (fromBlock: bigint, toBlock: bigint): Promise<readonly bigint[]> => {
+			attempts.push([fromBlock, toBlock])
+			if (toBlock - fromBlock + 1n > 26n) throw new Error('query returned more than 10000 results')
+			return [fromBlock, toBlock]
+		}
+
+		const first = await queryAdaptiveLogRange(0n, 200n, 101, query)
+		expect(first).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
+		expect(attempts).toEqual([
+			[0n, 100n],
+			[0n, 50n],
+			[0n, 25n],
+		])
+
+		const second = await queryAdaptiveLogRange(first.toBlock + 1n, 200n, 101, query)
+		expect(second.fromBlock).toBe(26n)
+		expect(second.toBlock).toBe(51n)
+		expect(attempts.slice(3)).toEqual([
+			[26n, 126n],
+			[26n, 76n],
+			[26n, 51n],
+		])
+	})
+
+	test('does not hide an RPC failure when even one block cannot be queried', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		await expect(
+			queryAdaptiveLogRange(9n, 9n, 100, async (fromBlock, toBlock) => {
+				attempts.push([fromBlock, toBlock])
+				throw new Error('RPC unavailable')
+			}),
+		).rejects.toThrow('RPC unavailable')
+		expect(attempts).toEqual([[9n, 9n]])
+	})
+
+	test('splits provider result-limit failures but preserves unrelated failures for failover', () => {
+		expect(isSplittableLogRangeError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
+		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
+		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('does not bisect an unrelated provider failure', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		await expect(
+			queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					throw new Error('401 Unauthorized')
+				},
+				undefined,
+				isSplittableLogRangeError,
+			),
+		).rejects.toThrow('401 Unauthorized')
+		expect(attempts).toEqual([[0n, 100n]])
+	})
+
 	test('attributes senders and referenced vaults to every security pool touched by a transaction', () => {
 		const sender = '0x2000000000000000000000000000000000000002'
 		const pool = '0x3000000000000000000000000000000000000003'
