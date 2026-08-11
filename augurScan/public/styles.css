@@ -855,7 +855,6 @@ button[aria-busy="true"]:disabled {
 		0.68rem / 1.4 ui-monospace,
 		monospace;
 }
-.live-marker-host,
 .live-added {
 	position: relative;
 }
@@ -870,29 +869,6 @@ button[aria-busy="true"]:disabled {
 	outline: 2px dashed color-mix(in srgb, var(--cyan) 70%, var(--line));
 	outline-offset: -2px;
 	animation: live-changed 1.25s ease-out;
-}
-
-.live-change-marker {
-	position: absolute;
-	top: 0;
-	left: 50%;
-	z-index: 2;
-	display: inline-flex;
-	width: max-content;
-	padding: 0.18rem 0.34rem;
-	color: #061315;
-	background: var(--cyan);
-	border-radius: 4px;
-	font: 700 0.54rem / 1 var(--mono);
-	letter-spacing: 0.04em;
-	pointer-events: none;
-	transform: translate(-50%, -50%);
-	text-transform: uppercase;
-}
-
-.network-card > .live-change-marker {
-	top: 0.55rem;
-	transform: translate(-50%, 0);
 }
 
 @keyframes live-added {

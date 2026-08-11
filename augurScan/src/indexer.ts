@@ -106,7 +106,7 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 	return result
 }
 
-export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly (readonly T[])[] => chunks(addresses, 5)
+export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
 const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
 	const result = new Array<R>(items.length)

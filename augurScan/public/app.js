@@ -121,16 +121,6 @@ const retryCanonicalViewOr = (fallback) => (canonicalRefreshRequired ? requestRo
 
 const animateLiveNode = (node, className) => {
 	node.classList.remove('live-added', 'live-changed', className)
-	if (className === 'live-added' || className === 'live-changed') {
-		node.querySelector(':scope > .live-change-marker')?.remove()
-		const marker = element('span', 'live-change-marker', className === 'live-added' ? 'New' : 'Updated')
-		node.classList.add('live-marker-host')
-		node.append(marker)
-		window.setTimeout(() => {
-			marker.remove()
-			if (node.querySelector(':scope > .live-change-marker') === null) node.classList.remove('live-marker-host')
-		}, 4_500)
-	}
 	requestAnimationFrame(() => {
 		node.classList.add(className)
 		const clear = () => node.classList.remove(className)
@@ -1060,7 +1050,6 @@ const api = async (path, { signal } = {}) => {
 }
 
 const renderNetworks = (networks) => {
-	const previousCards = liveSnapshot(networkCards)
 	let selectedReorgAdvanced = false
 	for (const network of networks) {
 		const previous = latestNetworks.find((item) => String(item.chain_id) === String(network.chain_id))
@@ -1130,7 +1119,6 @@ const renderNetworks = (networks) => {
 		if (network.last_error) card.append(element('p', 'network-error', network.last_error))
 		networkCards.append(card)
 	}
-	applyLiveChanges(networkCards, previousCards, { live: previousCards.size > 0 })
 	networkCards.setAttribute('aria-busy', 'false')
 	updateConnectionStatus()
 }
