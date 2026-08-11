@@ -11,6 +11,7 @@ import {
 	deploymentReadBudget,
 	findContractDeploymentBlock,
 	indexerProgressMessage,
+	indexingCompletion,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	readTokenMetadata,
@@ -110,10 +111,15 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('reports bounded backfill progress and live block completion clearly', () => {
-		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n)).toBe(
-			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 881 blocks behind',
+		expect(indexingCompletion(100n, 549n, 999n)).toEqual({ completedBlocks: 450n, percentage: '50.00', remainingBlocks: 450n, totalBlocks: 900n })
+		expect(indexingCompletion(100n, 1_005n, 1_000n)).toEqual({ completedBlocks: 901n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 901n })
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe(
+			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s',
 		)
-		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; caught up')
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n)).toEndWith('11.99% complete; 881 blocks behind; estimating ETA')
+		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe(
+			'[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up',
+		)
 	})
 
 	test('finds the first block containing contract code and distinguishes a bounded result', async () => {

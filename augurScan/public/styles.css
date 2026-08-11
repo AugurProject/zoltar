@@ -300,6 +300,13 @@ main {
 		0.66rem / 1.4 ui-monospace,
 		monospace;
 }
+.network-progress {
+	margin-top: 0.7rem;
+	color: var(--text);
+	font:
+		600 0.72rem / 1.4 ui-monospace,
+		monospace;
+}
 .activity {
 	margin-top: 2.6rem;
 }

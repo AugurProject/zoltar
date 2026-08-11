@@ -17,7 +17,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. PostgreSQL is included and stored in the `augurscan-data` named volume. The website is available while historical backfill is running and reports the indexed block, its timestamp/age, observed head, lag, and network errors.
+Open <http://localhost:3000>. PostgreSQL is included and stored in the `augurscan-data` named volume. The website is available while historical backfill is running and reports the indexed block, its timestamp/age, observed head, lag, percentage complete, estimated time remaining, and network errors. Completion is measured from the configured start block to the latest observed head. The ETA appears after the indexer or browser has observed enough forward progress to measure throughput.
 
 Set private or higher-capacity RPC endpoints in `.env` for reliable historical indexing. The included public defaults are convenient for evaluation but can rate-limit large backfills. Set `MAINNET_START_BLOCK` and `SEPOLIA_START_BLOCK` to the verified earliest project deployment blocks before relying on the database as a complete production history. The conservative default of block `0` cannot omit protocol history but is expensive.
 

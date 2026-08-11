@@ -42,6 +42,48 @@ export const indexerConnectionStatus = (network, streamState, networkRequestFail
 	return { label: 'Connecting', tone: 'pending' }
 }
 
+const compactDuration = (seconds) => {
+	const rounded = Math.max(1, Math.ceil(seconds))
+	if (rounded < 60) return `${rounded}s`
+	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
+	if (rounded < 86_400) return `${Math.floor(rounded / 3_600)}h ${Math.ceil((rounded % 3_600) / 60)}m`
+	return `${Math.floor(rounded / 86_400)}d ${Math.ceil((rounded % 86_400) / 3_600)}h`
+}
+
+export const indexerProgressEstimate = (network, previousSample, sampledAt = Date.now()) => {
+	if (network.start_block === null || network.start_block === undefined || network.indexed_block === null || network.observed_block === null)
+		return { percentage: undefined, eta: 'Estimating ETA' }
+	const startBlock = Number(network.start_block)
+	const indexedBlock = Number(network.indexed_block)
+	const observedBlock = Number(network.observed_block)
+	if (![startBlock, indexedBlock, observedBlock].every(Number.isSafeInteger)) return { percentage: undefined, eta: 'Estimating ETA' }
+	const boundedHead = Math.max(startBlock, observedBlock)
+	const boundedIndexed = Math.min(boundedHead, Math.max(startBlock - 1, indexedBlock))
+	const completedBlocks = boundedIndexed - startBlock + 1
+	const totalBlocks = boundedHead - startBlock + 1
+	const remainingBlocks = totalBlocks - completedBlocks
+	const percentage = ((completedBlocks / totalBlocks) * 100).toFixed(2)
+	if (network.phase === 'live' || remainingBlocks === 0) return { percentage: '100.00', eta: 'Caught up' }
+	let blocksPerSecond = previousSample?.blocksPerSecond
+	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
+		const observedRate = (boundedIndexed - previousSample.indexedBlock) / ((sampledAt - previousSample.sampledAt) / 1_000)
+		blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
+	}
+	const sample =
+		previousSample !== undefined && boundedIndexed === previousSample.indexedBlock
+			? previousSample
+			: {
+					indexedBlock: boundedIndexed,
+					sampledAt,
+					blocksPerSecond: boundedIndexed < (previousSample?.indexedBlock ?? boundedIndexed) ? undefined : blocksPerSecond,
+				}
+	return {
+		percentage,
+		eta: blocksPerSecond === undefined ? 'Estimating ETA' : `ETA ${compactDuration(remainingBlocks / blocksPerSecond)}`,
+		sample,
+	}
+}
+
 export const contractDeploymentStatus = (contract) => {
 	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
 		return contract.deployment_block_exact === false

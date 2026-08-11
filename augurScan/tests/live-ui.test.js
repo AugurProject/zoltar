@@ -6,6 +6,7 @@ import {
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerProgressEstimate,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
@@ -31,6 +32,29 @@ test('distinguishes indexer startup and backfill progress from stream connectivi
 		tone: 'error',
 	})
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'open', true)).toEqual({ label: 'Status unavailable', tone: 'error' })
+})
+
+test('calculates bounded indexer completion and estimates remaining time from observed throughput', () => {
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: null, observed_block: null, phase: 'backfilling' })).toEqual({
+		percentage: undefined,
+		eta: 'Estimating ETA',
+	})
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '549', observed_block: '999', phase: 'backfilling' }, undefined, 1_000)).toEqual({
+		percentage: '50.00',
+		eta: 'Estimating ETA',
+		sample: { indexedBlock: 549, sampledAt: 1_000, blocksPerSecond: undefined },
+	})
+	expect(
+		indexerProgressEstimate(
+			{ start_block: '100', indexed_block: '549', observed_block: '999', phase: 'backfilling' },
+			{ indexedBlock: 449, sampledAt: 1_000, blocksPerSecond: undefined },
+			11_000,
+		),
+	).toEqual({ percentage: '50.00', eta: 'ETA 45s', sample: { indexedBlock: 549, sampledAt: 11_000, blocksPerSecond: 10 } })
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '1000', observed_block: '1000', phase: 'live' })).toEqual({
+		percentage: '100.00',
+		eta: 'Caught up',
+	})
 })
 
 test('describes verified, absent, and pending contract deployments', () => {

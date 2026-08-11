@@ -4,6 +4,7 @@ import {
 	contractDeploymentTimestampLabel,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerProgressEstimate,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
@@ -68,6 +69,7 @@ let stream
 let networkLoadPromise
 let networkFollowUpPromise
 let latestNetworks = []
+const indexerProgressSamples = new Map()
 let logsAbortController
 let serverClockOffsetMs = 0
 let networkFreshnessThresholdMs = 48_000
@@ -1108,6 +1110,8 @@ const renderNetworks = (networks) => {
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
 	for (const network of networks.filter((item) => String(item.chain_id) === selectedChainId())) {
+		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)))
+		if (progress.sample !== undefined) indexerProgressSamples.set(String(network.chain_id), progress.sample)
 		const card = setLiveRecord(element('article', 'network-card'), String(network.chain_id), {
 			indexedBlock: network.indexed_block,
 			indexedHash: network.indexed_hash,
@@ -1147,7 +1151,8 @@ const renderNetworks = (networks) => {
 				? 'head unknown'
 				: `${counted(Math.max(0, Number(network.observed_block) - Number(network.indexed_block)), 'block')} behind`
 		meta.append(indexedTime, ageNode, element('span', '', lag))
-		card.append(title, block, meta)
+		const progressLabel = progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`
+		card.append(title, block, meta, element('p', 'network-progress', progressLabel))
 		if (Number(network.consecutive_failures) > 0) {
 			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
 			card.append(element('p', 'network-retry', `${number(network.consecutive_failures)} consecutive failures · ${retry}`))

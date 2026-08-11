@@ -263,11 +263,45 @@ export const commitCanonicalRead = async <T>(
 const databaseFailureMessage = 'Database request failed; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 
-export const indexerProgressMessage = (networkId: string, startBlock: bigint, endBlock: bigint, observedHead: bigint): string => {
+export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
+	const boundedHead = observedHead < configuredStartBlock ? configuredStartBlock : observedHead
+	const totalBlocks = boundedHead - configuredStartBlock + 1n
+	const boundedIndexed = indexedBlock < configuredStartBlock ? configuredStartBlock - 1n : indexedBlock > boundedHead ? boundedHead : indexedBlock
+	const completedBlocks = boundedIndexed - configuredStartBlock + 1n
+	const remainingBlocks = totalBlocks - completedBlocks
+	const hundredths = (completedBlocks * 10_000n + totalBlocks / 2n) / totalBlocks
+	return {
+		completedBlocks,
+		percentage: `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`,
+		remainingBlocks,
+		totalBlocks,
+	}
+}
+
+const compactDuration = (seconds: number): string => {
+	const rounded = Math.max(1, Math.ceil(seconds))
+	if (rounded < 60) return `${rounded}s`
+	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
+	if (rounded < 86_400) return `${Math.floor(rounded / 3_600)}h ${Math.ceil((rounded % 3_600) / 60)}m`
+	return `${Math.floor(rounded / 86_400)}d ${Math.ceil((rounded % 86_400) / 3_600)}h`
+}
+
+export const indexerProgressMessage = (
+	networkId: string,
+	startBlock: bigint,
+	endBlock: bigint,
+	observedHead: bigint,
+	configuredStartBlock: bigint,
+	blocksPerSecond?: number,
+): string => {
 	const state = endBlock >= observedHead ? 'live' : 'backfilling'
 	const indexed = startBlock === endBlock ? `indexed block #${endBlock}` : `indexed blocks #${startBlock}–#${endBlock}`
-	const progress = state === 'live' ? 'caught up' : `${observedHead - endBlock} blocks behind`
-	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${progress}`
+	const completion = indexingCompletion(configuredStartBlock, endBlock, observedHead)
+	const progress =
+		state === 'live'
+			? 'caught up'
+			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactDuration(Number(completion.remainingBlocks) / blocksPerSecond)}`}`
+	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
 }
 
 export const safeIndexerFailure = (error: unknown): string => {
@@ -491,6 +525,7 @@ class NetworkIndexer {
 	#activeRpcEndpoint: string
 	#indexingStartReported = false
 	#lastProgressLogAt: number | undefined
+	#progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
 	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	#lastDeploymentScanAt: number | undefined
 	readonly #signal: AbortSignal
@@ -578,10 +613,19 @@ class NetworkIndexer {
 	#reportProgress(startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
 		const phase = endBlock >= observedHead ? 'live' : 'backfilling'
 		const now = Date.now()
+		const previousSample = this.#progressSample
+		let blocksPerSecond = previousSample?.blocksPerSecond
+		if (previousSample !== undefined && endBlock > previousSample.block && now - previousSample.sampledAt >= 1_000) {
+			const observedRate = Number(endBlock - previousSample.block) / ((now - previousSample.sampledAt) / 1_000)
+			blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
+			this.#progressSample = { block: endBlock, sampledAt: now, blocksPerSecond }
+		} else if (previousSample === undefined || endBlock < previousSample.block) {
+			this.#progressSample = { block: endBlock, sampledAt: now }
+		}
 		if (phase === 'backfilling' && this.#lastReportedPhase === phase && this.#lastProgressLogAt !== undefined && now - this.#lastProgressLogAt < 30_000) return
 		this.#lastReportedPhase = phase
 		this.#lastProgressLogAt = now
-		console.info(indexerProgressMessage(this.#network.id, startBlock, endBlock, observedHead))
+		console.info(indexerProgressMessage(this.#network.id, startBlock, endBlock, observedHead, this.#network.startBlock, blocksPerSecond))
 	}
 
 	async #assertLease(): Promise<void> {
@@ -663,7 +707,11 @@ class NetworkIndexer {
 		}
 
 		if (!this.#indexingStartReported) {
-			console.info(`[${this.#network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}`)
+			const completion = indexingCompletion(this.#network.startBlock, nextBlock - 1n, observedHead)
+			console.info(
+				`[${this.#network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}; ${completion.percentage}% complete; ${completion.remainingBlocks} blocks behind; estimating ETA`,
+			)
+			this.#progressSample = { block: nextBlock - 1n, sampledAt: Date.now() }
 			this.#indexingStartReported = true
 		}
 		const batchStart = nextBlock
