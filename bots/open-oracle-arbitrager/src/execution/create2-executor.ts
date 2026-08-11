@@ -57,11 +57,39 @@ export async function submitExecutorDeploymentTransaction(parameters: { account:
 	})
 }
 
+async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
+	const deadline = Date.now() + timeoutMilliseconds
+	let failures: string[] = []
+	while (true) {
+		const settled = await Promise.allSettled(
+			parameters.clients.map(async ({ client, rpcUrl }) => {
+				const receipt = await client.getTransactionReceipt({ hash: parameters.transactionHash })
+				assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
+				const deployedCode = await client.getCode({ address: parameters.address })
+				if (executorCodeStatus(deployedCode, parameters.expectedRuntimeCodeHash) !== 'verified') throw new Error('CREATE2 deployment did not produce executor runtime bytecode')
+				return { receipt, rpcUrl }
+			}),
+		)
+		const confirmed = settled.find(result => result.status === 'fulfilled')
+		if (confirmed?.status === 'fulfilled') return confirmed.value.receipt
+		failures = settled.map((result, index) => {
+			const endpoint = parameters.clients[index]
+			if (endpoint === undefined) return 'Unknown RPC: missing deployment confirmation result'
+			return `${endpointLabel(endpoint.rpcUrl)}: ${result.status === 'rejected' ? (result.reason instanceof Error ? result.reason.message : String(result.reason)) : 'unknown confirmation failure'}`
+		})
+		if (Date.now() >= deadline) throw new Error(`Every public RPC failed executor deployment confirmation: ${failures.join('; ')}`)
+		await new Promise(resolve => {
+			setTimeout(resolve, 1_000)
+		})
+	}
+}
+
 export async function deployExecutorCreate2(parameters: { chain: Chain; privateKey: Hex; rpcUrls: readonly string[]; salt: unknown }) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
-	let publicClient: ReturnType<typeof createPublicClient> | undefined
-	let preparationRpcUrl: string | undefined
+	const account = privateKeyToAccount(parameters.privateKey)
+	const clients: { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[] = []
+	let prepared: { gas: bigint; gasPrice: bigint; nonce: bigint } | undefined
 	const preflightFailures: string[] = []
 	for (const rpcUrl of parameters.rpcUrls) {
 		try {
@@ -71,24 +99,24 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; privateK
 			assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
 			const existingCode = await candidate.getCode({ address: plan.address })
 			if (executorCodeStatus(existingCode, expectedRuntimeCodeHash) === 'verified') return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
-			publicClient = candidate
-			preparationRpcUrl = rpcUrl
-			break
+			clients.push({ client: candidate, rpcUrl })
+			if (prepared === undefined) {
+				const [nonce, gas, gasPrice] = await Promise.all([readRpcPendingNonce(rpcUrl, account.address), estimateRpcTransactionGas(rpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }), readRpcGasPrice(rpcUrl)])
+				prepared = { gas, gasPrice, nonce }
+			}
 		} catch (error) {
 			preflightFailures.push(`${endpointLabel(rpcUrl)}: ${error instanceof Error ? error.message : String(error)}`)
 		}
 	}
-	if (publicClient === undefined || preparationRpcUrl === undefined) throw new Error(`Every public RPC failed executor deployment preflight: ${preflightFailures.join('; ')}`)
-	const account = privateKeyToAccount(parameters.privateKey)
+	if (prepared === undefined) throw new Error(`Every public RPC failed executor deployment preflight or transaction preparation: ${preflightFailures.join('; ')}`)
 	const signTransaction = account.signTransaction
 	if (signTransaction === undefined) throw new Error('Executor deployment requires a local transaction signer')
-	const [nonce, gas, gasPrice] = await Promise.all([readRpcPendingNonce(preparationRpcUrl, account.address), estimateRpcTransactionGas(preparationRpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }), readRpcGasPrice(preparationRpcUrl)])
 	const serializedTransaction = await signTransaction({
 		chainId: parameters.chain.id,
 		data: plan.calldata,
-		gas,
-		gasPrice,
-		nonce,
+		gas: prepared.gas,
+		gasPrice: prepared.gasPrice,
+		nonce: prepared.nonce,
 		to: deterministicDeploymentProxy,
 	})
 	const transactionHash = keccak256(serializedTransaction)
@@ -99,9 +127,6 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; privateK
 		serializedTransaction,
 		transactionHash,
 	})
-	const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash })
-	assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
-	const deployedCode = await publicClient.getCode({ address: plan.address })
-	if (executorCodeStatus(deployedCode, expectedRuntimeCodeHash) !== 'verified') throw new Error('CREATE2 deployment did not produce executor runtime bytecode')
+	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash })
 	return { address: plan.address, alreadyDeployed: false, transactionHash: transactionHash as Hash }
 }

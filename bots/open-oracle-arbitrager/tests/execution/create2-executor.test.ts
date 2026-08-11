@@ -85,7 +85,7 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 	expect(receivedRpcUrls).toEqual(publicRpcUrls)
 })
 
-test('deploys through preflight, signed multi-RPC broadcast, receipt polling, and code verification', async () => {
+async function runDeploymentScenario(options: { primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
 	const privateKey = `0x${'11'.repeat(32)}` as Hex
 	const account = privateKeyToAccount(privateKey)
 	const salt = `0x${'22'.repeat(32)}` as Hex
@@ -96,7 +96,7 @@ test('deploys through preflight, signed multi-RPC broadcast, receipt polling, an
 	let transactionHash = `0x${'00'.repeat(32)}` as Hex
 
 	const rpcResponse = (result: unknown) => Response.json({ id: 1, jsonrpc: '2.0', result })
-	const handler = (name: string, rejectBroadcast: boolean) => async (request: Request) => {
+	const handler = (name: 'primary' | 'secondary') => async (request: Request) => {
 		const body: unknown = await request.json()
 		if (typeof body !== 'object' || body === null || Array.isArray(body) || !('method' in body) || typeof body.method !== 'string' || !('params' in body) || !Array.isArray(body.params)) {
 			return new Response('invalid request', { status: 400 })
@@ -104,7 +104,7 @@ test('deploys through preflight, signed multi-RPC broadcast, receipt polling, an
 		if (body.method === 'eth_chainId') return rpcResponse('0x1')
 		if (body.method === 'eth_getTransactionCount') return rpcResponse('0x0')
 		if (body.method === 'eth_estimateGas') return rpcResponse('0x300000')
-		if (body.method === 'eth_gasPrice') return rpcResponse('0x3b9aca00')
+		if (body.method === 'eth_gasPrice') return name === 'primary' && options.primaryPreparationFails ? new Response('primary preparation unavailable', { status: 503 }) : rpcResponse('0x3b9aca00')
 		if (body.method === 'eth_getCode') {
 			const address = body.params[0]
 			if (typeof address !== 'string') return new Response('invalid address', { status: 400 })
@@ -117,12 +117,13 @@ test('deploys through preflight, signed multi-RPC broadcast, receipt polling, an
 			if (typeof transaction !== 'string' || !transaction.startsWith('0x')) return new Response('invalid transaction', { status: 400 })
 			const normalizedTransaction: Hex = `0x${transaction.slice(2)}`
 			broadcastRequests.push({ transaction: normalizedTransaction, url: name })
-			if (rejectBroadcast) return new Response('primary unavailable', { status: 503 })
+			if (name === 'primary') return new Response('primary broadcast unavailable', { status: 503 })
 			transactionHash = keccak256(normalizedTransaction)
 			deployed = true
 			return rpcResponse(transactionHash)
 		}
 		if (body.method === 'eth_getTransactionReceipt') {
+			if (name === 'primary' && options.primaryReceiptFails) return new Response('primary receipt unavailable', { status: 503 })
 			return rpcResponse({
 				blockHash: `0x${'aa'.repeat(32)}`,
 				blockNumber: '0x64',
@@ -143,8 +144,8 @@ test('deploys through preflight, signed multi-RPC broadcast, receipt polling, an
 		return new Response(`unexpected method ${body.method}`, { status: 500 })
 	}
 
-	const primary = Bun.serve({ fetch: handler('primary', true), port: 0 })
-	const secondary = Bun.serve({ fetch: handler('secondary', false), port: 0 })
+	const primary = Bun.serve({ fetch: handler('primary'), port: 0 })
+	const secondary = Bun.serve({ fetch: handler('secondary'), port: 0 })
 	try {
 		const primaryPort = primary.port
 		const secondaryPort = secondary.port
@@ -155,12 +156,23 @@ test('deploys through preflight, signed multi-RPC broadcast, receipt polling, an
 			rpcUrls: [`http://127.0.0.1:${primaryPort.toString()}`, `http://127.0.0.1:${secondaryPort.toString()}`],
 			salt,
 		})
-		expect(result).toEqual({ address: plan.address, alreadyDeployed: false, transactionHash })
-		expect(broadcastRequests).toHaveLength(2)
-		expect(broadcastRequests.map(request => request.url)).toEqual(['primary', 'secondary'])
-		expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
+		return { broadcastRequests, expected: { address: plan.address, alreadyDeployed: false, transactionHash }, result }
 	} finally {
 		primary.stop(true)
 		secondary.stop(true)
 	}
+}
+
+test('falls back when the primary fails transaction preparation before signed multi-RPC broadcast', async () => {
+	const { broadcastRequests, expected, result } = await runDeploymentScenario({ primaryPreparationFails: true, primaryReceiptFails: false })
+	expect(result).toEqual(expected)
+	expect(broadcastRequests.map(request => request.url)).toEqual(['primary', 'secondary'])
+	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
+})
+
+test('confirms through the secondary when the primary fails receipt polling after broadcast', async () => {
+	const { broadcastRequests, expected, result } = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true })
+	expect(result).toEqual(expected)
+	expect(broadcastRequests).toHaveLength(2)
+	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
 })
