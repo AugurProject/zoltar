@@ -21,3 +21,6 @@
 # Shell entrypoints must retain Unix line endings so their shebangs are executable
 # inside Linux containers, including when the repository is checked out on Windows.
 *.sh text eol=lf
+
+# This vendored artifact is checked byte-for-byte against a pinned SHA-256 digest.
+/scripts/artifacts/uniswap-deployment.json text eol=lf
