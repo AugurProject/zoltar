@@ -16,6 +16,7 @@ import {
 	getAddress,
 	getCreate2Address,
 	hexToBytes,
+	http,
 	isAddress,
 	isHex,
 	keccak256,
@@ -27,6 +28,7 @@ import {
 	parseUnits,
 	privateKeyToAccount,
 	publicActions,
+	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
 	toHex,
 	type EIP1193Provider,
@@ -989,7 +991,7 @@ describe('shared ethereum compatibility layer', () => {
 		}, calls)
 		const client = createPublicClient({
 			chain: mainnet,
-			transport: custom(provider),
+			transport: custom(provider, { retryCount: 0, retryDelay: 0 }),
 		})
 
 		const receipt = await client.waitForTransactionReceipt({
@@ -1012,7 +1014,7 @@ describe('shared ethereum compatibility layer', () => {
 			if (receiptRequests === 1) throw { code: 429, message: 'rate limit exceeded' }
 			throw new Error('Receipt request ran after the deadline')
 		}, [])
-		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryCount: 0, retryDelay: 0 }) })
 
 		Date.now = () => clockValues.shift() ?? 1
 		try {
@@ -1082,7 +1084,7 @@ describe('shared ethereum compatibility layer', () => {
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
 		}, calls)
-		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryCount: 0, retryDelay: 0 }) })
 
 		const receipt = await client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 50 })
 
@@ -1450,6 +1452,65 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
+		expect(RATE_LIMIT_RETRY_DELAY_MILLISECONDS).toBe(10_000)
+		expect(http('https://rpc.example.test').retryDelay).toBe(RATE_LIMIT_RETRY_DELAY_MILLISECONDS)
+		const responses = [
+			new Response(undefined, { status: 429 }),
+			Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' }),
+			new Response(undefined, { status: 429 }),
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					effectiveGasPrice: '0x3',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: RECEIPT_HASH,
+					transactionIndex: '0x0',
+					type: '0x2',
+				},
+			}),
+			new Response(undefined, { status: 429 }),
+			Response.json({ error: { code: -32_000, message: 'already known' }, id: 1, jsonrpc: '2.0' }),
+		]
+		const originalFetch = globalThis.fetch
+		const testFetch = async () => {
+			const response = responses.shift()
+			if (response === undefined) throw new Error('Unexpected HTTP RPC request')
+			return response
+		}
+		testFetch.preconnect = originalFetch.preconnect
+		globalThis.fetch = testFetch
+		try {
+			const client = createWalletClient({
+				account: privateKeyToAccount(PRIVATE_KEY),
+				chain: mainnet,
+				transport: http('https://rpc.example.test', { retryDelay: 0 }),
+			})
+
+			expect(await client.getCode({ address: TOKEN_ADDRESS })).toBe('0x1234')
+			expect(
+				await client.waitForTransactionReceipt({
+					hash: RECEIPT_HASH,
+					pollingInterval: 0,
+					timeout: 50,
+				}),
+			).toMatchObject({ transactionHash: RECEIPT_HASH })
+			expect(await client.sendRawTransaction({ serializedTransaction: '0x1234' })).toBe(keccak256('0x1234'))
+		} finally {
+			globalThis.fetch = originalFetch
+		}
+
+		expect(responses).toHaveLength(0)
 	})
 
 	test('wallet client defaults simulations and gas estimates to its configured account', async () => {
