@@ -44,6 +44,15 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 		percentage: undefined,
 		eta: 'Estimating ETA',
 	})
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: null, observed_block: '100', phase: 'backfilling' }, undefined, 1_000)).toEqual({
+		percentage: '0.00',
+		eta: 'Estimating ETA',
+		sample: { indexedBlock: 99, sampledAt: 1_000, blocksPerSecond: undefined },
+	})
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: null, observed_block: '99', phase: 'live' })).toEqual({
+		percentage: '100.00',
+		eta: 'Caught up',
+	})
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '549', observed_block: '999', phase: 'backfilling' }, undefined, 1_000)).toEqual({
 		percentage: '50.00',
 		eta: 'Estimating ETA',

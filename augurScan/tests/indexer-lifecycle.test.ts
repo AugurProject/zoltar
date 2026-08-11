@@ -114,6 +114,8 @@ describe('network indexer lifecycle', () => {
 	test('reports bounded backfill progress and live block completion clearly', () => {
 		expect(indexingCompletion(100n, 549n, 999n)).toEqual({ completedBlocks: 450n, percentage: '50.00', remainingBlocks: 450n, totalBlocks: 900n })
 		expect(indexingCompletion(100n, 1_005n, 1_000n)).toEqual({ completedBlocks: 901n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 901n })
+		expect(indexingCompletion(100n, 99n, 100n)).toEqual({ completedBlocks: 0n, percentage: '0.00', remainingBlocks: 1n, totalBlocks: 1n })
+		expect(indexingCompletion(100n, 99n, 99n)).toEqual({ completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n })
 		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
 		expect(compactIndexerDuration(3_600)).toBe('1h')
 		expect(compactIndexerDuration(86_400)).toBe('1d')

@@ -265,7 +265,8 @@ const databaseFailureMessage = 'Database request failed; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 
 export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
-	const boundedHead = observedHead < configuredStartBlock ? configuredStartBlock : observedHead
+	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
+	const boundedHead = observedHead
 	const totalBlocks = boundedHead - configuredStartBlock + 1n
 	const boundedIndexed = indexedBlock < configuredStartBlock ? configuredStartBlock - 1n : indexedBlock > boundedHead ? boundedHead : indexedBlock
 	const completedBlocks = boundedIndexed - configuredStartBlock + 1n

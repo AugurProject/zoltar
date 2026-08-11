@@ -57,13 +57,14 @@ export const compactIndexerDuration = (seconds) => {
 }
 
 export const indexerProgressEstimate = (network, previousSample, sampledAt = Date.now()) => {
-	if (network.start_block === null || network.start_block === undefined || network.indexed_block === null || network.observed_block === null)
+	if (network.start_block === null || network.start_block === undefined || network.observed_block === null || network.observed_block === undefined)
 		return { percentage: undefined, eta: 'Estimating ETA' }
 	const startBlock = Number(network.start_block)
-	const indexedBlock = Number(network.indexed_block)
 	const observedBlock = Number(network.observed_block)
+	const indexedBlock = network.indexed_block === null || network.indexed_block === undefined ? startBlock - 1 : Number(network.indexed_block)
 	if (![startBlock, indexedBlock, observedBlock].every(Number.isSafeInteger)) return { percentage: undefined, eta: 'Estimating ETA' }
-	const boundedHead = Math.max(startBlock, observedBlock)
+	if (observedBlock < startBlock) return { percentage: '100.00', eta: 'Caught up' }
+	const boundedHead = observedBlock
 	const boundedIndexed = Math.min(boundedHead, Math.max(startBlock - 1, indexedBlock))
 	const completedBlocks = boundedIndexed - startBlock + 1
 	const totalBlocks = boundedHead - startBlock + 1
