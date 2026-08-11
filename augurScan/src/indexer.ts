@@ -336,17 +336,32 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	return details.join('; ')
 }
 
-export const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs = 5_000): Promise<T> =>
+const deploymentReadTimeoutError = (): Error => {
+	const error = new Error('Contract deployment history read timed out')
+	error.name = 'TimeoutError'
+	return error
+}
+
+export const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs: number): Promise<T> =>
 	await new Promise<T>((resolve, reject) => {
 		const timeout = setTimeout(() => {
-			const error = new Error('Contract deployment history read timed out')
-			error.name = 'TimeoutError'
-			reject(error)
+			reject(deploymentReadTimeoutError())
 		}, timeoutMs)
 		void read()
 			.then(resolve, reject)
 			.finally(() => clearTimeout(timeout))
 	})
+
+export const deploymentReadBudget = (timeoutMs = 5_000, now = Date.now): (<T>(read: () => Promise<T>) => Promise<T>) => {
+	const deadline = now() + timeoutMs
+	return async <T>(read: () => Promise<T>): Promise<T> => {
+		const remaining = deadline - now()
+		if (remaining <= 0) throw deploymentReadTimeoutError()
+		const value = await boundedDeploymentRead(read, remaining)
+		if (now() > deadline) throw deploymentReadTimeoutError()
+		return value
+	}
+}
 
 export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean =>
 	lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
@@ -610,15 +625,16 @@ class NetworkIndexer {
 		try {
 			const candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
 			if (candidate === undefined) return
+			const readWithinBudget = deploymentReadBudget()
 			const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
-				boundedDeploymentRead(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+				readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
 			)
 			const resolved =
 				deployment === undefined
 					? undefined
 					: {
 							...deployment,
-							timestamp: new Date(Number((await boundedDeploymentRead(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
+							timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
 						}
 			await this.#assertLease()
 			await this.#database.recordContractDeployment(this.#network.chainId, candidate.address, indexedBoundary, resolved, this.#requireLease())

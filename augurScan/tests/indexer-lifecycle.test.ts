@@ -8,6 +8,7 @@ import {
 	commitCanonicalRead,
 	confirmCanonicalBlock,
 	contractDeploymentScanDue,
+	deploymentReadBudget,
 	findContractDeploymentBlock,
 	indexerProgressMessage,
 	isProtocolActivitySource,
@@ -123,6 +124,20 @@ describe('network indexer lifecycle', () => {
 
 	test('bounds a stalled optional contract deployment history read', async () => {
 		await expect(boundedDeploymentRead(() => new Promise(() => {}), 1)).rejects.toMatchObject({ name: 'TimeoutError' })
+		let now = 0
+		const readWithinBudget = deploymentReadBudget(10, () => now)
+		expect(
+			await readWithinBudget(async () => {
+				now += 6
+				return 'first'
+			}),
+		).toBe('first')
+		await expect(
+			readWithinBudget(async () => {
+				now += 5
+				return 'second'
+			}),
+		).rejects.toMatchObject({ name: 'TimeoutError' })
 		expect(contractDeploymentScanDue(undefined, 1_000)).toBe(true)
 		expect(contractDeploymentScanDue(1_000, 60_999)).toBe(false)
 		expect(contractDeploymentScanDue(1_000, 61_000)).toBe(true)
