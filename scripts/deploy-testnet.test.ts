@@ -61,6 +61,16 @@ describe('testnet deployment inputs', () => {
 		expect(() => parsePrivateKey(undefined)).toThrow('32-byte 0x-prefixed')
 	})
 
+	test('accepts a private key command-line option before the environment fallback', () => {
+		const commandLinePrivateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		const environmentPrivateKey = '0x3434343434343434343434343434343434343434343434343434343434343434'
+		expect(
+			parseDeploymentCommandLine(['--rpc-url=https://rpc.example.test', `--private-key=${commandLinePrivateKey}`], {
+				PRIVATE_KEY: environmentPrivateKey,
+			}),
+		).toMatchObject({ privateKey: commandLinePrivateKey })
+	})
+
 	test('parses positive fee and total deployment limits', () => {
 		expect(parseMaxFeePerGas(undefined)).toBe(100_000_000_000n)
 		expect(parseMaxFeePerGas('1.5')).toBe(1_500_000_000n)
@@ -87,8 +97,10 @@ describe('testnet deployment inputs', () => {
 		})
 	})
 
-	test('never suggests placing the private key in a shell command', () => {
+	test('warns about command history when documenting the private key option', () => {
 		expect(getDeploymentHelp()).not.toContain('PRIVATE_KEY=0x')
+		expect(getDeploymentHelp()).toContain('--private-key=0x...')
+		expect(getDeploymentHelp()).toContain('shell history exposure')
 	})
 
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
