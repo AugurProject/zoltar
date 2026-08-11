@@ -201,21 +201,15 @@ Build from the monorepo root so Docker can include the local `shared/` package:
 docker build --file bots/open-oracle-arbitrager/Dockerfile --tag zoltar-open-oracle-arbitrager .
 ```
 
-From the monorepo root, create the mounted state directory and configuration:
+The build creates the image but does not start it. Before starting the container,
+create the mounted state directory and configuration from the monorepo root:
 
 ```bash
 install -d -m 700 bots/open-oracle-arbitrager/.state
 install -m 600 bots/open-oracle-arbitrager/config/operator.example.json bots/open-oracle-arbitrager/.state/operator.json
 ```
 
-For a one-shot scan, edit the file so `runtime.once` is `true` and `runtime.ui`
-is `false`, then run:
-
-```bash
-docker run --rm --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state zoltar-open-oracle-arbitrager
-```
-
-To run the bot with its dashboard:
+Now start the bot with its dashboard:
 
 1. In `bots/open-oracle-arbitrager/.state/operator.json`, set `runtime.once` to
    `false`, `runtime.ui` to `true`, and `runtime.uiHost` to `0.0.0.0`.
@@ -244,6 +238,13 @@ credentials, or manifests containing private infrastructure into the image.
 Do not attach the bot to a Docker network shared with untrusted containers. Loopback
 RPC URLs refer to the container itself, so use a container-reachable RPC address
 when the node runs elsewhere.
+
+For a one-shot scan instead of the dashboard, edit the file so `runtime.once` is
+`true` and `runtime.ui` is `false`, then run:
+
+```bash
+docker run --rm --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state zoltar-open-oracle-arbitrager
+```
 
 ## Monitor without trading
 
