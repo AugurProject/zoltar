@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
+import type { WalletSummaryState } from '../features/LiveTrading.tsx'
 import type { LiveMarket } from '../protocol/live.ts'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
@@ -38,6 +39,13 @@ async function flush() {
 	})
 }
 
+async function settleAsyncWorkflow() {
+	await act(async () => {
+		await Bun.sleep(10)
+	})
+	await flush()
+}
+
 function button(label: string) {
 	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
 	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
@@ -60,24 +68,36 @@ describe('live workflow safety boundary', () => {
 	})
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
+		let connectedAccount = account
 		let contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		let waitForContextApprovalReceipt = false
 		let approved = false
+		let approveRouterCalls = 0
+		let rejectWalletChainRead = false
+		let rejectWalletAccountRead = false
+		let emitAccountChangeAfterReads = 0
+		let deferredWalletChainRead: ReturnType<typeof deferred<number>> | undefined
+		let walletChainReadStarted: ReturnType<typeof deferred<undefined>> | undefined
 		let lpAllowance = 10n ** 18n
 		let rejectBalanceRefresh = false
+		let deferWalletHeaderBalance = false
+		const walletHeaderBalance = deferred<undefined>()
 		let deferSecondPortfolioBalance = false
 		const secondPortfolioBalance = deferred<undefined>()
 		let deferChildDiscovery = false
 		const childDiscovery = deferred<undefined>()
-		const childBalanceStarted = deferred<undefined>()
+		let childBalanceStarted = deferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
 		const balancedPools: Address[] = []
+		const walletSummaries: WalletSummaryState[] = []
+		const recordWalletSummary = (summary: WalletSummaryState) => walletSummaries.push(summary)
 		const walletListeners = new Map<string, (...args: unknown[]) => void>()
-		Reflect.set(window, 'ethereum', {
+		const injectedProvider = {
 			request: async () => undefined,
 			on: (eventName: string, listener: (...args: unknown[]) => void) => walletListeners.set(eventName, listener),
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
-		})
+		}
+		Reflect.set(window, 'ethereum', injectedProvider)
 		const walletClient = {
 			waitForTransactionReceipt: async () => {
 				if (waitForContextApprovalReceipt) return await contextApprovalReceipt.promise
@@ -149,9 +169,27 @@ describe('live workflow safety boundary', () => {
 			validateLiveDeployment: async () => undefined,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
 			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
-			walletChainId: async () => configuration.chainId,
-			connectWallet: async () => account,
+			walletChainId: async () => {
+				if (rejectWalletChainRead) throw new Error('chain RPC unavailable')
+				if (deferredWalletChainRead !== undefined) {
+					walletChainReadStarted?.resolve(undefined)
+					return await deferredWalletChainRead.promise
+				}
+				return configuration.chainId
+			},
+			connectWallet: async () => {
+				if (rejectWalletAccountRead) throw new Error('account RPC unavailable')
+				if (emitAccountChangeAfterReads > 0) {
+					emitAccountChangeAfterReads--
+					if (emitAccountChangeAfterReads === 0) queueMicrotask(() => walletListeners.get('accountsChanged')?.([`0x${'94'.repeat(20)}`]))
+				}
+				return connectedAccount
+			},
 			createTradingWalletClient: () => walletClient,
+			loadWalletHeaderBalances: async () => {
+				if (deferWalletHeaderBalance) await walletHeaderBalance.promise
+				return { ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }
+			},
 			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
 				balancedPools.push(selectedMarket.pool)
 				if (selectedMarket.pool === childPool) childBalanceStarted.resolve(undefined)
@@ -161,6 +199,7 @@ describe('live workflow safety boundary', () => {
 				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, approved, lp: multiplier * 10n ** 18n, lpAllowance }
 			},
 			approveRouter: async () => {
+				approveRouterCalls++
 				approved = true
 				return transactionHash
 			},
@@ -183,11 +222,11 @@ describe('live workflow safety boundary', () => {
 					conditionalYesBpsAfter: 5_001n,
 				},
 			}),
-			submitFreshEntry: async () => transactionHash,
+			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => await guardedWrite(async () => transactionHash),
 		}))
 		const { LiveTrading } = await import('../features/LiveTrading.tsx')
 		const workflowLocks: boolean[] = []
-		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />)
+		let rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
@@ -207,10 +246,41 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		discoveredEndTime = now + 2n
 
-		await act(async () => button('Connect wallet').click())
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		await act(async () => {
+			button('Connect wallet').click()
+			await walletChainReadStarted?.promise
+		})
+		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length
+		await rendered.cleanup()
+		cleanupRendered = undefined
+		deferredWalletChainRead.resolve(configuration.chainId)
+		await settleAsyncWorkflow()
+		expect(walletSummaries).toHaveLength(summariesBeforeUnmountedConnectionResolution)
+		expect(walletListeners.size).toBe(0)
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
+		rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
+		cleanupRendered = rendered.cleanup
 		await flush()
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
+		await act(async () => {
+			button('Connect wallet').click()
+			await walletChainReadStarted?.promise
+		})
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		deferredWalletChainRead.resolve(configuration.chainId)
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.slice(discoveriesBeforeMidConnectUniverseChange)).not.toContain(1n)
+		expect(discoveredUniverseIds.at(-1)).toBe(2n)
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
 		deferSecondPortfolioBalance = true
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await Bun.sleep(10)
 		await flush()
 		expect(document.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
@@ -223,8 +293,9 @@ describe('live workflow safety boundary', () => {
 		await Bun.sleep(10)
 		await flush()
 		expect(secondPortfolioCard?.textContent).toContain('4 shares')
+		childBalanceStarted = deferred<undefined>()
 		deferChildDiscovery = true
-		render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container)
+		render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container)
 		expect(document.body.textContent).not.toContain(pool)
 		expect(document.body.textContent).not.toContain(secondPool)
 		await flush()
@@ -234,8 +305,39 @@ describe('live workflow safety boundary', () => {
 		expect(discoveredUniverseIds).toContain(2n)
 		expect(balancedPools).toContain(childPool)
 		expect(document.body.textContent).toContain(childPool)
+		connectedAccount = `0x${'9b'.repeat(20)}` as Address
+		const universeTwoDiscoveryCount = discoveredUniverseIds.length
+		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.slice(universeTwoDiscoveryCount)).not.toContain(1n)
+		expect(discoveredUniverseIds.at(-1)).toBe(2n)
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		const universeTwoChainDiscoveryCount = discoveredUniverseIds.length
+		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.slice(universeTwoChainDiscoveryCount)).not.toContain(1n)
+		expect(discoveredUniverseIds.at(-1)).toBe(2n)
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
 		deferChildDiscovery = false
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await flush()
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		connectedAccount = `0x${'9c'.repeat(20)}` as Address
+		const discoveriesBeforeMidEventUniverseChange = discoveredUniverseIds.length
+		await act(async () => {
+			walletListeners.get('accountsChanged')?.([connectedAccount])
+			await walletChainReadStarted?.promise
+		})
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		deferredWalletChainRead.resolve(configuration.chainId)
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.slice(discoveriesBeforeMidEventUniverseChange)).not.toContain(1n)
+		expect(discoveredUniverseIds.at(-1)).toBe(2n)
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
 		rejectDiscovery = true
 		await act(async () => button('Refresh').click())
@@ -246,12 +348,128 @@ describe('live workflow safety boundary', () => {
 		rejectDiscovery = false
 		await act(async () => button('Refresh').click())
 		await flush()
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
+		connectedAccount = `0x${'99'.repeat(20)}` as Address
+		const summariesBeforeSilentChange = walletSummaries.length
+		await act(async () => button('Exit').click())
+		await act(async () => button('Approve router for all ShareToken shares').click())
+		await settleAsyncWorkflow()
+		const silentChangeSummaries = walletSummaries.slice(summariesBeforeSilentChange)
+		expect(silentChangeSummaries.length).toBeGreaterThan(0)
+		expect(silentChangeSummaries.at(-1)?.account).toBeUndefined()
+		expect(silentChangeSummaries.at(-1)?.ethAttoEth).toBeUndefined()
+		expect(silentChangeSummaries.at(-1)?.repAttoRep).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet account changed; reconnect before approving')
+		deferWalletHeaderBalance = true
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)?.account).toBe(connectedAccount)
+		expect(walletSummaries.at(-1)?.ethAttoEth).toBeUndefined()
+		expect(walletSummaries.at(-1)?.repAttoRep).toBeUndefined()
+		deferWalletHeaderBalance = false
+		walletHeaderBalance.resolve(undefined)
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
+		connectedAccount = `0x${'9a'.repeat(20)}` as Address
+		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
+		expect(document.body.textContent).not.toContain('Reconnect before simulating or submitting')
+		const summariesBeforeChainRefresh = walletSummaries.length
+		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
+		await settleAsyncWorkflow()
+		expect(walletSummaries.length).toBeGreaterThan(summariesBeforeChainRefresh)
+		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
+
+		const callsBeforeProviderReplacement = approveRouterCalls
+		Reflect.set(window, 'ethereum', { ...injectedProvider })
+		await act(async () => button('Exit').click())
+		await act(async () => button('Approve router for all ShareToken shares').click())
+		await settleAsyncWorkflow()
+		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet provider changed; reconnect before continuing')
+
+		Reflect.set(window, 'ethereum', injectedProvider)
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		await act(async () => {
+			button('Connect wallet').click()
+			await walletChainReadStarted?.promise
+		})
+		Reflect.set(window, 'ethereum', { ...injectedProvider })
+		deferredWalletChainRead.resolve(configuration.chainId)
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet provider changed; reconnect before continuing')
+
+		Reflect.set(window, 'ethereum', injectedProvider)
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
+		emitAccountChangeAfterReads = 2
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
+
+		rejectWalletChainRead = true
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('chain RPC unavailable')
+		rejectWalletChainRead = false
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+		expect(walletSummaries.at(-1)?.account).toBe(connectedAccount)
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		const callsBeforeMidPreflightReplacement = approveRouterCalls
+		await act(async () => {
+			button('Exit').click()
+			button('Approve router for all ShareToken shares').click()
+			await walletChainReadStarted?.promise
+		})
+		Reflect.set(window, 'ethereum', { ...injectedProvider })
+		deferredWalletChainRead.resolve(configuration.chainId)
+		await settleAsyncWorkflow()
+		expect(approveRouterCalls).toBe(callsBeforeMidPreflightReplacement)
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet context changed; reconnect before continuing')
+
+		Reflect.set(window, 'ethereum', injectedProvider)
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+
+		rejectWalletChainRead = true
+		await act(async () => button('Exit').click())
+		await act(async () => button('Approve router for all ShareToken shares').click())
+		await settleAsyncWorkflow()
+		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet network changed; switch back before approving')
+
+		rejectWalletChainRead = false
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+		rejectWalletAccountRead = true
+		await act(async () => button('Exit').click())
+		await act(async () => button('Approve router for all ShareToken shares').click())
+		await settleAsyncWorkflow()
+		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
+		expect(walletSummaries.at(-1)?.account).toBeUndefined()
+		expect(document.body.textContent).toContain('Wallet account changed; reconnect before approving')
+
+		rejectWalletAccountRead = false
+		await act(async () => button('Connect wallet').click())
+		await settleAsyncWorkflow()
+
 		await act(async () => button('Exit').click())
 		rejectBalanceRefresh = true
 		await act(async () => button('Approve router for all ShareToken shares').click())
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
 		expect(document.body.textContent).toContain('Retry balances')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
@@ -260,8 +478,10 @@ describe('live workflow safety boundary', () => {
 
 		rejectBalanceRefresh = false
 		approved = false
+		await settleAsyncWorkflow()
+		expect(button('Retry balances').disabled).toBeFalse()
 		await act(async () => button('Retry balances').click())
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('balance RPC unavailable')
 		waitForContextApprovalReceipt = true
 		await act(async () => button('Approve router for all ShareToken shares').click())
@@ -270,7 +490,7 @@ describe('live workflow safety boundary', () => {
 			contextApprovalReceipt.resolve({ status: 'success' })
 			await contextApprovalReceipt.promise
 		})
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(button('Connect wallet').disabled).toBeFalse()
@@ -285,7 +505,7 @@ describe('live workflow safety boundary', () => {
 		await act(async () => button('Remove').click())
 		rejectBalanceRefresh = true
 		await act(async () => button('Approve exact LP amount').click())
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
@@ -303,7 +523,7 @@ describe('live workflow safety boundary', () => {
 			contextApprovalReceipt.resolve({ status: 'success' })
 			await contextApprovalReceipt.promise
 		})
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Wallet context changed while the LP-token approval was pending')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
@@ -317,7 +537,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectBalanceRefresh = true
 		await act(async () => button('Approve router for complete-set redemption').click())
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
@@ -325,7 +545,7 @@ describe('live workflow safety boundary', () => {
 		rejectBalanceRefresh = false
 		approved = false
 		await act(async () => button('Retry balances').click())
-		await flush()
+		await settleAsyncWorkflow()
 		waitForContextApprovalReceipt = true
 		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		await act(async () => button('Approve router for complete-set redemption').click())
@@ -334,7 +554,7 @@ describe('live workflow safety boundary', () => {
 			contextApprovalReceipt.resolve({ status: 'success' })
 			await contextApprovalReceipt.promise
 		})
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
@@ -349,7 +569,7 @@ describe('live workflow safety boundary', () => {
 			contextApprovalReceipt.resolve({ status: 'reverted' })
 			await contextApprovalReceipt.promise
 		})
-		await flush()
+		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending. Approval transaction reverted.')
 		expect(button('Connect wallet').disabled).toBeFalse()
 		expect(workflowLocks.at(-1)).toBeFalse()
@@ -357,7 +577,7 @@ describe('live workflow safety boundary', () => {
 		approved = false
 		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		await act(async () => button('Connect wallet').click())
-		await flush()
+		await settleAsyncWorkflow()
 		await act(async () => button('Approve router for complete-set redemption').click())
 		await act(async () => {
 			walletListeners.get('accountsChanged')?.([`0x${'97'.repeat(20)}`])

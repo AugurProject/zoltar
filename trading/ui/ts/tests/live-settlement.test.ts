@@ -107,7 +107,7 @@ describe('live settlement contract encoding', () => {
 		expect(settlementQuoteCanSubmit('ready', undefined, true)).toBeTrue()
 		expect(settlementQuoteCanSubmit('loading', undefined, true)).toBeFalse()
 		expect(settlementQuoteCanSubmit('error', undefined, true)).toBeFalse()
-		expect(await submitFreshSettlement(client, configuration, account, quote)).toBe(transactionHash)
+		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
 			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n]] })
@@ -145,7 +145,7 @@ describe('live settlement contract encoding', () => {
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(1_000n)
 		expect(quote.minimumAttoEth).toBe(995n)
-		expect(await submitFreshSettlement(client, configuration, account, quote)).toBe(transactionHash)
+		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionTargets).toEqual([configuration.router, configuration.router, configuration.router])
 		expect(transactionData).toHaveLength(3)
 		const calls = transactionData.map(data => decodeFunctionData({ abi: routerAbi, data }))
@@ -178,7 +178,41 @@ describe('live settlement contract encoding', () => {
 		})
 		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount: 10n ** 18n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
-		await expect(submitFreshSettlement(client, configuration, account, quote)).rejects.toThrow('approved minimum ETH output')
+		await expect(submitFreshSettlement(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved minimum ETH output')
+		expect(sends).toBe(0)
+	})
+
+	test('runs the wallet-context guard after revalidation and before broadcasting', async () => {
+		let simulations = 0
+		let sends = 0
+		let guards = 0
+		const client = createWalletClient({
+			account,
+			transport: custom({
+				async request({ method }) {
+					if (method === 'eth_blockNumber') return '0x2'
+					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+					if (method === 'eth_call') {
+						simulations++
+						return '0x'
+					}
+					if (method === 'eth_sendTransaction') {
+						sends++
+						return transactionHash
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndex: 12n })
+		await expect(
+			submitFreshSettlement(client, configuration, account, quote, async () => {
+				guards++
+				throw new Error('Wallet context changed during revalidation')
+			}),
+		).rejects.toThrow('Wallet context changed during revalidation')
+		expect(simulations).toBe(2)
+		expect(guards).toBe(1)
 		expect(sends).toBe(0)
 	})
 })

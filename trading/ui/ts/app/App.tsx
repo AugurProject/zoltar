@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import { demoMarket } from '../demo/markets.ts'
+import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoRep } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Developer, Help, Liquidity, MarketList, Portfolio } from '../features/Routes.tsx'
-import { LiveTrading } from '../features/LiveTrading.tsx'
+import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
 import { createTradingPublicClient, validateLiveDeployment } from '../protocol/live.ts'
+import { formatUnits } from './format.ts'
 
 function currentRoute() {
 	return window.location.hash.replace(/^#\/?/, '') || 'markets'
@@ -43,6 +44,13 @@ function renderBanner(scenario: string, demo: boolean) {
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
+async function resolveLiveDeployment() {
+	const loaded = await loadDeploymentConfiguration()
+	if (loaded === undefined) throw new Error('Missing deployment.json. Build with a reviewed trading deployment manifest.')
+	await validateLiveDeployment(createTradingPublicClient(loaded), loaded)
+	return loaded
+}
+
 function networkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
 	if (scenario === 'wrong-network') return 'Unsupported · requires Anvil 31337'
 	if (demo) return 'Anvil 31337'
@@ -79,9 +87,79 @@ export function UniverseSelector({ options, selectedId, disabled, onChange }: { 
 	)
 }
 
+export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryState; onRetry?(): void }) {
+	if (summary.account === undefined) return null
+	let ethBalance = '…'
+	let repBalance = '…'
+	if (summary.status === 'error') {
+		ethBalance = '—'
+		repBalance = '—'
+	} else if (summary.status === 'ready') {
+		if (summary.ethAttoEth !== undefined) ethBalance = formatUnits(summary.ethAttoEth, 18, 18)
+		if (summary.repAttoRep !== undefined) repBalance = formatUnits(summary.repAttoRep, 18, 18)
+	}
+	return (
+		<div class='wallet-summary' aria-label='Connected wallet balances' aria-busy={summary.status === 'loading'}>
+			<code class='wallet-summary__address'>{summary.account}</code>
+			<div class='wallet-summary__balances'>
+				<span data-wallet-asset='ETH'>
+					<small>ETH</small>
+					<strong>{ethBalance}</strong>
+				</span>
+				<span data-wallet-asset='REP'>
+					<small>REP</small>
+					<strong>{repBalance}</strong>
+				</span>
+			</div>
+			{summary.status === 'loading' ? (
+				<span class='visually-hidden' role='status'>
+					Loading wallet ETH and current-universe REP balances
+				</span>
+			) : null}
+			{summary.status === 'error' ? (
+				<span class='wallet-summary__failure'>
+					<span class='wallet-summary__error' role='alert' title={summary.error} aria-label={`${summary.errorLabel ?? 'Balances unavailable'}: ${summary.error ?? 'wallet balance read failed'}`}>
+						{summary.errorLabel ?? 'Balances unavailable'}
+					</span>
+					{onRetry === undefined ? null : (
+						<button class='wallet-summary__retry' type='button' onClick={onRetry}>
+							Retry
+						</button>
+					)}
+				</span>
+			) : null}
+		</div>
+	)
+}
+
 function demoUniverseChoices(scenario: string) {
 	const choices = scenario === 'max-token-ids' ? [demoMarket(scenario), demoMarket('max-token-ids-alt'), demoMarket('baseline'), demoMarket('truth-auction')] : [demoMarket(scenario), demoMarket('baseline'), demoMarket('truth-auction')]
 	return choices.filter((market, index) => choices.findIndex(candidate => candidate.universeId === market.universeId) === index)
+}
+
+function demoWalletSummary(scenario: string, universeId: bigint, retrySucceeded: boolean): WalletSummaryState {
+	const selectedUniverseId = universeId.toString()
+	if (scenario === 'wallet-balance-loading') return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+	if (scenario === 'wallet-balance-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'Wallet balance RPC request failed', errorLabel: 'Wallet balance read failed', universeId: selectedUniverseId }
+	if (scenario === 'wallet-discovery-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'No SecurityPool is available in the selected universe', errorLabel: 'No SecurityPool in this universe', universeId: selectedUniverseId }
+	if (scenario === 'wallet-pool-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'The selected SecurityPool could not be read', errorLabel: 'SecurityPool unavailable', universeId: selectedUniverseId }
+	if (scenario === 'wallet-max-balances') return { account: demoWalletAccount, ethAttoEth: 2n ** 256n - 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+	if (scenario === 'wallet-small-balances') return { account: demoWalletAccount, ethAttoEth: 1n, repAttoRep: 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+	return { account: demoWalletAccount, ethAttoEth: demoWalletEthAttoEth, repAttoRep: demoWalletRepAttoRep(universeId), status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+}
+
+export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUniverseId: string | undefined): WalletSummaryState {
+	if (summary.universeId === selectedUniverseId) return summary
+	return { account: summary.account, ethAttoEth: undefined, repAttoRep: undefined, status: summary.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
+}
+
+function routeOwnsLiveWallet(route: string) {
+	return route !== 'help' && route !== 'developer'
+}
+
+export function walletSummaryAfterRouteChange(summary: WalletSummaryState, previousRoute: string, nextRoute: string, selectedUniverseId: string | undefined): WalletSummaryState {
+	if (routeOwnsLiveWallet(previousRoute) === routeOwnsLiveWallet(nextRoute)) return summary
+	return { account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
 }
 
 export function compactUniverseId(universeId: string) {
@@ -96,7 +174,7 @@ function demoUniverseLabel(market: ReturnType<typeof demoMarket>) {
 	return `ID ${compactUniverseId(market.universeId.toString())}`
 }
 
-export function App() {
+export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
 	const scenario = query.get('scenario') ?? 'baseline'
@@ -108,6 +186,10 @@ export function App() {
 	const [workflowLocked, setWorkflowLocked] = useState(false)
 	const [selectedUniverseId, setSelectedUniverseId] = useState<string | undefined>(demo ? initialDemoMarket.universeId.toString() : undefined)
 	const [liveUniverseOptions, setLiveUniverseOptions] = useState<readonly UniverseOption[]>([])
+	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
+	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
+	const [deploymentRetryNonce, setDeploymentRetryNonce] = useState(0)
+	const [demoWalletRetrySucceeded, setDemoWalletRetrySucceeded] = useState(false)
 	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
 	routeRef.current = route
@@ -135,6 +217,20 @@ export function App() {
 	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
 	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
 	const showUniverseSelector = route !== 'help' && route !== 'developer'
+	const walletSummary = demo ? demoWalletSummary(scenario, market.universeId, demoWalletRetrySucceeded) : walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
+	const retryWalletSummary = () => {
+		if (demo) setDemoWalletRetrySucceeded(true)
+		else {
+			setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
+			setWalletSummaryRetryNonce(current => current + 1)
+		}
+	}
+	const retryDeployment = () => {
+		setLiveConfiguration(undefined)
+		setLiveConfigurationError(undefined)
+		setLiveDeploymentStatus('loading')
+		setDeploymentRetryNonce(current => current + 1)
+	}
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
@@ -142,12 +238,13 @@ export function App() {
 				return
 			}
 			const nextRoute = currentRoute()
+			if (!demo) setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, routeRef.current, nextRoute, selectedUniverseId))
 			routeRef.current = nextRoute
 			setRoute(nextRoute)
 		}
 		window.addEventListener('hashchange', update)
 		return () => window.removeEventListener('hashchange', update)
-	}, [])
+	}, [demo, selectedUniverseId])
 	useEffect(() => {
 		window.scrollTo(0, 0)
 	}, [route])
@@ -157,10 +254,7 @@ export function App() {
 		setLiveDeploymentStatus('loading')
 		void (async () => {
 			try {
-				const loaded = await loadDeploymentConfiguration()
-				if (!active) return
-				if (loaded === undefined) throw new Error('Missing deployment.json. Build with a reviewed trading deployment manifest.')
-				await validateLiveDeployment(createTradingPublicClient(loaded), loaded)
+				const loaded = await loadLiveDeployment()
 				if (!active) return
 				setLiveConfiguration(loaded)
 				setLiveConfigurationError(undefined)
@@ -175,13 +269,26 @@ export function App() {
 		return () => {
 			active = false
 		}
-	}, [demo])
+	}, [demo, deploymentRetryNonce, loadLiveDeployment])
 	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
 	if (!demo) {
 		if (route === 'help') content = <Help />
 		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
-		else content = <LiveTrading route={route} configuration={liveConfiguration} configurationError={liveConfigurationError} selectedUniverseId={selectedUniverseId} onUniversesChange={updateLiveUniverses} onWorkflowLockChange={updateWorkflowLock} />
+		else
+			content = (
+				<LiveTrading
+					route={route}
+					configuration={liveConfiguration}
+					configurationError={liveConfigurationError}
+					selectedUniverseId={selectedUniverseId}
+					onUniversesChange={updateLiveUniverses}
+					onWorkflowLockChange={updateWorkflowLock}
+					onWalletSummaryChange={setLiveWalletSummary}
+					walletSummaryRetryNonce={walletSummaryRetryNonce}
+					onDeploymentRetry={retryDeployment}
+				/>
+			)
 	} else if (scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
@@ -244,7 +351,7 @@ export function App() {
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</a>
-						{demo ? <span class='wallet-context'>0x8ba1…ba72</span> : null}
+						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
 					</div>
 				</header>

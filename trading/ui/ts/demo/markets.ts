@@ -37,6 +37,13 @@ export const demoWalletBalances = {
 	lp: 428_570_000_000_000_000_000n,
 } as const
 
+export const demoWalletAccount = '0x8ba1f109551bD432803012645Ac136ddd64DBA72' as const
+export const demoWalletEthAttoEth = 64n * 10n ** 18n
+
+export function demoWalletRepAttoRep(universeId: bigint) {
+	return (universeId === 2n ? 1_750n : 12_500n) * 10n ** 18n
+}
+
 const pool = `0x${'3a'.repeat(20)}` as const
 const pair = `0x${'7c'.repeat(20)}` as const
 const childPool = `0x${'4b'.repeat(20)}` as const

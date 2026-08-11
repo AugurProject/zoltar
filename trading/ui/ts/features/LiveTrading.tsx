@@ -15,6 +15,7 @@ import {
 	discoverAllLiveMarketsInUniverse,
 	discoverLiveUniverseMarketPage,
 	loadLiveBalances,
+	loadWalletHeaderBalances,
 	liveBalancesForMarket,
 	marketAcceptsNewRisk,
 	marketNewRiskBlocker,
@@ -50,6 +51,40 @@ type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 
 type TransactionState = 'idle' | 'simulating' | 'ready' | 'approval' | 'pending' | 'confirmed' | 'error'
 type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
+export type WalletSummaryState = Readonly<{
+	account: Address | undefined
+	ethAttoEth: bigint | undefined
+	repAttoRep: bigint | undefined
+	status: 'disconnected' | 'loading' | 'ready' | 'error'
+	error: string | undefined
+	errorLabel: string | undefined
+	universeId: string | undefined
+}>
+type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
+
+const ignoreWalletSummaryChange = () => undefined
+
+export function walletSummaryRefreshState(account: Address | undefined, universeId: string | undefined): WalletSummaryState {
+	return { account, ethAttoEth: undefined, repAttoRep: undefined, status: account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId }
+}
+
+export async function observeKnownReceipt<T>(receipt: Promise<T>, onKnownReceipt: () => void): Promise<T> {
+	const knownReceipt = await receipt
+	onKnownReceipt()
+	return knownReceipt
+}
+
+export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 'ready' | 'error', selectedPoolAvailable: boolean, selectedPoolLoadError: string | undefined, currentPageStart: bigint) {
+	return discoveryState === 'error' || !selectedPoolAvailable || selectedPoolLoadError !== undefined ? currentPageStart : undefined
+}
+
+export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean) {
+	if (!configurationAvailable) return configurationError === undefined ? { status: 'loading' as const, error: undefined, errorLabel: undefined } : { status: 'error' as const, error: configurationError, errorLabel: 'Deployment unavailable' }
+	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
+	if (discoveryState === 'error') return { status: 'error' as const, error: `SecurityPool discovery failed: ${discoveryError ?? 'unknown discovery error'}`, errorLabel: 'SecurityPool discovery failed' }
+	if (selectedPoolAvailable) return undefined
+	return { status: 'error' as const, error: 'No SecurityPool is available in the selected universe', errorLabel: 'No SecurityPool in this universe' }
+}
 
 function statusLabel(market: LiveMarket, nowSeconds: bigint) {
 	if (market.loadError !== undefined) return 'Market data unavailable'
@@ -255,6 +290,9 @@ export function LiveTrading({
 	selectedUniverseId,
 	onUniversesChange = () => undefined,
 	onWorkflowLockChange,
+	onWalletSummaryChange = ignoreWalletSummaryChange,
+	walletSummaryRetryNonce = 0,
+	onDeploymentRetry = () => undefined,
 }: {
 	route: string
 	configuration: DeploymentConfiguration | undefined
@@ -262,6 +300,9 @@ export function LiveTrading({
 	selectedUniverseId?: string | undefined
 	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined): void
 	onWorkflowLockChange(locked: boolean): void
+	onWalletSummaryChange?(summary: WalletSummaryState): void
+	walletSummaryRetryNonce?: number
+	onDeploymentRetry?(): void
 }) {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	const [selectedPool, setSelectedPool] = useState<Address>()
@@ -271,6 +312,13 @@ export function LiveTrading({
 	const [walletClient, setWalletClient] = useState<WalletClient>()
 	const [walletProvider, setWalletProvider] = useState<InjectedEthereum>()
 	const [walletContextInvalidated, setWalletContextInvalidated] = useState(false)
+	const [walletSummaryStatus, setWalletSummaryStatus] = useState<WalletSummaryState['status']>('disconnected')
+	const [walletEthAttoEth, setWalletEthAttoEth] = useState<bigint>()
+	const [walletRepAttoRep, setWalletRepAttoRep] = useState<bigint>()
+	const [walletSummaryError, setWalletSummaryError] = useState<string>()
+	const [walletSummaryErrorLabel, setWalletSummaryErrorLabel] = useState<string>()
+	const [walletSummaryUniverseId, setWalletSummaryUniverseId] = useState<string>()
+	const [walletSummaryReceiptNonce, setWalletSummaryReceiptNonce] = useState(0)
 	const [balances, setBalances] = useState<LiveBalances>()
 	const [balanceState, setBalanceState] = useState<BalanceState>('disconnected')
 	const [balanceError, setBalanceError] = useState<string>()
@@ -295,6 +343,17 @@ export function LiveTrading({
 	const marketDetailRef = useRef<HTMLElement>(null)
 	const discoveryRequests = useRef(createLatestRequestGuard()).current
 	const balanceRequests = useRef(createLatestRequestGuard()).current
+	const walletSummaryRequests = useRef(createLatestRequestGuard()).current
+	const connectionRequests = useRef(createLatestRequestGuard()).current
+	const walletContextRevision = useRef(0)
+	const walletSubscriptionCleanup = useRef<(() => void) | undefined>()
+	const walletContextChangeHandler = useRef<(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) => void>(() => undefined)
+	const walletConnectHandler = useRef<() => void>(() => undefined)
+	const walletComponentMounted = useRef(true)
+	const walletRenderContextKey = `${route}\u0000${selectedUniverseId ?? ''}\u0000${configuration?.chainId.toString() ?? ''}\u0000${configuration?.router ?? ''}`
+	const walletRenderContextKeyRef = useRef(walletRenderContextKey)
+	walletRenderContextKeyRef.current = walletRenderContextKey
+	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const positionWorkflow = useRef(createExclusiveWorkflowGuard()).current
 	const positionWorkflowLockedRef = useRef(false)
@@ -302,6 +361,101 @@ export function LiveTrading({
 	const [positionWorkflowLocked, setPositionWorkflowLocked] = useState(false)
 	const [liquidityWorkflowLocked, setLiquidityWorkflowLocked] = useState(false)
 	const workflowLocked = positionWorkflowLocked || liquidityWorkflowLocked
+	const invalidateWalletIdentity = useCallback(
+		(detail: string) => {
+			walletContextRevision.current++
+			walletSubscriptionCleanup.current?.()
+			walletSubscriptionCleanup.current = undefined
+			connectionRequests.invalidate()
+			balanceRequests.invalidate()
+			portfolioBalanceRequests.invalidate()
+			walletSummaryRequests.invalidate()
+			simulationRequests.invalidate()
+			accountRef.current = undefined
+			setWalletEthAttoEth(undefined)
+			setWalletRepAttoRep(undefined)
+			setWalletSummaryError(undefined)
+			setWalletSummaryErrorLabel(undefined)
+			setWalletSummaryUniverseId(selectedUniverseId)
+			setWalletSummaryStatus('disconnected')
+			onWalletSummaryChange(walletSummaryRefreshState(undefined, selectedUniverseId))
+			setWalletClient(undefined)
+			setWalletProvider(undefined)
+			setAccount(undefined)
+			setBalances(undefined)
+			setBalanceState('error')
+			setBalanceError('Wallet context changed; reconnect to refresh balances and approvals')
+			setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
+			setWalletContextInvalidated(true)
+			setQuote(undefined)
+			setMessage(detail)
+		},
+		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, selectedUniverseId, simulationRequests, walletSummaryRequests],
+	)
+	const executeWithCurrentWalletContext = useCallback(
+		async <T,>(expectedAccount: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T> => {
+			const expectedRevision = walletContextRevision.current
+			const provider = getInjectedEthereum()
+			if (provider === undefined) {
+				const detail = 'No injected wallet was found; reconnect before continuing'
+				invalidateWalletIdentity(detail)
+				throw new Error(detail)
+			}
+			if (provider !== walletProvider) {
+				const detail = 'Wallet provider changed; reconnect before continuing'
+				invalidateWalletIdentity(detail)
+				throw new Error(detail)
+			}
+			const requireUnchangedProvider = () => {
+				if (walletContextRevision.current !== expectedRevision || getInjectedEthereum() !== provider || accountRef.current !== expectedAccount) {
+					const detail = 'Wallet context changed; reconnect before continuing'
+					invalidateWalletIdentity(detail)
+					throw new Error(detail)
+				}
+			}
+			let chainId: number
+			try {
+				chainId = await walletChainId(provider)
+			} catch {
+				invalidateWalletIdentity(networkFailure)
+				throw new Error(networkFailure)
+			}
+			requireUnchangedProvider()
+			if (configuration === undefined || chainId !== configuration.chainId) {
+				invalidateWalletIdentity(networkFailure)
+				throw new Error(networkFailure)
+			}
+			let connectedAccount: Address
+			try {
+				connectedAccount = await connectWallet(provider)
+			} catch {
+				invalidateWalletIdentity(accountFailure)
+				throw new Error(accountFailure)
+			}
+			requireUnchangedProvider()
+			if (connectedAccount !== expectedAccount) {
+				invalidateWalletIdentity(accountFailure)
+				throw new Error(accountFailure)
+			}
+			requireUnchangedProvider()
+			return action()
+		},
+		[configuration, invalidateWalletIdentity, walletProvider],
+	)
+	const createGuardedWalletWrite = useCallback(
+		(expectedAccount: Address, networkFailure: string, accountFailure: string) => {
+			const expectedRevision = walletContextRevision.current
+			const guardedWrite: GuardedWalletWrite = async write => {
+				if (walletContextRevision.current !== expectedRevision) throw new Error('Wallet context changed during transaction revalidation; reconnect and simulate again')
+				return await executeWithCurrentWalletContext(expectedAccount, networkFailure, accountFailure, async () => {
+					if (walletContextRevision.current !== expectedRevision) throw new Error('Wallet context changed during transaction revalidation; reconnect and simulate again')
+					return await write()
+				})
+			}
+			return guardedWrite
+		},
+		[executeWithCurrentWalletContext],
+	)
 	const updatePositionWorkflowLock = useCallback(
 		(locked: boolean) => {
 			positionWorkflowLockedRef.current = locked
@@ -318,6 +472,19 @@ export function LiveTrading({
 		},
 		[onWorkflowLockChange],
 	)
+	const refreshWalletSummaryAfterReceipt = useCallback(() => {
+		walletSummaryRequests.invalidate()
+		const currentAccount = accountRef.current
+		const nextSummary = walletSummaryRefreshState(currentAccount, selectedUniverseId)
+		setWalletEthAttoEth(undefined)
+		setWalletRepAttoRep(undefined)
+		setWalletSummaryError(undefined)
+		setWalletSummaryErrorLabel(undefined)
+		setWalletSummaryUniverseId(selectedUniverseId)
+		setWalletSummaryStatus(currentAccount === undefined ? 'disconnected' : 'loading')
+		onWalletSummaryChange(nextSummary)
+		setWalletSummaryReceiptNonce(current => current + 1)
+	}, [onWalletSummaryChange, selectedUniverseId, walletSummaryRequests])
 	const visibleMarkets = filterMarketsByUniverse(markets, selectedUniverseId)
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	const selected = visibleMarkets.find(market => market.pool === selectedPool) ?? visibleMarkets[0]
@@ -333,6 +500,53 @@ export function LiveTrading({
 			return { value: undefined, error: error instanceof Error ? error.message : 'Invalid amount' }
 		}
 	}, [amount])
+
+	useEffect(() => {
+		onWalletSummaryChange({ account, ethAttoEth: walletEthAttoEth, repAttoRep: walletRepAttoRep, status: walletSummaryStatus, error: walletSummaryError, errorLabel: walletSummaryErrorLabel, universeId: walletSummaryUniverseId })
+	}, [account, onWalletSummaryChange, walletEthAttoEth, walletRepAttoRep, walletSummaryError, walletSummaryErrorLabel, walletSummaryStatus, walletSummaryUniverseId])
+
+	useEffect(() => {
+		const request = walletSummaryRequests.begin()
+		setWalletEthAttoEth(undefined)
+		setWalletRepAttoRep(undefined)
+		setWalletSummaryError(undefined)
+		setWalletSummaryErrorLabel(undefined)
+		setWalletSummaryUniverseId(selectedUniverseId)
+		if (account === undefined) {
+			setWalletSummaryStatus('disconnected')
+			return
+		}
+		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined)
+		if (availability !== undefined) {
+			setWalletSummaryStatus(availability.status)
+			setWalletSummaryError(availability.error)
+			setWalletSummaryErrorLabel(availability.errorLabel)
+			return
+		}
+		if (configuration === undefined || selected === undefined) throw new Error('Wallet summary availability was resolved without a SecurityPool configuration')
+		if (selected.loadError !== undefined) {
+			setWalletSummaryStatus('error')
+			setWalletSummaryError(`Wallet balances could not be loaded because the selected SecurityPool is unavailable: ${selected.loadError}`)
+			setWalletSummaryErrorLabel('SecurityPool unavailable')
+			return
+		}
+		setWalletSummaryStatus('loading')
+		void loadWalletHeaderBalances(configuredClient(configuration), selected, account).then(
+			loaded => {
+				if (!walletSummaryRequests.isCurrent(request) || accountRef.current !== account) return
+				setWalletEthAttoEth(loaded.ethAttoEth)
+				setWalletRepAttoRep(loaded.repAttoRep)
+				setWalletSummaryStatus('ready')
+			},
+			error => {
+				if (!walletSummaryRequests.isCurrent(request) || accountRef.current !== account) return
+				setWalletSummaryStatus('error')
+				setWalletSummaryError(error instanceof Error ? error.message : 'Wallet ETH and REP balances could not be loaded')
+				setWalletSummaryErrorLabel('Wallet balance read failed')
+			},
+		)
+		return () => walletSummaryRequests.invalidate()
+	}, [account, configuration, configurationError, discoveryError, discoveryState, selected, walletSummaryReceiptNonce, walletSummaryRequests, walletSummaryRetryNonce])
 
 	async function refresh(nextConfiguration = configuration, requestedStart = marketPage.start, owner: WorkflowOwner | undefined = undefined) {
 		if (nextConfiguration === undefined) return
@@ -424,6 +638,13 @@ export function LiveTrading({
 	}, [configuration, configurationError, selectedUniverseId])
 
 	useEffect(() => {
+		if (previousWalletSummaryRetryNonce.current === walletSummaryRetryNonce) return
+		previousWalletSummaryRetryNonce.current = walletSummaryRetryNonce
+		const retryStart = walletSummaryDiscoveryRetryStart(discoveryState, selected !== undefined, selected?.loadError, marketPage.start)
+		if (configuration !== undefined && retryStart !== undefined) void refresh(configuration, retryStart)
+	}, [configuration, discoveryState, marketPage.start, selected, walletSummaryRetryNonce])
+
+	useEffect(() => {
 		if (positionWorkflowLockedRef.current) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
@@ -459,30 +680,16 @@ export function LiveTrading({
 		if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) setState('idle')
 	}, [nowSeconds, selected])
 
-	useEffect(() => {
-		setWalletProvider(getInjectedEthereum())
-	}, [])
-
-	useEffect(() => {
-		if (walletProvider === undefined) return
-		return subscribeToWalletContextChanges(walletProvider, (eventName: WalletContextChangeEvent) => {
-			balanceRequests.invalidate()
-			portfolioBalanceRequests.invalidate()
-			simulationRequests.invalidate()
-			accountRef.current = undefined
-			setWalletProvider(undefined)
-			setWalletClient(undefined)
-			setAccount(undefined)
-			setBalances(undefined)
-			setBalanceState('error')
-			setBalanceError('Wallet context changed; reconnect to refresh balances and approvals')
-			setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
-			setWalletContextInvalidated(true)
-			setQuote(undefined)
-			if (!positionWorkflowLockedRef.current) setState('error')
-			setMessage(eventName === 'accountsChanged' ? 'Wallet account changed. Reconnect before simulating or submitting.' : 'Wallet network changed. Reconnect on the configured network before simulating or submitting.')
-		})
-	}, [walletProvider])
+	useEffect(
+		() => () => {
+			walletComponentMounted.current = false
+			connectionRequests.invalidate()
+			walletContextRevision.current++
+			walletSubscriptionCleanup.current?.()
+			walletSubscriptionCleanup.current = undefined
+		},
+		[],
+	)
 
 	useEffect(() => {
 		const request = portfolioBalanceRequests.begin()
@@ -603,32 +810,139 @@ export function LiveTrading({
 
 	async function connect() {
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
+		if (accountRef.current !== undefined || walletClient !== undefined) invalidateWalletIdentity('Reconnecting wallet…')
+		const request = connectionRequests.begin()
+		const expectedRenderContextKey = walletRenderContextKey
 		try {
 			const provider = getInjectedEthereum()
 			if (provider === undefined) throw new Error('No injected wallet was found')
-			setWalletProvider(provider)
+			const requireCurrentConnection = () => {
+				if (!walletComponentMounted.current || !connectionRequests.isCurrent(request)) return false
+				if (getInjectedEthereum() !== provider) throw new Error('Wallet provider changed; reconnect before continuing')
+				if (walletRenderContextKeyRef.current !== expectedRenderContextKey) {
+					walletConnectHandler.current()
+					return false
+				}
+				return true
+			}
 			if (configuration === undefined) throw new Error('Deployment configuration is unavailable')
 			let chainId = await walletChainId(provider)
+			if (!requireCurrentConnection()) return
 			if (chainId !== configuration.chainId) {
 				await switchWalletChain(provider, configuration.chainId)
+				if (!requireCurrentConnection()) return
 				chainId = await walletChainId(provider)
+				if (!requireCurrentConnection()) return
 			}
 			if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
 			const connected = await connectWallet(provider)
+			if (!requireCurrentConnection()) return
+			walletSubscriptionCleanup.current?.()
+			walletSubscriptionCleanup.current = subscribeToWalletContextChanges(provider, (eventName: WalletContextChangeEvent) => {
+				walletContextChangeHandler.current(provider, eventName, false)
+			})
+			const confirmedChainId = await walletChainId(provider)
+			if (!requireCurrentConnection()) return
+			if (confirmedChainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
+			const confirmedAccount = await connectWallet(provider)
+			if (!requireCurrentConnection()) return
+			if (confirmedAccount !== connected) throw new Error('Wallet account changed while connecting; reconnect to continue')
 			balanceRequests.invalidate()
+			walletSummaryRequests.invalidate()
 			simulationRequests.invalidate()
+			accountRef.current = connected
+			setWalletEthAttoEth(undefined)
+			setWalletRepAttoRep(undefined)
+			setWalletSummaryError(undefined)
+			setWalletSummaryErrorLabel(undefined)
+			setWalletSummaryUniverseId(selectedUniverseId)
+			setWalletSummaryStatus('loading')
+			onWalletSummaryChange(walletSummaryRefreshState(connected, selectedUniverseId))
 			setBalances(undefined)
 			setBalanceState('loading')
 			setBalanceError(undefined)
 			setWalletContextInvalidated(false)
+			walletContextRevision.current++
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
 			setMessage(undefined)
 			await refresh(configuration)
 		} catch (error) {
-			setMessage(error instanceof Error ? error.message : 'Wallet connection failed')
+			if (!connectionRequests.isCurrent(request)) return
+			invalidateWalletIdentity(error instanceof Error ? error.message : 'Wallet connection failed')
 		}
+	}
+	walletConnectHandler.current = () => {
+		void connect()
+	}
+
+	async function refreshWalletContextAfterEvent(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) {
+		const contextLabel = eventName === 'accountsChanged' ? 'Wallet account changed' : 'Wallet network changed'
+		if ((!allowDisconnectedRefresh && accountRef.current === undefined) || positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) {
+			invalidateWalletIdentity(`${contextLabel}. Reconnect before simulating or submitting.`)
+			if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) setState('error')
+			return
+		}
+		invalidateWalletIdentity(`${contextLabel}. Refreshing wallet context…`)
+		const request = connectionRequests.begin()
+		const expectedRenderContextKey = walletRenderContextKey
+		try {
+			const requireCurrentConnection = () => {
+				if (!walletComponentMounted.current || !connectionRequests.isCurrent(request)) return false
+				if (getInjectedEthereum() !== provider) throw new Error('Wallet provider changed; reconnect before continuing')
+				if (walletRenderContextKeyRef.current !== expectedRenderContextKey) {
+					walletContextChangeHandler.current(provider, eventName, true)
+					return false
+				}
+				return true
+			}
+			if (configuration === undefined) throw new Error('Deployment configuration is unavailable')
+			const chainId = await walletChainId(provider)
+			if (!requireCurrentConnection()) return
+			if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
+			const connected = await connectWallet(provider)
+			if (!requireCurrentConnection()) return
+			walletSubscriptionCleanup.current?.()
+			walletSubscriptionCleanup.current = subscribeToWalletContextChanges(provider, changedEventName => {
+				walletContextChangeHandler.current(provider, changedEventName, false)
+			})
+			const confirmedChainId = await walletChainId(provider)
+			if (!requireCurrentConnection()) return
+			if (confirmedChainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
+			const confirmedAccount = await connectWallet(provider)
+			if (!requireCurrentConnection()) return
+			if (confirmedAccount !== connected) throw new Error('Wallet account changed while refreshing; reconnect to continue')
+			balanceRequests.invalidate()
+			walletSummaryRequests.invalidate()
+			simulationRequests.invalidate()
+			accountRef.current = connected
+			setWalletEthAttoEth(undefined)
+			setWalletRepAttoRep(undefined)
+			setWalletSummaryError(undefined)
+			setWalletSummaryErrorLabel(undefined)
+			setWalletSummaryUniverseId(selectedUniverseId)
+			setWalletSummaryStatus('loading')
+			onWalletSummaryChange(walletSummaryRefreshState(connected, selectedUniverseId))
+			setBalances(undefined)
+			setBalanceState('loading')
+			setBalanceError(undefined)
+			setWalletContextInvalidated(false)
+			walletContextRevision.current++
+			setAccount(connected)
+			setWalletClient(createTradingWalletClient(provider, connected))
+			setWalletProvider(provider)
+			setMessage(undefined)
+			setState('idle')
+			await refresh(configuration)
+		} catch (error) {
+			if (!connectionRequests.isCurrent(request)) return
+			invalidateWalletIdentity(error instanceof Error ? `${contextLabel}: ${error.message}` : `${contextLabel}: wallet refresh failed`)
+			setState('error')
+		}
+	}
+	walletContextChangeHandler.current = (provider, eventName, allowDisconnectedRefresh) => {
+		void refreshWalletContextAfterEvent(provider, eventName, allowDisconnectedRefresh)
 	}
 
 	async function refreshBalancesAfterApproval(label: string, expectedMarket: LiveMarket, expectedAccount: Address, request = balanceRequests.begin()): Promise<'ready' | 'refresh-error' | 'context-changed'> {
@@ -684,11 +998,8 @@ export function LiveTrading({
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before approving')
-			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect before approving')
-			broadcastHash = await approveRouter(walletClient, selected, configuration, account)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; switch back before approving', 'Wallet account changed; reconnect before approving')(async () => await approveRouter(walletClient, selected, configuration, account))
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
 			receiptKnown = true
 			if (!balanceRequests.isCurrent(balanceRequest)) {
 				setState('error')
@@ -751,12 +1062,10 @@ export function LiveTrading({
 			)
 				throw new Error('Trade inputs changed; simulate the current selection again')
 			simulationRequests.invalidate()
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before submitting')
-			const currentAccount = await connectWallet(provider)
-			if (currentAccount !== account) throw new Error('Wallet account changed; reconnect and simulate again')
-			broadcastHash = quote.kind === 'entry' ? await submitFreshEntry(walletClient, configuration, account, quote.value) : await submitFreshExit(walletClient, configuration, account, quote.value)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and simulate again', async () => undefined)
+			const guardedWrite = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and simulate again', 'Wallet account changed during transaction revalidation; reconnect and simulate again')
+			broadcastHash = quote.kind === 'entry' ? await submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Transaction reverted')
 			setQuote(undefined)
@@ -791,7 +1100,14 @@ export function LiveTrading({
 					<div>
 						<span class='eyebrow'>Standalone live client</span>
 						<h1>Deployment configuration required</h1>
-						<p>{message ?? 'Loading deployment.json…'}</p>
+						<p class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
+							{configurationError ?? message ?? 'Loading deployment.json…'}
+						</p>
+						{configurationError === undefined ? null : (
+							<button class='secondary-action' type='button' onClick={onDeploymentRetry}>
+								Retry deployment
+							</button>
+						)}
 					</div>
 				</header>
 			</main>
@@ -1040,7 +1356,10 @@ export function LiveTrading({
 									externallyLocked={workflowLocked}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
+									onKnownReceipt={refreshWalletSummaryAfterReceipt}
 									walletContextIsCurrent={expectedAccount => accountRef.current === expectedAccount}
+									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
+									createGuardedWalletWrite={createGuardedWalletWrite}
 									retryBalances={retryBalances}
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 								/>
@@ -1058,7 +1377,10 @@ export function LiveTrading({
 									nowSeconds={nowSeconds}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
+									onKnownReceipt={refreshWalletSummaryAfterReceipt}
 									walletContextIsCurrent={expectedAccount => accountRef.current === expectedAccount}
+									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
+									createGuardedWalletWrite={createGuardedWalletWrite}
 									retryBalances={retryBalances}
 									onWorkflowLockChange={updateLiquidityWorkflowLock}
 								/>
@@ -1134,7 +1456,10 @@ function LiveLiquidityControls({
 	nowSeconds,
 	refresh,
 	refreshBalancesAfterApproval,
+	onKnownReceipt,
 	walletContextIsCurrent,
+	executeWithCurrentWalletContext,
+	createGuardedWalletWrite,
 	retryBalances,
 	onWorkflowLockChange,
 }: {
@@ -1149,7 +1474,10 @@ function LiveLiquidityControls({
 	nowSeconds: bigint
 	refresh(): Promise<void>
 	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
+	onKnownReceipt(): void
 	walletContextIsCurrent(account: Address): boolean
+	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
+	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
 }) {
@@ -1236,11 +1564,8 @@ function LiveLiquidityControls({
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before approving')
-			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect before approving')
-			broadcastHash = await approveLpRouter(walletClient, configuration, market, account, parsed)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; switch back before approving', 'Wallet account changed; reconnect before approving')(async () => await approveLpRouter(walletClient, configuration, market, account, parsed))
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (!walletContextIsCurrent(account)) {
 				setState('error')
@@ -1310,12 +1635,9 @@ function LiveLiquidityControls({
 			)
 				throw new Error('Liquidity inputs changed; simulate the current selection again')
 			simulationRequests.invalidate()
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; switch back before submitting')
-			const currentAccount = await connectWallet(provider)
-			if (currentAccount !== account) throw new Error('Wallet account changed; reconnect and simulate again')
-			broadcastHash = await submitFreshLiquidity(walletClient, configuration, account, quote)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and simulate again', async () => undefined)
+			broadcastHash = await submitFreshLiquidity(walletClient, configuration, account, quote, createGuardedWalletWrite(account, 'Wallet network changed during liquidity revalidation; reconnect and simulate again', 'Wallet account changed during liquidity revalidation; reconnect and simulate again'))
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Liquidity transaction reverted')
 			setQuote(undefined)
@@ -1641,7 +1963,10 @@ function LiveSettlementControls({
 	externallyLocked,
 	refresh,
 	refreshBalancesAfterApproval,
+	onKnownReceipt,
 	walletContextIsCurrent,
+	executeWithCurrentWalletContext,
+	createGuardedWalletWrite,
 	retryBalances,
 	onWorkflowLockChange,
 }: {
@@ -1655,7 +1980,10 @@ function LiveSettlementControls({
 	externallyLocked: boolean
 	refresh(): Promise<void>
 	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
+	onKnownReceipt(): void
 	walletContextIsCurrent(account: Address): boolean
+	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
+	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
 }) {
@@ -1775,13 +2103,11 @@ function LiveSettlementControls({
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; reconnect and simulate again')
-			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect and simulate again')
+			await executeWithCurrentWalletContext(account, 'Wallet network changed; reconnect and simulate again', 'Wallet account changed; reconnect and simulate again', async () => undefined)
 			const current = submitContext.current
 			if (current.balanceState !== 'ready' || current.inputBlocker !== undefined || current.actionableQuote !== selectedQuote) throw new Error('Settlement inputs or balances changed; simulate again')
-			broadcastHash = await submitFreshSettlement(walletClient, configuration, account, selectedQuote)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			broadcastHash = await submitFreshSettlement(walletClient, configuration, account, selectedQuote, createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again'))
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Settlement transaction reverted')
 			setQuote(undefined)
@@ -1818,11 +2144,8 @@ function LiveSettlementControls({
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			const provider = getInjectedEthereum()
-			if (provider === undefined || (await walletChainId(provider)) !== configuration.chainId) throw new Error('Wallet network changed; reconnect before approving')
-			if ((await connectWallet(provider)) !== account) throw new Error('Wallet account changed; reconnect before approving')
-			broadcastHash = await approveRouter(walletClient, market, configuration, account)
-			const receipt = await walletClient.waitForTransactionReceipt({ hash: broadcastHash })
+			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; reconnect before approving', 'Wallet account changed; reconnect before approving')(async () => await approveRouter(walletClient, market, configuration, account))
+			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (!walletContextIsCurrent(account)) {
 				setState('error')

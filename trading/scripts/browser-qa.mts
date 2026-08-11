@@ -19,7 +19,7 @@ async function waitForDebugger() {
 			const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/version`)
 			if (response.ok) return
 		} catch (error) {
-			if (typeof error !== 'object' || error === null || !('code' in error) || (error.code !== 'ConnectionRefused' && error.code !== 'ECONNREFUSED')) throw error
+			if (typeof error !== 'object' || error === null || !('code' in error) || !['ConnectionRefused', 'ECONNREFUSED', 'ECONNRESET'].includes(String(error.code))) throw error
 		}
 		await Bun.sleep(100)
 	}
@@ -75,25 +75,134 @@ await command('Log.enable')
 const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity') === true && document.body.textContent?.includes('2,468.5 / 10,000 ETH') === true && document.body.textContent?.includes('Available minting capacity') === false && document.body.textContent?.includes('Fork continuation') === false && document.body.textContent?.includes('Demo discovery snapshot') === false && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); return !['binary shares for', 'invalid is insurance', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei'].some(phrase => text.includes(phrase)); })()`
 const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Universe'`
+const genesisWalletSummaryAssertion = `(() => { const summary = document.querySelector('.wallet-summary'); const address = summary?.querySelector('.wallet-summary__address')?.textContent ?? ''; const eth = summary?.querySelector('[data-wallet-asset="ETH"] strong')?.textContent; const rep = summary?.querySelector('[data-wallet-asset="REP"] strong')?.textContent; return /^0x[0-9a-f]{40}$/i.test(address) && !address.includes('…') && eth === '64' && rep === '12,500' && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()); return wallet !== undefined && values.length === 2 && values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const maximumWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true)`
+const smallWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '0.000000000000000001')`
+const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
 		name: 'disconnected-market-list',
 		width: 1440,
 		height: 900,
 		path: '/#/markets',
-		assertExpression: `document.querySelector('.wallet-status') === null && document.body.textContent?.includes('Connect in market view') !== true`,
+		assertExpression: `document.querySelector('.wallet-status') === null && document.body.textContent?.includes('Connect in market view') !== true && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Retry deployment')`,
 	},
-	{ name: 'disconnected-market-list-mobile', width: 390, height: 844, path: '/#/markets' },
-	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets' },
-	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion}) && (${universeSelectorAssertion})` },
+	{
+		name: 'disconnected-market-list-mobile',
+		width: 390,
+		height: 844,
+		path: '/#/markets',
+		assertExpression: `[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Retry deployment' && button.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth` },
+	{ name: 'market-list-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion}) && (${universeSelectorAssertion}) && (${genesisWalletSummaryAssertion})` },
+	{ name: 'market-list-1280', width: 1280, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
+	{ name: 'market-list-1181', width: 1181, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
+	{ name: 'market-list-1501', width: 1501, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
+	{ name: 'market-list-1600', width: 1600, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
+	{
+		name: 'wallet-balance-loading',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-balance-loading#/markets',
+		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'true' && document.querySelector('.wallet-summary [role="status"]')?.textContent?.includes('Loading wallet ETH') === true && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '…')`,
+	},
+	{
+		name: 'wallet-balance-loading-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-balance-loading#/markets',
+		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'true' && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '…') && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'wallet-balance-error',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__retry') !== null && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'wallet-balance-error-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__retry')?.getBoundingClientRect().height === 44 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{ name: 'wallet-ready-900', width: 900, height: 844, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
+	{
+		name: 'wallet-balance-error-800',
+		width: 800,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
+		name: 'wallet-discovery-error-761',
+		width: 761,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-discovery-error#/markets',
+		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'No SecurityPool in this universe' && wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
+		name: 'wallet-pool-error-900',
+		width: 900,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-pool-error#/markets',
+		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'SecurityPool unavailable' && wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
+		name: 'wallet-max-balances-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-max-balances#/markets',
+		assertExpression: maximumWalletBalancesAssertion,
+	},
+	{
+		name: 'wallet-max-balances-900',
+		width: 900,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-max-balances#/markets',
+		assertExpression: maximumWalletBalancesAssertion,
+	},
+	{
+		name: 'wallet-max-balances-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-max-balances#/markets',
+		assertExpression: maximumWalletBalancesAssertion,
+	},
+	{ name: 'wallet-max-balances-1501', width: 1501, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
+	{ name: 'wallet-max-balances-1600', width: 1600, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
+	{ name: 'wallet-small-balances-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
+	{ name: 'wallet-small-balances-900', width: 900, height: 844, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
+	{ name: 'wallet-small-balances-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
+	{
+		name: 'wallet-balance-retry',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		clickSelector: '.wallet-summary__retry',
+		clickWaitMs: 150,
+		assertExpression: `document.querySelector('.wallet-summary [role="alert"]') === null && document.querySelector('[data-wallet-asset="ETH"] strong')?.textContent === '64' && document.querySelector('[data-wallet-asset="REP"] strong')?.textContent === '12,500'`,
+	},
+	{
+		name: 'wallet-balance-retry-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		clickSelector: '.wallet-summary__retry',
+		clickWaitMs: 150,
+		assertExpression: `document.querySelector('.wallet-summary [role="alert"]') === null && document.querySelector('[data-wallet-asset="ETH"] strong')?.textContent === '64' && document.querySelector('[data-wallet-asset="REP"] strong')?.textContent === '12,500' && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
 	{
 		name: 'market-list-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const exactPoolVisible = document.body.textContent?.includes('SecurityPool used by this AMM') === true; const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const selectorHeight = document.querySelector('.universe-selector select')?.getBoundingClientRect().height ?? 0; const capacityFactsVisible = ${capacityFactsAssertion}; if (!exactPoolVisible || !capacityFactsVisible || selectorHeight < 44 || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, capacityFactsVisible, selectorHeight, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
+		assertExpression: `(() => { const exactPoolVisible = document.body.textContent?.includes('SecurityPool used by this AMM') === true; const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const selectorHeight = document.querySelector('.universe-selector select')?.getBoundingClientRect().height ?? 0; const capacityFactsVisible = ${capacityFactsAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !capacityFactsVisible || !walletSummaryVisible || selectorHeight < 44 || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, capacityFactsVisible, walletSummaryVisible, selectorHeight, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
-	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 500 },
+	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
 	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets', assertExpression: removedCopyAssertion },
 	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion})` },
@@ -108,7 +217,14 @@ const scenarios = [
 	{ name: 'developer-live', width: 1440, height: 900, path: '/#/developer' },
 	{ name: 'no-entry', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&side=no#/market' },
 	{ name: 'insured-exit', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&mode=exit#/market' },
-	{ name: 'insufficient-invalid', width: 390, height: 844, path: '/?demo=1&scenario=insufficient-invalid&mode=exit#/market', scrollY: 650 },
+	{
+		name: 'insufficient-invalid',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=insufficient-invalid&mode=exit#/market',
+		scrollY: 650,
+		postScrollAssertExpression: `(() => { const chrome = document.querySelector('.site-chrome'); return chrome instanceof HTMLElement && getComputedStyle(chrome).position === 'relative' && chrome.getBoundingClientRect().bottom < 0 })()`,
+	},
 	{ name: 'pair-missing', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/markets' },
 	{ name: 'ended-pair-missing-list', width: 1440, height: 900, path: '/?demo=1&scenario=ended-missing-pair#/markets' },
 	{ name: 'pair-missing-market', width: 1440, height: 900, path: '/?demo=1&scenario=missing-pair#/market', assertExpression: `document.body.textContent?.includes('Pair initialization required') === true && document.body.textContent?.includes('Waiting for input') !== true` },
@@ -174,7 +290,7 @@ const scenarios = [
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/portfolio',
 		evaluate: `(() => { const select = document.querySelector('.universe-selector select'); if (!(select instanceof HTMLSelectElement)) return false; select.value = '2'; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
-		assertExpression: `document.querySelector('.universe-selector select')?.value === '2' && document.querySelectorAll('[data-portfolio-pool]').length === 1 && document.querySelector('main')?.textContent?.includes('0x4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `document.querySelector('.universe-selector select')?.value === '2' && document.querySelectorAll('[data-portfolio-pool]').length === 1 && document.querySelector('main')?.textContent?.includes('0x4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b') === true && document.querySelector('[data-wallet-asset="REP"] strong')?.textContent === '1,750' && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{
 		name: 'portfolio-max-token-ids-mobile',
@@ -193,7 +309,7 @@ const scenarios = [
 		height: 844,
 		path: '/?demo=1&scenario=truth-auction#/liquidity',
 		scrollY: 420,
-		postScrollAssertExpression: `(() => { const chrome = document.querySelector('.site-chrome'); const header = document.querySelector('.site-header'); if (!(chrome instanceof HTMLElement) || !(header instanceof HTMLElement)) return false; const chromeStyle = getComputedStyle(chrome); const headerStyle = getComputedStyle(header); return chromeStyle.isolation === 'isolate' && headerStyle.backdropFilter === 'none' && headerStyle.backgroundColor === 'rgb(9, 13, 18)' })()`,
+		postScrollAssertExpression: `(() => { const chrome = document.querySelector('.site-chrome'); const header = document.querySelector('.site-header'); if (!(chrome instanceof HTMLElement) || !(header instanceof HTMLElement)) return false; const chromeStyle = getComputedStyle(chrome); const headerStyle = getComputedStyle(header); return chromeStyle.position === 'relative' && chromeStyle.isolation === 'isolate' && headerStyle.backdropFilter === 'none' && headerStyle.backgroundColor === 'rgb(9, 13, 18)' })()`,
 	},
 	{ name: 'forked-mobile', width: 390, height: 844, path: '/?demo=1&scenario=forked#/market' },
 	{ name: 'resolved-invalid', width: 1440, height: 900, path: '/?demo=1&scenario=resolved-invalid#/market' },
