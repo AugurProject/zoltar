@@ -1,0 +1,22 @@
+{
+	"contracts": [
+		["0x7A0D94F55792C434d74a40883C6ed8545E406D12", "Proxy Deployer", "proxyDeployer"],
+		["0x508248aaE01D24B35E0001a09a417Bad6F47b096", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108", "Multicall3", "multicall3"],
+		["0x0dC46042E6749234F8Ea477e20c95c5A7852fe41", "UniformPriceDualCapBatchAuctionFactory", "truthAuctionFactory"],
+		["0x9AdECC476DdF3a0E89B7540302758123308B03A0", "ScalarOutcomes", "scalarOutcomes"],
+		["0x838DbfdFFEe6Fd2527f0050d3580Dbb3B16eD15A", "SecurityPoolUtils", "securityPoolUtils"],
+		["0x529dcaC57677451CBfe766d88CcC133D082500df", "OpenOracle", "openOracle"],
+		["0x2E39068E56aaA81dC56849b1C97e1ac7E79D2399", "ZoltarQuestionData", "zoltarQuestionData"],
+		["0xEA791fB533a03e2Fe371A139a9e15fc512987Cd1", "Zoltar", "zoltar"],
+		["0x3F4b11281AF3757aF33773144E3aB2c13e0E5c17", "ShareTokenFactory", "shareTokenFactory"],
+		["0x68796f0EB09077E71e8158130516f9BeFDe869BC", "OpenOracle Price Coordinator Factory", "priceCoordinatorFactory"],
+		["0x8Aa45F0D0a93b82e1fC9AcE032aFc3DF5Af025e5", "Security Pool Forker", "securityPoolForker"],
+		["0x2299D3caD8B1c72143A8D99c98607cDEDE38D90B", "Escalation Claim Checkpoint Delegate", "escalationGameClaimDelegate"],
+		["0x048B47AeA0fd18B55411eAEaF2115649Dee8Fcf9", "Escalation Game Factory", "escalationGameFactory"],
+		["0x233D8Bf48280490Ee8d0960B81D9a79E2F893949", "Security Pool Factory", "securityPoolFactory"],
+		["0xE458F5490f75473f6064b59014D2645435ff1782", "Escalation Game Proof Verifier", "escalationProofVerifier"],
+		["0xDAbF9B101c76489d3CE3D5fDB8361f426eD1Db68", "Genesis REP", "reputationToken"],
+		["0x65156FD21726b8efcB627fa38c506E3f3542F601", "Wrapped Ether", "weth"]
+	]
+}
