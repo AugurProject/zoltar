@@ -161,6 +161,9 @@ describe('database checkpoint fencing', () => {
 	test('rejects changing the configured start boundary after indexing has begun', () => {
 		expect(() => assertStartBlockCompatible(100n, 100n, 125n)).not.toThrow()
 		expect(() => assertStartBlockCompatible(200n, 100n, undefined)).not.toThrow()
+		expect(() => assertStartBlockCompatible(200n, 200n, 125n)).toThrow(
+			'Stored checkpoint 125 is below configured start block 200; rebuild the augurScan database from the configured start block',
+		)
 		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow(
 			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
 		)
@@ -303,6 +306,14 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
 		const unchangedBoundary = await database.sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
 		expect(unchangedBoundary[0]?.['start_block']).toBe('1')
+		await database.sql`UPDATE networks SET start_block = 3 WHERE chain_id = ${chainId}`
+		await expect(database.seedNetwork({ ...network, startBlock: 3n }, writeLease)).rejects.toThrow(
+			'Stored checkpoint 1 is below configured start block 3; rebuild the augurScan database from the configured start block',
+		)
+		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		const inconsistentBoundary = await database.sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
+		expect(inconsistentBoundary[0]?.['start_block']).toBe('3')
+		await database.sql`UPDATE networks SET start_block = 1 WHERE chain_id = ${chainId}`
 		const invalidParent = indexedBlock('block-two-invalid-parent', genesisHash)
 		await expect(database.storeBlock(chainId, invalidParent, writeLease)).rejects.toThrow('does not extend the current database checkpoint')
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })

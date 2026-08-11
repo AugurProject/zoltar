@@ -118,7 +118,12 @@ export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHa
 }
 
 export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint): void => {
-	if (configuredStartBlock === storedStartBlock || indexedBlock === undefined) return
+	if (indexedBlock === undefined) return
+	if (indexedBlock < storedStartBlock)
+		throw new DatabaseConsistencyError(
+			`Stored checkpoint ${indexedBlock} is below configured start block ${storedStartBlock}; rebuild the augurScan database from the configured start block`,
+		)
+	if (configuredStartBlock === storedStartBlock) return
 	throw new DatabaseConsistencyError(
 		`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`,
 	)
