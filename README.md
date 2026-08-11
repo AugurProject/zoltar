@@ -125,19 +125,13 @@ Load `PRIVATE_KEY` from a secret manager or hidden prompt. Never paste the key
 into a command because it may be saved in shell history. For example, in Bash:
 
 ```bash
-read -rsp 'Testnet deployer private key: ' PRIVATE_KEY
-printf '\n'
-export PRIVATE_KEY
+read -rsp 'Testnet deployer private key: ' PRIVATE_KEY && echo && export PRIVATE_KEY
 ```
 
 Run the deployer with an explicit RPC endpoint and spending limits:
 
 ```bash
-bun run deploy:testnet -- \
-  --rpc-url=https://rpc.example \
-  --chain-id=11155111 \
-  --max-fee-per-gas-gwei=100 \
-  --max-total-cost-eth=20
+bun run deploy:testnet -- --rpc-url=https://rpc.example --chain-id=11155111 --max-fee-per-gas-gwei=100 --max-total-cost-eth=20
 ```
 
 Remove the key from the shell when the command finishes:
@@ -146,9 +140,11 @@ Remove the key from the shell when the command finishes:
 unset PRIVATE_KEY
 ```
 
-Run `bun run deploy:testnet -- --help` for the command-line form of each option.
-Except for `PRIVATE_KEY`, options also accept uppercase arguments after `--` or
-environment variables.
+The deployer reads the exported `PRIVATE_KEY` automatically. It intentionally
+does not accept a private-key command-line option, so the key does not need to
+appear in shell history. Run `bun run deploy:testnet -- --help` for the
+command-line form of each other option. Those options also accept uppercase
+arguments after `--` or environment variables.
 
 | Input | Default | Purpose |
 | --- | --- | --- |
