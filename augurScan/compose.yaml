@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: augurscan
+      POSTGRES_USER: augurscan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-augurscan-local}
+    volumes:
+      - augurscan-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U augurscan -d augurscan"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    stop_grace_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan
+      PORT: 3000
+      NETWORKS: ${NETWORKS:-mainnet,sepolia}
+      MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://ethereum.dark.florist}
+      MAINNET_START_BLOCK: ${MAINNET_START_BLOCK:-0}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
+      SEPOLIA_START_BLOCK: ${SEPOLIA_START_BLOCK:-0}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
+      BLOCK_BATCH_SIZE: ${BLOCK_BATCH_SIZE:-20}
+    ports:
+      - "${AUGURSCAN_PORT:-3000}:3000"
+    stop_grace_period: 30s
+
+volumes:
+  augurscan-data:

@@ -1,0 +1,25 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+	"root": false,
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 160
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"semicolons": "asNeeded"
+		}
+	},
+	"linter": {
+		"rules": {
+			"complexity": {
+				"useLiteralKeys": "off"
+			}
+		}
+	},
+	"files": {
+		"includes": ["**", "!node_modules", "!bun.lock", "!config/abis.json"]
+	}
+}
