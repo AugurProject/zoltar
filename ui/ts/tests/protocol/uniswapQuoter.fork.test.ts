@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, mainnet } from '@zoltar/shared/ethereum'
+import { resolveAnvilBinary } from '../../../../solidity/ts/testSupport/simulator/anvilNode'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEthV3 } from '../../protocol/uniswapQuoter.js'
 
 const PINNED_MAINNET_BLOCK = 22_000_000n
@@ -14,6 +15,8 @@ const scheduleTimeout: ScheduleTimeout = (callback, delayMs) => {
 	const timeoutId = setTimeout(callback, delayMs)
 	return () => clearTimeout(timeoutId)
 }
+
+const getPinnedForkAnvilCommand = (archiveRpcUrl: string, resolveBinary: () => string = resolveAnvilBinary): string[] => [resolveBinary(), '--fork-url', archiveRpcUrl, '--fork-block-number', PINNED_MAINNET_BLOCK.toString(), '--host', '127.0.0.1', '--port', '0']
 
 const withTimeout = async <Result>(operation: Promise<Result>, timeoutMs: number, timeoutMessage: string, schedule: ScheduleTimeout = scheduleTimeout): Promise<Result> => {
 	let cancelTimeout = () => {}
@@ -70,6 +73,11 @@ test('pinned fork startup parses the OS-assigned Anvil RPC address', () => {
 	expect(parseAnvilListeningRpcUrl('Listening on 127.0.0.1:0')).toBeUndefined()
 })
 
+test('pinned fork startup uses the repository-resolved Anvil executable', () => {
+	const repositoryAnvil = 'C:\\projects\\zoltar\\node_modules\\@foundry-rs\\anvil-win32-amd64\\bin\\anvil.exe'
+	expect(getPinnedForkAnvilCommand('https://archive.example', () => repositoryAnvil)[0]).toBe(repositoryAnvil)
+})
+
 test('pinned fork startup cancels losing deadlines and stops readiness polling', async () => {
 	let cancelledDeadlines = 0
 	const fakeSchedule: ScheduleTimeout = () => () => {
@@ -117,7 +125,7 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 
 	beforeAll(async () => {
 		if (forkRpcUrl === undefined || forkRpcUrl === '') throw new Error('MAINNET_ARCHIVE_RPC_URL is required for the pinned mainnet fork')
-		const anvil = Bun.spawn([process.env['ANVIL_BIN']?.trim() || 'anvil', '--fork-url', forkRpcUrl, '--fork-block-number', PINNED_MAINNET_BLOCK.toString(), '--host', '127.0.0.1', '--port', '0'], { stderr: 'pipe', stdout: 'pipe' })
+		const anvil = Bun.spawn(getPinnedForkAnvilCommand(forkRpcUrl), { stderr: 'pipe', stdout: 'pipe' })
 		const stderrPromise = new Response(anvil.stderr).text()
 		let reportListeningRpcUrl: ((rpcUrl: string) => void) | undefined
 		const listeningRpcUrlPromise = new Promise<string>(resolve => {

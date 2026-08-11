@@ -2,6 +2,7 @@
 
 import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
@@ -15,8 +16,9 @@ import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '../../contractArtifact.js'
 import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE } from '../../protocol/deployment.js'
 
-const require = createRequire(new URL('../../../../package.json', import.meta.url))
-const solc: { compile: (input: string) => string; version: () => string } = require('solc')
+const require = createRequire(import.meta.url)
+const rootSolcPath = fileURLToPath(new URL('../../../../node_modules/solc/index.js', import.meta.url))
+const solc: { compile: (input: string) => string; version: () => string } = require(rootSolcPath)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)

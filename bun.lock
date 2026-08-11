@@ -11,6 +11,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
+        "@foundry-rs/anvil": "1.5.1",
         "@observablehq/plot": "0.6.17",
         "@solidity-parser/parser": "0.20.2",
         "better-typescript-lib": "2.11.0",
@@ -147,6 +148,18 @@
     "@evmts/zevm-linux-arm64-gnu": ["@evmts/zevm-linux-arm64-gnu@0.0.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-cXOB4bDR0sesJzoiPaNIXJ7vF9DsaDnBqqW4Hn7sszCY/pV4uL+CAkoZpMS6q/LEw43LJFuA65kLVABtz+e46g=="],
 
     "@evmts/zevm-linux-x64-gnu": ["@evmts/zevm-linux-x64-gnu@0.0.0", "", { "os": "linux", "cpu": "x64" }, "sha512-a6tpXNchDZzI5mElMZ9XFgt6QRZMlBK2sntxe4cABfNTW7h4/Nwn8rJarfXxi7/jF6QqUuOj5wtWUtwiwThGYQ=="],
+
+    "@foundry-rs/anvil": ["@foundry-rs/anvil@1.5.1", "", { "optionalDependencies": { "@foundry-rs/anvil-darwin-amd64": "1.5.1", "@foundry-rs/anvil-darwin-arm64": "1.5.1", "@foundry-rs/anvil-linux-amd64": "1.5.1", "@foundry-rs/anvil-linux-arm64": "1.5.1", "@foundry-rs/anvil-win32-amd64": "1.5.1" }, "bin": { "anvil": "bin.mjs" } }, "sha512-M72VCkqb4S2uShBJUcemD7kjfd3YId7LNYNDqr9RLmgbaEtgZm6XkztefYJX2mouaJtjpL8YGuKczhAIaI79Bw=="],
+
+    "@foundry-rs/anvil-darwin-amd64": ["@foundry-rs/anvil-darwin-amd64@1.5.1", "", { "os": "darwin", "cpu": "x64", "bin": { "anvil": "bin/anvil" } }, "sha512-uIMvV+G8NgPvZ/PKD4/bUAMb1R/AttzB2cmkFQvzPPgfSXza+65xrF+PhckFKRud5WWbq+MW365v5Ds5Y0Y1MQ=="],
+
+    "@foundry-rs/anvil-darwin-arm64": ["@foundry-rs/anvil-darwin-arm64@1.5.1", "", { "os": "darwin", "cpu": "arm64", "bin": { "anvil": "bin/anvil" } }, "sha512-pFELxWnGYS2oIhPKwD+aAy+QXZv1SCl77Np7aqBDp7QTDZf2pcSR8382IkA5c/RbruA++KNWIpAK7bcdp8JqzQ=="],
+
+    "@foundry-rs/anvil-linux-amd64": ["@foundry-rs/anvil-linux-amd64@1.5.1", "", { "os": "linux", "cpu": "x64", "bin": { "anvil": "bin/anvil" } }, "sha512-17AQOAcW1/iLQ9batoTWNMDp6hcCvh5rH0f5fkEzvsiv50Sq6Q4jyyGB30YEdQnHFkkmmQNKsZz/R1RhuyxJkg=="],
+
+    "@foundry-rs/anvil-linux-arm64": ["@foundry-rs/anvil-linux-arm64@1.5.1", "", { "os": "linux", "cpu": "arm64", "bin": { "anvil": "bin/anvil" } }, "sha512-4qe+8emZrM9NRg2LPin64aa2lyz6mOWiklu/N0Rw0hWF2nStYuE9L0un7Ud7X1dSmrMDkAHI8rSciOijSfTRNQ=="],
+
+    "@foundry-rs/anvil-win32-amd64": ["@foundry-rs/anvil-win32-amd64@1.5.1", "", { "os": "win32", "cpu": "x64", "bin": { "anvil": "bin/anvil.exe" } }, "sha512-tf5if3seNV43kkx+J5L8NvS+xaE+Sn8mOdOHdJzT1EH95f9qHdwCaK/9Iud1CdcvN+I0orusN07qdwggW/+jhA=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

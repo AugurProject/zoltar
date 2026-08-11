@@ -7,12 +7,14 @@ import { DEFAULT_ANVIL_STATE_MAX_AGE_MS } from './cleanup-foundry-anvil-state.mt
 
 const createTemporaryDirectory = async (prefix: string) => await mkdtemp(join(tmpdir(), prefix))
 
-const runTestWrapper = async ({ homeDirectory, testFile, useExistingProductionBuild = false }: { readonly homeDirectory: string; readonly testFile: string; readonly useExistingProductionBuild?: boolean }) => {
+const runTestWrapper = async ({ anvilStateDirectory, homeDirectory, testFile, useExistingProductionBuild = false }: { readonly anvilStateDirectory?: string; readonly homeDirectory: string; readonly testFile: string; readonly useExistingProductionBuild?: boolean }) => {
 	const child = Bun.spawn({
 		cmd: [process.execPath, './scripts/run-tests.mts', '--parallel=1', testFile],
 		env: {
 			...process.env,
 			HOME: homeDirectory,
+			USERPROFILE: homeDirectory,
+			...(anvilStateDirectory === undefined ? {} : { ZOLTAR_ANVIL_STATE_DIRECTORY: anvilStateDirectory }),
 			...(useExistingProductionBuild ? { ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' } : {}),
 		},
 		stderr: 'pipe',
@@ -58,7 +60,7 @@ test('run-tests cleans stale Anvil state before and after a passing child test',
 		const staleTime = new Date(Date.now() - DEFAULT_ANVIL_STATE_MAX_AGE_MS - 60_000)
 		await utimes(staleStateDirectory, staleTime, staleTime)
 
-		const result = await runTestWrapper({ homeDirectory, testFile })
+		const result = await runTestWrapper({ anvilStateDirectory: stateDirectory, homeDirectory, testFile, useExistingProductionBuild: true })
 
 		expect(result.exitCode).toBe(0)
 		expect(existsSync(staleStateDirectory)).toBe(false)
@@ -71,14 +73,16 @@ test('run-tests cleans stale Anvil state before and after a passing child test',
 
 test('run-tests preserves a failing child exit code when cleanup fails', async () => {
 	const workspaceDirectory = await createTemporaryDirectory('run-tests-cleanup-failure-')
-	const homeDirectory = join(workspaceDirectory, 'home-file')
+	const homeDirectory = join(workspaceDirectory, 'home')
+	const invalidStateDirectory = join(workspaceDirectory, 'anvil-state-file')
 	const testFile = join(workspaceDirectory, 'failing.test.ts')
 
 	try {
-		await writeFile(homeDirectory, 'not a directory')
+		await mkdir(homeDirectory)
+		await writeFile(invalidStateDirectory, 'not a directory')
 		await writeFile(testFile, "import { expect, test } from 'bun:test'\ntest('fails', () => expect(1).toBe(2))\n")
 
-		const result = await runTestWrapper({ homeDirectory, testFile })
+		const result = await runTestWrapper({ anvilStateDirectory: invalidStateDirectory, homeDirectory, testFile, useExistingProductionBuild: true })
 
 		expect(result.exitCode).toBe(1)
 		expect(result.stderr).toContain('Failed to clean stale Anvil state directories before tests')

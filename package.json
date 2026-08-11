@@ -7,6 +7,7 @@
 	"type": "module",
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",
+		"@foundry-rs/anvil": "1.5.1",
 		"@observablehq/plot": "0.6.17",
 		"@solidity-parser/parser": "0.20.2",
 		"better-typescript-lib": "2.11.0",
@@ -39,7 +40,8 @@
 		"check:shared-dependencies": "bun run refresh:shared-dependencies",
 		"check:unit-terminology": "bun ./scripts/check-unit-terminology.mts",
 		"check:uniswap-deployment-artifact": "bun ./scripts/check-uniswap-deployment-artifact.mts",
-		"install:anvil": "bash -lc 'if ! command -v anvil >/dev/null 2>&1; then curl -L https://foundry.paradigm.xyz | bash && export PATH=\"$HOME/.foundry/bin:$PATH\" && foundryup; fi'",
+		"anvil": "bun x anvil",
+		"install:anvil": "bun install --frozen-lockfile",
 		"ensure-shared-build": "bun ./scripts/ensure-contract-artifacts.mts --ensure-shared-only",
 		"ensure-contract-artifacts": "bun ./scripts/ensure-contract-artifacts.mts",
 		"shared:build": "bun x tsc --project shared/tsconfig.json && bun ./scripts/ensure-contract-artifacts.mts --sync-shared-freshness",
