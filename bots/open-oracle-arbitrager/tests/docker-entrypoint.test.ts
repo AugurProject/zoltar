@@ -27,6 +27,12 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 }
 
 describe('Docker entrypoint', () => {
+	test('has a Linux-compatible shell shebang', async () => {
+		const source = await readFile(entrypoint, 'utf8')
+		expect(source.startsWith('#!/bin/sh\n')).toBe(true)
+		expect(source).not.toContain('\r')
+	})
+
 	test('creates a private Compose-ready operator configuration on first start', async () => {
 		const directory = await fixture()
 		await runEntrypoint(directory)
