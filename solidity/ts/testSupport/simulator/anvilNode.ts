@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, win32 } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
 import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { getMockedEthSimulateWindowEthereum, validateLocalAnvilRpcUrl } from './AnvilWindowEthereum'
 
@@ -13,6 +14,13 @@ const ANVIL_OUTPUT_TAIL_LENGTH = 16_384
 const RPC_READY_TIMEOUT_MS = 30_000
 const RPC_PROBE_TIMEOUT_MS = 3_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
+const ANVIL_PLATFORM_PACKAGES: Readonly<Record<string, string>> = {
+	'darwin-arm64': 'anvil-darwin-arm64',
+	'darwin-x64': 'anvil-darwin-amd64',
+	'linux-arm64': 'anvil-linux-arm64',
+	'linux-x64': 'anvil-linux-amd64',
+	'win32-x64': 'anvil-win32-amd64',
+}
 
 type AnvilProcess = ReturnType<typeof spawn>
 
@@ -48,18 +56,29 @@ const stripWrappingQuotes = (value: string): string => {
 }
 
 export const resolveAnvilBinary = ({
+	architecture = process.arch,
 	environment = process.env,
 	pathExists = existsSync,
 	platform = process.platform,
+	repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url)),
 	which = Bun.which,
 }: {
+	readonly architecture?: string
 	readonly environment?: Record<string, string | undefined>
 	readonly pathExists?: (path: string) => boolean
 	readonly platform?: string
+	readonly repositoryRoot?: string
 	readonly which?: (command: string) => string | null
 } = {}): string => {
 	const explicitAnvilBin = environment['ANVIL_BIN']?.trim()
 	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') return stripWrappingQuotes(explicitAnvilBin)
+
+	const platformPackage = ANVIL_PLATFORM_PACKAGES[`${platform}-${architecture}`]
+	if (platformPackage !== undefined) {
+		const executableName = platform === 'win32' ? 'anvil.exe' : 'anvil'
+		const repositoryAnvilBin = platform === 'win32' ? win32.join(repositoryRoot, 'node_modules', '@foundry-rs', platformPackage, 'bin', executableName) : join(repositoryRoot, 'node_modules', '@foundry-rs', platformPackage, 'bin', executableName)
+		if (pathExists(repositoryAnvilBin)) return repositoryAnvilBin
+	}
 
 	const homeDirectory = environment['USERPROFILE'] ?? environment['HOME']
 	if (homeDirectory !== undefined) {
@@ -225,7 +244,7 @@ const createIsolatedAnvilNode = async ({ context, printTraces = false, startTime
 	const processFailurePromise = new Promise<never>((_, reject) => {
 		childProcess.once('error', error => {
 			if (getErrorCode(error) === 'ENOENT') {
-				reject(new Error(`Failed to start isolated Anvil node: could not find Anvil executable '${anvilBinary}'. On Windows, Foundry usually installs to %USERPROFILE%\\.foundry\\bin\\anvil.exe. Set ANVIL_BIN to the full path if Anvil is not on PATH.`))
+				reject(new Error(`Failed to start isolated Anvil node: could not find Anvil executable '${anvilBinary}'. Run 'bun install --frozen-lockfile' to install the repository-pinned Anvil binary, or set ANVIL_BIN to the full path of another Anvil installation.`))
 				return
 			}
 			reject(error)

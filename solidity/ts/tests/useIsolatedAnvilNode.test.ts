@@ -96,9 +96,19 @@ test('Anvil executable resolution supports standard and quoted Windows installat
 	expect(resolveAnvilBinary({ environment: { ANVIL_BIN: '"C:\\Program Files\\Foundry\\anvil.exe"' }, pathExists: () => false, platform: 'win32', which: () => null })).toBe('C:\\Program Files\\Foundry\\anvil.exe')
 })
 
+test('Anvil executable resolution supports the repository-pinned Windows binary outside PATH', () => {
+	const repositoryAnvil = 'C:\\projects\\zoltar\\node_modules\\@foundry-rs\\anvil-win32-amd64\\bin\\anvil.exe'
+	expect(resolveAnvilBinary({ architecture: 'x64', environment: {}, pathExists: path => path === repositoryAnvil, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe(repositoryAnvil)
+})
+
+test('Anvil executable resolution prefers the repository pin over a user-home installation', () => {
+	const repositoryAnvil = 'C:\\projects\\zoltar\\node_modules\\@foundry-rs\\anvil-win32-amd64\\bin\\anvil.exe'
+	expect(resolveAnvilBinary({ architecture: 'x64', environment: { USERPROFILE: 'C:\\Users\\tester' }, pathExists: () => true, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe(repositoryAnvil)
+})
+
 test('Anvil executable resolution uses the absolute PATH match before a command-name fallback', () => {
-	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', which: () => 'C:\\Foundry\\anvil.exe' })).toBe('C:\\Foundry\\anvil.exe')
-	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', which: () => null })).toBe('anvil')
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => 'C:\\Foundry\\anvil.exe' })).toBe('C:\\Foundry\\anvil.exe')
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe('anvil')
 })
 
 test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {
