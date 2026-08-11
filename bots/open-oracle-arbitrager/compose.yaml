@@ -8,6 +8,7 @@ services:
     image: zoltar-open-oracle-arbitrager
     environment:
       ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
+      ZOLTAR_BOT_RPC_URLS: ${ZOLTAR_BOT_RPC_URLS:-}
     ports:
       - 127.0.0.1:4173:4173
     volumes:
