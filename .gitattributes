@@ -17,3 +17,7 @@
 
 # Third-party Solidity sources are intentionally vendored for compilation.
 /solidity/contracts/peripherals/openOracle/openzeppelin/** linguist-vendored=true
+
+# Shell entrypoints must retain Unix line endings so their shebangs are executable
+# inside Linux containers, including when the repository is checked out on Windows.
+*.sh text eol=lf

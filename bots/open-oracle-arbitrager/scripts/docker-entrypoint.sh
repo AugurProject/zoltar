@@ -2,6 +2,7 @@
 
 set -eu
 
+# Compose persists operator state in this mounted directory.
 settings_file='.state/operator.json'
 temporary_file=''
 
