@@ -3,6 +3,7 @@ import {
 	classifyLiveRecords,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
+	indexerConnectionStatus,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
@@ -11,6 +12,24 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 } from '../public/live-update.js'
+
+test('distinguishes indexer startup and backfill progress from stream connectivity', () => {
+	expect(indexerConnectionStatus(undefined, 'connecting', false)).toEqual({ label: 'Connecting', tone: 'pending' })
+	expect(indexerConnectionStatus({ indexed_block: null, phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Indexer starting', tone: 'pending' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Backfilling #42', tone: 'pending' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'degraded' }, 'open', false)).toEqual({ label: 'Indexer retrying', tone: 'error' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'open', false)).toEqual({ label: 'Live connection', tone: 'live' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'connecting', false)).toEqual({ label: 'Reconnecting', tone: 'error' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'backfilling' }, 'connecting', false, true)).toEqual({
+		label: 'Backfill #42 · Reconnecting',
+		tone: 'error',
+	})
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'degraded' }, 'closed', false, true)).toEqual({
+		label: 'Indexer retrying · Reconnecting',
+		tone: 'error',
+	})
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'open', true)).toEqual({ label: 'Status unavailable', tone: 'error' })
+})
 
 test('classifies appended, changed, and stable live records by canonical key', () => {
 	const previous = new Map([

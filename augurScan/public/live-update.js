@@ -26,6 +26,22 @@ export const shouldClearPendingDetailState = (preservePendingOnClose) => !preser
 export const shouldContinueTransactionRestore = (loaded, loadedCount, targetLoadedCount, nextPageCursor) =>
 	loaded && loadedCount < targetLoadedCount && nextPageCursor !== undefined
 
+export const indexerConnectionStatus = (network, streamState, networkRequestFailed, streamHasOpened = false) => {
+	if (networkRequestFailed) return { label: 'Status unavailable', tone: 'error' }
+	if (streamHasOpened && streamState !== 'open') {
+		if (network?.phase === 'degraded') return { label: 'Indexer retrying · Reconnecting', tone: 'error' }
+		if (network?.indexed_block === null) return { label: 'Indexer starting · Reconnecting', tone: 'error' }
+		if (network?.phase === 'backfilling') return { label: `Backfill #${network.indexed_block} · Reconnecting`, tone: 'error' }
+		return { label: 'Reconnecting', tone: 'error' }
+	}
+	if (network?.phase === 'degraded') return { label: 'Indexer retrying', tone: 'error' }
+	if (network?.indexed_block === null) return { label: 'Indexer starting', tone: 'pending' }
+	if (network?.phase === 'backfilling') return { label: `Backfilling #${network.indexed_block}`, tone: 'pending' }
+	if (streamState === 'open') return { label: 'Live connection', tone: 'live' }
+	if (network !== undefined) return { label: 'Reconnecting', tone: 'error' }
+	return { label: 'Connecting', tone: 'pending' }
+}
+
 export const reconcileTransactionDialogSnapshot = (snapshot, availableKeys) => ({
 	...snapshot,
 	expandedKeys: snapshot.expandedKeys.filter((key) => key !== undefined && availableKeys.has(key)),

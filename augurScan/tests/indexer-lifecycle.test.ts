@@ -1,10 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import type { StoredTransaction } from '../src/database.ts'
 import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	commitCanonicalRead,
 	confirmCanonicalBlock,
+	indexerProgressMessage,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	readTokenMetadata,
@@ -15,8 +16,10 @@ import {
 	rpcLogAddressGroups,
 	rpcProviderLabel,
 	runIndexerOwnershipLifecycle,
+	runIndexerTask,
 	runNetworkLifecycle,
 	safeIndexerFailure,
+	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
@@ -100,6 +103,13 @@ describe('network indexer lifecycle', () => {
 		expect(retryDelayMs(1, 12_000, () => 1)).toBe(14_400)
 	})
 
+	test('reports bounded backfill progress and live block completion clearly', () => {
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n)).toBe(
+			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 881 blocks behind',
+		)
+		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; caught up')
+	})
+
 	test('never runs an indexing operation against a mismatched fallback provider', async () => {
 		const operations: string[] = []
 		const providers = [
@@ -138,6 +148,48 @@ describe('network indexer lifecycle', () => {
 		expect(message).toBe('RPC request failed; retrying')
 		expect(message).not.toContain(secret)
 		expect(message).not.toContain('rpc.example')
+	})
+
+	test('reports safe transport diagnostics without exposing raw error messages', () => {
+		const secret = 'provider-key-sentinel'
+		const transportError = Object.assign(new Error(`HTTP request failed at https://rpc.example/${secret}?token=${secret}`), {
+			code: 'HTTP_429',
+			name: 'HttpRequestError',
+			status: 429,
+		})
+		const error = new Error(`wrapped ${secret}`, { cause: transportError })
+		error.name = 'ContractFunctionExecutionError'
+		const reason = safeIndexerFailureReason(error)
+
+		expect(reason).toBe('ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429')
+		expect(rpcFailureLogMessage('RPC request failed; retrying', '#1 https://rpc.example', reason)).toBe(
+			'RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429)',
+		)
+		expect(reason).not.toContain(secret)
+		expect(reason).not.toContain('rpc.example')
+		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
+	})
+
+	test('reports one stopped transition after graceful lifecycle shutdown', async () => {
+		const controller = new AbortController()
+		const info = spyOn(console, 'info').mockImplementation(() => {})
+		try {
+			await runIndexerTask('sepolia', () =>
+				runNetworkLifecycle({
+					verify: async () => {},
+					poll: async () => {
+						controller.abort()
+						return true
+					},
+					failure: async () => {},
+					intervalMs: 1,
+					signal: controller.signal,
+				}),
+			)
+			expect(info.mock.calls.filter(([message]) => message === '[sepolia] indexer state: stopped')).toHaveLength(1)
+		} finally {
+			info.mockRestore()
+		}
 	})
 
 	test('identifies same-origin RPC providers during failover without exposing URL credentials or paths', async () => {

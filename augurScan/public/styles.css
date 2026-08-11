@@ -1691,7 +1691,7 @@ dialog::backdrop {
 		padding-top: 14px;
 	}
 	.connection span:last-child {
-		max-width: 105px;
+		max-width: calc(100vw - 4rem);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;

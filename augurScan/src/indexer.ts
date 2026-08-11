@@ -191,7 +191,8 @@ export const rpcEndpointLabel = (rpcUrl: string): string => new URL(rpcUrl).orig
 
 export const rpcProviderLabel = (rpcUrl: string, index: number): string => `#${index + 1} ${rpcEndpointLabel(rpcUrl)}`
 
-export const rpcFailureLogMessage = (message: string, endpoint: string): string => `${message} (RPC: ${endpoint})`
+export const rpcFailureLogMessage = (message: string, endpoint: string, reason?: string): string =>
+	`${message} (RPC: ${endpoint}${reason === undefined ? '' : `; reason: ${reason}`})`
 
 export const withVerifiedProvider = async <TProvider extends ChainProvider, TResult>(
 	providers: readonly TProvider[],
@@ -235,6 +236,13 @@ export const commitCanonicalRead = async <T>(
 const databaseFailureMessage = 'Database request failed; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 
+export const indexerProgressMessage = (networkId: string, startBlock: bigint, endBlock: bigint, observedHead: bigint): string => {
+	const state = endBlock >= observedHead ? 'live' : 'backfilling'
+	const indexed = startBlock === endBlock ? `indexed block #${endBlock}` : `indexed blocks #${startBlock}–#${endBlock}`
+	const progress = state === 'live' ? 'caught up' : `${observedHead - endBlock} blocks behind`
+	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${progress}`
+}
+
 export const safeIndexerFailure = (error: unknown): string => {
 	if (error instanceof ChainConfigurationError) return error.message
 	if (error instanceof ChainContinuityError) return 'The remote canonical chain changed while indexing; retrying'
@@ -242,10 +250,69 @@ export const safeIndexerFailure = (error: unknown): string => {
 	return 'RPC request failed; retrying'
 }
 
+const safeErrorNames = new Set([
+	'AbortError',
+	'ChainConfigurationError',
+	'ChainContinuityError',
+	'ConnectTimeoutError',
+	'ContractFunctionExecutionError',
+	'ContractFunctionRevertedError',
+	'DatabaseConsistencyError',
+	'Error',
+	'HeadersTimeoutError',
+	'HttpRequestError',
+	'LeaseLostError',
+	'LimitExceededRpcError',
+	'PostgresError',
+	'ResourceUnavailableRpcError',
+	'RpcRequestError',
+	'SocketError',
+	'TimeoutError',
+	'TypeError',
+	'UnknownRpcError',
+])
+
+const safeErrorIdentifier = (value: unknown): string | undefined => (typeof value === 'string' && safeErrorNames.has(value) ? value : undefined)
+
+const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
+
+const safeErrorCode = (value: unknown): string | undefined => {
+	if (typeof value === 'number' && Number.isSafeInteger(value)) return value.toString()
+	return typeof value === 'string' && (/^HTTP_[1-5][0-9]{2}$/.test(value) || safeNamedErrorCodes.has(value)) ? value : undefined
+}
+
+export const safeIndexerFailureReason = (error: unknown): string => {
+	const names: string[] = []
+	let status: number | undefined
+	let code: string | undefined
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		const name = 'name' in current ? safeErrorIdentifier(current.name) : undefined
+		if (name !== undefined && names.at(-1) !== name) names.push(name)
+		if (
+			status === undefined &&
+			'status' in current &&
+			typeof current.status === 'number' &&
+			Number.isInteger(current.status) &&
+			current.status >= 100 &&
+			current.status <= 599
+		)
+			status = current.status
+		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
+		current = 'cause' in current ? current.cause : undefined
+	}
+	const details = [names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
+	if (status !== undefined) details.push(`HTTP ${status}`)
+	if (code !== undefined) details.push(`code ${code}`)
+	return details.join('; ')
+}
+
 type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
-	readonly failure: (message: string, nextRetryAt: Date) => Promise<void>
+	readonly failure: (message: string, nextRetryAt: Date, reason: string) => Promise<void>
 	readonly intervalMs: number
 	readonly signal: AbortSignal
 	readonly random?: () => number
@@ -275,7 +342,7 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			if (error instanceof LeaseLostError) throw error
 			consecutiveFailures++
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
-			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure))
+			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure), safeIndexerFailureReason(error))
 		}
 		await wait(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
 	}
@@ -365,6 +432,9 @@ class NetworkIndexer {
 	readonly #providers: readonly { readonly client: PublicClient; readonly endpoint: string; readonly getChainId: () => Promise<number> }[]
 	#client: PublicClient
 	#activeRpcEndpoint: string
+	#indexingStartReported = false
+	#lastProgressLogAt: number | undefined
+	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
@@ -383,6 +453,7 @@ class NetworkIndexer {
 	}
 
 	async run(): Promise<void> {
+		console.info(`[${this.#network.id}] indexer state: starting`)
 		console.info(`[${this.#network.id}] RPC providers: ${this.#providers.map(({ endpoint }) => endpoint).join(', ')}`)
 		await runIndexerOwnershipLifecycle({
 			acquire: () => this.#database.tryAcquireIndexerLock(this.#network.chainId),
@@ -393,7 +464,7 @@ class NetworkIndexer {
 					await runNetworkLifecycle({
 						verify: () => this.#withProviderFailover(async () => undefined),
 						poll: () => this.#withProviderFailover(() => this.#poll()),
-						failure: (message, nextRetryAt) => this.#recordFailure(message, nextRetryAt, this.#requireLease()),
+						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,
 					})
@@ -403,12 +474,12 @@ class NetworkIndexer {
 			},
 			failure: async (message, lease) => {
 				if (lease === undefined) {
-					console.error(`[${this.#network.id}] ownership unavailable: ${message}`)
+					console.error(`[${this.#network.id}] indexer state: degraded; ownership unavailable: ${message}`)
 					return
 				}
 				await this.#recordFailure(message, new Date(Date.now() + runtimeConfig.pollIntervalMs), lease)
 			},
-			standby: () => console.info(`[${this.#network.id}] standby: another replica owns the network indexer lock`),
+			standby: () => console.info(`[${this.#network.id}] indexer state: standby; another replica owns the network indexer lock`),
 			intervalMs: runtimeConfig.pollIntervalMs,
 			signal: this.#signal,
 		})
@@ -436,10 +507,23 @@ class NetworkIndexer {
 		}
 	}
 
-	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
+	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
 		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
-		const logMessage = message === databaseFailureMessage ? message : rpcFailureLogMessage(message, this.#activeRpcEndpoint)
-		console.error(`[${this.#network.id}] ${logMessage}`)
+		const logMessage =
+			message === databaseFailureMessage
+				? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
+				: rpcFailureLogMessage(message, this.#activeRpcEndpoint, reason)
+		this.#lastReportedPhase = 'degraded'
+		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
+	}
+
+	#reportProgress(startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
+		const phase = endBlock >= observedHead ? 'live' : 'backfilling'
+		const now = Date.now()
+		if (phase === 'backfilling' && this.#lastReportedPhase === phase && this.#lastProgressLogAt !== undefined && now - this.#lastProgressLogAt < 30_000) return
+		this.#lastReportedPhase = phase
+		this.#lastProgressLogAt = now
+		console.info(indexerProgressMessage(this.#network.id, startBlock, endBlock, observedHead))
 	}
 
 	async #assertLease(): Promise<void> {
@@ -489,9 +573,15 @@ class NetworkIndexer {
 			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
+			if (this.#lastReportedPhase !== 'live') this.#reportProgress(observedHead, observedHead, observedHead)
 			return true
 		}
 
+		if (!this.#indexingStartReported) {
+			console.info(`[${this.#network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}`)
+			this.#indexingStartReported = true
+		}
+		const batchStart = nextBlock
 		const end = nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) < observedHead ? nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) : observedHead
 		let contracts = await this.#database.contracts(this.#network.chainId)
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId)
@@ -518,6 +608,7 @@ class NetworkIndexer {
 			expectedParentHash = indexed.block.hash
 			nextBlock++
 		}
+		if (nextBlock > batchStart) this.#reportProgress(batchStart, nextBlock - 1n, observedHead)
 		return end >= observedHead
 	}
 
@@ -780,11 +871,14 @@ class NetworkIndexer {
 }
 
 export const startIndexers = (networks: readonly NetworkConfig[], database: ScannerDatabase, signal: AbortSignal): readonly Promise<void>[] =>
-	networks.map(async (network) => {
-		try {
-			await new NetworkIndexer(network, database, signal).run()
-		} catch (error) {
-			const message = safeIndexerFailure(error)
-			console.error(`[${network.id}] indexer stopped: ${message}`)
-		}
-	})
+	networks.map((network) => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal).run()))
+
+export const runIndexerTask = async (networkId: string, run: () => Promise<void>): Promise<void> => {
+	try {
+		await run()
+		console.info(`[${networkId}] indexer state: stopped`)
+	} catch (error) {
+		const message = safeIndexerFailure(error)
+		console.error(`[${networkId}] indexer state: stopped; ${message}`)
+	}
+}

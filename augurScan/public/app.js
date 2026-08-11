@@ -1,6 +1,7 @@
 import {
 	classifyLiveRecords,
 	createLiveRouteRefreshCoordinator,
+	indexerConnectionStatus,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
@@ -20,6 +21,8 @@ const detailContent = $('#detail-content')
 const connection = $('.connection')
 const pageUrl = new URL(location.href)
 const isDemo = pageUrl.searchParams.get('demo') === '1'
+const connectionDemo = pageUrl.searchParams.get('connectionDemo')
+const usesDemoConnectionLabel = isDemo && connectionDemo !== 'indexer' && connectionDemo !== 'reconnecting'
 const demoState = pageUrl.searchParams.get('state')
 const detailState = pageUrl.searchParams.get('detailState')
 const networkState = pageUrl.searchParams.get('networkState')
@@ -84,6 +87,26 @@ let currentAddressProfile
 const addressIdentityCache = new Map()
 let polledReorgRefreshTimer
 let requestRouteRefresh
+
+const updateConnectionStatus = () => {
+	if (usesDemoConnectionLabel) {
+		connection.className = 'connection live'
+		$('#connection-label').textContent = 'Demo fixture'
+		return
+	}
+	const network = latestNetworks.find((item) => String(item.chain_id) === selectedChainId())
+	const streamState =
+		connectionDemo === 'reconnecting'
+			? 'closed'
+			: stream?.readyState === EventSource.OPEN
+				? 'open'
+				: stream?.readyState === EventSource.CONNECTING || stream === undefined
+					? 'connecting'
+					: 'closed'
+	const status = indexerConnectionStatus(network, streamState, lastNetworkRequestFailed, streamHasOpened || connectionDemo === 'reconnecting')
+	connection.className = `connection ${status.tone}`
+	$('#connection-label').textContent = status.label
+}
 
 const liveSnapshot = (container, selector = '[data-live-key]') =>
 	new Map([...container.querySelectorAll(selector)].map((node) => [node.dataset.liveKey, node.dataset.liveSignature ?? node.textContent]))
@@ -1109,6 +1132,7 @@ const renderNetworks = (networks) => {
 	}
 	applyLiveChanges(networkCards, previousCards, { live: previousCards.size > 0 })
 	networkCards.setAttribute('aria-busy', 'false')
+	updateConnectionStatus()
 }
 
 const updateDiagnostics = () => {
@@ -1249,10 +1273,7 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			lastNetworkRequestFailed = false
 			updateFreshness()
 			updateDiagnostics()
-			if (isDemo) {
-				connection.className = 'connection live'
-				$('#connection-label').textContent = 'Demo fixture'
-			}
+			updateConnectionStatus()
 			if (isActivity && synchronizeActivity && previousNetwork !== selectedChainId()) {
 				await loadLogs()
 			}
@@ -1263,6 +1284,7 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 		} catch (error) {
 			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
 			lastNetworkRequestFailed = true
+			updateConnectionStatus()
 			networkCards.setAttribute('aria-busy', 'false')
 			if (networkCards.childElementCount === 0) networkCards.classList.add('empty')
 			updateFreshness()
@@ -3504,14 +3526,12 @@ const connectStream = () => {
 	stream = nextStream
 	nextStream.addEventListener('open', () => {
 		lastStreamEventAt = new Date()
-		connection.className = 'connection live'
-		$('#connection-label').textContent = 'Live connection'
+		updateConnectionStatus()
 		if (streamHasOpened) void requestRouteRefresh(1)
 		streamHasOpened = true
 	})
 	nextStream.addEventListener('error', () => {
-		connection.className = 'connection error'
-		$('#connection-label').textContent = 'Reconnecting'
+		updateConnectionStatus()
 	})
 	const eventPayload = (event, label) => {
 		try {
