@@ -150,6 +150,44 @@ describe('file-only startup configuration', () => {
 		expect(result.output).toContain('config/operator.example.json')
 	})
 
+	test('uses the environment RPC list for every RPC role', async () => {
+		const directory = await temporaryDirectory()
+		const path = join(directory, 'operator.json')
+		await saveOperatorSettings(path, settings('https://saved.example/', 4173))
+		const child = Bun.spawn([executable, '-e', "const { loadConfiguration } = await import('./src/config/configuration.ts'); const value = await loadConfiguration(); console.log(JSON.stringify({ connectivity: value.connectivity, quorumRpcUrls: value.quorumRpcUrls }))"], {
+			cwd: join(import.meta.dir, '..', '..'),
+			env: {
+				...process.env,
+				OPEN_ORACLE_ARBITRAGER_CONFIG: path,
+				ZOLTAR_BOT_RPC_URLS: 'https://primary.example,https://secondary.example',
+			},
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+		expect(exitCode, stderr).toBe(0)
+		expect(JSON.parse(stdout)).toEqual({
+			connectivity: {
+				publicRpcUrls: ['https://primary.example/', 'https://secondary.example/'],
+				readRpcUrl: 'https://primary.example/',
+			},
+			quorumRpcUrls: ['https://secondary.example/'],
+		})
+	})
+
+	test('reports a missing effective quorum when one environment RPC overrides saved quorum readers', async () => {
+		const directory = await temporaryDirectory()
+		const path = join(directory, 'operator.json')
+		const value = settings('https://saved.example/', 4173)
+		value.runtime.execute = true
+		value.deployment.quorumRpcUrls = ['https://saved-quorum.example/']
+		await saveOperatorSettings(path, value)
+		const result = await runToExit(path, [], { ZOLTAR_BOT_RPC_URLS: 'https://primary.example' })
+		expect(result.exitCode).toBe(1)
+		expect(result.output).toContain('effective RPC configuration has no independent quorum reader')
+		expect(result.output).not.toContain('deployment.quorumRpcUrls')
+	})
+
 	test('rejects invalid file settings before RPC activity', async () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')

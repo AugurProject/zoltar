@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getAddress } from '../helpers/ethereum.ts'
-import { parseSettings, parseStrategy, saveSettings, serializedSettings, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { loadSettings, parseSettings, parseStrategy, saveSettings, serializedSettings, settingsForPersistence, type SettingsFilesystem } from '../../src/config/settings.ts'
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -118,6 +121,65 @@ describe('liquidator settings', () => {
 				runtime: { ...settings.runtime, execute: true },
 			}),
 		).toThrow('independent quorum RPC')
+	})
+
+	test('uses the environment RPC list for every RPC role', () => {
+		const parsed = parseSettings(settings, 'https://primary.example,https://secondary.example')
+		expect(parsed.connectivity).toEqual({
+			publicRpcUrls: ['https://primary.example/', 'https://secondary.example/'],
+			quorumRpcUrls: ['https://secondary.example/'],
+			readRpcUrl: 'https://primary.example/',
+		})
+	})
+
+	test('rejects an environment quorum that repeats the primary RPC', () => {
+		expect(() => parseSettings(settings, 'https://primary.example,https://primary.example')).toThrow('independent origins')
+	})
+
+	test('keeps file RPC fallbacks after saving an unrelated environment-overridden setting', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-rpc-environment-'))
+		try {
+			const path = join(directory, 'operator.json')
+			await writeFile(path, JSON.stringify(settings), 'utf8')
+			const loaded = await loadSettings(path, 'https://primary.example,https://secondary.example')
+			expect(loaded.settings.connectivity.readRpcUrl).toBe('https://primary.example/')
+			await saveSettings(path, settingsForPersistence({ ...loaded.settings, paused: true }, loaded.persistedConnectivity), loaded.revision)
+			const reloaded = await loadSettings(path, '')
+			expect(reloaded.settings.paused).toBe(true)
+			expect(reloaded.settings.connectivity).toEqual({
+				publicRpcUrls: ['https://public.example/'],
+				quorumRpcUrls: [],
+				readRpcUrl: 'https://read.example/',
+			})
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('allows environment quorum RPCs to satisfy live execution without changing an empty file fallback', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-live-rpc-environment-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const liveSettings = {
+				...settings,
+				deployment: {
+					securityPoolFactory: '0x0000000000000000000000000000000000000001',
+					weth: '0x0000000000000000000000000000000000000002',
+					zoltar: '0x0000000000000000000000000000000000000003',
+				},
+				privateKey: `0x${'11'.repeat(32)}`,
+				runtime: { ...settings.runtime, execute: true },
+			}
+			await writeFile(path, JSON.stringify(liveSettings), 'utf8')
+			const loaded = await loadSettings(path, 'https://primary.example,https://secondary.example')
+			expect(loaded.settings.connectivity.quorumRpcUrls).toEqual(['https://secondary.example/'])
+			expect(loaded.persistedConnectivity.quorumRpcUrls).toEqual([])
+			await saveSettings(path, settingsForPersistence({ ...loaded.settings, paused: true }, loaded.persistedConnectivity), loaded.revision)
+			const savedDocument = JSON.parse(await Bun.file(path).text()) as { connectivity: { quorumRpcUrls: string[]; readRpcUrl: string } }
+			expect(savedDocument.connectivity).toMatchObject({ quorumRpcUrls: [], readRpcUrl: 'https://read.example/' })
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
 	})
 
 	test('requires a deployed WETH contract for live execution', () => {

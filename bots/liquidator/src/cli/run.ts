@@ -5,7 +5,7 @@ import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-sh
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
+import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, settingsForPersistence, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
@@ -62,7 +62,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const persistSettings = async (update: (current: OperatorSettings) => OperatorSettings) => {
 		await queueSettingsUpdate(async () => {
 			const next = update(settings)
-			settingsRevision = await saveSettings(loaded.path, next, settingsRevision)
+			settingsRevision = await saveSettings(loaded.path, settingsForPersistence(next, loaded.persistedConnectivity), settingsRevision)
 			settings = next
 		})
 	}

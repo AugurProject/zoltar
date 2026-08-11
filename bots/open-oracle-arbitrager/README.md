@@ -204,8 +204,11 @@ cd bots/open-oracle-arbitrager
 install -m 600 .env.example .env
 ```
 
-Edit `.env` and set a unique dashboard password of at least 16 characters. Then
-build and start the container:
+Edit `.env`, set a unique dashboard password of at least 16 characters, and set
+`ZOLTAR_BOT_RPC_URLS` to a comma-separated list of RPC URLs. The first URL is the
+primary reader, every URL receives public transaction broadcasts, and every URL
+after the first is an independent quorum reader. Live execution therefore requires
+at least two independently operated origins. Then build and start the container:
 
 ```bash
 docker compose up --build --detach
@@ -650,9 +653,12 @@ security.
 
 ## Persistent operator settings
 
-`.state/operator.json` is the only source of bot settings. The bot accepts no
-command-line arguments and does not read operational settings from environment
-variables. Copy the example before first startup:
+`.state/operator.json` is the source of persisted bot settings. The bot accepts no
+command-line arguments. `ZOLTAR_BOT_RPC_URLS` can override its RPC settings at
+startup; the first comma-separated URL becomes the primary reader, all listed URLs
+become public broadcast endpoints, and the remaining URLs become quorum readers.
+The override does not modify the settings file, whose connectivity values remain
+the fallback when the variable is blank. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
@@ -661,7 +667,8 @@ install -m 600 config/operator.example.json .state/operator.json
 
 `OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
 any value inside the document. This locator is useful for service managers and
-tests.
+tests. `ZOLTAR_BOT_RPC_URLS` applies to direct Bun runs as well as Compose. URL query
+parameters are supported, but the comma separator must not appear inside a URL.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the

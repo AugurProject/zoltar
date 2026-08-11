@@ -1,5 +1,7 @@
-import { concatHex, createPublicClient, createWalletClient, getCreate2Address, http, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '#ethereum'
+import { concatHex, createPublicClient, createWalletClient, custom, getCreate2Address, http, isHex, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '#ethereum'
 import { executorArtifact } from '#contracts/artifacts.generated'
+import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
+import { endpointLabel, sendRawTransactionToRpc } from '#monitoring/connectivity'
 
 export const deterministicDeploymentProxy = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as Address
 export const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as Hex
@@ -38,19 +40,65 @@ export function assertExecutorDeploymentReceipt(status: 'reverted' | 'success', 
 	if (status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${transactionHash}`)
 }
 
-export async function deployExecutorCreate2(parameters: { chain: Chain; privateKey: Hex; rpcUrl: string; salt: unknown }) {
+const executorPublicSubmissionSettings = validateSubmissionSettings({ minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+
+export async function submitExecutorDeploymentTransaction(parameters: { account: Address; publicRpcUrls: readonly string[]; publicSubmit: (rpcUrl: string, serializedTransaction: Hex) => Promise<Hex>; serializedTransaction: Hex; transactionHash: Hex }) {
+	return await submitSignedTransaction({
+		address: parameters.account,
+		hash: parameters.transactionHash,
+		maxBlockNumber: 0n,
+		publicRpcUrls: parameters.publicRpcUrls,
+		publicSubmit: parameters.publicSubmit,
+		serializedTransaction: parameters.serializedTransaction,
+		settings: executorPublicSubmissionSettings,
+		signMessage: async () => {
+			throw new Error('Public executor deployment does not sign relay messages')
+		},
+	})
+}
+
+export async function deployExecutorCreate2(parameters: { chain: Chain; privateKey: Hex; rpcUrls: readonly string[]; salt: unknown }) {
 	const plan = executorDeploymentPlan(parameters.salt)
-	const publicClient = createPublicClient({ chain: parameters.chain, transport: http(parameters.rpcUrl) })
-	const chainId = await publicClient.getChainId()
-	const proxyCode = await publicClient.getCode({ address: deterministicDeploymentProxy })
-	assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
-	const existingCode = await publicClient.getCode({ address: plan.address })
-	if (executorCodeStatus(existingCode, expectedRuntimeCodeHash) === 'verified') {
-		return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
+	let publicClient: ReturnType<typeof createPublicClient> | undefined
+	const preflightFailures: string[] = []
+	for (const rpcUrl of parameters.rpcUrls) {
+		try {
+			const candidate = createPublicClient({ chain: parameters.chain, transport: http(rpcUrl) })
+			const chainId = await candidate.getChainId()
+			const proxyCode = await candidate.getCode({ address: deterministicDeploymentProxy })
+			assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
+			const existingCode = await candidate.getCode({ address: plan.address })
+			if (executorCodeStatus(existingCode, expectedRuntimeCodeHash) === 'verified') return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
+			publicClient = candidate
+			break
+		} catch (error) {
+			preflightFailures.push(`${endpointLabel(rpcUrl)}: ${error instanceof Error ? error.message : String(error)}`)
+		}
 	}
+	if (publicClient === undefined) throw new Error(`Every public RPC failed executor deployment preflight: ${preflightFailures.join('; ')}`)
 	const account = privateKeyToAccount(parameters.privateKey)
-	const wallet = createWalletClient({ account, chain: parameters.chain, transport: http(parameters.rpcUrl) })
+	const wallet = createWalletClient({
+		account,
+		chain: parameters.chain,
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_sendRawTransaction' || !Array.isArray(params) || params.length !== 1 || typeof params[0] !== 'string' || !isHex(params[0])) {
+					throw new Error('Executor deployment transport accepts only one serialized transaction')
+				}
+				const serializedTransaction: Hex = `0x${params[0].slice(2)}`
+				const transactionHash = keccak256(serializedTransaction)
+				await submitExecutorDeploymentTransaction({
+					account: account.address,
+					publicRpcUrls: parameters.rpcUrls,
+					publicSubmit: sendRawTransactionToRpc,
+					serializedTransaction,
+					transactionHash,
+				})
+				return transactionHash
+			},
+		}),
+	})
 	const transactionHash = await wallet.sendTransaction({ data: plan.calldata, to: deterministicDeploymentProxy })
 	const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash })
 	assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)

@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
-import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentReceipt, deterministicDeploymentProxy, deterministicDeploymentProxyCode, executorCodeStatus, executorDeploymentPlan } from '#execution/create2-executor'
-import { keccak256 } from '#ethereum'
+import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentReceipt, deterministicDeploymentProxy, deterministicDeploymentProxyCode, executorCodeStatus, executorDeploymentPlan, submitExecutorDeploymentTransaction } from '#execution/create2-executor'
+import { keccak256, mainnet } from '#ethereum'
 import type { Hex } from '#ethereum'
+import { deployExecutorFromConnectivity } from '../../src/runtime/operator-control-plane.ts'
 
 test('derives a stable executor address and canonical proxy calldata from a bytes32 salt', () => {
 	const salt = `0x${'00'.repeat(32)}` as Hex
@@ -36,4 +37,49 @@ test('rejects a reverted CREATE2 receipt', () => {
 	const hash = `0x${'11'.repeat(32)}` as Hex
 	expect(() => assertExecutorDeploymentReceipt('reverted', hash)).toThrow(`reverted: ${hash}`)
 	expect(() => assertExecutorDeploymentReceipt('success', hash)).not.toThrow()
+})
+
+test('broadcasts one signed executor deployment through every public RPC and tolerates one failure', async () => {
+	const transactionHash = `0x${'22'.repeat(32)}` as Hex
+	const serializedTransaction = '0x1234' as Hex
+	const submissions: { transaction: Hex; url: string }[] = []
+	const result = await submitExecutorDeploymentTransaction({
+		account: `0x${'11'.repeat(20)}`,
+		publicRpcUrls: ['https://primary.example', 'https://secondary.example'],
+		publicSubmit: async (url, transaction) => {
+			submissions.push({ transaction, url })
+			if (url.includes('primary')) throw new Error('primary unavailable')
+			return transactionHash
+		},
+		serializedTransaction,
+		transactionHash,
+	})
+
+	expect(submissions).toEqual([
+		{ transaction: serializedTransaction, url: 'https://primary.example' },
+		{ transaction: serializedTransaction, url: 'https://secondary.example' },
+	])
+	expect(result.hash).toBe(transactionHash)
+	expect(result.acceptedTargets).toEqual(['https://secondary.example'])
+	expect(result.failedTargets).toHaveLength(1)
+})
+
+test('passes every effective public RPC from the dashboard deployment path', async () => {
+	const primaryRpcUrl = 'https://primary.example/'
+	const publicRpcUrls = [primaryRpcUrl, 'https://secondary.example/']
+	let receivedRpcUrls: readonly string[] = []
+	await deployExecutorFromConnectivity(
+		{
+			chain: mainnet,
+			connectivity: { publicRpcUrls, readRpcUrl: primaryRpcUrl },
+			privateKey: `0x${'11'.repeat(32)}`,
+			salt: `0x${'22'.repeat(32)}`,
+		},
+		async parameters => {
+			receivedRpcUrls = parameters.rpcUrls
+			return { address: `0x${'33'.repeat(20)}`, alreadyDeployed: false, transactionHash: `0x${'44'.repeat(32)}` }
+		},
+	)
+
+	expect(receivedRpcUrls).toEqual(publicRpcUrls)
 })

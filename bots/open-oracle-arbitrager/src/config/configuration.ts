@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '#ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
-import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
+import { rpcConfigurationWithEnvironmentOverride, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
@@ -62,17 +62,19 @@ export async function loadConfiguration(): Promise<Configuration> {
 		rep: deployment.rep,
 		weth: deployment.weth,
 	})
-	const quorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
+	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
+	const rpcConfiguration = rpcConfigurationWithEnvironmentOverride(saved.connectivity, savedQuorumRpcUrls, process.env['ZOLTAR_BOT_RPC_URLS'])
+	const quorumRpcUrls = [...rpcConfiguration.quorumRpcUrls]
+	if (saved.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Execution is enabled, but the effective RPC configuration has no independent quorum reader')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
-	if (saved.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Execution is enabled, but deployment.quorumRpcUrls has no independent read RPC')
 	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
 	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
 	assertDistinctPersistentPaths(settingsFile, saved.runtime)
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,
-		connectivity: saved.connectivity,
+		connectivity: rpcConfiguration.connectivity,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
 		deploymentManifest: deployment.deploymentManifest,
 		execute: saved.runtime.execute,
