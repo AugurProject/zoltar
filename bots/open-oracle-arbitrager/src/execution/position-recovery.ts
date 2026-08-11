@@ -1,4 +1,4 @@
-import { formatUnits, parseUnits, type Hex } from '#ethereum'
+import { bigintToSafeNumber, formatUnits, parseUnits, type Hex } from '#ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
 import { attemptHasFinality, assertReceiptSnapshotBlockHash, canonicalBlockHashWithQuorum, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
 import { decimalSignedEth, decimalWeth, parseDecimalWeth, parseSignedDecimalEth, type ExecutionRecord } from '#state/operator-state'
@@ -14,8 +14,8 @@ import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/ca
 const REORG_OVERLAP_BLOCKS = 12n
 
 export function tokenDecimalsFromSnapshot(snapshot: { tokenDecimals: bigint }, reportId: string) {
-	const tokenDecimals = Number(snapshot.tokenDecimals)
-	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error(`Position ${reportId} token decimals are invalid`)
+	const tokenDecimals = bigintToSafeNumber(snapshot.tokenDecimals, `Position ${reportId} token decimals`)
+	if (tokenDecimals < 0 || tokenDecimals > 255) throw new Error(`Position ${reportId} token decimals are invalid`)
 	return tokenDecimals
 }
 
@@ -348,8 +348,9 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		}
 	}
 	if (receipt.blockNumber !== targetBlockNumber) throw new Error('Lifecycle executor transaction was included outside its signed parent-block target')
-	const tokenDecimals = Number(position.lifecycleTokenDecimals)
-	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
+	if (!/^\d+$/u.test(position.lifecycleTokenDecimals)) throw new Error('Lifecycle recovery token decimals are invalid')
+	const tokenDecimals = Number.parseInt(position.lifecycleTokenDecimals, 10)
+	if (tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
 	if (position.lifecycleKind === 'replacement-credit') {
 		if (position.replacementCreditAmount === undefined || position.replacementCreditToken === undefined || !('amount' in execution)) {
 			throw new Error('Replacement-credit recovery journal is incomplete')

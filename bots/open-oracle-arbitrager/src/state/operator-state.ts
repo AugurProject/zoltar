@@ -1,6 +1,6 @@
 import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Address, Hex } from '#ethereum'
+import { bigintToSafeNumber, type Address, type Hex } from '#ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
@@ -545,7 +545,7 @@ export function operatorSnapshot(
 	const totals = positionTotals(state.positions)
 	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(Number(BigInt(state.blockTimestamp) * 1_000n))
+	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(bigintToSafeNumber(BigInt(state.blockTimestamp) * 1_000n, 'Operator block timestamp'))
 	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,

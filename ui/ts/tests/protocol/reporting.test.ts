@@ -816,7 +816,7 @@ describe('reporting protocol client', () => {
 					if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 						const args = request.args
 						if (!Array.isArray(args) || typeof args[0] !== 'bigint') throw new Error('Expected node id')
-						const nodeIndex = Number(args[0] - 1n)
+						const nodeIndex = Number.parseInt((args[0] - 1n).toString(), 10)
 						const leaf = leaves[nodeIndex]
 						if (leaf === undefined) throw new Error(`Unexpected node id: ${args[0].toString()}`)
 						return [args[0] - 1n, leaf.depositor, 1, leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, BigInt(nodeIndex)]

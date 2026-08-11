@@ -1,3 +1,4 @@
+import { bigintToSafeNumber } from '@zoltar/shared/ethereum'
 import { formatRoundedCurrencyBalance } from './formatters.js'
 
 const VISUAL_RATIO_SCALE = 1_000_000n
@@ -15,7 +16,7 @@ export function getVisualRatio({ value, maxValue }: { value: bigint | undefined;
 	if (value >= maxValue) return 1
 
 	const scaledRatio = (value * VISUAL_RATIO_SCALE) / maxValue
-	return Number(scaledRatio) / Number(VISUAL_RATIO_SCALE)
+	return bigintToSafeNumber(scaledRatio, 'Visual ratio') / 1_000_000
 }
 
 function formatCollateralizationPercentLabel(value: bigint | undefined, decimals: number = 0) {

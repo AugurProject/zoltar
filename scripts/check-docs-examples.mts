@@ -13,7 +13,6 @@ import {
 	calculateForkThresholdSeries,
 	calculateResolutionModel,
 	ESCALATION_TIME_LENGTH_SECONDS,
-	toAttoRep,
 } from '../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../shared/ts/escalationMath'
 import { updateDiagramControl } from '../docs/charts/diagramControl'
@@ -904,8 +903,8 @@ assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION
 assert.match(chartRuntimeSource, /ticks: \[0, 3, 52\]/, 'whitepaper escalation Plot should mark game start, activation, and curve end')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
-const oneThirdPowerOfTwoTimeDays = Number(ESCALATION_TIME_LENGTH_SECONDS / 3n) / 86_400
-assert.equal(computeCanonicalEscalationBindingCapital(1, 8, 3 + oneThirdPowerOfTwoTimeDays), Number(toAttoRep(2)) / Number(toAttoRep(1)), 'canonical escalation fixture should match the contract one-third-time power-of-two ratio')
+const oneThirdPowerOfTwoTimeDays = Number.parseInt((ESCALATION_TIME_LENGTH_SECONDS / 3n).toString(), 10) / 86_400
+assert.equal(computeCanonicalEscalationBindingCapital(1, 8, 3 + oneThirdPowerOfTwoTimeDays), 2, 'canonical escalation fixture should match the contract one-third-time power-of-two ratio')
 assert.equal(computeCanonicalEscalationDeadlineDays(1, 8, 2), 3 + oneThirdPowerOfTwoTimeDays, 'canonical deadline fixture should match the contract inverse calculation')
 const payoutFixture = 10n ** 18n
 assert.equal(

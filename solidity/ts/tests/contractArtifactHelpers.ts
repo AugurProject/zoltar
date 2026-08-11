@@ -20,6 +20,11 @@ export function getArray(value: unknown, errorMessage: string): unknown[] {
 	return value
 }
 
+function getSafeInteger(value: unknown, errorMessage: string): number {
+	if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error(errorMessage)
+	return value
+}
+
 export function loadContractsJson(importMetaDirectory: string): Record<string, unknown> {
 	const contractsJsonPath = path.join(importMetaDirectory, '..', '..', 'artifacts', 'Contracts.json')
 	return getRecord(JSON.parse(readFileSync(contractsJsonPath, 'utf8')), 'Contracts.json must contain an object root')
@@ -55,7 +60,7 @@ export function normalizeStorageType(typeId: string, typeTable: Record<string, u
 			return {
 				label: getString(normalizedMember.label, `Missing member label ${index} for storage type ${typeId}`),
 				slot: getString(normalizedMember.slot, `Missing member slot ${index} for storage type ${typeId}`),
-				offset: Number(normalizedMember.offset),
+				offset: getSafeInteger(normalizedMember.offset, `Invalid member offset ${index} for storage type ${typeId}`),
 				type: normalizeStorageType(memberType, typeTable),
 			}
 		})
@@ -73,7 +78,7 @@ export function normalizeStorageLayout(contractOutput: Record<string, unknown>) 
 		return {
 			label: getString(normalizedEntry.label, `Missing label for storage entry ${index}`),
 			slot: getString(normalizedEntry.slot, `Missing slot for storage entry ${index}`),
-			offset: Number(normalizedEntry.offset),
+			offset: getSafeInteger(normalizedEntry.offset, `Invalid storage entry offset ${index}`),
 			type: normalizeStorageType(typeId, typeTable),
 		}
 	})

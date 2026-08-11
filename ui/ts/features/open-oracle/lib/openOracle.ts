@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../../../types/contracts.js'
 import { getWalletConnectionActiveAppChainGuardState } from '../../../lib/actionGuards.js'
@@ -391,21 +391,21 @@ export function parseOpenOracleFeePercentageInput(value: string, label: string) 
 	if (parsed === undefined) throw new Error(`${label} must be a decimal percentage`)
 	if (parsed < 0n) throw new Error(`${label} must be non-negative`)
 	if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${label} exceeds the maximum safe integer range`)
-	return Number(parsed)
+	return bigintToSafeNumber(parsed, label)
 }
 export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number; token2Decimals: number }) {
 	const validationMessage = getOpenOracleCreateValidationMessage({ form, token1Decimals, token2Decimals })
 	if (validationMessage !== undefined) throw new Error(validationMessage)
 	return {
-		disputeDelay: Number(parseBigIntInput(form.disputeDelay, 'Dispute delay')),
+		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
 		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
 		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
 		ethValueAttoEth: parseDecimalInput(form.ethValue, 'ETH value'),
 		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
-		multiplier: Number(parseBigIntInput(form.multiplier, 'Multiplier')),
+		multiplier: bigintToSafeNumber(parseBigIntInput(form.multiplier, 'Multiplier'), 'Multiplier'),
 		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
-		settlementTime: Number(parseBigIntInput(form.settlementTime, 'Settlement time')),
+		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, 'Settlement time'), 'Settlement time'),
 		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
 		token1Address: parseAddressInput(form.token1Address, 'Base token address'),
 		token2Address: parseAddressInput(form.token2Address, 'Quote token address'),

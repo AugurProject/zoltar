@@ -38,6 +38,7 @@ export {
 } from './ethereum/client'
 export {
 	bytesToHex,
+	bigintToSafeNumber,
 	concatHex,
 	decodeEventLog,
 	decodeFunctionData,

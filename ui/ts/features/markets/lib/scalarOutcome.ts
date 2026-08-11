@@ -14,7 +14,8 @@ type ScalarFormInputs = {
 	scalarMin: string
 }
 
-const SCALAR_DECIMALS = 18n
+const SCALAR_DECIMAL_PLACES = 18
+const SCALAR_DECIMALS = BigInt(SCALAR_DECIMAL_PLACES)
 const SCALAR_DECIMAL_BASE = 10n ** SCALAR_DECIMALS
 const SCALAR_PART_BIT_LENGTH = 120n
 const SCALAR_TOTAL_BITS = 256n
@@ -49,7 +50,7 @@ export function formatScalarDisplayValue(value: bigint) {
 	const integerPart = absoluteValue / SCALAR_DECIMAL_BASE
 	const fractionalPart = absoluteValue % SCALAR_DECIMAL_BASE
 	if (fractionalPart === 0n) return `${isNegative ? '-' : ''}${integerPart.toString()}`
-	const fractionalString = fractionalPart.toString().padStart(Number(SCALAR_DECIMALS), '0').replace(/0+$/, '')
+	const fractionalString = fractionalPart.toString().padStart(SCALAR_DECIMAL_PLACES, '0').replace(/0+$/, '')
 	return `${isNegative ? '-' : ''}${integerPart.toString()}.${fractionalString}`
 }
 
@@ -84,9 +85,9 @@ export function clampScalarTickIndex(tickIndex: bigint, numTicks: bigint) {
 }
 
 export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }: ScalarFormInputs) {
-	const displayValueMin = parseDecimalInput(scalarMin, 'Scalar min', Number(SCALAR_DECIMALS))
-	const displayValueMax = parseDecimalInput(scalarMax, 'Scalar max', Number(SCALAR_DECIMALS))
-	const increment = parseDecimalInput(scalarIncrement, 'Scalar increment', Number(SCALAR_DECIMALS))
+	const displayValueMin = parseDecimalInput(scalarMin, 'Scalar min', SCALAR_DECIMAL_PLACES)
+	const displayValueMax = parseDecimalInput(scalarMax, 'Scalar max', SCALAR_DECIMAL_PLACES)
+	const increment = parseDecimalInput(scalarIncrement, 'Scalar increment', SCALAR_DECIMAL_PLACES)
 
 	if (displayValueMin < SCALAR_SIGNED_MIN || displayValueMin > SCALAR_SIGNED_MAX) throw new Error('Scalar min is outside the supported range')
 	if (displayValueMax < SCALAR_SIGNED_MIN || displayValueMax > SCALAR_SIGNED_MAX) throw new Error('Scalar max is outside the supported range')

@@ -1,4 +1,4 @@
-import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
 import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
 import { sameAddress } from '../lib/address.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
@@ -294,7 +294,7 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 			if (parentEscalationGameAddress !== zeroAddress) {
 				const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
 				if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('Inherited historical carry snapshot is incomplete.')
-				inheritedLeaves = parentLeaves.slice(0, Number(snapshotLeafCount))
+				inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Snapshot leaf count'))
 			}
 		}
 	}
@@ -984,7 +984,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 	const consumedParentDepositIndexes = [...inheritedConsumedParentDepositIndexes, ...localConsumedParentDepositIndexes]
 	const { currentNullifierRoot: childNullifierRoot, snapshotLeafCount: parentCarryLeafCount, snapshotPeaks } = childOutcomeState
 	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
-	const orderedEntries = parentHistoricalLeaves.slice(0, Number(parentCarryLeafCount))
+	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent carry leaf count'))
 	const orderedLeaves = orderedEntries.map(entry => entry.leaf)
 	const leafHashes = orderedEntries.map(entry => entry.leafHash)
 	if (leafHashes.length > 0) {
