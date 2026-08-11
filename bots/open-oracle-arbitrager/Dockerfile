@@ -23,7 +23,9 @@ COPY --from=shared-builder /source/shared/ ./shared/
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/open-oracle-arbitrager/package.json bots/open-oracle-arbitrager/bun.lock ./bots/open-oracle-arbitrager/
-RUN cd bots/open-oracle-arbitrager \
+RUN cd bots/shared \
+	&& bun install --frozen-lockfile --production \
+	&& cd ../open-oracle-arbitrager \
 	&& bun install --frozen-lockfile --production
 
 COPY bots/open-oracle-arbitrager/README.md ./bots/open-oracle-arbitrager/README.md
