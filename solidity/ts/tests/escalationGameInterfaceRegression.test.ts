@@ -54,7 +54,7 @@ function storageMemberSummary(typeTable: Record<string, unknown>, typeLabel: str
 		return {
 			label: getString(normalizedMember.label, `Missing ${typeLabel} storage member label ${index}`),
 			slot: getString(normalizedMember.slot, `Missing ${typeLabel} storage member slot ${index}`),
-			offset: Number(normalizedMember.offset),
+			offset: getNumber(normalizedMember.offset, `Missing ${typeLabel} storage member offset ${index}`),
 			type: getString(memberType.label, `Missing ${typeLabel} storage member type label ${index}`),
 		}
 	})

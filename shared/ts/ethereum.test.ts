@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+	bigintToSafeNumber,
 	concatHex,
 	createPublicClient,
 	createWalletClient,
@@ -42,6 +43,11 @@ const MULTICALL_ADDRESS = '0x00000000000000000000000000000000000000DD'
 const RECEIPT_HASH = `0x${'11'.repeat(32)}` satisfies Hash
 const BLOCK_HASH = `0x${'22'.repeat(32)}` satisfies Hash
 const TX_HASH = `0x${'33'.repeat(32)}` satisfies Hash
+
+test('converts bigint values only inside the safe integer range', () => {
+	expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
+	expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
+})
 
 const BALANCE_OF_ABI = [
 	{
@@ -1148,6 +1154,23 @@ describe('shared ethereum compatibility layer', () => {
 				})
 			).result,
 		).toBe(1n)
+		expect(calls).toHaveLength(1)
+	})
+
+	test('simulateContract supports canonical block-hash selectors', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			const blockSelector = getArrayEntry(params, 1, 'simulate params')
+			expect(getObjectEntry(blockSelector, 'blockHash', 'simulate block selector')).toBe(BLOCK_HASH)
+			expect(getObjectEntry(blockSelector, 'requireCanonical', 'simulate block selector')).toBe(true)
+			return encodeAbiParameters([{ type: 'uint256' }], [1n])
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const simulation = await client.simulateContract({ abi: OWNER_CHECK_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'ownerCheck', blockHash: BLOCK_HASH })
+
+		expect(simulation.result).toBe(1n)
 		expect(calls).toHaveLength(1)
 	})
 

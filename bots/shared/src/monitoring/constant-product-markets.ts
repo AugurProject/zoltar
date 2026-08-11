@@ -1,5 +1,6 @@
 import type { CentralizedMarketSettings } from './centralized-markets.ts'
 import type { MarketConsensusObservation } from './market-consensus.ts'
+import { bigintToSafeNumber } from '../ethereum.ts'
 
 const UNIT = 10n ** 18n
 const BPS = 10_000n
@@ -64,7 +65,7 @@ export async function observeConstantProductMarkets(settings: CentralizedMarketS
 				kind: 'dex',
 				marketId: source.pair,
 				observationId: `${pair.chainId.toString()}:${pair.blockNumber.toString()}:${pair.blockHash.toLowerCase()}`,
-				observedAt: Number(pair.blockTimestamp) * 1_000,
+				observedAt: bigintToSafeNumber(pair.blockTimestamp * 1_000n, 'Pair block timestamp'),
 				priceRepPerEth: (askPriceRepPerEth + bidPriceRepPerEth) / 2n,
 				sourceId: source.sourceId,
 			} satisfies MarketConsensusObservation

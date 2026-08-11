@@ -63,17 +63,17 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		currentAmount1: AMOUNT1,
 		currentAmount2: AMOUNT2,
 		currentReporter: client.account.address,
-		disputeDelay: Number(DISPUTE_DELAY),
+		disputeDelay: Number.parseInt(DISPUTE_DELAY.toString(), 10),
 		escalationHalt: 1_500n,
-		feePercentage: Number(FEE_PERCENTAGE),
-		flags: Number(FLAGS),
+		feePercentage: Number.parseInt(FEE_PERCENTAGE.toString(), 10),
+		flags: Number.parseInt(FLAGS.toString(), 10),
 		lastReportOppoTime: 0,
-		multiplier: Number(MULTIPLIER),
+		multiplier: Number.parseInt(MULTIPLIER.toString(), 10),
 		numReports: 0,
-		protocolFee: Number(PROTOCOL_FEE),
+		protocolFee: Number.parseInt(PROTOCOL_FEE.toString(), 10),
 		protocolFeeRecipient: reporter.account.address,
 		reportTimestamp: 0,
-		settlementTime: Number(SETTLEMENT_TIME),
+		settlementTime: Number.parseInt(SETTLEMENT_TIME.toString(), 10),
 		settlementTimestamp: 0,
 		settlerReward: 1_000n,
 		token1: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
@@ -697,7 +697,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await submitReport(reporter, {
 			...getReportParameters(reporter),
 			callbackContract: reporter.account.address,
-			callbackGasLimit: Number(2n ** 32n - 1n),
+			callbackGasLimit: Number.parseInt((2n ** 32n - 1n).toString(), 10),
 		})
 		const callbackState = (await loadOpenOracleEventState(reporter, callbackReportId)).latest
 		await mockWindow.setTime(callbackState.game.reportTimestamp + SETTLEMENT_TIME - 1n)

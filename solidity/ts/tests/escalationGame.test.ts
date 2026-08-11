@@ -535,7 +535,7 @@ describe('Escalation Game Test Suite', () => {
 		let seed = initialSeed
 		return () => {
 			seed = (seed * 1103515245n + 12345n) % (1n << 31n)
-			return Number(seed)
+			return Number.parseInt(seed.toString(), 10)
 		}
 	}
 
@@ -621,6 +621,7 @@ describe('Escalation Game Test Suite', () => {
 			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 			for (const log of receipt.logs) {
 				if (!gameAddresses.has(log.address.toLowerCase())) continue
+				if (log.logIndex === null || log.logIndex === undefined) throw new Error('escalation event log is missing its log index')
 				let decoded: ReturnType<typeof decodeEventLog>
 				try {
 					decoded = decodeEventLog({ abi: peripherals_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics })
@@ -634,8 +635,8 @@ describe('Escalation Game Test Suite', () => {
 					blockHash: receipt.blockHash,
 					blockNumber: receipt.blockNumber,
 					transactionHash: receipt.transactionHash,
-					transactionIndex: Number(receipt.transactionIndex),
-					logIndex: Number(log.logIndex),
+					transactionIndex: Number.parseInt(receipt.transactionIndex.toString(), 10),
+					logIndex: Number.parseInt(log.logIndex.toString(), 10),
 					emitter: log.address,
 					eventName: decoded.eventName,
 					args: Object.fromEntries(Object.entries(decoded.args)),
@@ -2206,7 +2207,7 @@ describe('Escalation Game Test Suite', () => {
 
 		const activationTime = await getActivationTime(client, escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
-		const activeClaimOrder = deposits.filter(deposit => deposit.escrowed).sort((left, right) => Number((left.depositIndex * 17n) % 31n) - Number((right.depositIndex * 17n) % 31n))
+		const activeClaimOrder = deposits.filter(deposit => deposit.escrowed).sort((left, right) => Number.parseInt(((left.depositIndex * 17n) % 31n).toString(), 10) - Number.parseInt(((right.depositIndex * 17n) % 31n).toString(), 10))
 
 		for (const deposit of activeClaimOrder) {
 			await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, deposit.depositIndex, QuestionOutcome.Yes)

@@ -1,4 +1,4 @@
-import { bytesToHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from './ethereum.js'
+import { bigintToSafeNumber, bytesToHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from './ethereum.js'
 
 export const OPEN_ORACLE_FLAG_TIME_TYPE = 1n << 0n
 export const OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1n << 1n
@@ -92,7 +92,7 @@ function writePackedUint(bytes: Uint8Array, offset: number, width: number, value
 	if (value < 0n || value >= 1n << (BigInt(width) * 8n)) throw new Error(`OpenOracle packed value does not fit in ${width.toString()} bytes`)
 	let remaining = value
 	for (let index = offset + width - 1; index >= offset; index--) {
-		bytes[index] = Number(remaining & 0xffn)
+		bytes[index] = bigintToSafeNumber(remaining & 0xffn, 'Packed byte')
 		remaining >>= 8n
 	}
 }

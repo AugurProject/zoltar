@@ -461,7 +461,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			data: deploymentData,
 			gas: 1_000_000n,
 			gasPrice: 0n,
-			nonce: Number(nonce),
+			nonce: Number.parseInt(nonce.toString(), 10),
 		})
 		const hash = parseRpcHash(
 			await mockWindow.request({

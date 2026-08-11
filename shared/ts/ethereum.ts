@@ -168,6 +168,7 @@ type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends Ab
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
+	blockHash?: Hash | undefined
 	blockNumber?: bigint | undefined
 	blockTag?: BlockTag | undefined
 	gas?: bigint | undefined
@@ -527,6 +528,11 @@ function normalizeQuantityValue(value: bigint | number) {
 	}
 	if (value < 0n) throw new Error(`Number "${value.toString()}n" is not in safe integer range`)
 	return value
+}
+
+export function bigintToSafeNumber(value: bigint, label = 'Value') {
+	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
+	return Number.parseInt(value.toString(), 10)
 }
 
 function hexQuantity(value: bigint | number) {
@@ -1219,6 +1225,11 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 }
 
 async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
+	const selectedBlocks = [parameters.blockHash, parameters.blockNumber, parameters.blockTag].filter(value => value !== undefined)
+	if (selectedBlocks.length > 1) throw new Error('Contract reads accept only one block selector')
+	let blockSelector: BlockTag | Hex | Readonly<{ blockHash: Hash; requireCanonical: true }> = parameters.blockTag ?? 'latest'
+	if (parameters.blockNumber !== undefined) blockSelector = hexQuantity(parameters.blockNumber)
+	if (parameters.blockHash !== undefined) blockSelector = { blockHash: parameters.blockHash, requireCanonical: true }
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -1236,7 +1247,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber),
+				blockSelector,
 			],
 		}),
 	)
@@ -1298,7 +1309,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			return normalizeBlock(block, includeTransactions)
 		},
 		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => Number(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' }))),
+		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode: async parameters => {
 			const result = normalizeRpcHex(
 				await requestTransport<string>(transport, {

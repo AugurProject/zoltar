@@ -9,6 +9,7 @@ import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount } from '../src/ethereum.ts'
+import { bigintToSafeNumber } from '../src/ethereum/codec.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
 
 const temporaryDirectories: string[] = []
@@ -18,6 +19,10 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
+	test('converts bigint values only inside the safe integer range', () => {
+		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
+		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
+	})
 	test('splits a block scan into bounded inclusive ranges', () => {
 		const cursor = initialCursor(25n, 25n)
 		expect(scanRanges(cursor, 25n, 10n)).toEqual([

@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
@@ -376,7 +376,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							weth: config.network.weth,
 							wallet: wallet?.account.address,
 						})
-						const sampledAt = new Date(Number(block.timestamp) * 1_000).toISOString()
+						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
 						await appendPriceHistory(config.priceHistoryFile, samples)
 						state.priceHistory = [...state.priceHistory, ...samples]

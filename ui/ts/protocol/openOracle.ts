@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { ABIS } from '../abis.js'
 import { sameAddress } from '../lib/address.js'
@@ -45,9 +45,11 @@ export function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage
 }
 
 function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
-	const decimals = Number(decimalsValue)
+	let decimals: number | undefined
+	if (typeof decimalsValue === 'bigint') decimals = bigintToSafeNumber(decimalsValue, 'Token decimals')
+	if (typeof decimalsValue === 'number') decimals = decimalsValue
 	const symbol = String(symbolValue).trim()
-	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Token metadata for ${tokenAddress} returned invalid decimals`)
+	if (decimals === undefined || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Token metadata for ${tokenAddress} returned invalid decimals`)
 	if (symbol === '') throw new Error(`Token metadata for ${tokenAddress} returned an empty symbol`)
 	if (sameAddress(tokenAddress, getWethAddress()) && (decimals !== 18 || symbol !== 'WETH')) throw new Error(`WETH metadata is invalid for ${tokenAddress}`)
 	return { decimals, symbol }
@@ -368,7 +370,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		stateHash,
 		callbackContract: game.callbackContract,
 		numReports: eventState.reportCount,
-		callbackGasLimit: Number(game.callbackGasLimit),
+		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, 'Callback gas limit'),
 		protocolFeeRecipient: game.protocolFeeRecipient,
 		trackDisputes: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
 		lastReportOppoTime: game.lastReportOppoTime,
@@ -578,7 +580,7 @@ export async function createOpenOracleReportInstance(
 				zeroAddress,
 				0,
 				parameters.protocolFee,
-				Number(OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_STORE_PRICE),
+				bigintToSafeNumber(OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_STORE_PRICE, 'OpenOracle flags'),
 			],
 			false,
 			false,
