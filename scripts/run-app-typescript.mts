@@ -90,11 +90,14 @@ export function getApplicationTypeScriptHeapOption(existingNodeOptions: string |
 	return `--max-old-space-size=${explicitHeapLimitMb ?? APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`
 }
 
-export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv => {
 	const childEnvironment = { ...environment }
-	const retainedNodeOptions = getApplicationTypeScriptNodeOptions(environment['NODE_OPTIONS'])
-	if (retainedNodeOptions === undefined) delete childEnvironment['NODE_OPTIONS']
-	else childEnvironment['NODE_OPTIONS'] = retainedNodeOptions
+	const windowsNodeOptionsKey = platform === 'win32' ? Object.keys(environment).find(key => key.toUpperCase() === 'NODE_OPTIONS') : undefined
+	const retainedNodeOptions = getApplicationTypeScriptNodeOptions(environment['NODE_OPTIONS'] ?? (windowsNodeOptionsKey === undefined ? undefined : environment[windowsNodeOptionsKey]))
+	for (const key of Object.keys(childEnvironment)) {
+		if (key === 'NODE_OPTIONS' || (platform === 'win32' && key.toUpperCase() === 'NODE_OPTIONS')) delete childEnvironment[key]
+	}
+	if (retainedNodeOptions !== undefined) childEnvironment['NODE_OPTIONS'] = retainedNodeOptions
 	return childEnvironment
 }
 

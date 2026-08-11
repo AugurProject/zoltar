@@ -34,6 +34,8 @@ describe('application TypeScript process arguments', () => {
 		expect(getApplicationTypeScriptNodeOptions('--max-old-space-size 7168')).toBe('--max-old-space-size 7168')
 		expect(getApplicationTypeScriptEnvironment({ NODE_OPTIONS: '--max-old-space-size=8192', PATH: 'kept' })).toEqual({ PATH: 'kept' })
 		expect(getApplicationTypeScriptEnvironment({ NODE_OPTIONS: '--trace-warnings --max-old-space-size=8192', PATH: 'kept' })).toEqual({ NODE_OPTIONS: '--trace-warnings', PATH: 'kept' })
+		expect(getApplicationTypeScriptEnvironment({ Node_Options: '--max-old-space-size=8192', PATH: 'kept' }, 'win32')).toEqual({ PATH: 'kept' })
+		expect(getApplicationTypeScriptEnvironment({ Node_Options: '--trace-warnings --max-old-space-size=8192', PATH: 'kept' }, 'win32')).toEqual({ NODE_OPTIONS: '--trace-warnings', PATH: 'kept' })
 	})
 
 	test('preserves escaped quotes in non-heap NODE_OPTIONS', () => {
@@ -129,7 +131,7 @@ describe('application TypeScript process arguments', () => {
 		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		expect(childNodeOptions).toBeUndefined()
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(getHeapStatistics().heap_size_limit)"], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
+			env: getApplicationTypeScriptEnvironment({ ...process.env, Node_Options: '--max-old-space-size=512', NODE_OPTIONS: nodeOptions }, 'win32'),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
