@@ -8,7 +8,9 @@ WORKDIR /app
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
-RUN cd bots/liquidator \
+RUN cd bots/shared \
+	&& bun install --frozen-lockfile --production \
+	&& cd ../liquidator \
 	&& bun install --frozen-lockfile --production
 
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
