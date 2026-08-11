@@ -1395,8 +1395,10 @@ const loadLogs = async ({ append = false, live = false, preserveHistory = false 
 		moreButton.textContent = 'Loading more…'
 	}
 	if (!append && !hadRows) $('#more').hidden = true
-	feedState.hidden = false
-	feedState.textContent = append ? 'Loading more activity…' : hadRows ? 'Refreshing indexed activity…' : 'Loading indexed activity…'
+	if (!live || !hadRows || append) {
+		feedState.hidden = false
+		feedState.textContent = append ? 'Loading more activity…' : hadRows ? 'Refreshing indexed activity…' : 'Loading indexed activity…'
+	}
 	if (!append && !hadRows) feed.replaceChildren(...Array.from({ length: 6 }, () => element('div', 'loading-line')))
 	try {
 		const payload = await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
@@ -2362,8 +2364,10 @@ const loadRichList = async ({ append = false, live = false } = {}) => {
 	const status = $('#richlist-status')
 	const more = $('#richlist-more')
 	const nextOffset = append ? richListItems.length : 0
-	status.hidden = false
-	status.textContent = append ? 'Loading more known addresses…' : richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
+	if (!live || richListItems.length === 0 || append) {
+		status.hidden = false
+		status.textContent = append ? 'Loading more known addresses…' : richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
+	}
 	more.disabled = true
 	$('#richlist-rows').setAttribute('aria-busy', 'true')
 	try {
@@ -2979,7 +2983,7 @@ const entityCopy = (type, item) => {
 	]
 }
 
-const selectEntity = async (item, { preserveDetail = false } = {}) => {
+const selectEntity = async (item, { preserveDetail = false, quiet = false } = {}) => {
 	selectedEntityKey = entityKey(activeStateType, item)
 	for (const row of document.querySelectorAll('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
 	const requestVersion = ++stateDetailRequestVersion
@@ -2989,7 +2993,7 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 	detail.querySelector('.detail-refresh-status')?.remove()
 	let refreshStatus
 	if (replaceWithLoading) detail.replaceChildren(element('div', 'state-placeholder', 'Loading historical checkpoints…'))
-	else {
+	else if (!quiet) {
 		refreshStatus = element('div', 'system-status detail-refresh-status', 'Refreshing historical checkpoints…')
 		refreshStatus.setAttribute('role', 'status')
 		detail.prepend(refreshStatus)
@@ -3014,13 +3018,16 @@ const selectEntity = async (item, { preserveDetail = false } = {}) => {
 				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item)))
 				failure.append(retry)
 				detail.replaceChildren(failure)
-			} else if (refreshStatus !== undefined) {
-				refreshStatus.classList.add('error')
-				refreshStatus.replaceChildren(element('span', '', `Historical refresh failed; showing last known details: ${error.message}`))
+			} else {
+				const failure = refreshStatus ?? element('div', 'system-status detail-refresh-status')
+				failure.classList.add('error')
+				failure.setAttribute('role', 'alert')
+				failure.replaceChildren(element('span', '', `Historical refresh failed; showing last known details: ${error.message}`))
 				const retry = element('button', '', 'Retry')
 				retry.type = 'button'
 				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item, { preserveDetail: true })))
-				refreshStatus.append(retry)
+				failure.append(retry)
+				if (refreshStatus === undefined) detail.prepend(failure)
 			}
 		}
 		return false
@@ -3054,7 +3061,7 @@ const renderEntityList = async ({ refreshSelected = false, live = false } = {}) 
 	list.setAttribute('aria-busy', 'false')
 	const selected = items.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
 	if (selected !== undefined) {
-		if (refreshSelected) return await selectEntity(selected, { preserveDetail: true })
+		if (refreshSelected) return await selectEntity(selected, { preserveDetail: true, quiet: live })
 		return true
 	}
 	if (items[0] !== undefined) return await selectEntity(items[0])
@@ -3099,8 +3106,10 @@ const loadSystemState = async ({ live = false } = {}) => {
 	const previousDetail = $('#state-detail').textContent
 	alert.hidden = true
 	alert.replaceChildren()
-	status.hidden = false
-	status.textContent = hadData ? 'Refreshing indexed registry…' : 'Loading indexed registry…'
+	if (!live || !hadData) {
+		status.hidden = false
+		status.textContent = hadData ? 'Refreshing indexed registry…' : 'Loading indexed registry…'
+	}
 	setSystemControlsDisabled(true)
 	$('#state-stats').setAttribute('aria-busy', 'true')
 	$('#entity-list').setAttribute('aria-busy', 'true')
