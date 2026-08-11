@@ -90,20 +90,23 @@ export function getApplicationTypeScriptHeapOption(existingNodeOptions: string |
 	return `--max-old-space-size=${explicitHeapLimitMb ?? APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`
 }
 
+export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+	const childEnvironment = { ...environment }
+	const retainedNodeOptions = getApplicationTypeScriptNodeOptions(environment['NODE_OPTIONS'])
+	if (retainedNodeOptions === undefined) delete childEnvironment['NODE_OPTIONS']
+	else childEnvironment['NODE_OPTIONS'] = retainedNodeOptions
+	return childEnvironment
+}
+
 export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined) => [nodeExecutablePath, getApplicationTypeScriptHeapOption(existingNodeOptions), typescriptCliPath, '--noEmit']
 
 export async function runApplicationTypeScript() {
 	const nodeExecutablePath = Bun.which('node')
 	if (nodeExecutablePath === null) throw new Error('Node.js is required to run the application TypeScript check with its configured heap limit.')
 
-	const childEnvironment = { ...process.env }
-	const retainedNodeOptions = getApplicationTypeScriptNodeOptions(process.env['NODE_OPTIONS'])
-	if (retainedNodeOptions === undefined) delete childEnvironment['NODE_OPTIONS']
-	else childEnvironment['NODE_OPTIONS'] = retainedNodeOptions
-
 	const child = Bun.spawn({
 		cmd: getApplicationTypeScriptCommand(nodeExecutablePath, TYPESCRIPT_CLI_PATH, process.env['NODE_OPTIONS']),
-		env: childEnvironment,
+		env: getApplicationTypeScriptEnvironment(process.env),
 		stderr: 'inherit',
 		stdin: 'inherit',
 		stdout: 'inherit',

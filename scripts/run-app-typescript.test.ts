@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { APPLICATION_TYPESCRIPT_HEAP_MB, getApplicationTypeScriptCommand, getApplicationTypeScriptHeapOption, getApplicationTypeScriptNodeOptions } from './run-app-typescript.mts'
+import { APPLICATION_TYPESCRIPT_HEAP_MB, getApplicationTypeScriptCommand, getApplicationTypeScriptEnvironment, getApplicationTypeScriptHeapOption, getApplicationTypeScriptNodeOptions } from './run-app-typescript.mts'
 
 describe('application TypeScript process arguments', () => {
 	test('uses the repository default when NODE_OPTIONS does not set a heap limit', () => {
@@ -19,9 +19,8 @@ describe('application TypeScript process arguments', () => {
 		const nodeExecutablePath = Bun.which('node')
 		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript heap regression test')
 		const nodeOptions = '--max-old-space-size="7168" "--max_old_space_size=8192"'
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(getHeapStatistics().heap_size_limit)"], {
-			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -33,6 +32,8 @@ describe('application TypeScript process arguments', () => {
 	test('removes heap flags from inherited NODE_OPTIONS while preserving other options', () => {
 		expect(getApplicationTypeScriptNodeOptions('--trace-warnings --max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--trace-warnings')
 		expect(getApplicationTypeScriptNodeOptions('--max-old-space-size 7168')).toBe('--max-old-space-size 7168')
+		expect(getApplicationTypeScriptEnvironment({ NODE_OPTIONS: '--max-old-space-size=8192', PATH: 'kept' })).toEqual({ PATH: 'kept' })
+		expect(getApplicationTypeScriptEnvironment({ NODE_OPTIONS: '--trace-warnings --max-old-space-size=8192', PATH: 'kept' })).toEqual({ NODE_OPTIONS: '--trace-warnings', PATH: 'kept' })
 	})
 
 	test('preserves escaped quotes in non-heap NODE_OPTIONS', () => {
@@ -42,7 +43,7 @@ describe('application TypeScript process arguments', () => {
 		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		expect(childNodeOptions).toBe('--title="hello \\"world\\""')
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
-			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -59,7 +60,7 @@ describe('application TypeScript process arguments', () => {
 		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		expect(childNodeOptions).toBe("--title=Codex's")
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
-			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -76,7 +77,7 @@ describe('application TypeScript process arguments', () => {
 		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		expect(childNodeOptions).toBe('--title="kept \\q"')
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
-			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -94,7 +95,7 @@ describe('application TypeScript process arguments', () => {
 		expect(childNodeOptions).toBe(nodeOptions)
 		expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(JSON.stringify({ heapLimit: getHeapStatistics().heap_size_limit, title: process.title }))"], {
-			env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -113,7 +114,7 @@ describe('application TypeScript process arguments', () => {
 			expect(childNodeOptions).toBe(nodeOptions)
 			expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
 			const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', ''], {
-				env: { ...process.env, ...(childNodeOptions === undefined ? {} : { NODE_OPTIONS: childNodeOptions }) },
+				env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 				stderr: 'pipe',
 				stdout: 'pipe',
 			})
@@ -128,7 +129,7 @@ describe('application TypeScript process arguments', () => {
 		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
 		expect(childNodeOptions).toBeUndefined()
 		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', "import { getHeapStatistics } from 'node:v8'; console.log(getHeapStatistics().heap_size_limit)"], {
-			env: { ...process.env },
+			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
