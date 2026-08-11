@@ -295,6 +295,9 @@ export const compactIndexerDuration = (seconds: number): string => {
 	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
 }
 
+export const indexerWaitingMessage = (networkId: string, configuredStartBlock: bigint, observedHead: bigint): string =>
+	`[${networkId}] indexer state: live; observed head #${observedHead}; 100.00% complete; caught up; waiting for configured start block #${configuredStartBlock}`
+
 export const indexerProgressMessage = (
 	networkId: string,
 	startBlock: bigint,
@@ -637,6 +640,13 @@ class NetworkIndexer {
 		console.info(indexerProgressMessage(this.#network.id, startBlock, endBlock, observedHead, this.#network.startBlock, blocksPerSecond))
 	}
 
+	#reportWaitingForStart(observedHead: bigint): void {
+		if (this.#lastReportedPhase === 'live') return
+		this.#lastReportedPhase = 'live'
+		this.#lastProgressLogAt = Date.now()
+		console.info(indexerWaitingMessage(this.#network.id, this.#network.startBlock, observedHead))
+	}
+
 	async #assertLease(): Promise<void> {
 		try {
 			await this.#requireLease().assertHeld()
@@ -710,7 +720,8 @@ class NetworkIndexer {
 			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
-			if (this.#lastReportedPhase !== 'live') this.#reportProgress(observedHead, observedHead, observedHead)
+			if (checkpoint === undefined) this.#reportWaitingForStart(observedHead)
+			else if (this.#lastReportedPhase !== 'live') this.#reportProgress(observedHead, observedHead, observedHead)
 			if (checkpoint !== undefined) await this.#refreshContractDeployment(checkpoint.number)
 			return true
 		}

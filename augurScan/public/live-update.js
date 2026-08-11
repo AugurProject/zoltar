@@ -28,18 +28,43 @@ export const shouldContinueTransactionRestore = (loaded, loadedCount, targetLoad
 
 export const indexerConnectionStatus = (network, streamState, networkRequestFailed, streamHasOpened = false) => {
 	if (networkRequestFailed) return { label: 'Status unavailable', tone: 'error' }
+	const waitingForStart = indexerWaitingForStart(network)
 	if (streamHasOpened && streamState !== 'open') {
 		if (network?.phase === 'degraded') return { label: 'Indexer retrying · Reconnecting', tone: 'error' }
+		if (waitingForStart) return { label: `Waiting for #${network.start_block} · Reconnecting`, tone: 'error' }
 		if (network?.indexed_block === null) return { label: 'Indexer starting · Reconnecting', tone: 'error' }
 		if (network?.phase === 'backfilling') return { label: `Backfill #${network.indexed_block} · Reconnecting`, tone: 'error' }
 		return { label: 'Reconnecting', tone: 'error' }
 	}
 	if (network?.phase === 'degraded') return { label: 'Indexer retrying', tone: 'error' }
+	if (waitingForStart) return { label: `Waiting for start block #${network.start_block}`, tone: 'pending' }
 	if (network?.indexed_block === null) return { label: 'Indexer starting', tone: 'pending' }
 	if (network?.phase === 'backfilling') return { label: `Backfilling #${network.indexed_block}`, tone: 'pending' }
 	if (streamState === 'open') return { label: 'Live connection', tone: 'live' }
 	if (network !== undefined) return { label: 'Reconnecting', tone: 'error' }
 	return { label: 'Connecting', tone: 'pending' }
+}
+
+const decimalBlock = (value) => {
+	const text = String(value)
+	return /^\d+$/.test(text) ? BigInt(text) : undefined
+}
+
+export const indexerWaitingForStart = (network) => {
+	if (network === undefined || (network.indexed_block !== null && network.indexed_block !== undefined)) return false
+	const startBlock = decimalBlock(network.start_block)
+	const observedBlock = decimalBlock(network.observed_block)
+	return startBlock !== undefined && observedBlock !== undefined && observedBlock < startBlock
+}
+
+export const indexerLagLabel = (network) => {
+	const observedBlock = decimalBlock(network.observed_block)
+	if (observedBlock === undefined) return 'head unknown'
+	if (indexerWaitingForStart(network)) return `head #${network.observed_block} · starts at #${network.start_block}`
+	const indexedBlock = decimalBlock(network.indexed_block)
+	if (indexedBlock === undefined) return `head #${network.observed_block} · awaiting first indexed block`
+	const lag = observedBlock > indexedBlock ? observedBlock - indexedBlock : 0n
+	return `${lag.toLocaleString('en-US')} ${lag === 1n ? 'block' : 'blocks'} behind`
 }
 
 export const compactIndexerDuration = (seconds) => {
@@ -63,13 +88,29 @@ export const indexerProgressEstimate = (network, previousSample, sampledAt = Dat
 	const observedBlock = Number(network.observed_block)
 	const indexedBlock = network.indexed_block === null || network.indexed_block === undefined ? startBlock - 1 : Number(network.indexed_block)
 	if (![startBlock, indexedBlock, observedBlock].every(Number.isSafeInteger)) return { percentage: undefined, eta: 'Estimating ETA' }
-	if (observedBlock < startBlock) return { percentage: '100.00', eta: 'Caught up' }
+	const exactStartBlock = decimalBlock(network.start_block)
+	const exactObservedBlock = decimalBlock(network.observed_block)
+	const exactIndexedBlock =
+		network.indexed_block === null || network.indexed_block === undefined
+			? exactStartBlock === undefined
+				? undefined
+				: exactStartBlock - 1n
+			: decimalBlock(network.indexed_block)
+	if (exactStartBlock === undefined || exactObservedBlock === undefined || exactIndexedBlock === undefined)
+		return { percentage: undefined, eta: 'Estimating ETA' }
+	if (exactObservedBlock < exactStartBlock) return { percentage: '100.00', eta: 'Caught up' }
 	const boundedHead = observedBlock
 	const boundedIndexed = Math.min(boundedHead, Math.max(startBlock - 1, indexedBlock))
 	const completedBlocks = boundedIndexed - startBlock + 1
 	const totalBlocks = boundedHead - startBlock + 1
 	const remainingBlocks = totalBlocks - completedBlocks
-	const percentage = Math.min(remainingBlocks > 0 ? 99.99 : 100, (completedBlocks / totalBlocks) * 100).toFixed(2)
+	const exactBoundedIndexed =
+		exactIndexedBlock > exactObservedBlock ? exactObservedBlock : exactIndexedBlock < exactStartBlock ? exactStartBlock - 1n : exactIndexedBlock
+	const exactCompletedBlocks = exactBoundedIndexed - exactStartBlock + 1n
+	const exactTotalBlocks = exactObservedBlock - exactStartBlock + 1n
+	const roundedHundredths = (exactCompletedBlocks * 10_000n + exactTotalBlocks / 2n) / exactTotalBlocks
+	const hundredths = remainingBlocks > 0 && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
+	const percentage = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`
 	if (remainingBlocks === 0) return { percentage: '100.00', eta: 'Caught up' }
 	let blocksPerSecond = previousSample?.blocksPerSecond
 	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {

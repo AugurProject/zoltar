@@ -4,6 +4,7 @@ import {
 	contractDeploymentTimestampLabel,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerLagLabel,
 	indexerProgressEstimate,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
@@ -194,6 +195,18 @@ const demoNetworks = [
 		explorer_base_url: 'https://sepolia.etherscan.io',
 	},
 ]
+const demoNetworkItems = () => {
+	if (networkState === 'stale') return demoNetworks.map((network) => ({ ...network, last_success_at: new Date(Date.now() - 120_000).toISOString() }))
+	if (networkState !== 'future-start') return demoNetworks
+	return demoNetworks.map((network) => ({
+		...network,
+		start_block: (BigInt(network.observed_block) + 1n).toString(),
+		indexed_block: null,
+		indexed_hash: null,
+		indexed_timestamp: null,
+		phase: 'live',
+	}))
+}
 const demoContracts = demoNetworks.flatMap((network) =>
 	[
 		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
@@ -792,12 +805,7 @@ const api = async (path, { signal } = {}) => {
 	if (isDemo) {
 		if (path.startsWith('/api/v1/networks')) {
 			if (networkState === 'error') throw new Error('Network status could not be refreshed')
-			return {
-				items:
-					networkState === 'stale'
-						? demoNetworks.map((network) => ({ ...network, last_success_at: new Date(Date.now() - 120_000).toISOString() }))
-						: demoNetworks,
-			}
+			return { items: demoNetworkItems() }
 		}
 		if (path.startsWith('/api/v1/contracts')) {
 			const chainId = new URL(path, location.origin).searchParams.get('chainId')
@@ -1148,10 +1156,7 @@ const renderNetworks = (networks) => {
 		const ageNode = element('span', 'age', age(network.indexed_timestamp))
 		ageNode.dataset.time = network.indexed_timestamp ?? ''
 		ageNode.title = exactTimestamp(network.indexed_timestamp)
-		const lag =
-			network.indexed_block === null || network.observed_block === null
-				? 'head unknown'
-				: `${counted(Math.max(0, Number(network.observed_block) - Number(network.indexed_block)), 'block')} behind`
+		const lag = indexerLagLabel(network)
 		meta.append(indexedTime, ageNode, element('span', '', lag))
 		const progressLabel = progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`
 		card.append(title, block, meta, element('p', 'network-progress', progressLabel))
