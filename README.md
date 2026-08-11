@@ -140,11 +140,17 @@ Remove the key from the shell when the command finishes:
 unset PRIVATE_KEY
 ```
 
-The deployer reads the exported `PRIVATE_KEY` automatically. It intentionally
-does not accept a private-key command-line option, so the key does not need to
-appear in shell history. Run `bun run deploy:testnet -- --help` for the
-command-line form of each other option. Those options also accept uppercase
-arguments after `--` or environment variables.
+The deployer reads the exported `PRIVATE_KEY` automatically. You can instead
+pass the key directly, but the complete command—and therefore the key—may be
+saved in shell history:
+
+```bash
+bun run deploy:testnet -- --private-key=0x... --rpc-url=https://rpc.example --chain-id=11155111 --max-fee-per-gas-gwei=100 --max-total-cost-eth=20
+```
+
+Run `bun run deploy:testnet -- --help` for all options. Options other than
+`--private-key` also accept uppercase arguments after `--` or environment
+variables.
 
 | Input | Default | Purpose |
 | --- | --- | --- |
@@ -152,7 +158,7 @@ arguments after `--` or environment variables.
 | `CHAIN_ID` / `--chain-id` | `11155111` | Expected decimal chain ID |
 | `MAX_FEE_PER_GAS_GWEI` / `--max-fee-per-gas-gwei` | `100` | Rejects higher RPC fee suggestions |
 | `MAX_TOTAL_COST_ETH` / `--max-total-cost-eth` | `20` | Caps the conservative preflight estimate and transaction budget |
-| `PRIVATE_KEY` | Required | Environment-only, `0x`-prefixed 32-byte deployer key |
+| `PRIVATE_KEY` / `--private-key` | Required | `0x`-prefixed 32-byte deployer key |
 
 The defaults are authorization limits, not a spend forecast or a required
 balance. Before sending a transaction, the command checks the RPC chain ID, EVM
