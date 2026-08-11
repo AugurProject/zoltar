@@ -192,17 +192,6 @@ main {
 	gap: 1rem;
 	margin-bottom: 1rem;
 }
-.updated {
-	color: var(--muted);
-	font:
-		0.72rem / 1.4 ui-monospace,
-		monospace;
-}
-.status-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-}
 .network-cards {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -787,7 +776,7 @@ main {
 }
 .filters {
 	display: grid;
-	grid-template-columns: minmax(170px, 1fr) minmax(220px, 1.25fr) minmax(145px, 0.65fr) auto auto;
+	grid-template-columns: minmax(170px, 1fr) minmax(220px, 1.25fr) auto auto;
 	gap: 0.65rem;
 	align-items: end;
 	margin-bottom: 0.8rem;
@@ -861,25 +850,6 @@ button[aria-busy="true"]:disabled {
 		0.68rem / 1.4 ui-monospace,
 		monospace;
 }
-.live-update-region {
-	min-height: 60px;
-	display: flex;
-	justify-content: flex-end;
-	margin-bottom: 0.75rem;
-}
-
-.live-update-status {
-	max-width: min(430px, calc(100vw - 2rem));
-	margin: 0;
-	padding: 0.7rem 0.9rem;
-	border: 1px solid color-mix(in srgb, var(--cyan) 55%, var(--line));
-	border-radius: 9px;
-	color: var(--text);
-	background: color-mix(in srgb, var(--panel) 92%, var(--cyan));
-	box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
-	font: 0.7rem / 1.45 var(--mono);
-}
-
 .live-marker-host,
 .live-added {
 	position: relative;
@@ -915,8 +885,9 @@ button[aria-busy="true"]:disabled {
 	text-transform: uppercase;
 }
 
-.live-toast-active {
-	animation: live-toast 320ms ease-out;
+.network-card > .live-change-marker {
+	top: 0.55rem;
+	transform: translate(-50%, 0);
 }
 
 @keyframes live-added {
@@ -935,12 +906,6 @@ button[aria-busy="true"]:disabled {
 	}
 }
 
-@keyframes live-toast {
-	from {
-		opacity: 0;
-		transform: translateY(8px);
-	}
-}
 .feed-shell {
 	position: relative;
 	overflow-x: auto;
@@ -1223,9 +1188,6 @@ dialog::backdrop {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
-.updated.error {
-	color: var(--red);
-}
 .system-status {
 	margin: 0.8rem 0;
 	padding: 0.65rem 0.8rem;
@@ -1280,7 +1242,7 @@ dialog::backdrop {
 .richlist-header,
 .rich-row-main {
 	display: grid;
-	grid-template-columns: minmax(210px, 1.35fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) minmax(130px, 0.8fr) minmax(175px, 1fr) minmax(125px, 0.75fr);
+	grid-template-columns: minmax(320px, 1.5fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) minmax(130px, 0.8fr) minmax(175px, 1fr) minmax(125px, 0.75fr);
 	align-items: center;
 	gap: 0.8rem;
 }
@@ -1313,8 +1275,7 @@ dialog::backdrop {
 	font:
 		600 0.75rem / 1.3 ui-monospace,
 		monospace;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	overflow-wrap: anywhere;
 	text-decoration-color: color-mix(in srgb, var(--cyan) 55%, transparent);
 	text-underline-offset: 0.2em;
 }
@@ -1671,8 +1632,7 @@ dialog::backdrop {
 @media (prefers-reduced-motion: reduce) {
 	.loading-line,
 	.live-added,
-	.live-changed,
-	.live-toast-active {
+	.live-changed {
 		animation: none;
 	}
 }
@@ -1711,16 +1671,6 @@ dialog::backdrop {
 		display: flex;
 		align-items: center;
 		min-height: 44px;
-	}
-}
-
-@media (max-width: 600px) {
-	.live-update-region {
-		justify-content: stretch;
-	}
-	.live-update-status {
-		width: 100%;
-		max-width: none;
 	}
 }
 
@@ -1782,15 +1732,6 @@ dialog::backdrop {
 	.section-heading {
 		align-items: start;
 	}
-	.updated {
-		max-width: 130px;
-		text-align: right;
-	}
-	.status-actions {
-		align-items: flex-end;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
 	.network-cards {
 		grid-template-columns: 1fr;
 	}
@@ -1808,9 +1749,6 @@ dialog::backdrop {
 		grid-template-columns: 1fr 1fr;
 	}
 	.filters label:nth-child(2) {
-		grid-column: 1 / -1;
-	}
-	.filters label:nth-child(3) {
 		grid-column: 1 / -1;
 	}
 	.primary,

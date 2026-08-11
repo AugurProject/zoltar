@@ -36,9 +36,6 @@
 		</header>
 
 		<main>
-			<div class="live-update-region">
-				<p id="live-update-status" class="live-update-status" role="status" aria-live="polite" aria-atomic="true" hidden></p>
-			</div>
 			<div id="freshness-banner" class="freshness-banner" role="alert" hidden>
 				<div><strong id="freshness-title">Indexer data is stale</strong><span id="freshness-detail"></span></div>
 				<button id="refresh-stale" class="secondary compact" type="button">Retry now</button>
@@ -46,10 +43,7 @@
 			<section aria-label="Indexer status">
 				<div class="section-heading">
 					<p class="eyebrow">Indexer status</p>
-					<div class="status-actions">
-						<p class="updated" id="last-updated">Waiting for status</p>
-						<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
-					</div>
+					<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
 				</div>
 				<div id="network-cards" class="network-cards" aria-busy="true"></div>
 				<details class="diagnostics">
@@ -62,21 +56,13 @@
 			<section id="activity" class="activity" aria-labelledby="activity-heading">
 				<div class="section-heading activity-heading">
 					<div>
-						<p class="eyebrow">Canonical event stream</p>
+						<p class="eyebrow">Event stream</p>
 						<h2 id="activity-heading">Project logs</h2>
 					</div>
 				</div>
 				<form id="filters" class="filters" role="search">
 					<label><span>Event</span><input id="event-filter" type="search" placeholder="Transfer, Report…" /></label>
 					<label><span>Address</span><input id="address-filter" type="search" placeholder="0x…" spellcheck="false" /></label>
-					<label
-						><span>Decode</span
-						><select id="decode-filter">
-							<option value="">Any result</option>
-							<option value="true">Decoded</option>
-							<option value="false">Unknown</option>
-						</select></label
-					>
 					<button class="primary" type="submit">Apply filters</button>
 					<button id="clear-filters" class="secondary" type="button" disabled>Clear filters</button>
 				</form>
@@ -93,7 +79,7 @@
 			<section id="system" class="system" aria-labelledby="system-heading" hidden>
 				<div class="section-heading system-heading">
 					<div>
-						<p class="eyebrow">Canonical state projections</p>
+						<p class="eyebrow">System entities</p>
 						<h2 id="system-heading">Protocol system state</h2>
 					</div>
 				</div>
