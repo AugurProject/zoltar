@@ -1049,6 +1049,7 @@ async function requestTransport<TValue>(transport: Transport, parameters: Client
 	})
 	if (!response.ok) {
 		throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
+			code: response.status,
 			shortMessage: `HTTP ${response.status} while calling ${parameters.method}`,
 		})
 	}
@@ -1172,6 +1173,10 @@ function isTransactionNotFoundError(error: unknown) {
 	return error instanceof Error && error.message.includes('could not be found')
 }
 
+function isRateLimitError(error: unknown) {
+	return error instanceof RpcError && (error.code === 429 || error.code === '429' || error.message.includes('HTTP 429'))
+}
+
 function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
 	if (replacementTransaction.to?.toLowerCase() === originalTransaction.from.toLowerCase() && replacementTransaction.value === 0n && replacementTransaction.input === '0x') return 'cancelled'
 	if (replacementTransaction.to?.toLowerCase() === originalTransaction.to?.toLowerCase() && replacementTransaction.value === originalTransaction.value && replacementTransaction.input === originalTransaction.input) return 'repriced'
@@ -1180,9 +1185,9 @@ function getReplacementReason(originalTransaction: BlockTransaction, replacement
 
 const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
 
-async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }) {
+async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
 	for (let blockNumber = parameters.fromBlock; blockNumber <= parameters.toBlock; blockNumber += 1n) {
-		const block = await actions.getBlock({
+		const block = await blockReader.getBlock({
 			blockNumber,
 			includeTransactions: true,
 		})
@@ -1455,48 +1460,79 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport })
+			const waitForNextPoll = async (delayMilliseconds = pollingInterval) => {
+				await new Promise(resolve => {
+					setTimeout(resolve, delayMilliseconds)
+				})
+			}
+			const retryRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
+				while (true) {
+					try {
+						return await operation()
+					} catch (error) {
+						if (!isRateLimitError(error)) throw error
+						const remainingMilliseconds = timeoutMilliseconds - (Date.now() - startTime)
+						if (remainingMilliseconds <= 0) throw error
+						await waitForNextPoll(Math.min(pollingInterval, remainingMilliseconds))
+						if (Date.now() - startTime >= timeoutMilliseconds) throw error
+					}
+				}
+			}
 			let originalTransaction: BlockTransaction | undefined
 			let lastScannedReplacementBlock: bigint | undefined
 			if (parameters.onReplaced !== undefined) {
 				try {
-					originalTransaction = await actions.getTransaction({
-						hash: parameters.hash,
-					})
+					originalTransaction = await retryRateLimited(
+						async () =>
+							await actions.getTransaction({
+								hash: parameters.hash,
+							}),
+					)
 				} catch (error) {
 					if (!isTransactionNotFoundError(error)) throw error
 				}
 			}
 			while (true) {
 				try {
-					return await actions.getTransactionReceipt({
-						hash: parameters.hash,
-					})
+					return await retryRateLimited(
+						async () =>
+							await actions.getTransactionReceipt({
+								hash: parameters.hash,
+							}),
+					)
 				} catch (error) {
 					if (!isTransactionNotFoundError(error)) throw error
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
-							originalTransaction = await actions.getTransaction({
-								hash: parameters.hash,
-							})
+							originalTransaction = await retryRateLimited(
+								async () =>
+									await actions.getTransaction({
+										hash: parameters.hash,
+									}),
+							)
 						} catch (transactionError) {
 							if (!isTransactionNotFoundError(transactionError)) throw transactionError
 						}
 					}
 					if (originalTransaction !== undefined) {
-						const latestBlockNumber = await actions.getBlockNumber()
+						const transactionToReplace = originalTransaction
+						const latestBlockNumber = await retryRateLimited(async () => await actions.getBlockNumber())
 						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
 						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
 							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 						}
-						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, originalTransaction, { fromBlock: firstScanBlock, toBlock: latestBlockNumber })
+						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryRateLimited(async () => await actions.getBlock(parameters)) })
 						lastScannedReplacementBlock = latestBlockNumber
 						if (replacementTransaction !== undefined) {
-							const transactionReceipt = await actions.getTransactionReceipt({
-								hash: replacementTransaction.hash,
-							})
+							const transactionReceipt = await retryRateLimited(
+								async () =>
+									await actions.getTransactionReceipt({
+										hash: replacementTransaction.hash,
+									}),
+							)
 							parameters.onReplaced?.({
-								reason: getReplacementReason(originalTransaction, replacementTransaction),
-								replacedTransaction: originalTransaction,
+								reason: getReplacementReason(transactionToReplace, replacementTransaction),
+								replacedTransaction: transactionToReplace,
 								transaction: replacementTransaction,
 								transactionReceipt,
 							})
@@ -1504,9 +1540,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}
 					}
 					if (Date.now() - startTime >= timeoutMilliseconds) throw error
-					await new Promise(resolve => {
-						setTimeout(resolve, pollingInterval)
-					})
+					await waitForNextPoll()
 				}
 			}
 		},
