@@ -30,7 +30,8 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 describe('Docker entrypoint', () => {
 	test('installs production dependencies where shared bot sources can resolve them', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		expect(source).toContain('cd bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).toContain('cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
 	})
 
 	test('has a Linux-compatible shell shebang', async () => {

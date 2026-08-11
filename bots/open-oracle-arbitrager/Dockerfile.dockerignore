@@ -6,6 +6,7 @@
 !scripts/**
 !shared/
 !shared/package.json
+!shared/bun.lock
 !shared/tsconfig.json
 !shared/ts/
 !shared/ts/**
