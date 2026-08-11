@@ -965,6 +965,43 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
 	})
 
+	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
+		let receiptRequests = 0
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'HTTP 429 while calling eth_getTransactionReceipt' }
+			return {
+				blockHash: BLOCK_HASH,
+				blockNumber: '0x1',
+				cumulativeGasUsed: '0x5208',
+				effectiveGasPrice: '0x3',
+				from: OWNER_ADDRESS,
+				gasUsed: '0x5208',
+				logs: [],
+				status: '0x1',
+				to: RECIPIENT_ADDRESS,
+				transactionHash: RECEIPT_HASH,
+				transactionIndex: '0x0',
+				type: '0x2',
+			}
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		const receipt = await client.waitForTransactionReceipt({
+			hash: RECEIPT_HASH,
+			pollingInterval: 0,
+			timeout: 50,
+		})
+
+		expect(receipt.transactionHash).toBe(RECEIPT_HASH)
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
+	})
+
 	test('waitForTransactionReceipt scans previous blocks for delayed replacement detection', async () => {
 		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
