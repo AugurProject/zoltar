@@ -129,11 +129,12 @@ function parsePermit2Compilation(value: unknown): Permit2Compilation {
 }
 
 function parseUniswapDeploymentArtifacts(contents: string): UniswapDeploymentArtifacts {
-	const actualSha256 = new Bun.CryptoHasher('sha256').update(contents).digest('hex')
+	const canonicalContents = contents.replaceAll('\r\n', '\n')
+	const actualSha256 = new Bun.CryptoHasher('sha256').update(canonicalContents).digest('hex')
 	if (actualSha256 !== UNISWAP_DEPLOYMENT_ARTIFACT_SHA256) {
 		throw new Error(`Uniswap deployment artifact is stale or changed: expected SHA-256 ${UNISWAP_DEPLOYMENT_ARTIFACT_SHA256}, received ${actualSha256}`)
 	}
-	const value: unknown = JSON.parse(contents)
+	const value: unknown = JSON.parse(canonicalContents)
 	if (!isRecord(value) || value['formatVersion'] !== 1) throw new Error('Uniswap deployment artifact has an unsupported format')
 	const sources = value['sources']
 	if (!isRecord(sources)) throw new Error('Uniswap deployment artifact does not identify its sources')

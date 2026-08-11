@@ -167,7 +167,7 @@ const demoNetworks = [
 		indexed_block: '23184712',
 		indexed_hash: demoHash,
 		indexed_timestamp: new Date(Date.now() - 19_000).toISOString(),
-		observed_block: '23184713',
+		observed_block: '23184712',
 		finalized_block: '23184648',
 		phase: 'live',
 		last_poll_at: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
 	classifyLiveRecords,
+	compactIndexerDuration,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
 	createLatestRefreshCoordinator,
@@ -35,6 +36,10 @@ test('distinguishes indexer startup and backfill progress from stream connectivi
 })
 
 test('calculates bounded indexer completion and estimates remaining time from observed throughput', () => {
+	expect(compactIndexerDuration(3_600)).toBe('1h')
+	expect(compactIndexerDuration(86_400)).toBe('1d')
+	expect(compactIndexerDuration(172_800)).toBe('2d')
+	expect(indexerProgressEstimate({ start_block: '0', indexed_block: '99998', observed_block: '99999', phase: 'backfilling' }).percentage).toBe('99.99')
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: null, observed_block: null, phase: 'backfilling' })).toEqual({
 		percentage: undefined,
 		eta: 'Estimating ETA',
@@ -54,6 +59,11 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '1000', observed_block: '1000', phase: 'live' })).toEqual({
 		percentage: '100.00',
 		eta: 'Caught up',
+	})
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '999', observed_block: '1000', phase: 'live' }, undefined, 1_000)).toEqual({
+		percentage: '99.89',
+		eta: 'Estimating ETA',
+		sample: { indexedBlock: 999, sampledAt: 1_000, blocksPerSecond: undefined },
 	})
 })
 

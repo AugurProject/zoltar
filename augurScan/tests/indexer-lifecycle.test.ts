@@ -6,6 +6,7 @@ import {
 	addressActivityFrom,
 	boundedDeploymentRead,
 	commitCanonicalRead,
+	compactIndexerDuration,
 	confirmCanonicalBlock,
 	contractDeploymentScanDue,
 	deploymentReadBudget,
@@ -113,6 +114,10 @@ describe('network indexer lifecycle', () => {
 	test('reports bounded backfill progress and live block completion clearly', () => {
 		expect(indexingCompletion(100n, 549n, 999n)).toEqual({ completedBlocks: 450n, percentage: '50.00', remainingBlocks: 450n, totalBlocks: 900n })
 		expect(indexingCompletion(100n, 1_005n, 1_000n)).toEqual({ completedBlocks: 901n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 901n })
+		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
+		expect(compactIndexerDuration(3_600)).toBe('1h')
+		expect(compactIndexerDuration(86_400)).toBe('1d')
+		expect(compactIndexerDuration(172_800)).toBe('2d')
 		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe(
 			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s',
 		)

@@ -269,7 +269,8 @@ export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: b
 	const boundedIndexed = indexedBlock < configuredStartBlock ? configuredStartBlock - 1n : indexedBlock > boundedHead ? boundedHead : indexedBlock
 	const completedBlocks = boundedIndexed - configuredStartBlock + 1n
 	const remainingBlocks = totalBlocks - completedBlocks
-	const hundredths = (completedBlocks * 10_000n + totalBlocks / 2n) / totalBlocks
+	const roundedHundredths = (completedBlocks * 10_000n + totalBlocks / 2n) / totalBlocks
+	const hundredths = remainingBlocks > 0n && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
 	return {
 		completedBlocks,
 		percentage: `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`,
@@ -278,12 +279,18 @@ export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: b
 	}
 }
 
-const compactDuration = (seconds: number): string => {
+export const compactIndexerDuration = (seconds: number): string => {
 	const rounded = Math.max(1, Math.ceil(seconds))
 	if (rounded < 60) return `${rounded}s`
 	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
-	if (rounded < 86_400) return `${Math.floor(rounded / 3_600)}h ${Math.ceil((rounded % 3_600) / 60)}m`
-	return `${Math.floor(rounded / 86_400)}d ${Math.ceil((rounded % 86_400) / 3_600)}h`
+	const totalHours = Math.ceil(rounded / 3_600)
+	if (totalHours < 24) {
+		const totalMinutes = Math.ceil(rounded / 60)
+		const minutes = totalMinutes % 60
+		return `${Math.floor(totalMinutes / 60)}h${minutes === 0 ? '' : ` ${minutes}m`}`
+	}
+	const hours = totalHours % 24
+	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
 }
 
 export const indexerProgressMessage = (
@@ -300,7 +307,7 @@ export const indexerProgressMessage = (
 	const progress =
 		state === 'live'
 			? 'caught up'
-			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactDuration(Number(completion.remainingBlocks) / blocksPerSecond)}`}`
+			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(Number(completion.remainingBlocks) / blocksPerSecond)}`}`
 	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
 }
 
