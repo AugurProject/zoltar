@@ -12,6 +12,7 @@ import {
 	requiresParentLookup,
 	retryDelayMs,
 	rpcFailureLogMessage,
+	rpcLogAddressGroups,
 	rpcProviderLabel,
 	runIndexerOwnershipLifecycle,
 	runNetworkLifecycle,
@@ -120,6 +121,14 @@ describe('network indexer lifecycle', () => {
 			{ name: 'fallback', getChainId: async () => 1, read: async () => 'canonical data' },
 		]
 		expect(await withVerifiedProvider(providers, 1, (provider) => provider.read())).toBe('canonical data')
+	})
+
+	test('keeps RPC log address filters within public-provider limits', () => {
+		expect(rpcLogAddressGroups(Array.from({ length: 12 }, (_, index) => index))).toEqual([
+			[0, 1, 2, 3, 4],
+			[5, 6, 7, 8, 9],
+			[10, 11],
+		])
 	})
 
 	test('redacts arbitrary transport failures to a stable public message', () => {

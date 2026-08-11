@@ -5,6 +5,7 @@ import {
 	assertRewindTarget,
 	type IndexedBlock,
 	lockLiveEventWriter,
+	releaseReservedConnection,
 	replayWindowExpired,
 	rewindDepth,
 	ScannerDatabase,
@@ -111,6 +112,25 @@ const indexedBlock = (
 }
 
 describe('database checkpoint fencing', () => {
+	test('waits for asynchronous reserved connection release', async () => {
+		let finishRelease: (() => void) | undefined
+		let settled = false
+		const release = releaseReservedConnection({
+			release: () =>
+				new Promise<void>((resolve) => {
+					finishRelease = resolve
+				}),
+		}).then(() => {
+			settled = true
+		})
+
+		await Promise.resolve()
+		expect(settled).toBe(false)
+		finishRelease?.()
+		await release
+		expect(settled).toBe(true)
+	})
+
 	test('measures a full rewind from the configured history boundary', () => {
 		expect(rewindDepth(1_250n, 1_000n, -1n)).toBe(251n)
 		expect(rewindDepth(1_250n, 1_000n, 1_200n)).toBe(50n)

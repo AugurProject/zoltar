@@ -115,6 +115,10 @@ export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
 	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
 }
 
+export const releaseReservedConnection = async (connection: Pick<ReservedSQL, 'release'>): Promise<void> => {
+	await connection.release()
+}
+
 export type IndexerLease = {
 	readonly backendPid: number
 	readonly connection: ReservedSQL
@@ -214,10 +218,16 @@ export class ScannerDatabase {
 
 	async tryAcquireIndexerLock(chainId: number): Promise<IndexerLease | undefined> {
 		const connection = await this.sql.reserve()
+		let connectionReleased = false
+		const releaseConnection = async (): Promise<void> => {
+			if (connectionReleased) return
+			connectionReleased = true
+			await releaseReservedConnection(connection)
+		}
 		try {
 			const rows = await connection`SELECT pg_try_advisory_lock(92138472, ${chainId}) AS locked, pg_backend_pid() AS backend_pid`
 			if (rows[0]?.['locked'] !== true) {
-				connection.release()
+				await releaseConnection()
 				return undefined
 			}
 			let released = false
@@ -244,12 +254,12 @@ export class ScannerDatabase {
 					try {
 						await connection`SELECT pg_advisory_unlock(92138472, ${chainId})`
 					} finally {
-						connection.release()
+						await releaseConnection()
 					}
 				},
 			}
 		} catch (error) {
-			connection.release()
+			await releaseConnection()
 			throw error
 		}
 	}

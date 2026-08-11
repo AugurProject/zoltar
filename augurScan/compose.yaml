@@ -27,9 +27,9 @@ services:
       POSTGRES_URL: postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan
       PORT: 3000
       NETWORKS: ${NETWORKS:-mainnet,sepolia}
-      MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://ethereum.dark.florist}
+      MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://mainnet.gateway.tenderly.co}
       MAINNET_START_BLOCK: ${MAINNET_START_BLOCK:-0}
-      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-https://sepolia.gateway.tenderly.co}
       SEPOLIA_START_BLOCK: ${SEPOLIA_START_BLOCK:-0}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       BLOCK_BATCH_SIZE: ${BLOCK_BATCH_SIZE:-20}

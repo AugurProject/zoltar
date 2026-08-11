@@ -2,12 +2,15 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { loadNetworks } from '../src/config.ts'
 
 const originalNetworks = process.env['NETWORKS']
+const originalMainnetRpc = process.env['MAINNET_RPC_URL']
 const originalStart = process.env['SEPOLIA_START_BLOCK']
 const originalRpc = process.env['SEPOLIA_RPC_URL']
 
 afterEach(() => {
 	if (originalNetworks === undefined) delete process.env['NETWORKS']
 	else process.env['NETWORKS'] = originalNetworks
+	if (originalMainnetRpc === undefined) delete process.env['MAINNET_RPC_URL']
+	else process.env['MAINNET_RPC_URL'] = originalMainnetRpc
 	if (originalStart === undefined) delete process.env['SEPOLIA_START_BLOCK']
 	else process.env['SEPOLIA_START_BLOCK'] = originalStart
 	if (originalRpc === undefined) delete process.env['SEPOLIA_RPC_URL']
@@ -15,6 +18,15 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
+	test('uses public endpoints with historical state by default', async () => {
+		process.env['NETWORKS'] = 'mainnet,sepolia'
+		delete process.env['MAINNET_RPC_URL']
+		delete process.env['SEPOLIA_RPC_URL']
+		const networks = await loadNetworks()
+
+		expect(networks.map(({ rpcUrls }) => rpcUrls)).toEqual([['https://mainnet.gateway.tenderly.co'], ['https://sepolia.gateway.tenderly.co']])
+	})
+
 	test('selects networks and preserves an exact bigint start block', async () => {
 		process.env['NETWORKS'] = 'sepolia'
 		process.env['SEPOLIA_START_BLOCK'] = '8123456'

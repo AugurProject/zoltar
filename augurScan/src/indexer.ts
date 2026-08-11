@@ -106,6 +106,8 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 	return result
 }
 
+export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly (readonly T[])[] => chunks(addresses, 5)
+
 const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
 	const result = new Array<R>(items.length)
 	let cursor = 0
@@ -520,7 +522,7 @@ class NetworkIndexer {
 	}
 
 	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
-		const groups = chunks(addresses, 75)
+		const groups = rpcLogAddressGroups(addresses)
 		const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock: blockNumber, toBlock: blockNumber }))
 		const unique = new Map<string, Log>()
 		for (const log of pages.flat()) {
