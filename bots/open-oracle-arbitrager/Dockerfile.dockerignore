@@ -20,6 +20,7 @@
 !bots/open-oracle-arbitrager/docs/**
 !bots/open-oracle-arbitrager/scripts/
 !bots/open-oracle-arbitrager/scripts/check-market-fixture.mts
+!bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh
 !bots/open-oracle-arbitrager/src/
 !bots/open-oracle-arbitrager/src/**
 !bots/shared/package.json

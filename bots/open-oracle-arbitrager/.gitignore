@@ -1,3 +1,4 @@
+/.env
 /.state/
 /artifacts/
 /node_modules/
