@@ -511,10 +511,14 @@ main {
 	padding-bottom: 1rem;
 	border-bottom: 1px solid var(--line);
 }
+.state-detail-header > div {
+	min-width: 0;
+}
 .state-detail-title {
 	margin: 0.2rem 0 0;
 	font-size: clamp(1.15rem, 2vw, 1.6rem);
 	letter-spacing: -0.03em;
+	overflow-wrap: anywhere;
 }
 .state-detail-subtitle {
 	margin-top: 0.45rem;
@@ -522,6 +526,7 @@ main {
 	font:
 		0.68rem / 1.4 ui-monospace,
 		monospace;
+	overflow-wrap: anywhere;
 }
 .state-kind {
 	padding: 0.35rem 0.55rem;
@@ -1637,7 +1642,7 @@ dialog::backdrop {
 	}
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1200px) {
 	.richlist-header {
 		display: none;
 	}
@@ -1748,8 +1753,15 @@ dialog::backdrop {
 	.filters {
 		grid-template-columns: 1fr 1fr;
 	}
-	.filters label:nth-child(2) {
+	.filters label {
 		grid-column: 1 / -1;
+	}
+	.state-detail-header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+	.state-kind {
+		align-self: flex-start;
 	}
 	.primary,
 	.secondary {
