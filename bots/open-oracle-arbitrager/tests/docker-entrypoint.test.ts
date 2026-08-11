@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
+const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
 const temporaryDirectories: string[] = []
 
@@ -27,6 +28,11 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 }
 
 describe('Docker entrypoint', () => {
+	test('installs production dependencies where shared bot sources can resolve them', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		expect(source).toContain('cd bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+	})
+
 	test('has a Linux-compatible shell shebang', async () => {
 		const source = await readFile(entrypoint, 'utf8')
 		expect(source.startsWith('#!/bin/sh\n')).toBe(true)
