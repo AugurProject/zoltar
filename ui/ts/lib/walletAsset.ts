@@ -1,4 +1,4 @@
-import { getAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, getAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { getActiveBackend } from './activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'
@@ -146,7 +146,7 @@ async function readTokenMetadata(backend: ChainBackend, address: Address): Promi
 		}),
 	])
 	return {
-		decimals: Number(decimals),
+		decimals: bigintToSafeNumber(decimals, 'Token decimals'),
 		symbol: String(symbol),
 	}
 }

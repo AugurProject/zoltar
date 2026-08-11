@@ -1,5 +1,5 @@
 import { bytesToHex as nobleBytesToHex } from '@noble/hashes/utils.js'
-import { ensure0x, hexQuantity, normalizeBlockTag, transactionCountBlockTag, normalizeHash, normalizeRpcHex, normalizeRpcBigInt, normalizeCodecArguments, getNamedFunctionAbi, getContractMethod, decodeFunctionOutput, encodeEventTopics, encodeFunctionData, decodeEventLog, getAddress } from './codec'
+import { bigintToSafeNumber, ensure0x, hexQuantity, normalizeBlockTag, transactionCountBlockTag, normalizeHash, normalizeRpcHex, normalizeRpcBigInt, normalizeCodecArguments, getNamedFunctionAbi, getContractMethod, decodeFunctionOutput, encodeEventTopics, encodeFunctionData, decodeEventLog, getAddress } from './codec'
 import type {
 	Hex,
 	Address,
@@ -228,7 +228,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			return normalizeBlock(block, includeTransactions)
 		},
 		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => Number(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' }))),
+		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode: async parameters => {
 			const result = normalizeRpcHex(
 				await requestTransport<string>(transport, {

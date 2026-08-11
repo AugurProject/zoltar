@@ -1,4 +1,5 @@
 import { getAddress, isAddress } from './ethereum.ts'
+import { unixSecondsToDate } from './time.ts'
 import type { StoredLog } from './types.ts'
 
 type AtomicValue = string
@@ -107,8 +108,8 @@ const address = (value: unknown, name: string): string => {
 
 const timestamp = (value: unknown, name: string): Date => {
 	const seconds = BigInt(integerString(value, name))
-	if (seconds < 0n || seconds > BigInt(Math.floor(8_640_000_000_000_000 / 1000))) throw new Error(`${name} is outside the supported timestamp range`)
-	return new Date(Number(seconds) * 1000)
+	if (seconds < 0n) throw new Error(`${name} is outside the supported timestamp range`)
+	return unixSecondsToDate(seconds, name)
 }
 
 const strings = (value: unknown, name: string): readonly string[] => {

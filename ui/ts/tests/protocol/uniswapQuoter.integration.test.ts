@@ -108,7 +108,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 			if (typeof repDecimals !== 'bigint') {
 				throw new Error('REP decimals should decode to a bigint')
 			}
-			expect(Number(repDecimals)).toBe(18)
+			if (repDecimals !== 18n) throw new Error('Expected REP decimals to be 18')
 		})
 
 		void test('USDC_ADDRESS is a valid checksummed address with 6 decimals', async () => {
@@ -120,7 +120,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 			if (typeof usdcDecimals !== 'bigint') {
 				throw new Error('USDC decimals should decode to a bigint')
 			}
-			expect(Number(usdcDecimals)).toBe(6)
+			if (usdcDecimals !== 6n) throw new Error('Expected USDC decimals to be 6')
 		})
 	})
 })

@@ -1332,7 +1332,9 @@ describe('event-only replay', () => {
 				log.transactionHash === null ||
 				log.transactionHash === undefined ||
 				log.transactionIndex === null ||
+				log.transactionIndex === undefined ||
 				log.logIndex === null ||
+				log.logIndex === undefined ||
 				typeof decoded.args !== 'object' ||
 				decoded.args === null ||
 				Array.isArray(decoded.args)
@@ -1344,8 +1346,8 @@ describe('event-only replay', () => {
 				blockHash: log.blockHash,
 				blockNumber: log.blockNumber,
 				transactionHash: log.transactionHash,
-				transactionIndex: Number(log.transactionIndex),
-				logIndex: Number(log.logIndex),
+				transactionIndex: Number.parseInt(log.transactionIndex.toString(), 10),
+				logIndex: Number.parseInt(log.logIndex.toString(), 10),
 				emitter: log.address,
 				eventName: decoded.eventName,
 				args: Object.fromEntries(Object.entries(decoded.args)),
@@ -1782,8 +1784,8 @@ describe('event-only replay', () => {
 			blockHash: checkpointLog.blockHash,
 			blockNumber: checkpointLog.blockNumber,
 			transactionHash: checkpointLog.transactionHash,
-			transactionIndex: Number(checkpointLog.transactionIndex),
-			logIndex: Number(checkpointLog.logIndex),
+			transactionIndex: Number.parseInt(checkpointLog.transactionIndex.toString(), 10),
+			logIndex: Number.parseInt(checkpointLog.logIndex.toString(), 10),
 			emitter: checkpointLog.address,
 			eventName: 'PoolAccountingCheckpoint',
 			args: {

@@ -1,4 +1,4 @@
-import type { Address, BlockTransaction, Hex, TransactionReceipt, TransactionReplacement } from '#ethereum'
+import { bigintToSafeNumber, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
@@ -376,7 +376,7 @@ export async function receiptGasExpendituresWithQuorum(readers: readonly Receipt
 					if (milliseconds < 0n || milliseconds > 8_640_000_000_000_000n) throw new Error(`${label} receipt block timestamp is outside the supported date range`)
 					return {
 						costAttoEth: receipt.gasUsed * receipt.effectiveGasPrice,
-						minedAt: new Date(Number(milliseconds)).toISOString(),
+						minedAt: new Date(bigintToSafeNumber(milliseconds, `${label} receipt block timestamp`)).toISOString(),
 						transactionHash: receipt.transactionHash,
 					}
 				}),

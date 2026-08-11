@@ -1,4 +1,4 @@
-import { formatEther, type Address } from '#ethereum'
+import { bigintToSafeNumber, formatEther, type Address } from '#ethereum'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { type Configuration } from '#config/configuration'
 import { opportunityDecision } from '#execution/execution-orchestration'
@@ -65,7 +65,7 @@ export async function inspectReport(
 	for (const pool of pools) {
 		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
 		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
-		const evaluation = await evaluate(client, config, report, pool, gasPrice, { hash: blockHash, number: blockNumber, observedAt: Number(blockTimestamp) * 1_000 })
+		const evaluation = await evaluate(client, config, report, pool, gasPrice, { hash: blockHash, number: blockNumber, observedAt: bigintToSafeNumber(blockTimestamp * 1_000n, 'Report block timestamp') })
 		dexObservations.push(...evaluation.observations)
 		if (evaluation.candidate === undefined) continue
 		if (best === undefined || evaluation.candidate.quote.netProfitAttoWeth > best.quote.netProfitAttoWeth) best = { ...evaluation.candidate, pool }

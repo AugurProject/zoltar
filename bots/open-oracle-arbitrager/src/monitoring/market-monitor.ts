@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
 
 const MAINNET_AUGUR_GENESIS_UNIVERSE = getAddress('0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA')
@@ -97,7 +97,7 @@ export function createTokenCatalogTracker(discoverAugurTokens: (configured: read
 
 export function childPayouts(numTicks: bigint, numberOfOutcomes: bigint) {
 	if (numberOfOutcomes < 2n || numberOfOutcomes > 32n) throw new Error(`Unsupported Augur outcome count: ${numberOfOutcomes.toString()}`)
-	const count = Number(numberOfOutcomes)
+	const count = bigintToSafeNumber(numberOfOutcomes, 'Augur outcome count')
 	return Array.from({ length: count }, (_, winner) => Array.from({ length: count }, (_, index) => (index === winner ? numTicks : 0n)))
 }
 
@@ -145,7 +145,7 @@ export async function discoverAugurRepTokens(client: ReadClient, chainId: number
 
 async function tokenMetadata(client: ReadClient, address: Address) {
 	const [name, symbol, decimals] = await Promise.all([client.readContract({ address, abi: erc20Abi, functionName: 'name' }), client.readContract({ address, abi: erc20Abi, functionName: 'symbol' }), client.readContract({ address, abi: erc20Abi, functionName: 'decimals' })])
-	return { decimals: Number(decimals), name, symbol }
+	return { decimals: bigintToSafeNumber(decimals, 'Token decimals'), name, symbol }
 }
 
 export function poolSpotPriceWeth(sqrtPriceX96: bigint, token: Address, weth: Address, decimals: number) {

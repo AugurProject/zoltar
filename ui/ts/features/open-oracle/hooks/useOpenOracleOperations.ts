@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { zeroAddress, type Abi, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress, type Abi, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '../../../hooks/useFormState.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
@@ -80,8 +80,10 @@ const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDepende
 }
 
 function parseTokenDecimals(value: unknown) {
-	const decimals = Number(value)
-	return Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : undefined
+	let decimals: number | undefined
+	if (typeof value === 'bigint') decimals = bigintToSafeNumber(value, 'Token decimals')
+	if (typeof value === 'number') decimals = value
+	return decimals !== undefined && Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : undefined
 }
 
 type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }

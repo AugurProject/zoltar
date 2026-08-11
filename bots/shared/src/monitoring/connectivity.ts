@@ -1,4 +1,5 @@
 import type { Hex } from '../ethereum.ts'
+import { bigintToSafeNumber } from '../ethereum/codec.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
@@ -107,8 +108,8 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
 	const result = await rpcRequest(url, 'eth_chainId', [], timeoutMilliseconds)
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('RPC returned an invalid chain id')
-	const chainId = Number(BigInt(result))
-	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('RPC returned an unsupported chain id')
+	const chainId = bigintToSafeNumber(BigInt(result), 'RPC chain ID')
+	if (chainId <= 0) throw new Error('RPC returned an unsupported chain id')
 	return chainId
 }
 

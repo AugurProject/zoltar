@@ -14,6 +14,7 @@ import {
 	zeroAddress,
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
+import { unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 
 const erc20MetadataAbi = parseAbi([
@@ -698,7 +699,7 @@ class NetworkIndexer {
 				number,
 				hash: block.hash,
 				parentHash: block.parentHash,
-				timestamp: new Date(Number(block.timestamp) * 1000),
+				timestamp: unixSecondsToDate(block.timestamp, 'Block timestamp'),
 				observedHead,
 				finalizedThrough,
 				contracts: discovered,

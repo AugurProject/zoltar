@@ -1,4 +1,5 @@
 import ccxt, { type Exchange } from 'ccxt'
+import { bigintToSafeNumber } from '../ethereum.ts'
 import type { MarketConsensusObservation, MarketConsensusSettings } from './market-consensus.ts'
 
 const FIXED_UNIT = 10n ** 18n
@@ -286,10 +287,10 @@ export function serializeCentralizedMarketSettings(settings: CentralizedMarketSe
 		assetAddress: settings.assetAddress,
 		assetChainId: settings.assetChainId,
 		assetSymbol: settings.assetSymbol,
-		depthBps: Number(settings.depthBps),
-		maximumDexDeviationBps: Number(settings.maximumDexDeviationBps),
+		depthBps: bigintToSafeNumber(settings.depthBps, 'Depth basis points'),
+		maximumDexDeviationBps: bigintToSafeNumber(settings.maximumDexDeviationBps, 'Maximum DEX deviation basis points'),
 		maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
-		maximumVenueDispersionBps: Number(settings.maximumVenueDispersionBps),
+		maximumVenueDispersionBps: bigintToSafeNumber(settings.maximumVenueDispersionBps, 'Maximum venue dispersion basis points'),
 		minimumAskDepthEth: formatFixed(settings.minimumAskDepthAttoEth),
 		minimumBidDepthEth: formatFixed(settings.minimumBidDepthAttoEth),
 		minimumSourceCount: settings.minimumSourceCount,
@@ -308,7 +309,7 @@ export function serializeCentralizedMarketSettings(settings: CentralizedMarketSe
 						allowSingleGroupFallback: settings.venueConsensus.allowSingleGroupFallback,
 						dexProbeDepthEth: formatFixed(settings.venueConsensus.dexProbeDepthAttoEth),
 						dexSources: settings.venueConsensus.dexSources,
-						maximumGroupDeviationBps: Number(settings.venueConsensus.maximumGroupDeviationBps),
+						maximumGroupDeviationBps: bigintToSafeNumber(settings.venueConsensus.maximumGroupDeviationBps, 'Maximum group deviation basis points'),
 						minimumDexAskDepthEth: formatFixed(settings.venueConsensus.minimumDexAskDepthAttoEth),
 						minimumDexBidDepthEth: formatFixed(settings.venueConsensus.minimumDexBidDepthAttoEth),
 						minimumDexSourceCount: settings.venueConsensus.minimumDexSourceCount,
@@ -410,7 +411,8 @@ function fixed(value: number, label: string) {
 }
 
 function quoteDepth(levels: MarketOrderBook['bids'], midpoint: number, depthBps: bigint, side: 'ask' | 'bid') {
-	const boundary = side === 'bid' ? midpoint * (1 - Number(depthBps) / 10_000) : midpoint * (1 + Number(depthBps) / 10_000)
+	const depth = bigintToSafeNumber(depthBps, 'Order-book depth basis points')
+	const boundary = side === 'bid' ? midpoint * (1 - depth / 10_000) : midpoint * (1 + depth / 10_000)
 	let quoteDepth = 0
 	for (const [rawPrice, rawAmount] of levels) {
 		const price = requiredPositiveNumber(rawPrice, `${side} price`)
