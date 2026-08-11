@@ -21,7 +21,7 @@ Protocol documentation lives in [docs/documentation.html](https://augurproject.g
 ## Prerequisites
 
 - Bun 1.3+
-- Foundry `anvil` for local chain work
+- Node.js 20+ for the repository-wide TypeScript check
 
 ## Setup
 
@@ -37,15 +37,10 @@ Then run the full bootstrap:
 bun run setup
 ```
 
-Install `anvil` if it is not already available:
-
-```bash
-bun run install:anvil
-```
-
 Important:
 
 - `bun run setup` is the fastest way to get to a working repo after the root install.
+- The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
 - If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
 
@@ -53,7 +48,7 @@ Important:
 
 After completing [Setup](#setup), start a local chain and launch the app:
 
-1. Start `anvil`
+1. Start the repository-pinned local chain with `bun run anvil`
 1. Run `bun run app:serve`
 
 If you are iterating on the app and want rebuilds, use:
@@ -311,10 +306,10 @@ Measure Solidity gas costs:
 bun run gas-costs
 ```
 
-By default, `gas-costs` starts an isolated Anvil node. To measure against an existing local node instead, start Anvil in one terminal:
+By default, `gas-costs` starts an isolated Anvil node. To measure against an existing local node instead, start the repository-pinned Anvil in one terminal:
 
 ```bash
-anvil --host 127.0.0.1 --port 8545 --chain-id 1 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee
+bun run anvil -- --host 127.0.0.1 --port 8545 --chain-id 1 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee
 ```
 
 Then run `gas-costs` against it from another terminal:
