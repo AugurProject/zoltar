@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
-import { App, compactUniverseId, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
+import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../features/LiveTrading.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -29,7 +29,7 @@ describe('universe selector', () => {
 			<UniverseSelector
 				options={[
 					{ id: '1', label: 'Genesis universe' },
-					{ id: '2', label: 'Child universe · YES branch' },
+					{ id: '2', label: 'Universe 2 · YES branch' },
 				]}
 				selectedId={selected}
 				disabled={false}
@@ -41,7 +41,9 @@ describe('universe selector', () => {
 		cleanupRendered = rendered.cleanup
 		const select = rendered.container.querySelector<HTMLSelectElement>('select')
 		expect(select?.tagName).toBe('SELECT')
-		expect(select?.getAttribute('aria-label')).toBe('Universe')
+		expect(select?.getAttribute('aria-label')).toBe('Select universe')
+		expect(rendered.container.querySelector('.universe-selector > span')).toBeNull()
+		expect(Array.from(select?.options ?? [], option => option.textContent)).toEqual(['Genesis universe', 'Universe 2 · YES branch'])
 		expect(select?.value).toBe('1')
 		await act(() => {
 			if (select === null) throw new Error('Universe selector is unavailable')
@@ -56,6 +58,20 @@ describe('universe selector', () => {
 		const second = { universeId: 2n } as LiveMarket
 		expect(filterMarketsByUniverse([first, second], '2')).toEqual([second])
 		expect(filterMarketsByUniverse([first, second], undefined)).toEqual([])
+	})
+
+	test('labels live genesis and non-genesis universes without ambiguous compact IDs', () => {
+		const firstCollision = 123_000_000_000_000_000_456n
+		const secondCollision = 123_999_999_999_999_999_456n
+		const options = buildLiveUniverseOptions([0n, 7n, firstCollision, secondCollision])
+		expect(options[0]).toEqual({ id: '0', label: 'Genesis universe', accessibleLabel: 'Genesis universe' })
+		expect(options[1]).toEqual({ id: '7', label: 'Universe 7', accessibleLabel: 'Universe 7' })
+		expect(options[2]?.label).toStartWith('Universe ')
+		expect(options[3]?.label).toStartWith('Universe ')
+		expect(options[2]?.label).not.toBe(options[3]?.label)
+		expect(options[2]?.accessibleLabel).toBe(`Universe ${firstCollision.toString()}`)
+		expect(options[3]?.accessibleLabel).toBe(`Universe ${secondCollision.toString()}`)
+		expect(() => compactUniqueUniverseIds(['7', '7'])).toThrow('Universe IDs must be unique')
 	})
 
 	test('uses the header selection as the demo portfolio universe context', async () => {
@@ -91,8 +107,8 @@ describe('universe selector', () => {
 		const selected = demoMarket('max-token-ids').universeId.toString()
 		const selector = rendered.container.querySelector<HTMLSelectElement>('.universe-selector select')
 		expect(selector?.value).toBe(selected)
-		expect(selector?.selectedOptions[0]?.textContent).toBe(`ID ${compactUniverseId(selected)}`)
-		expect(selector?.selectedOptions[0]?.getAttribute('aria-label')).toBe(`Universe ID ${selected}`)
+		expect(selector?.selectedOptions[0]?.textContent).toBe(`Universe ${compactUniverseId(selected)}`)
+		expect(selector?.selectedOptions[0]?.getAttribute('aria-label')).toBe(`Universe ${selected}`)
 		const longOptions = Array.from(selector?.options ?? []).filter(option => option.value.length > 18)
 		expect(longOptions).toHaveLength(2)
 		expect(longOptions[0]?.textContent).not.toBe(longOptions[1]?.textContent)

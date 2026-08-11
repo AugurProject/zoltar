@@ -71,8 +71,7 @@ export function UniverseSelector({ options, selectedId, disabled, onChange }: { 
 	const selected = options.find(option => option.id === selectedId)
 	return (
 		<label class='universe-selector'>
-			<span>Universe</span>
-			<select aria-label='Universe' title={selected?.accessibleLabel ?? selected?.label} value={selectedId ?? ''} disabled={disabled || options.length === 0} onChange={event => onChange(event.currentTarget.value)}>
+			<select aria-label='Select universe' title={selected?.accessibleLabel ?? selected?.label} value={selectedId ?? ''} disabled={disabled || options.length === 0} onChange={event => onChange(event.currentTarget.value)}>
 				{options.length === 0 ? (
 					<option value=''>Unavailable</option>
 				) : (
@@ -167,11 +166,32 @@ export function compactUniverseId(universeId: string) {
 	return `${universeId.slice(0, 3)}…${universeId.slice(-3)}`
 }
 
-function demoUniverseLabel(market: ReturnType<typeof demoMarket>) {
-	if (market.universeId === 1n && market.universe === 'Genesis universe') return 'Genesis'
-	if (market.universeId === 1n && market.universe === 'Parent universe · forked') return 'Parent · forked'
-	if (market.universeId === 2n && market.universe === 'Child universe · YES branch') return 'YES child'
-	return `ID ${compactUniverseId(market.universeId.toString())}`
+export function compactUniqueUniverseIds(universeIds: readonly string[]) {
+	if (new Set(universeIds).size !== universeIds.length) throw new Error('Universe IDs must be unique')
+	let edgeLength = 3
+	while (true) {
+		const labels = universeIds.map(universeId => (universeId.length <= edgeLength * 2 + 1 ? universeId : `${universeId.slice(0, edgeLength)}…${universeId.slice(-edgeLength)}`))
+		if (new Set(labels).size === labels.length) return labels
+		edgeLength++
+	}
+}
+
+export function buildLiveUniverseOptions(universeIds: readonly bigint[]): readonly UniverseOption[] {
+	const ids = universeIds.map(universeId => universeId.toString())
+	const compactIds = compactUniqueUniverseIds(ids)
+	return universeIds.map((universeId, index) => {
+		const id = ids[index]
+		const compactId = compactIds[index]
+		if (id === undefined || compactId === undefined) throw new Error('Universe label generation failed')
+		return universeId === 0n ? { id, label: 'Genesis universe', accessibleLabel: 'Genesis universe' } : { id, label: `Universe ${compactId}`, accessibleLabel: `Universe ${id}` }
+	})
+}
+
+function demoUniverseLabel(market: ReturnType<typeof demoMarket>, compactId: string) {
+	if (market.universeId === 1n && market.universe === 'Genesis universe') return 'Genesis universe'
+	if (market.universeId === 1n && market.universe === 'Parent universe · forked') return 'Universe 1 · forked'
+	if (market.universeId === 2n && market.universe === 'Child universe · YES branch') return 'Universe 2 · YES branch'
+	return `Universe ${compactId}`
 }
 
 export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
@@ -199,10 +219,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 		setWorkflowLocked(locked)
 	}, [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined) => {
-		const options = universeIds.map(universeId => {
-			const id = universeId.toString()
-			return { id, label: `ID ${compactUniverseId(id)}`, accessibleLabel: `Universe ID ${id}` }
-		})
+		const options = buildLiveUniverseOptions(universeIds)
 		setLiveUniverseOptions(options)
 		setSelectedUniverseId(current => {
 			if (current !== undefined && options.some(option => option.id === current)) return current
@@ -210,9 +227,13 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 		})
 	}, [])
 	const demoMarkets = demoUniverseChoices(scenario)
-	const demoUniverseOptions = demoMarkets.map(choice => {
+	const demoCompactUniverseIds = compactUniqueUniverseIds(demoMarkets.map(choice => choice.universeId.toString()))
+	const demoUniverseOptions = demoMarkets.map((choice, index) => {
 		const id = choice.universeId.toString()
-		return { id, label: demoUniverseLabel(choice), accessibleLabel: choice.universeId === 1n || choice.universeId === 2n ? choice.universe : `Universe ID ${id}` }
+		const compactId = demoCompactUniverseIds[index]
+		if (compactId === undefined) throw new Error('Demo universe label generation failed')
+		const label = demoUniverseLabel(choice, compactId)
+		return { id, label, accessibleLabel: label.includes('…') ? `Universe ${id}` : label }
 	})
 	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
 	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions

@@ -178,14 +178,7 @@ nav a[aria-current="page"] {
 	min-width: 0;
 }
 .universe-selector {
-	display: grid;
-	gap: 0.2rem;
-	color: var(--muted);
-	font:
-		9px / 1.2 ui-monospace,
-		monospace;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	display: block;
 }
 .universe-selector select {
 	min-width: 150px;
@@ -1202,10 +1195,15 @@ footer {
 	}
 	.header-actions {
 		gap: 0.35rem;
+		grid-template-columns: minmax(0, 1fr) 210px;
+	}
+	.header-actions .universe-selector {
+		grid-column: 2;
 	}
 	.universe-selector select {
-		min-width: 116px;
-		max-width: 132px;
+		width: 210px;
+		min-width: 180px;
+		max-width: 210px;
 		height: 44px;
 	}
 	.brand small {
