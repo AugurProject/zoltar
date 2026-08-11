@@ -59,7 +59,7 @@ const getExplicitHeapLimitMb = (nodeOptions: string | undefined): string | undef
 		const match = EXPLICIT_HEAP_LIMIT_PATTERN.exec(token.value)
 		if (match === null) continue
 		const explicitValue = match[1]
-		if (explicitValue !== undefined) explicitHeapLimitMb = explicitValue
+		if (explicitValue !== undefined) explicitHeapLimitMb = explicitValue.startsWith('+') ? explicitValue.slice(1) : explicitValue
 	}
 	return explicitHeapLimitMb
 }
