@@ -63,11 +63,13 @@ export function MarketList({ market }: { market: DemoMarket }) {
 					</dl>
 					<MarketListAction market={market} />
 					<div class='market-row__pool'>
-						<div class='market-row__pool-identity'>
-							<span>SecurityPool used by this AMM</span>
-							<AddressValue value={market.pool} />
-						</div>
 						<dl>
+							<div class='market-row__pool-address'>
+								<dt>SecurityPool</dt>
+								<dd>
+									<AddressValue value={market.pool} />
+								</dd>
+							</div>
 							<div>
 								<dt>System state</dt>
 								<dd>{market.securityPool.systemState}</dd>
@@ -369,7 +371,6 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<span class='eyebrow'>Positions grouped by SecurityPool</span>
 					<h1>Portfolio</h1>
 				</div>
 			</header>

@@ -200,15 +200,6 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 				<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>
 			</header>
 
-			<section class='invalid-note' aria-label='INVALID pricing limitation'>
-				<span class='invalid-note__icon' aria-hidden='true'>
-					◇
-				</span>
-				<div>
-					<strong>INVALID is not traded or priced by this AMM.</strong>
-				</div>
-			</section>
-
 			<div class='detail-grid'>
 				{!initialized ? (
 					<section class='section uninitialized-state' aria-labelledby='initialization-heading'>

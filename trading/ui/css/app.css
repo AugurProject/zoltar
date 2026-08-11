@@ -387,32 +387,6 @@ nav a[aria-current="page"] {
 .status--bad {
 	color: var(--bad);
 }
-.invalid-note {
-	display: flex;
-	align-items: center;
-	gap: 0.9rem;
-	margin-bottom: 1rem;
-	padding: 0.85rem 1rem;
-	border: 1px solid #415027;
-	background: #151c0e;
-}
-.invalid-note__icon {
-	display: grid;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	color: var(--accent);
-	border: 1px solid #52632d;
-}
-.invalid-note div {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.4rem 0.8rem;
-	font-size: 12px;
-}
-.invalid-note span {
-	color: #b2bd9e;
-}
 .detail-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1.45fr) minmax(310px, 0.8fr);
@@ -767,27 +741,11 @@ summary {
 }
 .market-row__pool {
 	grid-column: 1 / -1;
-	display: grid;
-	grid-template-columns: minmax(260px, 0.8fr) minmax(0, 2fr);
-	gap: 1.5rem;
 	padding: 1rem;
 	border: 1px solid var(--line);
 	background: rgb(255 255 255 / 1.5%);
 }
-.market-row__pool-identity {
-	display: grid;
-	align-content: start;
-	gap: 0.45rem;
-}
-.market-row__pool-identity > span {
-	color: var(--accent);
-	font:
-		10px ui-monospace,
-		monospace;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-}
-.market-row__pool-identity .address {
+.market-row__pool-address .address {
 	max-width: 100%;
 	overflow: visible;
 	text-overflow: clip;
@@ -1115,9 +1073,6 @@ footer {
 	.market-row__main {
 		grid-column: 1 / -1;
 	}
-	.market-row__pool {
-		grid-template-columns: 1fr;
-	}
 	.explanation-flow {
 		grid-template-columns: 1fr 1fr;
 	}
@@ -1219,12 +1174,6 @@ footer {
 	}
 	.route-header h1 {
 		font-size: 2rem;
-	}
-	.invalid-note {
-		align-items: flex-start;
-	}
-	.invalid-note div {
-		display: grid;
 	}
 	.detail-grid {
 		gap: 0.5rem;

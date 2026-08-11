@@ -24,6 +24,9 @@ const forbiddenCopy = [
 	'Demo data is simulated',
 	'Simulate enter',
 	'Simulate insured',
+	'INVALID is not traded or priced by this AMM',
+	'Positions grouped by SecurityPool',
+	'SecurityPool used by this AMM',
 ]
 
 describe('essential trading copy', () => {
