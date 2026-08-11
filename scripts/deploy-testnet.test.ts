@@ -12,6 +12,8 @@ import {
 	createBudgetedTransactionSender,
 	createCompleteDeploymentPlan,
 	createDeploymentBudget,
+	createDeploymentReceiptWaiter,
+	DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS,
 	deployTestnet,
 	getDeploymentHelp,
 	parseDeploymentCommandLine,
@@ -160,6 +162,22 @@ describe('testnet deployment inputs', () => {
 	test('requires EIP-1559 even when every deployment step could be skipped', async () => {
 		await expect(assertEip1559Compatible({ getBlock: async () => ({ baseFeePerGas: 1n }) as never }, 11_155_111)).resolves.toBeUndefined()
 		await expect(assertEip1559Compatible({ getBlock: async () => ({ baseFeePerGas: undefined }) as never }, 84_532)).rejects.toThrow('does not expose the EIP-1559 base fee')
+	})
+
+	test('waits significantly longer for deployment transaction receipts', async () => {
+		const requests: Parameters<WriteClient['waitForTransactionReceipt']>[0][] = []
+		const waitForTransactionReceipt = createDeploymentReceiptWaiter({
+			waitForTransactionReceipt: async parameters => {
+				requests.push(parameters)
+				return { status: 'success' } as never
+			},
+		})
+
+		await waitForTransactionReceipt({ hash: FIRST_HASH })
+		await waitForTransactionReceipt({ hash: SECOND_HASH, timeout: 12_345 })
+
+		expect(DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS).toBe(60 * 60 * 1_000)
+		expect(requests.map(request => request.timeout)).toEqual([DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS, 12_345])
 	})
 
 	test('enforces chain and RPC safety at the transaction-capable entry point', async () => {

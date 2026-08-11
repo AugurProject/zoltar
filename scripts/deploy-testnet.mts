@@ -15,6 +15,7 @@ import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CO
 const DEFAULT_CHAIN_ID = 11_155_111
 export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '100'
 export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
+export const DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS = 60 * 60 * 1_000
 const CANCUN_CAPABILITY_PROBE = '0x6000600060005e600160005d60005c60005260206000f3'
 const CANCUN_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
@@ -290,6 +291,15 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 	return sendTransaction
 }
 
+export function createDeploymentReceiptWaiter(client: Pick<WriteClient, 'waitForTransactionReceipt'>) {
+	const waitForTransactionReceipt: WriteClient['waitForTransactionReceipt'] = async parameters =>
+		await client.waitForTransactionReceipt({
+			...parameters,
+			timeout: parameters.timeout ?? DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS,
+		})
+	return waitForTransactionReceipt
+}
+
 export function createPreparedDeploymentClient(parameters: { chain: Chain; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string }): WriteClient {
 	const account = privateKeyToAccount(parameters.privateKey)
 	const wallet = createWalletClient({
@@ -304,6 +314,7 @@ export function createPreparedDeploymentClient(parameters: { chain: Chain; maxFe
 		maxFeePerGas: parameters.maxFeePerGas ?? parseMaxFeePerGas(undefined),
 		maxTotalCost,
 	})
+	const waitForTransactionReceipt = createDeploymentReceiptWaiter(wallet)
 
 	return {
 		...wallet,
@@ -312,6 +323,7 @@ export function createPreparedDeploymentClient(parameters: { chain: Chain; maxFe
 		recordCanonicalRawTransaction: budget.recordCanonicalRawTransaction,
 		requiresWalletConfirmation: false,
 		sendTransaction,
+		waitForTransactionReceipt,
 	}
 }
 
