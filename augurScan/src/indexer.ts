@@ -5,6 +5,7 @@ import {
 	createPublicClient,
 	getAddress,
 	type Hash,
+	type Hex,
 	http,
 	type Log,
 	type PublicClient,
@@ -87,18 +88,38 @@ export const readTokenMetadata = async (address: Address, blockNumber: bigint, c
 	return { address, decimals, ...(name === undefined ? {} : { name }), ...(symbol === undefined ? {} : { symbol }), readBlock: blockNumber }
 }
 
-const wait = (milliseconds: number, signal: AbortSignal): Promise<void> =>
+export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve) => {
-		const timeout = setTimeout(resolve, milliseconds)
-		signal.addEventListener(
-			'abort',
-			() => {
-				clearTimeout(timeout)
-				resolve()
-			},
-			{ once: true },
-		)
+		const finish = (): void => {
+			clearTimeout(timeout)
+			signal.removeEventListener('abort', finish)
+			resolve()
+		}
+		const timeout = setTimeout(finish, milliseconds)
+		if (signal.aborted) finish()
+		else signal.addEventListener('abort', finish, { once: true })
 	})
+
+export const findContractDeploymentBlock = async (
+	startBlock: bigint,
+	observedHead: bigint,
+	codeAt: (block: bigint) => Promise<Hex | undefined>,
+): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+	const hasCode = async (block: bigint): Promise<boolean> => {
+		const code = await codeAt(block)
+		return code !== undefined && code !== '0x'
+	}
+	if (!(await hasCode(observedHead))) return undefined
+	if (await hasCode(startBlock)) return { block: startBlock, exact: false }
+	let lower = startBlock
+	let upper = observedHead
+	while (lower + 1n < upper) {
+		const middle = lower + (upper - lower) / 2n
+		if (await hasCode(middle)) upper = middle
+		else lower = middle
+	}
+	return { block: upper, exact: true }
+}
 
 const chunks = <T>(items: readonly T[], size: number): T[][] => {
 	const result: T[][] = []
@@ -187,7 +208,13 @@ class LeaseLostError extends Error {}
 
 type ChainProvider = { readonly getChainId: () => Promise<number> }
 
-export const rpcEndpointLabel = (rpcUrl: string): string => new URL(rpcUrl).origin
+export const rpcEndpointLabel = (rpcUrl: string): string => {
+	const url = new URL(rpcUrl)
+	const hostnameParts = url.hostname.split('.')
+	const isLocalOrIp = url.hostname === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname) || url.hostname.includes(':')
+	const hostname = !isLocalOrIp && hostnameParts.length > 2 ? `*.${hostnameParts.slice(-2).join('.')}` : url.hostname
+	return `${url.protocol}//${hostname}${url.port === '' ? '' : `:${url.port}`}`
+}
 
 export const rpcProviderLabel = (rpcUrl: string, index: number): string => `#${index + 1} ${rpcEndpointLabel(rpcUrl)}`
 
@@ -309,6 +336,21 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	return details.join('; ')
 }
 
+export const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs = 5_000): Promise<T> =>
+	await new Promise<T>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			const error = new Error('Contract deployment history read timed out')
+			error.name = 'TimeoutError'
+			reject(error)
+		}, timeoutMs)
+		void read()
+			.then(resolve, reject)
+			.finally(() => clearTimeout(timeout))
+	})
+
+export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean =>
+	lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
+
 type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
@@ -344,7 +386,7 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
 			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure), safeIndexerFailureReason(error))
 		}
-		await wait(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
+		await waitForIndexerDelay(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
 	}
 }
 
@@ -401,7 +443,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				// PostgreSQL already releases advisory locks when their session is lost.
 			}
 		}
-		if (!signal.aborted) await wait(intervalMs, signal)
+		if (!signal.aborted) await waitForIndexerDelay(intervalMs, signal)
 	}
 }
 
@@ -435,6 +477,7 @@ class NetworkIndexer {
 	#indexingStartReported = false
 	#lastProgressLogAt: number | undefined
 	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
+	#lastDeploymentScanAt: number | undefined
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
@@ -561,6 +604,31 @@ class NetworkIndexer {
 		await this.#database.rewind(this.#network.chainId, -1n, undefined, this.#requireLease())
 	}
 
+	async #refreshContractDeployment(indexedBoundary: bigint): Promise<void> {
+		const now = Date.now()
+		if (!contractDeploymentScanDue(this.#lastDeploymentScanAt, now)) return
+		try {
+			const candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
+			if (candidate === undefined) return
+			const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
+				boundedDeploymentRead(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+			)
+			const resolved =
+				deployment === undefined
+					? undefined
+					: {
+							...deployment,
+							timestamp: new Date(Number((await boundedDeploymentRead(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
+						}
+			await this.#assertLease()
+			await this.#database.recordContractDeployment(this.#network.chainId, candidate.address, indexedBoundary, resolved, this.#requireLease())
+		} catch (error) {
+			console.warn(`[${this.#network.id}] contract deployment check skipped: ${safeIndexerFailureReason(error)}`)
+		} finally {
+			this.#lastDeploymentScanAt = Date.now()
+		}
+	}
+
 	async #poll(): Promise<boolean> {
 		await this.#assertLease()
 		await this.#verifyRemoteChain()
@@ -574,6 +642,7 @@ class NetworkIndexer {
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
 			if (this.#lastReportedPhase !== 'live') this.#reportProgress(observedHead, observedHead, observedHead)
+			if (checkpoint !== undefined) await this.#refreshContractDeployment(checkpoint.number)
 			return true
 		}
 
@@ -608,7 +677,11 @@ class NetworkIndexer {
 			expectedParentHash = indexed.block.hash
 			nextBlock++
 		}
-		if (nextBlock > batchStart) this.#reportProgress(batchStart, nextBlock - 1n, observedHead)
+		if (nextBlock > batchStart) {
+			const indexedThrough = nextBlock - 1n
+			this.#reportProgress(batchStart, indexedThrough, observedHead)
+			await this.#refreshContractDeployment(indexedThrough)
+		}
 		return end >= observedHead
 	}
 

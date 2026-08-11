@@ -300,36 +300,6 @@ main {
 		0.66rem / 1.4 ui-monospace,
 		monospace;
 }
-.diagnostics {
-	margin-top: 0.8rem;
-	border: 1px solid var(--line);
-	border-radius: 9px;
-	background: rgba(13, 20, 28, 0.6);
-}
-.diagnostics summary {
-	cursor: pointer;
-	padding: 0.7rem 0.85rem;
-	color: var(--muted);
-	font-size: 0.72rem;
-}
-.diagnostics-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 0 0.85rem 0.65rem;
-	color: var(--muted);
-	font-size: 0.66rem;
-}
-.diagnostics pre {
-	max-height: 260px;
-	margin: 0;
-	padding: 0.85rem;
-	overflow: auto;
-	border-top: 1px solid var(--line);
-	color: #aab9c7;
-	font-size: 0.65rem;
-}
 .activity {
 	margin-top: 2.6rem;
 }
@@ -1190,6 +1160,89 @@ dialog::backdrop {
 .richlist {
 	margin-top: 2.8rem;
 }
+.contracts {
+	margin-top: 2.8rem;
+}
+.contracts-workspace {
+	display: grid;
+	grid-template-columns: minmax(300px, 0.75fr) minmax(360px, 1.25fr);
+	min-height: 480px;
+	overflow: hidden;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	background: rgba(16, 23, 32, 0.76);
+}
+.contract-list {
+	display: grid;
+	align-content: start;
+	max-height: 680px;
+	overflow-y: auto;
+	border-right: 1px solid var(--line);
+}
+.contract-row {
+	display: grid;
+	gap: 0.45rem;
+	width: 100%;
+	padding: 0.9rem 1rem;
+	color: var(--text);
+	border: 0;
+	border-bottom: 1px solid var(--line);
+	background: transparent;
+	text-align: left;
+}
+.contract-row:hover,
+.contract-row[aria-selected="true"] {
+	background: color-mix(in srgb, var(--cyan) 7%, var(--panel));
+}
+.contract-row[aria-selected="true"] {
+	box-shadow: inset 3px 0 var(--cyan);
+}
+.contract-row-head,
+.contract-detail-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.8rem;
+}
+.contract-row strong {
+	font-size: 0.78rem;
+}
+.contract-row code,
+.contract-detail code {
+	color: var(--muted);
+	font-size: 0.65rem;
+	overflow-wrap: anywhere;
+}
+.deployment-status {
+	width: max-content;
+	padding: 0.22rem 0.42rem;
+	color: var(--amber);
+	border: 1px solid color-mix(in srgb, var(--amber) 38%, transparent);
+	border-radius: 99px;
+	font: 600 0.56rem / 1 var(--mono);
+	text-transform: uppercase;
+}
+.deployment-status.live {
+	color: var(--green);
+	border-color: color-mix(in srgb, var(--green) 38%, transparent);
+}
+.deployment-status.error {
+	color: var(--red);
+	border-color: color-mix(in srgb, var(--red) 38%, transparent);
+}
+.contract-detail {
+	padding: 1.2rem;
+}
+.contract-detail h3 {
+	margin: 0.2rem 0;
+	font-size: 1.25rem;
+}
+.contract-detail-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.7rem;
+	margin-top: 1.2rem;
+}
 .richlist-controls {
 	display: flex;
 	align-items: end;
@@ -1656,8 +1709,7 @@ dialog::backdrop {
 }
 
 @media (max-width: 760px) {
-	.freshness-banner,
-	.diagnostics-bar {
+	.freshness-banner {
 		align-items: flex-start;
 		flex-direction: column;
 	}
@@ -1751,6 +1803,26 @@ dialog::backdrop {
 	}
 	.richlist {
 		margin-top: 2rem;
+	}
+	.contracts {
+		margin-top: 2rem;
+	}
+	.contracts-workspace {
+		grid-template-columns: 1fr;
+	}
+	.contract-list {
+		display: flex;
+		max-height: none;
+		overflow-x: auto;
+		border-right: 0;
+		border-bottom: 1px solid var(--line);
+	}
+	.contract-row {
+		min-width: 270px;
+		border-right: 1px solid var(--line);
+	}
+	.contract-detail-grid {
+		grid-template-columns: 1fr;
 	}
 	.richlist-heading,
 	.richlist-controls {

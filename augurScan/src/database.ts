@@ -72,6 +72,28 @@ type StoredCheckpoint = {
 	readonly indexedHash?: string
 }
 
+const contractMetadataFromRow = (row: Record<string, unknown>): ContractMetadata => {
+	const address = String(row['address']) as Address
+	return {
+		address,
+		label: String(row['label']),
+		kind: String(row['kind']),
+		provenance: String(row['provenance']),
+		...(row['discovery_block'] === null || row['discovery_block'] === undefined ? {} : { discoveryBlock: BigInt(String(row['discovery_block'])) }),
+		...(row['discovery_tx_hash'] === null || row['discovery_tx_hash'] === undefined ? {} : { discoveryTxHash: String(row['discovery_tx_hash']) as Hash }),
+		...(row['deployment_block'] === null || row['deployment_block'] === undefined ? {} : { deploymentBlock: BigInt(String(row['deployment_block'])) }),
+		...(row['deployment_timestamp'] === null || row['deployment_timestamp'] === undefined
+			? {}
+			: { deploymentTimestamp: new Date(String(row['deployment_timestamp'])) }),
+		...(row['deployment_block_exact'] === null || row['deployment_block_exact'] === undefined
+			? {}
+			: { deploymentBlockExact: row['deployment_block_exact'] === true || row['deployment_block_exact'] === 'true' }),
+		...(row['deployment_checked_block'] === null || row['deployment_checked_block'] === undefined
+			? {}
+			: { deploymentCheckedBlock: BigInt(String(row['deployment_checked_block'])) }),
+	}
+}
+
 type RewindCheckpoint = {
 	readonly indexedBlock?: bigint
 	readonly indexedHash?: string
@@ -319,26 +341,42 @@ export class ScannerDatabase {
 
 	async contracts(chainId: number): Promise<Map<string, ContractMetadata>> {
 		const rows = await this
-			.sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
-		return new Map(
-			rows.map((row: Record<string, unknown>) => {
-				const address = String(row['address']) as Address
-				const block = row['discovery_block']
-				return [
-					address,
-					{
-						address,
-						label: String(row['label']),
-						kind: String(row['kind']),
-						provenance: String(row['provenance']),
-						...(block === null || block === undefined ? {} : { discoveryBlock: BigInt(String(block)) }),
-						...(row['discovery_tx_hash'] === null || row['discovery_tx_hash'] === undefined
-							? {}
-							: { discoveryTxHash: String(row['discovery_tx_hash']) as Hash }),
-					},
-				]
-			}),
-		)
+			.sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
+		return new Map(rows.map((row: Record<string, unknown>) => [String(row['address']), contractMetadataFromRow(row)]))
+	}
+
+	async contractDeploymentCandidate(chainId: number, observedHead: bigint, lease: IndexerLease): Promise<ContractMetadata | undefined> {
+		await lease.assertHeld()
+		const staleBefore = observedHead >= 100n ? observedHead - 100n : -1n
+		const rows = await lease.connection`
+			SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp,
+				deployment_block_exact, deployment_checked_block
+			FROM contracts
+			WHERE chain_id = ${chainId} AND canonical AND deployment_block IS NULL
+				AND (deployment_checked_block IS NULL OR deployment_checked_block <= ${staleBefore.toString()})
+			ORDER BY deployment_checked_block NULLS FIRST, label, address
+			LIMIT 1
+		`
+		const row = rows[0]
+		return row === undefined ? undefined : contractMetadataFromRow(row)
+	}
+
+	async recordContractDeployment(
+		chainId: number,
+		address: Address,
+		checkedBlock: bigint,
+		deployment: { readonly block: bigint; readonly timestamp: Date; readonly exact: boolean } | undefined,
+		lease: IndexerLease,
+	): Promise<void> {
+		await lease.assertHeld()
+		await lease.connection`
+			UPDATE contracts SET
+				deployment_block = ${deployment?.block.toString() ?? null},
+				deployment_timestamp = ${deployment?.timestamp ?? null},
+				deployment_block_exact = ${deployment?.exact ?? null},
+				deployment_checked_block = ${checkedBlock.toString()}
+			WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()} AND canonical
+		`
 	}
 
 	async tokenMetadata(chainId: number): Promise<Map<string, TokenMetadata>> {
@@ -460,6 +498,15 @@ export class ScannerDatabase {
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
+			await transaction`
+				UPDATE contracts SET
+					deployment_block = CASE WHEN deployment_block > ${ancestor.toString()} THEN NULL ELSE deployment_block END,
+					deployment_timestamp = CASE WHEN deployment_block > ${ancestor.toString()} THEN NULL ELSE deployment_timestamp END,
+					deployment_block_exact = CASE WHEN deployment_block > ${ancestor.toString()} THEN NULL ELSE deployment_block_exact END,
+					deployment_checked_block = CASE WHEN deployment_checked_block > ${ancestor.toString()} THEN NULL ELSE deployment_checked_block END
+				WHERE chain_id = ${chainId} AND (deployment_block > ${ancestor.toString()} OR deployment_checked_block > ${ancestor.toString()})
+			`
+			await transaction`UPDATE contracts SET deployment_checked_block = NULL WHERE chain_id = ${chainId} AND deployment_checked_block > ${ancestor.toString()}`
 			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND provenance <> 'manifest' AND discovery_block > ${ancestor.toString()}`
 			await transaction`
 				UPDATE contracts AS contract SET
@@ -542,15 +589,19 @@ export class ScannerDatabase {
 					ON CONFLICT (chain_id, address, block_hash, tx_hash) DO UPDATE SET canonical = true
 				`
 				await transaction`
-					INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, discovery_tx_hash, canonical)
-					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${contract.label}, ${contract.kind}, ${contract.provenance}, ${contract.discoveryBlock?.toString() ?? null}, ${contract.discoveryTxHash ?? null}, true)
+					INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, discovery_tx_hash, canonical, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block)
+					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${contract.label}, ${contract.kind}, ${contract.provenance}, ${contract.discoveryBlock?.toString() ?? null}, ${contract.discoveryTxHash ?? null}, true, ${contract.discoveryBlock.toString()}, ${block.timestamp}, true, ${block.number.toString()})
 					ON CONFLICT (chain_id, address) DO UPDATE SET
 						canonical = true,
 						label = CASE WHEN contracts.provenance = 'manifest' THEN contracts.label ELSE EXCLUDED.label END,
 						kind = CASE WHEN contracts.provenance = 'manifest' THEN contracts.kind ELSE EXCLUDED.kind END,
 						provenance = CASE WHEN contracts.provenance = 'manifest' THEN contracts.provenance ELSE EXCLUDED.provenance END,
 						discovery_block = CASE WHEN contracts.provenance = 'manifest' THEN contracts.discovery_block ELSE EXCLUDED.discovery_block END,
-						discovery_tx_hash = CASE WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END
+						discovery_tx_hash = CASE WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END,
+						deployment_block = COALESCE(contracts.deployment_block, EXCLUDED.deployment_block),
+						deployment_timestamp = COALESCE(contracts.deployment_timestamp, EXCLUDED.deployment_timestamp),
+						deployment_block_exact = COALESCE(contracts.deployment_block_exact, EXCLUDED.deployment_block_exact),
+						deployment_checked_block = GREATEST(contracts.deployment_checked_block, EXCLUDED.deployment_checked_block)
 				`
 			}
 			for (const item of block.transactions) {

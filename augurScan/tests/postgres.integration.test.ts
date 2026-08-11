@@ -353,7 +353,11 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			kind: 'securityPool',
 			provenance: 'manifest',
 		})
+		await database.recordContractDeployment(chainId, address, 2n, { block: 2n, timestamp: new Date('2026-01-02T00:00:00Z'), exact: true }, writeLease)
+		expect((await database.contracts(chainId)).get(address.toLowerCase())).toMatchObject({ deploymentBlock: 2n, deploymentCheckedBlock: 2n })
 		await database.rewind(chainId, 1n, first.hash, writeLease)
+		expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentBlock')
+		expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentCheckedBlock')
 		expect((await database.contracts(chainId)).get(promotedAddress.toLowerCase())?.provenance).toBe('manifest')
 		expect((await database.contracts(chainId)).get(rediscoveredAddress.toLowerCase())).toMatchObject({
 			label: 'Original discovery',

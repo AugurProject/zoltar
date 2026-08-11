@@ -42,6 +42,18 @@ export const indexerConnectionStatus = (network, streamState, networkRequestFail
 	return { label: 'Connecting', tone: 'pending' }
 }
 
+export const contractDeploymentStatus = (contract) => {
+	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
+		return contract.deployment_block_exact === false
+			? { label: `Deployed by #${contract.deployment_block}`, tone: 'live' }
+			: { label: 'Deployed', tone: 'live' }
+	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
+		return { label: `Not deployed at #${contract.deployment_checked_block}`, tone: 'error' }
+	return { label: 'Checking deployment', tone: 'pending' }
+}
+
+export const contractDeploymentTimestampLabel = (contract) => (contract.deployment_block_exact === false ? 'Code present by' : 'Deployed at')
+
 export const reconcileTransactionDialogSnapshot = (snapshot, availableKeys) => ({
 	...snapshot,
 	expandedKeys: snapshot.expandedKeys.filter((key) => key !== undefined && availableKeys.has(key)),

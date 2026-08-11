@@ -1,5 +1,7 @@
 import {
 	classifyLiveRecords,
+	contractDeploymentStatus,
+	contractDeploymentTimestampLabel,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
 	isCurrentLiveRequest,
@@ -27,9 +29,10 @@ const demoState = pageUrl.searchParams.get('state')
 const detailState = pageUrl.searchParams.get('detailState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
+const isContracts = location.pathname === '/contracts'
 const isRichList = location.pathname === '/richlist'
 const isAddress = location.pathname === '/address'
-const isActivity = !isSystem && !isRichList && !isAddress
+const isActivity = !isSystem && !isContracts && !isRichList && !isAddress
 const initialChainId = pageUrl.searchParams.get('chainId') ?? ''
 const initialActivityFilters = {
 	event: pageUrl.searchParams.get('event') ?? '',
@@ -65,7 +68,6 @@ let stream
 let networkLoadPromise
 let networkFollowUpPromise
 let latestNetworks = []
-let lastStreamEventAt
 let logsAbortController
 let serverClockOffsetMs = 0
 let networkFreshnessThresholdMs = 48_000
@@ -75,6 +77,9 @@ let canonicalRefreshRequired = false
 let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
+let contractItems = []
+let contractRequestVersion = 0
+let selectedContractAddress
 let activeLog
 let pendingCanonicalLog
 let activeAccount
@@ -185,6 +190,33 @@ const demoNetworks = [
 		explorer_base_url: 'https://sepolia.etherscan.io',
 	},
 ]
+const demoContracts = demoNetworks.flatMap((network) =>
+	[
+		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
+		['0x052c04adFF6C1BF51f52158e36441C1e99cdfDB4', 'Deployment Status Oracle', 'deploymentStatusOracle', '22181462', true],
+		['0x529dcaC57677451CBfe766d88CcC133D082500df', 'OpenOracle', 'openOracle', '22181501', true],
+		['0xaa280cf94Fc3531aDe40b479C17eBef53923291C', 'Zoltar', 'zoltar', undefined, true],
+		['0xBea56ec12C943213408DA17f754A523A8aB38947', 'Security Pool Factory', 'securityPoolFactory', undefined, true],
+	].map(([address, label, kind, deploymentBlock, exact], index) => ({
+		chain_id: network.chain_id,
+		address,
+		label,
+		kind,
+		provenance: 'manifest',
+		discovery_block: null,
+		discovery_tx_hash: null,
+		deployment_block: network.id === 'mainnet' ? (deploymentBlock ?? null) : index < 3 ? String(8_750_000 + index * 12) : null,
+		deployment_timestamp:
+			network.id === 'mainnet' && deploymentBlock !== undefined
+				? new Date(Date.now() - (5 - index) * 86_400_000).toISOString()
+				: network.id === 'sepolia' && index < 3
+					? new Date(Date.now() - (3 - index) * 86_400_000).toISOString()
+					: null,
+		deployment_block_exact: deploymentBlock === undefined ? null : exact,
+		deployment_checked_block: network.indexed_block,
+		explorer_base_url: network.explorer_base_url,
+	})),
+)
 const demoEvents = [
 	'PoolAccountingCheckpoint',
 	'Transfer',
@@ -763,6 +795,10 @@ const api = async (path, { signal } = {}) => {
 						: demoNetworks,
 			}
 		}
+		if (path.startsWith('/api/v1/contracts')) {
+			const chainId = new URL(path, location.origin).searchParams.get('chainId')
+			return { items: demoContracts.filter((contract) => contract.chain_id === chainId) }
+		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
 				demoCanonicalRouteRefreshErrorConsumed = true
@@ -1123,32 +1159,6 @@ const renderNetworks = (networks) => {
 	updateConnectionStatus()
 }
 
-const updateDiagnostics = () => {
-	const report = {
-		generatedAt: new Date().toISOString(),
-		page: location.pathname,
-		stream: stream?.readyState === EventSource.OPEN ? 'connected' : stream?.readyState === EventSource.CONNECTING ? 'connecting' : 'closed',
-		lastStreamEventAt: lastStreamEventAt?.toISOString(),
-		networks: latestNetworks
-			.filter((network) => String(network.chain_id) === selectedChainId())
-			.map((network) => ({
-				chainId: network.chain_id,
-				id: network.id,
-				phase: network.phase,
-				indexedBlock: network.indexed_block,
-				observedBlock: network.observed_block,
-				indexedTimestamp: network.indexed_timestamp,
-				lastSuccessAt: network.last_success_at,
-				consecutiveFailures: network.consecutive_failures,
-				nextRetryAt: network.next_retry_at,
-				lastReorgAt: network.last_reorg_at,
-				lastReorgDepth: network.last_reorg_depth,
-				lastError: network.last_error,
-			})),
-	}
-	$('#diagnostics-output').textContent = JSON.stringify(report, null, 2)
-}
-
 const updateFreshness = () => {
 	if (activeReorgRecovery !== undefined) return
 	const retryCanonical = $('#refresh-stale')
@@ -1220,28 +1230,15 @@ const reconcileNetworkOptions = (items) => {
 	updateNetworkLabels()
 }
 
-const setManualNetworkRefreshBusy = (busy) => {
-	const refreshButton = $('#refresh-networks')
-	refreshButton.disabled = busy
-	if (busy) {
-		refreshButton.setAttribute('aria-busy', 'true')
-		refreshButton.textContent = 'Refreshing…'
-	} else {
-		refreshButton.removeAttribute('aria-busy')
-		refreshButton.textContent = 'Refresh status'
-	}
-}
-
-const loadNetworks = async ({ manual = false, synchronizeActivity = true, refreshAfterCurrent = false } = {}) => {
+const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = false } = {}) => {
 	if (networkLoadPromise !== undefined) {
-		if (!manual && !refreshAfterCurrent) return await networkLoadPromise
+		if (!refreshAfterCurrent) return await networkLoadPromise
 		if (refreshAfterCurrent && networkFollowUpPromise !== undefined) return await networkFollowUpPromise
-		if (manual) setManualNetworkRefreshBusy(true)
 		const activeLoad = networkLoadPromise
 		const followUp = activeLoad
 			.then(async () => {
 				if (networkLoadPromise === activeLoad) networkLoadPromise = undefined
-				return await loadNetworks({ manual, synchronizeActivity })
+				return await loadNetworks({ synchronizeActivity })
 			})
 			.finally(() => {
 				if (networkFollowUpPromise === followUp) networkFollowUpPromise = undefined
@@ -1249,7 +1246,6 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 		if (refreshAfterCurrent) networkFollowUpPromise = followUp
 		return await followUp
 	}
-	if (manual) setManualNetworkRefreshBusy(true)
 	const run = (async () => {
 		try {
 			const { items, serverTime, freshnessThresholdMs } = await api('/api/v1/networks')
@@ -1260,12 +1256,12 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			renderNetworks(items)
 			lastNetworkRequestFailed = false
 			updateFreshness()
-			updateDiagnostics()
 			updateConnectionStatus()
 			if (isActivity && synchronizeActivity && previousNetwork !== selectedChainId()) {
 				await loadLogs()
 			}
 			if (isSystem && synchronizeActivity && previousNetwork !== selectedChainId()) await loadSystemState()
+			if (isContracts && synchronizeActivity && previousNetwork !== selectedChainId()) await loadContracts()
 			if (isRichList && synchronizeActivity && previousNetwork !== selectedChainId()) await loadRichList()
 			if (isAddress && synchronizeActivity && previousNetwork !== selectedChainId()) await loadAddressProfile()
 			return true
@@ -1276,7 +1272,6 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 			networkCards.setAttribute('aria-busy', 'false')
 			if (networkCards.childElementCount === 0) networkCards.classList.add('empty')
 			updateFreshness()
-			updateDiagnostics()
 			return false
 		}
 	})()
@@ -1284,11 +1279,7 @@ const loadNetworks = async ({ manual = false, synchronizeActivity = true, refres
 		if (networkLoadPromise === tracked) networkLoadPromise = undefined
 	})
 	networkLoadPromise = tracked
-	try {
-		await tracked
-	} finally {
-		if (manual) setManualNetworkRefreshBusy(false)
-	}
+	await tracked
 }
 
 const rowFor = (log) => {
@@ -2187,6 +2178,131 @@ const stateHeader = (eyebrow, title, subtitle, kind) => {
 const richBalance = (value, symbol, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
 const richFieldLabel = (label) => element('span', 'sr-only rich-field-label', label)
 const nativeSymbol = (chainId = selectedChainId()) => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
+const syncContractUrl = (address) => {
+	const url = new URL(location.href)
+	if (address) url.searchParams.set('contract', address)
+	else url.searchParams.delete('contract')
+	history.replaceState(null, '', url)
+}
+
+const renderContractDetail = (contract) => {
+	const detail = $('#contract-detail')
+	if (contract === undefined) {
+		detail.replaceChildren(element('div', 'state-placeholder', 'No contract is selected.'))
+		return
+	}
+	const status = contractDeploymentStatus(contract)
+	const head = element('div', 'contract-detail-head')
+	const identity = element('div')
+	identity.append(element('p', 'eyebrow', contract.kind), element('h3', '', contract.label), element('code', '', contract.address))
+	const statusNode = element('span', `deployment-status ${status.tone}`, status.label)
+	head.append(identity, statusNode)
+	const grid = element('div', 'contract-detail-grid')
+	grid.append(
+		detailCard('Registry source', contract.provenance),
+		detailCard(
+			'Deployment block',
+			contract.deployment_block === null || contract.deployment_block === undefined
+				? 'Not observed'
+				: `${contract.deployment_block_exact === false ? 'At or before ' : ''}#${number(contract.deployment_block)}`,
+		),
+		detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
+		detailCard('First protocol discovery block', contract.discovery_block ? `#${number(contract.discovery_block)}` : 'Configured contract', true),
+	)
+	const actions = element('div', 'detail-tools')
+	const copyAddress = copyButton(contract.address, 'address')
+	copyAddress.dataset.contractAction = 'copy-address'
+	const openContract = explorerLink(contract.explorer_base_url, 'address', contract.address, 'Open contract ↗')
+	openContract.dataset.contractAction = 'open-contract'
+	actions.append(copyAddress, openContract)
+	if (contract.deployment_block) {
+		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, 'Open deployment block ↗')
+		openDeployment.dataset.contractAction = 'open-deployment'
+		actions.append(openDeployment)
+	}
+	if (contract.discovery_tx_hash) {
+		const openDiscovery = explorerLink(contract.explorer_base_url, 'tx', contract.discovery_tx_hash, 'Open discovery transaction ↗')
+		openDiscovery.dataset.contractAction = 'open-discovery'
+		actions.append(openDiscovery)
+	}
+	detail.replaceChildren(head, grid, actions)
+}
+
+const renderContracts = () => {
+	const list = $('#contract-list')
+	if (contractItems.length === 0) {
+		list.replaceChildren(element('div', 'state-placeholder', 'No system contracts are registered for this network.'))
+		renderContractDetail(undefined)
+		list.setAttribute('aria-busy', 'false')
+		return
+	}
+	const requested = pageUrl.searchParams.get('contract')?.toLowerCase()
+	const selected =
+		contractItems.find((contract) => contract.address.toLowerCase() === selectedContractAddress?.toLowerCase()) ??
+		contractItems.find((contract) => contract.address.toLowerCase() === requested) ??
+		contractItems[0]
+	selectedContractAddress = selected.address
+	const scrollLeft = list.scrollLeft
+	const scrollTop = list.scrollTop
+	const focusedContractAddress = document.activeElement?.closest?.('.contract-row')?.dataset.contractAddress
+	const focusedAction = document.activeElement?.closest?.('[data-contract-action]')?.dataset.contractAction
+	const existingRows = new Map([...list.querySelectorAll('.contract-row[data-contract-address]')].map((row) => [row.dataset.contractAddress, row]))
+	const renderedRows = []
+	for (const contract of contractItems) {
+		const status = contractDeploymentStatus(contract)
+		const addressKey = contract.address.toLowerCase()
+		const row = existingRows.get(addressKey) ?? element('button', 'contract-row')
+		row.type = 'button'
+		row.dataset.contractAddress = addressKey
+		row.setAttribute('aria-selected', String(contract.address.toLowerCase() === selected.address.toLowerCase()))
+		const head = element('span', 'contract-row-head')
+		head.append(element('strong', '', contract.label), element('span', `deployment-status ${status.tone}`, status.label))
+		row.replaceChildren(head, element('code', '', contract.address), element('span', 'eyebrow', contract.kind))
+		row.onclick = () => {
+			selectedContractAddress = contract.address
+			syncContractUrl(contract.address)
+			for (const candidate of list.querySelectorAll('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
+			renderContractDetail(contract)
+		}
+		renderedRows.push(row)
+	}
+	const retainedRows = new Set(renderedRows)
+	for (const child of [...list.children]) if (!retainedRows.has(child)) child.remove()
+	for (const row of renderedRows) list.append(row)
+	list.scrollLeft = scrollLeft
+	list.scrollTop = scrollTop
+	syncContractUrl(selected.address)
+	renderContractDetail(selected)
+	if (focusedAction !== undefined) document.querySelector(`[data-contract-action="${focusedAction}"]`)?.focus()
+	else if (focusedContractAddress !== undefined) list.querySelector(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
+	list.setAttribute('aria-busy', 'false')
+}
+
+const loadContracts = async () => {
+	const requestVersion = ++contractRequestVersion
+	const status = $('#contracts-status')
+	status.hidden = false
+	status.className = contractItems.length === 0 ? 'system-status' : 'system-status sr-only'
+	status.textContent = contractItems.length === 0 ? 'Loading system contracts…' : 'Refreshing system contracts…'
+	$('#contract-list').setAttribute('aria-busy', 'true')
+	try {
+		const result = await api(`/api/v1/contracts?${new URLSearchParams({ chainId: requiredChainId() })}`)
+		if (requestVersion !== contractRequestVersion) return false
+		contractItems = result.items
+		renderContracts()
+		status.className = 'system-status sr-only'
+		status.textContent = 'System contracts updated.'
+		return true
+	} catch (error) {
+		if (requestVersion !== contractRequestVersion) return false
+		$('#contract-list').setAttribute('aria-busy', 'false')
+		status.className = 'system-status error'
+		status.textContent =
+			contractItems.length === 0 ? `Contract registry unavailable: ${error.message}` : `Refresh failed; showing the last registry: ${error.message}`
+		return false
+	}
+}
+
 const renderRichList = ({ live = false } = {}) => {
 	const rows = $('#richlist-rows')
 	const previousRows = liveSnapshot(rows, '.rich-row[data-live-key]')
@@ -3214,7 +3330,6 @@ $('#address-filter').addEventListener('input', validateAddressFilter)
 $('#filters').addEventListener('input', () => {
 	$('#clear-filters').disabled = !hasActivityFilters()
 })
-$('#refresh-networks').addEventListener('click', () => loadNetworks({ manual: true }))
 $('#refresh-stale').addEventListener('click', async () => {
 	const button = $('#refresh-stale')
 	if (button.disabled) return
@@ -3227,8 +3342,9 @@ $('#refresh-stale').addEventListener('click', async () => {
 			if (refreshed) canonicalRefreshRequired = false
 			updateFreshness()
 		} else {
-			await loadNetworks({ manual: true, refreshAfterCurrent: true })
+			await loadNetworks({ refreshAfterCurrent: true })
 			if (isSystem) await loadSystemState()
+			else if (isContracts) await loadContracts()
 			else if (isRichList) await loadRichList()
 			else if (isAddress) await loadAddressProfile()
 			else await loadLogs()
@@ -3238,20 +3354,6 @@ $('#refresh-stale').addEventListener('click', async () => {
 		button.removeAttribute('aria-busy')
 		button.textContent = 'Retry now'
 	}
-})
-$('#copy-diagnostics').addEventListener('click', async (event) => {
-	updateDiagnostics()
-	const button = event.currentTarget
-	try {
-		await navigator.clipboard.writeText($('#diagnostics-output').textContent)
-		button.textContent = 'Copied'
-	} catch (error) {
-		console.error(`Clipboard write failed (${error instanceof Error ? error.name : typeof error})`)
-		button.textContent = 'Copy failed'
-	}
-	setTimeout(() => {
-		button.textContent = 'Copy diagnostics'
-	}, 1200)
 })
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
 $('#close-detail').addEventListener('click', closeDetail)
@@ -3323,12 +3425,12 @@ globalNetworkFilter.addEventListener('change', async () => {
 	url.searchParams.delete('log')
 	url.searchParams.delete('entity')
 	url.searchParams.delete('account')
+	url.searchParams.delete('contract')
 	history.replaceState(null, '', url)
 	syncNetworkUrl()
 	updateNetworkLabels()
 	renderNetworks(latestNetworks)
 	updateFreshness()
-	updateDiagnostics()
 	if (isSystem) {
 		stateDetailRequestVersion++
 		stateData = undefined
@@ -3337,6 +3439,12 @@ globalNetworkFilter.addEventListener('change', async () => {
 		$('#entity-list').replaceChildren()
 		$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system state…'))
 		await loadSystemState()
+	} else if (isContracts) {
+		contractItems = []
+		selectedContractAddress = undefined
+		$('#contract-list').replaceChildren()
+		$('#contract-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system contracts…'))
+		await loadContracts()
 	} else if (isRichList) {
 		richListItems = []
 		richListTotal = 0
@@ -3356,6 +3464,14 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
+			canonicalRefreshRequired = false
+			updateFreshness()
+		}
+		return contentRefreshed
+	}
+	if (isContracts) {
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadContracts()])
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
 			canonicalRefreshRequired = false
 			updateFreshness()
@@ -3448,7 +3564,6 @@ const refreshCanonicalViews = (title, detail) => {
 	banner.hidden = false
 	$('#freshness-title').textContent = title
 	$('#freshness-detail').textContent = detail
-	updateDiagnostics()
 	recovery.promise = (async () => {
 		try {
 			while (true) {
@@ -3513,7 +3628,6 @@ const connectStream = () => {
 	const nextStream = new EventSource(streamPath)
 	stream = nextStream
 	nextStream.addEventListener('open', () => {
-		lastStreamEventAt = new Date()
 		updateConnectionStatus()
 		if (streamHasOpened) void requestRouteRefresh(1)
 		streamHasOpened = true
@@ -3534,9 +3648,7 @@ const connectStream = () => {
 		return payload !== undefined && String(payload.chainId) === selectedChainId() ? payload : undefined
 	}
 	const liveUpdate = (event) => {
-		lastStreamEventAt = new Date()
 		if (selectedEventPayload(event, 'Live update') === undefined) return
-		updateDiagnostics()
 		queueBlockRefresh()
 	}
 	nextStream.addEventListener('block', (event) => {
@@ -3548,7 +3660,6 @@ const connectStream = () => {
 	})
 	nextStream.addEventListener('status', liveUpdate)
 	nextStream.addEventListener('reorg', async (event) => {
-		lastStreamEventAt = new Date()
 		const payload = eventPayload(event, 'Reorganization')
 		if (payload === undefined) return
 		if (isDemo) {
@@ -3561,7 +3672,6 @@ const connectStream = () => {
 		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; views are refreshing.`)
 	})
 	nextStream.addEventListener('reset', async () => {
-		lastStreamEventAt = new Date()
 		addressIdentityCache.clear()
 		await refreshCanonicalViews('Live replay window expired', 'Refreshing views from the current database state.')
 	})
@@ -3618,9 +3728,10 @@ if (!isRichList && accountDeepLink !== null) {
 }
 $('#activity').hidden = !isActivity
 $('#system').hidden = !isSystem
+$('#contracts').hidden = !isContracts
 $('#richlist').hidden = !isRichList
 $('#address-profile').hidden = !isAddress
-$('.skip-link').href = isSystem ? '#system' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
+$('.skip-link').href = isSystem ? '#system' : isContracts ? '#contracts' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
 for (const link of document.querySelectorAll('.product-nav a')) if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
 const requestedTab = pageUrl.searchParams.get('tab')
@@ -3630,6 +3741,7 @@ if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefine
 const initialDashboardLoad = (async () => {
 	await loadNetworks({ synchronizeActivity: false })
 	if (isSystem) await loadSystemState()
+	else if (isContracts) await loadContracts()
 	else if (isRichList) await loadRichList()
 	else if (isAddress) await loadAddressProfile()
 	else {

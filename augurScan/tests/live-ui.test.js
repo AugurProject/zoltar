@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
 import {
 	classifyLiveRecords,
+	contractDeploymentStatus,
+	contractDeploymentTimestampLabel,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
@@ -29,6 +31,15 @@ test('distinguishes indexer startup and backfill progress from stream connectivi
 		tone: 'error',
 	})
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'open', true)).toEqual({ label: 'Status unavailable', tone: 'error' })
+})
+
+test('describes verified, absent, and pending contract deployments', () => {
+	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: true })).toEqual({ label: 'Deployed', tone: 'live' })
+	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Deployed by #42', tone: 'live' })
+	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'Not deployed at #100', tone: 'error' })
+	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: null })).toEqual({ label: 'Checking deployment', tone: 'pending' })
+	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Code present by')
+	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
 })
 
 test('classifies appended, changed, and stable live records by canonical key', () => {

@@ -23,6 +23,7 @@
 				<nav class="product-nav" aria-label="Primary navigation">
 					<a href="/">Activity</a>
 					<a href="/system">System state</a>
+					<a href="/contracts">Contracts</a>
 					<a href="/richlist">Rich list</a>
 				</nav>
 				<label class="global-network"
@@ -41,16 +42,8 @@
 				<button id="refresh-stale" class="secondary compact" type="button">Retry now</button>
 			</div>
 			<section aria-label="Indexer status">
-				<div class="section-heading">
-					<p class="eyebrow">Indexer status</p>
-					<button id="refresh-networks" class="secondary compact" type="button">Refresh status</button>
-				</div>
+				<div class="section-heading"><p class="eyebrow">Indexer status</p></div>
 				<div id="network-cards" class="network-cards" aria-busy="true"></div>
-				<details class="diagnostics">
-					<summary>Operator diagnostics</summary>
-					<div class="diagnostics-bar"><span>Safe to include in a bug report; RPC URLs are never exposed.</span><button id="copy-diagnostics" class="secondary compact" type="button">Copy diagnostics</button></div>
-					<pre id="diagnostics-output">Waiting for network status…</pre>
-				</details>
 			</section>
 
 			<section id="activity" class="activity" aria-labelledby="activity-heading">
@@ -133,6 +126,25 @@
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
 				<div class="richlist-footer"><span id="richlist-summary"></span><button id="richlist-more" class="secondary" type="button" hidden>Show more</button></div>
+			</section>
+
+			<section id="contracts" class="contracts" aria-labelledby="contracts-heading" hidden>
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Deployment registry</p>
+						<h2 id="contracts-heading">System contracts</h2>
+					</div>
+				</div>
+				<p id="contracts-status" class="system-status" role="status" aria-live="polite">Loading system contracts…</p>
+				<div class="contracts-workspace">
+					<div id="contract-list" class="contract-list" aria-busy="true"></div>
+					<article id="contract-detail" class="contract-detail" aria-live="polite">
+						<div class="state-placeholder">
+							<p class="eyebrow">Contract details</p>
+							<h3>Select a contract</h3>
+						</div>
+					</article>
+				</div>
 			</section>
 
 			<section id="address-profile" class="address-profile" aria-labelledby="address-profile-heading" hidden>

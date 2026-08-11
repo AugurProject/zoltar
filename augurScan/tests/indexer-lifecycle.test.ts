@@ -1,10 +1,14 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
 import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
+	boundedDeploymentRead,
 	commitCanonicalRead,
 	confirmCanonicalBlock,
+	contractDeploymentScanDue,
+	findContractDeploymentBlock,
 	indexerProgressMessage,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
@@ -21,6 +25,7 @@ import {
 	safeIndexerFailure,
 	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
+	waitForIndexerDelay,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -110,6 +115,25 @@ describe('network indexer lifecycle', () => {
 		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; caught up')
 	})
 
+	test('finds the first block containing contract code and distinguishes a bounded result', async () => {
+		expect(await findContractDeploymentBlock(0n, 100n, async (block) => (block >= 42n ? '0x01' : undefined))).toEqual({ block: 42n, exact: true })
+		expect(await findContractDeploymentBlock(50n, 100n, async () => '0x01')).toEqual({ block: 50n, exact: false })
+		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
+	})
+
+	test('bounds a stalled optional contract deployment history read', async () => {
+		await expect(boundedDeploymentRead(() => new Promise(() => {}), 1)).rejects.toMatchObject({ name: 'TimeoutError' })
+		expect(contractDeploymentScanDue(undefined, 1_000)).toBe(true)
+		expect(contractDeploymentScanDue(1_000, 60_999)).toBe(false)
+		expect(contractDeploymentScanDue(1_000, 61_000)).toBe(true)
+	})
+
+	test('removes completed delay listeners from the shared shutdown signal', async () => {
+		const controller = new AbortController()
+		for (let index = 0; index < 20; index++) await waitForIndexerDelay(0, controller.signal)
+		expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+	})
+
 	test('never runs an indexing operation against a mismatched fallback provider', async () => {
 		const operations: string[] = []
 		const providers = [
@@ -192,9 +216,13 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
-	test('identifies same-origin RPC providers during failover without exposing URL credentials or paths', async () => {
+	test('identifies RPC providers during failover without exposing credentials, paths, or credential subdomains', async () => {
 		const secret = 'provider-key-sentinel'
-		const providers = [`https://rpc-user:${secret}@rpc.example/first`, `https://rpc.example/${secret}?token=${secret}`].map((rpcUrl, index) => ({
+		const providers = [
+			`https://rpc-user:${secret}@rpc.example/first`,
+			`https://rpc.example/${secret}?token=${secret}`,
+			`https://${secret}.rpc.example/third`,
+		].map((rpcUrl, index) => ({
 			endpoint: rpcProviderLabel(rpcUrl, index),
 			getChainId: async () => 1,
 			read: async () => Promise.reject(new Error('offline')),
@@ -213,7 +241,7 @@ describe('network indexer lifecycle', () => {
 		).rejects.toThrow('offline')
 		const message = rpcFailureLogMessage('RPC request failed; retrying', attemptedEndpoint)
 
-		expect(message).toBe('RPC request failed; retrying (RPC: #2 https://rpc.example)')
+		expect(message).toBe('RPC request failed; retrying (RPC: #3 https://*.rpc.example)')
 		expect(message).not.toContain(secret)
 		expect(message).not.toContain('rpc-user')
 	})

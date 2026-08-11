@@ -684,6 +684,18 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 				await sql`SELECT chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp, observed_block, finalized_block, phase, last_poll_at, last_success_at, failure_started_at, consecutive_failures, next_retry_at, last_reorg_at, last_reorg_depth, last_error, updated_at FROM networks ORDER BY chain_id`
 			return json({ items: rows, serverTime: new Date(), freshnessThresholdMs })
 		}
+		if (url.pathname === '/api/v1/contracts') {
+			const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+			if (chainId === undefined) throw new ApiRequestError('chainId is required')
+			const rows = await sql`
+				SELECT contract.*, network.explorer_base_url
+				FROM contracts contract
+				JOIN networks network USING (chain_id)
+				WHERE contract.chain_id = ${chainId} AND contract.canonical
+				ORDER BY (contract.deployment_block IS NOT NULL) DESC, contract.label, contract.address
+			`
+			return json({ items: rows })
+		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
 		if (url.pathname.startsWith('/api/v1/logs/')) return await logDetail(sql, url.pathname.slice('/api/v1/logs/'.length).split('/'))
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
@@ -706,7 +718,12 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			const chainId = routeInteger(chain)
 			if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address))
 				return json({ error: 'Invalid contract identifier' }, 400)
-			const rows = await sql`SELECT * FROM contracts WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()} AND canonical`
+			const rows = await sql`
+				SELECT contract.*, network.explorer_base_url
+				FROM contracts contract
+				JOIN networks network USING (chain_id)
+				WHERE contract.chain_id = ${chainId} AND contract.address = ${address.toLowerCase()} AND contract.canonical
+			`
 			return rows.length === 0 ? json({ error: 'Contract not found' }, 404) : json(rows[0])
 		}
 	} catch (error) {
