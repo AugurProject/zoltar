@@ -194,11 +194,14 @@ const splittableLogRangeErrorFragments = [
 	'too wide',
 ]
 
+const splittableLogRangeErrorNames = new Set(['ResponseBodyTooLargeError', 'TimeoutError'])
+
 export const isSplittableLogRangeError = (error: unknown): boolean => {
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
 		seen.add(current)
+		if ('name' in current && typeof current.name === 'string' && splittableLogRangeErrorNames.has(current.name)) return true
 		if ('code' in current && current.code === -32005) return true
 		const descriptions = [
 			'details' in current ? current.details : undefined,
@@ -1114,6 +1117,7 @@ class NetworkIndexer {
 			const pair = transactionByHash.get(hash)
 			const receipt = receiptByHash.get(hash)
 			if (pair === undefined || receipt === undefined) throw new Error(`Block ${number} did not contain relevant transaction ${hash}`)
+			if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${hash} did not succeed`)
 			const to = pair.transaction.to === null ? null : getAddress(pair.transaction.to)
 			storedTransactions.push({
 				hash,

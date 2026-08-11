@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
-import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, toHex } from '../src/ethereum.ts'
+import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, TimeoutError, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -104,6 +104,34 @@ describe('network indexer lifecycle', () => {
 		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
 		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
 		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('splits viem timeout and oversized-response failures at exact inclusive boundaries', async () => {
+		const failures = [
+			new TimeoutError({ body: { method: 'eth_getLogs' }, url: 'https://rpc.example' }),
+			new BaseError('HTTP response body exceeded the size limit.', { name: 'ResponseBodyTooLargeError' }),
+		]
+		for (const failure of failures) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const result = await queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					if (toBlock - fromBlock + 1n > 26n) throw failure
+					return [fromBlock, toBlock]
+				},
+				undefined,
+				isSplittableLogRangeError,
+			)
+			expect(result).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
+			expect(attempts).toEqual([
+				[0n, 100n],
+				[0n, 50n],
+				[0n, 25n],
+			])
+		}
 	})
 
 	test('does not bisect an unrelated provider failure', async () => {
