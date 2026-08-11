@@ -189,6 +189,52 @@ describe('network indexer lifecycle', () => {
 		expect(await withVerifiedProvider(providers, 1, (provider) => provider.read())).toBe('canonical data')
 	})
 
+	test('caches only successful provider chain verification', async () => {
+		let chainIdReads = 0
+		let verificationAvailable = false
+		const provider = {
+			getChainId: async () => {
+				chainIdReads++
+				if (!verificationAvailable) throw new Error('verification unavailable')
+				return 1
+			},
+			read: async () => 'canonical data',
+		}
+		const verifiedProviders = new WeakSet<typeof provider>()
+		await expect(
+			withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).rejects.toThrow('verification unavailable')
+		verificationAvailable = true
+		expect(
+			await withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).toBe('canonical data')
+		expect(
+			await withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).toBe('canonical data')
+		expect(chainIdReads).toBe(2)
+	})
+
 	test('keeps RPC log address filters within public-provider limits', () => {
 		expect(rpcLogAddressGroups(Array.from({ length: 12 }, (_, index) => index))).toEqual([
 			[0, 1, 2, 3, 4],

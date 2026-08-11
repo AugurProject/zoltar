@@ -208,6 +208,7 @@ class ChainConfigurationError extends Error {}
 class LeaseLostError extends Error {}
 
 type ChainProvider = { readonly getChainId: () => Promise<number> }
+type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string }
 
 export const rpcEndpointLabel = (rpcUrl: string): string => {
 	const url = new URL(rpcUrl)
@@ -228,13 +229,17 @@ export const withVerifiedProvider = async <TProvider extends ChainProvider, TRes
 	operation: (provider: TProvider) => Promise<TResult>,
 	stopFailover = (_error: unknown): boolean => false,
 	onAttempt = (_provider: TProvider): void => {},
+	verifiedProviders?: WeakSet<TProvider>,
 ): Promise<TResult> => {
 	let lastFailure: unknown
 	for (const provider of providers) {
 		onAttempt(provider)
 		try {
-			const remoteChainId = await provider.getChainId()
-			if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
+			if (verifiedProviders?.has(provider) !== true) {
+				const remoteChainId = await provider.getChainId()
+				if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
+				verifiedProviders?.add(provider)
+			}
 			return await operation(provider)
 		} catch (error) {
 			if (stopFailover(error)) throw error
@@ -533,7 +538,8 @@ const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, bl
 class NetworkIndexer {
 	readonly #network: NetworkConfig
 	readonly #database: ScannerDatabase
-	readonly #providers: readonly { readonly client: PublicClient; readonly endpoint: string; readonly getChainId: () => Promise<number> }[]
+	readonly #providers: readonly RpcProvider[]
+	readonly #verifiedProviders = new WeakSet<RpcProvider>()
 	#client: PublicClient
 	#activeRpcEndpoint: string
 	#indexingStartReported = false
@@ -603,14 +609,8 @@ class NetworkIndexer {
 			(provider) => {
 				this.#activeRpcEndpoint = provider.endpoint
 			},
+			this.#verifiedProviders,
 		)
-	}
-
-	async #verifyRemoteChain(): Promise<void> {
-		const remoteChainId = await this.#client.getChainId()
-		if (remoteChainId !== this.#network.chainId) {
-			throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.#network.chainId}, received ${remoteChainId}`)
-		}
 	}
 
 	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
@@ -711,14 +711,12 @@ class NetworkIndexer {
 
 	async #poll(): Promise<boolean> {
 		await this.#assertLease()
-		await this.#verifyRemoteChain()
 		await this.#reconcileReorg()
 		const observedHead = await this.#client.getBlockNumber()
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId)
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
 			if (checkpoint !== undefined) await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
-			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
 			if (checkpoint === undefined) this.#reportWaitingForStart(observedHead)
@@ -754,7 +752,6 @@ class NetworkIndexer {
 				}
 				throw error
 			}
-			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.storeBlock(this.#network.chainId, indexed.block, this.#requireLease())
 			contracts = indexed.contracts
