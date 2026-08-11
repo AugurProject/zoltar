@@ -1,4 +1,4 @@
-import type { Hex } from '../ethereum.ts'
+import type { Address, Hex } from '../ethereum.ts'
 import { bigintToSafeNumber } from '../ethereum/codec.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
@@ -65,7 +65,8 @@ export function validateReadRpcUrls(values: readonly string[]) {
 
 export function validateIndependentReadRpcUrls(primary: string, values: readonly string[]) {
 	const normalizedPrimary = endpointUrl(primary.trim())
-	const normalized = validateReadRpcUrls(values)
+	if (values.length > 8) throw new Error('At most 8 read quorum RPC URLs are supported')
+	const normalized = values.map(value => endpointUrl(value.trim()))
 	const origins = [new URL(normalizedPrimary).origin, ...normalized.map(value => new URL(value).origin)]
 	if (new Set(origins).size !== origins.length) throw new Error('Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider')
 	return normalized
@@ -83,6 +84,20 @@ export function validateConnectivitySettings(value: unknown): ConnectivitySettin
 	const publicRpcUrls = [...new Set(record['publicRpcUrls'].map(url => endpointUrl(String(url).trim())))]
 	if (publicRpcUrls.length === 0) throw new Error('At least one public RPC URL is required')
 	return { publicRpcUrls, readRpcUrl }
+}
+
+export function rpcConfigurationWithEnvironmentOverride(connectivity: ConnectivitySettings, quorumRpcUrls: readonly string[], environmentValue: string | undefined) {
+	if (environmentValue === undefined || environmentValue.trim() === '') return { connectivity, quorumRpcUrls }
+	const entries = environmentValue.split(',').map(value => value.trim())
+	if (entries.some(value => value === '')) throw new Error('ZOLTAR_BOT_RPC_URLS must not contain empty entries')
+	if (entries.length > 8) throw new Error('At most 8 RPC URLs are supported in ZOLTAR_BOT_RPC_URLS')
+	const urls = entries.map(endpointUrl)
+	const readRpcUrl = urls[0]
+	if (readRpcUrl === undefined) throw new Error('ZOLTAR_BOT_RPC_URLS must contain at least one RPC URL')
+	return {
+		connectivity: validateConnectivitySettings({ publicRpcUrls: urls, readRpcUrl }),
+		quorumRpcUrls: validateIndependentReadRpcUrls(readRpcUrl, urls.slice(1)),
+	}
 }
 
 async function rpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {
@@ -117,6 +132,23 @@ export async function sendRawTransactionToRpc(url: string, serializedTransaction
 	const result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
 	return result as Hex
+}
+
+function rpcQuantity(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) throw new Error(`RPC returned an invalid ${label}`)
+	return BigInt(value)
+}
+
+export async function readRpcPendingNonce(url: string, address: Address, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_getTransactionCount', [address, 'pending'], timeoutMilliseconds), 'pending nonce')
+}
+
+export async function estimateRpcTransactionGas(url: string, transaction: { data: Hex; from: Address; to: Address }, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_estimateGas', [transaction], timeoutMilliseconds), 'gas estimate')
+}
+
+export async function readRpcGasPrice(url: string, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_gasPrice', [], timeoutMilliseconds), 'gas price')
 }
 
 export async function checkRpcEndpoint(url: string, expectedChainId: number, kind: EndpointCheck['kind']): Promise<EndpointCheck> {
