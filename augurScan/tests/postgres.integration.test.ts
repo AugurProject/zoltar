@@ -3,6 +3,7 @@ import { handleApi } from '../src/api.ts'
 import {
 	assertBlockAppend,
 	assertRewindTarget,
+	assertStartBlockCompatible,
 	type IndexedBlock,
 	lockLiveEventWriter,
 	releaseReservedConnection,
@@ -157,6 +158,14 @@ describe('database checkpoint fencing', () => {
 		)
 	})
 
+	test('rejects changing the configured start boundary after indexing has begun', () => {
+		expect(() => assertStartBlockCompatible(100n, 100n, 125n)).not.toThrow()
+		expect(() => assertStartBlockCompatible(200n, 100n, undefined)).not.toThrow()
+		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow(
+			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
+		)
+	})
+
 	test('accepts only a prior canonical rewind target', () => {
 		const hash = blockHash('ancestor')
 		const checkpoint = { indexedBlock: 11n, indexedHash: blockHash('head') }
@@ -288,6 +297,12 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		])
 		await database.storeBlock(chainId, first, writeLease)
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		await expect(database.seedNetwork({ ...network, startBlock: 3n }, writeLease)).rejects.toThrow(
+			'Cannot change the configured start block from 1 to 3 while checkpoint 1 exists; rebuild the augurScan database from the new start block',
+		)
+		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
+		const unchangedBoundary = await database.sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
+		expect(unchangedBoundary[0]?.['start_block']).toBe('1')
 		const invalidParent = indexedBlock('block-two-invalid-parent', genesisHash)
 		await expect(database.storeBlock(chainId, invalidParent, writeLease)).rejects.toThrow('does not extend the current database checkpoint')
 		expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })

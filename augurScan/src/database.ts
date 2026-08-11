@@ -117,6 +117,13 @@ export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHa
 	if (block.parentHash !== checkpoint.indexedHash) throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
 }
 
+export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint): void => {
+	if (configuredStartBlock === storedStartBlock || indexedBlock === undefined) return
+	throw new DatabaseConsistencyError(
+		`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`,
+	)
+}
+
 export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | undefined, checkpoint: RewindCheckpoint, targetIsCanonical: boolean): void => {
 	if (checkpoint.indexedBlock === undefined || checkpoint.indexedHash === undefined)
 		throw new DatabaseConsistencyError('Cannot rewind a network without a complete indexed checkpoint')
@@ -290,6 +297,20 @@ export class ScannerDatabase {
 		await lease?.assertHeld()
 		const sql = lease?.connection ?? this.sql
 		await sql.begin(async (transaction) => {
+			const existingRows = await transaction`
+				SELECT start_block, indexed_block
+				FROM networks
+				WHERE chain_id = ${network.chainId}
+				FOR UPDATE
+			`
+			const existing = existingRows[0]
+			if (existing !== undefined) {
+				assertStartBlockCompatible(
+					network.startBlock,
+					BigInt(String(existing['start_block'])),
+					existing['indexed_block'] === null || existing['indexed_block'] === undefined ? undefined : BigInt(String(existing['indexed_block'])),
+				)
+			}
 			await transaction`
 				INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block)
 				VALUES (${network.chainId}, ${network.id}, ${network.name}, ${network.explorerBaseUrl}, ${network.startBlock.toString()})

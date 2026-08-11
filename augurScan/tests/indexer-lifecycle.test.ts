@@ -498,6 +498,33 @@ describe('network indexer lifecycle', () => {
 		expect(failures).toEqual(['Database request failed; retrying'])
 	})
 
+	test('logs an actionable configured-boundary failure during ownership seeding', async () => {
+		const controller = new AbortController()
+		const error = new Error(
+			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
+		)
+		error.name = 'DatabaseConsistencyError'
+		let seeds = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				acquire: async () => ({ assertHeld: async () => {}, release: async () => {} }),
+				seed: async () => {
+					seeds++
+					if (seeds === 1) throw error
+				},
+				runOwned: async () => controller.abort(),
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 1,
+				signal: controller.signal,
+			})
+			expect(logged).toHaveBeenCalledWith(`Indexer ownership operation failed (DatabaseConsistencyError): ${error.message}`)
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
 	test('does not select shared tokens as standalone activity sources', () => {
 		const contract = (kind: string): ContractMetadata => ({
 			address: '0x1000000000000000000000000000000000000001',

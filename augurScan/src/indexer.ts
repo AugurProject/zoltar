@@ -489,7 +489,8 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				await runOwned(lease)
 			}
 		} catch (error) {
-			console.error(`Indexer ownership operation failed (${error instanceof Error ? error.name : typeof error})`)
+			const actionableDetail = error instanceof Error && error.name === 'DatabaseConsistencyError' ? `: ${error.message}` : ''
+			console.error(`Indexer ownership operation failed (${error instanceof Error ? error.name : typeof error})${actionableDetail}`)
 			try {
 				await failure(databaseFailureMessage, lease)
 			} catch (error) {
