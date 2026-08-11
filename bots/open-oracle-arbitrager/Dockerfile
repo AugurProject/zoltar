@@ -8,7 +8,7 @@ RUN git init
 
 COPY package.json bun.lock ./
 COPY scripts/ ./scripts/
-COPY shared/package.json shared/tsconfig.json ./shared/
+COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
 COPY shared/ts/ ./shared/ts/
 RUN mkdir -p shared/js \
 	&& bun install --frozen-lockfile \
@@ -23,7 +23,9 @@ COPY --from=shared-builder /source/shared/ ./shared/
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/open-oracle-arbitrager/package.json bots/open-oracle-arbitrager/bun.lock ./bots/open-oracle-arbitrager/
-RUN cd bots/shared \
+RUN cd shared \
+	&& bun install --frozen-lockfile --production \
+	&& cd ../bots/shared \
 	&& bun install --frozen-lockfile --production \
 	&& cd ../open-oracle-arbitrager \
 	&& bun install --frozen-lockfile --production
