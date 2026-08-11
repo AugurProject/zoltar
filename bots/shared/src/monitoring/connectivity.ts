@@ -1,4 +1,4 @@
-import type { Hex } from '../ethereum.ts'
+import type { Address, Hex } from '../ethereum.ts'
 import { bigintToSafeNumber } from '../ethereum/codec.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
@@ -132,6 +132,23 @@ export async function sendRawTransactionToRpc(url: string, serializedTransaction
 	const result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
 	return result as Hex
+}
+
+function rpcQuantity(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) throw new Error(`RPC returned an invalid ${label}`)
+	return BigInt(value)
+}
+
+export async function readRpcPendingNonce(url: string, address: Address, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_getTransactionCount', [address, 'pending'], timeoutMilliseconds), 'pending nonce')
+}
+
+export async function estimateRpcTransactionGas(url: string, transaction: { data: Hex; from: Address; to: Address }, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_estimateGas', [transaction], timeoutMilliseconds), 'gas estimate')
+}
+
+export async function readRpcGasPrice(url: string, timeoutMilliseconds = 10_000) {
+	return rpcQuantity(await rpcRequest(url, 'eth_gasPrice', [], timeoutMilliseconds), 'gas price')
 }
 
 export async function checkRpcEndpoint(url: string, expectedChainId: number, kind: EndpointCheck['kind']): Promise<EndpointCheck> {
