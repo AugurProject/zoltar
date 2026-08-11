@@ -182,58 +182,84 @@ export const queryAdaptiveLogRange = async <T>(
 	}
 }
 
-const splittableLogRangeErrorFragments = [
-	'block range',
-	'exceed maximum',
-	'limit exceeded',
-	'more than',
-	'please reduce',
-	'query timeout',
-	'response size',
-	'too many logs',
-	'too many results',
-	'too wide',
-]
+const normalizedRpcDescription = (value: string): string =>
+	[...value]
+		.map((character) => {
+			const codePoint = character.codePointAt(0)
+			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
+		})
+		.join('')
+		.replace(/\p{Cf}/gu, ' ')
+		.replace(/\s+/gu, ' ')
+		.trim()
+		.toLowerCase()
 
-const splittableLogRangeErrorNames = new Set(['ResponseBodyTooLargeError', 'TimeoutError'])
+const classifiedRpcDescription = (value: string): string =>
+	normalizedRpcDescription(value)
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim()
 
-export const isSplittableLogRangeError = (error: unknown): boolean => {
+type RpcDescriptionCategory = 'block-range' | 'rate-limit' | 'response-size' | 'result-limit' | 'timeout' | 'too-many-logs' | 'too-many-results'
+
+const rpcDescriptionCategory = (value: string): RpcDescriptionCategory | undefined => {
+	const description = classifiedRpcDescription(value)
+	if (
+		description.includes('rate limit') ||
+		description.includes('too many requests') ||
+		description.includes('request limit') ||
+		description.includes('request rate') ||
+		description.includes('request quota') ||
+		description.includes('quota exceeded') ||
+		/\bmore than\b.*\brequests?\b/u.test(description) ||
+		/\brequests? per (?:second|minute|hour)\b/u.test(description)
+	)
+		return 'rate-limit'
+	if (description.includes('too many logs') || /\bmore than\b.*\blogs\b/u.test(description)) return 'too-many-logs'
+	if (description.includes('too many results') || /\bmore than\b.*\bresults\b/u.test(description)) return 'too-many-results'
+	if (description.includes('response size') || description.includes('response too large') || description.includes('response body too large'))
+		return 'response-size'
+	if (
+		description.includes('query timeout') ||
+		description.includes('query timed out') ||
+		description.includes('request timeout') ||
+		description.includes('request timed out')
+	)
+		return 'timeout'
+	if (description.includes('block range') || description.includes('too wide') || description.includes('please reduce')) return 'block-range'
+	if (description.includes('limit exceeded') || /\bexceeds? (?:the )?maximum\b/u.test(description) || description.includes('more than')) return 'result-limit'
+	return undefined
+}
+
+const preferredRpcDescriptions = (value: object): readonly string[] => {
+	if ('details' in value && typeof value.details === 'string') return [value.details]
+	if ('name' in value && (value.name === 'ResponseBodyTooLargeError' || value.name === 'TimeoutError')) return []
+	if ('shortMessage' in value && typeof value.shortMessage === 'string') return [value.shortMessage]
+	return 'message' in value && typeof value.message === 'string' ? [value.message] : []
+}
+
+const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined => {
 	const seen = new Set<unknown>()
-	const chain: unknown[] = []
+	let firstCategory: RpcDescriptionCategory | undefined
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
 		seen.add(current)
-		chain.push(current)
-		if ('status' in current && current.status === 429) return false
-		const descriptions = [
-			'details' in current ? current.details : undefined,
-			'message' in current ? current.message : undefined,
-			'shortMessage' in current ? current.shortMessage : undefined,
-		]
-		for (const description of descriptions) {
-			if (typeof description !== 'string') continue
-			const normalized = description.toLowerCase()
-			if (normalized.includes('rate limit') || normalized.includes('too many requests')) return false
+		if ('status' in current && current.status === 429) return 'rate-limit'
+		for (const description of preferredRpcDescriptions(current)) {
+			const category = rpcDescriptionCategory(description)
+			if (category === 'rate-limit') return category
+			firstCategory ??= category
 		}
+		if ('name' in current && current.name === 'ResponseBodyTooLargeError') firstCategory ??= 'response-size'
+		if ('name' in current && current.name === 'TimeoutError') firstCategory ??= 'timeout'
+		if ('code' in current && current.code === -32005) firstCategory ??= 'result-limit'
 		current = 'cause' in current ? current.cause : undefined
 	}
-	for (const item of chain) {
-		if (typeof item !== 'object' || item === null) continue
-		if ('name' in item && typeof item.name === 'string' && splittableLogRangeErrorNames.has(item.name)) return true
-		if ('code' in item && item.code === -32005) return true
-		const descriptions = [
-			'details' in item ? item.details : undefined,
-			'message' in item ? item.message : undefined,
-			'shortMessage' in item ? item.shortMessage : undefined,
-		]
-		for (const description of descriptions) {
-			if (typeof description === 'string') {
-				const normalized = description.toLowerCase()
-				if (splittableLogRangeErrorFragments.some((fragment) => normalized.includes(fragment))) return true
-			}
-		}
-	}
-	return false
+	return firstCategory
+}
+
+export const isSplittableLogRangeError = (error: unknown): boolean => {
+	const category = rpcErrorCategory(error)
+	return category !== undefined && category !== 'rate-limit'
 }
 
 const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
@@ -446,6 +472,7 @@ const safeErrorNames = new Set([
 	'LeaseLostError',
 	'LimitExceededRpcError',
 	'PostgresError',
+	'ResponseBodyTooLargeError',
 	'ResourceUnavailableRpcError',
 	'RpcRequestError',
 	'SocketError',
@@ -459,14 +486,44 @@ const safeErrorIdentifier = (value: unknown): string | undefined => (typeof valu
 const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
 
 const safeErrorCode = (value: unknown): string | undefined => {
-	if (typeof value === 'number' && Number.isSafeInteger(value)) return value.toString()
+	if (
+		typeof value === 'number' &&
+		Number.isSafeInteger(value) &&
+		(value === -32700 || (value >= -32603 && value <= -32600) || (value >= -32099 && value <= -32000))
+	)
+		return value.toString()
 	return typeof value === 'string' && (/^HTTP_[1-5][0-9]{2}$/.test(value) || safeNamedErrorCodes.has(value)) ? value : undefined
+}
+
+const safeStandardRpcMessages = new Map([
+	['parse error', 'Parse error'],
+	['invalid request', 'Invalid Request'],
+	['method not found', 'Method not found'],
+	['invalid params', 'Invalid params'],
+	['internal error', 'Internal error'],
+])
+
+const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, string>> = {
+	'block-range': 'provider rejected the requested block range',
+	'rate-limit': 'provider rate limit exceeded',
+	'response-size': 'provider response size limit exceeded',
+	'result-limit': 'provider result limit exceeded',
+	timeout: 'provider request timed out',
+	'too-many-logs': 'provider returned too many logs',
+	'too-many-results': 'provider returned too many results',
+}
+
+const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined
+	const normalized = normalizedRpcDescription(value)
+	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, ''))
 }
 
 export const safeIndexerFailureReason = (error: unknown): string => {
 	const names: string[] = []
 	let status: number | undefined
 	let code: string | undefined
+	let standardMessage: string | undefined
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
@@ -483,11 +540,15 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 		)
 			status = current.status
 		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
+		if (standardMessage === undefined && name === 'RpcRequestError' && 'details' in current) standardMessage = safeStandardRpcProviderMessage(current.details)
 		current = 'cause' in current ? current.cause : undefined
 	}
+	const category = rpcErrorCategory(error)
+	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
 	const details = [names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
 	if (status !== undefined) details.push(`HTTP ${status}`)
 	if (code !== undefined) details.push(`code ${code}`)
+	if (message !== undefined) details.push(`message: ${message}`)
 	return details.join('; ')
 }
 

@@ -1,7 +1,16 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
-import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, HttpRequestError, parseAbi, TimeoutError, toHex } from '../src/ethereum.ts'
+import {
+	BaseError,
+	ContractFunctionExecutionError,
+	decodeFunctionResult,
+	HttpRequestError,
+	parseAbi,
+	RpcRequestError,
+	TimeoutError,
+	toHex,
+} from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -128,6 +137,79 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
+	test('uses the same provider category for range splitting and diagnostics', async () => {
+		const plainTimeout = new Error('query timed out')
+		expect(isSplittableLogRangeError(plainTimeout)).toBe(true)
+		expect(safeIndexerFailureReason(plainTimeout)).toBe('Error; message: provider request timed out')
+		const httpRateLimit = new HttpRequestError({ details: 'request quota exceeded', status: 429, url: 'https://rpc.example' })
+		expect(isSplittableLogRangeError(httpRateLimit)).toBe(false)
+		expect(safeIndexerFailureReason(httpRateLimit)).toBe('HttpRequestError; HTTP 429; message: provider rate limit exceeded')
+
+		const structuredRangeFailure = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: ['response-size'] },
+			error: { code: -32600, message: 'block range is too wide' },
+			url: 'https://rpc.example/rate-limit/',
+		})
+		expect(isSplittableLogRangeError(structuredRangeFailure)).toBe(true)
+		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+		const unrelatedStructuredFailure = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: ['request timed out'] },
+			error: { code: -32600, message: 'upstream rejected query' },
+			url: 'https://rpc.example/response-size/',
+		})
+		expect(isSplittableLogRangeError(unrelatedStructuredFailure)).toBe(false)
+		expect(safeIndexerFailureReason(unrelatedStructuredFailure)).toBe('RpcRequestError; code -32600')
+		const conflictingCause = new Error('request rate exceeded', { cause: structuredRangeFailure })
+		expect(isSplittableLogRangeError(conflictingCause)).toBe(false)
+		expect(safeIndexerFailureReason(conflictingCause)).toBe('Error caused by RpcRequestError; code -32600; message: provider rate limit exceeded')
+
+		for (const details of ['more than 10 requests per second', 'request limit exceeded', 'please reduce your request rate']) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new RpcRequestError({ body: { method: 'eth_getLogs' }, error: { code: -32600, message: details }, url: 'https://rpc.example' })
+			await expect(
+				queryAdaptiveLogRange(
+					0n,
+					100n,
+					101,
+					async (fromBlock, toBlock) => {
+						attempts.push([fromBlock, toBlock])
+						throw failure
+					},
+					undefined,
+					isSplittableLogRangeError,
+				),
+			).rejects.toBe(failure)
+			expect(attempts).toEqual([[0n, 100n]])
+			expect(safeIndexerFailureReason(failure)).toBe('RpcRequestError; code -32600; message: provider rate limit exceeded')
+		}
+
+		for (const [details, expectedMessage] of [
+			['response too large', 'provider response size limit exceeded'],
+			['request timed out', 'provider request timed out'],
+		] as const) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new RpcRequestError({ body: { method: 'eth_getLogs' }, error: { code: -32600, message: details }, url: 'https://rpc.example' })
+			await queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					if (toBlock - fromBlock + 1n > 26n) throw failure
+					return []
+				},
+				undefined,
+				isSplittableLogRangeError,
+			)
+			expect(attempts).toEqual([
+				[0n, 100n],
+				[0n, 50n],
+				[0n, 25n],
+			])
+			expect(safeIndexerFailureReason(failure)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+		}
+	})
+
 	test('rejects an empty log range when its canonical endpoint changes before commit', async () => {
 		const oldHash = `0x${'1'.repeat(64)}` as const
 		const replacementHash = `0x${'2'.repeat(64)}` as const
@@ -153,12 +235,13 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('splits viem timeout and oversized-response failures at exact inclusive boundaries', async () => {
-		const failures = [
-			new TimeoutError({ body: { method: 'eth_getLogs' }, url: 'https://rpc.example' }),
-			new BaseError('HTTP response body exceeded the size limit.', { name: 'ResponseBodyTooLargeError' }),
-		]
+		const oversizedFailure = new BaseError('HTTP response body exceeded the size limit and contained provider-key-sentinel.', {
+			name: 'ResponseBodyTooLargeError',
+		})
+		const failures = [new TimeoutError({ body: { method: 'eth_getLogs' }, url: 'https://rpc.example' }), oversizedFailure]
 		for (const failure of failures) {
 			const attempts: Array<readonly [bigint, bigint]> = []
+			const warnings: string[] = []
 			const result = await queryAdaptiveLogRange(
 				0n,
 				100n,
@@ -168,7 +251,8 @@ describe('network indexer lifecycle', () => {
 					if (toBlock - fromBlock + 1n > 26n) throw failure
 					return [fromBlock, toBlock]
 				},
-				undefined,
+				(failedFrom, failedTo, retryTo, error) =>
+					warnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
 				isSplittableLogRangeError,
 			)
 			expect(result).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
@@ -177,6 +261,14 @@ describe('network indexer lifecycle', () => {
 				[0n, 50n],
 				[0n, 25n],
 			])
+			if (failure === oversizedFailure) {
+				expect(safeIndexerFailureReason(failure)).toBe('ResponseBodyTooLargeError; message: provider response size limit exceeded')
+				expect(warnings).toEqual([
+					'RPC log range #0-#100 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#50',
+					'RPC log range #0-#50 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#25',
+				])
+				expect(warnings.join(' ')).not.toContain('provider-key-sentinel')
+			}
 		}
 	})
 
@@ -278,7 +370,14 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('bounds a stalled optional contract deployment history read', async () => {
-		await expect(boundedDeploymentRead(() => new Promise(() => {}), 1)).rejects.toMatchObject({ name: 'TimeoutError' })
+		let deploymentTimeout: unknown
+		try {
+			await boundedDeploymentRead(() => new Promise(() => {}), 1)
+		} catch (error) {
+			deploymentTimeout = error
+		}
+		expect(deploymentTimeout).toMatchObject({ name: 'TimeoutError' })
+		expect(safeIndexerFailureReason(deploymentTimeout)).toBe('TimeoutError; message: provider request timed out')
 		let now = 0
 		const readWithinBudget = deploymentReadBudget(10, () => now)
 		expect(
@@ -401,13 +500,157 @@ describe('network indexer lifecycle', () => {
 		error.name = 'ContractFunctionExecutionError'
 		const reason = safeIndexerFailureReason(error)
 
-		expect(reason).toBe('ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429')
+		expect(reason).toBe('ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded')
 		expect(rpcFailureLogMessage('RPC request failed; retrying', '#1 https://rpc.example', reason)).toBe(
-			'RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429)',
+			'RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded)',
 		)
 		expect(reason).not.toContain(secret)
 		expect(reason).not.toContain('rpc.example')
 		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
+	})
+
+	test('reports a sanitized JSON-RPC provider message without request or endpoint secrets', async () => {
+		const secret = 'provider-key-sentinel'
+		const rangeError = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: [secret] },
+			error: { code: -32600, message: 'block range limit is 10 blocks' },
+			url: `https://rpc.example/${secret}?token=${secret}`,
+		})
+		expect(safeIndexerFailureReason(rangeError)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+
+		const numericCredential = '123456'
+		const numericRangeError = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: Number(numericCredential), message: `Bearer ${numericCredential}; block range limit is ${numericCredential} blocks` },
+			url: 'https://rpc.example',
+		})
+		const numericWarnings: string[] = []
+		await queryAdaptiveLogRange(
+			0n,
+			1n,
+			2,
+			async (fromBlock, toBlock) => {
+				if (fromBlock !== toBlock) throw numericRangeError
+				return []
+			},
+			(failedFrom, failedTo, retryTo, error) =>
+				numericWarnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+			isSplittableLogRangeError,
+		)
+		expect(numericWarnings).toEqual(['RPC log range #0-#1 failed (RpcRequestError; message: provider rejected the requested block range); retrying #0-#0'])
+		expect(numericWarnings.join(' ')).not.toContain(numericCredential)
+
+		const unsafeMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: `invalid token=${secret} at https://rpc.example/${secret}` },
+			url: 'https://rpc.example',
+		})
+		const reason = safeIndexerFailureReason(unsafeMessage)
+		expect(reason).toBe('RpcRequestError; code -32600')
+		expect(reason).not.toContain(secret)
+		expect(reason).not.toContain('rpc.example')
+
+		for (const [details, expectedMessage, splittable] of [
+			['query returned more than 10000 results', 'provider returned too many results', true],
+			['query timed out', 'provider request timed out', true],
+			['response size exceeded', 'provider response size limit exceeded', true],
+			['rate limit exceeded', 'provider rate limit exceeded', false],
+			['rate-limit exceeded', 'provider rate limit exceeded', false],
+			['rate_limit.exceeded', 'provider rate limit exceeded', false],
+			['rate\tlimit\u001bexceeded', 'provider rate limit exceeded', false],
+			['rate\u200blimit exceeded', 'provider rate limit exceeded', false],
+		] as const) {
+			const diagnosticError = new RpcRequestError({
+				body: { method: 'eth_getLogs' },
+				error: { code: -32600, message: details },
+				url: 'https://rpc.example',
+			})
+			expect(safeIndexerFailureReason(diagnosticError)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+			expect(isSplittableLogRangeError(diagnosticError)).toBe(splittable)
+		}
+
+		const quotedSecrets = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `credentials {"token":"${secret}", "client_secret":"${secret}"}; password = "provider key ${secret}"; endpoint wss://rpc.example/${secret}`,
+			},
+			url: 'https://rpc.example',
+		})
+		const quotedReason = safeIndexerFailureReason(quotedSecrets)
+		expect(quotedReason).toBe('RpcRequestError; code -32600')
+		expect(quotedReason).not.toContain(secret)
+		expect(quotedReason).not.toContain('rpc.example')
+		expect(quotedReason).not.toContain('\n')
+		expect(quotedReason.length).toBeLessThanOrEqual(360)
+
+		const escapedQuotedPassword = `{"password":"safe${String.fromCodePoint(92)}"${secret}"}`
+		const adversarialMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `password=first ${secret}; ${escapedQuotedPassword}; endpoint wss://[2001:db8::1]/${secret}`,
+			},
+			url: 'https://rpc.example',
+		})
+		const adversarialReason = safeIndexerFailureReason(adversarialMessage)
+		expect(adversarialReason).not.toContain(secret)
+		expect(adversarialReason).not.toContain('2001:db8::1')
+		expect(adversarialReason).not.toContain('wss://')
+
+		const apostropheUrl = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: `endpoint https://rpc.example/key'${secret} rejected the range` },
+			url: 'https://rpc.example',
+		})
+		const apostropheReason = safeIndexerFailureReason(apostropheUrl)
+		expect(apostropheReason).not.toContain(secret)
+		expect(apostropheReason).not.toContain('rpc.example')
+
+		const escapedBearer = `Bearer "safe${String.fromCodePoint(92)}"${secret}"`
+		const bearerMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `${escapedBearer}; Bearer first\u001b ${secret}; block range limit is 10 blocks`,
+			},
+			url: 'https://rpc.example',
+		})
+		const bearerReason = safeIndexerFailureReason(bearerMessage)
+		expect(bearerReason).not.toContain(secret)
+		expect(bearerReason).toContain('provider rejected the requested block range')
+
+		for (const unsafeDetails of [
+			String.raw`{\"token\":\"${secret}\"}`,
+			String.raw`\`token\`=\`${secret}\``,
+			String.raw`request https:\/\/rpc.example\/${secret} failed`,
+			String.raw`echoed body {\"params\":[\"${secret}\"]}`,
+		]) {
+			const escapedReason = safeIndexerFailureReason(
+				new RpcRequestError({
+					body: { method: 'eth_getLogs' },
+					error: { code: -32600, message: unsafeDetails },
+					url: 'https://rpc.example',
+				}),
+			)
+			expect(escapedReason).toBe('RpcRequestError; code -32600')
+			expect(escapedReason).not.toContain(secret)
+			expect(escapedReason).not.toContain('rpc.example')
+		}
+
+		const controlMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: 'range too wide\u001bEfor logs\u0085retry on a smaller range' },
+			url: 'https://rpc.example',
+		})
+		const controlReason = safeIndexerFailureReason(controlMessage)
+		expect(
+			[...controlReason].some((character) => {
+				const codePoint = character.codePointAt(0)
+				return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
+			}),
+		).toBe(false)
+		expect(controlReason).toContain('message: provider rejected the requested block range')
 	})
 
 	test('reports one stopped transition after graceful lifecycle shutdown', async () => {
