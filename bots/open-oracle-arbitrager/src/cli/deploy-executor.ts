@@ -32,5 +32,5 @@ const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
-const deployment = await deployExecutorCreate2({ chain: network.chain, privateKey: privateKeyValue as Hex, rpcUrl, salt })
+const deployment = await deployExecutorCreate2({ chain: network.chain, privateKey: privateKeyValue as Hex, rpcUrls: [rpcUrl], salt })
 console.log(`executor=${deployment.address} transaction=${deployment.transactionHash ?? 'already-deployed'}`)

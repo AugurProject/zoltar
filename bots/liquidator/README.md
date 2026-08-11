@@ -35,15 +35,21 @@ install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
 ```
 
-In `.env`, set a unique dashboard password of at least 16 characters. Set
-`LIQUIDATOR_UID` and `LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this
-lets the container read and update the owner-only state files without making them
-public.
+In `.env`, set a unique dashboard password of at least 16 characters and set
+`ZOLTAR_BOT_RPC_URLS` to a comma-separated list of RPC URLs. The first URL is the
+primary reader, every URL receives public transaction broadcasts, and every URL
+after the first is an independent quorum reader. Live execution therefore requires
+at least two independently operated origins. Set `LIQUIDATOR_UID` and
+`LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this lets the container read
+and update the owner-only state files without making them public.
 
-In `.state/operator.json`, add the reviewed deployment and RPC settings and set
-`runtime.uiHost` to `0.0.0.0`. These settings are not editable from the liquidator
-dashboard, and the operator file must remain owner-only. Keep `runtime.execute`
-false while testing the setup. Then build and start the bot:
+In `.state/operator.json`, add the reviewed deployment settings and set
+`runtime.uiHost` to `0.0.0.0`. The file's connectivity settings remain the fallback
+when `ZOLTAR_BOT_RPC_URLS` is blank; a non-empty environment value overrides all
+three RPC roles at startup without modifying the file. These settings are not
+editable from the liquidator dashboard, and the operator file must remain
+owner-only. Keep `runtime.execute` false while testing the setup. Then build and
+start the bot:
 
 ```bash
 docker compose up --build --detach
@@ -72,6 +78,10 @@ bun run run
 Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
 command-line arguments. The dashboard defaults to
 `http://127.0.0.1:4183`.
+
+`ZOLTAR_BOT_RPC_URLS` applies to direct Bun runs as well as Compose. Separate URLs
+with commas; URL query parameters are supported, but the separator itself must not
+appear inside a URL.
 
 Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The
