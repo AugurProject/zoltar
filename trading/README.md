@@ -27,7 +27,31 @@ bun run ui:serve
 
 Open `http://localhost:12346/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
 
-For live use, build with a reviewed deployment manifest and open the same routes without `?demo=1`:
+### Docker
+
+Build and serve the standalone UI from the repository root:
+
+```bash
+docker build --file trading/Dockerfile --tag zoltar-trading .
+docker run --rm --publish 12346:12346 zoltar-trading
+```
+
+Then open `http://localhost:12346/?demo=1#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`.
+
+Without a deployment build argument, the image contains `deployment.json` set to `null` and supports demo mode only. Live use requires a build with a reviewed manifest.
+
+For live use, include a reviewed project-local deployment manifest at build time. The path is relative to `trading/` inside the build context:
+
+```bash
+docker build \
+  --file trading/Dockerfile \
+  --build-arg TRADING_UI_DEPLOYMENT=deployments/local.json \
+  --tag zoltar-trading .
+```
+
+### Live deployment
+
+Without Docker, build with a reviewed deployment manifest and open the same routes without `?demo=1`:
 
 ```bash
 TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
@@ -57,6 +81,7 @@ The script verifies that the configured core `SecurityPoolFactory` has bytecode 
 | `bun run format:check` / `format` | Check or apply project formatting |
 | `bun run ui:build` / `ui:serve` | Build or serve the standalone UI |
 | `bun run deploy:local` | Deploy against an existing local Zoltar manifest |
+| `bun run docker:build` / `docker:run` | Build or run the standalone UI container from `trading/` |
 | `bun run gas-costs` | Report bytecode sizes and funded-fixture operation gas |
 | `bun run ci` | Run the AMM-local frozen install, build, tests, formatting, and dependency audit |
 

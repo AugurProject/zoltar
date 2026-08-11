@@ -88,13 +88,13 @@ export function UniverseSelector({ options, selectedId, disabled, onChange }: { 
 
 export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryState; onRetry?(): void }) {
 	if (summary.account === undefined) return null
-	let ethBalance = '…'
+	let ethDisplay = '…'
 	let repBalance = '…'
 	if (summary.status === 'error') {
-		ethBalance = '—'
+		ethDisplay = '—'
 		repBalance = '—'
 	} else if (summary.status === 'ready') {
-		if (summary.ethAttoEth !== undefined) ethBalance = formatUnits(summary.ethAttoEth, 18, 18)
+		if (summary.ethAttoEth !== undefined) ethDisplay = formatUnits(summary.ethAttoEth, 18, 18)
 		if (summary.repAttoRep !== undefined) repBalance = formatUnits(summary.repAttoRep, 18, 18)
 	}
 	return (
@@ -103,7 +103,7 @@ export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryStat
 			<div class='wallet-summary__balances'>
 				<span data-wallet-asset='ETH'>
 					<small>ETH</small>
-					<strong>{ethBalance}</strong>
+					<strong>{ethDisplay}</strong>
 				</span>
 				<span data-wallet-asset='REP'>
 					<small>REP</small>

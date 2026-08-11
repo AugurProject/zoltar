@@ -416,9 +416,9 @@ export function LiveTrading({
 			let chainId: number
 			try {
 				chainId = await walletChainId(provider)
-			} catch {
+			} catch (error) {
 				invalidateWalletIdentity(networkFailure)
-				throw new Error(networkFailure)
+				throw new Error(networkFailure, { cause: error })
 			}
 			requireUnchangedProvider()
 			if (configuration === undefined || chainId !== configuration.chainId) {
@@ -428,9 +428,9 @@ export function LiveTrading({
 			let connectedAccount: Address
 			try {
 				connectedAccount = await connectWallet(provider)
-			} catch {
+			} catch (error) {
 				invalidateWalletIdentity(accountFailure)
-				throw new Error(accountFailure)
+				throw new Error(accountFailure, { cause: error })
 			}
 			requireUnchangedProvider()
 			if (connectedAccount !== expectedAccount) {
