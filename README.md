@@ -90,62 +90,110 @@ dependent deployment address.
 
 ## Testnet deployment
 
-Deploy the complete deterministic infrastructure with an explicitly selected RPC
-endpoint. First load `PRIVATE_KEY` from a protected secret manager or hidden
-prompt; do not paste it into the command because shells may save it in history.
-Use a dedicated testnet account funded with enough testnet ETH to finish the
-remaining deployment.
+The testnet deployer installs the complete deterministic infrastructure. It is
+safe to rerun: existing contracts are skipped only when their runtime bytecode
+matches, and an unexpected contract at a target address stops the deployment.
+
+### Before you deploy
+
+- Complete [Setup](#setup).
+- Use a dedicated testnet account and fund it with enough testnet ETH for the
+  remaining steps.
+- Use an HTTPS RPC endpoint. Loopback HTTP endpoints are accepted for local test
+  networks.
+- Ensure the deployer account has no pending transactions.
+
+Sepolia is the default target (chain ID `11155111`). A different testnet must
+support EIP-1559, the Cancun opcodes used by Zoltar and Uniswap V4, and the Osaka
+`CLZ` opcode used by the compiled contracts. The deployer rejects Ethereum
+mainnet (chain ID `1`).
+
+### Deploy with GitHub Actions
+
+Use the [`Deploy Testnet Contracts`](./.github/workflows/deploy-testnet.yml)
+workflow for a deployment from `main`:
+
+1. Create a protected GitHub environment named `testnet-deployment`.
+1. Add the deployer's private key as the environment secret
+   `TESTNET_DEPLOYER_PRIVATE_KEY`.
+1. Open **Actions → Deploy Testnet Contracts → Run workflow**.
+1. Select `main`, complete the inputs, and enter `DEPLOY` as the confirmation.
+1. Review the job summary for each planned deployment's result and address. It
+   includes transaction hashes for contracts deployed during the run.
+
+Use a public RPC URL without credentials. Workflow inputs are stored in GitHub
+metadata and are not secret.
+
+### Deploy locally
+
+Load `PRIVATE_KEY` from a secret manager or hidden prompt. Never paste the key
+into a command because it may be saved in shell history. For example, in Bash:
+
+```bash
+read -rsp 'Testnet deployer private key: ' PRIVATE_KEY
+printf '\n'
+export PRIVATE_KEY
+```
+
+Run the deployer with an explicit RPC endpoint and spending limits:
 
 ```bash
 bun run deploy:testnet -- \
-RPC_URL=https://... MAX_FEE_PER_GAS_GWEI=100 MAX_TOTAL_COST_ETH=20
+  --rpc-url=https://rpc.example \
+  --chain-id=11155111 \
+  --max-fee-per-gas-gwei=100 \
+  --max-total-cost-eth=20
 ```
 
-The chain ID defaults to Sepolia (`11155111`). Set `CHAIN_ID` for any other EVM
-testnet that supports the protocol's required Cancun opcodes and Osaka `CLZ`
-opcode; chain ID `1` is intentionally rejected. Older pre-Cancun or pre-Osaka
-chains cannot execute the pinned protocol and Uniswap V4 bytecode. The fee ceiling
-defaults to 100 gwei and the total-cost authorization defaults to 20 testnet ETH.
-That default leaves headroom above the current conservative full-plan bound at
-100 gwei; it is an authorization cap, not a spend forecast or required balance.
-`RPC_URL`, `MAX_FEE_PER_GAS_GWEI`, and `MAX_TOTAL_COST_ETH` can be passed as the
-uppercase command arguments shown above, as lowercase `--rpc-url=...` style
-options, or as environment variables. `PRIVATE_KEY` remains environment-only so
-it is not exposed in command history.
+Remove the key from the shell when the command finishes:
 
-Before funding or signing, the command verifies the selected chain, required EVM
-opcodes, EIP-1559 support, fee limits, and acceptance of the fixed canonical
-legacy deployer transactions. It then identifies every missing step and calculates
-a deliberately conservative upper-bound cost at the selected fee ceiling. The
-allowances are about 50% above measured deployment gas and rounded upward; the
-largest deployments use the signer's 30-million-gas transaction ceiling. Missing
-canonical deployers also include their fixed raw-transaction cost and an allowance
-for atomic funding. If the estimate exceeds `MAX_TOTAL_COST_ETH`, the command exits
-before any funding or deployment transaction. The per-transaction budget remains
-active as a second guard. Each retry estimates only contracts that are still
-missing. A network that rejects the canonical transactions must provide both
-canonical deployers as predeploys.
+```bash
+unset PRIVATE_KEY
+```
 
-The command validates each expected runtime, skips deterministic addresses only
-when their code matches, fails closed when an address contains different code,
-and resumes from the first missing deployment. Atomic funding transactions refund
-surplus if another process wins a deployment race. Every supported testnet plan
-includes deterministic WETH and genesis REP contracts. The same plan covers the canonical CREATE2 deployer and
-Permit2, a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2, plus a
-Uniswap V4 PoolManager and Quoter. It does not create pools or add liquidity. The deployed
-protocol factories create per-market security pools, share tokens, oracle
-coordinators, auctions, escalation games, delegates, and child-universe
-contracts when those features are used. Constructor-created support contracts
-are not separate bootstrap steps; the command verifies all twelve bootstrap
-descendants after their parent factories are deployed.
+Run `bun run deploy:testnet -- --help` for the command-line form of each option.
+Except for `PRIVATE_KEY`, options also accept uppercase arguments after `--` or
+environment variables.
 
-The deployment workflow is
-[`deploy-testnet.yml`](./.github/workflows/deploy-testnet.yml). Create and protect
-the `testnet-deployment` environment, add its
-`TESTNET_DEPLOYER_PRIVATE_KEY` secret, and dispatch **Deploy Testnet Contracts**
-from `main`. Supply the public HTTPS RPC URL, chain ID, fee ceiling, and total
-budget, then enter `DEPLOY` in the confirmation input. Workflow inputs are
-visible in GitHub metadata, so do not supply an RPC URL containing credentials.
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `RPC_URL` / `--rpc-url` | Required | RPC endpoint for the target network |
+| `CHAIN_ID` / `--chain-id` | `11155111` | Expected decimal chain ID |
+| `MAX_FEE_PER_GAS_GWEI` / `--max-fee-per-gas-gwei` | `100` | Rejects higher RPC fee suggestions |
+| `MAX_TOTAL_COST_ETH` / `--max-total-cost-eth` | `20` | Caps the conservative preflight estimate and transaction budget |
+| `PRIVATE_KEY` | Required | Environment-only, `0x`-prefixed 32-byte deployer key |
+
+The defaults are authorization limits, not a spend forecast or a required
+balance. Before sending a transaction, the command checks the RPC chain ID, EVM
+features, EIP-1559 support, canonical deployer compatibility, expected bytecode,
+and fee limits. It then estimates only the missing deployment steps. If the
+conservative estimate exceeds `MAX_TOTAL_COST_ETH`, it exits before funding or
+deploying anything. Per-transaction checks enforce the same budget while the
+deployment runs.
+
+If a run is interrupted, wait for all pending transactions to settle and rerun
+the same command. The deployer revalidates completed contracts and resumes with
+the first missing step. A testnet that rejects the fixed legacy transactions for
+the canonical deployers must provide both deployers as predeploys.
+
+A successful local run exits with status `0` after logging each planned contract
+as `deployed` or `skip` and verifying the bootstrap support contracts.
+
+### Deployed infrastructure
+
+Every deployment includes:
+
+- deterministic WETH and genesis REP
+- the canonical CREATE2 deployer and Permit2
+- a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2
+- a Uniswap V4 PoolManager and Quoter
+- the Zoltar and Augur Statoblast protocol factories and their bootstrap support
+  contracts
+
+The command does not create Uniswap pools or add liquidity. Protocol factories
+create market-specific security pools, share tokens, oracle coordinators,
+auctions, escalation games, delegates, and child-universe contracts later, when
+those features are used.
 
 ## Browser Simulation
 
