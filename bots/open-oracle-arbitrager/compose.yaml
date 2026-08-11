@@ -1,0 +1,17 @@
+name: zoltar-open-oracle-arbitrager
+
+services:
+  arbitrager:
+    build:
+      context: ../..
+      dockerfile: bots/open-oracle-arbitrager/Dockerfile
+    image: zoltar-open-oracle-arbitrager
+    environment:
+      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
+    ports:
+      - 127.0.0.1:4173:4173
+    volumes:
+      - arbitrager-state:/app/bots/open-oracle-arbitrager/.state
+
+volumes:
+  arbitrager-state:

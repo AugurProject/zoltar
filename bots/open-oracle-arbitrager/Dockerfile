@@ -30,8 +30,10 @@ COPY bots/open-oracle-arbitrager/README.md ./bots/open-oracle-arbitrager/README.
 COPY bots/open-oracle-arbitrager/config/ ./bots/open-oracle-arbitrager/config/
 COPY bots/open-oracle-arbitrager/docs/ ./bots/open-oracle-arbitrager/docs/
 COPY bots/open-oracle-arbitrager/scripts/check-market-fixture.mts ./bots/open-oracle-arbitrager/scripts/check-market-fixture.mts
+COPY bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh ./bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh
 COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/
-RUN install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state
+RUN chmod 0755 bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh \
+	&& install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state
 
 USER bun
 WORKDIR /app/bots/open-oracle-arbitrager
@@ -39,4 +41,5 @@ WORKDIR /app/bots/open-oracle-arbitrager
 EXPOSE 4173
 VOLUME ["/app/bots/open-oracle-arbitrager/.state"]
 
-ENTRYPOINT ["bun", "run", "run"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+CMD ["bun", "run", "run"]

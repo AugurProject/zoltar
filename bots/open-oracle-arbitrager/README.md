@@ -195,56 +195,43 @@ bun run reconcile -- [reconciliation options]
 
 ## Docker
 
-Build from the monorepo root so Docker can include the local `shared/` package:
+Docker Compose builds the image, keeps bot state in a named volume, publishes the
+dashboard only on host loopback, and starts the bot. From the monorepo root, create
+the local environment file:
 
 ```bash
-docker build --file bots/open-oracle-arbitrager/Dockerfile --tag zoltar-open-oracle-arbitrager .
+cd bots/open-oracle-arbitrager
+install -m 600 .env.example .env
 ```
 
-The build creates the image but does not start it. Before starting the container,
-create the mounted state directory and configuration from the monorepo root:
+Edit `.env` and set a unique dashboard password of at least 16 characters. Then
+build and start the container:
 
 ```bash
-install -d -m 700 bots/open-oracle-arbitrager/.state
-install -m 600 bots/open-oracle-arbitrager/config/operator.example.json bots/open-oracle-arbitrager/.state/operator.json
+docker compose up --build --detach
 ```
 
-Now start the bot with its dashboard:
+On first start, the container creates a paused, dry-run configuration in its
+persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
+password from `.env`.
 
-1. In `bots/open-oracle-arbitrager/.state/operator.json`, set `runtime.once` to
-   `false`, `runtime.ui` to `true`, and `runtime.uiHost` to `0.0.0.0`.
-2. Export a dashboard password of at least 16 characters in the terminal that will
-   run Docker:
-
-   ```bash
-   export ZOLTAR_BOT_DASHBOARD_PASSWORD='replace-with-a-long-unique-password'
-   ```
-
-3. From the monorepo root, start the container and leave it running. The published
-   host port is bound to loopback:
-
-   ```bash
-   docker run --rm --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state --env ZOLTAR_BOT_DASHBOARD_PASSWORD="$ZOLTAR_BOT_DASHBOARD_PASSWORD" --publish 127.0.0.1:4173:4173 zoltar-open-oracle-arbitrager
-   ```
-
-4. Open `http://127.0.0.1:4173` in a browser on the same machine. When the browser
-   prompts for credentials, enter `operator` as the username and the exported
-   password as the password. The dashboard remains available while the container
-   is running; press Ctrl+C in its terminal to stop it.
-
-Do not publish the dashboard on a public interface:
-it controls signer and execution settings. Do not bake private keys, RPC
-credentials, or manifests containing private infrastructure into the image.
-Do not attach the bot to a Docker network shared with untrusted containers. Loopback
-RPC URLs refer to the container itself, so use a container-reachable RPC address
-when the node runs elsewhere.
-
-For a one-shot scan instead of the dashboard, edit the file so `runtime.once` is
-`true` and `runtime.ui` is `false`, then run:
+Open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration),
+add the reviewed deployment and endpoint settings, and save them. Configuration
+changes apply after restart:
 
 ```bash
-docker run --rm --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state zoltar-open-oracle-arbitrager
+docker compose restart
 ```
+
+Run `docker compose down` to stop the bot and `docker compose up --detach` to start
+it again. Compose preserves the operator configuration and bot history unless you
+explicitly delete the named volume.
+
+Do not publish the dashboard on a public interface: it controls signer and execution
+settings. Do not bake private keys, RPC credentials, or manifests containing private
+infrastructure into the image. Do not attach the bot to a Docker network shared
+with untrusted containers. Loopback RPC URLs refer to the container itself, so use
+a container-reachable RPC address when the node runs elsewhere.
 
 ## Monitor without trading
 
