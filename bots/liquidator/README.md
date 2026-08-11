@@ -24,8 +24,47 @@ threshold.
 
 ## Operator setup
 
+### Docker Compose
+
+From the monorepo root, create the private environment and operator files:
+
 ```bash
-cp config/operator.example.json .state/operator.json
+cd bots/liquidator
+install -m 600 .env.example .env
+install -d -m 700 .state
+install -m 600 config/operator.example.json .state/operator.json
+```
+
+In `.env`, set a unique dashboard password of at least 16 characters. Set
+`LIQUIDATOR_UID` and `LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this
+lets the container read and update the owner-only state files without making them
+public.
+
+In `.state/operator.json`, add the reviewed deployment and RPC settings and set
+`runtime.uiHost` to `0.0.0.0`. These settings are not editable from the liquidator
+dashboard, and the operator file must remain owner-only. Keep `runtime.execute`
+false while testing the setup. Then build and start the bot:
+
+```bash
+docker compose up --build --detach
+```
+
+Open `http://127.0.0.1:4183` and sign in as `operator` with the password from
+`.env`. Run `docker compose down` to stop the bot and `docker compose up --detach`
+to start it again. The bind-mounted `.state` directory preserves its configuration,
+history, and recovery state.
+
+Do not publish the dashboard on a public interface. Loopback RPC URLs refer to
+the container itself, so use a container-reachable RPC address when the node runs
+elsewhere.
+
+### Bun
+
+From `bots/liquidator`:
+
+```bash
+install -d -m 700 .state
+install -m 600 config/operator.example.json .state/operator.json
 bun install --frozen-lockfile
 bun run run
 ```
@@ -34,7 +73,7 @@ Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
 command-line arguments. The dashboard defaults to
 `http://127.0.0.1:4183`.
 
-Loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
+Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The
 browser's HTTP Basic prompt uses username `operator` and that password. Keep the
 listener on a trusted network or behind an authenticated TLS proxy: Basic

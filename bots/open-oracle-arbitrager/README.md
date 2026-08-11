@@ -195,51 +195,43 @@ bun run reconcile -- [reconciliation options]
 
 ## Docker
 
-Build from the monorepo root so Docker can include the local `shared/` package:
+Docker Compose builds the image, keeps bot state in a named volume, publishes the
+dashboard only on host loopback, and starts the bot. From the monorepo root, create
+the local environment file:
 
 ```bash
-docker build \
-  --file bots/open-oracle-arbitrager/Dockerfile \
-  --tag zoltar-open-oracle-arbitrager \
-  .
+cd bots/open-oracle-arbitrager
+install -m 600 .env.example .env
 ```
 
-From the monorepo root, create the mounted state directory and configuration:
+Edit `.env` and set a unique dashboard password of at least 16 characters. Then
+build and start the container:
 
 ```bash
-install -d -m 700 bots/open-oracle-arbitrager/.state
-install -m 600 bots/open-oracle-arbitrager/config/operator.example.json \
-  bots/open-oracle-arbitrager/.state/operator.json
+docker compose up --build --detach
 ```
 
-For a one-shot scan, edit the file so `runtime.once` is `true` and `runtime.ui`
-is `false`, then run:
+On first start, the container creates a paused, dry-run configuration in its
+persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
+password from `.env`.
+
+Open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration),
+add the reviewed deployment and endpoint settings, and save them. Configuration
+changes apply after restart:
 
 ```bash
-docker run --rm \
-  --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state \
-  zoltar-open-oracle-arbitrager
+docker compose restart
 ```
 
-For the dashboard, set `runtime.once` to `false`, `runtime.ui` to `true`, and
-`runtime.uiHost` to `0.0.0.0`. Set a password of at least 16 characters and bind
-the published host port to loopback:
+Run `docker compose down` to stop the bot and `docker compose up --detach` to start
+it again. Compose preserves the operator configuration and bot history unless you
+explicitly delete the named volume.
 
-```bash
-docker run --rm \
-  --mount type=bind,source="$PWD/bots/open-oracle-arbitrager/.state",target=/app/bots/open-oracle-arbitrager/.state \
-  --env ZOLTAR_BOT_DASHBOARD_PASSWORD="$ZOLTAR_BOT_DASHBOARD_PASSWORD" \
-  --publish 127.0.0.1:4173:4173 \
-  zoltar-open-oracle-arbitrager
-```
-
-Open `http://127.0.0.1:4173` and authenticate as `operator` with that password.
-Do not publish the dashboard on a public interface:
-it controls signer and execution settings. Do not bake private keys, RPC
-credentials, or manifests containing private infrastructure into the image.
-Do not attach the bot to a Docker network shared with untrusted containers. Loopback
-RPC URLs refer to the container itself, so use a container-reachable RPC address
-when the node runs elsewhere.
+Do not publish the dashboard on a public interface: it controls signer and execution
+settings. Do not bake private keys, RPC credentials, or manifests containing private
+infrastructure into the image. Do not attach the bot to a Docker network shared
+with untrusted containers. Loopback RPC URLs refer to the container itself, so use
+a container-reachable RPC address when the node runs elsewhere.
 
 ## Monitor without trading
 
@@ -312,9 +304,7 @@ is deterministic; use the same 32-byte `--salt` to obtain the same address on ev
 chain where the canonical CREATE2 proxy and executor init code are identical:
 
 ```bash
-PRIVATE_KEY=0xYourDeploymentPrivateKey \
-ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  bun run deploy-executor -- --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://your-private-mainnet-rpc.example bun run deploy-executor -- --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 ### Executor ABI source
@@ -394,16 +384,9 @@ The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
 can verify the file.
 
 ```bash
-bun run manifest -- generate \
-  --network=sepolia \
-  --rpc-url=https://first-provider.example \
-  --contract=executor:0x... \
-  --contract=open-oracle:0x... \
-  --output=/secure/operator/sepolia-deployments.json
+bun run manifest -- generate --network=sepolia --rpc-url=https://first-provider.example --contract=executor:0x... --contract=open-oracle:0x... --output=/secure/operator/sepolia-deployments.json
 
-bun run manifest -- verify \
-  --rpc-url=https://independent-provider.example \
-  --manifest=/secure/operator/sepolia-deployments.json
+bun run manifest -- verify --rpc-url=https://independent-provider.example --manifest=/secure/operator/sepolia-deployments.json
 ```
 
 `config/execution-manifest.example.json` is deliberately placeholder-only and must never
@@ -533,29 +516,13 @@ Grant ERC-20 and OpenOracle internal allowances from the dedicated bot account
 (replace the addresses and use the selected network RPC):
 
 ```bash
-cast send 0xWETH \
-  "approve(address,uint256)" \
-  0xExecutor \
-  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
-  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+cast send 0xWETH "approve(address,uint256)" 0xExecutor 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 
-cast send 0xReportToken \
-  "approve(address,uint256)" \
-  0xExecutor \
-  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
-  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+cast send 0xReportToken "approve(address,uint256)" 0xExecutor 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 
-cast send 0xOpenOracle \
-  "approveInternal(address,address,uint256)" \
-  0xExecutor 0xWETH \
-  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
-  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+cast send 0xOpenOracle "approveInternal(address,address,uint256)" 0xExecutor 0xWETH 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 
-cast send 0xOpenOracle \
-  "approveInternal(address,address,uint256)" \
-  0xExecutor 0xReportToken \
-  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
-  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+cast send 0xOpenOracle "approveInternal(address,address,uint256)" 0xExecutor 0xReportToken 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 ```
 
 Maximum allowances avoid missing an opportunity after a finite allowance is
@@ -1183,16 +1150,7 @@ an independently calculated realized P&amp;L or an explicit declaration that P&a
 is unavailable:
 
 ```bash
-PRIVATE_KEY=0x... bun run reconcile -- \
-  --position-file=.state/positions-sepolia.json \
-  --report-id=42 \
-  --confirm-report-id=42 \
-  --evidence='receipts and balance snapshots archived under incident-42' \
-  --note='residual REP sold manually; balances checked on all configured read RPCs' \
-  --external-cost-eth=0.003 \
-  --final-wallet-weth=4.2 \
-  --final-wallet-token=85 \
-  --pnl-unavailable=true
+PRIVATE_KEY=0x... bun run reconcile -- --position-file=.state/positions-sepolia.json --report-id=42 --confirm-report-id=42 --evidence='receipts and balance snapshots archived under incident-42' --note='residual REP sold manually; balances checked on all configured read RPCs' --external-cost-eth=0.003 --final-wallet-weth=4.2 --final-wallet-token=85 --pnl-unavailable=true
 ```
 
 Use `--realized-net-profit-eth=-0.04 --acknowledge-pnl-is-all-in=true` instead of
