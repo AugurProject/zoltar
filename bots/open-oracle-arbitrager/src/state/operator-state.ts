@@ -167,6 +167,7 @@ export type OperatorSnapshot = {
 	lastPollAt: string | undefined
 	mode: 'dry-run' | 'execute'
 	network: NetworkName
+	networkConfigured: boolean
 	openOracle: Address
 	operationLog: readonly OperationEntry[]
 	opportunities: readonly OpportunitySnapshot[]
@@ -522,6 +523,7 @@ export type OperatorSnapshotFixedState = {
 	expectedChainId: number
 	explorerUrl: string
 	network: NetworkName
+	networkConfigured?: boolean | undefined
 	openOracle: Address
 	queuedWallet: Address | null | undefined
 	savedWallet: Address | undefined
@@ -567,6 +569,7 @@ export function operatorSnapshot(
 		lastPollAt: state.lastPollAt,
 		mode: fixed.execute ? 'execute' : 'dry-run',
 		network: fixed.network,
+		networkConfigured: fixed.networkConfigured ?? true,
 		openOracle: fixed.openOracle,
 		opportunities: state.opportunities,
 		positions: state.positions.slice(0, 500),

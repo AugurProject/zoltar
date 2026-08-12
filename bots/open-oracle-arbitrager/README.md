@@ -174,8 +174,10 @@ cd bots/open-oracle-arbitrager
 bun install --frozen-lockfile
 ```
 
-Create the single operator configuration, edit its deployment and endpoint values,
-then run the executable with no arguments:
+Copy the paused example and run the executable with no arguments. On first start,
+save the chain and RPC endpoints through **Chain and RPC connectivity** in the dashboard;
+then review deployment values in **Complete bot configuration** before enabling
+execution:
 
 ```bash
 install -d -m 700 .state
@@ -204,11 +206,8 @@ cd bots/open-oracle-arbitrager
 install -m 600 .env.example .env
 ```
 
-Edit `.env`, set a unique dashboard password of at least 16 characters, and set
-`ZOLTAR_BOT_RPC_URLS` to a comma-separated list of RPC URLs. The first URL is the
-primary reader, every URL receives public transaction broadcasts, and every URL
-after the first is an independent quorum reader. Live execution therefore requires
-at least two independently operated origins. Then build and start the container:
+Edit `.env` and set a unique dashboard password of at least 16 characters. Then
+build and start the container:
 
 ```bash
 docker compose up --build --detach
@@ -218,9 +217,12 @@ On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
 password from `.env`.
 
-Open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration),
-add the reviewed deployment and endpoint settings, and save them. Configuration
-changes apply after restart:
+In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
+save so every endpoint is checked against that chain. Reload the dashboard, then
+open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration).
+Add the reviewed deployment settings, set the centralized-market REP address to
+match `deployment.rep`, choose chain-specific history, price, and position paths,
+and save. Configuration changes apply after restart:
 
 ```bash
 docker compose restart
@@ -250,9 +252,11 @@ execution opportunities, but no approvals or disputes are sent. Without an appro
 coordinator, dry-run still synchronizes a bounded sample for diagnostics but refuses
 to classify any report as an executable opportunity.
 
-Every startup and dashboard RPC change calls `eth_chainId`. The bot refuses to start
-or apply a change unless the read RPC and every public-submission RPC report the
-selected network. It also checks the chain before every scan.
+When network settings exist, every startup and dashboard RPC change calls
+`eth_chainId`. An initially unconfigured bot keeps its paused dashboard available
+without making RPC calls. It will not scan until a verified chain and endpoint set
+has been saved and the process restarted. The bot also checks the chain before every
+scan.
 
 Startup enters **Syncing** while the bot scans the configured historical lookback in
 100-block chunks. The deliberately bounded response size prevents permissionless
@@ -287,18 +291,31 @@ complete active-game context is operationally important.
 
 ## Run on Sepolia
 
-For Sepolia, set `network` to `sepolia` and replace every deployment address and
-RPC URL with values from the same reviewed test environment:
+Use a separate operator configuration and separate history, price, and position
+paths for Sepolia; an existing configured operator file cannot be retargeted to
+another chain. Start the new file paused and unconfigured, then save `sepolia` and
+its RPC URLs in **Chain and RPC connectivity**. Reload the dashboard so **Complete bot
+configuration** contains the persisted network. Replace
+every deployment address with values from the same reviewed test environment, set
+`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
+use separate history, price, and position paths before saving the complete
+configuration and restarting:
 
 ```bash
-bun run run
+install -m 600 config/operator.example.json .state/operator-sepolia.json
+OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json bun run run
 ```
 
-The selected network and every address can be changed in the complete JSON editor,
-but they apply only after restart so cached reports, transaction and contract
-identities cannot cross networks. Use different history, price, and position paths
-for every network because records do not contain a chain ID and a shared file would
-combine rows and profit totals.
+Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` on the restart
+command and in the service definition. Before enabling execution, set the file's
+runtime paths to distinct Sepolia-specific files such as
+`.state/history-sepolia.jsonl`, `.state/prices-sepolia.jsonl`, and
+`.state/positions-sepolia.json`.
+
+Deployment addresses can be changed in the complete JSON editor and apply only
+after restart. The selected chain cannot be changed after initial configuration,
+because durable records do not contain a chain ID. This prevents cached reports,
+transactions, positions, and profit totals from crossing networks.
 
 ## Execute disputes
 
@@ -654,11 +671,8 @@ security.
 ## Persistent operator settings
 
 `.state/operator.json` is the source of persisted bot settings. The bot accepts no
-command-line arguments. `ZOLTAR_BOT_RPC_URLS` can override its RPC settings at
-startup; the first comma-separated URL becomes the primary reader, all listed URLs
-become public broadcast endpoints, and the remaining URLs become quorum readers.
-The override does not modify the settings file, whose connectivity values remain
-the fallback when the variable is blank. Copy the example before first startup:
+command-line arguments and does not read chain or RPC settings from environment
+variables. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
@@ -667,8 +681,12 @@ install -m 600 config/operator.example.json .state/operator.json
 
 `OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
 any value inside the document. This locator is useful for service managers and
-tests. `ZOLTAR_BOT_RPC_URLS` applies to direct Bun runs as well as Compose. URL query
-parameters are supported, but the comma separator must not appear inside a URL.
+tests. Select the chain and enter the read and public RPC URLs in **RPC
+connectivity**. Every endpoint is checked against the selected chain before it is
+saved. Initial chain selection applies after restart; an RPC-only change on the
+active chain applies at the next scan boundary. To operate another chain, follow
+the [separate-configuration steps](#run-on-sepolia). Configure independent quorum
+readers with the deployment controls before enabling execution.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
@@ -1014,10 +1032,11 @@ conservative. Increasing that maximum permits larger Spot/TWAP deviations.
 Parameter changes do not disable contract-side deadline, ratio, state-hash,
 quote-refresh, simulation, or inventory guards.
 
-All other startup values are in `network`, `connectivity`, `deployment`,
-`submission`, `tokenAddresses`, and `runtime`. The example file documents their
-shape. The UI's complete JSON editor can change every field; network, deployment,
-path, execution-mode, UI-bind, and risk changes take effect after restart.
+All other startup values are in `deployment`, `submission`, `tokenAddresses`, and
+`runtime`; `network` and `connectivity` are absent until the focused dashboard form
+saves them. The UI's complete JSON editor can change the remaining fields;
+deployment, path, execution-mode, UI-bind, and risk changes take effect after
+restart.
 
 The position notional uses the refreshed required WETH plus required token funding
 valued at the higher of the executable hedge quote and signed hedge limit.
