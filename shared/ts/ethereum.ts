@@ -342,16 +342,18 @@ export type ParsedTransaction = {
 
 type TransportRetryOptions = {
 	batch?: unknown
-	requestTimeout?: number | undefined
 	retryCount?: number | undefined
 	retryDelay?: number | undefined
+}
+
+type HttpTransportOptions = TransportRetryOptions & {
+	requestTimeout?: number | undefined
 }
 
 type TypedTransport =
 	| {
 			kind: 'custom'
 			provider: EIP1193Provider
-			requestTimeout: number
 			retryCount: number
 			retryDelay: number
 	  }
@@ -1062,6 +1064,7 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 			'content-type': 'application/json',
 		},
 		method: 'POST',
+		redirect: 'error',
 		signal: AbortSignal.timeout(transport.requestTimeout),
 	})
 	if (!response.ok) {
@@ -1783,19 +1786,23 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 }
 
 function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
-	const requestTimeout = options.requestTimeout ?? 30_000
 	const retryCount = options.retryCount ?? DEFAULT_RATE_LIMIT_RETRY_COUNT
 	const retryDelay = options.retryDelay ?? RATE_LIMIT_RETRY_DELAY_MILLISECONDS
-	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
 	if (!Number.isSafeInteger(retryCount) || retryCount < 0) throw new Error('RPC retry count must be a non-negative safe integer')
 	if (!Number.isSafeInteger(retryDelay) || retryDelay < 0) throw new Error('RPC retry delay must be a non-negative safe integer')
-	return { requestTimeout, retryCount, retryDelay }
+	return { retryCount, retryDelay }
 }
 
-export function http(url: string, options?: TransportRetryOptions) {
+function normalizeHttpTransportOptions(options: HttpTransportOptions = {}) {
+	const requestTimeout = options.requestTimeout ?? 30_000
+	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
+	return { ...normalizeTransportRetryOptions(options), requestTimeout }
+}
+
+export function http(url: string, options?: HttpTransportOptions) {
 	return {
 		kind: 'http',
-		...normalizeTransportRetryOptions(options),
+		...normalizeHttpTransportOptions(options),
 		url,
 	} satisfies Transport
 }

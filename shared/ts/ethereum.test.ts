@@ -1515,6 +1515,34 @@ describe('shared ethereum compatibility layer', () => {
 		expect(responses).toHaveLength(0)
 	})
 
+	test('custom transport does not advertise an unenforced request timeout', () => {
+		const transport = custom(createProvider(() => '0x', []))
+		expect('requestTimeout' in transport).toBe(false)
+	})
+
+	test('HTTP transport rejects redirects before reaching another RPC endpoint', async () => {
+		let targetRequests = 0
+		const target = Bun.serve({
+			port: 0,
+			fetch: () => {
+				targetRequests += 1
+				return Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' })
+			},
+		})
+		const redirect = Bun.serve({
+			port: 0,
+			fetch: () => Response.redirect(target.url, 307),
+		})
+		try {
+			const client = createPublicClient({ transport: http(redirect.url.toString(), { retryCount: 0 }) })
+			await expect(client.getCode({ address: TOKEN_ADDRESS })).rejects.toThrow()
+			expect(targetRequests).toBe(0)
+		} finally {
+			await redirect.stop(true)
+			await target.stop(true)
+		}
+	})
+
 	test('HTTP transport rejects malformed JSON-RPC envelopes and supplies a request timeout signal', async () => {
 		const originalFetch = globalThis.fetch
 		let requestSignal: AbortSignal | null | undefined
