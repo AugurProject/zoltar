@@ -17,6 +17,7 @@ import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVa
 import { EscalationGameForker } from './EscalationGameForker.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import {
 	EscalationForkSnapshot,
 	EscalationMigrationEntitlement,
@@ -518,36 +519,32 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			_getEscalationAuctionableRep(securityPool, parentData) + disputeStakedRepSoldAttoRep;
 		uint256 combinedRepBeforeAttoRep = poolRepBeforeAttoRep + disputeStakedRepBeforeAttoRep;
 		uint256 poolRepAfterAttoRep = poolRepBeforeAttoRep + disputeStakedRepSoldAttoRep;
-		if (poolRepAfterAttoRep > 0) {
-			uint256 currentBackingUnitsDenominator = securityPool.totalRepBackingUnits();
-			uint256 incumbentRepAfterAttoRep =
-				combinedRepBeforeAttoRep == 0
-					? 0
-					: (poolRepBeforeAttoRep * (combinedRepBeforeAttoRep - repPurchasedAttoRep)) /
-						combinedRepBeforeAttoRep;
-			uint256 auctionRepBackingUnitsPerAttoRep =
-				currentBackingUnitsDenominator == 0 || incumbentRepAfterAttoRep == 0
-					? SecurityPoolUtils.PRICE_PRECISION
-					: (currentBackingUnitsDenominator - 1) / incumbentRepAfterAttoRep + 1;
-			if (auctionRepBackingUnitsPerAttoRep > 0) {
-				// Make every auction claim an exact backingUnits conversion. The final denominator
-				// is a multiple of total pool-held REP, so `amount * auctionRepBackingUnitsPerAttoRep`
-				// round-trips through `backingUnitsToAttoRep` without per-claim ceiling drift.
-				data.auctionRepBackingUnitsPerAttoRep = auctionRepBackingUnitsPerAttoRep;
-				securityPool.setTotalRepBackingUnits(poolRepAfterAttoRep * auctionRepBackingUnitsPerAttoRep);
-			}
+		if (poolRepAfterAttoRep == 0 || repPurchasedAttoRep == 0) return;
+		uint256 incumbentRepAfterAttoRep =
+			combinedRepBeforeAttoRep == 0
+				? 0
+				: Math.mulDiv(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep);
+		uint256 auctionRepBackingUnitsPerAttoRep;
+		if (incumbentRepAfterAttoRep == 0) {
+			// A full-cap auction has no positive REP residue from which to derive a
+			// dilution ratio. Bound auction ownership at the fixed scale while retaining
+			// child-local migrated units so sub-haircut claims cannot resurrect.
+			auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils.PRICE_PRECISION;
+			securityPool.setTotalRepBackingUnits(Math.mulDiv(poolRepAfterAttoRep, auctionRepBackingUnitsPerAttoRep, 1) + data.migratedAttoRep);
+		} else {
+			// Child backing units are REP-denominated before finalization, so this bounded
+			// rate preserves the intended haircut without inheriting a parent's unit scale.
+			auctionRepBackingUnitsPerAttoRep = Math.ceilDiv(poolRepAfterAttoRep, incumbentRepAfterAttoRep);
+			securityPool.setTotalRepBackingUnits(Math.mulDiv(poolRepAfterAttoRep, auctionRepBackingUnitsPerAttoRep, 1));
 		}
-		if (securityPool.totalRepBackingUnits() == 0) {
-			// wipe all rep holders in vaults
-			securityPool.setTotalRepBackingUnits(poolRepAfterAttoRep * SecurityPoolUtils.PRICE_PRECISION);
-		}
+		data.auctionRepBackingUnitsPerAttoRep = auctionRepBackingUnitsPerAttoRep;
 	}
 
 	function _applyEscalationTruthAuctionHaircut(ISecurityPool securityPool, SecurityPoolForkerForkData storage parentData, uint256 repPurchasedAttoRep) private returns (uint256 disputeStakedRepSoldAttoRep) {
 		uint256 disputeStakedRepBeforeAttoRep = _getEscalationAuctionableRep(securityPool, parentData);
 		if (disputeStakedRepBeforeAttoRep == 0 || repPurchasedAttoRep == 0) return 0;
 		uint256 combinedRepBeforeAttoRep = _getPoolAuctionableRepAtFork(parentData) + disputeStakedRepBeforeAttoRep;
-		disputeStakedRepSoldAttoRep = (repPurchasedAttoRep * disputeStakedRepBeforeAttoRep) / combinedRepBeforeAttoRep;
+		disputeStakedRepSoldAttoRep = Math.mulDiv(repPurchasedAttoRep, disputeStakedRepBeforeAttoRep, combinedRepBeforeAttoRep);
 		if (disputeStakedRepSoldAttoRep == 0) return 0;
 		securityPool.escalationGame().applyTruthAuctionHaircut(disputeStakedRepSoldAttoRep);
 	}

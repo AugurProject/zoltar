@@ -7,6 +7,7 @@ import {
 } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { Constants } from '../Constants.sol';
+import { UniformPriceDualCapBatchAuctionStorage } from './UniformPriceDualCapBatchAuctionStorage.sol';
 
 // Gas bound: finalize() descends AVL aggregate paths and never scans bids. The
 // tick range admits at most 1,048,577 distinct price levels, so an AVL tree over
@@ -14,17 +15,6 @@ import { Constants } from '../Constants.sol';
 // bid or tick cap because valid price levels must remain open during bidding; see
 // the synthetic max-depth gas tests.
 contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
-	struct Node {
-		int256 tick; // ETH/REP price (tick)
-		uint256 totalBidAttoEth; // total ETH at this tick
-		uint256 subtreeBidAttoEth; // total ETH in subtree
-		uint256 left;
-		uint256 right;
-		uint256 height;
-		uint256 subtreeClearingBidAttoEth; // total ETH in subtree that can contribute to clearing
-		int256 minClearingTick;
-	}
-
 	struct Bid {
 		address bidder;
 		bool claimed;
@@ -46,7 +36,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	// consuming settlement gas; contracts that need more gas can use the pull path.
 	uint256 constant REFUND_PUSH_GAS_LIMIT = 30_000;
 
-	mapping(uint256 => Node) private nodes;
+	mapping(uint256 => UniformPriceDualCapBatchAuctionStorage.Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
 	mapping(int256 => mapping(uint256 => uint256)) private refundedBidPrefixTree;
 
@@ -116,7 +106,9 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		// Same-price rationing is intentionally time-priority, not pro-rata. Bids at
 		// one tick append in submission order, and any marginal clearing-tick fill
 		// consumes earlier same-tick ETH before later same-tick ETH.
-		root = _insert(root, tick, msg.value);
+		bool insertedNewTick;
+		(root, nextId, insertedNewTick) = UniformPriceDualCapBatchAuctionStorage.insert(nodes, root, tick, msg.value, underfundedThreshold, nextId);
+		if (insertedNewTick) activeTickCount += 1;
 		uint256 bidIndex = _appendBid(tick, msg.sender, msg.value);
 		emit BidSubmitted(msg.sender, tick, bidIndex, msg.value, bidsAtTick[tick][bidIndex].cumulativeBidAttoEth);
 	}
@@ -184,7 +176,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		if (clearingPrice < underfundedThreshold) return (finalClearingTick, 0, 0, 0);
 
 		finalUnderfundedWinningAttoEth =
-			_getActiveBidAttoEthAboveTick(root, finalClearingTick) + _getBidAttoEthAtTick(root, finalClearingTick);
+			UniformPriceDualCapBatchAuctionStorage.getActiveBidAttoEthAboveTick(nodes, root, finalClearingTick) +
+			UniformPriceDualCapBatchAuctionStorage.getBidAttoEthAtTick(nodes, root, finalClearingTick);
 		if (finalUnderfundedWinningAttoEth == 0) return (finalClearingTick, 0, 0, 0);
 		finalRepPurchasedAttoRep = maxAttoRepBeingSold;
 		return (
@@ -200,7 +193,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		view
 		returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth)
 	{
-		return _compute(root, 0, 0, 0, 0);
+		return
+			UniformPriceDualCapBatchAuctionStorage.computeClearing(nodes, root, UniformPriceDualCapBatchAuctionStorage.ClearingConfig({attoEthRaiseCap: attoEthRaiseCap, maxAttoRepBeingSold: maxAttoRepBeingSold, underfundedThreshold: underfundedThreshold}));
 	}
 
 	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation) {
@@ -222,7 +216,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 			uint256 activeCumulativeBidBeforeAttoEth = _getActiveCumulativeBidBeforeAttoEth(tick, index, bid);
 			uint256 cumulativeWinningBidBeforeAttoEth =
-				_getActiveBidAttoEthAboveTick(root, tick) + activeCumulativeBidBeforeAttoEth;
+				UniformPriceDualCapBatchAuctionStorage.getActiveBidAttoEthAboveTick(nodes, root, tick) +
+					activeCumulativeBidBeforeAttoEth;
 			uint256 bidUsedAttoEth;
 			uint256 attoRepFilled;
 			uint256 refundAttoEth;
@@ -231,7 +226,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			if (underfunded) {
 				if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
 					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = _allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
+					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
 					status = BidSettlementStatus.Winning;
 				} else {
 					refundAttoEth = bid.bidAmountAttoEth;
@@ -243,7 +238,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 					status = BidSettlementStatus.Losing;
 				} else if (tick > clearingTick) {
 					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = _allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, PRICE_PRECISION, clearingPriceLocal);
+					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, PRICE_PRECISION, clearingPriceLocal);
 					status = BidSettlementStatus.Winning;
 				} else {
 					uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
@@ -256,7 +251,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 						bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
 					}
 					if (bidUsedAttoEth > bid.bidAmountAttoEth) bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = _allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, PRICE_PRECISION, clearingPriceLocal);
+					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, PRICE_PRECISION, clearingPriceLocal);
 					refundAttoEth = bid.bidAmountAttoEth - bidUsedAttoEth;
 					if (bidUsedAttoEth == 0) {
 						status = BidSettlementStatus.Losing;
@@ -268,7 +263,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 				}
 			}
 			totalFilledAttoRep += attoRepFilled;
-			totalProRataAllocation += _allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);
+			totalProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);
 			totalRefundAttoEth += refundAttoEth;
 			bid.claimed = true;
 			emit BidSettled(withdrawFor, tick, index, bid.bidAmountAttoEth, bidUsedAttoEth, attoRepFilled, refundAttoEth, status);
@@ -309,12 +304,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			uint256 originalBidAmountAttoEth = bid.bidAmountAttoEth;
 
 			bid.claimed = true;
-			_addRefundedBidPrefixAmount(tick, index + 1, originalBidAmountAttoEth);
+			UniformPriceDualCapBatchAuctionStorage.addRefundedPrefixAmount(refundedBidPrefixTree, tick, bidsAtTick[tick].length, index + 1, originalBidAmountAttoEth);
 
 			totalRefundAttoEth += originalBidAmountAttoEth;
 
 			// Update tree totals to remove this losing bid
-			_decreaseAtPrice(tick, originalBidAmountAttoEth);
+			bool removedTick;
+			(root, removedTick) = UniformPriceDualCapBatchAuctionStorage.decrease(nodes, root, tick, originalBidAmountAttoEth, underfundedThreshold);
+			if (removedTick) activeTickCount -= 1;
 			emit BidSettled(bidder, tick, index, originalBidAmountAttoEth, 0, 0, originalBidAmountAttoEth, BidSettlementStatus.PreFinalizationRefund);
 		}
 
@@ -340,13 +337,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	}
 
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {
-		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
-		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
-		price = PRICE_PRECISION;
-		for (uint8 i = 0; i < 20; i++) {
-			if ((absTick & (1 << i)) != 0) price = (price * powerOf1Point0001(i)) / PRICE_PRECISION;
-		}
-		if (tick < 0) price = (PRICE_PRECISION * PRICE_PRECISION) / price;
+		return UniformPriceDualCapBatchAuctionStorage.tickToPrice(tick);
 	}
 
 	function getTickSummary(int256 tick) external view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
@@ -408,41 +399,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 	// Internal/private functions below
 
-	function _wouldClear(uint256 candidateBidAttoEth, int256 tick) internal view returns (bool) {
-		if (candidateBidAttoEth >= attoEthRaiseCap) return true;
-		uint256 price = tickToPrice(tick);
-		if (price == 0) return false;
-		uint256 candidateAttoRep = (candidateBidAttoEth * PRICE_PRECISION) / price;
-		return candidateAttoRep >= maxAttoRepBeingSold;
-	}
-
-	function _isClearingTick(int256 tick) private view returns (bool) {
-		return tickToPrice(tick) >= underfundedThreshold;
-	}
-
-	function _subtreeWouldClear(uint256 nodeId, uint256 accumulatedBidAttoEth) internal view returns (bool) {
-		if (nodeId == 0) return false;
-		Node storage node = nodes[nodeId];
-		if (node.subtreeClearingBidAttoEth == 0) return false;
-		return _wouldClear(accumulatedBidAttoEth + node.subtreeClearingBidAttoEth, node.minClearingTick);
-	}
-
-	function _getBidAttoEthAtTick(uint256 nodeId, int256 tick) internal view returns (uint256) {
-		if (nodeId == 0) return 0;
-		Node storage node = nodes[nodeId];
-		if (tick == node.tick) return node.totalBidAttoEth;
-		if (tick < node.tick) return _getBidAttoEthAtTick(node.left, tick);
-		return _getBidAttoEthAtTick(node.right, tick);
-	}
-
 	function _isBidRefunded(int256 tick, uint256 bidIndex) internal view returns (bool) {
-		uint256 refundedBefore = _getRefundedCumulativeBidBeforeAttoEthIndex(tick, bidIndex);
-		uint256 refundedAtOrBefore = _getRefundedCumulativeBidBeforeAttoEthIndex(tick, bidIndex + 1);
+		uint256 refundedBefore = UniformPriceDualCapBatchAuctionStorage.refundedCumulativeBefore(refundedBidPrefixTree, tick, bidIndex);
+		uint256 refundedAtOrBefore = UniformPriceDualCapBatchAuctionStorage.refundedCumulativeBefore(refundedBidPrefixTree, tick, bidIndex + 1);
 		return refundedAtOrBefore > refundedBefore;
 	}
 
 	function _buildTickSummary(int256 tick) internal view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
-		uint256 currentTotalBidAttoEth = _getBidAttoEthAtTick(root, tick);
+		uint256 currentTotalBidAttoEth = UniformPriceDualCapBatchAuctionStorage.getBidAttoEthAtTick(nodes, root, tick);
 		return
 			IUniformPriceDualCapBatchAuction.TickSummary({tick: tick, price: tickToPrice(tick), currentTotalBidAttoEth: currentTotalBidAttoEth, submissionCount: bidsAtTick[tick].length, active: currentTotalBidAttoEth > 0});
 	}
@@ -454,28 +418,10 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			IUniformPriceDualCapBatchAuction.BidView({tick: tick, bidIndex: bidIndex, bidder: bid.bidder, bidAmountAttoEth: bid.bidAmountAttoEth, cumulativeBidAttoEth: bid.cumulativeBidAttoEth, activeCumulativeBidBeforeAttoEth: activeCumulativeBidBeforeAttoEth, claimed: bid.claimed, refunded: _isBidRefunded(tick, bidIndex)});
 	}
 
-	function _allocateFromCumulativePosition(uint256 cumulativeAmountBefore, uint256 amountUsed, uint256 allocationNumerator, uint256 denominator) private pure returns (uint256 allocation) {
-		if (amountUsed == 0 || allocationNumerator == 0 || denominator == 0) return 0;
-		uint256 cumulativeAllocationBefore = Math.mulDiv(cumulativeAmountBefore, allocationNumerator, denominator);
-		uint256 cumulativeAllocationAfter = Math.mulDiv(cumulativeAmountBefore + amountUsed, allocationNumerator, denominator);
-		return cumulativeAllocationAfter - cumulativeAllocationBefore;
-	}
-
-	function _getActiveBidAttoEthAboveTick(uint256 nodeId, int256 tick) private view returns (uint256 bidAttoEthAbove) {
-		if (nodeId == 0) return 0;
-		Node storage node = nodes[nodeId];
-		if (tick < node.tick) {
-			uint256 rightBidAttoEth = node.right == 0 ? 0 : nodes[node.right].subtreeBidAttoEth;
-			return rightBidAttoEth + node.totalBidAttoEth + _getActiveBidAttoEthAboveTick(node.left, tick);
-		}
-		if (tick > node.tick) return _getActiveBidAttoEthAboveTick(node.right, tick);
-		return node.right == 0 ? 0 : nodes[node.right].subtreeBidAttoEth;
-	}
-
 	function _fillActiveTickPage(uint256 nodeId, uint256 offset, IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries, uint256 writeIndex) internal view returns (uint256 remainingOffset, uint256 nextWriteIndex) {
 		if (nodeId == 0 || writeIndex >= summaries.length) return (offset, writeIndex);
 
-		Node storage node = nodes[nodeId];
+		UniformPriceDualCapBatchAuctionStorage.Node storage node = nodes[nodeId];
 		(offset, writeIndex) = _fillActiveTickPage(node.right, offset, summaries, writeIndex);
 		if (writeIndex >= summaries.length) return (offset, writeIndex);
 
@@ -497,80 +443,6 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		return offset + limit;
 	}
 
-	function _compute(uint256 nodeId, uint256 accumulatedBidAttoEth, int256 lastValidTick, uint256 lastValidBidAttoEth, uint256 lastValidBidAtTickAttoEth) internal view returns (bool, int256, uint256, uint256) {
-		if (nodeId == 0) return (false, lastValidTick, accumulatedBidAttoEth, 0);
-		Node storage node = nodes[nodeId];
-		if (!_subtreeWouldClear(nodeId, accumulatedBidAttoEth)) {
-			uint256 skippedBidAtTickAttoEth = _getBidAttoEthAtTick(nodeId, node.minClearingTick);
-			return (
-				false,
-				node.minClearingTick,
-				accumulatedBidAttoEth + node.subtreeClearingBidAttoEth,
-				skippedBidAtTickAttoEth
-			);
-		}
-
-		if (node.right != 0) {
-			if (_subtreeWouldClear(node.right, accumulatedBidAttoEth)) {
-				return
-					_compute(node.right, accumulatedBidAttoEth, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
-			}
-
-			Node storage rightNode = nodes[node.right];
-			accumulatedBidAttoEth += rightNode.subtreeClearingBidAttoEth;
-			if (rightNode.subtreeClearingBidAttoEth > 0) {
-				lastValidTick = rightNode.minClearingTick;
-				lastValidBidAttoEth = accumulatedBidAttoEth;
-				lastValidBidAtTickAttoEth = _getBidAttoEthAtTick(node.right, rightNode.minClearingTick);
-			}
-		}
-
-		// This node and its entire left subtree are below the cap-implied reserve.
-		// They remain in subtreeBidAttoEth for refunds and pagination but cannot establish
-		// a funded clearing price or contribute ETH to a winning prefix.
-		if (!_isClearingTick(node.tick))
-			return (false, lastValidTick, accumulatedBidAttoEth, lastValidBidAtTickAttoEth);
-
-		uint256 price = tickToPrice(node.tick);
-		uint256 bidToTakeAttoEth = price == 0 ? 0 : node.totalBidAttoEth;
-		if (accumulatedBidAttoEth > 0) {
-			uint256 repIfRepricedAttoRep = price == 0 ? 0 : (accumulatedBidAttoEth * PRICE_PRECISION) / price;
-			if (repIfRepricedAttoRep > maxAttoRepBeingSold)
-				return (true, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
-		}
-
-		if (accumulatedBidAttoEth >= attoEthRaiseCap)
-			return (true, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
-		uint256 remainingCap = attoEthRaiseCap - accumulatedBidAttoEth;
-		if (bidToTakeAttoEth > remainingCap) bidToTakeAttoEth = remainingCap;
-		uint256 newAccumulatedBidAttoEth = accumulatedBidAttoEth + bidToTakeAttoEth;
-
-		uint256 totalAttoRep = price == 0 ? 0 : (newAccumulatedBidAttoEth * PRICE_PRECISION) / price;
-
-		if (totalAttoRep >= maxAttoRepBeingSold) {
-			// partial fill
-			uint256 maximumBidAtThisPriceAttoEth = (maxAttoRepBeingSold * price) / PRICE_PRECISION;
-			uint256 bidUsedAtTickAttoEth = 0;
-			if (maximumBidAtThisPriceAttoEth > accumulatedBidAttoEth)
-				bidUsedAtTickAttoEth = maximumBidAtThisPriceAttoEth - accumulatedBidAttoEth;
-			if (bidUsedAtTickAttoEth > bidToTakeAttoEth) bidUsedAtTickAttoEth = bidToTakeAttoEth;
-			return (true, node.tick, accumulatedBidAttoEth + bidUsedAtTickAttoEth, bidUsedAtTickAttoEth);
-		}
-
-		if (newAccumulatedBidAttoEth >= attoEthRaiseCap)
-			return (true, node.tick, newAccumulatedBidAttoEth, bidToTakeAttoEth);
-
-		accumulatedBidAttoEth = newAccumulatedBidAttoEth;
-
-		lastValidTick = node.tick;
-		lastValidBidAttoEth = accumulatedBidAttoEth;
-		lastValidBidAtTickAttoEth = bidToTakeAttoEth;
-
-		// continue to lower prices
-		return
-			_compute(node.left, accumulatedBidAttoEth, lastValidTick, lastValidBidAttoEth, lastValidBidAtTickAttoEth);
-	}
-
 	function _priceToCeilingTick(uint256 price) private pure returns (int256) {
 		int256 low = MIN_TICK;
 		int256 high = MAX_TICK;
@@ -582,38 +454,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		return low;
 	}
 
-	function _insert(uint256 nodeId, int256 tick, uint256 bidAmountAttoEth) internal returns (uint256) {
-		if (nodeId == 0) {
-			uint256 newId = nextId++;
-			uint256 nodeClearingBidAttoEth = _isClearingTick(tick) ? bidAmountAttoEth : 0;
-			nodes[newId] = Node({tick: tick, totalBidAttoEth: bidAmountAttoEth, subtreeBidAttoEth: bidAmountAttoEth, left: 0, right: 0, height: 1, subtreeClearingBidAttoEth: nodeClearingBidAttoEth, minClearingTick: nodeClearingBidAttoEth == 0 ? int256(0) : tick});
-			activeTickCount += 1;
-			return newId;
-		}
-
-		Node storage node = nodes[nodeId];
-		if (tick == node.tick) {
-			node.totalBidAttoEth += bidAmountAttoEth;
-		} else if (tick < node.tick) {
-			node.left = _insert(node.left, tick, bidAmountAttoEth);
-		} else {
-			node.right = _insert(node.right, tick, bidAmountAttoEth);
-		}
-
-		_update(nodeId);
-		return _balance(nodeId);
-	}
-
 	function _appendBid(int256 tick, address bidder, uint256 bidAmountAttoEth) private returns (uint256 bidIndex) {
 		bidIndex = bidsAtTick[tick].length;
 		uint256 cumulativeBidAttoEth =
 			bidIndex == 0 ? bidAmountAttoEth : bidsAtTick[tick][bidIndex - 1].cumulativeBidAttoEth + bidAmountAttoEth;
 		require(cumulativeBidAttoEth <= type(uint128).max, 'Auction tick ETH total too high');
-		uint256 treeIndex = bidIndex + 1;
-		uint256 leastSignificantBit = _leastSignificantBit(treeIndex);
-		refundedBidPrefixTree[tick][treeIndex] =
-			_getRefundedCumulativeBidBeforeAttoEthIndex(tick, bidIndex) -
-			_getRefundedCumulativeBidBeforeAttoEthIndex(tick, treeIndex - leastSignificantBit);
+		UniformPriceDualCapBatchAuctionStorage.initializeRefundPrefixEntry(refundedBidPrefixTree, tick, bidIndex);
 		bidsAtTick[tick].push(Bid({bidder: bidder, claimed: false, bidAmountAttoEth: uint128(bidAmountAttoEth), cumulativeBidAttoEth: uint128(cumulativeBidAttoEth)}));
 		if (!hasSeenTick[tick]) {
 			hasSeenTick[tick] = true;
@@ -622,224 +468,10 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		bidderBidRefs[bidder].push(BidRef({tick: tick, bidIndex: bidIndex}));
 	}
 
-	function _update(uint256 nodeId) internal {
-		Node storage node = nodes[nodeId];
-		uint256 leftBidAttoEth;
-		uint256 rightBidAttoEth;
-		uint256 leftH;
-		uint256 rightH;
-		uint256 leftClearingBidAttoEth;
-		uint256 rightClearingBidAttoEth;
-		if (node.left != 0) {
-			leftBidAttoEth = nodes[node.left].subtreeBidAttoEth;
-			leftH = nodes[node.left].height;
-			leftClearingBidAttoEth = nodes[node.left].subtreeClearingBidAttoEth;
-		}
-		if (node.right != 0) {
-			rightBidAttoEth = nodes[node.right].subtreeBidAttoEth;
-			rightH = nodes[node.right].height;
-			rightClearingBidAttoEth = nodes[node.right].subtreeClearingBidAttoEth;
-		}
-
-		uint256 nodeClearingBidAttoEth = _isClearingTick(node.tick) ? node.totalBidAttoEth : 0;
-		node.subtreeBidAttoEth = node.totalBidAttoEth + leftBidAttoEth + rightBidAttoEth;
-		node.subtreeClearingBidAttoEth = nodeClearingBidAttoEth + leftClearingBidAttoEth + rightClearingBidAttoEth;
-		node.height = 1 + (leftH > rightH ? leftH : rightH);
-		if (leftClearingBidAttoEth > 0) {
-			node.minClearingTick = nodes[node.left].minClearingTick;
-		} else if (nodeClearingBidAttoEth > 0) {
-			node.minClearingTick = node.tick;
-		} else {
-			node.minClearingTick = rightClearingBidAttoEth == 0 ? int256(0) : nodes[node.right].minClearingTick;
-		}
-	}
-
-	function _ceilDiv(uint256 numerator, uint256 denominator) private pure returns (uint256) {
-		if (numerator == 0) return 0;
-		return ((numerator - 1) / denominator) + 1;
-	}
-
-	function _height(uint256 nodeId) internal view returns (uint256) {
-		return nodeId == 0 ? 0 : nodes[nodeId].height;
-	}
-
-	function _balance(uint256 nodeId) internal returns (uint256) {
-		int256 balance = int256(_height(nodes[nodeId].left)) - int256(_height(nodes[nodeId].right));
-		if (balance > 1) {
-			if (_height(nodes[nodes[nodeId].left].left) < _height(nodes[nodes[nodeId].left].right))
-				nodes[nodeId].left = _rotateLeft(nodes[nodeId].left);
-			return _rotateRight(nodeId);
-		}
-		if (balance < -1) {
-			if (_height(nodes[nodes[nodeId].right].right) < _height(nodes[nodes[nodeId].right].left))
-				nodes[nodeId].right = _rotateRight(nodes[nodeId].right);
-			return _rotateLeft(nodeId);
-		}
-		return nodeId;
-	}
-
-	function _rotateLeft(uint256 nodeId) internal returns (uint256) {
-		uint256 newRoot = nodes[nodeId].right;
-		uint256 moved = nodes[newRoot].left;
-		nodes[newRoot].left = nodeId;
-		nodes[nodeId].right = moved;
-		_update(nodeId);
-		_update(newRoot);
-		return newRoot;
-	}
-
-	function _rotateRight(uint256 nodeId) internal returns (uint256) {
-		uint256 newRoot = nodes[nodeId].left;
-		uint256 moved = nodes[newRoot].right;
-		nodes[newRoot].right = nodeId;
-		nodes[nodeId].left = moved;
-		_update(nodeId);
-		_update(newRoot);
-		return newRoot;
-	}
-
-	function powerOf1Point0001(uint8 index) internal pure returns (uint256) {
-		if (index == 0) return 1000100000000000000;
-		if (index == 1) return 1000200010000000000;
-		if (index == 2) return 1000400060004000100;
-		if (index == 3) return 1000800280056007000;
-		if (index == 4) return 1001601200560182043;
-		if (index == 5) return 1003204964963598014;
-		if (index == 6) return 1006420201727613920;
-		if (index == 7) return 1012881622445451097;
-		if (index == 8) return 1025929181087729343;
-		if (index == 9) return 1052530684607338948;
-		if (index == 10) return 1107820842039993613;
-		if (index == 11) return 1227267018058200482;
-		if (index == 12) return 1506184333613467388;
-		if (index == 13) return 2268591246822644826;
-		if (index == 14) return 5146506245160322222;
-		if (index == 15) return 26486526531474198664;
-		if (index == 16) return 701536087702486644953;
-		if (index == 17) return 492152882348911033633683;
-		if (index == 18) return 242214459604341065650571799093;
-		if (index == 19) return 58667844441422969901301586347865591163491;
-		revert('Auction tick price power index is out of bounds');
-	}
-
-	function _decreaseAtPrice(int256 tick, uint256 bidAmountAttoEth) internal {
-		root = _decrease(root, tick, bidAmountAttoEth);
-	}
-
-	function _getRefundedCumulativeBidBeforeAttoEthIndex(int256 tick, uint256 index) internal view returns (uint256 cumulativeBidAttoEth) {
-		uint256 treeIndex = index;
-		while (treeIndex > 0) {
-			cumulativeBidAttoEth += refundedBidPrefixTree[tick][treeIndex];
-			treeIndex -= _leastSignificantBit(treeIndex);
-		}
-	}
-
 	function _getActiveCumulativeBidBeforeAttoEth(int256 tick, uint256 bidIndex, Bid storage bid) private view returns (uint256) {
 		uint256 grossCumulativeBidBeforeAttoEth = bid.cumulativeBidAttoEth - bid.bidAmountAttoEth;
-		uint256 refundedCumulativeBidBeforeAttoEth = _getRefundedCumulativeBidBeforeAttoEthIndex(tick, bidIndex);
+		uint256 refundedCumulativeBidBeforeAttoEth = UniformPriceDualCapBatchAuctionStorage.refundedCumulativeBefore(refundedBidPrefixTree, tick, bidIndex);
 		require(refundedCumulativeBidBeforeAttoEth <= grossCumulativeBidBeforeAttoEth, 'Refund prefix exceeds bid history');
 		return grossCumulativeBidBeforeAttoEth - refundedCumulativeBidBeforeAttoEth;
-	}
-
-	function _addRefundedBidPrefixAmount(int256 tick, uint256 index, uint256 amountAttoEth) internal {
-		uint256 bidCount = bidsAtTick[tick].length;
-		uint256 treeIndex = index;
-		while (treeIndex <= bidCount) {
-			refundedBidPrefixTree[tick][treeIndex] += amountAttoEth;
-			treeIndex += _leastSignificantBit(treeIndex);
-		}
-	}
-
-	function _leastSignificantBit(uint256 value) internal pure returns (uint256) {
-		return value & (~value + 1);
-	}
-
-	function _decrease(uint256 nodeId, int256 tick, uint256 bidAmountAttoEth) internal returns (uint256) {
-		require(nodeId != 0, 'Auction tree node must exist before decreasing its ETH total');
-		Node storage node = nodes[nodeId];
-
-		if (tick < node.tick) {
-			node.left = _decrease(node.left, tick, bidAmountAttoEth);
-		} else if (tick > node.tick) {
-			node.right = _decrease(node.right, tick, bidAmountAttoEth);
-		} else {
-			// Found node
-			require(node.totalBidAttoEth >= bidAmountAttoEth, 'Auction tree node ETH total would underflow');
-			node.totalBidAttoEth -= bidAmountAttoEth;
-
-			// If node still has ETH, just update
-			if (node.totalBidAttoEth > 0) {
-				_update(nodeId);
-				return _balance(nodeId);
-			}
-
-			// Node empty → delete
-			activeTickCount -= 1;
-			return _delete(nodeId, tick);
-		}
-
-		_update(nodeId);
-		return _balance(nodeId);
-	}
-
-	function _delete(uint256 nodeId, int256 tick) internal returns (uint256) {
-		require(nodeId != 0, 'Auction tree node must exist before deletion');
-		Node storage node = nodes[nodeId];
-
-		if (tick < node.tick) {
-			node.left = _delete(node.left, tick);
-		} else if (tick > node.tick) {
-			node.right = _delete(node.right, tick);
-		} else {
-			// Case 1: no children
-			if (node.left == 0 && node.right == 0) {
-				delete nodes[nodeId];
-				return 0;
-			}
-
-			// Case 2: only right child
-			if (node.left == 0) {
-				uint256 rightChild = node.right;
-				delete nodes[nodeId];
-				return rightChild;
-			}
-
-			// Case 3: only left child
-			if (node.right == 0) {
-				uint256 leftChild = node.left;
-				delete nodes[nodeId];
-				return leftChild;
-			}
-
-			// Case 4: two children
-			uint256 successorId = _minNode(node.right); // smallest in right subtree
-			Node storage successor = nodes[successorId];
-
-			// Copy successor data
-			node.tick = successor.tick;
-			node.totalBidAttoEth = successor.totalBidAttoEth;
-
-			// Delete successor recursively
-			node.right = _delete(node.right, successor.tick);
-		}
-
-		_update(nodeId);
-		return _balance(nodeId);
-	}
-
-	function _minNode(uint256 nodeId) internal view returns (uint256) {
-		uint256 current = nodeId;
-		while (nodes[current].left != 0) {
-			current = nodes[current].left;
-		}
-		return current;
-	}
-
-	function _maxNode(uint256 nodeId) internal view returns (uint256) {
-		uint256 current = nodeId;
-		while (nodes[current].right != 0) {
-			current = nodes[current].right;
-		}
-		return current;
 	}
 }

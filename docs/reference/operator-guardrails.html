@@ -394,7 +394,7 @@
 						</tr>
 						<tr>
 							<td>Optional unresolved parent escalation-deposit accounting cleanup</td>
-							<td>The public <code>SecurityPoolForker.migrateVaultWithUnresolvedEscalation</code> wrapper first runs ordinary migration for that same vault: REP backing units and capacity ownership move to the child, claimable fees are checkpointed and retained in the parent vault, and proportional settlement collateral routes separately at pool level. Its fixed-size escalation cleanup then exports one <code>Invalid</code>/<code>Yes</code>/<code>No</code> principal tuple without another token transfer. The cleanup preserves proof leaves and neither funds dispute-staked REP backing nor authorizes inherited claims.</td>
+							<td>The public <code>SecurityPoolForker.migrateVaultWithUnresolvedEscalation</code> wrapper first runs ordinary migration for that same vault: the parent REP backing-unit claim is converted to REP and credited as child-local backing units, capacity ownership moves to the child, claimable fees are checkpointed and retained in the parent vault, and proportional settlement collateral routes separately at pool level. Its fixed-size escalation cleanup then exports one <code>Invalid</code>/<code>Yes</code>/<code>No</code> principal tuple without another token transfer. The cleanup preserves proof leaves and neither funds dispute-staked REP backing nor authorizes inherited claims.</td>
 							<td>
 								<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.migrateVaultWithUnresolvedEscalation</code></a
 								>, <a href="../../solidity/contracts/peripherals/EscalationGameEscrow.sol"><code>EscalationGameEscrow.exportVaultUnresolvedTotalsWithoutTransfer</code></a
@@ -403,7 +403,7 @@
 						</tr>
 						<tr>
 							<td>Residual sweep</td>
-							<td>Once a game is final, unresolved principal is cleared, and no escrow remains, residual REP in the escalation game can be swept back to the security pool.</td>
+							<td>Once a game is final, unresolved principal is cleared, and no escrow remains, its residual can be settled. An ordinary game's residual returns to the security pool. A fork continuation burns its entire residual, which can include inherited capital that must not accrue to child-local owners. This rule prevents capture by a late depositor and stranding in an ownerless fixed child.</td>
 							<td>
 								<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a>
 							</td>

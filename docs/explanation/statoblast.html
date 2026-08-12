@@ -45,7 +45,7 @@
 					<li>Vault owners deposit REP into security vaults and select a target health factor. Their REP-denominated capacity ownership is price independent; the current REP/ETH price converts the pool's aggregate ownership into live ETH minting capacity without iterating through vaults.</li>
 					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
 					<li>In the unfortunate case where the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.</li>
-					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, migrates its backing units there, and routes a proportional share of that pool's <a href="#term-settlement-collateral">settlement collateral</a>.</li>
+					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, converts the parent backing-unit claim to REP in that child, and routes a proportional share of that pool's <a href="#term-settlement-collateral">settlement collateral</a>.</li>
 					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href="truth-auctions.html">Truth Auction</a> to repair that collateral gap.</li>
 					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
 				</ol>
@@ -75,7 +75,7 @@
 						<li>Provide REP-backed security capacity for traders.</li>
 						<li>Receive time-based fees in ETH from traders holding outstanding complete sets.</li>
 						<li>Participate in the Escalation Game after the market ends.</li>
-						<li>Choose where to migrate their REP backing units and allocated share of pool settlement collateral after a fork.</li>
+						<li>Choose the child where their parent REP claim becomes child-local backing units and receives its allocated share of pool settlement collateral after a fork.</li>
 						<li>Keep the value of their REP backing above the amount required to secure their allocated open interest.</li>
 						<li>Trigger OpenOracle games when a REP/ETH price is required for a protocol operation.</li>
 					</ul>
@@ -165,7 +165,7 @@
 				<ol>
 					<li>The parent pool enters fork mode.</li>
 					<li>Anyone can deploy a child pool for a valid fork outcome.</li>
-					<li>Vault owners can migrate their REP backing units and <a href="#term-capacity-ownership">capacity ownership</a> to one child of their choosing. Claimable fees remain checkpointed, funded, and redeemable in the parent vault.</li>
+					<li>Vault owners can convert their parent backing-unit claim to REP, credit that amount as child-local backing units, and move <a href="#term-capacity-ownership">capacity ownership</a> to one child of their choosing. Claimable fees remain checkpointed, funded, and redeemable in the parent vault.</li>
 					<li>Unresolved ongoing escalation games fork into child pools and the games continue after a pause</li>
 					<li>The child starts a truth auction after the migration deadline if collateral is missing.</li>
 					<li>After the truth auction ends, winning bidders settle into REP backing units and capacity ownership.</li>
@@ -174,9 +174,9 @@
 				</ol>
 
 				<h3>8 week migration</h3>
-				<p>Vault holders have eight weeks to choose a child universe. Migration happens one pool at a time: a vault's backing units divided by the pool's total backing units determine its share of that pool's settlement collateral. No collateral moves from other pools or markets in the universe.</p>
+				<p>Vault holders have eight weeks to choose a child universe. Migration happens one pool at a time: a vault's parent backing units determine both its snapshot REP claim and its share of that pool's settlement collateral. The REP claim becomes child-local backing units. No collateral moves from other pools or markets in the universe.</p>
 
-				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, migrated REP backing units and capacity ownerships, and converted child-universe REP backing that actually move into it.</p>
+				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, transferred capacity ownership, and converted child-universe REP backing credited as child-local units.</p>
 
 				<p>For this mechanism to remain secure, the value of the pool-held REP backing must exceed the value of the pool settlement collateral it moves. Otherwise, a malicious vault could shift a significant portion of this pool's collateral to a universe in which they hold favorable positions.</p>
 
@@ -189,7 +189,7 @@
 
 					<ul>
 						<li>
-							Bob's vault receives <b>5 backing units</b>; the child pool receives <b>10 REP<sub>A</sub></b> after applying the snapshot's 2 REP per backing-unit conversion.
+							Bob's vault receives <b>10 child-local backing units</b>, equal to the <b>10 REP<sub>A</sub></b> produced by the snapshot's 2 REP per parent backing-unit conversion.
 						</li>
 						<li>
 							A proportional share of this pool's settlement collateral moves to universe A:
@@ -231,10 +231,10 @@
 						</li>
 					</ul>
 
-					<p>The remaining pool backing units route to universe B. Only this pool's collateral is divided; other markets and pools are unaffected.</p>
+					<p>The remaining vault owners choose universe B. Only this pool's collateral is divided; other markets and pools are unaffected.</p>
 					<ul>
 						<li>
-							Their vaults receive the remaining <b>15 backing units</b>; the child pool receives the corresponding <b>30 REP<sub>B</sub></b
+							Their vaults receive the remaining <b>30 child-local backing units</b>, equal to the corresponding <b>30 REP<sub>B</sub></b
 							>.
 						</li>
 						<li>
@@ -279,8 +279,8 @@
 
 					<p>After migration:</p>
 					<ul>
-						<li><b>Universe A</b> receives Bob's 5 backing units and 2.5 ETH of this pool's settlement collateral.</li>
-						<li><b>Universe B</b> receives the remaining 15 backing units and 7.5 ETH of this pool's settlement collateral.</li>
+						<li><b>Universe A</b> credits Bob with 10 child-local backing units and receives 2.5 ETH of this pool's settlement collateral.</li>
+						<li><b>Universe B</b> credits the other owners with 30 child-local backing units and receives 7.5 ETH of this pool's settlement collateral.</li>
 					</ul>
 				</div>
 
@@ -292,7 +292,7 @@
 					<p class="equation-note">Escalation claims are excluded.</p>
 				</div>
 				<p>Migration safety uses only pool-held vault REP backing. The effective multiplier is floored at <code>10,500 BPS</code> so free backing normally funds the complete liquidation award. The exact live health rules are owned by the <a href="../explanation/liquidations.html#capacity-and-health">liquidation design</a>. This separation lets REP perform escalation work without letting contingent claims secure parent open interest.</p>
-				<p>A vault's settlement-collateral migration weight is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and capacity ownership to one selected child and clears those two parent fields. The REP-backing share separately routes proportional pool-level settlement collateral, while the transferred capacity ownership determines the vault's live proportional open-interest allocation in the child. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration state across sibling universes.</p>
+				<p>A vault's settlement-collateral migration weight is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> converts the parent backing-unit claim to REP, credits that REP amount as child-local backing units, transfers capacity ownership to one selected child, and clears both parent fields. The REP-backing share separately routes proportional pool-level settlement collateral, while the transferred capacity ownership determines the vault's live proportional open-interest allocation in the child. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration state across sibling universes.</p>
 
 				<h3 id="child-outcome-resolution">Child Outcome Resolution</h3>
 				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational.</p>

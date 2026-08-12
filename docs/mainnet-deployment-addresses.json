@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x6bBD9e11C3Ef13dad9D556d1f8bf3726DaE76f79"
+			"address": "0xDB391bc815e30113B94C1b2958D4F9C0A8cd5254"
 		},
 		{
 			"id": "multicall3",
@@ -33,7 +33,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xb404c94A12f3b61a730DC6faDA1689d6daB1Aa8F"
+			"address": "0x77b5791C5ac213ac27Eb83C458Ae03750E58f08d"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -43,7 +43,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0xCa6b419867cE8ABc211e1E413B8CA1979e931a23"
+			"address": "0xEFa4c30C3FB051FDd51C39c541Bd2F60EC4848cb"
 		},
 		{
 			"id": "openOracle",
@@ -68,12 +68,12 @@
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0xd8A1b5ed8E0f7c4D5c05a2D6714be6894B764091"
+			"address": "0x8227aDE205Dd1E6c3F360502Be7E6FdFA715d1B6"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x25fC3234F6d119c1929F197EEc06597a5B889809"
+			"address": "0xeb3aCa7ed31Ead7E5711b23d1A12182293213977"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -83,19 +83,19 @@
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x1c6dF6C76900B56015D0d064EC8B4E14c9578c95"
+			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xC2bfaaF003dA832edDb3f0945D7FcdF47De4F5a6"
+			"address": "0x695A2FB77D4a043B9B66B443d7D7B52FA9B90224"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0x2EB24844ad3465D6d73De963944A5b7A4A374063"
+			"address": "0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505"
 		}
 	]
 }
