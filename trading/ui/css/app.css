@@ -342,6 +342,7 @@ nav a[aria-current="page"] {
 	display: none;
 }
 .wallet-summary__identity {
+	display: grid;
 	gap: 0.3rem;
 }
 .wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__identity,
