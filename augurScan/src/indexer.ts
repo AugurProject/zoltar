@@ -1,6 +1,7 @@
 import { runtimeConfig } from './config.ts'
 import {
 	type AddressActivity,
+	type ContractDeploymentObservation,
 	DatabaseConsistencyError,
 	type IndexedBlock,
 	type IndexerLease,
@@ -152,13 +153,14 @@ export const findContractDeploymentBlock = async (
 	startBlock: bigint,
 	observedHead: bigint,
 	codeAt: (block: bigint) => Promise<Hex | undefined>,
+	startBlockKnownAbsent = false,
 ): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
 	const hasCode = async (block: bigint): Promise<boolean> => {
 		const code = await codeAt(block)
 		return code !== undefined && code !== '0x'
 	}
 	if (!(await hasCode(observedHead))) return undefined
-	if (await hasCode(startBlock)) return { block: startBlock, exact: false }
+	if (!startBlockKnownAbsent && (await hasCode(startBlock))) return { block: startBlock, exact: false }
 	let lower = startBlock
 	let upper = observedHead
 	while (lower + 1n < upper) {
@@ -177,6 +179,29 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 
 export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
+export type LogScanInput = {
+	readonly address: Address
+	readonly fromBlock: bigint
+	readonly startBlock: bigint
+}
+
+export type LogQueryGroup = {
+	readonly addresses: Address[]
+	readonly fromBlock: bigint
+}
+
+export const rpcLogQueryGroups = (inputs: readonly LogScanInput[]): readonly LogQueryGroup[] => {
+	const byStart = new Map<bigint, Address[]>()
+	for (const input of inputs) {
+		const addresses = byStart.get(input.fromBlock) ?? []
+		addresses.push(input.address)
+		byStart.set(input.fromBlock, addresses)
+	}
+	return [...byStart]
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+		.flatMap(([fromBlock, addresses]) => rpcLogAddressGroups(addresses).map((group) => ({ addresses: group, fromBlock })))
+}
+
 const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
 	const result = new Array<R>(items.length)
 	let cursor = 0
@@ -189,6 +214,66 @@ const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (it
 	})
 	await Promise.all(workers)
 	return result
+}
+
+type DeploymentAwareLogPlan = {
+	readonly inputs: readonly LogScanInput[]
+	readonly observations: readonly ContractDeploymentObservation[]
+}
+
+export const planDeploymentAwareLogScan = async (
+	contracts: readonly ContractMetadata[],
+	fromBlock: bigint,
+	toBlock: bigint,
+	configuredStartBlock: bigint,
+	codeAt: (address: Address, block: bigint) => Promise<Hex | undefined>,
+	blockTimestamp: (block: bigint) => Promise<Date>,
+	onDetectionFailure: (contract: ContractMetadata, error: unknown) => void = () => {},
+): Promise<DeploymentAwareLogPlan> => {
+	const planned = await mapLimit(contracts, 4, async (contract): Promise<DeploymentAwareLogPlan> => {
+		const knownStart = contract.deploymentBlock ?? contract.discoveryBlock
+		if (knownStart !== undefined) {
+			return {
+				inputs: knownStart > toBlock ? [] : [{ address: contract.address, fromBlock: knownStart > fromBlock ? knownStart : fromBlock, startBlock: knownStart }],
+				observations: [],
+			}
+		}
+		try {
+			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
+			const deployment = await findContractDeploymentBlock(
+				searchStart,
+				toBlock,
+				(block) => codeAt(contract.address, block),
+				contract.deploymentCheckedBlock !== undefined,
+			)
+			if (deployment === undefined) {
+				return { inputs: [], observations: [{ contractAddress: contract.address, checkedBlock: toBlock }] }
+			}
+			const observation: ContractDeploymentObservation = {
+				contractAddress: contract.address,
+				checkedBlock: toBlock,
+				deployment: { ...deployment, timestamp: await blockTimestamp(deployment.block) },
+			}
+			return {
+				inputs: [
+					{
+						address: contract.address,
+						fromBlock: deployment.block > fromBlock ? deployment.block : fromBlock,
+						startBlock: deployment.block,
+					},
+				],
+				observations: [observation],
+			}
+		} catch (error) {
+			onDetectionFailure(contract, error)
+			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
+			return {
+				inputs: [{ address: contract.address, fromBlock, startBlock: fallbackStart }],
+				observations: [],
+			}
+		}
+	})
+	return { inputs: planned.flatMap(({ inputs }) => inputs), observations: planned.flatMap(({ observations }) => observations) }
 }
 
 export const queryAdaptiveLogRange = async <T>(
@@ -935,16 +1020,23 @@ class NetworkIndexer {
 		let contracts = await this.#database.contracts(this.#network.chainId)
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId)
 		const storedCursors = await this.#database.logScanCursors(this.#network.chainId)
-		const initialAddresses = [...contracts.values()].filter(isProtocolActivitySource).map(({ address }) => address)
+		const initialContracts = [...contracts.values()].filter(isProtocolActivitySource)
+		const initialAddresses = initialContracts.map(({ address }) => address)
 		for (const address of initialAddresses) {
 			const cursor = storedCursors.get(address.toLowerCase())
 			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock)
 				throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
 		}
-		let segment: { readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }
+		let segment: {
+			readonly toBlock: bigint
+			readonly logs: readonly Log[]
+			readonly endBlockHash?: Hash
+			readonly scanInputs: readonly LogScanInput[]
+			readonly deploymentObservations: readonly ContractDeploymentObservation[]
+		}
 		let headers: readonly RpcBlockHeader[]
 		try {
-			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses, contracts)
+			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialContracts)
 			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
 			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
 			const endHeader = headers.at(-1)
@@ -956,6 +1048,22 @@ class NetworkIndexer {
 			throw error
 		}
 		const end = segment.toBlock
+		for (const observation of segment.deploymentObservations) {
+			const key = observation.contractAddress.toLowerCase()
+			const contract = contracts.get(key)
+			if (contract === undefined) continue
+			contracts.set(key, {
+				...contract,
+				deploymentCheckedBlock: observation.checkedBlock,
+				...(observation.deployment === undefined
+					? {}
+					: {
+							deploymentBlock: observation.deployment.block,
+							deploymentTimestamp: observation.deployment.timestamp,
+							deploymentBlockExact: observation.deployment.exact,
+						}),
+			})
+		}
 		console.info(`[${this.#network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
 		const logsByBlock = new Map<bigint, Log[]>()
 		this.#mergeLogs(logsByBlock, segment.logs)
@@ -1008,11 +1116,21 @@ class NetworkIndexer {
 			const block = isSegmentEnd
 				? {
 						...indexed.block,
-						logScanCursors: [...indexed.contracts.values()].filter(isProtocolActivitySource).map((contract) => ({
-							contractAddress: contract.address,
-							startBlock: contract.discoveryBlock ?? this.#network.startBlock,
-							lastRetrievedBlock: end,
-						})),
+						contractDeploymentObservations: segment.deploymentObservations,
+						logScanCursors: [...indexed.contracts.values()]
+							.filter(
+								(contract) =>
+									isProtocolActivitySource(contract) &&
+									(segment.scanInputs.some(({ address }) => address.toLowerCase() === contract.address.toLowerCase()) || contract.discoveryBlock !== undefined),
+							)
+							.map((contract) => ({
+								contractAddress: contract.address,
+								startBlock:
+									segment.scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())?.startBlock ??
+									contract.discoveryBlock ??
+									this.#network.startBlock,
+								lastRetrievedBlock: end,
+							})),
 					}
 				: indexed.block
 			await this.#assertLease()
@@ -1030,84 +1148,124 @@ class NetworkIndexer {
 		return end >= observedHead
 	}
 
+	async #queryLogs(toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<readonly Log[]> {
+		const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
+		const inputsOfKind = (kind: string): readonly LogScanInput[] => inputs.filter(({ address }) => contracts.get(address.toLowerCase())?.kind === kind)
+		const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
+		const groups = rpcLogQueryGroups(ordinaryInputs)
+		const ordinaryPages = await mapLimit(groups, 3, (group) => this.#client.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
+		const repTokens = [...contracts.values()].filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
+		const wethTokens = [...contracts.values()].filter(({ kind }) => kind === 'weth').map(({ address }) => address)
+		const tokenPairs = repTokens.flatMap((rep) =>
+			wethTokens.flatMap((weth) => [
+				{ token0: rep, token1: weth },
+				{ token0: weth, token1: rep },
+			]),
+		)
+		const v2Queries = inputsOfKind('uniswapV2Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
+		const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const v3Queries = inputsOfKind('uniswapV3Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
+		const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
+		const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap((input) => poolIdGroups.map((ids) => ({ input, ids })))
+		const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const unique = new Map<string, Log>()
+		for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
+			const position = requireLogPosition(log)
+			const input = inputs.find(({ address }) => address.toLowerCase() === log.address.toLowerCase())
+			if (input === undefined || position.blockNumber < input.fromBlock || position.blockNumber > toBlock)
+				throw new ChainContinuityError(`RPC returned a log outside its requested deployment-aware range through ${toBlock}`)
+			unique.set(`${position.transactionHash}:${position.logIndex}`, log)
+		}
+		return [...unique.values()].sort((left, right) => {
+			const a = requireLogPosition(left)
+			const b = requireLogPosition(right)
+			return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
+		})
+	}
+
+	async #getLogsForInputs(
+		toBlock: bigint,
+		inputs: readonly LogScanInput[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
+	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+		const range = await queryCanonicalLogRange(
+			toBlock,
+			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
+			() => this.#queryLogs(toBlock, inputs, contracts),
+		)
+		return { logs: range.items, endBlockHash: range.endBlockHash }
+	}
+
 	async #getLogs(
 		fromBlock: bigint,
 		toBlock: bigint,
 		addresses: readonly Address[],
 		contracts: ReadonlyMap<string, ContractMetadata>,
 	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
-		const range = await queryCanonicalLogRange(
+		return await this.#getLogsForInputs(
 			toBlock,
-			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
-			async () => {
-				const addressesOfKind = (kind: string): readonly Address[] => addresses.filter((address) => contracts.get(address.toLowerCase())?.kind === kind)
-				const managerAddresses = addressesOfKind('uniswapV4PoolManager')
-				const v2FactoryAddresses = addressesOfKind('uniswapV2Factory')
-				const v3FactoryAddresses = addressesOfKind('uniswapV3Factory')
-				const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
-				const ordinaryAddresses = addresses.filter((address) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
-				const groups = rpcLogAddressGroups(ordinaryAddresses)
-				const ordinaryPages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
-				const repTokens = [...contracts.values()].filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
-				const wethTokens = [...contracts.values()].filter(({ kind }) => kind === 'weth').map(({ address }) => address)
-				const tokenPairs = repTokens.flatMap((rep) =>
-					wethTokens.flatMap((weth) => [
-						{ token0: rep, token1: weth },
-						{ token0: weth, token1: rep },
-					]),
-				)
-				const v2Queries = v2FactoryAddresses.flatMap((address) => tokenPairs.map((tokens) => ({ address, ...tokens })))
-				const v2Pages = await mapLimit(v2Queries, 3, ({ address, token0, token1 }) =>
-					this.#client.getLogs({ address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock, toBlock }),
-				)
-				const v3Queries = v3FactoryAddresses.flatMap((address) => tokenPairs.map((tokens) => ({ address, ...tokens })))
-				const v3Pages = await mapLimit(v3Queries, 3, ({ address, token0, token1 }) =>
-					this.#client.getLogs({ address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock, toBlock }),
-				)
-				const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
-				const v4Queries = managerAddresses.flatMap((address) => poolIdGroups.map((ids) => ({ address, ids })))
-				const initializePages = await mapLimit(v4Queries, 3, ({ address, ids }) =>
-					this.#client.getLogs({ address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock, toBlock }),
-				)
-				const swapPages = await mapLimit(v4Queries, 3, ({ address, ids }) =>
-					this.#client.getLogs({ address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock, toBlock }),
-				)
-				const unique = new Map<string, Log>()
-				for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
-					const position = requireLogPosition(log)
-					if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
-						throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
-					unique.set(`${position.transactionHash}:${position.logIndex}`, log)
-				}
-				return [...unique.values()].sort((left, right) => {
-					const a = requireLogPosition(left)
-					const b = requireLogPosition(right)
-					return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
-				})
-			},
+			addresses.map((address) => ({ address, fromBlock, startBlock: fromBlock })),
+			contracts,
 		)
-		return { logs: range.items, endBlockHash: range.endBlockHash }
 	}
 
 	async #getNextLogSegment(
 		fromBlock: bigint,
 		maximumToBlock: bigint,
-		addresses: readonly Address[],
-		contracts: ReadonlyMap<string, ContractMetadata>,
-	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }> {
-		if (addresses.length === 0) {
+		contracts: readonly ContractMetadata[],
+	): Promise<{
+		readonly toBlock: bigint
+		readonly logs: readonly Log[]
+		readonly endBlockHash?: Hash
+		readonly scanInputs: readonly LogScanInput[]
+		readonly deploymentObservations: readonly ContractDeploymentObservation[]
+	}> {
+		if (contracts.length === 0) {
 			const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
-			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [] }
+			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [], scanInputs: [], deploymentObservations: [] }
 		}
 		let endBlockHash: Hash | undefined
+		let successfulPlan: DeploymentAwareLogPlan | undefined
 		const segment = await queryAdaptiveLogRange(
 			fromBlock,
 			maximumToBlock,
 			runtimeConfig.logScanRangeSize,
 			async (rangeStart, rangeEnd) => {
-				const range = await this.#getLogs(rangeStart, rangeEnd, addresses, contracts)
+				let plan: DeploymentAwareLogPlan | undefined
+				const contractMap = new Map(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
+				const range = await queryCanonicalLogRange(
+					rangeEnd,
+					async () => (await this.#client.getBlock({ blockNumber: rangeEnd })).hash,
+					async () => {
+						plan = await planDeploymentAwareLogScan(
+							contracts,
+							rangeStart,
+							rangeEnd,
+							this.#network.startBlock,
+							(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
+							async (blockNumber) => new Date(Number((await this.#client.getBlock({ blockNumber })).timestamp) * 1_000),
+							(contract, error) =>
+								console.warn(
+									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${safeIndexerFailureReason(error)}`,
+								),
+						)
+						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
+					},
+				)
 				endBlockHash = range.endBlockHash
-				return range.logs
+				if (plan === undefined) throw new Error(`RPC did not plan log range through block ${rangeEnd}`)
+				successfulPlan = plan
+				return range.items
 			},
 			(failedFrom, failedTo, retryTo, error) =>
 				console.warn(
@@ -1116,7 +1274,14 @@ class NetworkIndexer {
 			isSplittableLogRangeError,
 		)
 		if (endBlockHash === undefined) throw new Error(`RPC did not anchor log range through block ${segment.toBlock}`)
-		return { toBlock: segment.toBlock, logs: segment.items, endBlockHash }
+		if (successfulPlan === undefined) throw new Error(`RPC did not plan log range through block ${segment.toBlock}`)
+		return {
+			toBlock: segment.toBlock,
+			logs: segment.items,
+			endBlockHash,
+			scanInputs: successfulPlan.inputs,
+			deploymentObservations: successfulPlan.observations,
+		}
 	}
 
 	async #getAllLogs(
@@ -1382,6 +1547,7 @@ class NetworkIndexer {
 				transactions: storedTransactions,
 				logs: storedLogs,
 				addressActivity: addressActivityFrom(storedTransactions, storedLogs, contracts),
+				contractDeploymentObservations: [],
 				logScanCursors: [],
 			},
 		}

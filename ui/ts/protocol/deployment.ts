@@ -4,8 +4,11 @@ import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploy
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ScalarOutcomes_ScalarOutcomes,
+	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	peripherals_Multicall3_Multicall3,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
+	peripherals_WETH9_WETH9,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
@@ -56,6 +59,34 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Record<De
 	zoltar: '0xab10fc74b97acd4e7a97007283f9f341ddfa81cf894fdfe5c9caf0bb939946b2',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
+
+export const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
+	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
+	escalationGameClaimDelegate: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
+	multicall3: `0x${peripherals_Multicall3_Multicall3.evm.deployedBytecode.object}`,
+	openOracle: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
+	scalarOutcomes: `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}`,
+	uniformPriceDualCapBatchAuctionFactory: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}`,
+	weth: `0x${peripherals_WETH9_WETH9.evm.deployedBytecode.object}`,
+	zoltarQuestionData: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`,
+} satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
+
+export function assertStaticDeploymentArtifactRuntimeCodeHashes(
+	parameters: { expectedRuntimeCodeHashes: Readonly<Record<string, Hash | undefined>>; runtimeCodeByStepId: Readonly<Record<string, Hex>> } = {
+		expectedRuntimeCodeHashes: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
+		runtimeCodeByStepId: STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID,
+	},
+) {
+	for (const [id, runtimeCode] of Object.entries(parameters.runtimeCodeByStepId)) {
+		const expectedRuntimeCodeHash = parameters.expectedRuntimeCodeHashes[id]
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Static deployment artifact ${id} has no pinned expected runtime code hash`)
+		const artifactRuntimeCodeHash = keccak256(runtimeCode)
+		if (artifactRuntimeCodeHash !== expectedRuntimeCodeHash) {
+			throw new Error(`Local runtime code for ${id} does not match its pinned expected hash: expected ${expectedRuntimeCodeHash}, artifact contains ${artifactRuntimeCodeHash}. Run bun run compile-contracts and refresh the pinned deployment hashes if the bytecode change is intentional.`)
+		}
+	}
+}
+
 const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	escalationGameClaimDelegate: '0x08ab4e84d9d88edd1d398d2554b85e1f1b969bb6a815370cc8dbae60a93d4360',

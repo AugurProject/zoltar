@@ -5,6 +5,18 @@ import { createOpenOracleCompilerSources, loadOpenOracleCompiler, openOracleComp
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 describe('OpenOracle compiler profile', () => {
+	test('normalizes Windows line endings before compiling vendored sources', () => {
+		const sources = createOpenOracleCompilerSources(
+			new Map([
+				['contracts/peripherals/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28;\r\ncontract OpenOracle {}\r\n'],
+				['contracts/peripherals/openOracle/libraries/Errors.sol', 'pragma solidity 0.8.28;\r\nlibrary Errors {}\r\n'],
+			]),
+		)
+
+		expect(sources.get('src/OpenOracleSlim.sol')).toBe('pragma solidity 0.8.28;\ncontract OpenOracle {}\n')
+		expect(sources.get('src/libraries/Errors.sol')).toBe('pragma solidity 0.8.28;\nlibrary Errors {}\n')
+	})
+
 	test('preserves the upstream compiler, optimizer, EVM target, and exact pragma', async () => {
 		const compiler = await loadOpenOracleCompiler()
 		const sources = createOpenOracleCompilerSources(

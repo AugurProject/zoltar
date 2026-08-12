@@ -28,7 +28,18 @@ export type IndexedBlock = {
 	readonly transactions: readonly StoredTransaction[]
 	readonly logs: readonly StoredLog[]
 	readonly addressActivity: readonly AddressActivity[]
+	readonly contractDeploymentObservations: readonly ContractDeploymentObservation[]
 	readonly logScanCursors: readonly LogScanCursor[]
+}
+
+export type ContractDeploymentObservation = {
+	readonly contractAddress: Address
+	readonly checkedBlock: bigint
+	readonly deployment?: {
+		readonly block: bigint
+		readonly timestamp: Date
+		readonly exact: boolean
+	}
 }
 
 export type LogScanCursor = {
@@ -141,6 +152,13 @@ export const assertLogScanCursorUpdate = (blockNumber: bigint, cursor: LogScanCu
 		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} must advance to committed block ${blockNumber}`)
 	if (cursor.startBlock < 0n || cursor.lastRetrievedBlock < cursor.startBlock)
 		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} has an invalid retrieval boundary`)
+}
+
+export const assertContractDeploymentObservation = (blockNumber: bigint, observation: ContractDeploymentObservation): void => {
+	if (observation.checkedBlock !== blockNumber)
+		throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} must be anchored to committed block ${blockNumber}`)
+	if (observation.deployment !== undefined && (observation.deployment.block < 0n || observation.deployment.block > observation.checkedBlock))
+		throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} has an invalid deployment boundary`)
 }
 
 export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | undefined, checkpoint: RewindCheckpoint, targetIsCanonical: boolean): void => {
@@ -685,6 +703,17 @@ export class ScannerDatabase {
 						deployment_timestamp = COALESCE(contracts.deployment_timestamp, EXCLUDED.deployment_timestamp),
 						deployment_block_exact = COALESCE(contracts.deployment_block_exact, EXCLUDED.deployment_block_exact),
 						deployment_checked_block = GREATEST(contracts.deployment_checked_block, EXCLUDED.deployment_checked_block)
+				`
+			}
+			for (const observation of block.contractDeploymentObservations) {
+				assertContractDeploymentObservation(block.number, observation)
+				await transaction`
+					UPDATE contracts SET
+						deployment_block = ${observation.deployment?.block.toString() ?? null},
+						deployment_timestamp = ${observation.deployment?.timestamp ?? null},
+						deployment_block_exact = ${observation.deployment?.exact ?? null},
+						deployment_checked_block = ${observation.checkedBlock.toString()}
+					WHERE chain_id = ${chainId} AND address = ${observation.contractAddress.toLowerCase()} AND canonical
 				`
 			}
 			for (const item of block.transactions) {
