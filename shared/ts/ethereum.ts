@@ -340,13 +340,23 @@ export type ParsedTransaction = {
 	value?: bigint | undefined
 }
 
+type TransportRetryOptions = {
+	batch?: unknown
+	retryCount?: number | undefined
+	retryDelay?: number | undefined
+}
+
 type TypedTransport =
 	| {
 			kind: 'custom'
 			provider: EIP1193Provider
+			retryCount: number
+			retryDelay: number
 	  }
 	| {
 			kind: 'http'
+			retryCount: number
+			retryDelay: number
 			url: string
 	  }
 
@@ -397,6 +407,9 @@ type ClientRequestParameters = {
 
 type BlockTag = 'earliest' | 'latest' | 'pending'
 type LogTopicFilter = Hex | readonly Hex[] | null
+
+const DEFAULT_RATE_LIMIT_RETRY_COUNT = 3
+export const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
 
 type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
 	chain: TChain
@@ -1023,7 +1036,7 @@ function ensureConstructorAbi(abi: readonly unknown[]) {
 			]
 }
 
-async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+async function requestTransportOnce<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	if (transport.kind === 'custom') {
 		try {
 			return (await transport.provider.request({
@@ -1070,6 +1083,33 @@ async function requestTransport<TValue>(transport: Transport, parameters: Client
 		})
 	}
 	return payload.result as TValue
+}
+
+async function retryRateLimited<TValue>(operation: () => Promise<TValue>, options: { retryCount?: number | undefined; retryDelay: number; startTime?: number | undefined; timeout?: number | undefined }) {
+	const startTime = options.timeout === undefined ? undefined : (options.startTime ?? Date.now())
+	let retries = 0
+	while (true) {
+		try {
+			return await operation()
+		} catch (error) {
+			if (!isRateLimitError(error) || (options.retryCount !== undefined && retries >= options.retryCount)) throw error
+			const remainingMilliseconds = options.timeout === undefined || startTime === undefined ? undefined : options.timeout - (Date.now() - startTime)
+			if (remainingMilliseconds !== undefined && remainingMilliseconds <= 0) throw error
+			const delayMilliseconds = remainingMilliseconds === undefined ? options.retryDelay : Math.min(options.retryDelay, remainingMilliseconds)
+			await new Promise(resolve => {
+				setTimeout(resolve, delayMilliseconds)
+			})
+			if (options.timeout !== undefined && startTime !== undefined && Date.now() - startTime >= options.timeout) throw error
+			retries += 1
+		}
+	}
+}
+
+async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
+		retryCount: transport.retryCount,
+		retryDelay: transport.retryDelay,
+	})
 }
 
 function toRpcError(error: unknown, fallbackMessage: string) {
@@ -1175,6 +1215,10 @@ function isTransactionNotFoundError(error: unknown) {
 
 function isRateLimitError(error: unknown) {
 	return error instanceof RpcError && (error.code === 429 || error.code === '429' || error.message.includes('HTTP 429'))
+}
+
+function isAlreadyKnownTransactionError(error: unknown) {
+	return error instanceof RpcError && error.message.toLowerCase().includes('already known')
 }
 
 function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
@@ -1459,30 +1503,23 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const timeoutMilliseconds = parameters.timeout ?? 180_000
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
-			const actions = buildPublicClientActions({ chain, transport })
-			const waitForNextPoll = async (delayMilliseconds = pollingInterval) => {
+			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
+			const waitForNextPoll = async () => {
 				await new Promise(resolve => {
-					setTimeout(resolve, delayMilliseconds)
+					setTimeout(resolve, pollingInterval)
 				})
 			}
-			const retryRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
-				while (true) {
-					try {
-						return await operation()
-					} catch (error) {
-						if (!isRateLimitError(error)) throw error
-						const remainingMilliseconds = timeoutMilliseconds - (Date.now() - startTime)
-						if (remainingMilliseconds <= 0) throw error
-						await waitForNextPoll(Math.min(pollingInterval, remainingMilliseconds))
-						if (Date.now() - startTime >= timeoutMilliseconds) throw error
-					}
-				}
-			}
+			const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) =>
+				await retryRateLimited(operation, {
+					retryDelay: transport.retryDelay,
+					startTime,
+					timeout: timeoutMilliseconds,
+				})
 			let originalTransaction: BlockTransaction | undefined
 			let lastScannedReplacementBlock: bigint | undefined
 			if (parameters.onReplaced !== undefined) {
 				try {
-					originalTransaction = await retryRateLimited(
+					originalTransaction = await retryReceiptRateLimited(
 						async () =>
 							await actions.getTransaction({
 								hash: parameters.hash,
@@ -1494,7 +1531,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 			while (true) {
 				try {
-					return await retryRateLimited(
+					return await retryReceiptRateLimited(
 						async () =>
 							await actions.getTransactionReceipt({
 								hash: parameters.hash,
@@ -1504,7 +1541,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					if (!isTransactionNotFoundError(error)) throw error
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
-							originalTransaction = await retryRateLimited(
+							originalTransaction = await retryReceiptRateLimited(
 								async () =>
 									await actions.getTransaction({
 										hash: parameters.hash,
@@ -1516,15 +1553,16 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					}
 					if (originalTransaction !== undefined) {
 						const transactionToReplace = originalTransaction
-						const latestBlockNumber = await retryRateLimited(async () => await actions.getBlockNumber())
+						const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
 						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
 						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
 							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 						}
-						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryRateLimited(async () => await actions.getBlock(parameters)) })
+						const replacementTransaction =
+							firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
 						lastScannedReplacementBlock = latestBlockNumber
 						if (replacementTransaction !== undefined) {
-							const transactionReceipt = await retryRateLimited(
+							const transactionReceipt = await retryReceiptRateLimited(
 								async () =>
 									await actions.getTransactionReceipt({
 										hash: replacementTransaction.hash,
@@ -1654,13 +1692,19 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				...parameters,
 				account: parameters.account ?? normalizedAccount,
 			}),
-		sendRawTransaction: async parameters =>
-			normalizeHash(
-				await requestTransport<string>(transport, {
-					method: 'eth_sendRawTransaction',
-					params: [parameters.serializedTransaction],
-				}),
-			),
+		sendRawTransaction: async parameters => {
+			try {
+				return normalizeHash(
+					await requestTransport<string>(transport, {
+						method: 'eth_sendRawTransaction',
+						params: [parameters.serializedTransaction],
+					}),
+				)
+			} catch (error) {
+				if (!isAlreadyKnownTransactionError(error)) throw error
+				return keccak256(parameters.serializedTransaction)
+			}
+		},
 		simulateContract: async parameters =>
 			await baseClient.simulateContract({
 				...parameters,
@@ -1730,17 +1774,27 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 	return walletClient
 }
 
-export function http(url: string, _options?: unknown) {
+function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
+	const retryCount = options.retryCount ?? DEFAULT_RATE_LIMIT_RETRY_COUNT
+	const retryDelay = options.retryDelay ?? RATE_LIMIT_RETRY_DELAY_MILLISECONDS
+	if (!Number.isSafeInteger(retryCount) || retryCount < 0) throw new Error('RPC retry count must be a non-negative safe integer')
+	if (!Number.isSafeInteger(retryDelay) || retryDelay < 0) throw new Error('RPC retry delay must be a non-negative safe integer')
+	return { retryCount, retryDelay }
+}
+
+export function http(url: string, options?: TransportRetryOptions) {
 	return {
 		kind: 'http',
+		...normalizeTransportRetryOptions(options),
 		url,
 	} satisfies Transport
 }
 
-export function custom(provider: EIP1193Provider, _options?: unknown) {
+export function custom(provider: EIP1193Provider, options?: TransportRetryOptions) {
 	return {
 		kind: 'custom',
 		provider,
+		...normalizeTransportRetryOptions(options),
 	} satisfies Transport
 }
 
