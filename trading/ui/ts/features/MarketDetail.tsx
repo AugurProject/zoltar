@@ -376,6 +376,23 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								<code title={demoTransactionHash}>{demoTransactionHash}</code>
 							</p>
 						) : null}
+						<details class='trade-breakdown pool-mechanics'>
+							<summary>Pool and reserve details</summary>
+							<dl class='metrics quote'>
+								<div>
+									<dt>Conditional YES price</dt>
+									<dd>{yesPercent === undefined ? 'Unavailable' : `${yesPercent.toFixed(1)}%`}</dd>
+								</div>
+								<div>
+									<dt>YES reserve</dt>
+									<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
+								</div>
+								<div>
+									<dt>NO reserve</dt>
+									<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
+								</div>
+							</dl>
+						</details>
 						{quote === undefined ? null : (
 							<details class='trade-breakdown'>
 								<summary>Full trade breakdown</summary>

@@ -1673,6 +1673,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setSlippage(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									setTransactionValidityMinutes={value => {
@@ -1680,6 +1681,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setTransactionValidityMinutes(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									simulate={simulate}
@@ -1771,8 +1773,10 @@ function LiveLiquidityControls({
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		setTransactionHash(undefined)
-		if (!workflow.isActive()) setState('idle')
+		if (!workflow.isActive()) {
+			setTransactionHash(undefined)
+			setState('idle')
+		}
 		return () => simulationRequests.invalidate()
 	}, [account, configuration, market.pool, receiptWarning, walletClient])
 
@@ -2061,6 +2065,7 @@ function LiveLiquidityControls({
 					simulationRequests.invalidate()
 					setSlippage(value)
 					setQuote(undefined)
+					setTransactionHash(undefined)
 					setState('idle')
 				}}
 				onValidityInput={value => {
@@ -2068,6 +2073,7 @@ function LiveLiquidityControls({
 					simulationRequests.invalidate()
 					setTransactionValidityMinutes(value)
 					setQuote(undefined)
+					setTransactionHash(undefined)
 					setState('idle')
 				}}
 			/>

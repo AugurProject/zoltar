@@ -505,6 +505,18 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
+		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.operation-block .execution-settings input')
+		if (protectionInputs.length !== 2) throw new Error('Missing position transaction protection fields')
+		await act(() => {
+			const slippageInput = protectionInputs[0]
+			const validityInput = protectionInputs[1]
+			if (slippageInput === undefined || validityInput === undefined) throw new Error('Missing position transaction protection input')
+			slippageInput.value = '0.6'
+			slippageInput.dispatchEvent(new Event('input', { bubbles: true }))
+			validityInput.value = '21'
+			validityInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(document.querySelector('.transaction-hash')).toBeNull()
 
 		await act(async () => button('Exit').click())
 		const positionAction = document.querySelector('.operation-block .primary-action')
