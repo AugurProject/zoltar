@@ -1,7 +1,7 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { useCallback, useMemo } from 'preact/hooks'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import type { DeploymentStatus } from '../../../types/contracts.js'
+import type { DeploymentStatus, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
 import { useZoltarUniverse } from './useZoltarUniverse.js'
@@ -50,12 +50,11 @@ export function useZoltarOperations({
 		onTransactionRequested,
 		onTransactionSubmitted,
 	})
-	const refreshZoltarUniverse = useCallback(async () => {
-		await universe.refreshZoltarUniverse()
-	}, [universe.refreshZoltarUniverse])
+	const refreshZoltarUniverse = useCallback(async () => await universe.refreshZoltarUniverse(), [universe.refreshZoltarUniverse])
 	const fork = useZoltarFork({
 		accountAddress,
 		activeUniverseId,
+		environmentRefreshKey,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransactionFailed,
 		onTransactionFinished,
@@ -70,11 +69,15 @@ export function useZoltarOperations({
 		shouldAutoLoadForkAccess: autoLoadInitialData || activeZoltarView === 'fork' || activeZoltarView === 'migrate',
 		zoltarUniverse: universe.zoltarUniverse,
 	})
-	const refreshZoltarForkAccess = useCallback(async () => {
-		await fork.loadZoltarForkAccess()
-	}, [fork.loadZoltarForkAccess])
+	const refreshZoltarForkAccess = useCallback(
+		async (refreshedUniverse?: ZoltarUniverseSummary) => {
+			await fork.loadZoltarForkAccess(refreshedUniverse)
+		},
+		[fork.loadZoltarForkAccess],
+	)
 	const migration = useZoltarMigration({
 		accountAddress,
+		activeUniverseId,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransactionFailed,
 		onTransactionFinished,
@@ -85,8 +88,8 @@ export function useZoltarOperations({
 		refreshState,
 		refreshZoltarForkAccess,
 		refreshZoltarUniverse,
-		zoltarForkRepBalance: fork.zoltarForkRepBalance,
-		zoltarMigrationPreparedRepBalance: fork.zoltarMigrationPreparedRepBalance,
+		zoltarForkRepBalanceAttoRep: fork.zoltarForkRepBalanceAttoRep,
+		zoltarMigrationPreparedRepBalanceAttoRep: fork.zoltarMigrationPreparedRepBalanceAttoRep,
 	})
 
 	const createChildUniverse = useCallback(

@@ -32,7 +32,7 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 		case 'staged-operations':
 			return 'Staged Operations'
 		case 'price-oracle':
-			return 'Open Oracle'
+			return 'Price Oracle'
 		default:
 			return assertNever(view)
 	}
@@ -80,6 +80,21 @@ export function resolveForkWorkflowSelectionStage(value: string | undefined): Fo
 	}
 }
 
+export function getSelectedPoolViewForForkWorkflowSelectionStage(stage: ForkWorkflowSelectionStage) {
+	switch (stage) {
+		case 'fork-triggered':
+			return 'fork-workflow'
+		case 'migration':
+			return 'fork-migration'
+		case 'auction':
+			return 'fork-auction'
+		case 'settlement':
+			return 'fork-settlement'
+		default:
+			return assertNever(stage)
+	}
+}
+
 export function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView): ForkWorkflowSelectionStage {
 	return stage === 'initiate' ? 'fork-triggered' : stage
 }
@@ -116,13 +131,13 @@ export function getForkWorkflowStageSelection({
 		| {
 				claimingAvailable: boolean
 				hasForkActivity: boolean
-				migratedRep: bigint
+				migratedAttoRep: bigint
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
 	forkOutcome: ListedSecurityPool['forkOutcome'] | undefined
-	previewPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'migratedRep' | 'truthAuctionStartedAt'> | undefined
+	previewPool: Pick<ListedSecurityPool, 'hasForkActivity' | 'migratedAttoRep' | 'truthAuctionStartedAt'> | undefined
 	selectedStageView: ForkWorkflowSelectionStage | undefined
 	stageView: ForkAuctionStageView | undefined
 	systemState: SecurityPoolSystemState | undefined
@@ -134,7 +149,7 @@ export function getForkWorkflowStageSelection({
 			: getForkAuctionStageView({
 					claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
 					forkOutcome: forkOutcome ?? 'none',
-					migratedRep: forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep ?? 0n,
+					migratedAttoRep: forkAuctionDetails?.migratedAttoRep ?? previewPool?.migratedAttoRep ?? 0n,
 					systemState,
 					truthAuction: forkAuctionDetails?.truthAuction,
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
@@ -167,13 +182,13 @@ export function getSelectedPoolForkWorkflowView({
 		| {
 				claimingAvailable: boolean
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }) {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,
@@ -184,7 +199,7 @@ export function getSelectedPoolForkWorkflowView({
 			getForkAuctionStageView({
 				claimingAvailable: currentForkAuctionDetails.claimingAvailable,
 				forkOutcome: currentForkAuctionDetails.forkOutcome,
-				migratedRep: currentForkAuctionDetails.migratedRep,
+				migratedAttoRep: currentForkAuctionDetails.migratedAttoRep,
 				systemState: currentForkAuctionDetails.systemState,
 				truthAuction: currentForkAuctionDetails.truthAuction,
 				truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
@@ -207,13 +222,13 @@ export function getCurrentSelectedPoolForkStage({
 		| {
 				claimingAvailable: boolean
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
+	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
 }): ForkAuctionStageView {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,
@@ -223,7 +238,7 @@ export function getCurrentSelectedPoolForkStage({
 		return getForkAuctionStageView({
 			claimingAvailable: currentForkAuctionDetails.claimingAvailable,
 			forkOutcome: currentForkAuctionDetails.forkOutcome,
-			migratedRep: currentForkAuctionDetails.migratedRep,
+			migratedAttoRep: currentForkAuctionDetails.migratedAttoRep,
 			systemState: currentForkAuctionDetails.systemState,
 			truthAuction: currentForkAuctionDetails.truthAuction,
 			truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
@@ -231,7 +246,7 @@ export function getCurrentSelectedPoolForkStage({
 	if (selectedPool === undefined) return 'migration'
 	return getForkAuctionStageView({
 		forkOutcome: selectedPool.forkOutcome,
-		migratedRep: selectedPool.migratedRep,
+		migratedAttoRep: selectedPool.migratedAttoRep,
 		systemState: selectedPool.systemState,
 		truthAuctionStartedAt: selectedPool.truthAuctionStartedAt,
 	})
@@ -244,12 +259,12 @@ export function hasCurrentSelectedPoolForkActivity({
 	forkAuctionDetails:
 		| {
 				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedRep: bigint
+				migratedAttoRep: bigint
 				systemState: SecurityPoolSystemState
 				truthAuctionStartedAt: bigint
 		  }
 		| undefined
-	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
+	selectedPool: Pick<ListedSecurityPool, 'forkOutcome' | 'hasForkActivity' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> | undefined
 }) {
 	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails,
@@ -302,8 +317,8 @@ export function getCurrentSelectedPoolReportingDetails({ reportingDetails, selec
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
-export function getSelectedPoolCardTitle() {
-	return 'Manage Pool'
+export function getSelectedPoolCardTitle(questionTitle?: string) {
+	return questionTitle?.trim() === '' || questionTitle === undefined ? 'Manage Pool' : questionTitle
 }
 export function applySelectedPoolWorkflowState(
 	pool: ListedSecurityPool | undefined,

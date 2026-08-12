@@ -2,7 +2,6 @@ import * as commonCopy from '../../../copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { AddressValue } from '../../../components/AddressValue.js'
 import { ChildUniverseDeploymentModal } from '../../universes/components/ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { ChildUniverseDetails } from '../../universes/components/ChildUniverseDetails.js'
@@ -15,13 +14,15 @@ import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
+import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
+import { getWrongNetworkMessage } from '../../../lib/network.js'
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingZoltarUniverse: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	zoltarChildUniverseError: string | undefined
@@ -29,7 +30,7 @@ type MarketOverviewSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
-export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
+export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -60,21 +61,21 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						{hasForked ? (
 							<>
 								<MetricField label={commonCopy.forkTime}>{loadingZoltarUniverse ? commonCopy.loadingWithEllipsis : <TimestampValue timestamp={rootUniverse.forkTime} />}</MetricField>
-								<MetricField label={commonCopy.forkThreshold}>
-									<CurrencyValue value={rootUniverse.forkThreshold} suffix={commonCopy.rep} />
+								<MetricField label={commonCopy.forkThresholdAttoRep}>
+									<CurrencyValue value={rootUniverse.forkThresholdAttoRep} suffix={commonCopy.rep} />
 								</MetricField>
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
-							<AddressValue address={rootUniverse.reputationToken} />
+							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
 						</MetricField>
-						<MetricField label={marketCopy.totalTheoreticalSupply}>
-							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix={commonCopy.rep} />
+						<MetricField label={marketCopy.totalTheoreticalSupplyAttoRep}>
+							<CurrencyValue value={rootUniverse.totalTheoreticalSupplyAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</DataGrid>
 					{hasForked ? (
 						<WorkflowSubsection title={marketCopy.forkQuestion}>
-							<EntityCard title={marketCopy.selectedForkQuestion} variant='record'>
+							<EntityCard surface='flat' title={marketCopy.selectedForkQuestion} variant='record'>
 								<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
 							</EntityCard>
 						</WorkflowSubsection>
@@ -84,7 +85,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							accountAddress={accountAddress}
 							childUniverses={rootUniverse.childUniverses}
 							hasForked={hasForked}
-							isMainnet={isMainnet}
+							isOnActiveAppChain={isOnActiveAppChain}
 							onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 							questionDetails={scalarQuestionDetails}
 							zoltarChildUniverseError={zoltarChildUniverseError}
@@ -98,10 +99,10 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							headerTitle={marketCopy.childUniverses}
 							action={child => ({
 								availability: {
-									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
+									disabled: accountAddress === undefined || !isOnActiveAppChain || !hasForked || child.exists,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-										if (!isMainnet) return commonCopy.mainnetRequiredReason
+										if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 										return (() => {
 											if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -117,18 +118,19 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								pendingLabel: commonCopy.opening,
 							})}
 							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-							renderBody={child => <ChildUniverseDetails child={child} />}
+							renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isOnActiveAppChain} />}
+							surface='flat'
 						/>
 					)}
 					<ChildUniverseDeploymentModal
 						actionAvailability={{
-							disabled: selectedChildUniverse === undefined || accountAddress === undefined || !isMainnet || !hasForked || selectedChildUniverse.exists,
+							disabled: selectedChildUniverse === undefined || accountAddress === undefined || !isOnActiveAppChain || !hasForked || selectedChildUniverse.exists,
 							reason:
 								selectedChildUniverse === undefined
 									? marketCopy.childDeploymentSelectionRequired
 									: (() => {
 											if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-											if (!isMainnet) return commonCopy.mainnetRequiredReason
+											if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 											return (() => {
 												if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -138,7 +140,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 											})()
 										})(),
 						}}
-						description={marketCopy.childUniverseDeploymentDescription}
 						idleLabel={marketCopy.deployUniverse}
 						isOpen={selectedChildUniverse !== undefined}
 						onClose={() => setSelectedChildOutcomeIndex(undefined)}
@@ -152,8 +153,8 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						title={marketCopy.createChildUniverseTitle}
 					>
 						{selectedChildUniverse === undefined ? undefined : (
-							<EntityCard className='compact' title={marketCopy.selectedChildUniverse} variant='compact'>
-								<ChildUniverseDetails child={selectedChildUniverse} />
+							<EntityCard className='compact' surface='flat' title={marketCopy.selectedChildUniverse} variant='compact'>
+								<ChildUniverseDetails accountAddress={accountAddress} child={selectedChildUniverse} isSupportedChain={isOnActiveAppChain} />
 							</EntityCard>
 						)}
 					</ChildUniverseDeploymentModal>

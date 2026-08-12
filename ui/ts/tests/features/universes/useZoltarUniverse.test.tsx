@@ -10,6 +10,7 @@ import type { DeploymentStatus, MarketDetails } from '../../../types/contracts.j
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { waitFor } from '../../testUtils/queries.js'
 
 type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 
@@ -153,13 +154,13 @@ describe('useZoltarUniverse', () => {
 			loadZoltarUniverseSummary: mock(async () => ({
 				childUniverses: [],
 				forkQuestionDetails: undefined,
-				forkThreshold: 100n,
+				forkThresholdAttoRep: 100n,
 				forkTime: 0n,
 				forkingOutcomeIndex: 0n,
 				hasForked: false,
 				parentUniverseId: 0n,
 				reputationToken: zeroAddress,
-				totalTheoreticalSupply: 1000n,
+				totalTheoreticalSupplyAttoRep: 1000n,
 				universeId: 1n,
 			})),
 		})
@@ -190,6 +191,7 @@ describe('useZoltarUniverse', () => {
 		await act(() => {
 			render(h(Harness, { environmentRefreshKey: 1 }), renderedComponent.container)
 		})
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
 		await act(async () => {
 			oldPage.resolve({
 				pageIndex: 0,
@@ -202,5 +204,168 @@ describe('useZoltarUniverse', () => {
 
 		expect(requireHookState(hookState).zoltarQuestionPage).toBeUndefined()
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
+	})
+
+	test('reports automatic universe and question-count load failures', async () => {
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => {
+				throw new Error('question count RPC failed')
+			},
+			loadZoltarUniverseSummary: async () => {
+				throw new Error('universe RPC failed')
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			expect(requireHookState(hookState).zoltarUniverseError).toBe('Failed to load Zoltar universe. Reason: universe RPC failed')
+			expect(requireHookState(hookState).zoltarQuestionsError).toBe('Failed to load Zoltar question count. Reason: question count RPC failed')
+		})
+	})
+
+	test('does not report a question-count error before Zoltar is deployed', async () => {
+		const loadZoltarQuestionCount = mock(async () => {
+			throw new Error('question count RPC failed')
+		})
+		const dependencies = createZoltarUniverseDependencies({ loadZoltarQuestionCount })
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => undefined)
+		expect(loadZoltarQuestionCount).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).zoltarQuestionsError).toBeUndefined()
+	})
+
+	test('ignores a late question-count failure after Zoltar becomes undeployed', async () => {
+		const questionCount = createDeferred<bigint>()
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => await questionCount.promise,
+			loadZoltarUniverseSummary: async () => undefined,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness({ deployed }: { deployed: boolean }) {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					autoLoadInitialData: true,
+					deploymentStatuses: deployed ? [createZoltarDeploymentStatus()] : [],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { deployed: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(h(Harness, { deployed: false }), renderedComponent.container)
+		})
+		await act(async () => {
+			questionCount.reject(new Error('late question count failure'))
+			await questionCount.promise.catch(() => undefined)
+		})
+
+		expect(requireHookState(hookState).zoltarQuestionsError).toBeUndefined()
+		expect(requireHookState(hookState).zoltarQuestionCount).toBeUndefined()
+	})
+
+	test('ignores an older partial page failure after a newer page succeeds', async () => {
+		const oldPage = createDeferred<{
+			pageIndex: number
+			pageSize: number
+			questionCount: bigint
+			questions: MarketDetails[]
+		}>()
+		let countCall = 0
+		let pageCall = 0
+		const newQuestion = createQuestion('0x02')
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => {
+				countCall += 1
+				if (countCall === 1) throw new Error('old count failure')
+				return 1n
+			},
+			loadZoltarQuestionPage: async () => {
+				pageCall += 1
+				if (pageCall === 1) return await oldPage.promise
+				return { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [newQuestion] }
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		void requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		await waitFor(() => expect(countCall).toBe(1))
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await act(async () => {
+			oldPage.resolve({ pageIndex: 0, pageSize: 10, questionCount: 0n, questions: [] })
+			await oldPage.promise
+		})
+
+		expect(requireHookState(hookState).zoltarQuestionsError).toBeUndefined()
+		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([newQuestion])
 	})
 })

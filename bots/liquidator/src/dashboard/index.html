@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>Zoltar Liquidator</title>
+		<link rel="stylesheet" href="/dashboard.css" />
+	</head>
+	<body>
+		<header class="topbar">
+			<div>
+				<p class="eyebrow">Zoltar operator</p>
+				<h1>Pool liquidator</h1>
+			</div>
+			<div class="topbar-actions">
+				<span id="mode-badge" class="badge">Starting</span>
+				<span id="run-status-badge" class="badge">Loading</span>
+				<button id="pause-button" class="secondary" type="button">Pause</button>
+				<span id="pause-status" class="action-status" role="alert"></span>
+			</div>
+		</header>
+		<main>
+			<div id="global-error" class="notice error hidden" role="alert"></div>
+			<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
+			<section aria-labelledby="overview-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Current position</p>
+						<h2 id="overview-title">Overview</h2>
+					</div>
+					<p id="last-scan" class="muted">Waiting for first scan</p>
+				</div>
+				<div id="metrics" class="metric-grid"></div>
+			</section>
+			<section id="network-connectivity" aria-labelledby="network-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Network safety</p>
+						<h2 id="network-title">Chain and RPC connectivity</h2>
+					</div>
+				</div>
+				<p class="muted">The chain is locked after initial setup. Use a separate operator configuration and durable state file for another chain.</p>
+				<form id="network-form">
+					<fieldset id="network-fields" disabled>
+						<div class="form-grid">
+							<label
+								><span>Chain</span
+								><select id="network-name" required>
+									<option value="mainnet">Ethereum mainnet · chain 1</option>
+									<option value="sepolia">Sepolia · chain 11155111</option>
+								</select></label
+							>
+							<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
+							<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
+							<label><span>Independent quorum RPC URLs · one per line</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
+						</div>
+						<div class="form-actions"><span id="network-status" class="muted" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
+					</fieldset>
+				</form>
+			</section>
+			<section aria-labelledby="universes-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Fork truth paths</p>
+						<h2 id="universes-title">Universes</h2>
+					</div>
+					<p class="muted">Approve one truthful child per parent universe.</p>
+				</div>
+				<div class="table-shell universe-shell">
+					<table>
+						<thead>
+							<tr>
+								<th id="universe-approved-heading" scope="col">Approved</th>
+								<th id="universe-id-heading" scope="col">Universe</th>
+								<th id="universe-parent-heading" scope="col">Parent</th>
+								<th id="universe-outcome-heading" scope="col">Fork outcome</th>
+								<th id="universe-state-heading" scope="col">Pool state</th>
+								<th id="universe-migration-heading" scope="col">Vault migration</th>
+							</tr>
+						</thead>
+						<tbody id="universe-rows">
+							<tr>
+								<td colspan="6" class="empty">Scanning universe registry…</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+			<section aria-labelledby="centralized-markets-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Independent market reference</p>
+						<h2 id="centralized-markets-title">REP market consensus</h2>
+					</div>
+					<p id="centralized-market-status" class="muted" role="status" aria-live="polite">No exchange sources configured</p>
+				</div>
+				<div id="centralized-market-summary" class="metric-grid">
+					<dl class="metric">
+						<dt>CEX median REP / ETH</dt>
+						<dd id="centralized-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX consensus REP / ETH</dt>
+						<dd id="dex-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>Guarded reference REP / ETH</dt>
+						<dd id="guarded-market-price">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX bid depth</dt>
+						<dd id="dex-market-bid-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>DEX ask depth</dt>
+						<dd id="dex-market-ask-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>CEX bid depth</dt>
+						<dd id="centralized-market-bid-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>CEX ask depth</dt>
+						<dd id="centralized-market-ask-depth">—</dd>
+					</dl>
+					<dl class="metric">
+						<dt>Consensus sources</dt>
+						<dd id="centralized-market-source-count">0 CEX</dd>
+					</dl>
+				</div>
+				<div class="table-shell">
+					<table>
+						<caption>
+							CEX observations
+						</caption>
+						<thead>
+							<tr>
+								<th id="market-exchange-heading" scope="col">Exchange</th>
+								<th id="market-pair-heading" scope="col">Market</th>
+								<th id="market-price-heading" scope="col">REP / ETH</th>
+								<th id="market-bid-heading" scope="col">Bid depth</th>
+								<th id="market-ask-heading" scope="col">Ask depth</th>
+								<th id="market-observed-heading" scope="col">Observed</th>
+							</tr>
+						</thead>
+						<tbody id="centralized-market-rows">
+							<tr>
+								<td colspan="6" class="empty">Add public exchange sources in the operator configuration.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="table-shell source-shell">
+					<table>
+						<caption id="market-source-caption">
+							Configured source admission
+						</caption>
+						<thead>
+							<tr>
+								<th id="source-kind-heading" scope="col">Venue</th>
+								<th id="source-id-heading" scope="col">Source</th>
+								<th id="source-asset-heading" scope="col">REP asset</th>
+								<th id="source-market-heading" scope="col">Market</th>
+								<th id="source-status-heading" scope="col">Status</th>
+								<th id="source-reason-heading" scope="col">Reason</th>
+							</tr>
+						</thead>
+						<tbody id="market-source-rows">
+							<tr>
+								<td colspan="6" class="empty">No source evidence yet.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<form id="market-configuration-form">
+					<fieldset id="market-configuration-fields" disabled>
+						<label><span>Pool targets and per-universe market JSON</span><textarea id="market-configuration-json" rows="18" spellcheck="false" required></textarea></label>
+						<p class="muted">Configure root REP under <code>root</code>, exact child REP assets under <code>children</code>, and undeployed origin-pool parameters under <code>desiredPools</code>. Existing desired pools are selected; missing ones are created only when automatic pool creation is enabled.</p>
+						<div class="form-actions"><span id="market-configuration-save-status" class="muted" role="status" aria-live="polite"></span><button id="show-active-admission" class="secondary hidden" type="button">Show active admission</button><button id="test-market-sources" class="secondary" type="button">Test saved sources</button><button type="submit">Validate &amp; save markets</button></div>
+						<p id="market-source-test-status" class="muted" role="status" aria-live="polite"></p>
+					</fieldset>
+				</form>
+			</section>
+			<section aria-labelledby="pools-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Factory registry</p>
+						<h2 id="pools-title">Security pools</h2>
+					</div>
+					<label class="search">
+						<span>Filter pools</span>
+						<input id="pool-filter" type="search" placeholder="Address or question" />
+					</label>
+				</div>
+				<div id="configuration-status" class="notice hidden" role="status"></div>
+				<div class="table-shell">
+					<table>
+						<thead>
+							<tr>
+								<th id="pool-selected-heading" scope="col">Selected</th>
+								<th id="pool-address-heading" scope="col">Pool</th>
+								<th id="pool-question-heading" scope="col">Question</th>
+								<th id="pool-oracle-heading" scope="col">Oracle</th>
+								<th id="pool-totals-heading" scope="col">Pool totals</th>
+								<th id="pool-vault-heading" scope="col">Bot vault</th>
+								<th id="pool-targets-heading" scope="col">Targets</th>
+							</tr>
+						</thead>
+						<tbody id="pool-rows">
+							<tr>
+								<td colspan="7" class="empty">Scanning factory registry…</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+			<div class="two-column">
+				<section aria-labelledby="strategy-title">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Risk controls</p>
+							<h2 id="strategy-title">Strategy</h2>
+						</div>
+					</div>
+					<form id="strategy-form">
+						<fieldset id="strategy-fields" class="form-grid" disabled>
+							<label>Minimum liquidation debt (ETH)<input name="minimumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Maximum liquidation debt (ETH)<input name="maximumLiquidationDebtEth" inputmode="decimal" /></label>
+							<label>Minimum reward (ETH)<input name="minimumRewardValueEth" inputmode="decimal" /></label>
+							<label>Maximum gas cost (ETH)<input name="maximumGasCostEth" inputmode="decimal" /></label>
+							<label>Maximum oracle cost (ETH)<input name="maximumOracleRequestCostEth" inputmode="decimal" /></label>
+							<label>Fallback REP / ETH price<input name="fallbackRepPerEthPrice" inputmode="decimal" /></label>
+							<label>Wallet REP reserve<input name="walletReserveRep" inputmode="decimal" /></label>
+							<label>REP per pool limit<input name="maximumPerPoolRep" inputmode="decimal" /></label>
+							<label>Total deployed REP limit<input name="maximumTotalDeployedRep" inputmode="decimal" /></label>
+							<label>Minimum REP withdrawal<input name="minimumRepWithdrawalRep" inputmode="decimal" /></label>
+							<label>Redeem fees above (ETH)<input name="redeemFeesAboveEth" inputmode="decimal" /></label>
+							<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label>
+							<label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label>
+							<label>Top-up health (bps)<input name="vaultTopUpHealthBps" inputmode="numeric" /></label>
+							<label>Target health (bps)<input name="vaultTargetHealthBps" inputmode="numeric" /></label>
+							<label>Withdrawal health (bps)<input name="vaultWithdrawHealthBps" inputmode="numeric" /></label>
+							<label
+								>Candidate priority
+								<select name="candidatePriority">
+									<option value="largest-bonus">Largest bonus</option>
+									<option value="largest-debt">Largest debt moved</option>
+									<option value="lowest-top-up">Lowest REP top-up</option>
+								</select>
+							</label>
+							<label class="check"><input name="allowAutomaticDeposits" type="checkbox" />Automatic REP deposits</label>
+							<label class="check"><input name="allowAutomaticPoolCreation" type="checkbox" />Create missing desired pools</label>
+							<label class="check"><input name="allowAutomaticVaultMigrations" type="checkbox" />Automatic approved-universe vault migrations</label>
+							<label class="check"><input name="allowAutomaticWithdrawals" type="checkbox" />Automatic REP withdrawals</label>
+							<div class="form-actions">
+								<button type="submit">Save strategy</button>
+								<span id="strategy-status" class="action-status" role="alert"></span>
+							</div>
+						</fieldset>
+					</form>
+				</section>
+				<section aria-labelledby="recovery-title">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Durable transaction journal</p>
+							<h2 id="recovery-title">Transaction recovery</h2>
+						</div>
+						<button id="recheck-recovery" class="secondary compact" type="button">Recheck evidence</button>
+					</div>
+					<p class="muted">The bot blocks new execution while an intent is ambiguous. To reconcile a canceled or replaced public transaction, pause the bot and provide the finalized replacement hash. It must use the same sender and nonce and have 12 canonical confirmations.</p>
+					<div id="recovery-list" class="recovery-list"><p class="empty">No pending transaction intents.</p></div>
+				</section>
+				<section aria-labelledby="activity-title">
+					<div class="section-heading">
+						<div>
+							<h2 id="activity-title">Recent activity</h2>
+						</div>
+					</div>
+					<ol id="activity-list" class="activity-list">
+						<li class="empty">No activity yet</li>
+					</ol>
+				</section>
+			</div>
+			<section aria-labelledby="signer-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Execution authority</p>
+						<h2 id="signer-title">Signer</h2>
+					</div>
+					<p id="wallet-address" class="mono muted">No active signer</p>
+				</div>
+				<form id="signer-form" class="signer-form">
+					<label>Private key<input name="privateKey" type="password" autocomplete="off" placeholder="0x…" /></label>
+					<label class="check"><input name="rememberSigner" type="checkbox" />Save in the local operator file</label>
+					<button id="update-signer" type="submit" disabled>Update signer</button>
+					<button id="clear-signer" class="secondary" type="button">Clear signer</button>
+					<span id="signer-status" class="action-status" role="alert"></span>
+				</form>
+			</section>
+		</main>
+		<script type="module" src="/dashboard.js"></script>
+	</body>
+</html>

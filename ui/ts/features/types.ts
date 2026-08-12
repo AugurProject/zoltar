@@ -6,6 +6,7 @@ import type {
 	DeploymentStepId,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
+	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
 	MarketCreationResult,
@@ -13,6 +14,8 @@ import type {
 	MarketDetailsPage,
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
+	OpenOracleReportSummaryPage,
+	OpenOracleWithdrawableBalances,
 	OracleManagerDetails,
 	OracleOperationBountyInput,
 	ReadClient,
@@ -27,19 +30,17 @@ import type {
 	SecurityVaultDetails,
 	TradingActionResult,
 	TradingDetails,
-	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from '../types/contracts.js'
 import type { ActionAvailability, ReadinessAction } from '../types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
-import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from './open-oracle/lib/openOracle.js'
+import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
-import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from './open-oracle/lib/openOracle.js'
 import type { ReadBackendStatus } from '../lib/chainBackend.js'
 
 export type * from '../types/components.js'
@@ -49,6 +50,8 @@ type RepPerEthPriceProps = {
 	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 }
+
+export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
 
 export type OutcomeChipRowProps = {
 	className?: string
@@ -102,23 +105,27 @@ export type OutcomeSelectionListProps = {
 }
 
 export type VaultMetricGridProps = {
+	badDebtAttoEth?: bigint | undefined
 	className?: string
 	layout?: 'grid' | 'preview'
-	escalationEscrowedRep?: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
-	repDepositShare: bigint | undefined
-	selectedPoolSecurityMultiplier: bigint | undefined
-	securityBondAllowance: bigint | undefined
-	unpaidEthFees: bigint | undefined
+	vaultAttoRepBacking: bigint | undefined
+	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
+	capacityOwnershipAttoRep: bigint | undefined
+	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
 export type DeploymentSectionProps = {
 	title: string
+	completedGroup?: boolean
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	busyStepId: DeploymentStepId | undefined
+	deploymentStateReady: boolean
+	deploymentStatusReasonElementId?: string | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
@@ -129,7 +136,7 @@ export type OverviewPanelsProps = {
 	isManagingWallet: boolean
 	walletBootstrapComplete: boolean
 	parentUniverseId: bigint | undefined
-	universeRepBalance: bigint | undefined
+	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
@@ -137,6 +144,7 @@ export type OverviewPanelsProps = {
 	universeLabel: string
 	isRefreshing: boolean
 	repUsdcPrice: bigint | undefined
+	repUsdcFailure: RepPriceFailure | undefined
 	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
@@ -148,6 +156,7 @@ export type OverviewPanelsProps = {
 	onRefreshRepPrices: () => void
 	onSwitchNetwork: () => void
 	readBackendStatus?: ReadBackendStatus
+	repPerEthFailure: RepPriceFailure | undefined
 } & RepPerEthPriceProps
 
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
@@ -157,13 +166,16 @@ export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
+	deploymentStateReady: boolean
+	deploymentStatusError: string | undefined
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
 	isLoadingDeploymentStatuses: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	deployNextMissingPending: boolean
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
+	onRetryDeploymentStatus: () => void
 }
 
 export type MarketRouteContentProps = {
@@ -209,14 +221,14 @@ export type MarketRouteContentProps = {
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
-	zoltarForkRepBalance: bigint | undefined
+	zoltarForkRepBalanceAttoRep: bigint | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
-	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
+	zoltarMigrationChildRepBalancesAttoRep: Record<string, bigint | undefined>
 	zoltarMigrationPending: boolean
-	zoltarMigrationPreparedRepBalance: bigint | undefined
-	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
+	zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined
 	zoltarQuestions: MarketDetails[]
+	zoltarQuestionsError: string | undefined
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
@@ -224,9 +236,14 @@ export type MarketRouteContentProps = {
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
+	availableQuestionsContextKey: string
+	availableQuestions: MarketDetails[]
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
+	hasLoadedAvailableQuestions: boolean
+	loadingAvailableQuestions: boolean
 	onCreateSecurityPool: () => void
+	onLoadAvailableQuestions: () => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
@@ -249,8 +266,8 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 
 type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
-	liquidationAmount: string
-	liquidationMaxAmount: bigint | undefined
+	liquidationDebtEthAmount: string
+	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -263,7 +280,20 @@ type LiquidationModalStateProps = {
 	securityPoolOverviewError: string | undefined
 	securityPoolLiquidationError: string | undefined
 	liquidationTargetVault: string
+	liquidationReceiverVault?: string | undefined
+	liquidationApprovalId?: string | undefined
+	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
+	liquidationApprovalError?: string | undefined
+	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
+	liquidationReceiverVaultSummaryError?: string | undefined
+	liquidationReceiverVaultSummaryResolved?: boolean | undefined
+	loadingLiquidationApproval?: boolean | undefined
+	loadingLiquidationReceiverVaultSummary?: boolean | undefined
 	onLiquidationAmountChange: (value: string) => void
+	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
+	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
+	onLoadLiquidationApproval?: (() => void) | undefined
+	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
@@ -273,24 +303,18 @@ type LiquidationModalStateProps = {
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
-	checkedSecurityPoolAddress: string | undefined
 	environmentRefreshKey: number
-	hasLoadedSecurityPools: boolean
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
-	loadingSecurityPools: boolean
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	onLoadSecurityPools: () => void
+	repPerEthPrice: bigint | undefined
 	securityPoolOverviewError: string | undefined
-	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPools: ListedSecurityPool[]
-} & LiquidationModalStateProps &
-	RepPerEthPriceProps
+}
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
@@ -299,12 +323,14 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined
 	forkAuction: ForkAuctionRouteContentProps
+	loadingPoolOperationBounty?: boolean
 	loadingSecurityPools: boolean
-	loadingPoolOperationBounty: boolean
+	onBrowsePools: () => void
+	onCreatePool: () => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
-	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
+	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void
 	onAcceptPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
 	onClaimPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
 	onClearPoolOperationBountyLookupError?: () => void
@@ -312,15 +338,16 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onPostPoolOperationBounty?: (managerAddress: Address, bounty: OracleOperationBountyInput) => void
 	onRefundPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
-	poolOracleActiveBountyId: bigint | undefined
+	poolOracleActiveBountyId?: bigint | undefined
 	poolOracleManagerError: string | undefined
-	poolOperationBountyLookupError: string | undefined
+	poolOracleManagerErrorAddress: Address | undefined
+	poolOperationBountyLookupError?: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
 	universeForkTime?: bigint | undefined
 	selectedPoolView: string
@@ -348,11 +375,10 @@ export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onDepositRep: () => void
+	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
-	onRedeemRep: () => void
-	onSetSecurityBondAllowance: () => void
+	onRedeemRepFromVault: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
@@ -361,9 +387,9 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultForm: SecurityVaultFormState
 	securityVaultMissing: boolean
 	securityVaultRepApproval: TokenApprovalState
-	securityVaultRepBalance: bigint | undefined
+	walletRepBalanceAttoRep: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
-	selectedPoolSecurityMultiplier: bigint | undefined
+	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
@@ -377,8 +403,8 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
-	selectedPoolTotalRepDeposit?: bigint | undefined
-	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
+	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
+	selectedPoolTotalCapacityOwnershipAttoRep?: bigint | undefined
 	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean
@@ -389,35 +415,21 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
-	loadingOracleReport: boolean
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
+	onCancelOpenOracleWithdrawalBalanceCheck: () => void
 	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
 	onLoadOracleReport: (reportId?: string) => void
-	onRefreshPrice: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
-	onSubmitInitialReport: () => void
-	onWrapWethForInitialReport: () => void
+	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
+	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
 	openOracleError: string | undefined
-	openOracleInitialReportState: {
-		defaultPrice: string | undefined
-		defaultPriceError: string | undefined
-		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
-		defaultPriceSourceUrl: string | undefined
-		ethBalance: bigint | undefined
-		ethBalanceError: string | undefined
-		quoteBlockNumber?: bigint | undefined
-		quoteLoadedAtMs?: number | undefined
-		quoteStale?: boolean
-		quoteLoading: boolean
-		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
-		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
-		quoteFailureReason: string | undefined
+	openOracleTokenAccessState: {
 		token1Approval: TokenApprovalState
 		token1Balance: bigint | undefined
 		token1BalanceError: string | undefined
@@ -430,17 +442,28 @@ type OpenOracleRouteContentProps = {
 		tokenAccessRefreshing: boolean
 	}
 	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
-	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
+	openOracleCreateFieldErrors?: OpenOracleCreateContractFieldErrors
 	openOracleForm: OpenOracleFormState
+	openOracleReportLookupState: OpenOracleReportLookupState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
+	openOracleWithdrawalBalanceChecking: boolean
+	openOracleWithdrawalReviewMessage: { balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined
+	openOracleWithdrawableBalances: OpenOracleWithdrawableBalances | undefined
+	openOracleWithdrawableBalancesError: string | undefined
+	openOracleWithdrawableBalancesLoading: boolean
 }
+
+export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
 
 export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 
 export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 	activeView: OpenOracleView
+	environmentReady: boolean
+	environmentRefreshKey: number
+	loadBrowseReports?: (pageIndex: number, pageSize: number) => Promise<OpenOracleReportSummaryPage>
 	onActiveViewChange: (view: OpenOracleView) => void
 }
 
@@ -465,8 +488,10 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	lockedReason?: string | undefined
 	mode?: 'full-reporting' | 'withdraw-only'
 	onOpenForkWorkflow?: (() => void) | undefined
+	onOpenPriceOracle?: (() => void) | undefined
 	onTriggerZoltarFork?: (() => void) | undefined
 	previewMarketDetails?: MarketDetails | undefined
+	reportActionGuardMessage?: string | undefined
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
 	triggerZoltarForkAvailability?: ActionAvailability | undefined
@@ -514,21 +539,21 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
 	onCreateChildUniverse: () => void
-	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address) => void
+	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
 	onForkUniverse: () => void
 	onForkWithOwnEscalation: () => void
 	onInitiateFork: () => void
 	onLoadForkAuction: (securityPoolAddressOverride?: Address) => void
-	onMigrateEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
+	onClaimParentEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
 	onMigrateUnresolvedEscalation: (selectedChildOutcome: ReportingOutcomeKey) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
-	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
-	onStartTruthAuction: (securityPoolAddressOverride?: Address) => void
-	onSubmitBid: (securityPoolAddressOverride?: Address) => void
+	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
+	onStartTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
+	onSubmitBid: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onWithdrawForkedEscalation: (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) => void
 }
 
@@ -541,9 +566,11 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
 	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
 	loadingReportingDetails?: boolean
+	onLoadReporting?: (() => void) | undefined
 	onReportingFormChange?: ((update: Partial<ReportingFormState>) => void) | undefined
 	previewPool?: ListedSecurityPool | undefined
 	reportingDetails?: ReportingDetails | undefined
+	reportingError?: string | undefined
 	reportingForm?: ReportingFormState | undefined
 	securityPools?: ListedSecurityPool[] | undefined
 	selectedPoolRefreshNonce?: number | undefined

@@ -1,9 +1,9 @@
-import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import type { Address } from '@zoltar/shared/ethereum'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
-import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { getClientAnvilWindow, ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 
 const getAwaitingForkContinuationAbi = [
@@ -17,11 +17,11 @@ const getAwaitingForkContinuationAbi = [
 ] as const
 
 type SecurityVault = {
-	repDepositShare: bigint
-	securityBondAllowance: bigint
-	unpaidEthFees: bigint
+	repBackingUnits: bigint
+	capacityOwnershipAttoRep: bigint
+	claimableFeesAttoEth: bigint
 	feeIndex: bigint
-	repInEscalationGame: bigint
+	disputeStakedAttoRep: bigint
 }
 
 function requireSystemState(value: unknown): SystemState {
@@ -64,78 +64,131 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	return hash
 }
 
-export const depositRep = async (client: WriteClient, securityPoolAddress: Address, amount: bigint) =>
+export const depositRepToVault = async (client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'depositRep',
+			functionName: 'depositRepToVault',
 			address: securityPoolAddress,
-			args: [amount],
+			args: [amount, targetHealthFactorBps],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, completeSetsToCreate: bigint) =>
-	await writeContractAndWait(client, () =>
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false) => {
+	if (!preserveStalePriceForTest) {
+		const priceOracleManagerAndOperatorQueuer = requireAddress(
+			await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPoolAddress,
+				functionName: 'priceOracleManagerAndOperatorQueuer',
+				args: [],
+			}),
+			'Price coordinator',
+		)
+		const isPriceValid = requireBoolean(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: priceOracleManagerAndOperatorQueuer,
+				functionName: 'isPriceValid',
+				args: [],
+			}),
+			'Oracle price validity',
+		)
+		if (!isPriceValid) {
+			const mockWindow = getClientAnvilWindow(client)
+			if (mockWindow === undefined) throw new Error('Test complete-set mint requires a fresh oracle price')
+			const currentTimestamp = await mockWindow.getTime()
+			const lastPrice = requireBigInt(
+				await client.readContract({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					address: priceOracleManagerAndOperatorQueuer,
+					functionName: 'lastPrice',
+					args: [],
+				}),
+				'Cached oracle price',
+			)
+			await mockWindow.addStateOverrides({
+				[priceOracleManagerAndOperatorQueuer]: {
+					stateDiff: {
+						[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
+						...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
+					},
+				},
+			})
+			const refreshedPriceIsValid = requireBoolean(
+				await client.readContract({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					address: priceOracleManagerAndOperatorQueuer,
+					functionName: 'isPriceValid',
+					args: [],
+				}),
+				'Refreshed oracle price validity',
+			)
+			if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
+		}
+	}
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'createCompleteSet',
 			address: securityPoolAddress,
 			args: [],
-			value: completeSetsToCreate,
+			value: settlementCollateralAttoEth,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
+}
 
-export const updateCollateralAmount = async (client: WriteClient, securityPoolAddress: Address) =>
+export const updateSettlementCollateral = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'updateCollateralAmount',
+			functionName: 'updateSettlementCollateral',
 			address: securityPoolAddress,
 			args: [],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: Address, completeSetsToRedeem: bigint) =>
+export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: Address, amountAttoShares: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'redeemCompleteSet',
 			address: securityPoolAddress,
-			args: [completeSetsToRedeem],
+			args: [amountAttoShares],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const getTotalSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalCapacityOwnershipAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalSecurityBondAllowance',
+			functionName: 'totalCapacityOwnershipAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		}),
-		'Security bond allowance',
+		'Capacity ownership',
 	)
 
-export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getSettlementCollateralAttoEth = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'completeSetCollateralAmount',
+			functionName: 'settlementCollateralAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		}),
 		'Complete set collateral amount',
 	)
 
-export const getShareTokenSupply = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getShareTokenSupplyAttoShares = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'shareTokenSupply',
+			functionName: 'shareTokenSupplyAttoShares',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -184,9 +237,9 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		}),
 		'Security vault',
 	)
-	const repDepositShare = requireBigInt(securityVaultData[0], 'Security vault rep deposit share')
-	const securityBondAllowance = requireBigInt(securityVaultData[1], 'Security vault security bond allowance')
-	const unpaidEthFees = requireBigInt(securityVaultData[2], 'Security vault unpaid ETH fees')
+	const repBackingUnits = requireBigInt(securityVaultData[0], 'Security vault REP backing units')
+	const capacityOwnershipAttoRep = requireBigInt(securityVaultData[1], 'Security vault capacity ownership')
+	const claimableFeesAttoEth = requireBigInt(securityVaultData[2], 'Security vault unpaid ETH fees')
 	const feeIndex = requireBigInt(securityVaultData[3], 'Security vault fee index')
 	const escalationGameAddress = requireAddress(
 		await client.readContract({
@@ -197,19 +250,19 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		}),
 		'Security pool escalation game',
 	)
-	const repInEscalationGame =
+	const disputeStakedAttoRep =
 		escalationGameAddress === '0x0000000000000000000000000000000000000000'
 			? 0n
 			: requireBigInt(
 					await client.readContract({
 						abi: peripherals_EscalationGame_EscalationGame.abi,
-						functionName: 'escrowedRepByVault',
+						functionName: 'disputeStakedRepByVaultAttoRep',
 						address: escalationGameAddress,
 						args: [securityVault],
 					}),
-					'Escrowed REP by vault',
+					'Dispute-staked REP by vault',
 				)
-	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, repInEscalationGame }
+	return { repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex, disputeStakedAttoRep }
 }
 
 export const getVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
@@ -234,28 +287,6 @@ export const getVaults = async (client: ReadClient, securityPoolAddress: Address
 		'Vault page',
 	).map((vault, index) => requireAddress(vault, `Vault page entry ${index.toString()}`))
 
-export const getActiveVaultCount = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getActiveVaultCount',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		'Active vault count',
-	)
-
-export const getActiveVaults = async (client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint): Promise<Address[]> =>
-	requireArray(
-		await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getActiveVaults',
-			address: securityPoolAddress,
-			args: [startIndex, count],
-		}),
-		'Active vault page',
-	).map((vault, index) => requireAddress(vault, `Active vault page entry ${index.toString()}`))
-
 export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: Address): Promise<Address> =>
 	requireAddress(
 		await client.readContract({
@@ -267,26 +298,26 @@ export const getSecurityPoolsEscalationGame = async (client: ReadClient, securit
 		'Security pool escalation game',
 	)
 
-export const getPoolOwnershipDenominator = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalRepBackingUnits = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'poolOwnershipDenominator',
+			functionName: 'totalRepBackingUnits',
 			address: securityPoolAddress,
 			args: [],
 		}),
-		'Pool ownership denominator',
+		'REP backing units denominator',
 	)
 
-export const poolOwnershipToRep = async (client: ReadClient, securityPoolAddress: Address, poolOwnership: bigint): Promise<bigint> =>
+export const backingUnitsToAttoRep = async (client: ReadClient, securityPoolAddress: Address, repBackingUnits: bigint): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'poolOwnershipToRep',
+			functionName: 'backingUnitsToAttoRep',
 			address: securityPoolAddress,
-			args: [poolOwnership],
+			args: [repBackingUnits],
 		}),
-		'Pool ownership to REP',
+		'REP backing units to REP',
 	)
 
 export const redeemShares = async (client: WriteClient, securityPoolAddress: Address) =>
@@ -300,11 +331,11 @@ export const redeemShares = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const getTotalFeesOwedToVaults = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalClaimableVaultFeesAttoEth = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalFeesOwedToVaults',
+			functionName: 'totalClaimableVaultFeesAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -315,27 +346,27 @@ export const getTotalAccruedFees = async (client: ReadClient, securityPoolAddres
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalAccruedFees',
+			functionName: 'totalAccruedFeesAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		}),
 		'Total accrued fees',
 	)
 
-export const sharesToCash = async (client: ReadClient, securityPoolAddress: Address, completeSetAmount: bigint): Promise<bigint> =>
+export const attoSharesToAttoEth = async (client: ReadClient, securityPoolAddress: Address, amountAttoShares: bigint): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'sharesToCash',
+			functionName: 'attoSharesToAttoEth',
 			address: securityPoolAddress,
-			args: [completeSetAmount],
+			args: [amountAttoShares],
 		}),
 		'Shares to cash',
 	)
 
-export const threeShareArrayToCash = async (client: ReadClient, securityPoolAddress: Address, shares: readonly [bigint, bigint, bigint]): Promise<[bigint, bigint, bigint]> => {
-	const [firstShare, secondShare, thirdShare] = shares
-	return await Promise.all([sharesToCash(client, securityPoolAddress, firstShare), sharesToCash(client, securityPoolAddress, secondShare), sharesToCash(client, securityPoolAddress, thirdShare)])
+export const threeAttoShareArrayToAttoEth = async (client: ReadClient, securityPoolAddress: Address, amountsAttoShares: readonly [bigint, bigint, bigint]): Promise<[bigint, bigint, bigint]> => {
+	const [firstAmountAttoShares, secondAmountAttoShares, thirdAmountAttoShares] = amountsAttoShares
+	return await Promise.all([attoSharesToAttoEth(client, securityPoolAddress, firstAmountAttoShares), attoSharesToAttoEth(client, securityPoolAddress, secondAmountAttoShares), attoSharesToAttoEth(client, securityPoolAddress, thirdAmountAttoShares)])
 }
 
 export const updateVaultFees = async (client: WriteClient, securityPoolAddress: Address, vault: Address) =>
@@ -360,11 +391,11 @@ export const redeemFees = async (client: WriteClient, securityPoolAddress: Addre
 		}),
 	)
 
-export const redeemRep = async (client: WriteClient, securityPoolAddress: Address, vault: Address) =>
+export const redeemRepFromVault = async (client: WriteClient, securityPoolAddress: Address, vault: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'redeemRep',
+			functionName: 'redeemRepFromVault',
 			address: securityPoolAddress,
 			args: [vault],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
@@ -382,11 +413,11 @@ export const getRepToken = async (client: ReadClient, securityPoolAddress: Addre
 		'REP token address',
 	)
 
-export const getTotalRepBalance = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalRepBalance',
+			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		}),

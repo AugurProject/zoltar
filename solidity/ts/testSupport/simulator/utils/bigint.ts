@@ -1,12 +1,17 @@
 import type { Address, Hex } from '@zoltar/shared/ethereum'
 
+function bigintToSafeNumber(value: bigint): number {
+	if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Bigint ${value.toString()} cannot be represented safely as a number`)
+	return Number.parseInt(value.toString(), 10)
+}
+
 export function bigintToDecimalString(value: bigint, power: bigint): string {
 	const sign = value < 0n ? '-' : ''
 	const magnitude = abs(value)
 	const integerPart = magnitude / 10n ** power
 	const fractionalPart = magnitude % 10n ** power
 	if (fractionalPart === 0n) return `${sign}${integerPart.toString(10)}`
-	return `${sign}${integerPart.toString(10)}.${fractionalPart.toString(10).padStart(Number(power), '0').replace(/0+$/, '')}`
+	return `${sign}${integerPart.toString(10)}.${fractionalPart.toString(10).padStart(bigintToSafeNumber(power), '0').replace(/0+$/, '')}`
 }
 
 export const addressString = (address: bigint): Address => `0x${address.toString(16).padStart(40, '0')}`

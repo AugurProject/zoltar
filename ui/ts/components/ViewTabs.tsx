@@ -29,7 +29,7 @@ function buildGroupedOptions<TValue extends string>(groups: ViewTabsProps<TValue
 	})
 }
 
-export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
+export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, onOverflowEdgesChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [overflowEdges, setOverflowEdges] = useState({ end: false, start: false })
 	const indexedOptions = options.map((option, index) => ({ index, option }))
@@ -76,7 +76,10 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			'aria-description': option.reason,
 			title: option.reason,
 			onClick: (event: MouseEvent) => {
-				if (option.disabled) return
+				if (option.disabled) {
+					event.preventDefault()
+					return
+				}
 				if (option.href !== undefined && (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return
 				onChange(option.value)
 			},
@@ -88,9 +91,9 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			return { 'aria-pressed': active }
 		})()
 		const commonProps = { ...sharedProps, ...semanticProps }
-		if (option.href !== undefined && option.disabled !== true)
+		if (option.href !== undefined)
 			return (
-				<a key={option.value} {...commonProps} href={option.href}>
+				<a key={option.value} {...commonProps} aria-disabled={option.disabled === true ? 'true' : undefined} href={option.disabled === true ? undefined : option.href} role={option.disabled === true ? 'link' : undefined} tabIndex={option.disabled === true ? 0 : undefined}>
 					{option.label}
 				</a>
 			)
@@ -119,18 +122,27 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		const scrollBehavior = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 		const updateOverflowEdges = () => {
 			const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
-			setOverflowEdges({
+			const nextOverflowEdges = {
 				end: container.scrollLeft < maxScrollLeft - 1,
 				start: container.scrollLeft > 1,
-			})
+			}
+			setOverflowEdges(nextOverflowEdges)
+			onOverflowEdgesChange?.(nextOverflowEdges)
 		}
 		const scrollActiveOptionIntoView = () => {
 			const activeOption = container.querySelector('.view-tab.active')
 			if (container.scrollWidth <= container.clientWidth || !(activeOption instanceof HTMLElement)) return
 			const containerRect = container.getBoundingClientRect()
 			const activeOptionRect = activeOption.getBoundingClientRect()
-			const centeredScrollLeft = container.scrollLeft + activeOptionRect.left - containerRect.left - (container.clientWidth - activeOptionRect.width) / 2
-			const targetScrollLeft = Math.min(container.scrollWidth - container.clientWidth, Math.max(0, centeredScrollLeft))
+			const measuredLayout = containerRect.width > 0 && activeOptionRect.width > 0
+			const nearestScrollLeft = (() => {
+				if (!measuredLayout) return container.scrollLeft + activeOptionRect.left - containerRect.left - (container.clientWidth - activeOptionRect.width) / 2
+				if (activeOptionRect.left < containerRect.left) return container.scrollLeft + activeOptionRect.left - containerRect.left
+				if (activeOptionRect.right > containerRect.right) return container.scrollLeft + activeOptionRect.right - containerRect.right
+				return undefined
+			})()
+			if (nearestScrollLeft === undefined) return
+			const targetScrollLeft = Math.min(container.scrollWidth - container.clientWidth, Math.max(0, nearestScrollLeft))
 			if (typeof container.scrollTo === 'function') container.scrollTo({ behavior: scrollBehavior, left: targetScrollLeft })
 			else container.scrollLeft = targetScrollLeft
 		}
@@ -149,7 +161,7 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			container.removeEventListener('scroll', updateOverflowEdges)
 			resizeObserver?.disconnect()
 		}
-	}, [options.length, orientation, value])
+	}, [onOverflowEdgesChange, options.length, orientation, value])
 	return (
 		<div ref={containerRef} className={`view-tabs ${variant} ${overflowEdges.start ? 'has-overflow-start' : ''} ${overflowEdges.end ? 'has-overflow-end' : ''} ${className}`.trim()} data-orientation={orientation} data-size={size} role={containerRole} aria-label={containerRole === undefined ? undefined : ariaLabel}>
 			{renderOptions()}

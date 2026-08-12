@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from '../lib/routing.js'
+import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from '../lib/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 describe('routing', () => {
@@ -54,5 +54,9 @@ describe('routing', () => {
 		expect(getRouteHash('security-pools')).toBe(SECURITY_POOLS_ROUTE)
 		expect(getRouteHash('open-oracle')).toBe(OPEN_ORACLE_ROUTE)
 		expect(getRouteHash('zoltar')).toBe(ZOLTAR_ROUTE)
+	})
+
+	test('preserves custom RPC configuration across top-level routes', () => {
+		expect(getTopLevelRouteSearch('deploy', '?rpcUrl=https%3A%2F%2Frpc.example&zoltarView=create')).toBe('?rpcUrl=https%3A%2F%2Frpc.example')
 	})
 })

@@ -25,7 +25,7 @@ export const aboveTarget = 'Above target'
 export const atTarget = 'At target'
 export const belowTarget = 'Below target'
 export const awaitingRepEthPrice = 'Awaiting REP/ETH price'
-export const noActiveAllowance = 'No active allowance'
+export const noActiveCapacityOwnership = 'No active capacity ownership'
 export const formatValueUnavailable = (label: CopyTemplateValue) => `${label} unavailable`
 export const formatCollateralizationWithTarget = (label: CopyTemplateValue, value: CopyTemplateValue, target: CopyTemplateValue) => `${label}: ${value}; target: ${target}`
 export const formatTargetValue = (value: CopyTemplateValue) => `Target ${value}`

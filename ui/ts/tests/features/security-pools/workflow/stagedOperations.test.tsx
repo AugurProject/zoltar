@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { ChainTimestampContext } from '../../../../lib/chainTimestamp.js'
 import { createStagedOperationsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: staged operations', () => {
@@ -11,6 +12,33 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, createAccountState, createReportingProps, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createMarketDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
 
 	describe('queueing and execution feedback', () => {
+		test('does not loop the automatic oracle-manager read after an error', async () => {
+			const loadPoolOracleManagerCalls: string[] = []
+			const selectedPoolAddress = zeroAddress
+			const managerAddress = '0x00000000000000000000000000000000000000aa'
+			const renderedComponent = await renderIntoDocument(
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						onLoadPoolOracleManager: managerAddressInput => {
+							loadPoolOracleManagerCalls.push(managerAddressInput)
+						},
+						poolOracleManagerDetails: undefined,
+						poolOracleManagerError: 'Failed to load price oracle details. Reason: RPC unavailable',
+						poolOracleManagerErrorAddress: managerAddress,
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ managerAddress, securityPoolAddress: selectedPoolAddress })],
+					})}
+					showHeader={false}
+				/>,
+			)
+			setCleanup(renderedComponent.cleanup)
+
+			await act(async () => {
+				await Promise.resolve()
+			})
+			expect(loadPoolOracleManagerCalls).toEqual([])
+		})
+
 		test('refreshes staged operations after queueing a vault withdrawal', async () => {
 			const loadPoolOracleManagerCalls: string[] = []
 			const selectedPoolAddress = zeroAddress
@@ -59,7 +87,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 						poolOracleManagerDetails: createOracleManagerDetails({
 							pendingOperation: {
 								amount: 5n * 10n ** 18n,
-								initiatorVault: zeroAddress,
+								operator: zeroAddress,
 								operation: 'withdrawRep',
 								operationId: 7n,
 								targetVault: zeroAddress,
@@ -73,9 +101,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
@@ -104,7 +132,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' }).closest('.actions')).toBeNull()
 
 			await act(() => {
-				fireEvent.click(dialogQueries.getByRole('button', { name: 'View In Staged Operations' }))
+				fireEvent.click(dialogQueries.getByRole('button', { name: 'View in staged operations' }))
 			})
 
 			expect(selectedViews).toEqual(['staged-operations'])
@@ -122,7 +150,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							isPriceValid: false,
 							pendingOperation: {
 								amount: 3n * 10n ** 18n,
-								initiatorVault: zeroAddress,
+								operator: zeroAddress,
 								operation: 'liquidation',
 								operationId: 6n,
 								targetVault: '0x0000000000000000000000000000000000000001',
@@ -136,9 +164,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
@@ -166,7 +194,36 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#11')).not.toBeNull()
-			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
+		})
+
+		test('blocks staged-operation execution at the exact oracle expiry boundary', async () => {
+			const selectedPoolAddress = zeroAddress
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={400n}>
+					<SecurityPoolWorkflowSection
+						{...createSecurityPoolWorkflowProps({
+							accountState: createAccountState(),
+							poolOracleManagerDetails: createOracleManagerDetails({
+								isPriceValid: true,
+								lastSettlementTimestamp: 100n,
+								pendingOperationSlotId: 6n,
+								priceValidUntilTimestamp: 400n,
+							}),
+							securityPoolAddress: selectedPoolAddress,
+							securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+							selectedPoolView: 'staged-operations',
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			setCleanup(renderedComponent.cleanup)
+
+			const executeButton = within(document.body).getByRole('button', { name: 'Execute staged operation' })
+			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged Operation button')
+			expect(executeButton.disabled).toBe(true)
+			expect(document.body.textContent).toContain('Wait for a valid oracle price before executing a staged operation.')
 		})
 
 		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {
@@ -187,9 +244,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
@@ -211,7 +268,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Executed' })).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 			expect(dialogQueries.getByText('A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.')).not.toBeNull()
 		})
 
@@ -233,15 +290,15 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '10000',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000be',
 								stagedExecution: {
-									errorMessage: 'Local Security Bond Allowance broken',
+									errorMessage: 'Local Capacity ownership broken',
 									operation: 'withdrawRep',
 									operationId: 8n,
 									success: false,
@@ -263,8 +320,8 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
+			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 		})
 
 		test('shows liquidation successful in the selected pool workflow after an immediate execution', async () => {
@@ -320,7 +377,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Capacity ownership broken',
 								operation: 'liquidation',
 								operationId: 13n,
 								success: false,
@@ -336,7 +393,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
 			const dialogQueries = within(dialog)
 			expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
 		})
 	})
 
@@ -367,9 +424,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
@@ -417,9 +474,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'reporting',
@@ -449,23 +506,23 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								reportingLoadCalls.push('refresh')
 							},
 							reportingDetails: {
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentTime: 3n,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: selectedPoolAddress,
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'not-started',
 								systemState: 'operational',
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 12_000n,
+								viewerPoolHeldVaultRepBackingAttoRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 12_000n,
+								viewerVaultDisputeStakedAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 12_000n,
 							},
 						}),
 						securityPoolAddress: selectedPoolAddress,
@@ -473,7 +530,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 						securityVault: createSecurityVaultProps({
 							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
 							securityVaultResult: {
-								action: 'depositRep',
+								action: 'depositRepToVault',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000df',
 							},
 						}),
@@ -507,7 +564,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							managerAddress: zeroAddress,
 							pendingOperation: {
 								amount: 1n,
-								initiatorVault: zeroAddress,
+								operator: zeroAddress,
 								operation: 'liquidation',
 								operationId: 10n,
 								targetVault: zeroAddress,
@@ -529,9 +586,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'vaults',
@@ -579,9 +636,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'vaults',
@@ -620,7 +677,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000d3',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Capacity ownership broken',
 								operation: 'liquidation',
 								operationId: 14n,
 								success: false,
@@ -635,9 +692,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'vaults',
@@ -676,9 +733,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'vaults',
@@ -718,23 +775,23 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								reportingLoadCalls.push('refresh')
 							},
 							reportingDetails: {
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentTime: 3n,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: selectedPoolAddress,
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'not-started',
 								systemState: 'operational',
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 12_000n,
+								viewerPoolHeldVaultRepBackingAttoRep: 12_000n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 12_000n,
+								viewerVaultDisputeStakedAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 12_000n,
 							},
 						}),
 						securityPoolAddress: selectedPoolAddress,
@@ -744,9 +801,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '1',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'vaults',
@@ -775,7 +832,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							action: 'executeStagedOperation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000ce',
 							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
+								errorMessage: 'Local Capacity ownership broken',
 								operation: 'withdrawRep',
 								operationId: 12n,
 								success: false,
@@ -795,9 +852,9 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultForm: {
 								depositAmount: '',
 								repWithdrawAmount: '',
-								securityBondAllowanceAmount: '',
+								targetHealthFactor: '',
 								securityPoolAddress: selectedPoolAddress,
-								selectedVaultAddress: zeroAddress,
+								selectedVaultOwner: zeroAddress,
 							},
 						}),
 						selectedPoolView: 'staged-operations',

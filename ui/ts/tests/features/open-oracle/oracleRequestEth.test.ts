@@ -20,8 +20,8 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 		pendingSettlementQueueCapacity: 4n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: undefined,
-		queuedOperationEthCost: 2n,
-		requestPriceEthCost: 10n,
+		queuedOperationCostAttoEth: 2n,
+		requestPriceCostAttoEth: 10n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
@@ -38,7 +38,7 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
 		})
 	})
@@ -49,7 +49,7 @@ describe('oracle request ETH funding', () => {
 				managerDetails: createOracleManagerDetails(),
 			}),
 		).toEqual({
-			ethCost: 10n,
+			costAttoEth: 10n,
 			includeBuffer: true,
 		})
 	})
@@ -62,8 +62,22 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
+		})
+	})
+
+	test('uses fresh-request funding when a caller identifies a cached valid price as expired', () => {
+		expect(
+			resolveOracleOperationEthFunding({
+				managerDetails: createOracleManagerDetails({
+					isPriceValid: true,
+				}),
+				priceUsable: false,
+			}),
+		).toEqual({
+			costAttoEth: 10n,
+			includeBuffer: true,
 		})
 	})
 
@@ -76,7 +90,7 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
 		})
 	})
@@ -91,7 +105,7 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
 		})
 	})
@@ -105,7 +119,7 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
 		})
 	})
@@ -119,7 +133,7 @@ describe('oracle request ETH funding', () => {
 				}),
 			}),
 		).toEqual({
-			ethCost: 0n,
+			costAttoEth: 0n,
 			includeBuffer: false,
 		})
 	})
@@ -128,8 +142,8 @@ describe('oracle request ETH funding', () => {
 		expect(
 			getOracleRequestEthGuardMessage({
 				actionLabel: 'queue this liquidation',
-				requiredEthCost: 0n,
-				walletEthBalance: undefined,
+				requiredCostAttoEth: 0n,
+				walletBalanceAttoEth: undefined,
 			}),
 		).toBeUndefined()
 	})

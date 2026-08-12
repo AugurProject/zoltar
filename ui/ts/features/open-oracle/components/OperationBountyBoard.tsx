@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import * as commonCopy from '../../../copy/common.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { Badge } from '../../../components/Badge.js'
@@ -37,8 +38,7 @@ type OperationBountyBoardProps = {
 
 function getOperationLabel(operation: OracleQueueOperation) {
 	if (operation === 'liquidation') return securityPoolCopy.liquidation
-	if (operation === 'withdrawRep') return securityPoolCopy.withdrawRep
-	return securityPoolCopy.setBondAllowance
+	return securityPoolCopy.withdrawRep
 }
 
 function getOperationUnit(operation: OracleQueueOperation) {
@@ -91,7 +91,7 @@ function getRefundGuardMessage(isMainnet: boolean, refundEnabled: boolean, refun
 }
 
 export function OperationBountyBoard({ accountAddress, activeAction, activeBountyId, currentTimestamp, isMainnet, loadingBounty, lookupError, managerDetails, onAccept, onClaim, onClearLookupError, onLoad, onPost, onRefund }: OperationBountyBoardProps) {
-	const [operation, setOperation] = useState<OracleQueueOperation>('setSecurityBondsAllowance')
+	const [operation, setOperation] = useState<OracleQueueOperation>('withdrawRep')
 	const [targetVault, setTargetVault] = useState('')
 	const [amount, setAmount] = useState('0')
 	const [validForMinutes, setValidForMinutes] = useState('5')
@@ -105,8 +105,8 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 	const resolvedRewardAmount = tryParseRepAmountInput(rewardAmount)
 	const resolvedValidForMinutes = tryParseBigIntInput(validForMinutes)
 	const resolvedAcceptanceMinutes = tryParseBigIntInput(acceptanceMinutes)
-	const resolvedMinimumInitialWeth = minimumInitialWeth.trim() === '' ? 0n : tryParseRepAmountInput(minimumInitialWeth)
-	const resolvedMaximumInitialWeth = maximumInitialWeth.trim() === '' ? 0n : tryParseRepAmountInput(maximumInitialWeth)
+	const resolvedMinimumInitialAttoWeth = minimumInitialWeth.trim() === '' ? 0n : tryParseRepAmountInput(minimumInitialWeth)
+	const resolvedMaximumInitialAttoWeth = maximumInitialWeth.trim() === '' ? 0n : tryParseRepAmountInput(maximumInitialWeth)
 	const resolvedBountyId = tryParseBigIntInput(bountyIdInput)
 	const resolvedTargetVault = resolveBountyTargetVault(operation, targetVault, accountAddress)
 	const resolvedRewardToken = rewardToken === 'rep' ? managerDetails.reputationTokenAddress : managerDetails.wethAddress
@@ -117,12 +117,13 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 		if (currentTimestamp === undefined) return securityPoolCopy.waitForChainTime
 		if (resolvedRewardToken === undefined) return securityPoolCopy.refreshBountyTokens
 		if (resolvedTargetVault === undefined) return securityPoolCopy.enterValidBountyTarget
-		if (resolvedAmount === undefined || (operation !== 'setSecurityBondsAllowance' && resolvedAmount <= 0n)) return securityPoolCopy.enterValidBountyAmount
+		if (operation === 'liquidation' && sameAddress(resolvedTargetVault, accountAddress)) return securityPoolCopy.liquidationBountyTargetMustDiffer
+		if (resolvedAmount === undefined || resolvedAmount <= 0n) return securityPoolCopy.enterValidBountyAmount
 		if (resolvedRewardAmount === undefined || resolvedRewardAmount <= 0n) return securityPoolCopy.enterValidBountyReward
 		if (resolvedValidForMinutes === undefined || resolvedValidForMinutes < 1n || resolvedValidForMinutes > 5n) return securityPoolCopy.enterValidBountyTimeout
 		if (resolvedAcceptanceMinutes === undefined || resolvedAcceptanceMinutes <= 0n) return securityPoolCopy.enterValidBountyDeadline
-		if (resolvedMinimumInitialWeth === undefined || resolvedMaximumInitialWeth === undefined) return securityPoolCopy.enterValidInitialWethBounds
-		if (resolvedMaximumInitialWeth > 0n && resolvedMinimumInitialWeth > resolvedMaximumInitialWeth) return securityPoolCopy.enterOrderedInitialWethBounds
+		if (resolvedMinimumInitialAttoWeth === undefined || resolvedMaximumInitialAttoWeth === undefined) return securityPoolCopy.enterValidInitialWethBounds
+		if (resolvedMaximumInitialAttoWeth > 0n && resolvedMinimumInitialAttoWeth > resolvedMaximumInitialAttoWeth) return securityPoolCopy.enterOrderedInitialWethBounds
 		return undefined
 	})()
 	const postBounty = () => {
@@ -135,16 +136,16 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 			resolvedRewardAmount === undefined ||
 			resolvedValidForMinutes === undefined ||
 			resolvedAcceptanceMinutes === undefined ||
-			resolvedMinimumInitialWeth === undefined ||
-			resolvedMaximumInitialWeth === undefined ||
+			resolvedMinimumInitialAttoWeth === undefined ||
+			resolvedMaximumInitialAttoWeth === undefined ||
 			postGuardMessage !== undefined
 		)
 			return
 		onPost(managerDetails.managerAddress, {
 			acceptanceDeadline: currentTimestamp + resolvedAcceptanceMinutes * 60n,
 			amount: resolvedAmount,
-			maximumInitialWeth: resolvedMaximumInitialWeth,
-			minimumInitialWeth: resolvedMinimumInitialWeth,
+			maximumInitialAttoWeth: resolvedMaximumInitialAttoWeth,
+			minimumInitialAttoWeth: resolvedMinimumInitialAttoWeth,
 			operation,
 			rewardAmount: resolvedRewardAmount,
 			rewardToken: resolvedRewardToken,
@@ -170,7 +171,6 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 						<label className='field'>
 							<span>{securityPoolCopy.operation}</span>
 							<select value={operation} onChange={event => setOperation(event.currentTarget.value as OracleQueueOperation)}>
-								<option value='setSecurityBondsAllowance'>{securityPoolCopy.setBondAllowance}</option>
 								<option value='withdrawRep'>{securityPoolCopy.withdrawRep}</option>
 								<option value='liquidation'>{securityPoolCopy.liquidation}</option>
 							</select>
@@ -289,17 +289,16 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 									<MetricField label={securityPoolCopy.reward}>
 										<CurrencyValue value={bounty.rewardAmount} suffix={rewardSymbol} />
 									</MetricField>
-									<MetricField label={securityPoolCopy.minimumInitialWeth}>{bounty.minimumInitialWeth === 0n ? securityPoolCopy.noMinimum : <CurrencyValue value={bounty.minimumInitialWeth} suffix={commonCopy.weth} />}</MetricField>
-									<MetricField label={securityPoolCopy.maximumInitialWeth}>{bounty.maximumInitialWeth === 0n ? securityPoolCopy.noMaximum : <CurrencyValue value={bounty.maximumInitialWeth} suffix={commonCopy.weth} />}</MetricField>
+									<MetricField label={securityPoolCopy.minimumInitialWeth}>{bounty.minimumInitialAttoWeth === 0n ? securityPoolCopy.noMinimum : <CurrencyValue value={bounty.minimumInitialAttoWeth} suffix={commonCopy.weth} />}</MetricField>
+									<MetricField label={securityPoolCopy.maximumInitialWeth}>{bounty.maximumInitialAttoWeth === 0n ? securityPoolCopy.noMaximum : <CurrencyValue value={bounty.maximumInitialAttoWeth} suffix={commonCopy.weth} />}</MetricField>
 									<MetricField label={securityPoolCopy.acceptBy}>{formatTimestamp(bounty.acceptanceDeadline)}</MetricField>
 									{bounty.operator === '0x0000000000000000000000000000000000000000' ? null : (
 										<MetricField label={securityPoolCopy.operator}>
 											<AddressValue address={bounty.operator} />
 										</MetricField>
 									)}
-									{bounty.reportId === 0n ? null : <MetricField label={securityPoolCopy.report}>{commonCopy.formatReportNumberLabel(bounty.reportId.toString())}</MetricField>}
+									{bounty.reportId === 0n ? null : <MetricField label={securityPoolCopy.report}>{openOracleCopy.formatReportNumberTitle(bounty.reportId.toString())}</MetricField>}
 								</MetricGrid>
-								{bounty.executionErrorMessage === undefined ? null : <p className='detail'>{securityPoolCopy.formatBountyFailureDetail(bounty.executionErrorMessage)}</p>}
 								<div className='entity-card-actions'>
 									{bounty.state === 'open' ? (
 										<TransactionActionButton

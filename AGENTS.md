@@ -108,7 +108,12 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked:
+Generated outputs are intentionally untracked, except for the documentation outputs and
+vendored deployment input listed below. The documentation outputs are tracked because the
+static documentation site loads them directly;
+`bun run docs:check-charts`, `bun run docs:check-contract-reference`, and
+`bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
+pins the deployment input and prevents its large upstream packages from entering the lockfile.
 
 | Output | Source or command |
 | --- | --- |
@@ -118,8 +123,13 @@ Generated outputs are intentionally untracked:
 | `ui/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/js/**` | UI TypeScript build |
 | `ui/vendor/**` | `bun run ui:vendor` |
+| `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
+| `docs/assets/js/docsData.js` | `bun run docs:build-index` |
+| `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
+| `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
+| `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
-Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
+Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
 
 ### 7. UI manual QA
 
@@ -164,6 +174,7 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
+- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there; `docs/AGENTS.md` is the sole repository-instruction exception.
 - Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
@@ -180,6 +191,13 @@ git rev-list --count HEAD..origin/main
 If the count is `0`, record that the branch is current. If it is nonzero, merge `origin/main` only when the user explicitly requested branch synchronization or a PR-ready result; otherwise report the behind count and ask before merging. After a merge or conflict resolution, recalculate scope and rerun all applicable checks.
 
 Skip this gate for read-only analysis, exploration, or when the user asks not to fetch or merge.
+
+## Pull requests
+
+When creating a pull request:
+
+- Write a pull request description that explains what changed and why.
+- For UI changes, include images that show the resulting UI changes. Do not commit these images to the repository; upload them to Sharey and embed them in the pull request description instead. Select the longest practical expiry.
 
 ## Review gates
 
@@ -201,13 +219,27 @@ Disposition every finding using the contract. After material fixes, rerun affect
 
 ### Documentation reviewer
 
-When documentation under `docs/` changes, spawn the project-scoped reviewer from `.codex/agents/textReview.toml` before the final reviewer. In addition to the standard handoff, list:
+When published documentation changes, spawn the project-scoped reviewer from
+`.codex/agents/textReview.toml` before the visual and final reviewers.
 
-- changed documentation files
-- Solidity contracts described, or `none`
-- linked docs, tooltips, diagrams, examples, and shared references in the reading path
+Supply:
 
-Ask it to assess story, flow, concept order, contract accuracy, MathML, notation, examples, and reader preparation. Disposition findings under the shared contract. Repeat the text review after material documentation fixes, then proceed to the visual reviewer when the documentation change can affect rendered appearance, followed by the final reviewer.
+- changed documentation files;
+- primary Diátaxis mode of each changed page;
+- intended reader and reader job;
+- acceptance criteria;
+- intentional non-goals;
+- authoritative implementation or research sources;
+- pages or material intentionally deleted;
+- validation performed.
+
+Ask the reviewer to assess reader-purpose completion, mode purity, concision,
+canonical ownership, accuracy of claims actually made, rendered correctness,
+and deletion opportunities.
+
+Do not ask it to build protocol-wide documentation coverage or require examples,
+diagrams, formulas, edge cases, and security analysis that are outside the
+stated reader job.
 
 ### Final response
 

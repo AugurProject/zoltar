@@ -39,6 +39,8 @@ Use three primary surface roles:
 
 Prefer spacing and dividers for simple grouping. Avoid decorative nesting and normally keep container depth to two levels inside a route section. Dialogs, popovers, tables, and semantically nested records may exceed that limit when the additional layer communicates real structure.
 
+Card-like surfaces must never be nested inside other card-like surfaces. A screen may use multiple sibling cards, but its card nesting depth is one: a bordered, elevated, rounded, or filled card cannot contain another surface with the same card treatment. When content has another hierarchical level, use spacing, dividers, flat rows, disclosure, tabs, a table, or a replacement detail view instead. If an implementation would require a card inside a card, redesign the composition before proceeding; changing the inner element's name without removing its card-like treatment does not satisfy this rule.
+
 ## Components and reuse
 
 Inspect shared `ui/ts/components`, the relevant `ui/ts/features/*/components`, and the touched route before introducing a primitive or pattern.

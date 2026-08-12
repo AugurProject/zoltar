@@ -1,8 +1,8 @@
 import type { RouteHeaderProps } from '../types/components.js'
 
-export function RouteHeader({ actions, badge, description, eyebrow, summary, title }: RouteHeaderProps) {
+export function RouteHeader({ actions, badge, className = '', description, eyebrow, summary, title }: RouteHeaderProps) {
 	return (
-		<header className='route-header'>
+		<header className={`route-header ${className}`.trim()}>
 			<div className='route-header-main'>
 				<div className='route-header-copy'>
 					{eyebrow === undefined ? undefined : <p className='route-eyebrow'>{eyebrow}</p>}

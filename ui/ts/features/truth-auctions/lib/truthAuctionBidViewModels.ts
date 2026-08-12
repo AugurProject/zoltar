@@ -10,8 +10,8 @@ type LocalSettlementBidStatus = 'claimed' | 'refunded'
 
 export type TruthAuctionBidRowViewModel = {
 	bidder: Address
-	cumulativeEth: bigint
-	ethAmount: bigint
+	cumulativeBidAttoEth: bigint
+	bidAmountAttoEth: bigint
 	key: string
 	price: bigint
 	statusLabel: string
@@ -19,7 +19,7 @@ export type TruthAuctionBidRowViewModel = {
 }
 
 export type ViewerTruthAuctionBidRowViewModel = {
-	ethAmount: bigint
+	bidAmountAttoEth: bigint
 	key: string
 	price: bigint
 	settlementControl:
@@ -46,8 +46,8 @@ export function buildTruthAuctionBidRows({ bids, truthAuction }: { bids: TruthAu
 		const disposition = getTruthAuctionBidDisposition(bid, truthAuction)
 		return {
 			bidder: bid.bidder,
-			cumulativeEth: bid.cumulativeEth,
-			ethAmount: bid.ethAmount,
+			cumulativeBidAttoEth: bid.cumulativeBidAttoEth,
+			bidAmountAttoEth: bid.bidAmountAttoEth,
 			key: `aggregate:${bid.tick.toString()}:${bid.bidIndex.toString()}`,
 			price: getTruthAuctionPriceAtTick(bid.tick),
 			statusLabel: disposition.label,
@@ -91,7 +91,7 @@ export function buildViewerTruthAuctionBidRows({
 		const inSessionSettlementResult = settlementResultByKey[settlementBidKey]
 		const isSettlementBidActions = selectedStage === 'settlement' && isSettlementBid && inSessionSettlementResult === undefined && !isSettlementInProgress
 		const isSettlementBidSelectable = inSessionSettlementResult === undefined && !isSettlementInProgress
-		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatCurrencyInputBalance(bid.ethAmount)} ETH at ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick))} ETH/REP`
+		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatCurrencyInputBalance(bid.bidAmountAttoEth)} ETH at ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick))} ETH/REP`
 		const statusLabel = (() => {
 			if (inSessionSettlementResult === 'claimed') return 'Claimed'
 			if (inSessionSettlementResult === 'refunded') return 'Refunded'
@@ -104,7 +104,7 @@ export function buildViewerTruthAuctionBidRows({
 		})()
 
 		return {
-			ethAmount: bid.ethAmount,
+			bidAmountAttoEth: bid.bidAmountAttoEth,
 			key: `viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`,
 			price: getTruthAuctionPriceAtTick(bid.tick),
 			settlementControl: showSettlementActionColumn

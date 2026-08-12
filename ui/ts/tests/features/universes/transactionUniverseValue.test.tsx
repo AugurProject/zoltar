@@ -36,7 +36,7 @@ describe('TransactionUniverseValue', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Genesis (0)')).not.toBeNull()
-		expect(documentQueries.getByText('Universe 7')).not.toBeNull()
+		expect(documentQueries.getByText('Genesis (0x0)')).not.toBeNull()
+		expect(documentQueries.getByText('Universe 0x7')).not.toBeNull()
 	})
 })

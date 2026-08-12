@@ -23,7 +23,7 @@ function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+		args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
 	})
 }
 
@@ -139,11 +139,11 @@ export const splitMigrationRep = async (client: WriteClient, universeId: bigint,
 	)
 }
 
-export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Address) {
+export async function getTotalTheoreticalSupplyAttoRep(client: ReadClient, repToken: Address) {
 	return requireBigInt(
 		await client.readContract({
 			abi: ReputationToken_ReputationToken.abi,
-			functionName: 'getTotalTheoreticalSupply',
+			functionName: 'getTotalTheoreticalSupplyAttoRep',
 			address: repToken,
 			args: [],
 		}),
@@ -151,11 +151,11 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Ad
 	)
 }
 
-export const getUniverseTheoreticalSupply = async (client: ReadClient, universeId: bigint): Promise<bigint> =>
+export const getUniverseTheoreticalSupplyAttoRep = async (client: ReadClient, universeId: bigint): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: Zoltar_Zoltar.abi,
-			functionName: 'getUniverseTheoreticalSupply',
+			functionName: 'getUniverseTheoreticalSupplyAttoRep',
 			address: getZoltarAddress(),
 			args: [universeId],
 		}),
@@ -166,7 +166,7 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 	requireBigInt(
 		await client.readContract({
 			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkThreshold',
+			functionName: 'getForkThresholdAttoRep',
 			address: getZoltarAddress(),
 			args: [universeId],
 		}),
@@ -205,12 +205,12 @@ export const deployChild = async (client: WriteClient, universeId: bigint, outco
 		}),
 	)
 
-export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: Address) => {
-	const repBalance = await client.readContract({
+export const getMigrationRepBalanceAttoRep = async (client: ReadClient, universeId: bigint, address: Address) => {
+	const repBalanceAttoRep = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'getMigrationRepBalance',
+		functionName: 'getMigrationRepBalanceAttoRep',
 		address: getZoltarAddress(),
 		args: [address, universeId],
 	})
-	return requireBigInt(repBalance, 'Migration REP balance')
+	return requireBigInt(repBalanceAttoRep, 'Migration REP balance')
 }

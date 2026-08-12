@@ -1,24 +1,20 @@
 import { expect, test } from 'bun:test'
-import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl } from '../testSupport/simulator/anvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl, resolveAnvilBinary } from '../testSupport/simulator/anvilNode'
 
-test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
+test('getAnvilConnectionMode spawns an isolated node on Windows when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
+	const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 
 	try {
 		delete process.env['ANVIL_RPC']
-		if (process.platform === 'win32') {
-			expect(getAnvilConnectionMode()).toEqual({
-				type: 'use-existing',
-				rpcUrl: 'http://127.0.0.1:8545',
-			})
-		} else {
-			expect(getAnvilConnectionMode()).toEqual({
-				type: 'spawn-isolated',
-				rpcUrl: '',
-				port: 0,
-			})
-		}
+		Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+		expect(getAnvilConnectionMode()).toEqual({
+			type: 'spawn-isolated',
+			rpcUrl: '',
+			port: 0,
+		})
 	} finally {
+		if (originalPlatformDescriptor !== undefined) Object.defineProperty(process, 'platform', originalPlatformDescriptor)
 		if (originalAnvilRpc === undefined) {
 			delete process.env['ANVIL_RPC']
 		} else {
@@ -87,11 +83,34 @@ test('isolated Anvil nodes atomically select a port and limit their runtime thre
 
 	expect(getIsolatedAnvilArgs()).toEqual(expectedBaseArgs)
 	expect(getIsolatedAnvilArgs({ printTraces: true })).toEqual([...expectedBaseArgs, '--print-traces'])
+	expect(getIsolatedAnvilArgs({ chainId: 11_155_111, disableCodeSizeLimit: true, gasLimit: 100_000_000n, hardfork: 'osaka' })).toEqual([...expectedBaseArgs.slice(0, 7), '11155111', ...expectedBaseArgs.slice(8), '--hardfork', 'osaka', '--gas-limit', '100000000', '--disable-code-size-limit'])
+	expect(getIsolatedAnvilArgs({ zeroFees: false })).toEqual(['--host', '127.0.0.1', '--port', '0', '--threads', '1', '--chain-id', '1', '--timestamp', '1', '--max-persisted-states', '0'])
 })
 
 test('isolated Anvil startup reads the OS-assigned listening port', () => {
 	expect(parseAnvilListeningRpcUrl('Available Accounts\nListening on 127.0.0.1:43127\n')).toBe('http://127.0.0.1:43127')
+	expect(parseAnvilListeningRpcUrl('Listening on 0.0.0.0:43128')).toBe('http://127.0.0.1:43128')
 	expect(parseAnvilListeningRpcUrl('Listening on 127.0.0.1:')).toBeUndefined()
+})
+
+test('Anvil executable resolution supports standard and quoted Windows installations', () => {
+	expect(resolveAnvilBinary({ environment: { USERPROFILE: 'C:\\Users\\tester' }, pathExists: path => path === 'C:\\Users\\tester\\.foundry\\bin\\anvil.exe', platform: 'win32', which: () => null })).toBe('C:\\Users\\tester\\.foundry\\bin\\anvil.exe')
+	expect(resolveAnvilBinary({ environment: { ANVIL_BIN: '"C:\\Program Files\\Foundry\\anvil.exe"' }, pathExists: () => false, platform: 'win32', which: () => null })).toBe('C:\\Program Files\\Foundry\\anvil.exe')
+})
+
+test('Anvil executable resolution supports the repository-pinned Windows binary outside PATH', () => {
+	const repositoryAnvil = 'C:\\projects\\zoltar\\node_modules\\@foundry-rs\\anvil-win32-amd64\\bin\\anvil.exe'
+	expect(resolveAnvilBinary({ architecture: 'x64', environment: {}, pathExists: path => path === repositoryAnvil, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe(repositoryAnvil)
+})
+
+test('Anvil executable resolution prefers the repository pin over a user-home installation', () => {
+	const repositoryAnvil = 'C:\\projects\\zoltar\\node_modules\\@foundry-rs\\anvil-win32-amd64\\bin\\anvil.exe'
+	expect(resolveAnvilBinary({ architecture: 'x64', environment: { USERPROFILE: 'C:\\Users\\tester' }, pathExists: () => true, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe(repositoryAnvil)
+})
+
+test('Anvil executable resolution uses the absolute PATH match before a command-name fallback', () => {
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => 'C:\\Foundry\\anvil.exe' })).toBe('C:\\Foundry\\anvil.exe')
+	expect(resolveAnvilBinary({ environment: {}, pathExists: () => false, platform: 'win32', repositoryRoot: 'C:\\projects\\zoltar', which: () => null })).toBe('anvil')
 })
 
 test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {

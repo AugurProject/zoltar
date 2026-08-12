@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 
 type IntegerLike = bigint | number
@@ -6,16 +6,17 @@ type IntegerLike = bigint | number
 type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 export type StagedOperationTuple = {
-	amount: bigint
-	initiatorVault: Address
+	operationAmountAttoRepOrAttoEth: bigint
+	operator: Address
 	operation: IntegerLike
 	targetVault: Address
 }
 export type SecurityPoolDeploymentTuple = {
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
 	questionId: bigint
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	securityPool: Address
 	truthAuction: Address
 	universeId: bigint
@@ -28,9 +29,6 @@ export type DeployedChildUniverseTuple = {
 	reputationToken: Address
 }
 type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
-type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
-type OpenOracleReportStatusTuple = readonly [bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike]
-type OpenOracleExtraDataTuple = readonly [Hex, Address, IntegerLike, IntegerLike, Address, boolean]
 
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -64,6 +62,12 @@ export function getMinBigintValue(values: bigint[]) {
 	return minValue
 }
 
+export function getProtocolPageOffset(pageIndex: number, pageSize: number) {
+	if (!Number.isSafeInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer within the safe range')
+	if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer within the safe range')
+	return BigInt(pageIndex) * BigInt(pageSize)
+}
+
 export function hasTimestamp(value: unknown): value is { timestamp: bigint } {
 	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
 }
@@ -82,7 +86,7 @@ export function requireUniverseTupleArray(value: unknown, context: string): Univ
 }
 
 function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
-	return isObjectRecord(value) && typeof value['amount'] === 'bigint' && typeof value['initiatorVault'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
+	return isObjectRecord(value) && typeof value['operationAmountAttoRepOrAttoEth'] === 'bigint' && typeof value['operator'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
 }
 
 export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {
@@ -93,10 +97,11 @@ export function requireStagedOperationTupleArray(value: unknown, context: string
 function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDeploymentTuple {
 	return (
 		isObjectRecord(value) &&
+		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
 		typeof value['parent'] === 'string' &&
 		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&
-		typeof value['securityMultiplier'] === 'bigint' &&
+		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
 		typeof value['securityPool'] === 'string' &&
 		typeof value['truthAuction'] === 'string' &&
 		typeof value['universeId'] === 'bigint'
@@ -145,63 +150,6 @@ function isSecurityVaultTuple(value: unknown): value is SecurityVaultTuple {
 
 export function requireSecurityVaultTupleArray(value: unknown, context: string): SecurityVaultTuple[] {
 	if (Array.isArray(value) && value.every(isSecurityVaultTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isOpenOracleReportMetaTuple(value: unknown): value is OpenOracleReportMetaTuple {
-	return (
-		Array.isArray(value) &&
-		value.length === 12 &&
-		typeof value[0] === 'bigint' &&
-		typeof value[1] === 'bigint' &&
-		typeof value[2] === 'bigint' &&
-		typeof value[3] === 'bigint' &&
-		typeof value[4] === 'string' &&
-		isIntegerLike(value[5]) &&
-		typeof value[6] === 'string' &&
-		typeof value[7] === 'boolean' &&
-		isIntegerLike(value[8]) &&
-		isIntegerLike(value[9]) &&
-		isIntegerLike(value[10]) &&
-		isIntegerLike(value[11])
-	)
-}
-
-export function requireOpenOracleReportMetaTuple(value: unknown, context: string): OpenOracleReportMetaTuple {
-	if (isOpenOracleReportMetaTuple(value)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-export function requireOpenOracleReportMetaTupleArray(value: unknown, context: string): OpenOracleReportMetaTuple[] {
-	if (Array.isArray(value) && value.every(isOpenOracleReportMetaTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isOpenOracleReportStatusTuple(value: unknown): value is OpenOracleReportStatusTuple {
-	return Array.isArray(value) && value.length === 7 && typeof value[0] === 'bigint' && typeof value[1] === 'bigint' && typeof value[2] === 'string' && isIntegerLike(value[3]) && isIntegerLike(value[4]) && typeof value[5] === 'string' && isIntegerLike(value[6])
-}
-
-export function requireOpenOracleReportStatusTuple(value: unknown, context: string): OpenOracleReportStatusTuple {
-	if (isOpenOracleReportStatusTuple(value)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-export function requireOpenOracleReportStatusTupleArray(value: unknown, context: string): OpenOracleReportStatusTuple[] {
-	if (Array.isArray(value) && value.every(isOpenOracleReportStatusTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isOpenOracleExtraDataTuple(value: unknown): value is OpenOracleExtraDataTuple {
-	return Array.isArray(value) && value.length === 6 && typeof value[0] === 'string' && typeof value[1] === 'string' && isIntegerLike(value[2]) && isIntegerLike(value[3]) && typeof value[4] === 'string' && typeof value[5] === 'boolean'
-}
-
-export function requireOpenOracleExtraDataTuple(value: unknown, context: string): OpenOracleExtraDataTuple {
-	if (isOpenOracleExtraDataTuple(value)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-export function requireOpenOracleExtraDataTupleArray(value: unknown, context: string): OpenOracleExtraDataTuple[] {
-	if (Array.isArray(value) && value.every(isOpenOracleExtraDataTuple)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 

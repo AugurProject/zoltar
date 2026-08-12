@@ -7,23 +7,24 @@ type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zol
 type Props = {
 	accountAddress: Address | undefined
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
-	augurPlaceHolderDeploymentMissing: boolean
+	augurStatoblastDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
-	openOracleFormReportId: string
-	openOracleReportDetailsReportId: bigint | undefined
+	resetSecurityPoolCreation: () => void
 	route: AppRoute
 	securityPoolAddress: string
+	securityPoolQuestionId: string
 	securityPoolResultHash: string | undefined
 	selectedPoolSecurityPoolAddress: string | undefined
 	setForkAuctionFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setOpenOracleReport: (reportId: string | undefined) => void
+	setOpenOracleFormReportId: (reportId: string) => void
 	setReportingFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setSecurityVaultFormSelectedVaultAddress: (selectedVaultAddress: string) => void
+	setSecurityVaultFormSelectedVaultOwner: (selectedVaultOwner: string) => void
 	setSecurityVaultFormSecurityPoolAddress: (securityPoolAddress: string) => void
+	setSecurityPoolFormMarketId: (marketId: string) => void
 	setTradingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	tradingResultHash: string | undefined
 	urlOpenOracleReportId: string
@@ -58,7 +59,7 @@ export function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Ap
 	return route === 'security-pools'
 }
 
-export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: AppRoute; securityPoolAddress: string }) {
+export function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: AppRoute; securityPoolAddress: string }) {
 	if (route !== 'security-pools') return undefined
 	const normalizedSecurityPoolAddress = normalizeAddress(securityPoolAddress) ?? ''
 	const normalizedLastSecurityPoolAddress = normalizeAddress(lastSecurityPoolAddress)
@@ -70,23 +71,24 @@ export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, last
 export function useAppRouteEffects({
 	accountAddress,
 	activeZoltarView,
-	augurPlaceHolderDeploymentMissing,
+	augurStatoblastDeploymentMissing,
 	activeEnvironmentNonce,
 	environmentReady,
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
-	openOracleFormReportId,
-	openOracleReportDetailsReportId,
+	resetSecurityPoolCreation,
 	route,
 	securityPoolAddress,
+	securityPoolQuestionId,
 	securityPoolResultHash,
 	selectedPoolSecurityPoolAddress,
 	setForkAuctionFormSecurityPoolAddress,
-	setOpenOracleReport,
+	setOpenOracleFormReportId,
 	setReportingFormSecurityPoolAddress,
-	setSecurityVaultFormSelectedVaultAddress,
+	setSecurityVaultFormSelectedVaultOwner,
 	setSecurityVaultFormSecurityPoolAddress,
+	setSecurityPoolFormMarketId,
 	setTradingFormSecurityPoolAddress,
 	tradingResultHash,
 	urlOpenOracleReportId,
@@ -100,6 +102,8 @@ export function useAppRouteEffects({
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
+	const lastSyncedOpenOracleReportId = useRef<string | undefined>(undefined)
+	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
 
 	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
@@ -119,6 +123,17 @@ export function useAppRouteEffects({
 	}, [accountAddress, activeEnvironmentNonce, activeZoltarView, environmentReady, route, walletBootstrapComplete])
 
 	useEffect(() => {
+		if (route !== 'open-oracle') {
+			lastSyncedOpenOracleReportId.current = undefined
+			return
+		}
+		const normalizedReportId = urlOpenOracleReportId.trim()
+		if (lastSyncedOpenOracleReportId.current === normalizedReportId) return
+		lastSyncedOpenOracleReportId.current = normalizedReportId
+		setOpenOracleFormReportId(normalizedReportId)
+	}, [route, setOpenOracleFormReportId, urlOpenOracleReportId])
+
+	useEffect(() => {
 		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })
 		if (!shouldLoadReport) {
 			lastRequestedOpenOracleReportId.current = undefined
@@ -131,16 +146,15 @@ export function useAppRouteEffects({
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
-		if (openOracleReportDetailsReportId !== undefined) {
-			setOpenOracleReport(openOracleReportDetailsReportId.toString())
+		if (route !== 'security-pools') {
+			lastSyncedSecurityPoolQuestionId.current = undefined
 			return
 		}
-		if (openOracleFormReportId.trim() !== '') {
-			setOpenOracleReport(openOracleFormReportId)
-			return
-		}
-		setOpenOracleReport(undefined)
-	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport])
+		if (lastSyncedSecurityPoolQuestionId.current === securityPoolQuestionId) return
+		lastSyncedSecurityPoolQuestionId.current = securityPoolQuestionId
+		resetSecurityPoolCreation()
+		setSecurityPoolFormMarketId(securityPoolQuestionId)
+	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolFormMarketId])
 
 	useEffect(() => {
 		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return
@@ -151,19 +165,19 @@ export function useAppRouteEffects({
 	}, [route, securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
 
 	useEffect(() => {
-		const nextSelectedVaultAddress = getSelectedVaultAddressForRoutePoolChange({
+		const nextSelectedVaultOwner = getSelectedVaultOwnerForRoutePoolChange({
 			accountAddress,
 			lastSecurityPoolAddress: lastSelectedSecurityPoolAddress.current,
 			route,
 			securityPoolAddress,
 		})
-		if (nextSelectedVaultAddress !== undefined) setSecurityVaultFormSelectedVaultAddress(nextSelectedVaultAddress)
+		if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
 		if (route !== 'security-pools') {
 			lastSelectedSecurityPoolAddress.current = undefined
 			return
 		}
 		lastSelectedSecurityPoolAddress.current = normalizeAddress(securityPoolAddress) ?? ''
-	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultAddress])
+	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultOwner])
 
 	useEffect(() => {
 		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current
@@ -205,8 +219,8 @@ export function useAppRouteEffects({
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 
 	useEffect(() => {
-		if (!augurPlaceHolderDeploymentMissing) return
+		if (!augurStatoblastDeploymentMissing) return
 		if (route === 'deploy') return
 		navigateRef.current('deploy')
-	}, [augurPlaceHolderDeploymentMissing, route])
+	}, [augurStatoblastDeploymentMissing, route])
 }

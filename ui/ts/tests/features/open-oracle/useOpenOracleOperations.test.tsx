@@ -2,7 +2,7 @@
 
 import { waitFor } from '../../testUtils/queries'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
@@ -11,6 +11,7 @@ import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '../../../features/open-oracle/hooks/useOpenOracleOperations.js'
+import { createOpenOracleReportMissingError } from '../../../protocol/index.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }
@@ -20,8 +21,52 @@ const REPORT_ID = 1n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000bb')
 const TOKEN1_ADDRESS = getAddress('0x00000000000000000000000000000000000000c1')
 const TOKEN2_ADDRESS = getAddress('0x00000000000000000000000000000000000000c2')
-const WETH_ADDRESS = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 const STATE_HASH = '0x1111111111111111111111111111111111111111111111111111111111111111'
+
+type OpenOracleApprovalTestCase = {
+	action: 'approveToken1' | 'approveToken2'
+	allowanceKey: 'token1Approval' | 'token2Approval'
+	changedContributionMessage: string
+	currentCapacityOwnershipAttoRep: bigint
+	disputeNewAmount1: string
+	disputeNewAmount2: string
+	disputeTokenToSwap: 'token1' | 'token2'
+	requiredAmount: bigint
+	token: 'token1' | 'token2'
+	tokenLabel: 'base token' | 'quote token'
+	underRequiredAmount: bigint
+}
+
+const OPEN_ORACLE_APPROVAL_TEST_CASES = [
+	{
+		action: 'approveToken1',
+		allowanceKey: 'token1Approval',
+		changedContributionMessage: 'The required base token approval changed',
+		currentCapacityOwnershipAttoRep: 100n,
+		disputeNewAmount1: '101',
+		disputeNewAmount2: '25',
+		disputeTokenToSwap: 'token1',
+		requiredAmount: 201n,
+		token: 'token1',
+		tokenLabel: 'base token',
+		underRequiredAmount: 150n,
+	},
+	{
+		action: 'approveToken2',
+		allowanceKey: 'token2Approval',
+		changedContributionMessage: 'The required quote token approval changed',
+		currentCapacityOwnershipAttoRep: 25n,
+		disputeNewAmount1: '101',
+		disputeNewAmount2: '26',
+		disputeTokenToSwap: 'token2',
+		requiredAmount: 51n,
+		token: 'token2',
+		tokenLabel: 'quote token',
+		underRequiredAmount: 30n,
+	},
+] satisfies ReadonlyArray<OpenOracleApprovalTestCase>
+
+type TestTokenAccessReadResult = { error: Error; status: 'failure' } | { result: bigint; status: 'success' }
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -61,14 +106,14 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		reportTimestamp: 0n,
 		settlementTime: 10n,
 		settlementTimestamp: 0n,
-		settlerReward: 0n,
+		settlerRewardAttoEth: 0n,
 		stateHash: STATE_HASH,
 		timeType: true,
 		token1: TOKEN1_ADDRESS,
-		token1Decimals: 18,
+		token1Decimals: 0,
 		token1Symbol: 'REP',
 		token2: TOKEN2_ADDRESS,
-		token2Decimals: 18,
+		token2Decimals: 0,
 		token2Symbol: 'WETH',
 		trackDisputes: false,
 		...overrides,
@@ -92,16 +137,10 @@ function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracle
 		disputeOracleReport: async () => {
 			throw new Error('disputeOracleReport should not be called in this test')
 		},
-		loadOpenOracleInitialReportPriceResult: mock(async () => ({
-			price: 4n * 10n ** 30n,
-			priceSource: 'MOCK' as const,
-			priceSourceUrl: undefined,
-			status: 'success' as const,
-			token2Amount: 25n,
-		})),
 		loadOpenOracleReportDetails: async () => {
 			throw new Error('loadOpenOracleReportDetails should not be called in this test')
 		},
+		loadOpenOracleWithdrawableBalances: async () => ({ ethAttoEth: 0n, token1: 0n, token2: 0n }),
 		readOptionalMulticall: mock(async () => [
 			{ result: 100n, status: 'success' as const },
 			{ result: 25n, status: 'success' as const },
@@ -111,27 +150,25 @@ function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracle
 		settleOracleReport: async () => {
 			throw new Error('settleOracleReport should not be called in this test')
 		},
-		submitInitialOracleReport: async () => {
-			throw new Error('submitInitialOracleReport should not be called in this test')
-		},
-		wrapWeth: async () => {
-			throw new Error('wrapWeth should not be called in this test')
+		withdrawOpenOracleBalance: async () => {
+			throw new Error('withdrawOpenOracleBalance should not be called in this test')
 		},
 		...overrides,
 	}
 }
 
-function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>, onRender: (state: UseOpenOracleOperationsState) => void) {
+function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>, onRender: (state: UseOpenOracleOperationsState) => void, connected = true, parameterOverrides: Partial<Parameters<typeof useOpenOracleOperations>[0]> = {}) {
 	return function OpenOracleOperationsHarness() {
 		const state = useOpenOracleOperations(
 			{
-				accountAddress: WALLET_ADDRESS,
+				accountAddress: connected ? WALLET_ADDRESS : undefined,
 				enabled: true,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
+				...parameterOverrides,
 			},
 			dependencies,
 		)
@@ -146,6 +183,28 @@ function requireHookState(state: UseOpenOracleOperationsState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
+}
+
+function createTokenAccessReadResults({ token1Allowance = 100n, token2Allowance = 25n, unavailableToken }: { token1Allowance?: bigint; token2Allowance?: bigint; unavailableToken?: 'token1' | 'token2' | undefined } = {}): TestTokenAccessReadResult[] {
+	const createAllowanceResult = (token: 'token1' | 'token2', allowance: bigint): TestTokenAccessReadResult => (token === unavailableToken ? { error: new Error(`${token} allowance RPC unavailable`), status: 'failure' } : { result: allowance, status: 'success' })
+	return [createAllowanceResult('token1', token1Allowance), createAllowanceResult('token2', token2Allowance), { result: 1_000n, status: 'success' }, { result: 1_000n, status: 'success' }]
+}
+
+function setOpenOracleApprovalForm(state: UseOpenOracleOperationsState, testCase: OpenOracleApprovalTestCase) {
+	state.setOpenOracleForm(current => ({
+		...current,
+		disputeNewAmount1: testCase.disputeNewAmount1,
+		disputeNewAmount2: testCase.disputeNewAmount2,
+		disputeTokenToSwap: testCase.disputeTokenToSwap,
+	}))
+}
+
+async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, action: OpenOracleApprovalTestCase['action'], amount?: bigint) {
+	if (action === 'approveToken1') {
+		await state.approveToken1(amount)
+		return
+	}
+	await state.approveToken2(amount)
 }
 
 describe('useOpenOracleOperations', () => {
@@ -169,23 +228,125 @@ describe('useOpenOracleOperations', () => {
 		mock.restore()
 	})
 
-	test('submitInitialReport reloads token access after a successful write', async () => {
-		const reportDetails = createOpenOracleReportDetails()
-		const readOptionalMulticall = mock(async () => [
-			{ result: 100n, status: 'success' as const },
-			{ result: 25n, status: 'success' as const },
-			{ result: 100n, status: 'success' as const },
-			{ result: 25n, status: 'success' as const },
-		])
-		const submitInitialOracleReport = mock(async () => ({
-			action: 'submitInitialReport' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d1' as const,
-		}))
+	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
+		const dependencies = createOpenOracleOperationsDependencies()
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			false,
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
 
+		await act(async () => {
+			await requireHookState(hookState).approveToken1(1n)
+		})
+
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle')
+	})
+
+	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {
+		const secondReportId = 2n
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
+				if (reportId === REPORT_ID) throw createOpenOracleReportMissingError(reportId)
+				throw new Error('RPC unavailable')
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: REPORT_ID.toString() }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('missing')
+		expect(requireHookState(hookState).openOracleError).toBeUndefined()
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: secondReportId.toString() }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(secondReportId.toString())
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('load-failed')
+		expect(requireHookState(hookState).openOracleError).toContain('RPC unavailable')
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: '3' }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+		expect(requireHookState(hookState).openOracleError).toBeUndefined()
+	})
+
+	test('keeps a replacement report load independent from an older pending request', async () => {
+		const secondReportId = 2n
+		const firstReportLoad = createDeferred<OpenOracleReportDetails>()
+		const secondReportLoad = createDeferred<OpenOracleReportDetails>()
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
+				if (reportId === REPORT_ID) return await firstReportLoad.promise
+				if (reportId === secondReportId) return await secondReportLoad.promise
+				throw new Error(`Unexpected report ${reportId.toString()}`)
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let firstLoadPromise = Promise.resolve()
+		await act(() => {
+			firstLoadPromise = requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: secondReportId.toString() }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+
+		let secondLoadPromise = Promise.resolve()
+		await act(() => {
+			secondLoadPromise = requireHookState(hookState).loadOracleReport(secondReportId.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
+
+		await act(async () => {
+			secondReportLoad.resolve(createOpenOracleReportDetails({ reportId: secondReportId }))
+			await secondLoadPromise
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('ready')
+		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
+
+		await act(async () => {
+			firstReportLoad.resolve(createOpenOracleReportDetails())
+			await firstLoadPromise
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('ready')
+		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
+	})
+
+	test('invalidates loaded report state when the selected report ID changes', async () => {
+		const reportDetails = createOpenOracleReportDetails()
 		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails: mock(async () => reportDetails),
-			readOptionalMulticall,
-			submitInitialOracleReport,
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -197,30 +358,59 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
-		await waitFor(() => {
-			expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID)
-		})
-		await waitFor(() => {
-			expect(readOptionalMulticall).toHaveBeenCalledTimes(1)
-		})
+		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID)
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('ready')
 
 		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				price: '4',
-				reportId: REPORT_ID.toString(),
-				stateHash: STATE_HASH,
-			}))
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: '2' }))
 		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+		expect(requireHookState(hookState).openOracleReportDetails).toBeUndefined()
+		expect(requireHookState(hookState).openOracleError).toBeUndefined()
+	})
 
-		const tokenAccessLoadsBeforeSubmit = readOptionalMulticall.mock.calls.length
+	test('clears stale details for a direct replacement load and ignores it after the selection is cleared', async () => {
+		const secondReportId = 2n
+		const secondReportLoad = createDeferred<OpenOracleReportDetails>()
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
+				if (reportId === REPORT_ID) return createOpenOracleReportDetails()
+				if (reportId === secondReportId) return await secondReportLoad.promise
+				throw new Error(`Unexpected report ${reportId.toString()}`)
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).submitInitialReport()
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
+		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID)
 
-		expect(submitInitialOracleReport).toHaveBeenCalledTimes(1)
-		expect(readOptionalMulticall.mock.calls.length).toBe(tokenAccessLoadsBeforeSubmit + 2)
+		let replacementLoadPromise = Promise.resolve()
+		await act(() => {
+			replacementLoadPromise = requireHookState(hookState).loadOracleReport(secondReportId.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
+		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
+		expect(requireHookState(hookState).openOracleReportDetails).toBeUndefined()
+
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: '' }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+
+		await act(async () => {
+			secondReportLoad.resolve(createOpenOracleReportDetails({ reportId: secondReportId }))
+			await replacementLoadPromise
+		})
+		expect(requireHookState(hookState).openOracleForm.reportId).toBe('')
+		expect(requireHookState(hookState).openOracleReportDetails).toBeUndefined()
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
 	})
 
 	test('approveToken1 and approveToken2 reject stale loaded details after the selected report changes', async () => {
@@ -284,6 +474,408 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
 		expect(approveErc20).not.toHaveBeenCalled()
 		expect(tokenAccessLoadCount).toBe(1)
+	})
+
+	test('approval preflight blocks a report that settled after it was loaded', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			reportTimestamp: 1n,
+			settlementTime: 100n,
+		})
+		const settledReport = createOpenOracleReportDetails({
+			...loadedReport,
+			isDistributed: true,
+		})
+		let reportLoadCount = 0
+		const approveErc20 = mock(async () => ({
+			action: 'approveToken1' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d8' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? loadedReport : settledReport
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			await requireHookState(hookState).approveToken1(1n)
+		})
+
+		expect(approveErc20).not.toHaveBeenCalled()
+		expect(reportLoadCount).toBe(2)
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('only available while disputing')
+	})
+
+	test('approval preflight derives the required amount from refreshed report details', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			reportTimestamp: 1n,
+			settlementTime: 100n,
+		})
+		const refreshedReport = createOpenOracleReportDetails({
+			...loadedReport,
+			feePercentage: 1_000_000n,
+		})
+		let reportLoadCount = 0
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => ({
+			action: 'approveToken1' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d9' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? loadedReport : refreshedReport
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '101',
+				disputeNewAmount2: '25',
+				disputeTokenToSwap: 'token1',
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).approveToken1()
+		})
+
+		expect(approveErc20).toHaveBeenCalledTimes(1)
+		expect(approveErc20.mock.calls[0]?.[3]).toBe(211n)
+	})
+
+	test('approval preflight blocks a refreshed dispute direction change even when the contribution is unchanged', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			reportTimestamp: 1n,
+			settlementTime: 100n,
+		})
+		const refreshedReport = createOpenOracleReportDetails({
+			...loadedReport,
+			currentAmount2: 24n,
+		})
+		let reportLoadCount = 0
+		const approveErc20 = mock(async () => ({
+			action: 'approveToken1' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000da' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? loadedReport : refreshedReport
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '101',
+				disputeNewAmount2: '25',
+				disputeTokenToSwap: 'token1',
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).approveToken1(201n)
+		})
+
+		expect(approveErc20).not.toHaveBeenCalled()
+		expect(reportLoadCount).toBe(2)
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('would swap out WETH, not REP')
+	})
+
+	for (const approvalCase of OPEN_ORACLE_APPROVAL_TEST_CASES) {
+		test(`approval preflight blocks unavailable refreshed ${approvalCase.tokenLabel} allowance`, async () => {
+			const reportDetails = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			let tokenAccessLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000db' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => reportDetails),
+				readOptionalMulticall: mock(async () => {
+					tokenAccessLoadCount += 1
+					return createTokenAccessReadResults({
+						unavailableToken: tokenAccessLoadCount === 1 ? undefined : approvalCase.token,
+					})
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(tokenAccessLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(`Unable to verify ${approvalCase.tokenLabel} approval before submitting this approval`)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('allowance RPC unavailable')
+		})
+
+		test(`approval preflight blocks a changed explicit ${approvalCase.tokenLabel} contribution`, async () => {
+			const loadedReport = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			const refreshedReport = createOpenOracleReportDetails({
+				...loadedReport,
+				feePercentage: 1_000_000n,
+			})
+			let reportLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000dc' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => {
+					reportLoadCount += 1
+					return reportLoadCount === 1 ? loadedReport : refreshedReport
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, approvalCase.requiredAmount)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(reportLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(approvalCase.changedContributionMessage)
+		})
+
+		test(`approval preflight blocks a refreshed ${approvalCase.tokenLabel} allowance that became sufficient`, async () => {
+			const reportDetails = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			let tokenAccessLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000dd' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => reportDetails),
+				readOptionalMulticall: mock(async () => {
+					tokenAccessLoadCount += 1
+					return createTokenAccessReadResults({
+						token1Allowance: approvalCase.token === 'token1' && tokenAccessLoadCount > 1 ? approvalCase.requiredAmount : 100n,
+						token2Allowance: approvalCase.token === 'token2' && tokenAccessLoadCount > 1 ? approvalCase.requiredAmount : 25n,
+					})
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, approvalCase.requiredAmount)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(tokenAccessLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('already sufficient')
+		})
+
+		for (const rejectionCase of [
+			{
+				amount: approvalCase.currentCapacityOwnershipAttoRep,
+				expectedMessage: `The ${approvalCase.tokenLabel} approval must increase the current allowance`,
+				name: 'non-increasing explicit approval',
+			},
+			{
+				amount: approvalCase.underRequiredAmount,
+				expectedMessage: `The ${approvalCase.tokenLabel} approval must cover the refreshed dispute requirement`,
+				name: 'under-required explicit approval',
+			},
+		]) {
+			test(`approval preflight blocks ${rejectionCase.name} for the ${approvalCase.tokenLabel}`, async () => {
+				const reportDetails = createOpenOracleReportDetails({
+					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+					reportTimestamp: 1n,
+					settlementTime: 100n,
+				})
+				const approveErc20 = mock(async () => ({
+					action: approvalCase.action,
+					hash: '0x00000000000000000000000000000000000000000000000000000000000000de' as const,
+				}))
+				const dependencies = createOpenOracleOperationsDependencies({
+					approveErc20,
+					loadOpenOracleReportDetails: mock(async () => reportDetails),
+				})
+				let hookState: UseOpenOracleOperationsState | undefined
+				const Harness = createHarness(dependencies, state => {
+					hookState = state
+				})
+				const renderedComponent = await renderIntoDocument(h(Harness, {}))
+				cleanupRenderedComponent = renderedComponent.cleanup
+
+				await act(async () => {
+					await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+				})
+				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentCapacityOwnershipAttoRep))
+				await act(() => {
+					setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+				})
+				await act(async () => {
+					await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, rejectionCase.amount)
+				})
+
+				expect(approveErc20).not.toHaveBeenCalled()
+				expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(rejectionCase.expectedMessage)
+			})
+		}
+	}
+
+	test('approval preflight blocks a quote token approval that is no longer required after refresh', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentAmount2: 25n,
+			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			escalationHalt: 200n,
+			multiplier: 200n,
+			reportTimestamp: 1n,
+			settlementTime: 100n,
+		})
+		const refreshedReport = createOpenOracleReportDetails({
+			...loadedReport,
+			currentAmount2: 30n,
+		})
+		let reportLoadCount = 0
+		const approveErc20 = mock(async () => ({
+			action: 'approveToken2' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000df' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? loadedReport : refreshedReport
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '200',
+				disputeNewAmount2: '30',
+				disputeTokenToSwap: 'token1',
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).approveToken2()
+		})
+
+		expect(approveErc20).not.toHaveBeenCalled()
+		expect(reportLoadCount).toBe(2)
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('No quote token approval is required for the refreshed report')
+	})
+
+	test('approval failures use base and quote token terminology', async () => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async () =>
+				createOpenOracleReportDetails({
+					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+					reportTimestamp: 1n,
+					settlementTime: 100n,
+				}),
+			),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			await requireHookState(hookState).approveToken1(1n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Base token approval failed')
+
+		await act(async () => {
+			await requireHookState(hookState).approveToken2(1n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Quote token approval failed')
 	})
 
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {
@@ -452,486 +1044,342 @@ describe('useOpenOracleOperations', () => {
 		expect(settleOracleReport).not.toHaveBeenCalled()
 	})
 
-	test('ignores stale quote and token-access refreshes after the selected report changes', async () => {
-		const secondReportId = 2n
-		const firstReportDetails = createOpenOracleReportDetails({
+	test('keeps a failed post-settlement balance withdrawal visible and retryable', async () => {
+		const settledReport = createOpenOracleReportDetails({
 			currentReporter: WALLET_ADDRESS,
-			reportId: REPORT_ID,
+			isDistributed: true,
 			reportTimestamp: 1n,
+			settlementTimestamp: 11n,
 		})
-		const secondReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 200n,
-			currentAmount2: 35n,
+		const loadOpenOracleWithdrawableBalances = mock(async () => ({ ethAttoEth: 7n, token1: 100n, token2: 25n }))
+		let withdrawalAttempts = 0
+		const withdrawOpenOracleBalance = mock(async () => {
+			withdrawalAttempts += 1
+			if (withdrawalAttempts === 1) throw new Error('wallet rejected withdrawal')
+			return {
+				action: 'withdrawBalance' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e1' as const,
+			}
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: async () => settledReport,
+			loadOpenOracleWithdrawableBalances,
+			withdrawOpenOracleBalance,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances).toEqual({ ethAttoEth: 7n, token1: 100n, token2: 25n }))
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
+		expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n)
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		expect(withdrawOpenOracleBalance).toHaveBeenCalledTimes(2)
+		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+		expect(loadOpenOracleWithdrawableBalances.mock.calls.length).toBeGreaterThanOrEqual(2)
+	})
+
+	test('requires withdrawal reconfirmation when the reviewed balance changes', async () => {
+		const settledReport = createOpenOracleReportDetails({
 			currentReporter: WALLET_ADDRESS,
-			exactToken1Report: 200n,
-			reportId: secondReportId,
+			isDistributed: true,
 			reportTimestamp: 1n,
-			stateHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
+			settlementTimestamp: 11n,
 		})
-		const staleQuote = createDeferred<{
-			price: bigint
-			priceSource: 'MOCK'
-			priceSourceUrl: undefined
-			status: 'success'
-			token2Amount: bigint
-		}>()
-		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
-		let quoteLoadCount = 0
-		let tokenAccessLoadCount = 0
-		const readClient = {
-			getBalance: mock(async () => 5n * 10n ** 18n),
-			getBlockNumber: mock(async () => 123n),
-			readContract: mock(async () => 18),
-		}
-
+		let currentBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
+		const preflightBalanceRefresh = createDeferred<typeof currentBalances>()
+		let deferBalanceRefresh = false
+		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await preflightBalanceRefresh.promise : currentBalances))
+		const withdrawOpenOracleBalance = mock(async (_client: unknown, _oracleAddress: Address, _token: Address, amount: bigint) => {
+			expect(amount).toBe(125n)
+			currentBalances = { ...currentBalances, token1: 0n }
+			return {
+				action: 'withdrawBalance' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000e2' as const,
+			}
+		})
 		const dependencies = createOpenOracleOperationsDependencies({
-			createConnectedReadClient: mock(() => readClient),
-			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
-				if (reportId === REPORT_ID) return firstReportDetails
-				if (reportId === secondReportId) return secondReportDetails
-				throw new Error(`Unexpected report ${reportId.toString()}`)
-			}),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				if (tokenAccessLoadCount === 1) return await staleTokenAccess.promise
-				return [
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-				]
-			}),
-			loadOpenOracleInitialReportPriceResult: mock(async () => {
-				quoteLoadCount += 1
-				if (quoteLoadCount === 1) return await staleQuote.promise
-				return {
-					price: 7n * 10n ** 30n,
-					priceSource: 'MOCK' as const,
-					priceSourceUrl: undefined,
-					status: 'success' as const,
-					token2Amount: 35n,
-				}
-			}),
+			loadOpenOracleReportDetails: async () => settledReport,
+			loadOpenOracleWithdrawableBalances,
+			withdrawOpenOracleBalance,
 		})
+		const onTransactionFailed = mock(() => undefined)
+		const onTransactionRequested = mock(() => undefined)
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
-		})
-		await waitFor(() => expect(quoteLoadCount).toBe(1))
-		await waitFor(() => expect(tokenAccessLoadCount).toBe(1))
-
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				reportId: secondReportId.toString(),
-			}))
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(secondReportId.toString())
-		})
-
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId))
-		await waitFor(() => expect(requireHookState(hookState).openOracleForm.price).toBe('7'))
-		await waitFor(() => expect(requireHookState(hookState).openOracleInitialReportState.token1Approval.value).toBe(200n))
-		expect(requireHookState(hookState).openOracleInitialReportState.token1Balance).toBe(200n)
-		expect(requireHookState(hookState).openOracleInitialReportState.token2Approval.value).toBe(35n)
-		expect(requireHookState(hookState).openOracleInitialReportState.token2Balance).toBe(35n)
-
-		await act(async () => {
-			staleQuote.resolve({
-				price: 4n * 10n ** 30n,
-				priceSource: 'MOCK',
-				priceSourceUrl: undefined,
-				status: 'success',
-				token2Amount: 25n,
-			})
-			staleTokenAccess.resolve([
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-			])
-			await Promise.resolve()
-		})
-
-		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
-		expect(requireHookState(hookState).openOracleForm.price).toBe('7')
-		expect(requireHookState(hookState).openOracleForm.amount1).toBe('200')
-		expect(requireHookState(hookState).openOracleForm.amount2).toBe('35')
-		expect(requireHookState(hookState).openOracleInitialReportState.defaultPrice).toBe('7')
-		expect(requireHookState(hookState).openOracleInitialReportState.token1Approval.value).toBe(200n)
-		expect(requireHookState(hookState).openOracleInitialReportState.token1Balance).toBe(200n)
-		expect(requireHookState(hookState).openOracleInitialReportState.token2Approval.value).toBe(35n)
-		expect(requireHookState(hookState).openOracleInitialReportState.token2Balance).toBe(35n)
-	})
-
-	test('submitInitialReport replaces a stale auto-filled quote before writing', async () => {
-		const originalDateNow = Date.now
-		let nowMs = 1_000_000
-		Date.now = () => nowMs
-		try {
-			const reportDetails = createOpenOracleReportDetails()
-			const readOptionalMulticall = mock(async () => [
-				{ result: 100n, status: 'success' as const },
-				{ result: 25n, status: 'success' as const },
-				{ result: 100n, status: 'success' as const },
-				{ result: 25n, status: 'success' as const },
-			])
-			const submitInitialOracleReport = mock(async (_client: unknown, _openOracleAddress: string, _reportId: bigint, _amount1: bigint, _amount2: bigint, _stateHash: string) => ({
-				action: 'submitInitialReport' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000d3' as const,
-			}))
-			let quoteLoadCount = 0
-			const loadOpenOracleInitialReportPriceResult = mock(async () => {
-				quoteLoadCount += 1
-				const refreshedQuote = quoteLoadCount > 1
-				return {
-					price: (refreshedQuote ? 5n : 4n) * 10n ** 30n,
-					priceSource: 'MOCK' as const,
-					priceSourceUrl: undefined,
-					status: 'success' as const,
-					token2Amount: refreshedQuote ? 20n : 25n,
-				}
-			})
-
-			const dependencies = createOpenOracleOperationsDependencies({
-				createConnectedReadClient: mock(() => ({
-					getBalance: async () => 0n,
-					getBlockNumber: async () => 10n,
-					readContract: async () => 18,
-				})),
-				loadOpenOracleReportDetails: mock(async () => reportDetails),
-				readOptionalMulticall,
-				submitInitialOracleReport,
-				loadOpenOracleInitialReportPriceResult,
-			})
-			let hookState: UseOpenOracleOperationsState | undefined
-			const Harness = createHarness(dependencies, state => {
+		const Harness = createHarness(
+			dependencies,
+			state => {
 				hookState = state
-			})
-			const renderedComponent = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = renderedComponent.cleanup
-
-			await act(async () => {
-				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
-			})
-			await waitFor(() => {
-				expect(requireHookState(hookState).openOracleForm.price).toBe('4')
-			})
-
-			await act(async () => {
-				requireHookState(hookState).setOpenOracleForm(current => ({
-					...current,
-					reportId: REPORT_ID.toString(),
-					stateHash: STATE_HASH,
-				}))
-			})
-			nowMs += 6 * 60 * 1000
-
-			await act(async () => {
-				await requireHookState(hookState).submitInitialReport()
-			})
-
-			expect(loadOpenOracleInitialReportPriceResult).toHaveBeenCalledTimes(2)
-			expect(requireHookState(hookState).openOracleForm.price).toBe('5')
-			expect(submitInitialOracleReport.mock.calls[0]?.[3]).toBe(100n)
-			expect(submitInitialOracleReport.mock.calls[0]?.[4]).toBe(20n)
-		} finally {
-			Date.now = originalDateNow
-		}
-	})
-
-	test('submitInitialReport blocks a stale token-access refresh after the selected report changes', async () => {
-		const secondReportId = 2n
-		const firstReportDetails = createOpenOracleReportDetails()
-		const secondReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 200n,
-			currentAmount2: 35n,
-			exactToken1Report: 200n,
-			reportId: secondReportId,
-			stateHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
-		})
-		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
-		let tokenAccessLoadCount = 0
-		const submitInitialOracleReport = mock(async () => ({
-			action: 'submitInitialReport' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d5' as const,
-		}))
-		const readClient = {
-			getBalance: mock(async () => 5n * 10n ** 18n),
-			getBlockNumber: mock(async () => 123n),
-			readContract: mock(async () => 18),
-		}
-
-		const dependencies = createOpenOracleOperationsDependencies({
-			createConnectedReadClient: mock(() => readClient),
-			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
-				if (reportId === REPORT_ID) return firstReportDetails
-				if (reportId === secondReportId) return secondReportDetails
-				throw new Error(`Unexpected report ${reportId.toString()}`)
-			}),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
-				return [
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-				]
-			}),
-			submitInitialOracleReport,
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 35n,
-			})),
-		})
-		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
+			},
+			true,
+			{ onTransactionFailed, onTransactionRequested },
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n))
 
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				price: '4',
-				reportId: REPORT_ID.toString(),
-				stateHash: STATE_HASH,
-			}))
-		})
-
-		let submitPromise = Promise.resolve()
+		currentBalances = { ...currentBalances, token1: 125n }
+		deferBalanceRefresh = true
+		let withdrawalPromise = Promise.resolve()
 		await act(() => {
-			submitPromise = requireHookState(hookState).submitInitialReport()
+			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
 		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
+		const balanceLoadCount = loadOpenOracleWithdrawableBalances.mock.calls.length
+		await act(async () => {
+			await requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		expect(loadOpenOracleWithdrawableBalances).toHaveBeenCalledTimes(balanceLoadCount)
+		await act(async () => {
+			preflightBalanceRefresh.resolve(currentBalances)
+			await withdrawalPromise
+		})
+		deferBalanceRefresh = false
 
-		await waitFor(() => expect(tokenAccessLoadCount).toBe(2))
+		expect(withdrawOpenOracleBalance).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(125n)
+		expect(requireHookState(hookState).openOracleWithdrawalReviewMessage).toEqual({
+			balance: 'token1',
+			message: 'Your withdrawable REP balance changed. Review the updated amount and confirm again',
+		})
+		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(onTransactionFailed).not.toHaveBeenCalled()
 
 		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				reportId: secondReportId.toString(),
-			}))
+			await requireHookState(hookState).withdrawBalance('token1', 125n)
 		})
 
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(secondReportId.toString())
-		})
-
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId))
-
-		await act(async () => {
-			staleTokenAccess.resolve([
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-			])
-			await submitPromise
-		})
-
-		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
-		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
-		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-		expect(submitInitialOracleReport).not.toHaveBeenCalled()
+		expect(withdrawOpenOracleBalance).toHaveBeenCalledTimes(1)
+		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).openOracleWithdrawalReviewMessage).toBeUndefined()
+		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
 	})
 
-	test('wrapWethForInitialReport blocks a stale token-access refresh after the selected report changes', async () => {
-		const secondReportId = 2n
-		const firstReportDetails = createOpenOracleReportDetails()
-		const secondReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 200n,
-			currentAmount2: 35n,
-			exactToken1Report: 200n,
-			reportId: secondReportId,
-			stateHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
+	test('cancels an obsolete withdrawal preflight and reserves other Oracle actions while it is current', async () => {
+		const settleableReport = createOpenOracleReportDetails({
+			currentReporter: WALLET_ADDRESS,
+			currentTime: 12n,
+			reportTimestamp: 1n,
+			settlementTime: 10n,
 		})
-		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
-		let tokenAccessLoadCount = 0
-		const wrapWeth = mock(async () => ({
-			action: 'wrapWeth' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000d6' as const,
+		const balances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
+		const deferredBalanceRefresh = createDeferred<typeof balances>()
+		let deferBalanceRefresh = false
+		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await deferredBalanceRefresh.promise : balances))
+		const settleOracleReport = mock(async () => ({
+			action: 'settle' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000e3' as const,
 		}))
-		const readClient = {
-			getBalance: mock(async () => 5n * 10n ** 18n),
-			getBlockNumber: mock(async () => 123n),
-			readContract: mock(async () => 18),
-		}
-
+		const withdrawOpenOracleBalance = mock(async () => ({
+			action: 'withdrawBalance' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000e4' as const,
+		}))
 		const dependencies = createOpenOracleOperationsDependencies({
-			createConnectedReadClient: mock(() => readClient),
-			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
-				if (reportId === REPORT_ID) return firstReportDetails
-				if (reportId === secondReportId) return secondReportDetails
-				throw new Error(`Unexpected report ${reportId.toString()}`)
-			}),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
-				return [
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-					{ result: 200n, status: 'success' as const },
-					{ result: 35n, status: 'success' as const },
-				]
-			}),
-			wrapWeth,
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 35n,
-			})),
+			loadOpenOracleReportDetails: async () => settleableReport,
+			loadOpenOracleWithdrawableBalances,
+			settleOracleReport,
+			withdrawOpenOracleBalance,
 		})
+		const onTransactionRequested = mock(() => undefined)
+		const onReportSettled = mock(() => undefined)
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
-		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
-
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				reportId: REPORT_ID.toString(),
-				stateHash: STATE_HASH,
-			}))
-		})
-
-		let wrapPromise = Promise.resolve()
-		await act(() => {
-			wrapPromise = requireHookState(hookState).wrapWethForInitialReport()
-		})
-
-		await waitFor(() => expect(tokenAccessLoadCount).toBe(2))
-
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				reportId: secondReportId.toString(),
-			}))
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(secondReportId.toString())
-		})
-
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId))
-
-		await act(async () => {
-			staleTokenAccess.resolve([
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-			])
-			await wrapPromise
-		})
-
-		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
-		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
-		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-		expect(wrapWeth).not.toHaveBeenCalled()
-	})
-
-	test('submitInitialReport blocks a stale auto-filled quote when refresh throws', async () => {
-		const originalDateNow = Date.now
-		let nowMs = 2_000_000
-		Date.now = () => nowMs
-		try {
-			const reportDetails = createOpenOracleReportDetails()
-			const readOptionalMulticall = mock(async () => [
-				{ result: 100n, status: 'success' as const },
-				{ result: 25n, status: 'success' as const },
-				{ result: 100n, status: 'success' as const },
-				{ result: 25n, status: 'success' as const },
-			])
-			const submitInitialOracleReport = mock(async () => ({
-				action: 'submitInitialReport' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000d4' as const,
-			}))
-			let quoteLoadCount = 0
-			const loadOpenOracleInitialReportPriceResult = mock(async () => {
-				quoteLoadCount += 1
-				if (quoteLoadCount > 1) throw new Error('Stale quote RPC unavailable')
-				return {
-					price: 4n * 10n ** 30n,
-					priceSource: 'MOCK' as const,
-					priceSourceUrl: undefined,
-					status: 'success' as const,
-					token2Amount: 25n,
-				}
-			})
-
-			const dependencies = createOpenOracleOperationsDependencies({
-				createConnectedReadClient: mock(() => ({
-					getBalance: async () => 0n,
-					getBlockNumber: async () => 10n,
-					readContract: async () => 18,
-				})),
-				loadOpenOracleReportDetails: mock(async () => reportDetails),
-				readOptionalMulticall,
-				submitInitialOracleReport,
-				loadOpenOracleInitialReportPriceResult,
-			})
-			let hookState: UseOpenOracleOperationsState | undefined
-			const Harness = createHarness(dependencies, state => {
+		const Harness = createHarness(
+			dependencies,
+			state => {
 				hookState = state
-			})
-			const renderedComponent = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = renderedComponent.cleanup
+			},
+			true,
+			{ onReportSettled, onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-			await act(async () => {
-				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
-			})
-			await waitFor(() => {
-				expect(requireHookState(hookState).openOracleForm.price).toBe('4')
-			})
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n))
 
-			await act(async () => {
-				requireHookState(hookState).setOpenOracleForm(current => ({
-					...current,
-					reportId: REPORT_ID.toString(),
-					stateHash: STATE_HASH,
-				}))
-			})
-			nowMs += 6 * 60 * 1000
+		deferBalanceRefresh = true
+		let withdrawalPromise = Promise.resolve()
+		await act(() => {
+			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
 
-			await act(async () => {
-				await requireHookState(hookState).submitInitialReport()
-			})
+		await act(async () => {
+			await requireHookState(hookState).settleReport()
+		})
+		expect(settleOracleReport).not.toHaveBeenCalled()
+		expect(onTransactionRequested).not.toHaveBeenCalled()
 
-			expect(loadOpenOracleInitialReportPriceResult).toHaveBeenCalledTimes(2)
-			expect(requireHookState(hookState).openOracleForm.price).toBe('')
-			expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Automatic price quote is stale and could not be refreshed. Refresh the quote or enter a manual price before submitting')
-			expect(submitInitialOracleReport).not.toHaveBeenCalled()
-		} finally {
-			Date.now = originalDateNow
+		await act(() => {
+			requireHookState(hookState).cancelWithdrawalBalanceCheck()
+		})
+		expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(false)
+
+		let settlementPromise = Promise.resolve()
+		await act(() => {
+			settlementPromise = requireHookState(hookState).settleReport()
+		})
+		await waitFor(() => expect(settleOracleReport).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			deferredBalanceRefresh.resolve(balances)
+			await Promise.all([withdrawalPromise, settlementPromise])
+		})
+
+		expect(withdrawOpenOracleBalance).not.toHaveBeenCalled()
+		expect(settleOracleReport).toHaveBeenCalledTimes(1)
+		expect(onReportSettled).toHaveBeenCalledTimes(1)
+		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).openOracleActiveAction).toBeUndefined()
+		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()
+	})
+
+	test('silently discards a withdrawal preflight when its enabled context changes before effects flush', async () => {
+		const settledReport = createOpenOracleReportDetails({
+			currentReporter: WALLET_ADDRESS,
+			isDistributed: true,
+			reportTimestamp: 1n,
+			settlementTimestamp: 11n,
+		})
+		const initialBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
+		const changedBalances = { ...initialBalances, token1: 125n }
+		const deferredBalanceRefresh = createDeferred<typeof changedBalances>()
+		let deferBalanceRefresh = false
+		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await deferredBalanceRefresh.promise : initialBalances))
+		const withdrawOpenOracleBalance = mock(async () => ({
+			action: 'withdrawBalance' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000e5' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: async () => settledReport,
+			loadOpenOracleWithdrawableBalances,
+			withdrawOpenOracleBalance,
+		})
+		const onTransactionRequested = mock(() => undefined)
+		let hookState: UseOpenOracleOperationsState | undefined
+		const ContextHarness = ({ enabled }: { enabled: boolean }) => {
+			const state = useOpenOracleOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					enabled,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
+			hookState = state
+			return <div />
 		}
+		const renderedComponent = await renderIntoDocument(<ContextHarness enabled />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n))
+
+		deferBalanceRefresh = true
+		let withdrawalPromise = Promise.resolve()
+		await act(() => {
+			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
+
+		await act(async () => {
+			render(<ContextHarness enabled={false} />, renderedComponent.container)
+			deferredBalanceRefresh.resolve(changedBalances)
+			await withdrawalPromise
+		})
+
+		expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n)
+		expect(requireHookState(hookState).openOracleWithdrawalReviewMessage).toBeUndefined()
+		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()
+		expect(withdrawOpenOracleBalance).not.toHaveBeenCalled()
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+	})
+
+	test('silently discards a withdrawal preflight when the selected report changes before it resolves', async () => {
+		const settledReport = createOpenOracleReportDetails({
+			currentReporter: WALLET_ADDRESS,
+			isDistributed: true,
+			reportTimestamp: 1n,
+			settlementTimestamp: 11n,
+		})
+		const initialBalances = { ethAttoEth: 7n, token1: 100n, token2: 25n }
+		const changedBalances = { ...initialBalances, token1: 125n }
+		const deferredBalanceRefresh = createDeferred<typeof changedBalances>()
+		let deferBalanceRefresh = false
+		const loadOpenOracleWithdrawableBalances = mock(async () => (deferBalanceRefresh ? await deferredBalanceRefresh.promise : initialBalances))
+		const withdrawOpenOracleBalance = mock(async () => ({
+			action: 'withdrawBalance' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000e6' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: async () => settledReport,
+			loadOpenOracleWithdrawableBalances,
+			withdrawOpenOracleBalance,
+		})
+		const onTransactionRequested = mock(() => undefined)
+		const observedReviewMessages: Array<UseOpenOracleOperationsState['openOracleWithdrawalReviewMessage']> = []
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+				observedReviewMessages.push(state.openOracleWithdrawalReviewMessage)
+			},
+			true,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(100n))
+
+		deferBalanceRefresh = true
+		let withdrawalPromise = Promise.resolve()
+		await act(() => {
+			withdrawalPromise = requireHookState(hookState).withdrawBalance('token1', 100n)
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleWithdrawalBalanceChecking).toBe(true))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: '2' }))
+			deferredBalanceRefresh.resolve(changedBalances)
+			await withdrawalPromise
+		})
+
+		expect(observedReviewMessages.every(message => message === undefined)).toBe(true)
+		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()
+		expect(withdrawOpenOracleBalance).not.toHaveBeenCalled()
+		expect(onTransactionRequested).not.toHaveBeenCalled()
 	})
 
 	test('disputeReport blocks a stale token-access refresh after the selected report changes', async () => {
@@ -980,13 +1428,6 @@ describe('useOpenOracleOperations', () => {
 					{ result: 35n, status: 'success' as const },
 				]
 			}),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 7n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 35n,
-			})),
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -1069,13 +1510,6 @@ describe('useOpenOracleOperations', () => {
 			disputeOracleReport,
 			loadOpenOracleReportDetails: mock(async () => reportDetails),
 			readOptionalMulticall,
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 25n,
-			})),
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -1098,7 +1532,7 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleForm(current => ({
 				...current,
 				disputeNewAmount1: '150',
-				disputeNewAmount2: '35',
+				disputeNewAmount2: '20',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -1114,12 +1548,200 @@ describe('useOpenOracleOperations', () => {
 		expect(readOptionalMulticall.mock.calls.length).toBe(tokenAccessLoadsBeforeDispute + 2)
 	})
 
+	test('disputeReport rejects a direction changed by the forced report reload before refreshing token access', async () => {
+		const initialReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
+			currentAmount2: 25n,
+			currentReporter: WALLET_ADDRESS,
+			initialReporter: WALLET_ADDRESS,
+			reportTimestamp: 5n,
+		})
+		const refreshedReportDetails = createOpenOracleReportDetails({
+			...initialReportDetails,
+			currentAmount2: 10n,
+		})
+		let reportLoadCount = 0
+		const readOptionalMulticall = mock(async () => [
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+		])
+		const disputeOracleReport = mock(async () => ({
+			action: 'dispute' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d7' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			disputeOracleReport,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? initialReportDetails : refreshedReportDetails
+			}),
+			readOptionalMulticall,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.currentAmount2).toBe(initialReportDetails.currentAmount2))
+		await waitFor(() => expect(readOptionalMulticall).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '150',
+				disputeNewAmount2: '20',
+				disputeTokenToSwap: 'token1',
+				reportId: REPORT_ID.toString(),
+				stateHash: STATE_HASH,
+			}))
+		})
+
+		const tokenAccessLoadsBeforeDispute = readOptionalMulticall.mock.calls.length
+
+		await act(async () => {
+			await requireHookState(hookState).disputeReport()
+		})
+
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('These amounts would swap out WETH, not REP. Select WETH or change the proposed price')
+		expect(readOptionalMulticall).toHaveBeenCalledTimes(tokenAccessLoadsBeforeDispute)
+		expect(disputeOracleReport).not.toHaveBeenCalled()
+	})
+
+	test('disputeReport submits the state hash from the forced report reload', async () => {
+		const refreshedStateHash = '0x2222222222222222222222222222222222222222222222222222222222222222'
+		const initialReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
+			currentAmount2: 25n,
+			currentReporter: WALLET_ADDRESS,
+			initialReporter: WALLET_ADDRESS,
+			reportTimestamp: 5n,
+			stateHash: STATE_HASH,
+		})
+		const refreshedReportDetails = createOpenOracleReportDetails({
+			...initialReportDetails,
+			currentAmount2: 24n,
+			stateHash: refreshedStateHash,
+		})
+		let reportLoadCount = 0
+		let submittedStateHash: string | undefined
+		const disputeOracleReport = mock(async (_client: unknown, _openOracleAddress: Address, _reportId: bigint, _tokenToSwap: Address, _newAmount1: bigint, _newAmount2: bigint, _currentAmount2: bigint, stateHash: string) => {
+			submittedStateHash = stateHash
+			return {
+				action: 'dispute' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d8' as const,
+			}
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			disputeOracleReport,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? initialReportDetails : refreshedReportDetails
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.stateHash).toBe(STATE_HASH))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '150',
+				disputeNewAmount2: '20',
+				disputeTokenToSwap: 'token1',
+				reportId: REPORT_ID.toString(),
+				stateHash: STATE_HASH,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).disputeReport()
+		})
+
+		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
+		expect(submittedStateHash).toBe(refreshedStateHash)
+	})
+
+	test('scales decimal dispute inputs before calling the protocol boundary', async () => {
+		const tokenUnits = 10n ** 18n
+		const reportDetails = createOpenOracleReportDetails({
+			currentAmount1: tokenUnits,
+			currentAmount2: 5n * tokenUnits,
+			currentReporter: getAddress('0x00000000000000000000000000000000000000cc'),
+			escalationHalt: 2n * tokenUnits,
+			initialReporter: zeroAddress,
+			multiplier: 20_000n,
+			reportTimestamp: 5n,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+		const readOptionalMulticall = mock(async () => [
+			{ result: 100n * tokenUnits, status: 'success' as const },
+			{ result: 100n * tokenUnits, status: 'success' as const },
+			{ result: 100n * tokenUnits, status: 'success' as const },
+			{ result: 100n * tokenUnits, status: 'success' as const },
+		])
+		const disputeOracleReport = mock(async (_client: unknown, _oracleAddress: Address, _reportId: bigint, _tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint) => {
+			expect(newAmount1).toBe(2n * tokenUnits)
+			expect(newAmount2).toBe(75n * 10n ** 17n)
+			return {
+				action: 'dispute' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d3' as const,
+			}
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			disputeOracleReport,
+			loadOpenOracleReportDetails: mock(async () => reportDetails),
+			readOptionalMulticall,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '2',
+				disputeNewAmount2: '7.5',
+				disputeTokenToSwap: 'token1',
+				reportId: REPORT_ID.toString(),
+				stateHash: STATE_HASH,
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).disputeReport()
+		})
+
+		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
+	})
+
 	test('createOpenOracleGame snapshots the submitted create form before decimals resolve', async () => {
-		const editedToken1Address = getAddress('0x00000000000000000000000000000000000000d1')
-		const editedToken2Address = getAddress('0x00000000000000000000000000000000000000d2')
 		const token1Decimals = createDeferred<number>()
-		const createOpenOracleReportInstance = mock(async (_client: unknown, submission: { exactToken1Report: bigint; token1Address: Address; token2Address: Address }) => {
+		const createOpenOracleReportInstance = mock(async (_client: unknown, submission: { exactToken1Report: bigint; initialToken2Amount: bigint; token1Address: Address; token2Address: Address }) => {
 			expect(submission.exactToken1Report).toBe(10n * 10n ** 18n)
+			expect(submission.initialToken2Amount).toBe(5n * 10n ** 18n)
 			expect(submission.token1Address).toBe(TOKEN1_ADDRESS)
 			expect(submission.token2Address).toBe(TOKEN2_ADDRESS)
 			return {
@@ -1146,7 +1768,10 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
+				disputeDelay: '0',
 				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
 				token1Address: TOKEN1_ADDRESS,
 				token2Address: TOKEN2_ADDRESS,
 			}))
@@ -1161,8 +1786,6 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
 				exactToken1Report: '20',
-				token1Address: editedToken1Address,
-				token2Address: editedToken2Address,
 			}))
 		})
 
@@ -1175,133 +1798,76 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
 	})
 
-	test('submitInitialReport snapshots the submitted price and state hash before token access refresh resolves', async () => {
-		const editedStateHash = '0x2222222222222222222222222222222222222222222222222222222222222222'
-		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
-		let tokenAccessLoadCount = 0
-		const submitInitialOracleReport = mock(async (_client: unknown, _oracleAddress: Address, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: string) => {
-			expect(reportId).toBe(REPORT_ID)
-			expect(amount1).toBe(100n)
-			expect(amount2).toBe(25n)
-			expect(stateHash).toBe(STATE_HASH)
-			return {
-				action: 'submitInitialReport' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e2' as const,
-			}
+	test('does not attach a stale token contract error after its address changes', async () => {
+		const editedToken1Address = getAddress('0x00000000000000000000000000000000000000d1')
+		const token1Decimals = createDeferred<number>()
+		const token2Decimals = createDeferred<number>()
+		const onTransactionRequested = mock(() => undefined)
+		const createOpenOracleReportInstance = mock(async () => {
+			throw new Error('createOpenOracleReportInstance should not be called')
 		})
-
 		const dependencies = createOpenOracleOperationsDependencies({
 			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 0n,
-				getBlockNumber: async () => 123n,
-				readContract: async () => 18,
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async parameters => await (parameters.address === TOKEN1_ADDRESS ? token1Decimals.promise : token2Decimals.promise)),
 			})),
-			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails()),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
-				return [
-					{ result: 100n, status: 'success' as const },
-					{ result: 25n, status: 'success' as const },
-					{ result: 100n, status: 'success' as const },
-					{ result: 25n, status: 'success' as const },
-				]
-			}),
-			submitInitialOracleReport,
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 25n,
-			})),
+			createOpenOracleReportInstance,
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{ onTransactionRequested },
+		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
-		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
-
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
-				price: '4',
-				reportId: REPORT_ID.toString(),
-				stateHash: STATE_HASH,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
 			}))
 		})
 
-		let submitPromise = Promise.resolve()
+		let createPromise = Promise.resolve()
 		await act(() => {
-			submitPromise = requireHookState(hookState).submitInitialReport()
+			createPromise = requireHookState(hookState).createOpenOracleGame()
 		})
-
-		await waitFor(() => expect(tokenAccessLoadCount).toBe(2))
-
 		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
-				price: '5',
-				stateHash: editedStateHash,
+				token1Address: editedToken1Address,
 			}))
 		})
-
 		await act(async () => {
-			staleTokenAccess.resolve([
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-			])
-			await submitPromise
+			token1Decimals.reject(new Error('base token contract function returned no data'))
+			token2Decimals.reject(new Error('quote token contract function returned no data'))
+			await createPromise
 		})
 
-		expect(submitInitialOracleReport).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({
+			token2Address: 'Quote token address is not a readable ERC-20 contract.',
+		})
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(createOpenOracleReportInstance).not.toHaveBeenCalled()
 	})
 
-	test('wrapWethForInitialReport snapshots the submitted price before token access refresh resolves', async () => {
-		const staleTokenAccess = createDeferred<[{ result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }, { result: bigint; status: 'success' }]>()
-		let tokenAccessLoadCount = 0
-		const wrapWeth = mock(async (_client: unknown, amount: bigint) => {
-			expect(amount).toBe(1n)
-			return {
-				action: 'wrapWeth' as const,
-				hash: '0x00000000000000000000000000000000000000000000000000000000000000e3' as const,
-			}
-		})
-
+	test('createOpenOracleGame reports invalid decimals with user-facing token terminology', async () => {
 		const dependencies = createOpenOracleOperationsDependencies({
 			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 1_000n,
-				getBlockNumber: async () => 123n,
-				readContract: async () => 18,
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async () => 256),
 			})),
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 25n,
-			})),
-			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails({ token2: WETH_ADDRESS })),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				if (tokenAccessLoadCount === 2) return await staleTokenAccess.promise
-				return [
-					{ result: 100n, status: 'success' as const },
-					{ result: 25n, status: 'success' as const },
-					{ result: 100n, status: 'success' as const },
-					{ result: 24n, status: 'success' as const },
-				]
-			}),
-			wrapWeth,
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -1311,44 +1877,106 @@ describe('useOpenOracleOperations', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+			await requireHookState(hookState).createOpenOracleGame()
 		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID))
+
+		expect(requireHookState(hookState).openOracleCreateFieldErrors.token1Address).toBe('Base token address is not a readable ERC-20 contract.')
+		expect(requireHookState(hookState).openOracleFeedback).toBeUndefined()
+	})
+
+	test('keeps unreadable token contract preflight out of the transaction workflow', async () => {
+		const onTransactionRequested = mock(() => undefined)
+		const createOpenOracleReportInstance = mock(async () => {
+			throw new Error('createOpenOracleReportInstance should not be called')
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async parameters => {
+					if (parameters.address === TOKEN1_ADDRESS) throw new Error('contract function returned no data')
+					return 18
+				}),
+			})),
+			createOpenOracleReportInstance,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
-				price: '4',
-				reportId: REPORT_ID.toString(),
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+			await requireHookState(hookState).createOpenOracleGame()
+		})
+
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({
+			token1Address: 'Base token address is not a readable ERC-20 contract.',
+		})
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(createOpenOracleReportInstance).not.toHaveBeenCalled()
+	})
+
+	test('rethrows unexpected token contract preflight failures', async () => {
+		const unexpectedError = new TypeError('unexpected token dependency failure')
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async () => {
+					throw unexpectedError
+				}),
+			})),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
 			}))
 		})
 
-		let wrapPromise = Promise.resolve()
-		await act(() => {
-			wrapPromise = requireHookState(hookState).wrapWethForInitialReport()
-		})
-
-		await waitFor(() => expect(tokenAccessLoadCount).toBe(2))
-
-		await act(async () => {
-			requireHookState(hookState).setOpenOracleForm(current => ({
-				...current,
-				price: '5',
-			}))
-		})
-
-		await act(async () => {
-			staleTokenAccess.resolve([
-				{ result: 100n, status: 'success' },
-				{ result: 25n, status: 'success' },
-				{ result: 100n, status: 'success' },
-				{ result: 24n, status: 'success' },
-			])
-			await wrapPromise
-		})
-
-		expect(wrapWeth).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+		await expect(
+			act(async () => {
+				await requireHookState(hookState).createOpenOracleGame()
+			}),
+		).rejects.toBe(unexpectedError)
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({})
 	})
 
 	test('disputeReport snapshots the submitted dispute inputs before token access refresh resolves', async () => {
@@ -1359,7 +1987,7 @@ describe('useOpenOracleOperations', () => {
 			expect(reportId).toBe(REPORT_ID)
 			expect(tokenToSwap).toBe(TOKEN1_ADDRESS)
 			expect(amount1).toBe(150n)
-			expect(amount2).toBe(35n)
+			expect(amount2).toBe(20n)
 			expect(currentAmount2).toBe(25n)
 			expect(stateHash).toBe(STATE_HASH)
 			return {
@@ -1375,13 +2003,6 @@ describe('useOpenOracleOperations', () => {
 				readContract: async () => 18,
 			})),
 			disputeOracleReport,
-			loadOpenOracleInitialReportPriceResult: mock(async () => ({
-				price: 4n * 10n ** 30n,
-				priceSource: 'MOCK' as const,
-				priceSourceUrl: undefined,
-				status: 'success' as const,
-				token2Amount: 25n,
-			})),
 			loadOpenOracleReportDetails: mock(async () =>
 				createOpenOracleReportDetails({
 					currentAmount1: 149n,
@@ -1416,7 +2037,7 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleForm(current => ({
 				...current,
 				disputeNewAmount1: '150',
-				disputeNewAmount2: '35',
+				disputeNewAmount2: '20',
 				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,

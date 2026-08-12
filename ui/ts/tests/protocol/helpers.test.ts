@@ -9,6 +9,7 @@ import {
 	getForkOutcomeKey,
 	getMarketType,
 	getMinBigintValue,
+	getProtocolPageOffset,
 	getQuestionId,
 	getQuestionIdHex,
 	getReportingOutcomeKey,
@@ -19,11 +20,6 @@ import {
 	isBigintTriple,
 	isStringArray,
 	requireEscalationGameTuple,
-	requireOpenOracleExtraDataTuple,
-	requireOpenOracleReportMetaTuple,
-	requireOpenOracleReportMetaTupleArray,
-	requireOpenOracleReportStatusTuple,
-	requireOpenOracleReportStatusTupleArray,
 	requireUniverseTupleArray,
 	requireSecurityVaultTupleArray,
 } from '../../protocol/helpers.js'
@@ -57,6 +53,12 @@ describe('contracts helpers', () => {
 		expect(getMinBigintValue([7n, 5n, 9n])).toBe(5n)
 	})
 
+	test('protocol pagination preserves exact offsets and rejects unsafe numeric inputs', () => {
+		expect(getProtocolPageOffset(Number.MAX_SAFE_INTEGER, 3)).toBe(BigInt(Number.MAX_SAFE_INTEGER) * 3n)
+		expect(() => getProtocolPageOffset(Number.MAX_SAFE_INTEGER + 1, 1)).toThrow('Page index must be a non-negative integer within the safe range')
+		expect(() => getProtocolPageOffset(0, Number.MAX_SAFE_INTEGER + 1)).toThrow('Page size must be a positive integer within the safe range')
+	})
+
 	test('timestamp predicates validate required keys', () => {
 		expect(hasTimestamp({ timestamp: 123n })).toBe(true)
 		expect(hasTimestamp({ timestamp: 1 })).toBe(false)
@@ -78,21 +80,6 @@ describe('contracts helpers', () => {
 		const legacyVaultTuple: Array<[bigint, bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n, 5n]]
 		expect(requireSecurityVaultTupleArray(legacyVaultTuple, 'vault response')).toEqual(legacyVaultTuple)
 		expect(() => requireSecurityVaultTupleArray([[1n, 2n, 3n] as never], 'vault response')).toThrow('Unexpected vault response')
-
-		const validMetaTuple: [bigint, bigint, bigint, bigint, `0x${string}`, bigint, `0x${string}`, boolean, bigint, bigint, bigint, bigint] = [1n, 2n, 3n, 4n, getAddress('0x00000000000000000000000000000000000000b2'), 1n, getAddress('0x00000000000000000000000000000000000000c3'), true, 4n, 5n, 6n, 7n]
-		const oneValidMetaTuple = [validMetaTuple]
-		expect(requireOpenOracleReportMetaTuple(validMetaTuple, 'oracle meta')).toEqual(validMetaTuple)
-		expect(requireOpenOracleReportMetaTupleArray(oneValidMetaTuple, 'oracle meta')).toEqual(oneValidMetaTuple)
-		expect(() => requireOpenOracleReportMetaTupleArray([[1n, 2n] as never], 'oracle meta')).toThrow('Unexpected oracle meta response')
-
-		const validStatusTuple: [bigint, bigint, `0x${string}`, bigint, bigint, `0x${string}`, bigint] = [1n, 2n, getAddress('0x00000000000000000000000000000000000000d4'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000e5'), 3n]
-		expect(requireOpenOracleReportStatusTuple(validStatusTuple, 'oracle status')).toEqual(validStatusTuple)
-		expect(requireOpenOracleReportStatusTupleArray([validStatusTuple], 'oracle status')).toEqual([validStatusTuple])
-		expect(() => requireOpenOracleReportStatusTupleArray([[1n, 2n] as never], 'oracle status')).toThrow('Unexpected oracle status response')
-
-		const validExtraData: [`0x${string}`, `0x${string}`, bigint, bigint, `0x${string}`, boolean] = ['0x00000000000000000000000000000000000000f6', getAddress('0x00000000000000000000000000000000000000f7'), 1n, 2n, getAddress('0x00000000000000000000000000000000000000f6'), false]
-		expect(requireOpenOracleExtraDataTuple(validExtraData, 'oracle extra data')).toEqual(validExtraData)
-		expect(() => requireOpenOracleExtraDataTuple(['0x00', zeroAddress, 1] as never, 'oracle extra data')).toThrow('Unexpected oracle extra data response')
 	})
 
 	test('question id helpers are deterministic and convert values consistently', () => {

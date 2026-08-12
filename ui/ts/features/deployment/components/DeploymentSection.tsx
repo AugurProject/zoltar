@@ -13,11 +13,10 @@ type StepStatus = {
 	buttonLabel: string
 }
 
-function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isMainnet: boolean): StepStatus {
+function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isOnActiveAppChain: boolean): StepStatus {
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: deploymentCopy.expectedCodeFoundStatus,
 			label: commonCopy.deployed,
 			buttonLabel: commonCopy.deployed,
 		}
@@ -38,7 +37,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 				label: deploymentCopy.notDeployedBadgeLabel,
 				buttonLabel: commonCopy.deploy,
 			}
-		if (!isMainnet)
+		if (!isOnActiveAppChain)
 			return {
 				badgeTone: 'pending',
 				label: deploymentCopy.notDeployedBadgeLabel,
@@ -54,40 +53,64 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 	return {
 		badgeTone: 'blocked',
-		detail: deploymentCopy.formatWaitingForPrerequisiteDetail(prerequisiteLabel),
+		detail: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel),
 		label: deploymentCopy.waiting,
 		buttonLabel: commonCopy.deploy,
 	}
 }
 
-export function DeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
+export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isOnActiveAppChain, onDeploy }: DeploymentSectionProps) {
 	return (
-		<SectionBlock className='contract-panel' title={title}>
+		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
 			<div className='contract-list'>
 				{steps.map(step => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
-					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
-					const availability = getDeploymentStepAvailability({
-						accountAddress,
-						busyStepId,
-						isMainnet,
-						prerequisiteLabel,
-						step,
-					})
+					const stepStatus = deploymentStateReady
+						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isOnActiveAppChain)
+						: {
+								badgeTone: 'muted' as const,
+								buttonLabel: commonCopy.deploy,
+								label: commonCopy.unavailable,
+							}
+					const availability = deploymentStateReady
+						? getDeploymentStepAvailability({
+								accountAddress,
+								busyStepId,
+								isOnActiveAppChain,
+								prerequisiteLabel,
+								step,
+							})
+						: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
+					const statusDetailId = stepStatus.detail === undefined ? undefined : `deployment-${step.id}-status-detail`
 
 					return (
 						<div className='contract-row' key={step.id}>
 							<div className='contract-copy'>
 								<div className='contract-topline'>
-									{stepStatus.label === undefined ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
+									{stepStatus.label === undefined || (completedGroup && step.deployed) ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>
-								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
+								{stepStatus.detail === undefined ? undefined : (
+									<p className='detail' id={statusDetailId}>
+										{stepStatus.detail}
+									</p>
+								)}
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							{step.deployed ? undefined : (
+								<TransactionActionButton
+									ariaLabel={isBusy ? deploymentCopy.formatDeployingContract(step.label) : deploymentCopy.formatDeployContract(step.label)}
+									idleLabel={stepStatus.buttonLabel}
+									pendingLabel={deploymentCopy.deploying}
+									onClick={() => void onDeploy(step.id)}
+									pending={isBusy}
+									availability={availability}
+									disabledReasonElementId={deploymentStateReady ? statusDetailId : deploymentStatusReasonElementId}
+									showDisabledReason={deploymentStateReady && accountAddress !== undefined && prerequisiteLabel === undefined}
+								/>
+							)}
 						</div>
 					)
 				})}

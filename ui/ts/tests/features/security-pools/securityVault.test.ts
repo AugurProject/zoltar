@@ -6,14 +6,16 @@ import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput, parseRepAmountInput } from '../../../features/markets/lib/marketForm.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
+	doesSecurityVaultExistOnchain,
 	getOracleManagerPriceValidUntilTimestamp,
-	getSecurityVaultMaxBondAllowanceAmount,
+	getSecurityVaultMaxCapacityOwnershipAttoRepAmount,
 	getSecurityVaultWithdrawableRepAmount,
-	getSelectedVaultAddress,
+	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
+	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount,
-	MIN_SECURITY_VAULT_REP_DEPOSIT,
+	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 } from '../../../features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient } from '../../../lib/clients.js'
@@ -22,10 +24,10 @@ import { loadSecurityVaultDetails } from '../../../protocol/index.js'
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {
 		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		expect(getSelectedVaultAddress('', accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress('   ', accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress(undefined, accountAddress)).toBe(accountAddress)
-		expect(getSelectedVaultAddress(undefined, undefined)).toBe(undefined)
+		expect(getSelectedVaultOwner('', accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner('   ', accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner(undefined, accountAddress)).toBe(accountAddress)
+		expect(getSelectedVaultOwner(undefined, undefined)).toBe(undefined)
 	})
 
 	void test('detects whether the selected vault is owned by the connected wallet', () => {
@@ -42,16 +44,17 @@ void describe('security vault helpers', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 		const details = {
+			badDebtAttoEth: 0n,
 			currentRetentionRate: 10n,
-			escalationEscrowedRep: 0n,
+			disputeStakedAttoRep: 0n,
 			managerAddress: zeroAddress,
-			poolOwnershipDenominator: 1n,
-			repDepositShare: 1n,
+			totalRepBackingUnits: 1n,
+			vaultAttoRepBacking: 1n,
 			repToken: zeroAddress,
-			securityBondAllowance: 0n,
+			capacityOwnershipAttoRep: 0n,
 			securityPoolAddress,
-			totalSecurityBondAllowance: 0n,
-			unpaidEthFees: 0n,
+			totalCapacityOwnershipAttoRep: 0n,
+			claimableFeesAttoEth: 0n,
 			universeId: 1n,
 			vaultAddress,
 		}
@@ -61,7 +64,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(true)
 
@@ -70,7 +73,7 @@ void describe('security vault helpers', () => {
 				accountAddress: vaultAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: '',
+				selectedVaultOwner: '',
 			}),
 		).toBe(true)
 
@@ -79,7 +82,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: accountAddress,
+				selectedVaultOwner: accountAddress,
 			}),
 		).toBe(false)
 
@@ -88,7 +91,7 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress: zeroAddress,
 				securityVaultDetails: details,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(false)
 
@@ -97,14 +100,34 @@ void describe('security vault helpers', () => {
 				accountAddress,
 				securityPoolAddress,
 				securityVaultDetails: undefined,
-				selectedVaultAddress: vaultAddress,
+				selectedVaultOwner: vaultAddress,
 			}),
 		).toBe(false)
 	})
 
+	void test('treats bad-debt-only vault details as an existing onchain vault', () => {
+		const details = {
+			badDebtAttoEth: 1n,
+			currentRetentionRate: 0n,
+			disputeStakedAttoRep: 0n,
+			managerAddress: zeroAddress,
+			totalRepBackingUnits: 0n,
+			vaultAttoRepBacking: 0n,
+			repToken: zeroAddress,
+			capacityOwnershipAttoRep: 0n,
+			securityPoolAddress: zeroAddress,
+			totalCapacityOwnershipAttoRep: 0n,
+			claimableFeesAttoEth: 0n,
+			universeId: 0n,
+			vaultAddress: zeroAddress,
+		}
+
+		expect(doesSecurityVaultExistOnchain(details)).toBe(true)
+	})
+
 	void test('parses security vault REP inputs as 18-decimal token amounts', () => {
-		expect(parseRepAmountInput('10', 'REP collateral amount')).toBe(MIN_SECURITY_VAULT_REP_DEPOSIT)
-		expect(parseRepAmountInput('10.5', 'REP collateral amount')).toBe(105n * 10n ** 17n)
+		expect(parseRepAmountInput('10', 'REP backing amount')).toBe(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)
+		expect(parseRepAmountInput('10.5', 'REP backing amount')).toBe(105n * 10n ** 17n)
 		expect(parseRepAmountInput('0.25', 'REP withdraw amount')).toBe(25n * 10n ** 16n)
 		expect(parseOptionalRepAmountInput('1')).toBe(10n ** 18n)
 		expect(parseOptionalRepAmountInput('1.5')).toBe(15n * 10n ** 17n)
@@ -112,17 +135,19 @@ void describe('security vault helpers', () => {
 	})
 
 	void test('formats Max-style REP input amounts without grouped separators or raw base units', () => {
-		expect(formatCurrencyInputBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)).toBe('10')
+		expect(formatCurrencyInputBalance(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe('10')
 		expect(formatCurrencyInputBalance(105n * 10n ** 17n)).toBe('10.5')
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
 	})
 
 	void test('requires a minimum first deposit for brand-new vaults only', () => {
-		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT - 1n)).toBe(true)
-		expect(isSecurityVaultDepositBelowMinimum(undefined, MIN_SECURITY_VAULT_REP_DEPOSIT - 1n)).toBe(true)
-		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
+		expect(isSecurityVaultDepositBelowMinimum(undefined, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
+		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(1n, 1n)).toBe(false)
-		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT, 5n * 10n ** 17n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, 5n * 10n ** 17n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(0n, 19n * 10n ** 18n, 20n * 10n ** 18n)).toBe(true)
+		expect(isSecurityVaultDepositBelowMinimum(0n, 20n * 10n ** 18n, 20n * 10n ** 18n)).toBe(false)
 	})
 
 	void test('requires matching valid oracle manager details for queued vault actions', () => {
@@ -130,10 +155,13 @@ void describe('security vault helpers', () => {
 		const otherManagerAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const validOracleManagerDetails = {
 			isPriceValid: true,
+			lastSettlementTimestamp: 100n,
 			managerAddress,
+			priceValidUntilTimestamp: 400n,
 		}
 
-		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails)).toBe(true)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails, 399n)).toBe(true)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails, 400n)).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, isPriceValid: false })).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, managerAddress: otherManagerAddress })).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(undefined, validOracleManagerDetails)).toBe(false)
@@ -146,23 +174,37 @@ void describe('security vault helpers', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
 	})
 
-	void test('caps max security bond allowance by both vault backing and remaining pool backing', () => {
+	void test('treats a loaded oracle validity flag as expired at the shared time boundary', () => {
+		const details = {
+			isPriceValid: true,
+			lastSettlementTimestamp: 100n,
+			priceValidUntilTimestamp: 400n,
+		}
+		expect(isOracleManagerPriceUsable(details)).toBe(true)
+		expect(isOracleManagerPriceUsable(details, 399n)).toBe(true)
+		expect(isOracleManagerPriceUsable(details, 400n)).toBe(false)
+		expect(isOracleManagerPriceUsable({ ...details, isPriceValid: false }, 399n)).toBe(false)
+	})
+
+	void test('caps max capacity ownership by both vault backing and remaining pool backing', () => {
 		expect(
-			getSecurityVaultMaxBondAllowanceAmount({
-				currentSecurityBondAllowance: 1n * 10n ** 18n,
-				repDepositShare: 12n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 1n * 10n ** 18n,
+				vaultAttoRepBacking: 12n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
-				totalRepDeposit: 9n * 10n ** 18n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 9n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
 			}),
-		).toBe(1_999_999_999_999_999_999n)
+		).toBe(500_000_000_000_000_000n)
 		expect(
-			getSecurityVaultMaxBondAllowanceAmount({
-				currentSecurityBondAllowance: 0n,
-				repDepositShare: 6n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 0n,
+				vaultAttoRepBacking: 6n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
-		).toBe(1_999_999_999_999_999_999n)
+		).toBe(1n * 10n ** 18n)
 	})
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {
@@ -183,86 +225,162 @@ void describe('security vault helpers', () => {
 	void test('returns zero or no withdrawal when balance inputs are missing or blocked', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				repDepositShare: undefined,
+				vaultAttoRepBacking: undefined,
 				repPerEthPrice: 0n,
-				securityBondAllowance: 0n,
-				totalRepDeposit: undefined,
-				totalSecurityBondAllowance: undefined,
+				capacityOwnershipAttoRep: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(undefined)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				repDepositShare: 10n * 10n ** 18n,
+				disputeStakedAttoRep: 1n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
-				securityBondAllowance: 0n,
-				totalRepDeposit: undefined,
-				totalSecurityBondAllowance: undefined,
+				capacityOwnershipAttoRep: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
+			}),
+		).toBe(0n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				repPerEthPrice: 0n,
+				capacityOwnershipAttoRep: 0n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: undefined,
+				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(10n * 10n ** 18n)
 	})
 
-	void test('caps max bond allowance by local backing and empty global context', () => {
+	void test('caps max capacity ownership by local backing and empty global context', () => {
 		expect(
-			getSecurityVaultMaxBondAllowanceAmount({
-				repDepositShare: 20n * 10n ** 18n,
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				currentSecurityBondAllowance: 10n * 10n ** 18n,
+				currentCapacityOwnershipAttoRep: 10n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
-		).toBe(9_999_999_999_999_999_999n)
+		).toBe(5n * 10n ** 18n)
 	})
 
-	void test('uses global allowance ceilings only when pool totals are available', () => {
-		expect(
-			getSecurityVaultMaxBondAllowanceAmount({
-				currentSecurityBondAllowance: 15n * 10n ** 18n,
-				repDepositShare: 20n * 10n ** 18n,
-				repPerEthPrice: 10n ** 18n,
-				totalRepDeposit: 50n * 10n ** 18n,
-				totalSecurityBondAllowance: 30n * 10n ** 18n,
-			}),
-		).toBe(19_999_999_999_999_999_999n)
-		expect(
-			getSecurityVaultMaxBondAllowanceAmount({
-				currentSecurityBondAllowance: 40n * 10n ** 18n,
-				repDepositShare: 50n * 10n ** 18n,
-				repPerEthPrice: 10n ** 18n,
-				totalRepDeposit: 10n * 10n ** 18n,
-				totalSecurityBondAllowance: 40n * 10n ** 18n,
-			}),
-		).toBe(9_999_999_999_999_999_999n)
+	void test('capacity ownership', () => {
+		const vaultAttoRepBacking = 10n * 10n ** 18n
+		const repPerEthPrice = 3n * 10n ** 18n
+		const statoblastSecurityMultiplierBps = 20_000n
+		const maxCapacityOwnershipAttoRep = getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+			currentCapacityOwnershipAttoRep: 0n,
+			vaultAttoRepBacking,
+			repPerEthPrice,
+			statoblastSecurityMultiplierBps,
+		})
+
+		expect(maxCapacityOwnershipAttoRep).toBe(1_666_666_666_666_666_666n)
+		if (maxCapacityOwnershipAttoRep === undefined) throw new Error('capacity ownership')
+		expect(maxCapacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps <= vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
+		expect((maxCapacityOwnershipAttoRep + 1n) * repPerEthPrice * statoblastSecurityMultiplierBps > vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
 	})
 
-	void test('withdrawable amount is bounded by unlocked vault rep and pool caps', () => {
+	void test('capacity ownership', () => {
+		expect(
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 15n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
+				repPerEthPrice: 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 50n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 30n * 10n ** 18n,
+			}),
+		).toBe(10n * 10n ** 18n)
+		expect(
+			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+				currentCapacityOwnershipAttoRep: 40n * 10n ** 18n,
+				vaultAttoRepBacking: 50n * 10n ** 18n,
+				repPerEthPrice: 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 10n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 40n * 10n ** 18n,
+			}),
+		).toBe(5n * 10n ** 18n)
+	})
+
+	void test('withdrawable REP is bounded by pool-held vault REP backing and pool caps', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				repDepositShare: 20n * 10n ** 18n,
+				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				securityBondAllowance: 3n * 10n ** 18n,
-				totalRepDeposit: 10n * 10n ** 18n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				capacityOwnershipAttoRep: 3n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 10n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+			}),
+		).toBe(2_000_000_000_000_000_000n)
+	})
+
+	void test('capacity ownership', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				repPerEthPrice: 2n * 10n ** 18n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 50n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n,
 			}),
 		).toBe(6_000_000_000_000_000_000n)
-	})
-
-	void test('respects allowance-backed floors and zero-balance constraints', () => {
-		expect(
-			getSecurityVaultWithdrawableRepAmount({
-				repDepositShare: 10n * 10n ** 18n,
-				repPerEthPrice: 2n * 10n ** 18n,
-				securityBondAllowance: 1n * 10n ** 18n,
-				totalRepDeposit: 50n * 10n ** 18n,
-				totalSecurityBondAllowance: 1n * 10n ** 18n,
-			}),
-		).toBe(8_000_000_000_000_000_000n)
 
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
-				repDepositShare: 10n * 10n ** 18n,
+				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 5n * 10n ** 18n,
-				securityBondAllowance: 10n * 10n ** 18n,
-				totalRepDeposit: 100n * 10n ** 18n,
-				totalSecurityBondAllowance: 20n * 10n ** 18n,
+				capacityOwnershipAttoRep: 10n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 100n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 20n * 10n ** 18n,
 			}),
 		).toBe(0n)
+	})
+
+	void test('requires multiplier context and rounds the required REP backing up', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 10n * 10n ** 18n,
+				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
+			}),
+		).toBe(3_999_999_999_999_999_994n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				statoblastSecurityMultiplierBps: undefined,
+			}),
+		).toBe(undefined)
+	})
+
+	void test('uses floor plus one for strict migration backing at integral and non-integral boundaries', () => {
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n,
+				repPerEthPrice: 10n ** 18n,
+				capacityOwnershipAttoRep: 1n,
+				statoblastSecurityMultiplierBps: 20_000n,
+			}),
+		).toBe(8n)
+		expect(
+			getSecurityVaultWithdrawableRepAmount({
+				vaultAttoRepBacking: 10n,
+				repPerEthPrice: 10n ** 18n,
+				capacityOwnershipAttoRep: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
+			}),
+		).toBe(6n)
 	})
 })

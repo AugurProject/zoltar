@@ -13,8 +13,8 @@ describe('oracle manager queue funding helpers', () => {
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'getPendingSettlementOperationIds') return [1n] as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'pendingReportId') return 7n as never
-			if (request.address === MANAGER_ADDRESS && request.functionName === 'getQueuedOperationEthCost') return 2n as never
-			if (request.address === MANAGER_ADDRESS && request.functionName === 'getRequestPriceEthCost') return 10n as never
+			if (request.address === MANAGER_ADDRESS && request.functionName === 'getQueuedOperationCostAttoEth') return 2n as never
+			if (request.address === MANAGER_ADDRESS && request.functionName === 'getRequestPriceCostAttoEth') return 10n as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'isPriceValid') return false as never
 			throw new Error(`Unexpected read: ${request.address}.${request.functionName}`)
 		}

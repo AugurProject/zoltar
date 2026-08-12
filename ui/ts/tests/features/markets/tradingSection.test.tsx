@@ -6,11 +6,13 @@ import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { TradingSection } from '../../../features/markets/components/TradingSection.js'
+import { GlobalTransactionPresentationProvider } from '../../../components/GlobalTransactionPresentationContext.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
-import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
+import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
 import type { AccountState, TradingFormState } from '../../../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import type { TradingSectionProps } from '../../../features/types.js'
+import type { GlobalTransactionPresentation } from '../../../types/components.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
@@ -34,25 +36,27 @@ function createMarketDetails(): MarketDetails {
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
-		lastOraclePrice: undefined,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+		lastOraclePrice: 10n ** 18n,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 5n * 10n ** 18n,
+		totalPoolHeldAttoRep: 0n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -69,9 +73,9 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 
 function createShareBalances(overrides: Partial<TradingShareBalances> = {}): TradingShareBalances {
 	return {
-		invalid: 2n * 10n ** 18n,
-		no: 4n * 10n ** 18n,
-		yes: 3n * 10n ** 18n,
+		invalidAttoShares: 2n * 10n ** 18n,
+		noAttoShares: 4n * 10n ** 18n,
+		yesAttoShares: 3n * 10n ** 18n,
 		...overrides,
 	}
 }
@@ -79,7 +83,7 @@ function createShareBalances(overrides: Partial<TradingShareBalances> = {}): Tra
 function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingDetails {
 	const shareBalances = createShareBalances()
 	return {
-		maxRedeemableCompleteSets: 2n * 10n ** 18n,
+		maxRedeemableCompleteSetsAttoShares: 2n * 10n ** 18n,
 		shareBalances,
 		universeId: 1n,
 		...overrides,
@@ -101,8 +105,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 10n * 10n ** 18n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 10n * 10n ** 18n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -147,7 +151,7 @@ function createScalarForkUniverse(): ZoltarUniverseSummary {
 				universeId: 2n,
 			},
 		],
-		forkThreshold: 0n,
+		forkThresholdAttoRep: 0n,
 		forkQuestionDetails: {
 			...createMarketDetails(),
 			answerUnit: 'USD',
@@ -162,7 +166,7 @@ function createScalarForkUniverse(): ZoltarUniverseSummary {
 		hasForked: true,
 		parentUniverseId: 1n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 0n,
+		totalTheoreticalSupplyAttoRep: 0n,
 		universeId: 10n,
 	}
 }
@@ -189,7 +193,7 @@ function createBinaryForkUniverse(): ZoltarUniverseSummary {
 				universeId: 3n,
 			},
 		],
-		forkThreshold: 0n,
+		forkThresholdAttoRep: 0n,
 		forkQuestionDetails: {
 			...createMarketDetails(),
 			marketType: 'binary',
@@ -201,7 +205,7 @@ function createBinaryForkUniverse(): ZoltarUniverseSummary {
 		hasForked: true,
 		parentUniverseId: 1n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 0n,
+		totalTheoreticalSupplyAttoRep: 0n,
 		universeId: 10n,
 	}
 }
@@ -287,13 +291,13 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Balances are shown as complete-set amounts for the selected pool.')).toBe(false)
-		expect(document.body.textContent?.includes('Placeholder does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
-		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Statoblast does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
+		expect(documentQueries.queryByRole('heading', { name: 'Mint Complete Sets' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem Complete Sets' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Migrate Forked Shares' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Migrate Forked Shares' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem resolved shares' })).toBeNull()
 	})
 
 	void test('does not render a local latest trading action card when a result exists', async () => {
@@ -325,15 +329,29 @@ void describe('TradingSection', () => {
 	})
 
 	void test('closes a trading modal for a new result without blocking the same modal from reopening', async () => {
-		let updateTradingResult: ((result: TradingActionResult | undefined) => void) | undefined
+		let completeTradingOperation: ((result: TradingActionResult) => void) | undefined
 
 		function TradingResultHarness() {
 			const [tradingResult, setTradingResult] = useState<TradingActionResult | undefined>(undefined)
+			const [transaction, setTransaction] = useState<GlobalTransactionPresentation | undefined>()
 			useEffect(() => {
-				updateTradingResult = setTradingResult
+				completeTradingOperation = result => {
+					setTradingResult(result)
+					setTransaction({
+						dismissKey: result.hash,
+						hash: result.hash,
+						operationKey: 'trading-request-1',
+						title: 'Complete sets minted',
+						tone: 'success',
+					})
+				}
 			}, [])
 
-			return <TradingSection {...createTradingSectionProps({ tradingResult })} />
+			return (
+				<GlobalTransactionPresentationProvider transaction={transaction}>
+					<TradingSection {...createTradingSectionProps({ tradingResult })} />
+				</GlobalTransactionPresentationProvider>
+			)
 		}
 
 		const renderedComponent = await renderIntoDocument(<TradingResultHarness />)
@@ -346,8 +364,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
 
 		await act(() => {
-			if (updateTradingResult === undefined) throw new Error('Expected trading result setter')
-			updateTradingResult({
+			if (completeTradingOperation === undefined) throw new Error('Expected trading operation completion')
+			completeTradingOperation({
 				action: 'createCompleteSet',
 				hash: zeroHash,
 				securityPoolAddress: zeroAddress,
@@ -367,11 +385,11 @@ void describe('TradingSection', () => {
 			<TradingSection
 				{...createTradingSectionProps({
 					tradingDetails: createTradingDetails({
-						maxRedeemableCompleteSets: 410000000000000n,
+						maxRedeemableCompleteSetsAttoShares: 410000000000000n,
 						shareBalances: createShareBalances({
-							invalid: 410000000000000n,
-							no: 23000000000000000n,
-							yes: 1234000000000000000n,
+							invalidAttoShares: 410000000000000n,
+							noAttoShares: 23000000000000000n,
+							yesAttoShares: 1234000000000000000n,
 						}),
 					}),
 				})}
@@ -394,15 +412,15 @@ void describe('TradingSection', () => {
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
-						completeSetCollateralAmount: 1n * 10n ** 18n,
-						shareTokenSupply: firstMintShareAmount,
+						settlementCollateralAttoEth: 1n * 10n ** 18n,
+						shareTokenSupplyAttoShares: firstMintShareAmount,
 					}),
 					tradingDetails: createTradingDetails({
-						maxRedeemableCompleteSets: firstMintShareAmount,
+						maxRedeemableCompleteSetsAttoShares: firstMintShareAmount,
 						shareBalances: createShareBalances({
-							invalid: firstMintShareAmount,
-							no: firstMintShareAmount,
-							yes: firstMintShareAmount,
+							invalidAttoShares: firstMintShareAmount,
+							noAttoShares: firstMintShareAmount,
+							yesAttoShares: firstMintShareAmount,
 						}),
 					}),
 				})}
@@ -419,14 +437,15 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {
+	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
-						completeSetCollateralAmount: 0n,
-						totalRepDeposit: 20n * 10n ** 18n,
-						totalSecurityBondAllowance: 0n,
+						settlementCollateralAttoEth: 0n,
+						feeEligibleCapacityOwnershipAttoRep: 0n,
+						totalPoolHeldAttoRep: 20n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 0n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '100' }),
@@ -438,7 +457,34 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
+	})
+
+	void test('shows only assigned fee-eligible capacity ownership in the mint transaction modal', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 9n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const activeCapacityOwnershipLabel = modalQueries.getByText('Active capacity ownership')
+		const activeCapacityOwnershipMetric = activeCapacityOwnershipLabel.parentElement
+		if (activeCapacityOwnershipMetric === null) throw new Error('Expected active capacity ownership metric')
+		const activeCapacityOwnershipQueries = within(activeCapacityOwnershipMetric)
+		expect(activeCapacityOwnershipQueries.getByRole('button', { name: 'Copy exact value 2' })).not.toBeNull()
+		expect(activeCapacityOwnershipQueries.queryByRole('button', { name: 'Copy exact value 9' })).toBeNull()
 	})
 
 	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
@@ -451,8 +497,8 @@ void describe('TradingSection', () => {
 		})
 
 		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
-		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button')
+		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button')
 		expect(mintSubmitButton.disabled).toBe(false)
 
 		await act(() => {
@@ -460,8 +506,8 @@ void describe('TradingSection', () => {
 		})
 
 		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
-		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button after network switch')
+		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
 		expect(mintSubmitButton.title).toBe('Switch to Ethereum mainnet.')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
@@ -485,8 +531,9 @@ void describe('TradingSection', () => {
 		expect(dialog.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
 		expect(dialog.getByText('You Pay')).not.toBeNull()
 		expect(dialog.getByText('Estimated Shares Received')).not.toBeNull()
-		expect(dialog.getByText('Retention Fee at Execution')).not.toBeNull()
-		expect(dialog.getByText(/accrued pool retention fees are checkpointed/i)).not.toBeNull()
+		expect(dialog.getByText('Estimate details')).not.toBeNull()
+		expect(dialog.getByText('Retention fee')).not.toBeNull()
+		expect(dialog.getByText('Estimate may change when accrued fees are checkpointed.')).not.toBeNull()
 		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
 		expect(document.body.textContent?.includes('Yes +')).toBe(true)
 		expect(document.body.textContent?.includes('No +')).toBe(true)
@@ -498,9 +545,9 @@ void describe('TradingSection', () => {
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
-						completeSetCollateralAmount: 0n,
-						shareTokenSupply: 10n * 10n ** 18n,
-						totalSecurityBondAllowance: 5n * 10n ** 18n,
+						settlementCollateralAttoEth: 0n,
+						shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '1' }),
@@ -521,11 +568,11 @@ void describe('TradingSection', () => {
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({ universeHasForked: false }),
 					tradingDetails: createTradingDetails({
-						maxRedeemableCompleteSets: 0n,
+						maxRedeemableCompleteSetsAttoShares: 0n,
 						shareBalances: createShareBalances({
-							invalid: 0n,
-							no: 2n * 10n ** 18n,
-							yes: 2n * 10n ** 18n,
+							invalidAttoShares: 0n,
+							noAttoShares: 2n * 10n ** 18n,
+							yesAttoShares: 2n * 10n ** 18n,
 						}),
 					}),
 					tradingForm: createTradingForm({ redeemAmount: '1' }),
@@ -594,6 +641,24 @@ void describe('TradingSection', () => {
 		expect(redeemSharesButton.title).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
+	void test('uses a title-case resolved-share dialog title and a sentence-case action label', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
+		fireEvent.click(launcher)
+
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem Resolved Shares' })
+		expect(within(dialog).getByRole('button', { name: 'Redeem shares' })).not.toBeNull()
+	})
+
 	void test('blocks minting once the selected market has finalized', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -659,9 +724,9 @@ void describe('TradingSection', () => {
 		const modalQueries = within(documentQueries.getByRole('dialog'))
 		const slider = modalQueries.getByRole('slider') as HTMLInputElement
 
-		expect(modalQueries.getByText('Select Scalar Target')).not.toBeNull()
+		expect(modalQueries.getByText('Select scalar target')).not.toBeNull()
 		expect(modalQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Add Target' })).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(slider, {
@@ -672,11 +737,11 @@ void describe('TradingSection', () => {
 		expect(modalQueries.getByText('7 / 10')).not.toBeNull()
 
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Add Target' }))
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
 		})
 
 		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
 	})
 
 	void test('does not render local trading outcome cards for completed action variants', async () => {
@@ -744,7 +809,7 @@ void describe('TradingSection', () => {
 						}
 					},
 					tradingDetails: createTradingDetails({
-						maxRedeemableCompleteSets: 1n * 10n ** 18n,
+						maxRedeemableCompleteSetsAttoShares: 1n * 10n ** 18n,
 					}),
 				})}
 			/>,

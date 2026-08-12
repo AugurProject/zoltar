@@ -1,7 +1,7 @@
 import type { ChainBackend } from './chainBackend.js'
 import { createInjectedBackend } from './chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import type { NetworkProfile } from './networkProfile.js'
+import { getPublicNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -13,13 +13,23 @@ type LocationLike = {
 	search: string
 }
 
-const injectedBackend = createInjectedBackend()
+const defaultInjectedBackend = createInjectedBackend()
 
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
+let initializeActiveEnvironmentGeneration = 0
 
 const SIMULATION_QUERY_PARAM = 'simulate'
 const SIMULATION_QUERY_VALUE = '1'
+const NETWORK_QUERY_PARAM = 'network'
+
+type InitializeActiveEnvironmentDependencies = {
+	createSimulationBackend: typeof createSimulationBackend
+}
+
+const defaultInitializeActiveEnvironmentDependencies: InitializeActiveEnvironmentDependencies = {
+	createSimulationBackend,
+}
 
 function readLocationParams(location: LocationLike) {
 	const params = new URLSearchParams(location.search)
@@ -53,15 +63,26 @@ function getSimulationStateId(location: LocationLike) {
 	return stateId === null || stateId.trim() === '' ? undefined : stateId
 }
 
-export async function initializeActiveEnvironment(location: LocationLike = window.location) {
-	if (activeSimulationController !== undefined) {
-		await activeSimulationController.dispose()
-		activeSimulationController = undefined
-	}
+export async function initializeActiveEnvironment(location: LocationLike = window.location, dependencies: InitializeActiveEnvironmentDependencies = defaultInitializeActiveEnvironmentDependencies) {
+	initializeActiveEnvironmentGeneration += 1
+	const requestGeneration = initializeActiveEnvironmentGeneration
+	const previousSimulationController = activeSimulationController
 
 	if (!shouldUseSimulationLocation(location)) {
+		const injectedBackend = createInjectedBackend({
+			profile: getPublicNetworkProfile(readLocationParams(location).get(NETWORK_QUERY_PARAM) ?? undefined),
+		})
 		activeBackend = injectedBackend
-		return injectedBackend
+		setRuntimeNetworkProfile(injectedBackend.profile)
+		activeSimulationController = undefined
+		if (previousSimulationController !== undefined) {
+			try {
+				await previousSimulationController.dispose()
+			} catch (error) {
+				console.error('[simulation] failed to dispose previous environment', error)
+			}
+		}
+		return getActiveBackend()
 	}
 
 	const savedStateId = getSimulationStateId(location)
@@ -79,16 +100,33 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 	const simulationBackend =
 		savedStateId !== undefined && savedState !== undefined
-			? await createSimulationBackend({
+			? await dependencies.createSimulationBackend({
 					savedState,
 					savedStateId,
 				})
-			: await createSimulationBackend({
+			: await dependencies.createSimulationBackend({
 					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 				})
+	if (requestGeneration !== initializeActiveEnvironmentGeneration) {
+		try {
+			await simulationBackend.dispose()
+		} catch (error) {
+			console.error('[simulation] failed to dispose stale replacement environment', error)
+		}
+		return getActiveBackend()
+	}
 	activeBackend = simulationBackend
+	setRuntimeNetworkProfile(simulationBackend.profile)
 	activeSimulationController = simulationBackend
+	if (previousSimulationController !== undefined && previousSimulationController !== simulationBackend) {
+		try {
+			await previousSimulationController.dispose()
+		} catch (error) {
+			console.error('[simulation] failed to dispose previous environment', error)
+		}
+	}
+	if (activeBackend !== simulationBackend || activeSimulationController !== simulationBackend) return getActiveBackend()
 	void simulationBackend.bootstrap().catch(error => {
 		console.error('[simulation] bootstrap failed', error)
 	})
@@ -96,7 +134,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 }
 
 export function getActiveBackend() {
-	return activeBackend ?? injectedBackend
+	return activeBackend ?? defaultInjectedBackend
 }
 
 export function getActiveNetworkProfile(): NetworkProfile {
@@ -110,6 +148,7 @@ export function getActiveSimulationController() {
 function setActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	activeBackend = backend
 	activeSimulationController = simulationController
+	setRuntimeNetworkProfile(backend.profile)
 }
 
 export function installActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
@@ -120,6 +159,8 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 }
 
 export function resetActiveEnvironmentForTesting() {
+	initializeActiveEnvironmentGeneration += 1
 	activeBackend = undefined
 	activeSimulationController = undefined
+	resetRuntimeNetworkProfile()
 }

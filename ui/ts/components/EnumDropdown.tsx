@@ -7,15 +7,17 @@ export type EnumDropdownOption<T extends string> = {
 }
 
 type EnumDropdownProps<T extends string> = {
+	ariaDescribedBy?: string | undefined
 	ariaLabel?: string
 	disabled?: boolean
+	invalid?: boolean
 	onChange: (value: T) => void
 	options: ReadonlyArray<EnumDropdownOption<T>>
 	placeholder?: string
 	value: T | undefined
 }
 
-export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
+export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, disabled = false, invalid = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -45,9 +47,24 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 	}, [open])
 
 	useEffect(() => {
+		if (disabled) setOpen(false)
+	}, [disabled])
+
+	useEffect(() => {
 		const handleDocumentMouseDown = (event: MouseEvent) => {
 			if (rootRef.current === null) return
 			if (event.target instanceof Node && rootRef.current.contains(event.target)) return
+			setOpen(false)
+		}
+		const handleDocumentFocusIn = (event: FocusEvent) => {
+			if (rootRef.current === null) return
+			if (event.target instanceof Node && rootRef.current.contains(event.target)) return
+			setOpen(false)
+		}
+		const handleDocumentFocusOut = (event: FocusEvent) => {
+			if (rootRef.current === null) return
+			if (!(event.target instanceof Node) || !rootRef.current.contains(event.target)) return
+			if (event.relatedTarget instanceof Node && rootRef.current.contains(event.relatedTarget)) return
 			setOpen(false)
 		}
 
@@ -56,9 +73,13 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 		}
 
 		document.addEventListener('mousedown', handleDocumentMouseDown)
+		document.addEventListener('focusin', handleDocumentFocusIn)
+		document.addEventListener('focusout', handleDocumentFocusOut)
 		document.addEventListener('keydown', handleDocumentKeyDown)
 		return () => {
 			document.removeEventListener('mousedown', handleDocumentMouseDown)
+			document.removeEventListener('focusin', handleDocumentFocusIn)
+			document.removeEventListener('focusout', handleDocumentFocusOut)
 			document.removeEventListener('keydown', handleDocumentKeyDown)
 		}
 	}, [])
@@ -70,6 +91,8 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
 				type='button'
 				disabled={disabled}
+				aria-describedby={ariaDescribedBy}
+				aria-invalid={invalid ? 'true' : undefined}
 				aria-label={accessibleTriggerLabel}
 				aria-haspopup='listbox'
 				aria-expanded={open}
@@ -93,7 +116,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 				<span className='enum-dropdown-label'>{triggerLabel}</span>
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
-			{open ? (
+			{open && !disabled ? (
 				<div className='enum-dropdown-menu' role='listbox' aria-label={commonCopy.dropdownOptions}>
 					{options.map(option => (
 						<button
@@ -117,6 +140,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 								}
 							}}
 							onClick={() => {
+								if (disabled) return
 								onChange(option.value)
 								closeAndFocusTrigger()
 							}}

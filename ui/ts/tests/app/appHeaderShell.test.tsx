@@ -14,8 +14,8 @@ function createOverviewProps(): OverviewPanelsProps {
 		accountState: {
 			address: undefined,
 			chainId: undefined,
-			ethBalance: undefined,
-			wethBalance: undefined,
+			ethBalanceAttoEth: undefined,
+			wethBalanceAttoEth: undefined,
 		},
 		activeUniverseId: 0n,
 		isConnectingWallet: false,
@@ -38,23 +38,25 @@ function createOverviewProps(): OverviewPanelsProps {
 			rpcUrl: 'browser-simulation',
 			transportMode: 'rpc',
 		},
+		repPerEthFailure: undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
+		repUsdcFailure: undefined,
 		repUsdcPrice: undefined,
 		repUsdcSource: undefined,
 		repUsdcSourceUrl: undefined,
 		universeHasForked: false,
 		universeLabel: 'Genesis',
 		universePresentation: undefined,
-		universeRepBalance: undefined,
+		universeRepBalanceAttoRep: undefined,
 		walletBootstrapComplete: true,
 	}
 }
 
 function createTabNavigationProps(): TabNavigationProps {
 	return {
-		augurPlaceHolderDeployed: true,
+		augurStatoblastDeployed: true,
 		deployRoute: '#/deploy',
 		marketRoute: '#/zoltar',
 		onRouteChange: () => undefined,
@@ -88,10 +90,10 @@ function createSimulationController(): SimulationController {
 		reset: async () => undefined,
 		selectAccount: async () => undefined,
 		selectedAccount,
-		setQueryDelayMilliseconds: () => undefined,
-		setRepPerEthPrice: () => undefined,
-		setRepPerUsdcPrice: () => undefined,
-		setTransactionDelayMilliseconds: () => undefined,
+		setQueryDelayMilliseconds: async () => undefined,
+		setRepPerEthPrice: async () => undefined,
+		setRepPerUsdcPrice: async () => undefined,
+		setTransactionDelayMilliseconds: async () => undefined,
 		simulationSource: {
 			kind: 'scenario',
 			scenario: 'baseline',

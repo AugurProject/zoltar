@@ -12,7 +12,7 @@ void describe('deployed simulation backend', () => {
 
 	beforeAll(async () => {
 		deployedBackend = await createBootstrappedSimulationBackendWithRetry('deployed')
-		deployedBackend.setTransactionDelayMilliseconds(0)
+		await deployedBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	beforeEach(async () => {
@@ -42,8 +42,8 @@ void describe('deployed simulation backend', () => {
 		}
 		const zoltarBalanceAfter = await readClient.getBalance({ address: zoltarStep.address })
 
-		expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
-		expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
+		expect(universeSummaryAfter.totalTheoreticalSupplyAttoRep).toBe(universeSummaryBefore.totalTheoreticalSupplyAttoRep + SIMULATION_REP_MINT_AMOUNT)
+		expect(universeSummaryAfter.forkThresholdAttoRep).toBe(universeSummaryBefore.forkThresholdAttoRep + SIMULATION_REP_MINT_AMOUNT / 20n)
 		expect(zoltarBalanceAfter).toBe(zoltarBalanceBefore)
 	}, 60_000)
 
@@ -51,7 +51,7 @@ void describe('deployed simulation backend', () => {
 		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(deployedBackend.createReadClient())
 
 		expect(deployedBackend.currentScenario).toBe('deployed')
-		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(true)
+		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(true)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed)).toBe(true)
 	}, 30_000)
 })

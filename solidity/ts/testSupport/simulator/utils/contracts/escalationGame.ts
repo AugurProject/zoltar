@@ -4,6 +4,7 @@ import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 import { getRepTokenAddress } from './zoltar'
+import { getInfraContractAddresses } from './deployPeripherals'
 import { requireAddress, requireArray, requireBigInt } from '../utilities'
 
 function requireContractAddress(value: `0x${string}` | null | undefined, context: string): `0x${string}` {
@@ -30,8 +31,8 @@ function parseQuestionOutcome(value: unknown): QuestionOutcome {
 type EscalationDeposit = {
 	depositIndex: bigint
 	depositor: AccountAddress
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 }
 
 function getTupleField(value: unknown, index: number, key: string, context: string) {
@@ -40,11 +41,11 @@ function getTupleField(value: unknown, index: number, key: string, context: stri
 	return Reflect.get(value, key)
 }
 
-export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
+export const getNonDecisionThresholdAttoRep = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThreshold',
+			functionName: 'nonDecisionThresholdAttoRep',
 			address: escalationGame,
 			args: [],
 		}),
@@ -65,7 +66,7 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startBond',
+			functionName: 'startBondAttoRep',
 			address: escalationGame,
 			args: [],
 		}),
@@ -76,7 +77,7 @@ export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: Ac
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalEscrowedRep',
+			functionName: 'totalDisputeStakedAttoRep',
 			address: escalationGame,
 			args: [],
 		}),
@@ -87,7 +88,7 @@ export const getEscrowedRepByVault = async (client: ReadClient, escalationGame: 
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'escrowedRepByVault',
+			functionName: 'disputeStakedRepByVaultAttoRep',
 			address: escalationGame,
 			args: [vault],
 		}),
@@ -109,10 +110,10 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 		).map((deposit: unknown, index: number) => ({
 			depositIndex: currentIndex + BigInt(index),
 			depositor: requireAddress(getTupleField(deposit, 0, 'depositor', 'Escalation deposit'), 'Escalation deposit depositor'),
-			amount: requireBigInt(getTupleField(deposit, 1, 'amount', 'Escalation deposit'), 'Escalation deposit amount'),
-			cumulativeAmount: requireBigInt(getTupleField(deposit, 2, 'cumulativeAmount', 'Escalation deposit'), 'Escalation deposit cumulative amount'),
+			amountAttoRep: requireBigInt(getTupleField(deposit, 1, 'amountAttoRep', 'Escalation deposit'), 'Escalation deposit amount'),
+			cumulativeAmountAttoRep: requireBigInt(getTupleField(deposit, 2, 'cumulativeAmountAttoRep', 'Escalation deposit'), 'Escalation deposit cumulative amount'),
 		}))
-		const newDeposits = returnedDeposits.filter((deposit: EscalationDeposit) => BigInt(deposit.depositor) !== 0n || deposit.amount !== 0n || deposit.cumulativeAmount !== 0n)
+		const newDeposits = returnedDeposits.filter((deposit: EscalationDeposit) => BigInt(deposit.depositor) !== 0n || deposit.amountAttoRep !== 0n || deposit.cumulativeAmountAttoRep !== 0n)
 		pages.push(...newDeposits)
 		if (BigInt(returnedDeposits.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
@@ -128,7 +129,7 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 		args: [outcome],
 	})
 
-export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
+export const deployEscalationGame = async (writeClient: WriteClient, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint) => {
 	const verifierDeploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
 			abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
@@ -141,7 +142,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 		data: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress],
+			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })
@@ -151,7 +152,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'start',
 			address: escalationGameAddress,
-			args: [startBond, nonDecisionThreshold],
+			args: [startBondAttoRep, nonDecisionThresholdAttoRep],
 		}),
 	)
 	return escalationGameAddress
@@ -178,7 +179,7 @@ export const getBalances = async (client: ReadClient, escalationGame: AccountAdd
 			args: [2],
 		}),
 	])
-	return { invalid: invalidState.balance, yes: yesState.balance, no: noState.balance }
+	return { invalid: invalidState.balanceAttoRep, yes: yesState.balanceAttoRep, no: noState.balanceAttoRep }
 }
 
 export const getActivationTime = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
@@ -196,7 +197,7 @@ export const getEscalationGameTotalCost = async (client: ReadClient, escalationG
 	requireBigInt(
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCost',
+			functionName: 'totalCostAttoRep',
 			address: escalationGame,
 			args: [],
 		}),

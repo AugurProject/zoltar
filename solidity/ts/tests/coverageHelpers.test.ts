@@ -22,10 +22,13 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
+	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
+	peripherals_WETH9_WETH9,
 	ReputationToken_ReputationToken,
 	test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted,
@@ -39,9 +42,10 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const SCALAR_DECIMALS = 18n
-const ONE_REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const MAX_INT256 = 2n ** 255n - 1n
 const MIN_INT256 = -(2n ** 255n)
+const MAX_UINT256 = 2n ** 256n - 1n
 const DEFAULT_ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
 type CoverageFileSummary = {
@@ -116,7 +120,7 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 		'contract CoverageClassifierCalls {',
 		'    function execute(address vault, uint256 amount) external {',
 		'        token.safeTransfer(receiver, amount);',
-		'        _syncActiveVault(vault);',
+		'        _registerVault(vault);',
 		'        burnRep(repToken, msg.sender, amount);',
 		'        securityPool.configureVault(',
 		'            vault,',
@@ -153,18 +157,6 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 			source: ['contract EscalationGameSettlement {', '    function withdrawDeposit(', '        uint256 claimIndex,', '        BinaryOutcomes.BinaryOutcome selectedOutcome', '    ) public {', "        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');", '    }', '}'],
 		},
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameEscrow.sol',
-			source: [
-				'contract EscalationGameEscrow {',
-				'    function claim(ForkedEscrowState storage state, uint256 principalToClaim) internal {',
-				'        uint256 nextPrincipalClaimed = state.sourcePrincipalClaimed + principalToClaim;',
-				'        state.sourcePrincipalClaimed = nextPrincipalClaimed;',
-				'        state.childRepClaimed = nextRepClaimed;',
-				'    }',
-				'}',
-			],
-		},
-		{
 			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameCarry.sol',
 			source: [
 				'contract EscalationGameCarry {',
@@ -195,9 +187,9 @@ test('coverage source-map gap manifest stays aligned with current Solidity sourc
 })
 
 test('coverage classifier keeps similar lines coverable when source-map gap context does not match', () => {
-	const settlementProofOverload = [
+	const settlementProofFunction = [
 		'contract EscalationGameSettlement {',
-		'    function exportUnresolvedDeposit(',
+		'    function withdrawDeposit(',
 		'        CarriedDepositProof calldata proof,',
 		'        BinaryOutcomes.BinaryOutcome selectedOutcome',
 		'    ) public {',
@@ -217,7 +209,7 @@ test('coverage classifier keeps similar lines coverable when source-map gap cont
 	].join('\n')
 	const erc1155Return = ['contract ERC1155 {', '    function balanceOf(address account, uint256 id) public view returns (uint256) {', '        return _balances[id][account];', '    }', '}'].join('\n')
 
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofOverload), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofFunction), [6])
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementUnrelatedUintOverload), [6])
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol', erc1155Return), [3])
 })
@@ -306,6 +298,55 @@ describe('Solidity bytecode coverage helpers', () => {
 		await setupTestAccounts(mockWindow)
 	})
 
+	test('security pool factory constructor, range, and child authorization guards expose exact reasons', async () => {
+		const factoryArtifact = peripherals_factories_SecurityPoolFactory_SecurityPoolFactory
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+				}),
+			}),
+			/Initial escalation game deposit must equal 1 REP/,
+		)
+
+		const factoryAddress = await deployContract(
+			encodeDeployData({
+				abi: factoryArtifact.abi,
+				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+			}),
+		)
+		await assert.rejects(
+			client.readContract({
+				abi: factoryArtifact.abi,
+				address: factoryAddress,
+				functionName: 'securityPoolDeploymentsRange',
+				args: [1n, 0n],
+			}),
+			/Security pool deployment range start index is out of bounds/,
+		)
+		await assert.rejects(
+			client.readContract({
+				abi: factoryArtifact.abi,
+				address: factoryAddress,
+				functionName: 'securityPoolDeploymentsRange',
+				args: [0n, 1n],
+			}),
+			/Security pool deployment range count exceeds available entries/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: factoryArtifact.abi,
+				address: factoryAddress,
+				functionName: 'deployChildSecurityPool',
+				args: [zeroAddress, zeroAddress, 0n, 0n, 2n, 0n, 0n],
+			}),
+			/Only the security pool forker can deploy child pools/,
+		)
+	})
+
 	test('production attribution ignores unresolved nested PCs shared by unexecuted contract profiles', async () => {
 		if (!isCoverageEnabled()) return
 
@@ -330,8 +371,13 @@ describe('Solidity bytecode coverage helpers', () => {
 			functionName: 'select',
 			args: [true],
 		})
-		const decoyHash = await client.sendTransaction({ to: decoyAddress, data: decoyData })
-		const decoyReceipt = await client.waitForTransactionReceipt({ hash: decoyHash })
+		const decoyHash = await client.sendTransaction({
+			to: decoyAddress,
+			data: decoyData,
+		})
+		const decoyReceipt = await client.waitForTransactionReceipt({
+			hash: decoyHash,
+		})
 		assert.strictEqual(decoyReceipt.status, 'success', 'decoy attribution fixture call should succeed')
 		const rawDecoyTrace = await mockWindow.request({
 			method: 'debug_traceTransaction',
@@ -416,7 +462,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			data: deploymentData,
 			gas: 1_000_000n,
 			gasPrice: 0n,
-			nonce: Number(nonce),
+			nonce: Number.parseInt(nonce.toString(), 10),
 		})
 		const hash = parseRpcHash(
 			await mockWindow.request({
@@ -457,10 +503,34 @@ describe('Solidity bytecode coverage helpers', () => {
 			'only the deployed contract address should be set in the mask',
 		)
 
-		await transact(reputationTokenAddress, encodeFunctionData({ abi: ReputationToken_ReputationToken.abi, functionName: 'name' }))
-		await transact(reputationTokenAddress, encodeFunctionData({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol' }))
-		await transact(reputationTokenAddress, encodeFunctionData({ abi: ReputationToken_ReputationToken.abi, functionName: 'decimals' }))
-		await transact(reputationTokenAddress, encodeFunctionData({ abi: ReputationToken_ReputationToken.abi, functionName: 'totalSupply' }))
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'name',
+			}),
+		)
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'symbol',
+			}),
+		)
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'decimals',
+			}),
+		)
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'totalSupply',
+			}),
+		)
 		await transact(
 			reputationTokenAddress,
 			encodeFunctionData({
@@ -474,7 +544,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
 				args: [100n],
 			}),
 		)
@@ -572,7 +642,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupply',
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
 				args: [10n],
 			}),
 		)
@@ -596,6 +666,184 @@ describe('Solidity bytecode coverage helpers', () => {
 			),
 			/Mint exceeds theoretical supply/i,
 		)
+	})
+
+	test('deployment status rejects more than 256 tracked deployment steps', async () => {
+		const helperAddress = await deployCoverageHelper()
+		const tooManyDeploymentAddresses = Array.from({ length: 257 }, () => client.account.address)
+
+		await assert.rejects(
+			transact(
+				helperAddress,
+				encodeFunctionData({
+					abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+					functionName: 'deployDeploymentStatusOracle',
+					args: [tooManyDeploymentAddresses],
+				}),
+			),
+			/DeploymentStatusOracle supports at most 256 deployment steps/,
+		)
+	})
+
+	test('reachable ERC20 guards expose their specific revert reasons', async () => {
+		const reputationTokenAddress = await deployReputationToken()
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'setMaxTheoreticalSupplyAttoRep',
+				args: [100n],
+			}),
+		)
+		await transact(
+			reputationTokenAddress,
+			encodeFunctionData({
+				abi: ReputationToken_ReputationToken.abi,
+				functionName: 'mint',
+				args: [client.account.address, 10n],
+			}),
+		)
+
+		const clientCalls = [
+			{
+				data: encodeFunctionData({
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'transfer',
+					args: [zeroAddress, 1n],
+				}),
+				expected: /ERC20 transfer receiver must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'mint',
+					args: [zeroAddress, 1n],
+				}),
+				expected: /ERC20 mint receiver must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'burn',
+					args: [zeroAddress, 0n],
+				}),
+				expected: /ERC20 burn account must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: ReputationToken_ReputationToken.abi,
+					functionName: 'approve',
+					args: [zeroAddress, 1n],
+				}),
+				expected: /ERC20 approval spender must not be the zero address/,
+			},
+		]
+		for (const { data, expected } of clientCalls) {
+			await assert.rejects(transact(reputationTokenAddress, data), expected)
+		}
+
+		await assert.rejects(
+			writeContractAndWait(participantClient, () =>
+				participantClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: reputationTokenAddress,
+					functionName: 'transfer',
+					args: [client.account.address, 1n],
+				}),
+			),
+			/ERC20 transfer amount exceeds sender balance/,
+		)
+		await assert.rejects(
+			writeContractAndWait(participantClient, () =>
+				participantClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: reputationTokenAddress,
+					functionName: 'transferFrom',
+					args: [client.account.address, participantClient.account.address, 1n],
+				}),
+			),
+			/ERC20 transfer amount exceeds spender allowance/,
+		)
+		await assert.rejects(
+			writeContractAndWait(participantClient, () =>
+				participantClient.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: reputationTokenAddress,
+					functionName: 'transferFrom',
+					args: [zeroAddress, client.account.address, 0n],
+				}),
+			),
+			/ERC20 approval owner must not be the zero address/,
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: reputationTokenAddress,
+				functionName: 'totalSupply',
+				args: [],
+			}),
+			10n,
+			'rejected zero-owner allowance update must not change supply',
+		)
+	})
+
+	test('reachable scalar arithmetic guards expose their specific revert reasons', async () => {
+		const helperAddress = await deployCoverageHelper()
+		const helperAbi = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi
+		const scalarErrorCases = [
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'getScalarOutcomeName',
+					args: [[0n, 0n], '', 0n, 0n, 1n],
+				}),
+				expected: /Scalar outcome numTicks must be greater than zero/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'getScalarOutcomeName',
+					args: [[0n, 0n], '', 1n, 1n, 1n],
+				}),
+				expected: /Scalar outcome max value must be greater than min value/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'addInt256Uint256',
+					args: [MAX_INT256, 1n],
+				}),
+				expected: /Scalar value addition exceeds int256 maximum/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'addInt256Uint256',
+					args: [-1n, 2n ** 255n + 1n],
+				}),
+				expected: /Scalar value positive result exceeds int256 maximum/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'mulDiv',
+					args: [1n, 1n, 0n],
+				}),
+				expected: /mulDiv denominator must be greater than zero/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: helperAbi,
+					functionName: 'mulDiv',
+					args: [2n ** 255n, 2n, 1n],
+				}),
+				expected: /mulDiv result would overflow uint256/,
+			},
+		]
+
+		for (const { data, expected } of scalarErrorCases) {
+			await assert.rejects(transact(helperAddress, data), expected)
+		}
 	})
 
 	test('reuses cached address profiles without repeated getCode lookups for the same deployed contract', async () => {
@@ -727,7 +975,14 @@ describe('Solidity bytecode coverage helpers', () => {
 	test('traces ERC1155 legacy helper overloads and internal mint, transfer, and burn paths', async () => {
 		const tokenAddress = await deployErc1155CoverageHelper()
 
-		await transact(tokenAddress, encodeFunctionData({ abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi, functionName: 'supportsInterface', args: ['0xd9b67a26'] }))
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				functionName: 'supportsInterface',
+				args: ['0xd9b67a26'],
+			}),
+		)
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
@@ -840,6 +1095,164 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 	})
 
+	test('ERC1155 internal mint and burn helpers expose every explicit guard reason', async () => {
+		const tokenAddress = await deployErc1155CoverageHelper()
+		const tokenAbi = test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi
+		const errorCases = [
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'mintOne',
+					args: [zeroAddress, 1n, 1n],
+				}),
+				expected: /ERC1155: mint receiver must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'mintMany',
+					args: [zeroAddress, [], []],
+				}),
+				expected: /ERC1155: batch mint receiver must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'mintMany',
+					args: [client.account.address, [1n], []],
+				}),
+				expected: /ERC1155: batch mint IDs and values arrays must have the same length/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'burnOne',
+					args: [zeroAddress, 1n, 0n],
+				}),
+				expected: /ERC1155: burn account must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'burnMany',
+					args: [zeroAddress, [], []],
+				}),
+				expected: /ERC1155: batch burn account must not be the zero address/,
+			},
+			{
+				data: encodeFunctionData({
+					abi: tokenAbi,
+					functionName: 'burnMany',
+					args: [client.account.address, [1n], []],
+				}),
+				expected: /ERC1155: batch burn IDs and values arrays must have the same length/,
+			},
+		]
+
+		for (const { data, expected } of errorCases) {
+			await assert.rejects(transact(tokenAddress, data), expected)
+		}
+	})
+
+	test('ERC1155 arithmetic panics preserve balances and supplies across single and batch paths', async () => {
+		const tokenAddress = await deployErc1155CoverageHelper()
+		const tokenAbi = test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi
+		const panic11 = /arithmetic operation resulted in underflow or overflow|0x11|4e487b71[0-9a-f]*11/i
+		const readBalance = async (id: bigint, account = client.account.address) =>
+			await client.readContract({
+				abi: tokenAbi,
+				address: tokenAddress,
+				functionName: 'balanceOf',
+				args: [account, id],
+			})
+		const readSupply = async (id: bigint) =>
+			await client.readContract({
+				abi: tokenAbi,
+				address: tokenAddress,
+				functionName: 'totalSupply',
+				args: [id],
+			})
+		const rejectPanic = async (functionName: 'safeTransferFrom' | 'safeBatchTransferFrom' | 'mintOne' | 'mintMany' | 'burnOne' | 'burnMany', args: readonly unknown[]) => {
+			await assert.rejects(
+				transact(
+					tokenAddress,
+					encodeFunctionData({
+						abi: tokenAbi,
+						functionName,
+						args,
+					}),
+				),
+				panic11,
+			)
+		}
+
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: tokenAbi,
+				functionName: 'mintMany',
+				args: [client.account.address, [1n, 2n], [1n, 1n]],
+			}),
+		)
+
+		await rejectPanic('safeTransferFrom', [client.account.address, participantClient.account.address, 1n, 2n, '0x'])
+		assert.strictEqual(await readBalance(1n), 1n, 'failed single transfer must retain sender balance')
+		assert.strictEqual(await readBalance(1n, participantClient.account.address), 0n, 'failed single transfer must not credit receiver')
+
+		await rejectPanic('safeBatchTransferFrom', [client.account.address, participantClient.account.address, [1n, 2n], [1n, 2n], '0x'])
+		assert.deepStrictEqual([await readBalance(1n), await readBalance(2n)], [1n, 1n], 'failed batch transfer must roll back every sender debit')
+		assert.deepStrictEqual([await readBalance(1n, participantClient.account.address), await readBalance(2n, participantClient.account.address)], [0n, 0n], 'failed batch transfer must not partially credit the receiver')
+
+		await rejectPanic('burnOne', [client.account.address, 1n, 2n])
+		assert.deepStrictEqual([await readBalance(1n), await readSupply(1n)], [1n, 1n], 'failed single burn must retain balance and supply')
+
+		await rejectPanic('burnMany', [client.account.address, [1n, 2n], [1n, 2n]])
+		assert.deepStrictEqual([await readBalance(1n), await readBalance(2n), await readSupply(1n), await readSupply(2n)], [1n, 1n, 1n, 1n], 'failed batch burn must roll back every balance and supply update')
+
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: tokenAbi,
+				functionName: 'mintOne',
+				args: [client.account.address, 3n, MAX_UINT256],
+			}),
+		)
+		await rejectPanic('mintOne', [client.account.address, 3n, 1n])
+		assert.deepStrictEqual([await readBalance(3n), await readSupply(3n)], [MAX_UINT256, MAX_UINT256], 'failed single mint balance overflow must retain balance and supply')
+
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: tokenAbi,
+				functionName: 'mintMany',
+				args: [client.account.address, [4n], [MAX_UINT256]],
+			}),
+		)
+		await rejectPanic('mintMany', [client.account.address, [4n], [1n]])
+		assert.deepStrictEqual([await readBalance(4n), await readSupply(4n)], [MAX_UINT256, MAX_UINT256], 'failed batch mint balance overflow must retain balance and supply')
+
+		const supplyOverflowId = 5n
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: tokenAbi,
+				functionName: 'mintMany',
+				args: [client.account.address, [supplyOverflowId], [MAX_UINT256]],
+			}),
+		)
+		await transact(
+			tokenAddress,
+			encodeFunctionData({
+				abi: tokenAbi,
+				functionName: 'safeTransferFrom',
+				args: [client.account.address, participantClient.account.address, supplyOverflowId, MAX_UINT256, '0x'],
+			}),
+		)
+		assert.deepStrictEqual([await readBalance(supplyOverflowId), await readBalance(supplyOverflowId, participantClient.account.address), await readSupply(supplyOverflowId)], [0n, MAX_UINT256, MAX_UINT256], 'public mint and transfer setup must isolate the total-supply overflow path from recipient balance overflow')
+		await rejectPanic('mintMany', [client.account.address, [supplyOverflowId], [1n]])
+		assert.deepStrictEqual([await readBalance(supplyOverflowId), await readBalance(supplyOverflowId, participantClient.account.address), await readSupply(supplyOverflowId)], [0n, MAX_UINT256, MAX_UINT256], 'failed batch mint supply overflow must roll back its preceding balance update')
+	})
+
 	test('traces pure production libraries through transaction-backed harness calls', async () => {
 		const helperAddress = await deployCoverageHelper()
 		const helperAbi = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi
@@ -856,9 +1269,30 @@ describe('Solidity bytecode coverage helpers', () => {
 			'token ids should pack universe and outcome',
 		)
 
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'getTokenId', args: [7n, 1] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'getTokenIds', args: [7n, [0, 1, 2]] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'unpackTokenId', args: [(7n << 8n) | 1n] }))
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'getTokenId',
+				args: [7n, 1],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'getTokenIds',
+				args: [7n, [0, 1, 2]],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'unpackTokenId',
+				args: [(7n << 8n) | 1n],
+			}),
+		)
 		await transact(
 			helperAddress,
 			encodeFunctionData({
@@ -867,14 +1301,69 @@ describe('Solidity bytecode coverage helpers', () => {
 				args: [client.account.address, 1, 11n, 22n, 33n, 44n],
 			}),
 		)
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'hashParent', args: [bytes32(1n), bytes32(2n)] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'bagPeaks', args: [[], 0n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'bagPeaks', args: [[bytes32(1n), bytes32(2n), bytes32(3n)], 3n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'computeEmptyNullifierRoot' }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'getCurrentCarryPeakForLeaf', args: [3n, 0n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'getCurrentCarryPeakForLeaf', args: [3n, 2n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'bagCarryPeakSamples', args: [ZERO_BYTES32, bytes32(2n), 0n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'bagCarryPeakSamples', args: [bytes32(1n), bytes32(2n), 3n] }))
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'hashParent',
+				args: [bytes32(1n), bytes32(2n)],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'bagPeaks',
+				args: [[], 0n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'bagPeaks',
+				args: [[bytes32(1n), bytes32(2n), bytes32(3n)], 3n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'computeEmptyNullifierRoot',
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'getCurrentCarryPeakForLeaf',
+				args: [3n, 0n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'getCurrentCarryPeakForLeaf',
+				args: [3n, 2n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'bagCarryPeakSamples',
+				args: [ZERO_BYTES32, bytes32(2n), 0n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'bagCarryPeakSamples',
+				args: [bytes32(1n), bytes32(2n), 3n],
+			}),
+		)
 		await transact(
 			helperAddress,
 			encodeFunctionData({
@@ -915,20 +1404,118 @@ describe('Solidity bytecode coverage helpers', () => {
 				args: [[500n, 500n], 'km', 1000n, -500n * 10n ** SCALAR_DECIMALS, 500n * 10n ** SCALAR_DECIMALS],
 			}),
 		)
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'addInt256Uint256', args: [5n, 7n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'addInt256Uint256', args: [-5n, 7n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'addInt256Uint256', args: [-7n, 5n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'addInt256Uint256', args: [MIN_INT256, 0n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'absoluteInt256', args: [5n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'absoluteInt256', args: [-5n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'mulDiv', args: [6n, 7n, 3n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'mulDiv', args: [2n ** 200n, 2n ** 80n, 2n ** 100n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'intToDecimalString', args: [-1234000000000000000n, 18n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'intToDecimalString', args: [42n * 10n ** SCALAR_DECIMALS, 18n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'zeroPadLeft', args: ['7', 3n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'zeroPadLeft', args: ['1234', 3n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'uintToString', args: [0n] }))
-		await transact(helperAddress, encodeFunctionData({ abi: helperAbi, functionName: 'uintToString', args: [12345n] }))
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'addInt256Uint256',
+				args: [5n, 7n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'addInt256Uint256',
+				args: [-5n, 7n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'addInt256Uint256',
+				args: [-7n, 5n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'addInt256Uint256',
+				args: [MIN_INT256, 0n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'absoluteInt256',
+				args: [5n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'absoluteInt256',
+				args: [-5n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'mulDiv',
+				args: [6n, 7n, 3n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'mulDiv',
+				args: [2n ** 200n, 2n ** 80n, 2n ** 100n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'intToDecimalString',
+				args: [-1234000000000000000n, 18n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'intToDecimalString',
+				args: [42n * 10n ** SCALAR_DECIMALS, 18n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'zeroPadLeft',
+				args: ['7', 3n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'zeroPadLeft',
+				args: ['1234', 3n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'uintToString',
+				args: [0n],
+			}),
+		)
+		await transact(
+			helperAddress,
+			encodeFunctionData({
+				abi: helperAbi,
+				functionName: 'uintToString',
+				args: [12345n],
+			}),
+		)
 
 		assert.strictEqual(
 			await client.readContract({
@@ -944,10 +1531,17 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('traces factory deployment paths through transaction-backed calls', async () => {
 		const reputationTokenAddress = await deployReputationToken()
+		const claimDelegateAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+				bytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
+			}),
+		)
 		const escalationGameFactoryAddress = await deployContract(
 			encodeDeployData({
 				abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+				args: [claimDelegateAddress],
 			}),
 		)
 		await assert.rejects(
@@ -957,7 +1551,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 						functionName: 'deployEscalationGame',
-						args: [ONE_REP, 2n * ONE_REP],
+						args: [ATTO_REP, 2n * ATTO_REP],
 					}),
 					gas: 10_000_000n,
 				}),
@@ -971,7 +1565,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployStartedGame',
-				args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP],
+				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 			}),
 		)
 		await transact(
@@ -979,7 +1573,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployForkedGame',
-				args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP, 0n],
+				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n],
 			}),
 		)
 		await assert.rejects(
@@ -988,17 +1582,23 @@ describe('Solidity bytecode coverage helpers', () => {
 				encodeFunctionData({
 					abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 					functionName: 'deployStartedGame',
-					args: [escalationGameFactoryAddress, ONE_REP, 2n * ONE_REP],
+					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 				}),
 			),
 			/Escalation game deployment failed/,
 		)
 
+		const wethAddress = await deployContract(
+			encodeDeployData({
+				abi: peripherals_WETH9_WETH9.abi,
+				bytecode: `0x${peripherals_WETH9_WETH9.evm.bytecode.object}`,
+			}),
+		)
 		const priceOracleFactoryAddress = await deployContract(
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
-				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
+				args: [wethAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(
@@ -1006,7 +1606,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				functionName: 'deployPriceOracleManagerAndOperatorQueuer',
-				args: [zeroAddress, reputationTokenAddress, ZERO_BYTES32],
+				args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
 			}),
 		)
 
@@ -1022,6 +1622,15 @@ describe('Solidity bytecode coverage helpers', () => {
 				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
 				args: [zeroAddress, zeroAddress],
 			}),
+		)
+		await assert.rejects(
+			participantClient.writeContract({
+				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				address: deploymentWorkerAddress,
+				functionName: 'deploy',
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+			}),
+			/Only SecurityPoolDeployer can use the deployment worker/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -1042,6 +1651,15 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
 			}),
+		)
+		await assert.rejects(
+			participantClient.writeContract({
+				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+				address: securityPoolDeployerAddress,
+				functionName: 'deploy',
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+			}),
+			/Only SecurityPoolFactory can use the deployer/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>

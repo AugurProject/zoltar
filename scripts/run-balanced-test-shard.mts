@@ -1,5 +1,8 @@
 import * as process from 'node:process'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath, type WeightedTestFile } from './test-discovery.mts'
+import { getHistoricalTestWeights, readTestTimingHistory, writeTestTimingObservation } from './test-timings.mts'
 
 const repositoryRoot = process.cwd()
 
@@ -66,11 +69,13 @@ function parseShardOption(args: readonly string[]): { listOnly: boolean; shardIn
 	return { listOnly, shardIndex, shardCount, passthroughArgs }
 }
 
-export async function getWeightedTestFiles() {
+export async function getWeightedTestFiles(historyPath?: string) {
 	const files = await discoverTestFiles(repositoryRoot)
 	const uniqueFiles = new Set(files)
-	const missingWeightedFiles = [...knownFileWeights.keys()].filter(filePath => !uniqueFiles.has(filePath))
-	if (missingWeightedFiles.length > 0) throw new Error(`Weighted test files were not discovered: ${missingWeightedFiles.join(', ')}`)
+	if (historyPath !== undefined) {
+		const history = await readTestTimingHistory(historyPath)
+		if (history !== undefined) return getHistoricalTestWeights(history, files).sort((left, right) => right.weight - left.weight || left.filePath.localeCompare(right.filePath))
+	}
 	return [...uniqueFiles]
 		.map(
 			(filePath): WeightedTestFile => ({
@@ -83,7 +88,9 @@ export async function getWeightedTestFiles() {
 
 if (import.meta.main) {
 	const { listOnly, shardIndex, shardCount, passthroughArgs } = parseShardOption(process.argv.slice(2))
-	const testFiles = await getWeightedTestFiles()
+	const timingHistoryPath = process.env['ZOLTAR_TEST_TIMING_HISTORY']
+	const timingOutputPath = process.env['ZOLTAR_TEST_TIMING_OUTPUT']
+	const testFiles = await getWeightedTestFiles(timingHistoryPath)
 	const shards = createBalancedTestShards(testFiles, shardCount)
 	const selectedShard = shards[shardIndex - 1]
 	if (selectedShard === undefined) throw new Error(`Unable to select shard ${shardIndex.toString()}/${shardCount.toString()}`)
@@ -101,12 +108,22 @@ if (import.meta.main) {
 		process.exit(0)
 	}
 
+	const junitPath = timingOutputPath === undefined ? undefined : `${timingOutputPath}.junit.xml`
+	const reporterArguments = junitPath === undefined ? ['--reporter=dots'] : ['--reporter=junit', `--reporter-outfile=${junitPath}`]
+	if (junitPath !== undefined) await fs.mkdir(path.dirname(junitPath), { recursive: true })
+	const startedAt = performance.now()
 	const child = Bun.spawn({
-		cmd: [process.execPath, 'test', '--preload', './bun-test-setup-ui.ts', '--reporter=dots', '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
+		cmd: [process.execPath, 'test', '--preload', './bun-test-setup-ui.ts', ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
 		stderr: 'inherit',
 		stdin: 'inherit',
 		stdout: 'inherit',
 	})
 
-	process.exit(await child.exited)
+	const exitCode = await child.exited
+	const elapsedSeconds = (performance.now() - startedAt) / 1000
+	if (timingOutputPath !== undefined && junitPath !== undefined) {
+		await writeTestTimingObservation(timingOutputPath, junitPath, elapsedSeconds, selectedShard.files)
+		console.log(`Recorded ${elapsedSeconds.toFixed(1)}s timing observation in ${timingOutputPath}`)
+	}
+	process.exit(exitCode)
 }

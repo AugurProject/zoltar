@@ -53,4 +53,23 @@ describe('TimestampValue', () => {
 		expect(document.body.textContent?.includes(formatTimestamp(840n))).toBe(true)
 		expect(document.body.querySelector('.timestamp-value-relative')).toBeNull()
 	})
+
+	test('renders loading timestamps with an accessible spinner', async () => {
+		const renderedComponent = await renderIntoDocument(<TimestampValue loading timestamp={undefined} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = document.body.querySelector('[role="status"].timestamp-value')
+		expect(loadingStatus?.textContent).toContain('Loading…')
+		expect(loadingStatus?.querySelector('.spinner')).not.toBeNull()
+	})
+
+	test('renders an invalid timestamp without crashing', async () => {
+		const invalidTimestamp = 10n ** 30n
+		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={invalidTimestamp} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const invalidValue = document.body.querySelector('.timestamp-value.error')
+		expect(invalidValue?.textContent).toContain(`Invalid timestamp (${invalidTimestamp.toString()})`)
+		expect(document.body.querySelector('time')).toBeNull()
+	})
 })

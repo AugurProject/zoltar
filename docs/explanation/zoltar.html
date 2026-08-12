@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Zoltar White Paper</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="paper-page paper-zoltar">
+		<main id="main-content">
+			<header class="hero">
+				<div class="hero-label-row">
+					<p class="paper-status">Draft</p>
+				</div>
+				<h1>Zoltar White Paper</h1>
+			</header>
+
+			<section class="paper-section" id="abstract">
+				<p>Zoltar is a generalized branching oracle and coordination layer for binary, categorical, and scalar questions. Rather than forcing a single answer when disagreement persists, it represents unresolved outcomes as explicit child universes. After a fork, REP holders can convert parent REP into a migration balance and use that balance to mint REP in one or more child universes.</p>
+
+				<p>The design closely follows the <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a> model: the protocol branches state first, while applications and their users later coordinate which branch ultimately carries economic value.</p>
+
+				<p>Zoltar is not itself a prediction market or an outcome-reporting oracle. Instead, it provides the shared infrastructure for questions, REP tokens, and universe forks. Any application can build on top of it and define its own local dispute process. If disagreement cannot be resolved locally, anyone able to commit the required REP threshold may fork an unforked universe using an eligible ended global question. The resulting child universes become the new foundations from which applications may choose to continue.</p>
+			</section>
+
+			<section class="paper-section" id="timeline">
+				<div class="section-heading">
+					<h2>Lifecycle Timeline</h2>
+					<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
+				</div>
+				<p>Zoltar's lifecycle has six conceptual steps, from question registration through post-fork coordination.</p>
+				<div class="timeline-grid">
+					<div class="timeline-card">
+						<b>1. Register question</b>
+						<p><code>ZoltarQuestionData</code> stores the question and defines its valid answer space.</p>
+					</div>
+					<div class="timeline-card">
+						<b>2. A fork is triggered</b>
+						<p>After the question end date, any address able to supply the threshold REP can call <code>forkUniverse</code>. Zoltar does not verify that a disagreement exists; applications decide when a fork is justified.</p>
+					</div>
+					<div class="timeline-card">
+						<b>3. Parent universe forks</b>
+						<p><code>Zoltar</code> records the fork question and deterministically defines every valid child branch.</p>
+					</div>
+					<div class="timeline-card">
+						<b>4. Child universes deploy lazily</b>
+						<p>Branches exist by deterministic id first; contracts are deployed only when needed.</p>
+					</div>
+					<div class="timeline-card">
+						<b>5. REP holders split</b>
+						<p>Migration balances mint child REP into one or more selected branches.</p>
+					</div>
+					<div class="timeline-card">
+						<b>6. Applications and users choose where to continue</b>
+						<p>The protocol does not pick a winner. Users and applications decide where durable activity continues.</p>
+					</div>
+				</div>
+			</section>
+
+			<section class="paper-section" id="overview">
+				<div class="section-heading">
+					<h2>1. System Overview</h2>
+					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
+				</div>
+				<p>Zoltar has one responsibility: define and account for branching universes. It does not implement the market, collateral, or underwriting system built on top of it elsewhere in the repo. Its role is narrower and more fundamental:</p>
+				<ul class="clean-list">
+					<li>register questions</li>
+					<li>encode valid answer spaces</li>
+					<li>represent forks as child universes</li>
+					<li>mint and burn child-universe REP</li>
+					<li>turn migration balances into selected child REP</li>
+				</ul>
+				<p>In practice, an application can register a question, trigger a fork after that question ends, and use the child-universe structure that Zoltar defines. <code>ZoltarQuestionData</code> stores question state and answer encoding. Only Zoltar can mint the child-universe <code>ReputationToken</code>; genesis REP is separately deployed and supplied to Zoltar. Zoltar can never mint more REP into a single universe than its parent has REP.</p>
+
+				<h3>Zoltar Contracts</h3>
+				<ul class="contract-list">
+					<li>
+						<a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a
+						>: universe forks and REP splitting
+					</li>
+					<li>
+						<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a
+						>: question registry and outcome encoding
+					</li>
+					<li>
+						<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a
+						>: child-universe REP minted and burned by Zoltar
+					</li>
+					<li>
+						<a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a
+						>: scalar formatting and interpolation logic
+					</li>
+				</ul>
+			</section>
+
+			<section class="paper-section" id="universe-model">
+				<div class="section-heading">
+					<h2>2. Universe Model</h2>
+					<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
+				</div>
+				<p>A universe is one branch of protocol state. The <a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:</p>
+				<ul class="clean-list">
+					<li><code>forkTime</code>: when the universe forked</li>
+					<li><code>forkQuestionId</code>: the question id recorded by <code>forkUniverse</code> and used to define child branches</li>
+					<li><code>forkingOutcomeIndex</code>: the outcome index represented by the universe when it is a child</li>
+					<li><code>reputationToken</code>: the REP token used inside that universe</li>
+					<li><code>parentUniverseId</code>: the parent branch</li>
+				</ul>
+				<p>Universe <code>0</code> is the genesis universe. Its network-specific REP token is supplied to the <code>Zoltar</code> constructor. Mainnet uses the existing REP deployment; Sepolia deterministically deploys a genesis REP token from the configured initial-holder allocations before deploying <code>Zoltar</code>. Child universes are identified deterministically as:</p>
+				<div class="equation" id="eq-zoltar-child-universe-id">
+					<math display="block" aria-label="child universe id equals uint248 of keccak256 of abi encode parent universe id and outcome index" data-source="childUniverseId = uint248(keccak256(abi.encode(parentUniverseId, outcomeIndex)))">
+						<mrow>
+							<mi>childUniverseId</mi>
+							<mo>=</mo>
+							<mi>uint248</mi>
+							<mo>(</mo>
+							<mi>keccak256</mi>
+							<mo>(</mo>
+							<mi>abi.encode</mi>
+							<mo>(</mo>
+							<mi>parentUniverseId</mi>
+							<mo>,</mo>
+							<mi>outcomeIndex</mi>
+							<mo>)</mo>
+							<mo>)</mo>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-note">Child universe ids are deterministic hashes of the parent universe and outcome index.</p>
+				</div>
+				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
+				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches.</div>
+				<pre><code>Genesis
+├── Yes: Alice holds 100 Yes-REP
+│   ├── Option A: Alice may later mint 100 Yes/A-REP
+│   └── Option B: Alice may later mint 100 Yes/B-REP
+└── No: Alice holds 100 No-REP</code></pre>
+
+				<figure class="diagram" id="fig-zoltar-fork-branch-set" aria-labelledby="universe-diagram-title">
+					<p class="diagram-title" id="universe-diagram-title">Universe Tree</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-branch-set" data-plot-width="920" data-plot-height="430" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome."><span class="plot-chart-fallback">Universe tree. A fork creates the full valid branch set; no branch is privileged by the contract.</span></div>
+					<div class="legend" aria-label="Universe diagram legend">
+						<span class="legend-item"><span class="legend-swatch gold"></span>Forking parent</span>
+						<span class="legend-item"><span class="legend-swatch teal"></span>Invalid branch</span>
+						<span class="legend-item"><span class="legend-swatch blue"></span>Valid outcome branches</span>
+					</div>
+					<p class="diagram-caption"><span class="figure-label">Universe tree</span>A fork creates the full valid branch set; no branch is privileged by the contract.</p>
+				</figure>
+				<div class="callout">
+					<strong>Important distinction</strong>
+					Zoltar defines the branch set. It does not select one canonical child universe or delete the others.
+				</div>
+				<h3 id="global-question-scope">Global Question Scope</h3>
+				<p>Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks that the target universe exists, still has supply, has not already forked, and that the supplied question exists and has ended. It does not require the question to have been created for that universe. Applications that need a stricter universe/question relationship enforce it above Zoltar.</p>
+				<div class="callout">
+					<p><strong>Accepted eligibility boundary</strong> Zoltar intentionally accepts any existing ended global question. It does not require a minimum creation age, prior universe registration, or proof that the fork's disruption is smaller than its economic benefit. The fork-threshold REP commitment and configured haircut are the protocol's admission mechanism. A stricter relevance, aging, or cost-benefit rule is not a Zoltar invariant.</p>
+				</div>
+			</section>
+
+			<section class="paper-section" id="economics">
+				<div class="section-heading">
+					<h2>3. Fork Thresholds and REP Economics</h2>
+					<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
+				</div>
+				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThresholdAttoRep</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
+				<p>Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.</p>
+				<div class="equation" id="eq-zoltar-fork-threshold">
+					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThresholdAttoRep = ⌊totalTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌋">
+						<mrow>
+							<mi>forkThresholdAttoRep</mi>
+							<mo>=</mo>
+							<mrow>
+								<mo form="prefix" stretchy="true">⌊</mo>
+								<mfrac>
+									<mi>totalTheoreticalRepSupplyAttoRep</mi>
+									<mi>forkThresholdDivisor</mi>
+								</mfrac>
+								<mo form="postfix" stretchy="true">⌋ </mo>
+							</mrow>
+						</mrow>
+					</math>
+					<p class="equation-note">With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
+				</div>
+				<p>Triggering a fork removes the full fork threshold from the parent universe. `forkUniverse` removes `forkThresholdAttoRep` of parent REP and reduces the parent universe's theoretical REP supply by the same amount.</p>
+
+				<p>Only part of that removed REP is credited toward REP in the child universe. <code>forkBurnDivisor</code> determines the haircut. With <code>forkBurnDivisor = 5</code>:</p>
+				<ul>
+					<li><b>20% is burnt:</b> ⌊forkThresholdAttoRep / 5⌋</li>
+					<li><b>80% becomes migration credit:</b> ⌈4 × forkThresholdAttoRep / 5⌉</li>
+				</ul>
+
+				<p>The constructor rejects <code>forkBurnDivisor &lt; 5</code></p>
+				<div class="equation" id="eq-zoltar-fork-burn">
+					<math display="block" aria-label="uncredited fork haircut in attoREP equals floor fork threshold in attoREP divided by fork burn divisor" data-source="uncreditedForkHaircutAttoRep = ⌊forkThresholdAttoRep / forkBurnDivisor⌋">
+						<mrow>
+							<mi>uncreditedForkHaircutAttoRep</mi>
+							<mo>=</mo>
+							<mo form="prefix" stretchy="true">⌊</mo>
+							<mfrac>
+								<mi>forkThresholdAttoRep</mi>
+								<mi>forkBurnDivisor</mi>
+							</mfrac>
+							<mo form="postfix" stretchy="true">⌋</mo>
+						</mrow>
+					</math>
+				</div>
+				<div class="equation" id="eq-zoltar-initiator-migration-balance">
+					<math display="block" aria-label="fork initiator migration balance in attoREP equals fork threshold in attoREP minus uncredited fork haircut in attoREP" data-source="forkInitiatorMigrationBalanceAttoRep = forkThresholdAttoRep - uncreditedForkHaircutAttoRep">
+						<mrow>
+							<mi>forkInitiatorMigrationBalanceAttoRep</mi>
+							<mo>=</mo>
+							<mi>forkThresholdAttoRep</mi>
+							<mo>-</mo>
+							<mi>uncreditedForkHaircutAttoRep</mi>
+						</mrow>
+					</math>
+				</div>
+
+				<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
+					<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="360" data-rounding="integer-flooring" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance."><span class="plot-chart-fallback">Threshold Deposit Split. The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</span></div>
+				</figure>
+
+				<p>Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a> under Zoltar’s control.</p>
+				<p>A child's theoretical supply is a maximum for REP that can be minted in that branch. It starts from the parent's pre-fork theoretical supply and subtracts only the uncredited haircut. Later REP added to a migration balance converts 1:1; only fork initiation pays this admission cost. A holder can voluntarily burn REP and reduce theoretical supply.</p>
+
+				<h3>Repeated-fork threshold decay</h3>
+				<p>Along one lineage, each fork subtracts its floored haircut from child theoretical supply. With threshold divisor <code>20</code> and burn divisor <code>5</code>, supply is close to 99% of the previous generation, subject to Solidity integer flooring.</p>
+				<figure class="diagram" id="fig-zoltar-fork-threshold-decay">
+					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-threshold-decay" data-plot-width="900" data-plot-height="420" role="img" aria-label="Theoretical REP supply and fork threshold across repeated forks"><span class="plot-chart-fallback">Repeated-fork economics. Each default fork leaves approximately 99% of the previous generation's theoretical REP supply, and the next fork threshold remains 5% of that declining supply.</span></div>
+				</figure>
+			</section>
+
+			<section class="paper-section" id="splitting">
+				<div class="section-heading">
+					<h2>4. Child Universes and REP Splitting</h2>
+					<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
+				</div>
+				<p>Once a universe forks, child universes can be deployed lazily through <code>deployChild</code>. A user can also add more REP into the migration balance with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.</p>
+
+				<p>For categorical questions, <code>Invalid</code> and any in-range categorical outcome are allowed, while out-of-range values are rejected. For scalar questions, only well-formed scalar encodings are allowed.</p>
+				<p>The fork question defines the child-branch shape for the whole universe. A child branch may therefore be keyed by <code>Invalid</code>, a categorical outcome index, or a scalar encoding depending on which parent-universe question <code>forkUniverse</code> used for the fork.</p>
+
+				<div class="callout">
+					<strong>Colored Coins-style property</strong>
+					The same migration balance can mint child REP in each selected child. Later value concentration determines which branch or branches matters economically.
+				</div>
+				<p>At the implementation level, <code>splitMigrationRep</code> validates each selected outcome against the parent universe's fork question, lazily deploys any missing child universe, and records how much of the caller's migration balance has already been minted into each child. A caller cannot mint more into one child than the source migration balance available to that caller, but the same source balance can be reproduced into multiple valid children.</p>
+			</section>
+
+			<section class="paper-section" id="security">
+				<div class="section-heading">
+					<h2>5. Assumptions and Security Model</h2>
+					<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
+				</div>
+				<p>Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.</p>
+
+				<ul class="clean-list">
+					<li>users can choose which child universe (or child universes) to continue using after a fork</li>
+					<li>users prefer to continue in the universes they regard as truthful</li>
+					<li>the protocol itself does not know which universe is truthful and treats all valid branches symmetrically</li>
+					<li>most durable economic activity concentrates in the branch that users expect other users to keep using</li>
+					<li>dishonest or abandoned branches may continue to exist, but are assumed to retain little long-term value compared with the branch that market participants keep coordinating around</li>
+				</ul>
+			</section>
+
+			<section class="paper-section" id="questions">
+				<div class="section-heading">
+					<h2>6. Questions and Outcome Encoding</h2>
+					<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
+				</div>
+				<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a> stores title, description, start and end time, scalar metadata such as <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code>.</p>
+
+				<p>Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options. For scalar questions, there are no categorical labels to include, so the id is determined from the scalar question fields alone.</p>
+				<p>Every call to <code>createQuestion</code> also requires <code>endTime &gt;= startTime</code>. The contract rejects any question whose end time is earlier than its start time before it reaches scalar or categorical validation.</p>
+
+				<h3>Categorical Questions</h3>
+				<p>Categorical questions store sorted outcome labels. The implementation requires labels to be non-empty and strictly ordered by hash: each label's <code>keccak256(abi.encode(label))</code> value must be lower than the previous label's hash, so callers provide labels in descending hash order. The contract stores the labels in <code>outcomeLabels[questionId]</code>. Any number of categorical outcomes can exist at the Zoltar level as long as those conditions hold.</p>
+
+				<h3>Scalar Questions</h3>
+				<p>Scalar questions store no categorical labels. Instead, <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code> define the answer space. At creation time, scalar questions must satisfy <code>numTicks &gt; 0</code> and <code>displayValueMax &gt; displayValueMin</code>.</p>
+				<p>Onchain, each scalar answer is encoded into a single <code>uint256</code> that packs:</p>
+				<ul class="clean-list">
+					<li>the highest bit as an invalid flag</li>
+					<li>a 120-bit first payout numerator</li>
+					<li>a 120-bit second payout numerator</li>
+				</ul>
+
+				<figure class="diagram" id="fig-zoltar-packed-scalar-answer" aria-labelledby="packed-diagram-title">
+					<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-packed-scalar-answer" data-plot-width="920" data-plot-height="520" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators."><span class="plot-chart-fallback">Packed Scalar Answer. A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits 254...240 must be zero, 0 in bit 255 is the invalid namespace, and 1 means the payout fields must sum to numTicks.</span></div>
+					<div class="legend" aria-label="Scalar encoding diagram legend">
+						<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
+						<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>
+						<span class="legend-item"><span class="legend-swatch blue"></span>Second payout</span>
+					</div>
+					<p class="diagram-caption"><span class="figure-label">Packed Scalar Answer</span>A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits <code>254...240</code> must be zero, <code>0</code> in bit <code>255</code> is the invalid namespace, and <code>1</code> means the payout fields must sum to <code>numTicks</code>.</p>
+				</figure>
+
+				<p>The all-zero encoding is the canonical <code>Invalid</code> answer for scalar questions. For a valid scalar answer, the two payout numerators must sum exactly to <code>numTicks</code>:</p>
+				<div class="equation" id="eq-zoltar-scalar-validity">
+					<math display="block" aria-label="first payout numerator plus second payout numerator equals num ticks" data-source="firstPayoutNumerator + secondPayoutNumerator = numTicks">
+						<mrow>
+							<mi>firstPayoutNumerator</mi>
+							<mo>+</mo>
+							<mi>secondPayoutNumerator</mi>
+							<mo>=</mo>
+							<mi>numTicks</mi>
+						</mrow>
+					</math>
+					<p class="equation-note">A valid scalar answer must allocate all ticks across the two payout numerators.</p>
+				</div>
+				<p>The all-zero word is the only canonical scalar <code>Invalid</code> value. Any other word with the highest bit clear is malformed, and any word with a nonzero reserved bit in <code>254...240</code> is malformed even if the payout fields would otherwise decode cleanly.</p>
+				<p>At the helper and UI level, a scalar tick index named <code>tickIndex</code> is encoded as:</p>
+				<ul class="clean-list">
+					<li><code>firstPayoutNumerator = numTicks - tickIndex</code></li>
+					<li><code>secondPayoutNumerator = tickIndex</code></li>
+					<li><code>highest bit = 1</code></li>
+				</ul>
+				<div class="equation" id="eq-zoltar-scalar-tick-encoding">
+					<math display="block" aria-label="scalar tick encoding is an ordered pair of num ticks minus tick index, and tick index" data-source="(numTicks - tickIndex, tickIndex)">
+						<mrow>
+							<mo>(</mo>
+							<mi>numTicks</mi>
+							<mo>-</mo>
+							<mi>tickIndex</mi>
+							<mo>,</mo>
+							<mi>tickIndex</mi>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-note">The helper encodes a tick as left and right payout numerators.</p>
+				</div>
+				<p><a href="../../solidity/contracts/ScalarOutcomes.sol"><code>ScalarOutcomes</code></a> interprets <code>secondPayoutNumerator</code> as the position along the scalar range:</p>
+				<div class="equation" id="eq-zoltar-scalar-display-value">
+					<math display="block" aria-label="displayed atomic value equals display value min plus floor second payout numerator times display range divided by num ticks" data-source="displayedAtomic = displayValueMin + ⌊secondPayoutNumerator * (displayValueMax - displayValueMin) / numTicks⌋">
+						<mrow>
+							<mi>displayedAtomic</mi>
+							<mo>=</mo>
+							<mi>displayValueMin</mi>
+							<mo>+</mo>
+							<mi>⌊</mi>
+							<mfrac>
+								<mrow>
+									<mi>secondPayoutNumerator</mi>
+									<mo>&#x22C5;</mo>
+									<mo>(</mo>
+									<mi>displayValueMax</mi>
+									<mo>-</mo>
+									<mi>displayValueMin</mi>
+									<mo>)</mo>
+								</mrow>
+								<mi>numTicks</mi>
+							</mfrac>
+							<mo>⌋</mo>
+						</mrow>
+					</math>
+					<p class="equation-note">The contract interpolates the scalar answer with <code>mulDiv</code>, so uneven divisions round down before the value is formatted.</p>
+				</div>
+				<p><code>displayValueMin</code> and <code>displayValueMax</code> are stored as 18-decimal fixed-point display bounds. Formatting divides the atomic result by <code>1e18</code> and trims trailing zeroes. For example, with <code>displayValueMin = 0</code>, <code>displayValueMax = 10e18</code>, <code>numTicks = 6</code>, and <code>secondPayoutNumerator = 1</code>, the atomic value is <code>⌊10e18 / 6⌋</code>, which displays as <code>1.666666666666666666</code> rather than an unrounded real number.</p>
+			</section>
+
+			<section class="paper-section" id="question-types">
+				<div class="section-heading">
+					<h2>7. Question Types Supported by Zoltar</h2>
+					<a class="anchor-link" href="#question-types" aria-label="Link to Question Types Supported by Zoltar">#</a>
+				</div>
+				<p>At the Zoltar layer, market type support comes from how questions and outcomes are encoded in <a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a>.</p>
+				<ul class="clean-list">
+					<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
+					<li>binary questions, implemented as categorical questions</li>
+					<li>scalar questions, implemented as a tick-based numeric range with no categorical labels</li>
+				</ul>
+			</section>
+
+			<section class="paper-section" id="invalid">
+				<div class="section-heading">
+					<h2>8. Invalid vs Malformed</h2>
+					<a class="anchor-link" href="#invalid" aria-label="Link to Invalid vs Malformed">#</a>
+				</div>
+				<p>Zoltar distinguishes <code>Invalid</code> answers from <code>Malformed</code> answers. Malformed answers are rejected, while <code>Invalid</code> remains a valid branch and a valid final outcome.</p>
+				<div class="table-wrap">
+					<table class="invalid-table">
+						<thead>
+							<tr>
+								<th>Term</th>
+								<th>Meaning</th>
+								<th>Effect</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>Invalid</code></td>
+								<td>A legitimate resolution state.</td>
+								<td>Can be a valid branch and final outcome.</td>
+							</tr>
+							<tr>
+								<td><code>Malformed</code></td>
+								<td>A submitted outcome index or scalar encoding that does not fit the question’s answer space.</td>
+								<td>Rejected during child-universe REP splitting and fork-aware asset branching.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+		</main>
+
+		<script src="../assets/js/chartRuntime.js"></script>
+		<script>
+			const navLinks = Array.from(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+			const sectionLinks = navLinks
+				.map((link) => {
+					const href = link.getAttribute("href");
+					if (href === null || href.length < 2) {
+						return undefined;
+					}
+
+					const section = document.getElementById(href.slice(1));
+					if (section === null) {
+						return undefined;
+					}
+
+					return { link, section };
+				})
+				.filter((item) => item !== undefined);
+
+			const updateCurrentSection = () => {
+				let current = sectionLinks[0];
+
+				for (const item of sectionLinks) {
+					if (item.section.getBoundingClientRect().top <= 180) {
+						current = item;
+					}
+				}
+
+				for (const item of sectionLinks) {
+					item.link.removeAttribute("aria-current");
+				}
+
+				if (current !== undefined) {
+					current.link.setAttribute("aria-current", "location");
+				}
+			};
+
+			let scheduled = false;
+			const scheduleCurrentSectionUpdate = () => {
+				if (scheduled) {
+					return;
+				}
+
+				scheduled = true;
+				window.requestAnimationFrame(() => {
+					scheduled = false;
+					updateCurrentSection();
+				});
+			};
+
+			if (sectionLinks.length > 0) {
+				updateCurrentSection();
+				document.addEventListener("scroll", scheduleCurrentSectionUpdate, { passive: true });
+				window.addEventListener("resize", scheduleCurrentSectionUpdate);
+				window.addEventListener("hashchange", scheduleCurrentSectionUpdate);
+			}
+		</script>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

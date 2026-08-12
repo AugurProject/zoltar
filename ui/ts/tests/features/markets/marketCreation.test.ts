@@ -115,7 +115,7 @@ void describe('market creation helpers', () => {
 			startTime: '1000',
 		})
 		expect(oneOutcome.isValid).toBe(false)
-		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Categorical markets require at least 2 outcomes')
+		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Outcome 2 is required')
 
 		const duplicateOutcomes = validateMarketForm({
 			answerUnit: '',
@@ -167,8 +167,29 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(noOutcomes.isValid).toBe(false)
-		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcomes are required')
-		expect(noOutcomes.notice).toContain('Missing required fields: Outcomes')
+		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcome 1 and Outcome 2 are required')
+		expect(noOutcomes.notice).toContain('Missing required fields: Outcome 1, Outcome 2')
+	})
+
+	test('categorical validation rejects a blank required slot even when later optional rows are populated', () => {
+		const sparseOutcomesForm: MarketFormState = {
+			answerUnit: '',
+			categoricalOutcomes: ['', 'Yes', 'No'],
+			description: 'test categorical description',
+			endTime: '2000',
+			marketType: 'categorical',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'categorical market with a sparse outcome list',
+			startTime: '1000',
+		}
+
+		const validation = validateMarketForm(sparseOutcomesForm)
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.categoricalOutcomes).toBe('Outcome 1 is required')
+		expect(validation.notice).toContain('Missing required fields: Outcome 1')
+		expect(() => createMarketParameters(sparseOutcomesForm)).toThrow('Outcome 1 is required')
 	})
 
 	test('validation catches invalid time ordering for categorical and scalar forms', () => {
@@ -220,6 +241,43 @@ void describe('market creation helpers', () => {
 		expect(validation.isValid).toBe(false)
 		expect(validation.fieldErrors.endTime).toBe('End time is invalid')
 		expect(validation.notice).toContain('Fix invalid fields: End time is invalid')
+	})
+
+	test('rejects pre-epoch timestamps before uint256 encoding', () => {
+		const validation = validateMarketForm({
+			answerUnit: '',
+			categoricalOutcomes: ['Yes', 'No'],
+			description: 'test binary description',
+			endTime: '1969-12-31T23:59:59.000Z',
+			marketType: 'binary',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'pre-epoch market',
+			startTime: '1969-12-31T23:59:58.000Z',
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.startTime).toBe('Start time must not be before the Unix epoch')
+		expect(validation.fieldErrors.endTime).toBe('End time must not be before the Unix epoch')
+	})
+
+	test('validates a blank start time using the zero value used for submission', () => {
+		const validation = validateMarketForm({
+			answerUnit: '',
+			categoricalOutcomes: ['Yes', 'No'],
+			description: 'test binary description',
+			endTime: '1970-01-01T00:00:00.000Z',
+			marketType: 'binary',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'zero end-time market',
+			startTime: '',
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.endTime).toBe('End time must be after start time')
 	})
 
 	test('validates start/end times during question creation', () => {
@@ -300,15 +358,16 @@ void describe('market creation helpers', () => {
 		expect(() =>
 			createSecurityPoolParameters({
 				marketId: '   ',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState),
 		).toThrow('Question ID is required')
 	})
 
 	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
+			initialReportPriorityFeeGwei: '10',
 			marketId: '0x2a',
-			securityMultiplier: '3',
+			statoblastSecurityMultiplierBps: '3',
 		}
 
 		const parameters = createSecurityPoolParameters(form)
@@ -318,15 +377,16 @@ void describe('market creation helpers', () => {
 	test('normalizes and rejects malformed security-pool market IDs', () => {
 		expect(
 			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '10',
 				marketId: '  55  ',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState).questionId,
 		).toBe(55n)
 
 		expect(() =>
 			createSecurityPoolParameters({
 				marketId: 'not-a-number',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState),
 		).toThrow('Question ID must be a valid decimal or hex bigint')
 	})
@@ -353,25 +413,59 @@ void describe('market creation helpers', () => {
 
 	test('security pool creation parameters exclude origin retention input', () => {
 		const parameters = createSecurityPoolParameters({
+			initialReportPriorityFeeGwei: '10',
 			marketId: '42',
-			securityMultiplier: '2',
+			statoblastSecurityMultiplierBps: '2',
 		} as SecurityPoolFormState)
 
 		expect(parameters).toEqual({
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: 42n,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 		expect('currentRetentionRate' in parameters).toBe(false)
 	})
 
+	test('converts fractional security multipliers to basis points', () => {
+		const parameters = createSecurityPoolParameters({
+			initialReportPriorityFeeGwei: '10',
+			marketId: '42',
+			statoblastSecurityMultiplierBps: '2.5',
+		} as SecurityPoolFormState)
+
+		expect(parameters.statoblastSecurityMultiplierBps).toBe(25_000n)
+	})
+
+	test('parses the initial report priority fee from gwei and rejects zero', () => {
+		expect(
+			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '10.5',
+				marketId: '42',
+				statoblastSecurityMultiplierBps: '2',
+			}),
+		).toEqual({
+			initialReportPriorityFeeAttoEthPerGas: 10_500_000_000n,
+			questionId: 42n,
+			statoblastSecurityMultiplierBps: 20_000n,
+		})
+
+		expect(() =>
+			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '0',
+				marketId: '42',
+				statoblastSecurityMultiplierBps: '2',
+			}),
+		).toThrow('Initial report priority fee must be greater than 0')
+	})
+
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
-		for (const securityMultiplier of ['0', '1']) {
+		for (const statoblastSecurityMultiplierBps of ['0', '1', '1.0001']) {
 			expect(() =>
 				createSecurityPoolParameters({
 					marketId: '42',
-					securityMultiplier,
+					statoblastSecurityMultiplierBps,
 				} as SecurityPoolFormState),
-			).toThrow('Security multiplier must be greater than 1')
+			).toThrow('Statoblast security multiplier must be at least 1.0002')
 		}
 	})
 })

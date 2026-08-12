@@ -2,20 +2,16 @@ import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zer
 import type { ReadClient } from '../lib/clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '../lib/activeEnvironment.js'
 import { isRecoverableContractReadError, isRecoverableQuoteError } from '../lib/errors.js'
-import { MAINNET_WETH_ADDRESS } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS } from '../lib/networkProfile.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 
 export { getWethAddress }
 
-export const UNISWAP_V4_QUOTER_ADDRESS: Address = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203'
-// Uniswap V3 QuoterV2 — used as fallback when a V4 pool doesn't exist
-const UNISWAP_V3_QUOTER_ADDRESS: Address = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e'
-const UNISWAP_V3_FACTORY_ADDRESS: Address = '0x1F98431c8aD98523631AE4a59f267346ea31F984'
-const UNISWAP_POOL_EXPLORER_BASE_URL = 'https://app.uniswap.org/explore/pools/ethereum'
+export const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
 
 // Known token addresses (mainnet)
 export const REP_ADDRESS: Address = '0x221657776846890989a759BA2973e427DfF5C9bB'
-export const USDC_ADDRESS: Address = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+export const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
 // WETH — used for V3 quotes (V3 doesn't support native ETH, only WETH)
 export const WETH_ADDRESS: Address = MAINNET_WETH_ADDRESS
 // ETH in Uniswap V4 is represented as address(0)
@@ -124,11 +120,15 @@ function sortTokenPair(tokenA: Address, tokenB: Address): [Address, Address] {
 }
 
 function buildUniswapPoolExplorerUrl(poolIdentifier: string) {
-	return `${UNISWAP_POOL_EXPLORER_BASE_URL}/${poolIdentifier}`
+	return `${getActiveNetworkProfile().uniswapPoolExplorerBaseUrl}/${poolIdentifier}`
 }
 
 export function getRepAddress() {
 	return getGenesisReputationTokenAddress()
+}
+
+function getUsdcAddress() {
+	return getActiveNetworkProfile().usdcAddress
 }
 
 export function isRepPricingEnabled() {
@@ -141,7 +141,8 @@ function isMockRepPricingEnabled() {
 
 function assertRepPricingEnabled() {
 	if (isRepPricingEnabled()) return
-	throw new Error('Uniswap pricing is unavailable in simulation mode.')
+	const profile = getActiveNetworkProfile()
+	throw new Error(`Uniswap pricing is unavailable on ${profile.displayName} because this network has no configured REP pricing source.`)
 }
 
 async function isRepToken(client: ReadClient, token: Address) {
@@ -183,8 +184,8 @@ function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: b
 
 function calculateMockUsdcAmountOut(tokenIn: Address, tokenOut: Address, amountIn: bigint) {
 	const repPerUsdcPrice = getMockRepUsdcPrice()
-	const tokenInIsUsdc = tokenIn === USDC_ADDRESS
-	const tokenOutIsUsdc = tokenOut === USDC_ADDRESS
+	const tokenInIsUsdc = tokenIn === getUsdcAddress()
+	const tokenOutIsUsdc = tokenOut === getUsdcAddress()
 
 	if (!tokenInIsUsdc && tokenOutIsUsdc) return (amountIn * repPerUsdcPrice) / 10n ** 18n
 	if (tokenInIsUsdc && !tokenOutIsUsdc) return (amountIn * 10n ** 18n) / repPerUsdcPrice
@@ -196,8 +197,8 @@ async function maybeQuoteMockRepPair(client: ReadClient, tokenIn: Address, token
 
 	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
 	const tokenOutIsEth = tokenOut === ETH_ADDRESS || tokenOut === getWethAddress()
-	const tokenInIsUsdc = tokenIn === USDC_ADDRESS
-	const tokenOutIsUsdc = tokenOut === USDC_ADDRESS
+	const tokenInIsUsdc = tokenIn === getUsdcAddress()
+	const tokenOutIsUsdc = tokenOut === getUsdcAddress()
 
 	if (!tokenInIsEth && !tokenOutIsEth && !tokenInIsUsdc && !tokenOutIsUsdc) return undefined
 	if ((tokenInIsEth || tokenOutIsEth) && (tokenInIsUsdc || tokenOutIsUsdc)) return undefined
@@ -249,7 +250,7 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 	const [currency0, currency1] = zeroForOne ? [tokenIn, tokenOut] : [tokenOut, tokenIn]
 
 	const { result } = await client.simulateContract({
-		address: UNISWAP_V4_QUOTER_ADDRESS,
+		address: getActiveNetworkProfile().uniswapV4QuoterAddress,
 		abi: QUOTER_ABI,
 		functionName: 'quoteExactInputSingle',
 		args: [
@@ -313,24 +314,24 @@ export async function quoteBestExactInput(client: ReadClient, tokenIn: Address, 
 	return result.amountOut
 }
 
-// Returns how much ETH (in wei) you receive for swapping `amountIn` of `token`
+// Returns how much ETH (in attoETH) you receive for swapping `amountIn` of `token`
 export async function quoteTokenForEth(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	return quoteExactInput(client, token, ETH_ADDRESS, amountIn, poolConfig)
 }
 
-// Returns how much `token` (in token's native units) you receive for swapping `amountIn` ETH (in wei)
+// Returns how much `token` (in token's native units) you receive for swapping `amountIn` ETH (in attoETH)
 export async function quoteEthForToken(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	return quoteExactInput(client, ETH_ADDRESS, token, amountIn, poolConfig)
 }
 
 // Convenience: REP → ETH using the default pool config
-export async function quoteRepForEth(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
+export async function quoteRepForEth(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
+	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
 }
 
 // Convenience: ETH → REP using the default pool config
-export async function quoteEthForRep(client: ReadClient, ethAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmount)
+export async function quoteEthForRep(client: ReadClient, ethAmountAttoEth: bigint): Promise<bigint> {
+	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmountAttoEth)
 }
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
@@ -366,7 +367,7 @@ const V3_QUOTER_ABI = [
 // Use WETH_ADDRESS for ETH (V3 does not support native ETH).
 async function quoteV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fee: number): Promise<bigint> {
 	const { result } = await client.simulateContract({
-		address: UNISWAP_V3_QUOTER_ADDRESS,
+		address: getActiveNetworkProfile().uniswapV3QuoterAddress,
 		abi: V3_QUOTER_ABI,
 		functionName: 'quoteExactInputSingle',
 		args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
@@ -383,7 +384,7 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 
 	try {
 		const poolAddress = await client.readContract({
-			address: UNISWAP_V3_FACTORY_ADDRESS,
+			address: getActiveNetworkProfile().uniswapV3FactoryAddress,
 			abi: V3_FACTORY_ABI,
 			functionName: 'getPool',
 			args: [token0, token1, fee],
@@ -442,9 +443,9 @@ export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address
 	return result.amountOut
 }
 
-// Returns how much WETH (= ETH) you receive for `repAmount` REP via Uniswap V3 (1% pool).
-export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
+// Returns how much WETH (= ETH) you receive for `attoRepAmount` REP via Uniswap V3 (1% pool).
+export async function quoteRepForEthV3(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
+	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────
@@ -452,6 +453,6 @@ export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): P
 // Pool ID: 0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
-export async function quoteRepForUsdcV4WithSource(client: ReadClient, repAmount: bigint) {
-	return await quoteBestExactInputWithSource(client, getRepAddress(), USDC_ADDRESS, repAmount, [REP_USDC_V4_POOL])
+export async function quoteRepForUsdcV4WithSource(client: ReadClient, attoRepAmount: bigint) {
+	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), attoRepAmount, [REP_USDC_V4_POOL])
 }

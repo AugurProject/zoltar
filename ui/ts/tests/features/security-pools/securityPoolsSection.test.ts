@@ -9,7 +9,7 @@ import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../../../features/security-pools/components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import type { AccountState } from '../../../types/app.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../../../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../../../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../../../features/types.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
@@ -18,8 +18,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -85,11 +85,10 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onDepositRep: () => undefined,
+		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
-		onRedeemRep: () => undefined,
-		onSetSecurityBondAllowance: () => undefined,
+		onRedeemRepFromVault: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
@@ -102,9 +101,9 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		securityVaultForm: {
 			depositAmount: '',
 			repWithdrawAmount: '',
-			securityBondAllowanceAmount: '',
+			targetHealthFactor: '',
 			securityPoolAddress: '',
-			selectedVaultAddress: '',
+			selectedVaultOwner: '',
 		},
 		securityVaultMissing: false,
 		securityVaultRepApproval: {
@@ -112,9 +111,9 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 			loading: false,
 			value: 0n,
 		},
-		securityVaultRepBalance: undefined,
+		walletRepBalanceAttoRep: undefined,
 		securityVaultResult: undefined,
-		selectedPoolSecurityMultiplier: undefined,
+		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
 	}
 }
@@ -151,7 +150,7 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
+		onClaimParentEscalationDeposits: (_outcome, _depositIndexes) => undefined,
 		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
 		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,
@@ -184,25 +183,27 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 5n * 10n ** 18n,
+		totalPoolHeldAttoRep: 0n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -217,30 +218,6 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
-function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	const details = {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
-		lastPrice: 1n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
-		priceValidUntilTimestamp: 1000n,
-		queuedOperationEthCost: 1n,
-		requestPriceEthCost: 1n,
-		token1: zeroAddress,
-		token2: zeroAddress,
-		...overrides,
-	}
-	return details
-}
-
 function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
 	return {
 		accountState: createAccountState(),
@@ -248,16 +225,17 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		checkedSecurityPoolAddress: undefined,
 		closeLiquidationModal: () => undefined,
 		forkAuction: createForkAuctionProps(),
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
+		liquidationDebtEthAmount: '',
+		maximumLiquidationDebtAttoEth: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
 		liquidationTargetVault: '',
 		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
-		loadingPoolOperationBounty: false,
 		loadingSecurityPools: false,
+		onBrowsePools: () => undefined,
+		onCreatePool: () => undefined,
 		onLiquidationAmountChange: () => undefined,
 		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
@@ -271,10 +249,9 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		selectedPoolRefreshNonce: 0,
 		onViewPendingReport: () => undefined,
 		poolOracleActiveAction: undefined,
-		poolOracleActiveBountyId: undefined,
 		poolOracleManagerDetails: undefined,
 		poolOracleManagerError: undefined,
-		poolOperationBountyLookupError: undefined,
+		poolOracleManagerErrorAddress: undefined,
 		poolPriceOracleResult: undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
@@ -327,35 +304,11 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 				}
 	return {
 		accountState,
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		hasLoadedSecurityPools: false,
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '5',
-		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
-		loadingSecurityPools: false,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTimeoutMinutesChange: () => undefined,
-		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
-		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
-		poolOracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
-		securityPoolLiquidationError: undefined,
-		securityPoolOverviewResult: undefined,
 		...overrides,
 		environmentRefreshKey,
 		securityPoolBrowseCount: securityPoolPage?.poolCount,
@@ -367,11 +320,16 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps> = {}): SecurityPoolRouteContentProps {
 	return {
 		accountState: createAccountState(),
+		availableQuestionsContextKey: 'environment-1:universe-0',
+		availableQuestions: [],
 		checkingDuplicateOriginPool: false,
 		duplicateOriginPoolExists: false,
+		hasLoadedAvailableQuestions: true,
+		loadingAvailableQuestions: false,
 		loadingMarketDetails: false,
 		marketDetails: undefined,
 		onCreateSecurityPool: () => undefined,
+		onLoadAvailableQuestions: async () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onSecurityPoolFormChange: () => undefined,
 		poolCreationMarketDetails: undefined,
@@ -382,8 +340,9 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
+			initialReportPriorityFeeGwei: '10',
 			marketId: '',
-			securityMultiplier: '',
+			statoblastSecurityMultiplierBps: '',
 		},
 		securityPoolResult: undefined,
 		zoltarUniverseHasForked: false,
@@ -594,9 +553,10 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: createdPoolAddress,
-							securityMultiplier: 2n,
+							statoblastSecurityMultiplierBps: 20_000n,
 							universeId: 1n,
 						},
 					}),
@@ -613,16 +573,16 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Pool' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: /^Open pool:/ }))
 		expect(activeViewChanges).toEqual(['operate'])
 		expect(refreshCalls).toEqual([createdPoolAddress])
 
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to Browse' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to browse' }))
 		expect(activeViewChanges).toEqual(['operate', 'browse'])
 		expect(refreshCalls).toEqual([createdPoolAddress])
 	})
 
-	void test('Create Another Pool button is wired in create mode', async () => {
+	void test('Create another pool button is wired in create mode', async () => {
 		let resetCount = 0
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -632,9 +592,10 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
+							initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: '0x00000000000000000000000000000000000000a5',
-							securityMultiplier: 2n,
+							statoblastSecurityMultiplierBps: 20_000n,
 							universeId: 1n,
 						},
 						onResetSecurityPoolCreation: () => {
@@ -646,7 +607,7 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Create Another Pool' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
 	})
 
@@ -676,125 +637,19 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
 		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected operate mode to render the selected pool context card')
 		const contextQueries = within(selectedPoolContext)
 		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
-		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
-		const lookupLabel = contextQueries.getByText('Security Pool Address')
-		const summaryMetric = contextQueries.getByText('Total REP Backing')
-		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
-		const summaryPosition = selectedPoolContext.textContent?.indexOf(summaryMetric.textContent ?? '') ?? -1
-		expect(lookupPosition).toBeGreaterThanOrEqual(0)
-		expect(summaryPosition).toBeGreaterThanOrEqual(0)
-		expect(lookupPosition < summaryPosition).toBe(true)
-	})
-
-	void test('shows liquidation successful in browse mode after an immediate execution', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: true,
-							managerAddress: zeroAddress,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-							securityPoolAddress: zeroAddress,
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
-		expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
-	})
-
-	void test('shows liquidation queued in browse mode when the refreshed manager reports a pending liquidation', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: false,
-							managerAddress: zeroAddress,
-							pendingOperation: {
-								amount: 1n,
-								initiatorVault: zeroAddress,
-								operation: 'liquidation',
-								operationId: 4n,
-								targetVault: zeroAddress,
-							},
-							pendingOperationSlotId: 4n,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
-							securityPoolAddress: zeroAddress,
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(within(document.body).getByText('Liquidation Queued')).not.toBeNull()
-	})
-
-	void test('shows liquidation failed in browse mode with the revert detail', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: true,
-							managerAddress: zeroAddress,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
-							securityPoolAddress: zeroAddress,
-							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
-								operation: 'liquidation',
-								operationId: 9n,
-								success: false,
-							},
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
-		expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(contextQueries.queryByText('Total Capacity ownership')).toBeNull()
+		expect(contextQueries.getByText('Security Pool Address')).not.toBeNull()
+		const contextDetails = document.body.querySelector('.selected-pool-context-details')
+		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
+		expect(within(contextDetails).getByText('Pool-held REP')).not.toBeNull()
+		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
@@ -820,7 +675,6 @@ void describe('SecurityPoolsSection', () => {
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPools: true,
 						securityPools: [createSelectedPool()],
 					}),
 				}),
@@ -853,7 +707,6 @@ void describe('SecurityPoolsSection', () => {
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPools: true,
 						securityPools: [operationalPool, endedPool],
 					}),
 				}),
@@ -862,7 +715,7 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const searchInput = documentQueries.getByPlaceholderText('Filter this page by pool address, question ID, or question text.')
+		const searchInput = documentQueries.getByPlaceholderText('Address, question ID, or text')
 		if (!(searchInput instanceof HTMLInputElement)) throw new Error('Expected search input')
 		searchInput.value = 'second'
 		await act(() => {

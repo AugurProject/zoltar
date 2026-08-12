@@ -49,8 +49,8 @@ void describe('question helpers', () => {
 		const fields = getQuestionSummaryFields({
 			...questionBase,
 			answerUnit: 'USD',
-			displayValueMax: 10n,
-			displayValueMin: 1n,
+			displayValueMax: 10n * 10n ** 18n,
+			displayValueMin: 1n * 10n ** 18n,
 			marketType: 'scalar',
 			numTicks: 100n,
 			outcomeLabels: [],

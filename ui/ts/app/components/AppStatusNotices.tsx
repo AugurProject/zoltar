@@ -1,20 +1,19 @@
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { NoticeStack } from '../../components/NoticeStack.js'
-import { TimestampValue } from '../../components/TimestampValue.js'
-import { formatUniverseLabel } from '../../features/universes/lib/universe.js'
-import type { ZoltarUniverseSummary } from '../../types/contracts.js'
 import type { NoticeItem } from '../../types/components.js'
 import type { ReadBackendStatus } from '../../lib/chainBackend.js'
 
 type AppStatusNoticesProps = {
-	errorMessage: string | undefined
+	errorMessage?: string | undefined
+	errorMessages?: readonly string[]
+	loadingZoltarUniverse?: boolean
+	onRetryZoltarUniverse?: (() => void) | undefined
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
 	simulationBootstrapError: string | undefined
-	showAugurPlaceHolderDeploymentWarning: boolean
-	showZoltarUniverseForkedWarning: boolean
-	zoltarUniverse: ZoltarUniverseSummary | undefined
+	showAugurStatoblastDeploymentWarning: boolean
+	zoltarUniverseError?: string | undefined
 }
 
 function formatRpcSourceLabel(source: ReadBackendStatus['rpcSource']) {
@@ -41,46 +40,57 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 		const rejectedOverride = readBackendStatus.rejectedRpcOverride
 		const configuredRpcLabel = getConfiguredRpcLabel(readBackendStatus)
 		return {
-			detail: appCopy.formatReadRpcOverrideIgnoredDetail(formatRpcSourceLabel(rejectedOverride.source), rejectedOverride.url, rejectedOverride.reason, configuredRpcLabel, readBackendStatus.rpcUrl),
+			detail: appCopy.readRpcOverrideIgnoredDetail,
 			id: 'read-rpc-override-ignored',
+			technicalDetails: appCopy.formatReadRpcOverrideIgnoredDetail(formatRpcSourceLabel(rejectedOverride.source), rejectedOverride.url, rejectedOverride.reason, configuredRpcLabel, readBackendStatus.rpcUrl),
 			tone: 'warning',
 			title: appCopy.readRpcOverrideIgnored,
 		}
 	}
 	if (readBackendStatus.rpcSource === 'url')
 		return {
-			detail: appCopy.formatReadRpcOverrideFromUrlDetail(getConfiguredRpcLabel(readBackendStatus), readBackendStatus.rpcUrl),
+			detail: appCopy.customReadRpcWarningDetail,
 			id: 'url-read-rpc-override',
+			technicalDetails: appCopy.formatReadRpcOverrideFromUrlDetail(getConfiguredRpcLabel(readBackendStatus), readBackendStatus.rpcUrl),
 			tone: 'warning',
 			title: appCopy.urlProvidedReadRpc,
 		}
 	if (readBackendStatus.rpcSource === 'default') return undefined
 	return {
-		detail: appCopy.formatReadRpcOverrideActiveDetail(getConfiguredRpcLabel(readBackendStatus), formatRpcSourceLabel(readBackendStatus.rpcSource), readBackendStatus.rpcUrl),
+		detail: appCopy.customReadRpcWarningDetail,
 		id: 'read-rpc-override-active',
+		technicalDetails: appCopy.formatReadRpcOverrideActiveDetail(getConfiguredRpcLabel(readBackendStatus), formatRpcSourceLabel(readBackendStatus.rpcSource), readBackendStatus.rpcUrl),
 		tone: 'pending',
 		title: appCopy.readRpcOverrideActive,
 	}
 }
 
-export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurStatoblastDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
-	if (showZoltarUniverseForkedWarning && zoltarUniverse !== undefined)
+	if (showAugurStatoblastDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
+	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
+	if (zoltarUniverseError !== undefined)
 		items.push({
 			detail: (
 				<>
-					{formatUniverseLabel(zoltarUniverse.universeId)} {appCopy.hasForkedOn} <TimestampValue timestamp={zoltarUniverse.forkTime} />.
+					<p>{zoltarUniverseError}</p>
+					{onRetryZoltarUniverse === undefined ? undefined : (
+						<div className='actions'>
+							<button type='button' className='secondary' disabled={loadingZoltarUniverse} onClick={onRetryZoltarUniverse}>
+								{loadingZoltarUniverse ? commonCopy.retrying : commonCopy.retry}
+							</button>
+						</div>
+					)}
 				</>
 			),
-			id: 'zoltar-forked',
+			id: 'zoltar-universe-error',
 			tone: 'blocking',
-			title: appCopy.universeForked,
+			title: commonCopy.error,
 		})
-	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
-	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
-	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: commonCopy.error })
+	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
+	for (const [index, message] of distinctErrorMessages.entries()) items.push({ detail: message, id: `app-error-${index.toString()}`, tone: 'blocking', title: commonCopy.error })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)
 
 	return <NoticeStack items={items} />

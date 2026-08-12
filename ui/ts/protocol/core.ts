@@ -2,12 +2,14 @@ import { encodeFunctionData, RpcError, type Abi, type Account, type Address, typ
 import { getMulticall3Address } from './deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
+import { getContractLabel } from './contractLabels.js'
 
 export type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
 	abi: Abi | readonly unknown[]
 	address: Address
 	args?: readonly unknown[]
+	contractLabel?: string
 	functionName: string
 	gas?: bigint
 	value?: bigint
@@ -31,9 +33,10 @@ export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'statu
 		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 	}
 
-export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
+export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts, blockNumber?: bigint): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({
 		allowFailure: false,
+		blockNumber,
 		contracts: contracts as readonly ContractFunctionParameters[],
 		multicallAddress: getMulticall3Address(),
 	})) as MulticallReturnType<TContracts, false>
@@ -125,6 +128,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			args: callParams.args,
 			chainName: client.chain?.name,
 			contractAddress: callParams.address,
+			contractLabel: callParams.contractLabel ?? getContractLabel(callParams.abi, callParams.functionName),
 			data,
 			functionName: callParams.functionName,
 			requiresWalletConfirmation: client.requiresWalletConfirmation,

@@ -18,8 +18,8 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
 }
@@ -55,25 +55,27 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const securityPool: ListedSecurityPool = {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
-		lastOraclePrice: undefined,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+		lastOraclePrice: 10n ** 18n,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 0n,
+		migratedAttoRep: 0n,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 5n * 10n ** 18n,
+		totalPoolHeldAttoRep: 0n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -122,36 +124,12 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 				}
 	return {
 		accountState,
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		hasLoadedSecurityPools: true,
 		hasLoadedSecurityPoolPage: true,
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '5',
-		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
-		loadingSecurityPools: false,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTimeoutMinutesChange: () => undefined,
-		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
-		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
 		onSelectSecurityPool: () => undefined,
-		poolOracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
-		securityPoolLiquidationError: undefined,
-		securityPoolOverviewResult: undefined,
 		...overrides,
 		environmentRefreshKey,
 		securityPoolBrowseCount: securityPoolPage?.poolCount,
@@ -187,7 +165,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		if (titleHeading === undefined) {
 			throw new Error(`Expected security pool card heading for "${headingText}"`)
 		}
-		const poolCard = titleHeading.closest('.entity-card')
+		const poolCard = titleHeading.closest('.comparison-record')
 		if (!(poolCard instanceof HTMLElement)) {
 			throw new Error(`Expected security pool card for "${headingText}"`)
 		}
@@ -204,6 +182,61 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
+	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
+		const pool = createSecurityPool({
+			lastOraclePrice: 3n * 10n ** 18n,
+			settlementCollateralAttoEth: 5n * 10n ** 18n,
+			statoblastSecurityMultiplierBps: 20_000n,
+			totalCapacityOwnershipAttoRep: 80n * 10n ** 18n,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const card = getSecurityPoolCard('Will this resolve?')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max ≈ 13.33 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('Max ≈ 80.00 ETH')
+	})
+
+	test('does not present pool-held vault REP backing alone as a pool health gauge when dispute-staked REP changes ordinary coverage', async () => {
+		const pool = createSecurityPool({
+			statoblastSecurityMultiplierBps: 20_000n,
+			totalPoolHeldAttoRep: 16n * 10n ** 18n,
+			totalCapacityOwnershipAttoRep: 10n * 10n ** 18n,
+			vaultCount: 1n,
+			vaults: [
+				{
+					disputeStakedAttoRep: 4n * 10n ** 18n,
+					vaultAttoRepBacking: 16n * 10n ** 18n,
+					capacityOwnershipAttoRep: 10n * 10n ** 18n,
+					claimableFeesAttoEth: 0n,
+					vaultAddress: '0x0000000000000000000000000000000000000100',
+				},
+			],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Pool collateralization')).toBeNull()
+		expect(documentQueries.queryByText('Below target')).toBeNull()
+	})
+
+	test('gives same-titled pool actions distinct accessible names', async () => {
+		const firstAddress = '0x0000000000000000000000000000000000000100'
+		const secondAddress = '0x0000000000000000000000000000000000000101'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [createSecurityPool({ securityPoolAddress: firstAddress }), createSecurityPool({ securityPoolAddress: secondAddress })],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${firstAddress})` })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${secondAddress})` })).not.toBeNull()
+	})
+
 	test('preserves the pool universe when opening a child-universe pool', async () => {
 		const pool = createSecurityPool({
 			securityPoolAddress: '0x0000000000000000000000000000000000000101',
@@ -214,30 +247,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Open Pool' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool: Will this resolve? (0x0000000000000000000000000000000000000101)' }))
 		})
 
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
-	})
-
-	test('does not render a local liquidation transaction notice', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					securityPoolOverviewResult: {
-						action: 'queueLiquidation',
-						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
-						securityPoolAddress: zeroAddress,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
-		expect(documentQueries.queryByText('Check State')).toBeNull()
-		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
 	})
 
 	test('reloads the current browse page when the environment refresh key changes', async () => {
@@ -316,7 +329,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Previous environment pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 
 		const staleResolvedPage: SecurityPoolBrowsePage = {
@@ -344,7 +357,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Stale resolved environment pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 
 		deferredPageLoad.resolve()
 		await act(async () => {
@@ -393,7 +406,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(documentQueries.queryByText('Account A pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 	})
 
 	test('uses a non-wallet request key off-mainnet and reloads with the wallet key after switching back', async () => {
@@ -462,7 +475,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
@@ -503,7 +516,7 @@ describe('SecurityPoolsOverviewSection', () => {
 					securityPools: [
 						createSecurityPool({
 							forkOutcome: 'yes',
-							migratedRep: 1n,
+							migratedAttoRep: 1n,
 							systemState: 'poolForked',
 						}),
 					],
@@ -512,7 +525,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Migration')
 	})
 
@@ -526,7 +539,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							forkOutcome: 'yes',
 							hasForkActivity: true,
 							marketDetails: createMarketDetails({ title: auctionPoolTitle }),
-							migratedRep: 1n,
+							migratedAttoRep: 1n,
 							parent: '0x0000000000000000000000000000000000000100',
 							systemState: 'forkTruthAuction',
 							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
@@ -558,7 +571,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							forkOutcome: 'yes',
 							hasForkActivity: true,
 							marketDetails: createMarketDetails({ title: childPoolTitle }),
-							migratedRep: 1n,
+							migratedAttoRep: 1n,
 							parent: '0x0000000000000000000000000000000000000100',
 							systemState: 'operational',
 							truthAuctionAddress: '0x0000000000000000000000000000000000000001',
@@ -571,7 +584,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		const badgeTexts = Array.from(document.body.querySelectorAll('.comparison-record .badge')).map(element => element.textContent?.trim() ?? '')
 		expect(badgeTexts).toContain('Fork Finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
@@ -611,7 +624,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					hasLoadedSecurityPools: true,
 					securityPools: [],
 				})}
 			/>,
@@ -628,7 +640,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					hasLoadedSecurityPools: true,
 					onCreateSecurityPool: () => {
 						createSecurityPoolClicks += 1
 					},
@@ -639,7 +650,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Security Pool' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create security pool' }))
 		})
 
 		expect(createSecurityPoolClicks).toBe(1)
@@ -660,7 +671,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'No security pools' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create Security Pool' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create security pool' })).not.toBeNull()
 		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
 	})
 
@@ -697,14 +708,15 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const hasLoadingOrLoadCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Load security pools to check what is available in this universe.') !== null
-		expect(hasLoadingOrLoadCopy).toBe(true)
+		expect(documentQueries.queryByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create security pool' })).toBeNull()
 	})
 
 	test('offers an explicit retry action when the pool list fails to load', async () => {
 		const requestedPages: string[] = []
+		const retryPageLoad = createDeferred<void>()
+		let pageLoadCount = 0
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -712,6 +724,8 @@ describe('SecurityPoolsOverviewSection', () => {
 					loadingSecurityPoolPage: false,
 					onLoadSecurityPoolPage: (pageIndex, pageSize) => {
 						requestedPages.push(`${pageIndex}:${pageSize}`)
+						pageLoadCount += 1
+						return pageLoadCount === 1 ? undefined : retryPageLoad.promise
 					},
 					securityPoolOverviewError: 'Failed to load security pools.',
 					securityPoolPage: undefined,
@@ -721,13 +735,22 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const retryButton = within(document.body).getByRole('button', { name: 'Retry Loading Pools' })
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
+		})
+		const retryButton = documentQueries.getByRole('button', { name: 'Retry' })
 		expect(within(document.body).queryByRole('button', { name: 'Load Security Pools' })).toBeNull()
 		await act(() => {
 			fireEvent.click(retryButton)
 		})
 
 		expect(requestedPages).toContain('0:6')
+		expect(documentQueries.getByRole('button', { name: 'Retrying security pools…' }).hasAttribute('disabled')).toBe(true)
+		retryPageLoad.resolve()
+		await act(async () => {
+			await retryPageLoad.promise
+		})
 	})
 
 	test('does not infer browse page count from selected-pool cache before the first pool page loads', async () => {
@@ -777,6 +800,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const searchInput = documentQueries.getByLabelText('Search this page')
+		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
+		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
 		const systemStateSelect = documentQueries.getByLabelText('System State')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
@@ -786,6 +812,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Operational pool')).toBeNull()
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
+		expect(documentQueries.getByText('1 of 2 pools matches.')).not.toBeNull()
 	})
 
 	test('clamps the current page when the loaded pool count shrinks', async () => {
@@ -813,7 +840,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		await waitFor(() => {
 			expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
 		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
@@ -872,7 +899,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		await waitFor(() => {
 			expect(loadPageCalls.includes(0)).toBe(true)
 		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
@@ -885,11 +912,11 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		await waitFor(() => {
 			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Load Security Pools' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
 		})
 	})
 
-	test('shows a deferred vault placeholder when browse mode has not loaded vault details yet', async () => {
+	test('shows only the aggregate vault count when browse mode has not loaded vault details yet', async () => {
 		const deferredPoolTitle = 'Deferred vault pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -908,28 +935,25 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const documentQueries = within(document.body)
 		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByText('Preview deferred')).not.toBeNull()
-		expect(poolCardQueries.getByText('2 vaults are registered. Open the pool to load individual vault details.')).not.toBeNull()
+		expect(poolCardQueries.queryByText('Preview deferred')).toBeNull()
+		expect(poolCardQueries.queryByText('2 vaults are registered. Open the pool to load individual vault details.')).toBeNull()
 		expect(poolCardQueries.queryByText('Vault preview unavailable.')).toBeNull()
-		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
+		expect(poolCardQueries.queryByText('No known vaults in this pool.')).toBeNull()
+		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Known Vaults')
+		expect(vaultMetric?.querySelector('dd')?.textContent).toBe('2')
+		expect(documentQueries.getByLabelText('Known Vault Registry')).not.toBeNull()
+		expect(documentQueries.getByRole('option', { name: 'Has known vaults' })).not.toBeNull()
+		expect(documentQueries.getByRole('option', { name: 'No known vaults' })).not.toBeNull()
 	})
 
-	test('renders browse-mode vault previews and opens liquidation review for a vault', async () => {
+	test('keeps browse pool cards focused on pool-level information', async () => {
 		const previewPoolTitle = 'Pool with preview vaults'
-		let liquidationRequest: { managerAddress: string; securityPoolAddress: string; vaultAddress: string; maxAmount: bigint | undefined } | undefined
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress, maxAmount) => {
-						liquidationRequest = {
-							managerAddress,
-							securityPoolAddress,
-							vaultAddress,
-							maxAmount,
-						}
-					},
 					securityPools: [
 						createSecurityPool({
 							managerAddress: '0x0000000000000000000000000000000000000502',
@@ -938,10 +962,10 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 5n,
 							vaults: [
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 5n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 5n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000501',
 								},
 							],
@@ -954,26 +978,17 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
-		expect(poolCardQueries.queryByText('Pool Details')).toBeNull()
 		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
-		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
-		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Review Liquidation' })
-		expect(liquidationReviewButton).not.toBeNull()
-		await act(() => {
-			fireEvent.click(liquidationReviewButton)
-		})
-		expect(liquidationRequest).toEqual({
-			managerAddress: '0x0000000000000000000000000000000000000502',
-			securityPoolAddress: '0x0000000000000000000000000000000000000500',
-			vaultAddress: '0x0000000000000000000000000000000000000501',
-			maxAmount: 5n,
-		})
-		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.queryByText('+4 more vaults')).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Review liquidation' })).toBeNull()
+		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
+		const browseSection = poolCard.closest('.section-block')
+		if (!(browseSection instanceof HTMLElement)) throw new Error('Expected browse section')
+		expect(browseSection.classList.contains('plain')).toBe(true)
+		expect(browseSection.classList.contains('surface')).toBe(false)
 	})
 
-	test('preserves the loader-provided vault preview order instead of re-ranking by allowance', async () => {
+	test('does not render loader-provided vault previews inside pool cards', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -984,24 +999,24 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 3n,
 							vaults: [
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 1n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 1n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000701',
 								},
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 9n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 9n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000702',
 								},
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 5n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 5n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000703',
 								},
 							],
@@ -1014,16 +1029,13 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard('Ordered vault preview pool')
 		const previewRows = Array.from(poolCard.querySelectorAll('.security-pool-browse-vault-row'))
-		expect(previewRows).toHaveLength(3)
-		const previewAddresses = previewRows.map(row => {
-			if (!(row instanceof HTMLElement)) throw new Error('Expected vault preview row element')
-			const copyButton = within(row).getByRole('button', { name: /Copy address / })
-			return copyButton.getAttribute('aria-label')?.replace('Copy address ', '')
-		})
-		expect(previewAddresses).toEqual(['0x0000000000000000000000000000000000000701', '0x0000000000000000000000000000000000000702', '0x0000000000000000000000000000000000000703'])
+		expect(previewRows).toHaveLength(0)
+		for (const vaultAddress of ['0x0000000000000000000000000000000000000701', '0x0000000000000000000000000000000000000702', '0x0000000000000000000000000000000000000703']) {
+			expect(within(poolCard).queryByRole('button', { name: `Copy address ${vaultAddress}` })).toBeNull()
+		}
 	})
 
-	test('keeps the connected wallet vault visible when it is appended outside the top browse preview', async () => {
+	test('keeps connected-wallet vault details out of browse pool cards', async () => {
 		const viewerVaultAddress = '0x0000000000000000000000000000000000000604'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -1036,31 +1048,31 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaultCount: 6n,
 							vaults: [
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 8n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 8n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000601',
 								},
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 7n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 7n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000602',
 								},
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 6n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 6n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000603',
 								},
 								{
-									escalationEscrowedRep: 0n,
-									repDepositShare: 10n,
-									securityBondAllowance: 1n,
-									unpaidEthFees: 0n,
+									disputeStakedAttoRep: 0n,
+									vaultAttoRepBacking: 10n,
+									capacityOwnershipAttoRep: 1n,
+									claimableFeesAttoEth: 0n,
 									vaultAddress: viewerVaultAddress,
 								},
 							],
@@ -1073,8 +1085,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard('Viewer vault preview pool')
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getAllByRole('button', { name: `Copy address ${viewerVaultAddress}` }).length).toBeGreaterThan(0)
-		expect(poolCardQueries.getByText('Showing 4 of 6 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.queryByText('+2 more vaults')).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: `Copy address ${viewerVaultAddress}` })).toBeNull()
+		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
 	})
 })

@@ -1,11 +1,12 @@
 import { getErrorDetail } from '../lib/errors.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
 
-export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
+type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
-export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
+type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
 export type OpenOracleInitialReportPriceLoadResult =
 	| {
 			status: 'success'
@@ -38,39 +39,45 @@ function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
-	if (!isRepPricingEnabled())
+	if (!isRepPricingEnabled()) {
+		const profile = getActiveNetworkProfile()
 		return {
 			attemptedSources: [],
 			failureKind: 'unsupported-pair',
-			reason: 'Automatic pricing is unavailable for this pair in simulation mode. The simulation mock only supports REP / ETH and REP / WETH pairs.',
+			reason: `Automatic pricing is unavailable on ${profile.displayName} because no REP pricing source is configured for this network.`,
 			status: 'failure',
 		}
+	}
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
+	let v4Quote: Extract<OpenOracleInitialReportPriceLoadResult, { status: 'success' }> | undefined
 	try {
 		const { amountOut: token2Amount, source } = await quoteBestExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-		if (price !== undefined) return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+		if (price !== undefined) {
+			v4Quote = { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+			if (source.protocol === 'mock') return v4Quote
+		}
 	} catch (error) {
 		v4Failure = error
 	}
 	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4', 'Uniswap V3']
+	let v3Failure: unknown = 'Uniswap V3 returned an unusable quote'
+	let v3Quote: Extract<OpenOracleInitialReportPriceLoadResult, { status: 'success' }> | undefined
 	try {
 		const { amountOut: token2Amount, source } = await quoteBestV3ExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-		if (price !== undefined) return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
-		return {
-			attemptedSources,
-			failureKind: 'quote-failed',
-			reason: formatOpenOraclePriceLoadError(v4Failure, 'Uniswap V3 returned an unusable quote'),
-			status: 'failure',
-		}
-	} catch (v3Error) {
-		return {
-			attemptedSources,
-			failureKind: 'quote-failed',
-			reason: formatOpenOraclePriceLoadError(v4Failure, v3Error),
-			status: 'failure',
-		}
+		if (price !== undefined) v3Quote = { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+	} catch (error) {
+		v3Failure = error
+	}
+
+	if (v4Quote !== undefined && (v3Quote === undefined || v4Quote.token2Amount >= v3Quote.token2Amount)) return v4Quote
+	if (v3Quote !== undefined) return v3Quote
+	return {
+		attemptedSources,
+		failureKind: 'quote-failed',
+		reason: formatOpenOraclePriceLoadError(v4Failure, v3Failure),
+		status: 'failure',
 	}
 }
 

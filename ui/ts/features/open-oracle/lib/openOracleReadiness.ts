@@ -1,23 +1,14 @@
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '../../types.js'
 
-export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, reportId, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; reportId: string; settleMessage: string | undefined }): ReadinessAction[] {
-	const baseBlocker = !hasReport ? 'Load a report first.' : undefined
+export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; settleMessage: string | undefined }): ReadinessAction[] {
+	const baseBlocker = !hasReport ? 'Select a report first.' : undefined
 	const actions: ReadinessAction[] = []
 
-	if (actionMode === 'initial-report')
-		actions.push({
-			actionLabel: 'Initial Report',
-			description: 'Provide price, approvals, and submission details for the initial report.',
-			key: 'submit-initial-report',
-			readiness: baseBlocker === undefined ? 'ready' : 'blocked',
-			title: reportId === '' ? 'Submit Initial Report' : `Submit Initial Report For #${reportId}`,
-			...(baseBlocker === undefined ? {} : { blocker: baseBlocker }),
-		})
 	if (actionMode === 'dispute') {
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({
-			actionLabel: 'Dispute & Swap',
+			actionLabel: 'Dispute & swap',
 			description: 'Challenge the current report and provide the replacement swap amounts.',
 			key: 'dispute-report',
 			readiness: disputeBlocker === undefined ? 'ready' : 'blocked',
@@ -26,8 +17,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		})
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle Report',
-			description: 'Review settlement readiness and settle once the dispute window has closed.',
+			actionLabel: 'Settle report',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',
@@ -37,22 +27,12 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 	if (actionMode === 'settle') {
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
-			actionLabel: 'Settle Report',
-			description: 'Confirm settlement once the report is ready.',
+			actionLabel: 'Settle report',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',
 			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
 		})
 	}
-	if (actionMode === 'read-only')
-		actions.push({
-			actionLabel: 'No write action',
-			description: 'This report has completed its lifecycle.',
-			key: 'settled-read-only',
-			readiness: 'ready',
-			title: 'Settled Report',
-		})
-
 	return actions
 }

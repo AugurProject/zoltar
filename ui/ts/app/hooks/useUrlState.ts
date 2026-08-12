@@ -5,6 +5,7 @@ import {
 	readOpenOracleViewQueryParam,
 	readOpenOracleReportIdQueryParam,
 	readSecurityPoolsViewQueryParam,
+	readSecurityPoolQuestionIdQueryParam,
 	readSecurityPoolQueryParam,
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
@@ -12,6 +13,7 @@ import {
 	writeOpenOracleViewQueryParam,
 	writeOpenOracleReportIdQueryParam,
 	writeSecurityPoolsViewQueryParam,
+	writeSecurityPoolQuestionIdQueryParam,
 	writeSecurityPoolQueryParam,
 	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
@@ -25,6 +27,7 @@ type UrlState = {
 	securityPoolsView: string
 	selectedPoolView: string
 	securityPoolAddress: string
+	securityPoolQuestionId: string
 	zoltarView: string
 }
 
@@ -35,6 +38,7 @@ type UseUrlStateResult = UrlState & {
 	setSecurityPoolsView: (view: string | undefined) => void
 	setSelectedPoolView: (view: string | undefined) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
+	setSecurityPoolQuestionId: (questionId: string | undefined) => void
 	setZoltarView: (view: string | undefined) => void
 }
 
@@ -46,6 +50,7 @@ function readUrlState(search: string): UrlState {
 		securityPoolsView: readSecurityPoolsViewQueryParam(search) ?? '',
 		selectedPoolView: readSelectedPoolViewQueryParam(search) ?? '',
 		securityPoolAddress: readSecurityPoolQueryParam(search) ?? '',
+		securityPoolQuestionId: readSecurityPoolQuestionIdQueryParam(search) ?? '',
 		zoltarView: readZoltarViewQueryParam(search) ?? '',
 	}
 }
@@ -100,6 +105,14 @@ export function useUrlState(): UseUrlStateResult {
 		[applyUrlStateUpdate],
 	)
 
+	const setSecurityPoolQuestionId = useCallback(
+		(questionId: string | undefined) => {
+			const nextSearch = writeSecurityPoolQuestionIdQueryParam(getCurrentUrlStateSearch(), questionId === '' ? undefined : questionId)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
+
 	const setOpenOracleReport = useCallback(
 		(reportId: string | undefined) => {
 			const nextSearch = writeOpenOracleReportIdQueryParam(getCurrentUrlStateSearch(), reportId === '' ? undefined : reportId)
@@ -147,6 +160,7 @@ export function useUrlState(): UseUrlStateResult {
 		securityPoolsView: urlState.value.securityPoolsView,
 		selectedPoolView: urlState.value.selectedPoolView,
 		securityPoolAddress: urlState.value.securityPoolAddress,
+		securityPoolQuestionId: urlState.value.securityPoolQuestionId,
 		zoltarView: urlState.value.zoltarView,
 		setActiveUniverseId,
 		setOpenOracleReport,
@@ -154,6 +168,7 @@ export function useUrlState(): UseUrlStateResult {
 		setSecurityPoolsView,
 		setSelectedPoolView,
 		setSecurityPoolAddress,
+		setSecurityPoolQuestionId,
 		setZoltarView,
 	}
 }

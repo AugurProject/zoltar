@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+	bigintToSafeNumber,
 	concatHex,
 	createPublicClient,
 	createWalletClient,
@@ -15,6 +16,7 @@ import {
 	getAddress,
 	getCreate2Address,
 	hexToBytes,
+	http,
 	isAddress,
 	isHex,
 	keccak256,
@@ -26,6 +28,7 @@ import {
 	parseUnits,
 	privateKeyToAccount,
 	publicActions,
+	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
 	toHex,
 	type EIP1193Provider,
@@ -42,6 +45,11 @@ const MULTICALL_ADDRESS = '0x00000000000000000000000000000000000000DD'
 const RECEIPT_HASH = `0x${'11'.repeat(32)}` satisfies Hash
 const BLOCK_HASH = `0x${'22'.repeat(32)}` satisfies Hash
 const TX_HASH = `0x${'33'.repeat(32)}` satisfies Hash
+
+test('converts bigint values only inside the safe integer range', () => {
+	expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
+	expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
+})
 
 const BALANCE_OF_ABI = [
 	{
@@ -82,7 +90,7 @@ const SUBMIT_REPORT_ABI = [
 			{ name: 'amount2', type: 'uint128' },
 			{ name: 'stateHash', type: 'bytes32' },
 		],
-		name: 'submitInitialReport',
+		name: 'submitReport',
 		type: 'function',
 	},
 	{
@@ -93,7 +101,7 @@ const SUBMIT_REPORT_ABI = [
 			{ name: 'stateHash', type: 'bytes32' },
 			{ name: 'reporter', type: 'address' },
 		],
-		name: 'submitInitialReport',
+		name: 'submitReport',
 		type: 'function',
 	},
 ]
@@ -373,7 +381,7 @@ describe('shared ethereum compatibility layer', () => {
 				args: [7n, '0xaa'],
 			}),
 		)
-		expect(parseAbiItem('function withdrawDeposit((address depositor, uint256 amount) proof, uint8 outcome) nonpayable returns (uint256 amountToWithdraw)')).toEqual({
+		expect(parseAbiItem('function withdrawDeposit((address depositor, uint256 amount) proof, uint8 outcome) nonpayable returns (uint256 amountToWithdrawAttoRep)')).toEqual({
 			inputs: [
 				{
 					components: [
@@ -386,7 +394,7 @@ describe('shared ethereum compatibility layer', () => {
 				{ name: 'outcome', type: 'uint8' },
 			],
 			name: 'withdrawDeposit',
-			outputs: [{ name: 'amountToWithdraw', type: 'uint256' }],
+			outputs: [{ name: 'amountToWithdrawAttoRep', type: 'uint256' }],
 			stateMutability: 'nonpayable',
 			type: 'function',
 		})
@@ -408,12 +416,12 @@ describe('shared ethereum compatibility layer', () => {
 		const stateHash = `0x${'55'.repeat(32)}` satisfies Hex
 		const fourArgumentCall = encodeFunctionData({
 			abi: SUBMIT_REPORT_ABI,
-			functionName: 'submitInitialReport',
+			functionName: 'submitReport',
 			args: [7n, 8n, 9n, stateHash],
 		})
 		const fiveArgumentCall = encodeFunctionData({
 			abi: SUBMIT_REPORT_ABI,
-			functionName: 'submitInitialReport',
+			functionName: 'submitReport',
 			args: [7n, 8n, 9n, stateHash, OWNER_ADDRESS],
 		})
 
@@ -789,6 +797,22 @@ describe('shared ethereum compatibility layer', () => {
 		expect(getDecodedEntry(logArgs, 0, 'from', 'decoded log args')).toBe(getAddress(OWNER_ADDRESS))
 		expect(getDecodedEntry(logArgs, 1, 'to', 'decoded log args')).toBe(getAddress(RECIPIENT_ADDRESS))
 		expect(getDecodedEntry(logArgs, 2, 'value', 'decoded log args')).toBe(5n)
+		const signatureTopic = transferTopics[0]
+		const ownerTopic = transferTopics[1]
+		if (signatureTopic === undefined || ownerTopic === undefined) throw new Error('transfer topics missing')
+		const rawTopicFilter = [[signatureTopic], ownerTopic] as const
+		const rawLogs = await client.getLogs({
+			address: TOKEN_ADDRESS,
+			fromBlock: 1n,
+			toBlock: 1n,
+			topics: rawTopicFilter,
+		})
+		expect(rawLogs).toHaveLength(1)
+		expect(rawLogs[0]?.topics).toEqual(transferTopics)
+		const rawLogsCall = calls.filter(call => call.method === 'eth_getLogs').at(-1)
+		const rawLogsFilter = getArrayEntry(rawLogsCall?.params, 0, 'raw eth_getLogs params')
+		expect(getObjectEntry(rawLogsFilter, 'topics', 'raw eth_getLogs filter')).toEqual(rawTopicFilter)
+		await expect(client.getLogs({ address: TOKEN_ADDRESS, event: transferEvent, topics: rawTopicFilter })).rejects.toThrow('getLogs accepts either an event or raw topics, not both')
 
 		const receipt = await client.waitForTransactionReceipt({
 			hash: RECEIPT_HASH,
@@ -941,6 +965,131 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
+	})
+
+	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
+		let receiptRequests = 0
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'HTTP 429 while calling eth_getTransactionReceipt' }
+			return {
+				blockHash: BLOCK_HASH,
+				blockNumber: '0x1',
+				cumulativeGasUsed: '0x5208',
+				effectiveGasPrice: '0x3',
+				from: OWNER_ADDRESS,
+				gasUsed: '0x5208',
+				logs: [],
+				status: '0x1',
+				to: RECIPIENT_ADDRESS,
+				transactionHash: RECEIPT_HASH,
+				transactionIndex: '0x0',
+				type: '0x2',
+			}
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider, { retryCount: 0, retryDelay: 0 }),
+		})
+
+		const receipt = await client.waitForTransactionReceipt({
+			hash: RECEIPT_HASH,
+			pollingInterval: 0,
+			timeout: 50,
+		})
+
+		expect(receipt.transactionHash).toBe(RECEIPT_HASH)
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
+	})
+
+	test('waitForTransactionReceipt does not retry a rate-limited request after its deadline', async () => {
+		let receiptRequests = 0
+		const clockValues = [0, 0, 1]
+		const originalDateNow = Date.now
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'rate limit exceeded' }
+			throw new Error('Receipt request ran after the deadline')
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryCount: 0, retryDelay: 0 }) })
+
+		Date.now = () => clockValues.shift() ?? 1
+		try {
+			await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, pollingInterval: 2, timeout: 1 })).rejects.toThrow('rate limit exceeded')
+		} finally {
+			Date.now = originalDateNow
+		}
+
+		expect(receiptRequests).toBe(1)
+	})
+
+	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
+		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
+		const calls: { method: string; params: unknown }[] = []
+		let secondBlockRequests = 0
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0xabcd',
+			nonce: '0x9',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x7',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') return originalTransaction
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					effectiveGasPrice: '0x9',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: replacementHash,
+					transactionIndex: '0x0',
+					type: '0x2',
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x1'
+			if (method === 'eth_getBlockByNumber') {
+				const blockNumber = getArrayEntry(params, 0, 'replacement block params')
+				if (blockNumber === '0x1') {
+					secondBlockRequests += 1
+					if (secondBlockRequests === 1) throw { code: 429, message: 'rate limit exceeded' }
+				}
+				return {
+					hash: BLOCK_HASH,
+					number: blockNumber,
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: blockNumber === '0x1' ? [replacementTransaction] : [],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryCount: 0, retryDelay: 0 }) })
+
+		const receipt = await client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 50 })
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1', '0x1'])
 	})
 
 	test('waitForTransactionReceipt scans previous blocks for delayed replacement detection', async () => {
@@ -1105,6 +1254,7 @@ describe('shared ethereum compatibility layer', () => {
 		})
 		const provider = createProvider(({ method, params }) => {
 			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			expect(getArrayEntry(params, 1, 'simulate block tag')).toBe('0x2a')
 			const transaction = getArrayEntry(params, 0, 'simulate params')
 			expect(getObjectEntry(transaction, 'from', 'simulate transaction')).toBe(getAddress(OWNER_ADDRESS))
 			expect(getObjectEntry(transaction, 'data', 'simulate transaction')).toBe(expectedData)
@@ -1124,12 +1274,30 @@ describe('shared ethereum compatibility layer', () => {
 					account: OWNER_ADDRESS,
 					address: TOKEN_ADDRESS,
 					args: [RECIPIENT_ADDRESS],
+					blockNumber: 42n,
 					functionName: 'ownerCheck',
 					gas: 21_000n,
 					value: 7n,
 				})
 			).result,
 		).toBe(1n)
+		expect(calls).toHaveLength(1)
+	})
+
+	test('simulateContract supports canonical block-hash selectors', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			const blockSelector = getArrayEntry(params, 1, 'simulate params')
+			expect(getObjectEntry(blockSelector, 'blockHash', 'simulate block selector')).toBe(BLOCK_HASH)
+			expect(getObjectEntry(blockSelector, 'requireCanonical', 'simulate block selector')).toBe(true)
+			return encodeAbiParameters([{ type: 'uint256' }], [1n])
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const simulation = await client.simulateContract({ abi: OWNER_CHECK_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'ownerCheck', blockHash: BLOCK_HASH })
+
+		expect(simulation.result).toBe(1n)
 		expect(calls).toHaveLength(1)
 	})
 
@@ -1166,6 +1334,7 @@ describe('shared ethereum compatibility layer', () => {
 		const provider = createProvider(({ method, params }) => {
 			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
 			const tx = getArrayEntry(params, 0, 'multicall params')
+			expect(getArrayEntry(params, 1, 'multicall block tag')).toBe('0x2a')
 			const data = getObjectEntry(tx, 'data', 'multicall transaction')
 			expect(data).toBe(aggregateData)
 			return encodeAbiParameters(
@@ -1193,6 +1362,7 @@ describe('shared ethereum compatibility layer', () => {
 
 		const result = await client.multicall({
 			allowFailure: true,
+			blockNumber: 42n,
 			contracts: [
 				{
 					abi: BALANCE_OF_ABI,
@@ -1284,6 +1454,65 @@ describe('shared ethereum compatibility layer', () => {
 		expect(localCalls).toHaveLength(1)
 	})
 
+	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
+		expect(RATE_LIMIT_RETRY_DELAY_MILLISECONDS).toBe(10_000)
+		expect(http('https://rpc.example.test').retryDelay).toBe(RATE_LIMIT_RETRY_DELAY_MILLISECONDS)
+		const responses = [
+			new Response(undefined, { status: 429 }),
+			Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' }),
+			new Response(undefined, { status: 429 }),
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					effectiveGasPrice: '0x3',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: RECEIPT_HASH,
+					transactionIndex: '0x0',
+					type: '0x2',
+				},
+			}),
+			new Response(undefined, { status: 429 }),
+			Response.json({ error: { code: -32_000, message: 'already known' }, id: 1, jsonrpc: '2.0' }),
+		]
+		const originalFetch = globalThis.fetch
+		const testFetch = async () => {
+			const response = responses.shift()
+			if (response === undefined) throw new Error('Unexpected HTTP RPC request')
+			return response
+		}
+		testFetch.preconnect = originalFetch.preconnect
+		globalThis.fetch = testFetch
+		try {
+			const client = createWalletClient({
+				account: privateKeyToAccount(PRIVATE_KEY),
+				chain: mainnet,
+				transport: http('https://rpc.example.test', { retryDelay: 0 }),
+			})
+
+			expect(await client.getCode({ address: TOKEN_ADDRESS })).toBe('0x1234')
+			expect(
+				await client.waitForTransactionReceipt({
+					hash: RECEIPT_HASH,
+					pollingInterval: 0,
+					timeout: 50,
+				}),
+			).toMatchObject({ transactionHash: RECEIPT_HASH })
+			expect(await client.sendRawTransaction({ serializedTransaction: '0x1234' })).toBe(keccak256('0x1234'))
+		} finally {
+			globalThis.fetch = originalFetch
+		}
+
+		expect(responses).toHaveLength(0)
+	})
+
 	test('wallet client defaults simulations and gas estimates to its configured account', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const walletClient = createWalletClient({
@@ -1325,6 +1554,35 @@ describe('shared ethereum compatibility layer', () => {
 			}),
 		).toBe(21_000n)
 		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_estimateGas'])
+	})
+
+	test('public client exposes raw gas estimation, gas price, and pending nonce RPCs', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method, params }) => {
+					if (method === 'eth_estimateGas') {
+						const transaction = getArrayEntry(params, 0, 'estimate gas params')
+						expect(getObjectEntry(transaction, 'from', 'estimate gas transaction')).toBe(getAddress(OWNER_ADDRESS))
+						expect(getObjectEntry(transaction, 'to', 'estimate gas transaction')).toBe(RECIPIENT_ADDRESS)
+						expect(getObjectEntry(transaction, 'value', 'estimate gas transaction')).toBe('0x5')
+						return '0x10000'
+					}
+					if (method === 'eth_gasPrice') return '0x3b9aca00'
+					if (method === 'eth_getTransactionCount') {
+						expect(getArrayEntry(params, 0, 'transaction count params')).toBe(getAddress(OWNER_ADDRESS))
+						expect(getArrayEntry(params, 1, 'transaction count params')).toBe('pending')
+						return '0x7'
+					}
+					throw new Error(`Unexpected rpc method: ${method}`)
+				}, calls),
+			),
+		})
+
+		expect(await client.estimateGas({ account: OWNER_ADDRESS, to: RECIPIENT_ADDRESS, value: 5n })).toBe(65_536n)
+		expect(await client.getGasPrice()).toBe(1_000_000_000n)
+		expect(await client.getTransactionCount({ address: OWNER_ADDRESS, blockTag: 'pending' })).toBe(7n)
+		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
 	})
 
 	test('publicActions extension preserves wallet default account behavior', async () => {

@@ -2,16 +2,20 @@ import { createPublicClient, createWalletClient, custom, http, publicActions, ty
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'
-import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
+import { sameChainId } from './chainId.js'
+import { getNetworkSwitchTarget, MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
 	PublicActions<Transport, NetworkProfile['chain']> & {
+		assertCanonicalRawTransactionCost?: (signer: Address, costAttoEth: bigint) => void
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
+		recordCanonicalFunding?: (signer: Address, amountAttoEth: bigint) => void
+		recordCanonicalRawTransaction?: (signer: Address, costAttoEth: bigint) => void
 		requiresWalletConfirmation?: boolean | undefined
 	}
 
@@ -25,11 +29,13 @@ export type TransactionRequestPreview = {
 	args: readonly unknown[] | undefined
 	chainName: string | undefined
 	contractAddress?: Address | undefined
+	contractLabel?: string | undefined
 	data?: Hex | undefined
 	dataLabel?: string | undefined
 	functionName: string
 	requiresWalletConfirmation?: boolean | undefined
 	to?: Address | undefined
+	toLabel?: string | undefined
 	value: bigint | undefined
 }
 
@@ -145,25 +151,27 @@ async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	return result
 }
 
-export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): ChainBackend {
+export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUrl }: { profile?: NetworkProfile; rpcUrl?: string } = {}): ChainBackend {
 	const getProvider = () => getInjectedEthereum()
 	let readTransportMode: ReadTransportMode = 'provider'
 	let readBackendBlockNumber: bigint | undefined
 	let readBackendBlockTimestamp: bigint | undefined
-	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? {} : { overrideRpcUrl: rpcUrl })
+	const fallbackRpcUrl = profile.chain.rpcUrls.default.http[0]
+	if (fallbackRpcUrl === undefined) throw new Error(`No default RPC URL is configured for ${profile.displayName}`)
+	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? { fallbackRpcUrl } : { fallbackRpcUrl, overrideRpcUrl: rpcUrl })
 
 	return {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
-		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, readTransportMode, configuredRpc.url, getProvider()),
+		createReadClient: () => createReadClientForProfile(profile, readTransportMode, configuredRpc.url, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
 
 			const baseClient = createWalletClient({
 				account: accountAddress,
-				chain: MAINNET_NETWORK_PROFILE.chain,
+				chain: profile.chain,
 				transport: custom(ethereum),
 			}).extend(publicActions) as WriteClient
 
@@ -173,7 +181,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 				if (currentAccount === undefined) throw new Error('Wallet account is no longer connected. Reconnect your wallet and try again.')
 				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw new Error('Wallet account changed. Review the action with the connected account and try again.')
 				const currentChainId = await readProviderChainId(ethereum)
-				if (currentChainId !== MAINNET_NETWORK_PROFILE.chainIdHex) throw new Error('Wallet network changed. Switch to Ethereum mainnet and try again.')
+				if (!sameChainId(currentChainId, profile.chainIdHex)) throw new Error(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
 			})
 		},
 		disconnectWallet: async () => {
@@ -196,7 +204,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		}),
 		hasWallet: () => getProvider() !== undefined,
 		id: 'injected',
-		profile: MAINNET_NETWORK_PROFILE,
+		profile,
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
@@ -235,7 +243,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		switchNetwork: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
-			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: MAINNET_NETWORK_PROFILE.chainIdHex }] })
+			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: profile.chainIdHex }] })
 		},
 	}
 }

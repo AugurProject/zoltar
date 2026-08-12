@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
-import type { OracleOperationBounty } from '../../../../types/contracts.js'
 import { createReportingAndOracleFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
@@ -10,6 +8,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	const {
 		fireEvent,
 		within,
+		render,
+		act,
 		getAddress,
 		zeroAddress,
 		SecurityPoolWorkflowSection,
@@ -24,6 +24,51 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		createSelectedPool,
 		createSecurityPoolWorkflowProps,
 	} = fixture
+
+	const createLoadedReportingProps = (questionOutcome: 'none' | 'yes' = 'none') =>
+		createReportingProps({
+			reportingDetails: {
+				activationTime: 1n,
+				bindingCapital: 5n,
+				settlementCollateralAttoEth: 1n,
+				currentRequiredBond: 2n,
+				currentTime: 100n,
+				escalationEndTime: 500n,
+				escalationGameAddress: zeroAddress,
+				forkThresholdAttoRep: 10n,
+				hasReachedNonDecision: false,
+				marketDetails: createMarketDetails({ endTime: 0n }),
+				nonDecisionThresholdAttoRep: 20n,
+				questionOutcome,
+				securityPoolAddress: zeroAddress,
+				sides: [
+					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				],
+				startBondAttoRep: 1n,
+				status: 'active',
+				systemState: 'operational',
+				totalCostAttoRep: 2n,
+				universeId: 1n,
+				settlementState: 'locked',
+				parentWithdrawalEnabled: false,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
+				viewerVaultExists: true,
+				viewerVaultDisputeStakedAttoRep: 0n,
+				viewerVaultRepBackingAttoRep: 10n,
+			},
+			reportingForm: {
+				reportAmount: '0.000000000000000001',
+				securityPoolAddress: zeroAddress,
+				selectedOutcome: 'no',
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [],
+					no: [],
+				},
+			},
+		})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
 		const renderedComponent = await renderIntoDocument(
@@ -84,7 +129,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
-		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Report on selected side' })).toBeNull()
 	})
 
 	test('locks reporting actions while the selected pool is not operational', async () => {
@@ -93,19 +138,23 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
 						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
 						reporting: createReportingProps({
 							reportingDetails: {
 								activationTime: 1_699_999_000n,
 								bindingCapital: 5n,
-								completeSetCollateralAmount: 1n,
+								settlementCollateralAttoEth: 1n,
 								currentRequiredBond: 2n,
 								currentTime: 1_700_000_000n,
 								escalationEndTime: 1_700_000_500n,
 								escalationGameAddress: zeroAddress,
-								forkThreshold: 10n,
+								forkThresholdAttoRep: 10n,
 								hasReachedNonDecision: false,
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThreshold: 20n,
+								nonDecisionThresholdAttoRep: 20n,
 								questionOutcome: 'none',
 								securityPoolAddress: zeroAddress,
 								sides: [
@@ -113,17 +162,17 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 									{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 									{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 								],
-								startBond: 1n,
+								startBondAttoRep: 1n,
 								status: 'active',
 								systemState: 'forkTruthAuction',
-								totalCost: 2n,
+								totalCostAttoRep: 2n,
 								universeId: 1n,
 								settlementState: 'locked',
 								parentWithdrawalEnabled: false,
-								viewerVaultAvailableEscalationRep: 10n,
+								viewerPoolHeldVaultRepBackingAttoRep: 10n,
 								viewerVaultExists: true,
-								viewerVaultEscrowedRep: 0n,
-								viewerVaultRepDepositShare: 10n,
+								viewerVaultDisputeStakedAttoRep: 0n,
+								viewerVaultRepBackingAttoRep: 10n,
 							},
 						}),
 						securityPoolAddress: zeroAddress,
@@ -137,10 +186,73 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' })
+		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
+	})
+
+	test('allows reporting with a stale oracle price when the pool has no capacity ownership', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting: createLoadedReportingProps(),
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								totalCapacityOwnershipAttoRep: 0n,
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const reportButton = within(document.body).getByRole('button', { name: 'Report No' })
+		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(reportButton.disabled).toBe(false)
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
+	})
+
+	test('preserves the finalized reporting blocker instead of stale-price recovery', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting: createLoadedReportingProps('yes'),
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								questionOutcome: 'yes',
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Report No', 'This pool is already finalized.')
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -184,9 +296,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
+		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
+		expect(reportButton.title).toBe('Loading reporting details.')
 	})
 
 	test('keeps reporting disabled at the exact market end timestamp', async () => {
@@ -207,7 +319,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Report on selected side' })).toBeNull()
 		expect(documentQueries.queryByText(getReportingLockedUntilMessage(100n, 100n))).not.toBeNull()
 	})
 
@@ -230,8 +342,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -248,9 +360,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect((documentQueries.getByRole('button', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
 		expect(documentQueries.getByRole('heading', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Staged Operations List' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Staged Operations List' })).toBeNull()
 		expect(documentQueries.getByText('No staged operations are currently queued for this pool.')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Request New Price' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
@@ -269,7 +381,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: {
 							amount: 5n * 10n ** 18n,
-							initiatorVault: zeroAddress,
+							operator: zeroAddress,
 							operation: 'withdrawRep',
 							operationId: 7n,
 							targetVault: zeroAddress,
@@ -279,8 +391,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -296,9 +408,46 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
+		expect(documentQueries.getByText('Operation ID')).not.toBeNull()
+		expect(documentQueries.getByText('REP withdrawal')).not.toBeNull()
+		expect(documentQueries.getByText('5 REP')).not.toBeNull()
+		expect(documentQueries.getByText('Staged Operation ID')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+	})
+
+	test('labels liquidation amounts by accounting role', async () => {
+		for (const stagedCase of [{ amountLabel: 'Requested liquidation debt', operation: 'liquidation' as const }]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							pendingOperation: {
+								amount: 5n * 10n ** 18n,
+								operator: zeroAddress,
+								operation: stagedCase.operation,
+								operationId: 7n,
+								targetVault: zeroAddress,
+							},
+							pendingOperationSlotId: 7n,
+						}),
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'staged-operations',
+					})}
+					showHeader={false}
+				/>,
+			)
+			try {
+				const documentQueries = within(document.body)
+				expect(documentQueries.getByText(stagedCase.amountLabel)).not.toBeNull()
+				expect(documentQueries.getByText('5 ETH')).not.toBeNull()
+			} finally {
+				renderedComponent.cleanup()
+			}
+		}
 	})
 
 	test('does not show staged-operation cancellation actions', async () => {
@@ -312,7 +461,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					poolOracleManagerDetails: createOracleManagerDetails({
 						pendingOperation: {
 							amount: 1n,
-							initiatorVault: walletAddress,
+							operator: walletAddress,
 							operation: 'liquidation',
 							operationId: 9n,
 							targetVault,
@@ -347,7 +496,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						openOracleAddress: zeroAddress,
 						pendingOperation: {
 							amount: 5n * 10n ** 18n,
-							initiatorVault: zeroAddress,
+							operator: zeroAddress,
 							operation: 'withdrawRep',
 							operationId: 7n,
 							targetVault: zeroAddress,
@@ -357,8 +506,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -375,7 +524,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Execute Staged Operation')
+		expectTransactionButtonDisabled(document.body, 'Execute staged operation')
 	})
 
 	test('renders price oracle details and request controls in the price oracle tab', async () => {
@@ -397,8 +546,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingSettlementQueueCapacity: 4n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
-						queuedOperationEthCost: 1n,
-						requestPriceEthCost: 1n,
+						queuedOperationCostAttoEth: 1n,
+						requestPriceCostAttoEth: 1n,
 						token1: zeroAddress,
 						token2: zeroAddress,
 					},
@@ -412,335 +561,65 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Open Oracle' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
-		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Open Oracle' }).closest('section')
-		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Open Oracle section to render')
+		expect((documentQueries.getByRole('button', { name: 'Price Oracle' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
+		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Price Oracle' }).closest('section')
+		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Price Oracle section to render')
 		const sectionQueries = within(priceOracleSection)
-		expect(sectionQueries.getByRole('heading', { name: 'Open Oracle' })).not.toBeNull()
+		expect(sectionQueries.getByRole('heading', { name: 'Price Oracle' })).not.toBeNull()
 		expect(sectionQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(sectionQueries.queryByText('Price Window')).toBeNull()
 		expect(sectionQueries.queryByText('Last Settlement')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Request new price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
-	test('keeps self-funded requests and exposes creator, operator, claim, and refund bounty controls', async () => {
-		const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		const otherAddress = getAddress('0x00000000000000000000000000000000000000b2')
-		const repToken = getAddress('0x00000000000000000000000000000000000000c3')
-		const wethToken = getAddress('0x00000000000000000000000000000000000000d4')
-		const loadedBountyIds: Array<{ bountyId: bigint; managerAddress: Address }> = []
-		const refundedBountyIds: Array<{ bountyId: bigint; managerAddress: Address }> = []
-		let clearedLookupErrors = 0
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1_000n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						accountState: createAccountState({ address: walletAddress }),
-						checkedSecurityPoolAddress: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							operationBountyBoardAddress: otherAddress,
-							operationBounties: [
-								{
-									acceptanceDeadline: 2_000n,
-									amount: 2n * 10n ** 18n,
-									bountyId: 4n,
-									creator: otherAddress,
-									executionErrorMessage: undefined,
-									executionStatus: 'none',
-									maximumInitialWeth: 4n * 10n ** 18n,
-									minimumInitialWeth: 2n * 10n ** 18n,
-									operation: 'liquidation',
-									operationId: 0n,
-									operator: zeroAddress,
-									refundAvailableAt: undefined,
-									reportId: 0n,
-									rewardAmount: 1n * 10n ** 18n,
-									rewardToken: repToken,
-									state: 'open',
-									targetVault: otherAddress,
-									validForSeconds: 300n,
-								},
-								{
-									acceptanceDeadline: 2_000n,
-									amount: 5n * 10n ** 18n,
-									bountyId: 3n,
-									creator: walletAddress,
-									executionErrorMessage: undefined,
-									executionStatus: 'none',
-									maximumInitialWeth: 0n,
-									minimumInitialWeth: 0n,
-									operation: 'setSecurityBondsAllowance',
-									operationId: 0n,
-									operator: zeroAddress,
-									refundAvailableAt: undefined,
-									reportId: 0n,
-									rewardAmount: 2n * 10n ** 18n,
-									rewardToken: wethToken,
-									state: 'open',
-									targetVault: walletAddress,
-									validForSeconds: 300n,
-								},
-								{
-									acceptanceDeadline: 2_000n,
-									amount: 1n * 10n ** 18n,
-									bountyId: 2n,
-									creator: otherAddress,
-									executionErrorMessage: undefined,
-									executionStatus: 'succeeded',
-									maximumInitialWeth: 0n,
-									minimumInitialWeth: 0n,
-									operation: 'liquidation',
-									operationId: 8n,
-									operator: walletAddress,
-									refundAvailableAt: undefined,
-									reportId: 4n,
-									rewardAmount: 3n * 10n ** 18n,
-									rewardToken: repToken,
-									state: 'assigned',
-									targetVault: otherAddress,
-									validForSeconds: 300n,
-								},
-								{
-									acceptanceDeadline: 2_000n,
-									amount: 1n * 10n ** 18n,
-									bountyId: 1n,
-									creator: walletAddress,
-									executionErrorMessage: 'oracle report exposure exceeded',
-									executionStatus: 'failed',
-									maximumInitialWeth: 0n,
-									minimumInitialWeth: 0n,
-									operation: 'withdrawRep',
-									operationId: 7n,
-									operator: otherAddress,
-									refundAvailableAt: undefined,
-									reportId: 4n,
-									rewardAmount: 1n * 10n ** 18n,
-									rewardToken: wethToken,
-									state: 'assigned',
-									targetVault: walletAddress,
-									validForSeconds: 300n,
-								},
-							],
-							reputationTokenAddress: repToken,
-							wethAddress: wethToken,
-						}),
-						poolOracleActiveAction: 'acceptOperationBounty',
-						poolOracleActiveBountyId: 3n,
-						onLoadPoolOperationBounty: (managerAddress, bountyId) => loadedBountyIds.push({ bountyId, managerAddress }),
-						onClearPoolOperationBountyLookupError: () => {
-							clearedLookupErrors += 1
-						},
-						onRefundPoolOperationBounty: (managerAddress, bountyId) => refundedBountyIds.push({ bountyId, managerAddress }),
-						poolOperationBountyLookupError: 'Operation bounty #99 does not exist',
-						securityPoolAddress: zeroAddress,
-						securityPools: [createSelectedPool()],
-						selectedPoolView: 'price-oracle',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Self-funded price request' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Operation Bounties', level: 3 })).not.toBeNull()
-		expect(documentQueries.getByText('Acceptance revalidates the operation and, when the price is stale, requires room in the four-operation settlement batch.')).not.toBeNull()
-		expect(documentQueries.getByText("Optional bounds apply to either a proposed new report's WETH amount or the current WETH amount of an existing pending report.")).not.toBeNull()
-		expect(documentQueries.getByText('The cancellation deadline is fixed when accepted: queued time + one oracle settlement window + this execution window. Disputes do not extend it.')).not.toBeNull()
-		const operationPicker = documentQueries.getByRole('combobox', { name: 'Operation' })
-		expect(documentQueries.getByLabelText('Amount (ETH)')).not.toBeNull()
-		fireEvent.change(operationPicker, { currentTarget: { value: 'withdrawRep' }, target: { value: 'withdrawRep' } })
-		expect(documentQueries.getByLabelText('Amount (REP)')).not.toBeNull()
-		fireEvent.change(operationPicker, { currentTarget: { value: 'liquidation' }, target: { value: 'liquidation' } })
-		expect(documentQueries.getByLabelText('Amount (ETH)')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Operation bounties', level: 4 })).not.toBeNull()
-		expect(documentQueries.getByRole('alert').textContent).toContain('Operation bounty #99 does not exist')
-		fireEvent.input(documentQueries.getByLabelText('Bounty ID'), { currentTarget: { value: '1' }, target: { value: '1' } })
-		expect(clearedLookupErrors).toBe(1)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Load Bounty' }))
-		expect(loadedBountyIds).toEqual([{ bountyId: 1n, managerAddress: zeroAddress }])
-		const boundedBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #4 · Liquidation', level: 5 })
-		const allowanceBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #3 · Set Bond Allowance', level: 5 })
-		const liquidationBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #2 · Liquidation', level: 5 })
-		const withdrawalBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #1 · Withdraw REP', level: 5 })
-		const boundedBountyCard = boundedBountyHeading.closest('article')
-		const allowanceBountyCard = allowanceBountyHeading.closest('article')
-		const liquidationBountyCard = liquidationBountyHeading.closest('article')
-		const withdrawalBountyCard = withdrawalBountyHeading.closest('article')
-		if (boundedBountyCard === null || allowanceBountyCard === null || liquidationBountyCard === null || withdrawalBountyCard === null) throw new Error('Expected bounty headings to be nested in bounty cards')
-		expect(within(allowanceBountyCard).getByText('≈ 5.00 ETH')).not.toBeNull()
-		expect(within(allowanceBountyCard).getByText('No minimum')).not.toBeNull()
-		expect(within(allowanceBountyCard).getByText('No maximum')).not.toBeNull()
-		expect(within(liquidationBountyCard).getByText('≈ 1.00 ETH')).not.toBeNull()
-		expect(within(boundedBountyCard).getByText('≈ 2.00 WETH')).not.toBeNull()
-		expect(within(boundedBountyCard).getByText('≈ 4.00 WETH')).not.toBeNull()
-		expect(within(withdrawalBountyCard).getByText('≈ 1.00 REP')).not.toBeNull()
-		fireEvent.click(within(withdrawalBountyCard).getByRole('button', { name: 'Cancel & Refund' }))
-		expect(refundedBountyIds).toEqual([{ bountyId: 1n, managerAddress: zeroAddress }])
-		expect(documentQueries.getByRole('button', { name: 'Post Bounty' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Accepting bounty…' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Accept & Fund Report' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Claim Bounty' })).not.toBeNull()
-		expect(documentQueries.getAllByRole('button', { name: /Refund|Cancel & Refund/ })).toHaveLength(2)
-	})
-
-	test('distinguishes exact bounty deadlines from strictly expired acceptance and execution states', async () => {
-		const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		const otherAddress = getAddress('0x00000000000000000000000000000000000000b2')
-		const createBounty = (bountyId: bigint, overrides: Partial<OracleOperationBounty>): OracleOperationBounty => ({
-			acceptanceDeadline: 1_000n,
-			amount: 0n,
-			bountyId,
-			creator: walletAddress,
-			executionErrorMessage: undefined,
-			executionStatus: 'none',
-			maximumInitialWeth: 0n,
-			minimumInitialWeth: 0n,
-			operation: 'setSecurityBondsAllowance',
-			operationId: 0n,
-			operator: zeroAddress,
-			refundAvailableAt: undefined,
-			reportId: 0n,
-			rewardAmount: 1n,
-			rewardToken: otherAddress,
-			state: 'open',
-			targetVault: walletAddress,
-			validForSeconds: 300n,
-			...overrides,
+	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
+		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string }> = []
+		const pool = createSelectedPool()
+		const baseProps = createSecurityPoolWorkflowProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+			checkedSecurityPoolAddress: pool.securityPoolAddress,
+			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestValueAttoEth) => requests.push({ managerAddress, reviewedRequestValueAttoEth, securityPoolAddress }),
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 2n * 10n ** 18n }),
+			securityPoolAddress: pool.securityPoolAddress,
+			securityPools: [pool],
+			selectedPoolView: 'price-oracle',
 		})
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1_000n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						accountState: createAccountState({ address: walletAddress }),
-						checkedSecurityPoolAddress: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							operationBountyBoardAddress: otherAddress,
-							operationBounties: [
-								createBounty(4n, {}),
-								createBounty(3n, { acceptanceDeadline: 999n }),
-								createBounty(2n, {
-									executionStatus: 'pending',
-									operationId: 2n,
-									operator: walletAddress,
-									refundAvailableAt: 1_000n,
-									reportId: 1n,
-									state: 'assigned',
-								}),
-								createBounty(1n, {
-									executionStatus: 'pending',
-									operationId: 1n,
-									operator: walletAddress,
-									refundAvailableAt: 999n,
-									reportId: 1n,
-									state: 'assigned',
-								}),
-							],
-							reputationTokenAddress: otherAddress,
-							wethAddress: otherAddress,
-						}),
-						securityPoolAddress: zeroAddress,
-						securityPools: [createSelectedPool()],
-						selectedPoolView: 'price-oracle',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const exactAcceptanceCard = documentQueries.getByRole('heading', { name: 'Bounty #4 · Set Bond Allowance', level: 5 }).closest('article')
-		const expiredAcceptanceCard = documentQueries.getByRole('heading', { name: 'Bounty #3 · Set Bond Allowance', level: 5 }).closest('article')
-		const exactExecutionCard = documentQueries.getByRole('heading', { name: 'Bounty #2 · Set Bond Allowance', level: 5 }).closest('article')
-		const expiredExecutionCard = documentQueries.getByRole('heading', { name: 'Bounty #1 · Set Bond Allowance', level: 5 }).closest('article')
-		if (exactAcceptanceCard === null || expiredAcceptanceCard === null || exactExecutionCard === null || expiredExecutionCard === null) throw new Error('Expected deadline test bounties to render as cards')
-		expect(within(exactAcceptanceCard).getByText('Open')).not.toBeNull()
-		expect(within(expiredAcceptanceCard).getByText('Acceptance expired')).not.toBeNull()
-		expectTransactionButtonDisabled(expiredAcceptanceCard, 'Accept & Fund Report', 'This bounty’s acceptance window has expired.')
-		expect(within(exactExecutionCard).getByText('In progress')).not.toBeNull()
-		expectTransactionButtonDisabled(exactExecutionCard, 'Claim Bounty', 'Wait for the staged operation to execute successfully.')
-		expect(within(expiredExecutionCard).getByText('Execution expired')).not.toBeNull()
-		expectTransactionButtonDisabled(expiredExecutionCard, 'Claim Bounty', 'Expired operation bounties cannot be claimed.')
-		const expiredRefundButton = within(expiredExecutionCard).getByRole('button', { name: 'Cancel & Refund' })
-		if (!(expiredRefundButton instanceof HTMLButtonElement)) throw new Error('Expected expired bounty refund button')
-		expect(expiredRefundButton.disabled).toBe(false)
-	})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Request new price' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Request New Price' })
+		expect(within(dialog).getByText('Transaction Review')).not.toBeNull()
+		expect(within(dialog).getByText('You Pay')).not.toBeNull()
+		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
+		expect(within(dialog).queryByText(/≈/)).toBeNull()
+		expect(dialog.querySelector('[title="2.4 ETH"]')).not.toBeNull()
+		expect(within(dialog).getByText(/20% request buffer/)).not.toBeNull()
+		expect(requests).toEqual([])
 
-	test('disables stale-price bounty acceptance for a full settlement queue while preserving fresh-price execution', async () => {
-		const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		const tokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
-		const openBounty: OracleOperationBounty = {
-			acceptanceDeadline: 2_000n,
-			amount: 0n,
-			bountyId: 1n,
-			creator: walletAddress,
-			executionErrorMessage: undefined,
-			executionStatus: 'none',
-			maximumInitialWeth: 0n,
-			minimumInitialWeth: 0n,
-			operation: 'setSecurityBondsAllowance',
-			operationId: 0n,
-			operator: zeroAddress,
-			refundAvailableAt: undefined,
-			reportId: 0n,
-			rewardAmount: 1n,
-			rewardToken: tokenAddress,
-			state: 'open',
-			targetVault: walletAddress,
-			validForSeconds: 300n,
-		}
-		const createWorkflow = (isPriceValid: boolean) => (
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ address: walletAddress }),
-					checkedSecurityPoolAddress: zeroAddress,
-					poolOracleManagerDetails: createOracleManagerDetails({
-						isPriceValid,
-						operationBountyBoardAddress: tokenAddress,
-						operationBounties: [openBounty],
-						pendingSettlementOperationIds: [1n, 2n, 3n, 4n],
-						pendingSettlementQueueCapacity: 4n,
-						reputationTokenAddress: tokenAddress,
-						wethAddress: tokenAddress,
-					}),
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
-					selectedPoolView: 'price-oracle',
-				})}
-				showHeader={false}
-			/>
-		)
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1_000n}>
-				<div data-testid='stale-full-queue'>{createWorkflow(false)}</div>
-				<div data-testid='fresh-full-queue'>{createWorkflow(true)}</div>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n })} showHeader={false} />, renderedComponent.container)
+		})
+		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
+		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
-		const staleSurface = document.body.querySelector('[data-testid="stale-full-queue"]')
-		const freshSurface = document.body.querySelector('[data-testid="fresh-full-queue"]')
-		if (!(staleSurface instanceof HTMLElement) || !(freshSurface instanceof HTMLElement)) throw new Error('Expected stale and fresh queue fixtures')
-		expectTransactionButtonDisabled(staleSurface, 'Accept & Fund Report', 'This bounty cannot be accepted while the pending settlement queue is full.')
-		const freshAcceptButton = within(freshSurface).getByRole('button', { name: 'Accept & Fund Report' })
-		if (!(freshAcceptButton instanceof HTMLButtonElement)) throw new Error('Expected fresh-price bounty acceptance button')
-		expect(freshAcceptButton.disabled).toBe(false)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
+		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n }),
 					checkedSecurityPoolAddress: zeroAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
 						pendingReportId: 0n,
-						requestPriceEthCost: 10n * 10n ** 18n,
+						requestPriceCostAttoEth: 10n * 10n ** 18n,
 					}),
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool()],
@@ -751,7 +630,59 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Request New Price', 'Need 7 more ETH in this wallet to request a new price.')
+		expectTransactionButtonDisabled(document.body, 'Request new price', 'Need 7 more ETH in this wallet to request a new price.')
+	})
+
+	test('disables Request New Price while the current oracle price remains valid', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						pendingReportId: 0n,
+					}),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Request new price', 'The current oracle price is still valid.')
+	})
+
+	test('enables Request New Price when the shared chain time reaches a loaded price expiry', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1000n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							lastSettlementTimestamp: 700n,
+							pendingReportId: 0n,
+							priceValidUntilTimestamp: 1000n,
+							requestPriceCostAttoEth: 1n,
+						}),
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'price-oracle',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const requestButton = within(document.body).getByRole('button', { name: 'Request new price' })
+		if (!(requestButton instanceof HTMLButtonElement)) throw new Error('Expected Request New Price button')
+		expect(requestButton.disabled).toBe(false)
+		expect(document.body.textContent).toContain('(expired less than a minute ago)')
+		expect(document.body.textContent).not.toContain('The current oracle price is still valid.')
 	})
 
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {

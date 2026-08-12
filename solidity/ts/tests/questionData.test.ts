@@ -473,6 +473,40 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, ['Yes', 'No']), { message: /question end time must be on or after the start time/i })
 	})
 
+	test('createQuestion reports duplicate, malformed scalar, and empty-label guards precisely', async () => {
+		const currentTime = await mockWindow.getTime()
+		const categoricalQuestion = {
+			title: 'explicit question guard coverage',
+			description: '',
+			startTime: currentTime + 100000n,
+			endTime: currentTime + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, categoricalQuestion, outcomes)
+		await assert.rejects(createQuestion(client, categoricalQuestion, outcomes), {
+			message: /Question already exists and cannot be created twice/,
+		})
+		await assert.rejects(createQuestion(client, { ...categoricalQuestion, title: 'empty label guard' }, ['']), {
+			message: /Outcome option label must not be an empty string/,
+		})
+
+		const scalarQuestion = {
+			...categoricalQuestion,
+			title: 'scalar guard coverage',
+			displayValueMax: 1n,
+		}
+		await assert.rejects(createQuestion(client, { ...scalarQuestion, displayValueMax: 0n }, []), {
+			message: /Scalar question display max must be greater than display min/,
+		})
+		await assert.rejects(createQuestion(client, scalarQuestion, []), {
+			message: /Scalar question numTicks must be positive/,
+		})
+	})
+
 	test('createQuestion enforces binary outcome order', async () => {
 		const question = {
 			title: 'Test Binary Order',
@@ -605,5 +639,91 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
 		assert.deepStrictEqual(maxCountQuestionPage, [firstQuestionId, secondQuestionId], 'question paging should clamp max count to available ids')
 		assert.deepStrictEqual(maxCountOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should clamp max count to available labels')
+	})
+
+	test('question registry, stored data, and malformed classifiers stay coherent across appends', async () => {
+		const questionDataAddress = getInfraContractAddresses().zoltarQuestionData
+		const initialCount = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestionCount',
+			address: questionDataAddress,
+			args: [],
+		})
+		const baseQuestion = {
+			title: 'Question registry coherence 1',
+			description: 'persistent registry fixture',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const categoricalOutcomes = ['Yes', 'No']
+		const secondQuestion = { ...baseQuestion, title: 'Question registry coherence 2' }
+		const scalarQuestion = {
+			...baseQuestion,
+			title: 'Question registry coherence scalar',
+			numTicks: 10n,
+			displayValueMin: -5n,
+			displayValueMax: 5n,
+			answerUnit: 'points',
+		}
+		const firstQuestionId = getQuestionId(baseQuestion, categoricalOutcomes)
+		const secondQuestionId = getQuestionId(secondQuestion, categoricalOutcomes)
+		const scalarQuestionId = getQuestionId(scalarQuestion, [])
+		const expectedQuestionIds = [firstQuestionId, secondQuestionId, scalarQuestionId]
+
+		await createQuestion(client, baseQuestion, categoricalOutcomes)
+		const firstStoredData = await getQuestionData(client, firstQuestionId)
+		const firstStoredOutcomes = await getOutcomeLabels(client, firstQuestionId)
+		await createQuestion(client, secondQuestion, categoricalOutcomes)
+		await createQuestion(client, scalarQuestion, [])
+
+		const finalCount = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestionCount',
+			address: questionDataAddress,
+			args: [],
+		})
+		const appendedQuestionIds = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: questionDataAddress,
+			args: [initialCount, finalCount - initialCount],
+		})
+
+		assert.strictEqual(finalCount, initialCount + 3n, 'each successful create should append exactly one question id')
+		assert.deepStrictEqual(appendedQuestionIds, expectedQuestionIds, 'question ids should be unique and preserve creation order')
+		assert.strictEqual(new Set(appendedQuestionIds).size, appendedQuestionIds.length, 'the question registry must not contain duplicate ids')
+		assert.deepStrictEqual(await getQuestionData(client, firstQuestionId), firstStoredData, 'later appends must not mutate stored question data')
+		assert.deepStrictEqual(await getOutcomeLabels(client, firstQuestionId), firstStoredOutcomes, 'later appends must not mutate stored outcome labels')
+
+		await assert.rejects(createQuestion(client, baseQuestion, categoricalOutcomes), /Question already exists and cannot be created twice/)
+		assert.strictEqual(
+			await client.readContract({
+				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+				functionName: 'getQuestionCount',
+				address: questionDataAddress,
+				args: [],
+			}),
+			finalCount,
+			'a rejected duplicate must not change the registry count',
+		)
+
+		const classifierSamples = [
+			{ questionId: firstQuestionId, answers: [0n, 1n, 2n, 3n] },
+			{
+				questionId: scalarQuestionId,
+				answers: [combineUint256FromTwoWithInvalid(true, 0n, 0n), combineUint256FromTwoWithInvalid(false, 5n, 5n), combineUint256FromTwoWithInvalid(false, 11n, 0n), withScalarReservedBits(combineUint256FromTwoWithInvalid(false, 5n, 5n))],
+			},
+		]
+		for (const sample of classifierSamples) {
+			for (const answer of sample.answers) {
+				const malformed = await isMalformedAnswerOption(client, sample.questionId, answer)
+				const name = await getAnswerOptionName(client, sample.questionId, answer)
+				assert.strictEqual(name === 'Malformed', malformed, 'the malformed classifier and public answer name must agree')
+			}
+		}
 	})
 })

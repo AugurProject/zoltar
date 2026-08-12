@@ -57,7 +57,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 						if (typeof requestedAddress !== 'string') throw new Error('Missing balanceOf account argument')
 						return repState.balances.get(requestedAddress.toLowerCase()) ?? 0n
 					}
-					case 'getTotalTheoreticalSupply':
+					case 'getTotalTheoreticalSupplyAttoRep':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply
@@ -69,7 +69,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 			switch (functionName) {
 				case 'getRepToken':
 					return repAddress
-				case 'getUniverseTheoreticalSupply':
+				case 'getUniverseTheoreticalSupplyAttoRep':
 					return repState.theoreticalSupply
 				default:
 					throw new Error(`Unexpected Zoltar read function ${functionName}`)
@@ -91,7 +91,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 					repState.totalSupply += amount
 					break
 				}
-				case 'setMaxTheoreticalSupply': {
+				case 'setMaxTheoreticalSupplyAttoRep': {
 					const nextTheoreticalSupply = args?.[0]
 					if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
 					repState.theoreticalSupply = nextTheoreticalSupply
@@ -158,7 +158,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	}
 	const poolPlan = scenario === 'security-pool' ? [{ question: 'Will this resolve?' }] : [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
 	const repDeposits: Record<Address, Record<Address, bigint>> = {}
-	const securityBondAllowances: Record<Address, Record<Address, bigint>> = {}
+	const capacityOwnershipAttoReps: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
 	const pendingReportIds: Record<Address, bigint> = {}
 	type PendingReportMock = { currentAmount1: bigint; currentAmount2: bigint; currentReporter: Address; reportTimestamp: bigint; settlementTime: bigint }
@@ -173,12 +173,12 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		repDeposits[poolAddress] = {
 			[primaryVault]: scenario === 'security-pool' ? primaryVaultRepDeposit : x2PrimaryVaultRepDeposit,
 		}
-		securityBondAllowances[poolAddress] = {
+		capacityOwnershipAttoReps[poolAddress] = {
 			[primaryVault]: 0n,
 		}
 		if (secondaryVault !== undefined) {
 			repDeposits[poolAddress][secondaryVault] = x2SecondaryVaultRepDeposit
-			securityBondAllowances[poolAddress][secondaryVault] = 0n
+			capacityOwnershipAttoReps[poolAddress][secondaryVault] = 0n
 		}
 	}
 
@@ -188,7 +188,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			createMarket: 0,
 			createSecurityPool: 0,
 			createCompleteSetInSecurityPool: 0,
-			depositRepToSecurityPool: 0,
+			depositRepToVaultToSecurityPool: 0,
 			loadAllSecurityPools: 0,
 			loadErc20Balance: 0,
 			loadForkAuctionDetails: 0,
@@ -199,10 +199,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			loadZoltarUniverseSummary: 0,
 			migrateRepToZoltarFromSecurityPool: 0,
 			queueOracleManagerOperation: 0,
+			requestOraclePrice: 0,
 			reportOutcomeInSecurityPool: 0,
 			settleOracleReport: 0,
 			startTruthAuctionForSecurityPool: 0,
-			submitInitialOracleReport: 0,
 			submitTruthAuctionBid: 0,
 			writeContract: 0,
 			setSecurityPoolDeployCalls: 0,
@@ -226,13 +226,13 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		return nextManager
 	}
 
-	const settleSecurityBondAllowance = (managerAddress: Address, accountAddress: Address) => {
+	const settleCapacityOwnershipAttoRep = (managerAddress: Address, accountAddress: Address) => {
 		const operation = pendingOperations[managerAddress]
 		if (operation === undefined || operation.targetVault !== accountAddress) return
 		const ownerPool = managerToPool.get(managerAddress)
 		if (ownerPool === undefined) return
-		securityBondAllowances[ownerPool] ??= {}
-		securityBondAllowances[ownerPool][accountAddress] = operation.amount
+		capacityOwnershipAttoReps[ownerPool] ??= {}
+		capacityOwnershipAttoReps[ownerPool][accountAddress] = operation.amount
 		delete pendingOperations[managerAddress]
 		delete pendingReportIds[managerAddress]
 	}
@@ -255,7 +255,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				questionId,
 			}
 		}),
-		createSecurityPool: mock(async (_client: never, input: { questionId: bigint; securityMultiplier: bigint }) => {
+		createSecurityPool: mock(async (_client: never, input: { questionId: bigint; statoblastSecurityMultiplierBps: bigint }) => {
 			state.callLog.createSecurityPool += 1
 			const poolAddress = getPoolAddressForMarket(securityPoolCount)
 			const managerAddress = getManagerForPool(poolAddress)
@@ -264,7 +264,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				deployPoolHash: `0x${securityPoolCount.toString(16)}`,
 				questionId: input.questionId.toString(16),
 				securityPoolAddress: poolAddress,
-				securityMultiplier: input.securityMultiplier,
+				statoblastSecurityMultiplierBps: input.statoblastSecurityMultiplierBps,
 				universeId: 0n,
 				managerAddress,
 			} as never
@@ -287,15 +287,17 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					universeId: 1n,
 				}) as never,
 		),
-		depositRepToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint) => {
-			state.callLog.depositRepToSecurityPool += 1
+		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) => {
+			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
+				capacityOwnershipAttoReps[poolAddress] ??= {}
+				capacityOwnershipAttoReps[poolAddress][vaultAddress] = (amount * 10_000n) / targetHealthFactorBps
 			}
 			return {
-				action: 'depositRep',
+				action: 'depositRepToVault',
 				hash: '0x01',
 			} as never
 		}),
@@ -344,10 +346,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			const parentPools = poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
-				const vaultRows: Array<{ vaultAddress: Address; repDepositShare: bigint; securityBondAllowance: bigint }> = vaultAddresses.map(vaultAddress => ({
+				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; capacityOwnershipAttoRep: bigint }> = vaultAddresses.map(vaultAddress => ({
 					vaultAddress,
-					repDepositShare: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
-					securityBondAllowance: securityBondAllowances[securityPoolAddress]?.[vaultAddress] ?? 0n,
+					vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
+					capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				}))
 				return {
 					marketDetails: {
@@ -357,8 +359,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					questionOutcome: 'none',
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
-					totalRepDeposit: vaultRows.reduce<bigint>((sum, row) => sum + row.repDepositShare, 0n),
-					totalSecurityBondAllowance: vaultRows.reduce<bigint>((sum, row) => sum + row.securityBondAllowance, 0n),
+					totalPoolHeldAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.vaultAttoRepBacking, 0n),
+					totalCapacityOwnershipAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.capacityOwnershipAttoRep, 0n),
 					vaults: vaultRows,
 				} as never
 			})
@@ -370,8 +372,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					questionOutcome: 'yes',
 					securityPoolAddress: yesChildPoolAddress,
 					systemState: 'forkTruthAuction',
-					totalRepDeposit: 0n,
-					totalSecurityBondAllowance: 0n,
+					totalPoolHeldAttoRep: 0n,
+					totalCapacityOwnershipAttoRep: 0n,
 					vaultCount: 0n,
 					vaults: [],
 				} as never,
@@ -385,7 +387,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadForkAuctionDetails += 1
 			return {
 				currentTime: SIMULATION_INITIAL_TIMESTAMP,
-				migratedRep: 1n,
+				migratedAttoRep: 1n,
 				securityPoolAddress: primaryPoolAddress,
 				systemState: 'forkTruthAuction',
 				truthAuction: {
@@ -410,8 +412,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				pendingOperation: pendingOperation
 					? {
 							amount: pendingOperation.amount,
-							initiatorVault: pendingOperation.targetVault,
-							operation: 'setSecurityBondsAllowance',
+							operator: pendingOperation.targetVault,
+							operation: 'withdrawRep',
 							operationId: pendingOperation.operationId,
 							targetVault: pendingOperation.targetVault,
 						}
@@ -421,8 +423,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				pendingSettlementQueueCapacity: 4n,
 				pendingReportId: pendingReportIds[managerAddress] ?? 0n,
 				priceValidUntilTimestamp: 0n,
-				queuedOperationEthCost: 0n,
-				requestPriceEthCost: 0n,
+				queuedOperationCostAttoEth: 0n,
+				requestPriceCostAttoEth: 0n,
 				token1: token1Address,
 				token2: token2Address,
 			} as never
@@ -453,15 +455,15 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
 				currentRetentionRate: 0n,
-				escalationEscrowedRep: 0n,
+				disputeStakedAttoRep: 0n,
 				managerAddress: getManagerForPool(securityPoolAddress),
-				poolOwnershipDenominator: 0n,
-				repDepositShare: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
+				totalRepBackingUnits: 0n,
+				vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				repToken: profile.genesisRepTokenAddress,
-				securityBondAllowance: securityBondAllowances[securityPoolAddress]?.[vaultAddress] ?? 0n,
+				capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				securityPoolAddress,
-				totalSecurityBondAllowance: Object.values(securityBondAllowances[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
-				unpaidEthFees: 0n,
+				totalCapacityOwnershipAttoRep: Object.values(capacityOwnershipAttoReps[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
+				claimableFeesAttoEth: 0n,
 				universeId: 0n,
 				vaultAddress,
 			} as never
@@ -469,7 +471,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		loadZoltarUniverseSummary: mock(async () => {
 			state.callLog.loadZoltarUniverseSummary += 1
 			return {
-				forkThreshold: 100n,
+				forkThresholdAttoRep: 100n,
 			} as never
 		}),
 		migrateRepToZoltarFromSecurityPool: mock(async () => {
@@ -483,7 +485,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		}),
 		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => {
 			state.callLog.queueOracleManagerOperation += 1
-			if (operation === 'setSecurityBondsAllowance') {
+			if (operation === 'withdrawRep') {
 				if (proposedRepPerEthPrice !== expectedProposedRepPerEthPrice) throw new Error(`Unexpected seeded REP per ETH price ${proposedRepPerEthPrice?.toString() ?? 'undefined'}`)
 				pendingOperations[managerAddress] = {
 					targetVault,
@@ -519,6 +521,25 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				hash: '0x01',
 			} as never
 		}),
+		requestOraclePrice: mock(async (client: { account?: Address }, managerAddress: Address, proposedRepPerEthPrice?: bigint) => {
+			state.callLog.requestOraclePrice += 1
+			if (proposedRepPerEthPrice !== expectedProposedRepPerEthPrice) throw new Error(`Unexpected seeded REP per ETH price ${proposedRepPerEthPrice?.toString() ?? 'undefined'}`)
+			const reporter = client.account ?? zeroAddress
+			const reportId = nextPendingReportId
+			nextPendingReportId += 1n
+			pendingReportIds[managerAddress] = reportId
+			const reportOpenOracleAddress = openOracleByManager.get(managerAddress) ?? openOracleAddress
+			const reportKey = getReportKey(reportOpenOracleAddress, reportId)
+			state.pendingReportSnapshots.push({ managerAddress, openOracleAddress: reportOpenOracleAddress, reportId, currentReporter: reporter, currentAmount2: expectedInitialReportAmount2 })
+			pendingReports[reportKey] = {
+				currentAmount1: coordinatorExactToken1Report,
+				currentAmount2: expectedInitialReportAmount2,
+				currentReporter: reporter,
+				reportTimestamp: SIMULATION_INITIAL_TIMESTAMP,
+				settlementTime: 1n,
+			}
+			return { action: 'requestPrice', hash: '0x01' } as never
+		}),
 		reportOutcomeInSecurityPool: mock(async () => {
 			state.callLog.reportOutcomeInSecurityPool += 1
 			return {
@@ -540,10 +561,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				securityPoolAddress: primaryPoolAddress,
 				universeId: 1n,
 			} as never
-		}),
-		submitInitialOracleReport: mock(async () => {
-			state.callLog.submitInitialOracleReport += 1
-			return { action: 'submitInitialReport', hash: '0x01' } as never
 		}),
 		submitTruthAuctionBid: mock(async () => {
 			state.callLog.submitTruthAuctionBid += 1
@@ -589,7 +606,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			readContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
 				if (address.toLowerCase() !== profile.genesisRepTokenAddress.toLowerCase()) throw new Error(`Unexpected contract read for ${address}`)
 				switch (functionName) {
-					case 'getTotalTheoreticalSupply':
+					case 'getTotalTheoreticalSupplyAttoRep':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply
@@ -622,7 +639,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 						repState.totalSupply += amount
 						return '0x01'
 					}
-					if (functionName === 'setMaxTheoreticalSupply') {
+					if (functionName === 'setMaxTheoreticalSupplyAttoRep') {
 						const nextTheoreticalSupply = args?.[0]
 						if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
 						repState.theoreticalSupply = nextTheoreticalSupply
@@ -634,7 +651,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				state.callLog.writeContract += 1
 				const pending = pendingOperations[address]
 				if (pending !== undefined) {
-					settleSecurityBondAllowance(address, pending.targetVault)
+					settleCapacityOwnershipAttoRep(address, pending.targetVault)
 				}
 				return '0x01'
 			},
@@ -823,65 +840,6 @@ describe('simulation bootstrap', () => {
 		expect(writeCalls.some(call => call.value !== undefined)).toBe(true)
 	})
 
-	test('mirrors seeded REP supply at the Zoltar constructor genesis address for simulation profiles', async () => {
-		const profile = createBaselineProfile({
-			genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000d1'),
-		})
-		const storageWrites: MemoryStorageCall[] = []
-		const setCodeCalls: Array<{ address: string; bytecode: string }> = []
-		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
-		const memoryClient = {
-			tevmReady: async () => undefined,
-			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
-			getBalance: async () => 0n,
-			getStorageAt: async () => toHex(0n, { size: 32 }),
-			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
-				storageWrites.push(payload)
-			},
-			getTransactionCount: async () => 0n,
-			setCode: async (payload: { address: string; bytecode: string }) => {
-				setCodeCalls.push(payload)
-			},
-			impersonateAccount: async () => undefined,
-			setBalance: async () => undefined,
-			setNonce: async () => undefined,
-			getCode: async () => '0x01',
-		} as never
-		const createWriteClient = (accountAddress: Address) =>
-			({
-				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
-					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-				},
-				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
-				getCode: async () => '0x01',
-				writeContract: async () => '0x01',
-			}) as never
-
-		await bootstrapSimulationChain({
-			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
-			createReadClient: () => ({}) as never,
-			createWriteClient,
-			memoryClient,
-			onProgress: () => undefined,
-			primaryAccount: MOCK_PRIMARY_ACCOUNT,
-			profile,
-			scenario: 'baseline',
-		})
-
-		const constructorRepAddress = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress.toLowerCase()
-		const expectedSupply = 2n * 100_000_000n * 10n ** 18n
-		const constructorCodeWrite = setCodeCalls.find(call => call.address.toLowerCase() === constructorRepAddress)
-		const constructorSupplyWrite = storageWrites.find(write => write.address.toLowerCase() === constructorRepAddress)
-
-		expect(constructorCodeWrite).toBeDefined()
-		expect(constructorSupplyWrite).toEqual({
-			address: MAINNET_NETWORK_PROFILE.genesisRepTokenAddress,
-			index: toHex(5n, { size: 32 }),
-			value: toHex(expectedSupply, { size: 32 }),
-		})
-	})
-
 	test('rejects security-pool bootstrap when the primary QA account is missing', async () => {
 		const memoryClient = createBootstrapMemoryClient()
 		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
@@ -1042,18 +1000,12 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(state.callLog.loadAllSecurityPools).toBe(1)
 		expect(state.callLog.settleOracleReport).toBe(1)
-		expect(state.callLog.submitInitialOracleReport).toBe(0)
-		expect(state.callLog.writeContract).toBe(1)
-		expect(contractWriteCalls).toContainEqual(
-			expect.objectContaining({
-				functionName: 'executeStagedOperation',
-				gas: 5_000_000n,
-			}),
-		)
+		expect(state.callLog.requestOraclePrice).toBe(1)
+		expect(contractWriteCalls).toHaveLength(0)
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
-	test('boots the securitypoolx2 simulation path with secondary vault security-bond allowance execution', async () => {
+	test('boots the securitypoolx2 simulation path with secondary vault capacity ownership execution', async () => {
 		const profile = createBaselineProfile()
 		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
@@ -1075,15 +1027,15 @@ describe('simulation bootstrap', () => {
 
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)
-		expect(state.callLog.settleOracleReport).toBe(4)
-		expect(state.callLog.submitInitialOracleReport).toBe(0)
-		expect(state.callLog.loadOpenOracleReportDetails).toBe(8)
-		expect(state.callLog.writeContract).toBe(4)
-		expect(state.callLog.queueOracleManagerOperation).toBe(4)
+		expect(state.callLog.settleOracleReport).toBe(2)
+		expect(state.callLog.loadOpenOracleReportDetails).toBe(4)
+		expect(state.callLog.writeContract).toBe(0)
+		expect(state.callLog.requestOraclePrice).toBe(2)
+		expect(state.callLog.queueOracleManagerOperation).toBe(0)
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.reportId.toString())).size).toBe(state.pendingReportSnapshots.length)
 		expect(state.pendingReportSnapshots.every(snapshot => snapshot.currentAmount2 === state.expectedInitialReportAmount2)).toBe(true)
-		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.currentReporter.toLowerCase())).size).toBeGreaterThan(1)
+		expect(new Set(state.pendingReportSnapshots.map(snapshot => snapshot.currentReporter.toLowerCase()))).toEqual(new Set([MOCK_PRIMARY_ACCOUNT.toLowerCase()]))
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 

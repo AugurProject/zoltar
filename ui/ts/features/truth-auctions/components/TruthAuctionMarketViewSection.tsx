@@ -2,6 +2,7 @@ import * as commonCopy from '../../../copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
+import { LoadingText } from '../../../components/LoadingText.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
@@ -12,7 +13,7 @@ type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
 	hasMoreTickSummaries: boolean
 	loadingTruthAuctionBook: boolean
-	maxTickEth: bigint
+	maxTickAttoEth: bigint
 	onLoadNextTickPage: () => void
 	onSelectTick: (tick: bigint) => void
 	renderPriceValue: (value: bigint | undefined) => ComponentChildren
@@ -25,9 +26,9 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
 }
 
-export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
+export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
-		<SectionBlock title={forkAuctionCopy.marketView}>
+		<SectionBlock variant='embedded'>
 			{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
 			<div className='truth-auction-market-board'>
 				<div className='truth-auction-market-section truth-auction-depth-panel'>
@@ -36,8 +37,12 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							<h4>{forkAuctionCopy.visibleDepth}</h4>
 						</div>
 					</div>
-					{loadingTruthAuctionBook ? <p className='detail'>{forkAuctionCopy.loadingOrderBook}</p> : undefined}
-					{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.auctionLiveLevelsEmpty}</p> : undefined}
+					{loadingTruthAuctionBook ? (
+						<p className='detail'>
+							<LoadingText>{forkAuctionCopy.loadingOrderBook}</LoadingText>
+						</p>
+					) : undefined}
+					{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.auctionLiveLevelsEmpty}</p> : undefined}
 					{truthAuctionDepthPoints.length === 0 ? undefined : <TruthAuctionDepthChart onSelectTick={onSelectTick} points={truthAuctionDepthPoints} {...(showDepthClearingTick && clearingTick !== undefined ? { clearingTick } : {})} />}
 				</div>
 				<div className='truth-auction-market-detail-grid'>
@@ -48,8 +53,12 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							</div>
 						</div>
 						<div className='truth-auction-ladder'>
-							{loadingTruthAuctionBook ? <p className='detail'>{forkAuctionCopy.loadingPriceLevels}</p> : undefined}
-							{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.visibleAuctionLevelsEmpty}</p> : undefined}
+							{loadingTruthAuctionBook ? (
+								<p className='detail'>
+									<LoadingText>{forkAuctionCopy.loadingPriceLevels}</LoadingText>
+								</p>
+							) : undefined}
+							{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.visibleAuctionLevelsEmpty}</p> : undefined}
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
@@ -58,7 +67,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 									onClick={() => onSelectTick(point.tick)}
 									type='button'
 								>
-									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalEth, maxTickEth)}%` }} />
+									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalBidAttoEth, maxTickAttoEth)}%` }} />
 									<div className='truth-auction-price-row-copy'>
 										<div className='truth-auction-price-row-main'>
 											<div>
@@ -73,17 +82,17 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										</div>
 										<div className='truth-auction-price-row-meta'>
 											<span>
-												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalEth} suffix={commonCopy.eth} />
+												{forkAuctionCopy.currentSize} <CurrencyValue value={point.currentTotalBidAttoEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span className='truth-auction-ladder-row-cumulative'>
-												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeEth} suffix={commonCopy.eth} />
+												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeBidAttoEth} suffix={commonCopy.eth} copyable={false} />
 											</span>
 											<span>{forkAuctionCopy.formatSubmissionsLabel(point.submissionCount.toString())}</span>
 										</div>
 									</div>
 								</button>
 							))}
-							{hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} onLoadMore={onLoadNextTickPage} loadMoreLabel={forkAuctionCopy.loadMorePriceLevels} /> : undefined}
+							{truthAuctionBookError === undefined && hasMoreTickSummaries ? <PaginationControls hasNextPage={hasMoreTickSummaries} loading={loadingTruthAuctionBook} onLoadMore={onLoadNextTickPage} loadMoreLabel={forkAuctionCopy.loadMorePriceLevels} /> : undefined}
 						</div>
 					</div>
 				</div>

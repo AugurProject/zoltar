@@ -2,120 +2,54 @@
 pragma solidity 0.8.35;
 
 contract OwnForkEscalationClaimHarness {
-	struct RepBuckets {
-		uint256 unallocatedEscrowChildRep;
-		uint256 unallocatedEscrowSourceRep;
+	function previewOwnForkEscalationBackingUnitsToCredit(uint256 childRepAmountAttoRep, uint256 childBackingUnitsDenominator, uint256 auctionableAttoRepAtFork) external pure returns (uint256 backingUnitsToCredit) {
+		require(auctionableAttoRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childRepAmountAttoRep > 0, 'Own-fork child REP amount must be positive');
+		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
+		backingUnitsToCredit =
+			(childRepAmountAttoRep * childBackingUnitsDenominator + auctionableAttoRepAtFork - 1) /
+			auctionableAttoRepAtFork;
 	}
 
-	mapping(address => RepBuckets) private repBucketsByParent;
-
-	function setOwnForkRepBuckets(
-		address parent,
-		uint256 escalationChildRepAtFork,
-		uint256 escalationSourceRep
-	) external {
-		repBucketsByParent[parent] = RepBuckets({
-			unallocatedEscrowChildRep: escalationChildRepAtFork,
-			unallocatedEscrowSourceRep: escalationSourceRep
-		});
-	}
-
-	function previewOwnForkEscalationClaim(
-		address parent,
-		uint256 sourceRepAmount
-	) external returns (uint256 childRepAmount) {
-		RepBuckets storage repBuckets = repBucketsByParent[parent];
-		uint256 unallocatedEscrowSourceRep = repBuckets.unallocatedEscrowSourceRep;
-		uint256 unallocatedEscrowChildRep = repBuckets.unallocatedEscrowChildRep;
-		require(unallocatedEscrowSourceRep >= sourceRepAmount, 'Own-fork escalation source REP bucket is exhausted');
-		if (sourceRepAmount == unallocatedEscrowSourceRep) {
-			childRepAmount = unallocatedEscrowChildRep;
-		} else {
-			childRepAmount =
-				(sourceRepAmount * unallocatedEscrowChildRep + unallocatedEscrowSourceRep - 1) /
-				unallocatedEscrowSourceRep;
+	function previewOwnForkEscalationBackingUnitsSequence(uint256[] calldata childRepAmountsAttoRep, uint256 childBackingUnitsDenominator, uint256 auctionableAttoRepAtFork) external pure returns (uint256[] memory backingUnitsCredits, uint256 totalBackingUnitsClaimed) {
+		require(auctionableAttoRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		require(childBackingUnitsDenominator > 0, 'Own-fork child backingUnits denominator must be positive');
+		backingUnitsCredits = new uint256[](childRepAmountsAttoRep.length);
+		uint256 childRepClaimedAttoRep = 0;
+		uint256 backingUnitsClaimed = 0;
+		for (uint256 index = 0; index < childRepAmountsAttoRep.length; index++) {
+			childRepClaimedAttoRep += childRepAmountsAttoRep[index];
+			uint256 nextBackingUnitsClaimed =
+				(childRepClaimedAttoRep * childBackingUnitsDenominator + auctionableAttoRepAtFork - 1) /
+					auctionableAttoRepAtFork;
+			uint256 backingUnitsToCredit = nextBackingUnitsClaimed - backingUnitsClaimed;
+			backingUnitsCredits[index] = backingUnitsToCredit;
+			backingUnitsClaimed = nextBackingUnitsClaimed;
 		}
-		repBuckets.unallocatedEscrowSourceRep = unallocatedEscrowSourceRep - sourceRepAmount;
-		repBuckets.unallocatedEscrowChildRep = unallocatedEscrowChildRep - childRepAmount;
+		totalBackingUnitsClaimed = backingUnitsClaimed;
 	}
 
-	function previewOwnForkEscalationOwnershipToCredit(
-		uint256 childRepAmount,
-		uint256 childOwnershipDenominator,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256 ownershipToCredit) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		require(childRepAmount > 0, 'Own-fork child REP amount must be positive');
-		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
-		ownershipToCredit =
-			(childRepAmount * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
-	}
-
-	function previewOwnForkEscalationOwnershipSequence(
-		uint256[] calldata childRepAmounts,
-		uint256 childOwnershipDenominator,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256[] memory ownershipCredits, uint256 totalOwnershipClaimed) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		require(childOwnershipDenominator > 0, 'Own-fork child ownership denominator must be positive');
-		ownershipCredits = new uint256[](childRepAmounts.length);
-		uint256 childRepClaimed = 0;
-		uint256 ownershipClaimed = 0;
-		for (uint256 index = 0; index < childRepAmounts.length; index++) {
-			childRepClaimed += childRepAmounts[index];
-			uint256 nextOwnershipClaimed =
-				(childRepClaimed * childOwnershipDenominator + auctionableRepAtFork - 1) / auctionableRepAtFork;
-			uint256 ownershipToCredit = nextOwnershipClaimed - ownershipClaimed;
-			ownershipCredits[index] = ownershipToCredit;
-			ownershipClaimed = nextOwnershipClaimed;
+	function previewOwnForkEscalationSettlementCollateralSequence(uint256[] calldata childRepAmountsAttoRep, uint256 parentSettlementCollateralAtForkAttoEth, uint256 auctionableAttoRepAtFork)
+		external
+		pure
+		returns (
+			uint256[] memory settlementCollateralTransfersAttoEth,
+			uint256 totalSettlementCollateralTransferredAttoEth
+		)
+	{
+		require(auctionableAttoRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
+		settlementCollateralTransfersAttoEth = new uint256[](childRepAmountsAttoRep.length);
+		uint256 childRepTransferredAttoRep = 0;
+		uint256 settlementCollateralTransferredAttoEth = 0;
+		for (uint256 index = 0; index < childRepAmountsAttoRep.length; index++) {
+			childRepTransferredAttoRep += childRepAmountsAttoRep[index];
+			uint256 nextSettlementCollateralTransferredAttoEth =
+				(parentSettlementCollateralAtForkAttoEth * childRepTransferredAttoRep + auctionableAttoRepAtFork - 1) /
+					auctionableAttoRepAtFork;
+			settlementCollateralTransfersAttoEth[index] =
+				nextSettlementCollateralTransferredAttoEth - settlementCollateralTransferredAttoEth;
+			settlementCollateralTransferredAttoEth = nextSettlementCollateralTransferredAttoEth;
 		}
-		totalOwnershipClaimed = ownershipClaimed;
-	}
-
-	function previewOwnForkEscalationCollateralSequence(
-		uint256[] calldata childRepAmounts,
-		uint256 parentCollateralAtFork,
-		uint256 auctionableRepAtFork
-	) external pure returns (uint256[] memory collateralTransfers, uint256 totalCollateralTransferred) {
-		require(auctionableRepAtFork > 0, 'Own-fork auctionable REP at fork must be non-zero');
-		collateralTransfers = new uint256[](childRepAmounts.length);
-		uint256 childRepTransferred = 0;
-		uint256 collateralTransferred = 0;
-		for (uint256 index = 0; index < childRepAmounts.length; index++) {
-			childRepTransferred += childRepAmounts[index];
-			uint256 nextCollateralTransferred =
-				(parentCollateralAtFork * childRepTransferred + auctionableRepAtFork - 1) / auctionableRepAtFork;
-			collateralTransfers[index] = nextCollateralTransferred - collateralTransferred;
-			collateralTransferred = nextCollateralTransferred;
-		}
-		totalCollateralTransferred = collateralTransferred;
-	}
-
-	function previewOwnForkUnresolvedEscalationAllocation(
-		address[] calldata vaults,
-		uint256[] calldata sourceAmounts,
-		uint256 childRepAtFork
-	) external pure returns (uint256[] memory childAmounts) {
-		require(vaults.length == sourceAmounts.length, 'Vault and source amount arrays must have the same length');
-		uint256 vaultCount = vaults.length;
-		uint256 totalSourceRep = 0;
-		for (uint256 index = 0; index < vaultCount; index++) {
-			totalSourceRep += sourceAmounts[index];
-		}
-		childAmounts = new uint256[](vaultCount);
-		for (uint256 index = 0; index < vaultCount; index++) {
-			childAmounts[index] = (sourceAmounts[index] * childRepAtFork) / totalSourceRep;
-		}
-	}
-
-	function previewOwnForkUnresolvedEscalationNoop(
-		uint256[] calldata exportedAmounts,
-		uint256 childRepAmount
-	) external pure returns (uint256[] memory returnedAmounts) {
-		returnedAmounts = new uint256[](exportedAmounts.length);
-		for (uint256 index = 0; index < exportedAmounts.length; index++) {
-			returnedAmounts[index] = exportedAmounts[index];
-		}
-		if (childRepAmount == 0) return returnedAmounts;
+		totalSettlementCollateralTransferredAttoEth = settlementCollateralTransferredAttoEth;
 	}
 }

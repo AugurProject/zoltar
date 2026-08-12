@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getSecurityPoolCreateDisabledReason } from '../../../features/security-pools/lib/securityPoolCreationGuards.js'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
+import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../../../features/security-pools/lib/securityPoolCreationGuards.js'
 import type { MarketDetails } from '../../../types/contracts.js'
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
@@ -31,9 +32,11 @@ describe('security pool creation guards', () => {
 				accountAddress: undefined,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				isMainnet: true,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
 		).toBe('Connect a wallet before creating a security pool.')
@@ -43,9 +46,11 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				isMainnet: false,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: false,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
@@ -55,21 +60,25 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: true,
-				isMainnet: true,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('A pool for this question and security multiplier already exists.')
+		).toBe('A pool for this question, Statoblast security multiplier, and priority fee already exists.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				isMainnet: true,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: true,
 				marketDetails: undefined,
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
 		).toBe('Enter an exact binary Yes / No question before creating a pool.')
@@ -79,9 +88,11 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				isMainnet: true,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails({ marketType: 'categorical' }),
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
 		).toBe('Security pools can only be created for exact binary Yes / No questions.')
@@ -91,11 +102,32 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				isMainnet: true,
+				initialReportPriorityFeeGwei: '10',
+				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
 		).toBeUndefined()
+	})
+
+	test('validates the Statoblast security multiplier before submission', () => {
+		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a Statoblast security multiplier of at least 1.0002x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('abc')).toBe('Enter a multiplier in x with at most 4 decimal places.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('2.00001')).toBe('Enter a multiplier in x with at most 4 decimal places.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Statoblast security multiplier must be at least 1.0002x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1.0001')).toBe('Statoblast security multiplier must be at least 1.0002x.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('2.0001')).toBeUndefined()
+	})
+
+	test('validates the initial-report priority fee before submission', () => {
+		expect(getInitialReportPriorityFeeValidationMessage('')).toBe('Enter an initial-report priority fee in gwei.')
+		expect(getInitialReportPriorityFeeValidationMessage('abc')).toBe('Enter a gwei value with at most 9 decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0.0000000001')).toBe('Enter a gwei value with at most 9 decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0 gwei.')
+		expect(getInitialReportPriorityFeeValidationMessage('0.000000001')).toBeUndefined()
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
 	})
 })

@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
@@ -20,7 +20,6 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
-const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
 	const failures = await validateDocsHtml()
@@ -35,23 +34,24 @@ export async function assertDocsHtmlValid(): Promise<void> {
 export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
 	const htmlFilePaths = await findDocsFiles('.html')
-	const markdownFilePaths = await findDocsFiles('.md')
 	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(document => [document.filePath, document]))
-	const markdownAnchorsByPath = await collectMarkdownAnchorsByPath(markdownFilePaths)
 
 	for (const parsedDocument of parsedDocuments) {
 		validateTextEnvelope(parsedDocument, failures)
+		validateResponsiveRuntime(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
+		validateInteractiveCatalogs(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
+		validatePlotMounts(parsedDocument, failures)
+		const hasMetaRefresh = Array.from(parsedDocument.document.querySelectorAll('meta[http-equiv]')).some(meta => meta.getAttribute('http-equiv')?.trim().toLowerCase() === 'refresh')
+		if (hasMetaRefresh) {
+			addFailure(parsedDocument, 'meta refresh redirects are not allowed in the documentation corpus', failures)
+		}
 		validateDiagrams(parsedDocument, failures)
 		validateEquations(parsedDocument, failures)
 		validateTables(parsedDocument, failures)
-		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, markdownAnchorsByPath, failures)
-	}
-
-	for (const markdownFilePath of markdownFilePaths) {
-		await validateMarkdownLinks(markdownFilePath, parsedDocumentsByPath, markdownAnchorsByPath, failures)
+		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, failures)
 	}
 
 	for (const parsedDocument of parsedDocuments) {
@@ -61,12 +61,21 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	return failures
 }
 
+function validateResponsiveRuntime(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	if (parsedDocument.relativePath === 'docs/documentation.html') return
+	const runtimeScripts = elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/responsiveDocs.js')
+	if (runtimeScripts.length !== 1) {
+		addFailure(parsedDocument, 'must load docs/assets/js/responsiveDocs.js exactly once for responsive equations and overflow cues', failures)
+	}
+}
+
 async function findDocsFiles(extension: string): Promise<string[]> {
-	const entries = await readdir(docsDirectoryPath)
-	return entries
-		.filter(entry => entry.endsWith(extension))
-		.map(entry => path.join(docsDirectoryPath, entry))
-		.sort()
+	const paths: string[] = []
+	const glob = new Bun.Glob(`**/*${extension}`)
+	for await (const relativePath of glob.scan({ cwd: docsDirectoryPath, onlyFiles: true })) {
+		paths.push(path.join(docsDirectoryPath, relativePath))
+	}
+	return paths.sort()
 }
 
 async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> {
@@ -119,6 +128,33 @@ function validateIds(parsedDocument: ParsedHtmlDocument, failures: ValidationFai
 	}
 }
 
+function validateInteractiveCatalogs(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const interactiveDetails = Array.from(parsedDocument.document.querySelectorAll('details.interactive-example'))
+	for (const details of interactiveDetails) {
+		const id = details.getAttribute('id')?.trim() ?? ''
+		if (id.length === 0) {
+			addFailure(parsedDocument, `${describeElement(details)} needs a stable id for direct links and shared scenarios`, failures)
+		}
+	}
+	if (interactiveDetails.length > 0 && elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/interactiveTools.js').length === 0) {
+		addFailure(parsedDocument, 'interactive calculators must load interactiveTools.js for presets, reset, sharing, and live results', failures)
+	}
+
+	const invariantEntries = Array.from(parsedDocument.document.querySelectorAll('details.invariant-entry'))
+	for (const entry of invariantEntries) {
+		const identifier = entry.querySelector('summary code')?.textContent?.trim().toLowerCase() ?? ''
+		const id = entry.getAttribute('id')?.trim() ?? ''
+		if (identifier.length === 0 || id !== identifier) {
+			addFailure(parsedDocument, `${describeElement(entry)} id must match its invariant identifier "${identifier || 'missing'}"`, failures)
+		}
+	}
+	if (invariantEntries.length > 0) {
+		if (elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/invariantExplorer.js').length === 0) {
+			addFailure(parsedDocument, 'invariant catalog must load invariantExplorer.js', failures)
+		}
+	}
+}
+
 function validateAriaReferences(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	for (const element of Array.from(parsedDocument.document.querySelectorAll('[aria-labelledby]'))) {
 		const referencedIds = splitIdList(element.getAttribute('aria-labelledby'))
@@ -137,42 +173,66 @@ function validateAriaReferences(parsedDocument: ParsedHtmlDocument, failures: Va
 function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	const figures = Array.from(parsedDocument.document.querySelectorAll('figure.diagram'))
 	if (figures.length === 0) {
-		addFailure(parsedDocument, 'does not contain any figure.diagram elements', failures)
 		return
 	}
 
 	for (const figure of figures) {
 		validateFigureEnvelope(parsedDocument, figure, failures)
 
-		const svg = figure.querySelector('svg')
-		if (svg === null) {
-			addFailure(parsedDocument, `${describeElement(figure)} is missing an svg`, failures)
+		const chartMount = figure.querySelector('[data-plot-chart]')
+		if (chartMount === null) {
+			addFailure(parsedDocument, `${describeElement(figure)} is missing an Observable Plot mount`, failures)
 			continue
 		}
 
-		const role = svg.getAttribute('role')?.trim()
+		const figureId = figure.getAttribute('id')?.trim()
+		const chartId = chartMount.getAttribute('data-plot-chart')?.trim()
+		if (chartId !== figureId) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} must use its figure id as data-plot-chart`, failures)
+		}
+	}
+}
+
+function validatePlotMounts(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const inlineSvgCount = parsedDocument.document.querySelectorAll('svg').length
+	if (inlineSvgCount > 0) {
+		addFailure(parsedDocument, `contains ${inlineSvgCount} hand-authored inline SVG element(s); documentation visuals must use Observable Plot mounts`, failures)
+	}
+
+	const chartMounts = Array.from(parsedDocument.document.querySelectorAll('[data-plot-chart]'))
+	if (chartMounts.length === 0) {
+		return
+	}
+	const runtimeScripts = elementsReferencingAsset(parsedDocument, 'script[src]', 'src', 'assets/js/chartRuntime.js')
+	if (runtimeScripts.length !== 1) {
+		addFailure(parsedDocument, `must load docs/assets/js/chartRuntime.js exactly once when Plot mounts are present`, failures)
+	}
+
+	for (const chartMount of chartMounts) {
+		const chartId = chartMount.getAttribute('data-plot-chart')?.trim()
+		if (chartId === undefined || chartId.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} is missing a stable data-plot-chart id`, failures)
+		}
+
+		const role = chartMount.getAttribute('role')?.trim()
 		if (role !== 'img') {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} must use role="img"`, failures)
+			addFailure(parsedDocument, `${describeElement(chartMount)} must use role="img" before Plot loads`, failures)
 		}
 
-		const ariaLabel = svg.getAttribute('aria-label')?.trim()
-		const labelledBy = splitIdList(svg.getAttribute('aria-labelledby'))
-		const title = svg.querySelector('title')?.textContent?.trim()
-		const desc = svg.querySelector('desc')?.textContent?.trim()
-		const hasInlineLabel = ariaLabel !== undefined && ariaLabel.length > 0
-		const hasTitleAndDesc = title !== undefined && title.length > 0 && desc !== undefined && desc.length > 0
-		if (!hasInlineLabel && labelledBy.length === 0) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} needs aria-label or aria-labelledby`, failures)
-		}
-		if (!hasInlineLabel && !hasTitleAndDesc) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} needs non-empty title and desc elements`, failures)
+		const ariaLabel = chartMount.getAttribute('aria-label')?.trim()
+		if (ariaLabel === undefined || ariaLabel.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs a non-empty aria-label`, failures)
 		}
 
-		validateViewBox(parsedDocument, svg, figure, failures)
+		const width = Number(chartMount.getAttribute('data-plot-width'))
+		const height = Number(chartMount.getAttribute('data-plot-height'))
+		if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs positive Plot width and height metadata`, failures)
+		}
 
-		const shapeCount = svg.querySelectorAll('circle, ellipse, line, path, polygon, polyline, rect, text').length
-		if (shapeCount === 0) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} has no visible SVG primitives`, failures)
+		const fallback = chartMount.querySelector('.plot-chart-fallback')?.textContent?.trim()
+		if (fallback === undefined || fallback.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs explanatory fallback text`, failures)
 		}
 	}
 }
@@ -186,8 +246,11 @@ function validateFigureEnvelope(parsedDocument: ParsedHtmlDocument, figure: Elem
 	}
 
 	const captions = Array.from(figure.children).filter(child => child.classList.contains('diagram-caption'))
+	if (captions.length === 0) {
+		return
+	}
 	if (captions.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(figure)} must have exactly one direct .diagram-caption`, failures)
+		addFailure(parsedDocument, `${describeElement(figure)} must have at most one direct .diagram-caption`, failures)
 		return
 	}
 
@@ -220,37 +283,12 @@ function validateFigureEnvelope(parsedDocument: ParsedHtmlDocument, figure: Elem
 	}
 }
 
-function validateViewBox(parsedDocument: ParsedHtmlDocument, svg: Element, figure: Element, failures: ValidationFailure[]): void {
-	const viewBox = svg.getAttribute('viewBox')?.trim()
-	if (viewBox === undefined || viewBox.length === 0) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} is missing a viewBox`, failures)
-		return
-	}
-
-	const values = viewBox.split(/\s+/).map(Number)
-	if (values.length !== 4 || values.some(value => !Number.isFinite(value))) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} has malformed viewBox "${viewBox}"`, failures)
-		return
-	}
-
-	const width = values[2]
-	const height = values[3]
-	if (width === undefined || height === undefined || width <= 0 || height <= 0) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} must have positive viewBox width and height`, failures)
-	}
-}
-
 function validateEquations(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	for (const formula of Array.from(parsedDocument.document.querySelectorAll('.formula'))) {
 		addFailure(parsedDocument, `${describeElement(formula)} must use native MathML inside .equation instead of stale .formula markup`, failures)
 	}
 
 	const equations = Array.from(parsedDocument.document.querySelectorAll('.equation'))
-	if (equations.length === 0) {
-		addFailure(parsedDocument, 'does not contain any .equation MathML blocks', failures)
-		return
-	}
-
 	for (const equation of equations) {
 		validateEquationEnvelope(parsedDocument, equation, failures)
 	}
@@ -275,37 +313,8 @@ function validateEquationEnvelope(parsedDocument: ParsedHtmlDocument, equation: 
 	}
 
 	const captions = Array.from(equation.children).filter(child => child.classList.contains('equation-caption'))
-	if (captions.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(equation)} must have exactly one direct .equation-caption`, failures)
-		return
-	}
-
-	const caption = captions[0]
-	if (caption === undefined) {
-		addFailure(parsedDocument, `${describeElement(equation)} is missing an .equation-caption`, failures)
-		return
-	}
-
-	const equationLabels = Array.from(caption.querySelectorAll('.equation-label'))
-	if (equationLabels.length !== 1) {
-		addFailure(parsedDocument, `${describeElement(equation)} caption must contain exactly one .equation-label`, failures)
-		return
-	}
-
-	const equationLabel = equationLabels[0]
-	const labelText = equationLabel?.textContent?.trim()
-	if (labelText === undefined || labelText.length === 0) {
-		addFailure(parsedDocument, `${describeElement(equation)} has an empty equation label`, failures)
-		return
-	}
-
-	if (/^equation\s+\d+/i.test(labelText)) {
-		addFailure(parsedDocument, `${describeElement(equation)} hard-codes its equation number in the label`, failures)
-	}
-
-	const captionText = caption.textContent?.trim() ?? ''
-	if (captionText.length <= labelText.length) {
-		addFailure(parsedDocument, `${describeElement(equation)} caption needs explanatory text after the label`, failures)
+	if (captions.length > 0) {
+		addFailure(parsedDocument, `${describeElement(equation)} must not use equation captions; put explanatory text in the surrounding prose`, failures)
 	}
 }
 
@@ -359,37 +368,22 @@ function validateTables(parsedDocument: ParsedHtmlDocument, failures: Validation
 	}
 }
 
-async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, failures: ValidationFailure[]): Promise<void> {
+async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, failures: ValidationFailure[]): Promise<void> {
 	for (const link of Array.from(parsedDocument.document.querySelectorAll('a[href]'))) {
-		const href = link.getAttribute('href')?.trim()
+		const rawHref = link.getAttribute('href')
+		const href = rawHref?.trim()
 		if (href === undefined || href.length === 0) {
 			addFailure(parsedDocument, `${describeElement(link)} has an empty href`, failures)
 			continue
 		}
-		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, markdownAnchorsByPath, parsedDocument.relativePath, failures)
-	}
-}
-
-async function validateMarkdownLinks(markdownFilePath: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, failures: ValidationFailure[]): Promise<void> {
-	const text = await readFile(markdownFilePath, 'utf8')
-	const relativePath = relativeToRepository(markdownFilePath)
-	if (conflictMarkerPattern.test(text)) {
-		failures.push({
-			message: 'contains unresolved conflict markers',
-			relativePath,
-		})
-	}
-
-	for (const match of text.matchAll(markdownLinkPattern)) {
-		const href = match[1]
-		if (href === undefined) {
-			continue
+		if (rawHref !== href) {
+			addFailure(parsedDocument, `${describeElement(link)} href has leading or trailing whitespace`, failures)
 		}
-		await validateLocalLink(markdownFilePath, href, parsedDocumentsByPath, markdownAnchorsByPath, relativePath, failures)
+		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, parsedDocument.relativePath, failures)
 	}
 }
 
-async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, markdownAnchorsByPath: Map<string, Set<string>>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
+async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
 	if (isExternalLink(href)) {
 		return
 	}
@@ -429,53 +423,6 @@ async function validateLocalLink(sourceFilePath: string, href: string, parsedDoc
 		}
 		return
 	}
-
-	const markdownAnchors = markdownAnchorsByPath.get(targetFilePath)
-	if (markdownAnchors !== undefined && !markdownAnchors.has(fragment)) {
-		failures.push({
-			message: `links to missing Markdown fragment "${href}"`,
-			relativePath: sourceRelativePath,
-		})
-	}
-}
-
-async function collectMarkdownAnchorsByPath(markdownFilePaths: string[]): Promise<Map<string, Set<string>>> {
-	const anchorsByPath = new Map<string, Set<string>>()
-	for (const filePath of markdownFilePaths) {
-		const text = await readFile(filePath, 'utf8')
-		anchorsByPath.set(filePath, collectMarkdownAnchors(text))
-	}
-	return anchorsByPath
-}
-
-function collectMarkdownAnchors(text: string): Set<string> {
-	const anchors = new Set<string>()
-	const slugCounts = new Map<string, number>()
-	for (const line of text.split('\n')) {
-		const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)
-		if (heading === null) {
-			continue
-		}
-		const headingText = heading[2]
-		if (headingText === undefined) {
-			continue
-		}
-		const baseSlug = markdownHeadingToSlug(headingText)
-		const priorCount = slugCounts.get(baseSlug) ?? 0
-		slugCounts.set(baseSlug, priorCount + 1)
-		anchors.add(priorCount === 0 ? baseSlug : `${baseSlug}-${priorCount}`)
-	}
-	return anchors
-}
-
-function markdownHeadingToSlug(headingText: string): string {
-	return headingText
-		.replace(/`([^`]+)`/g, '$1')
-		.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9 -]/g, '')
-		.replace(/\s+/g, '-')
 }
 
 function splitHref(href: string): [string, string | undefined] {
@@ -552,6 +499,18 @@ function formatUnknownError(error: unknown): string {
 		return error.message
 	}
 	return String(error)
+}
+
+export function resolveDocumentReference(filePath: string, reference: string): string {
+	return path.resolve(path.dirname(filePath), reference)
+}
+
+function elementsReferencingAsset(parsedDocument: ParsedHtmlDocument, selector: string, attribute: string, docsRelativeAssetPath: string): Element[] {
+	const expectedPath = path.join(docsDirectoryPath, docsRelativeAssetPath)
+	return Array.from(parsedDocument.document.querySelectorAll(selector)).filter(element => {
+		const reference = element.getAttribute(attribute)
+		return reference !== null && resolveDocumentReference(parsedDocument.filePath, reference) === expectedPath
+	})
 }
 
 function relativeToRepository(filePath: string): string {

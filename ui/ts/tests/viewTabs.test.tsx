@@ -307,18 +307,27 @@ describe('ViewTabs', () => {
 					options={[
 						{ label: 'Questions', value: 'questions' },
 						{ label: 'Create Question', value: 'create' },
-						{ label: 'Fork Zoltar', value: 'fork' },
+						{ label: 'Fork Universe', value: 'fork' },
 						{ label: 'Migrate REP', value: 'migration' },
 					]}
 				/>,
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
 			expect(requestedScrollPositions).toEqual([])
+			const container = within(document.body).getByRole('group', { name: 'Responsive Tabs' })
+			const activeTab = within(container).getByRole('button', { name: 'Migrate REP' })
+			container.getBoundingClientRect = () => new window.DOMRect(0, 0, 200, 40)
+			activeTab.getBoundingClientRect = () => new window.DOMRect(260, 0, 80, 40)
 
 			clientWidth = 200
 			await act(() => resizeCallback?.([], {} as ResizeObserver))
 
-			expect(requestedScrollPositions.length).toBe(1)
+			expect(requestedScrollPositions).toEqual([140])
+
+			activeTab.getBoundingClientRect = () => new window.DOMRect(80, 0, 80, 40)
+			await act(() => resizeCallback?.([], {} as ResizeObserver))
+
+			expect(requestedScrollPositions).toEqual([140])
 		} finally {
 			HTMLElement.prototype.scrollTo = originalScrollTo
 			if (originalResizeObserver === undefined) Reflect.deleteProperty(globalThis, 'ResizeObserver')

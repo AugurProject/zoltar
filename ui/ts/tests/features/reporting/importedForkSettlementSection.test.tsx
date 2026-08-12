@@ -51,8 +51,8 @@ describe('ImportedForkSettlementSection', () => {
 					{
 						importedUserDeposits: [
 							{
-								amount: 10n,
-								cumulativeAmount: 12n,
+								amountAttoRep: 10n,
+								cumulativeAmountAttoRep: 12n,
 								depositor: '0x0000000000000000000000000000000000000001',
 								parentDepositIndex: 7n,
 							},
@@ -61,6 +61,7 @@ describe('ImportedForkSettlementSection', () => {
 						label: 'Yes',
 					},
 				]}
+				winningOutcome={undefined}
 			/>,
 		)
 		cleanupRendered = rendered.cleanup
@@ -72,7 +73,7 @@ describe('ImportedForkSettlementSection', () => {
 		expect(within(document.body).queryByText(/Imported ordering start:/)).toBeNull()
 		expect(renderedActions).toEqual([
 			{
-				guardMessage: 'Fork-carried escalation deposits can be settled after this child pool finalizes.',
+				guardMessage: 'Winning fork-carried escalation deposits can be settled after this child pool finalizes.',
 				outcome: 'yes',
 				sideLabel: 'Yes',
 			},
@@ -88,8 +89,8 @@ describe('ImportedForkSettlementSection', () => {
 		const importedUserDeposits = Array.from({ length: 27 }, (_, index) => {
 			const parentDepositIndex = 250n + BigInt(index)
 			return {
-				amount: parentDepositIndex,
-				cumulativeAmount: parentDepositIndex + 1n,
+				amountAttoRep: parentDepositIndex,
+				cumulativeAmountAttoRep: parentDepositIndex + 1n,
 				depositor: '0x0000000000000000000000000000000000000001' as const,
 				parentDepositIndex,
 			}
@@ -125,6 +126,7 @@ describe('ImportedForkSettlementSection', () => {
 							label: 'Yes',
 						},
 					]}
+					winningOutcome='yes'
 				/>
 			)
 		}
@@ -140,7 +142,7 @@ describe('ImportedForkSettlementSection', () => {
 		const deposit256Checkbox = firstPageCheckboxes.item(6) as HTMLInputElement
 		expect(deposit256Checkbox.checked).toBe(true)
 
-		const nextButton = within(document.body).getByRole('button', { name: 'Next Parent Deposits' })
+		const nextButton = within(document.body).getByRole('button', { name: 'Next parent deposits' })
 		fireEvent.click(nextButton)
 
 		expect(document.body.textContent).toMatch('Parent deposit #276')
@@ -152,7 +154,7 @@ describe('ImportedForkSettlementSection', () => {
 		fireEvent.change(deposit276Checkbox, { target: { checked: true } })
 		expect(deposit276Checkbox.checked).toBe(true)
 
-		const previousButton = within(document.body).getByRole('button', { name: 'Previous Parent Deposits' })
+		const previousButton = within(document.body).getByRole('button', { name: 'Previous parent deposits' })
 		fireEvent.click(previousButton)
 
 		const refreshedFirstPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
@@ -164,5 +166,40 @@ describe('ImportedForkSettlementSection', () => {
 		const refreshedSecondPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')
 		const refreshedDeposit276Checkbox = refreshedSecondPageCheckboxes.item(1) as HTMLInputElement
 		expect(refreshedDeposit276Checkbox.checked).toBe(true)
+	})
+
+	test('renders only the winning imported side after finalization', async () => {
+		const renderedActions: ReportingOutcomeKey[] = []
+		const importedDeposit = {
+			amountAttoRep: 10n,
+			cumulativeAmountAttoRep: 12n,
+			depositor: '0x0000000000000000000000000000000000000001' as const,
+			parentDepositIndex: 7n,
+		}
+		const rendered = await renderIntoDocument(
+			<ImportedForkSettlementSection
+				activeReportingDetails={undefined}
+				disabled={false}
+				onDepositSelectionChange={() => undefined}
+				renderSettlementAction={({ outcome, sideLabel }) => {
+					renderedActions.push(outcome)
+					return <button type='button'>Settle {sideLabel}</button>
+				}}
+				resolved={true}
+				selectedDepositIndexesByOutcome={{ invalid: [], no: [7n], yes: [7n] }}
+				sides={[
+					{ importedUserDeposits: [importedDeposit], key: 'yes', label: 'Yes' },
+					{ importedUserDeposits: [{ ...importedDeposit, parentDepositIndex: 8n }], key: 'no', label: 'No' },
+				]}
+				winningOutcome='yes'
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+
+		expect(within(document.body).getByRole('heading', { name: 'Yes' })).not.toBeNull()
+		expect(within(document.body).queryByRole('heading', { name: 'No' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Settle Yes' })).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Settle No' })).toBeNull()
+		expect(renderedActions).toEqual(['yes'])
 	})
 })

@@ -10,7 +10,7 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function createProps(overrides: Partial<Parameters<typeof TabNavigation>[0]> = {}): Parameters<typeof TabNavigation>[0] {
 	return {
-		augurPlaceHolderDeployed: true,
+		augurStatoblastDeployed: true,
 		deployRoute: DEPLOY_ROUTE,
 		marketRoute: ZOLTAR_ROUTE,
 		onRouteChange: () => undefined,
@@ -27,7 +27,7 @@ describe('TabNavigation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&simulate=1').cleanup
+		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1').cleanup
 	})
 
 	afterEach(async () => {
@@ -44,14 +44,14 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('navigation', { name: 'Application sections' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('aria-current')).toBe('page')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/start-here.html')
-		expect(documentQueries.queryByRole('link', { name: 'Zoltar' })).toBeNull()
-		expect(documentQueries.queryByRole('link', { name: 'Open Oracle' })).toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
+		expect(documentQueries.queryByRole('link', { name: 'Markets' })).toBeNull()
+		expect(documentQueries.queryByRole('link', { name: 'Oracle Reports' })).toBeNull()
 	})
 
 	test('changes routes from the compact route selector', async () => {
@@ -71,13 +71,32 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual(['security-pools'])
 	})
 
+	test('keeps Deploy visible as the current compact route while deployment status is loading', async () => {
+		const rendered = await renderIntoDocument(
+			h(
+				TabNavigation,
+				createProps({
+					route: 'deploy',
+					showDeployTab: false,
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+
+		const routeSelector = within(document.body).getByRole('combobox', { name: 'Current application section' })
+		if (!(routeSelector instanceof window.HTMLSelectElement)) throw new Error('Expected compact route selector')
+		expect(routeSelector.value).toBe('deploy')
+		expect(routeSelector.selectedOptions[0]?.textContent).toBe('Deploy')
+		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
+	})
+
 	test('uses the deployment prerequisite copy for disabled application sections', async () => {
 		const routeChanges: string[] = []
 		const rendered = await renderIntoDocument(
 			h(
 				TabNavigation,
 				createProps({
-					augurPlaceHolderDeployed: false,
+					augurStatoblastDeployed: false,
 					onRouteChange: route => {
 						routeChanges.push(route)
 					},
@@ -86,24 +105,30 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 
-		const marketsTab = within(document.body).getByRole('button', { name: 'Markets' }) as HTMLButtonElement
-		expect(marketsTab.disabled).toBe(true)
-		expect(marketsTab.title).toBe('Deploy the application contracts before using this section.')
-		expect(marketsTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
+		const documentQueries = within(document.body)
+		const zoltarTab = documentQueries.getByRole('link', { name: 'Zoltar' }) as HTMLAnchorElement
+		expect(zoltarTab.getAttribute('aria-disabled')).toBe('true')
+		expect(zoltarTab.getAttribute('href')).toBeNull()
+		expect(zoltarTab.tabIndex).toBe(0)
+		expect(zoltarTab.title).toBe('Deploy the application contracts before using this section.')
+		expect(zoltarTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
+		expect(documentQueries.getByText('Deploy the application contracts before using this section.', { selector: '.mobile-route-select .disabled-reason' })).toBeDefined()
 
-		fireEvent.click(marketsTab)
+		zoltarTab.focus()
+		expect(document.activeElement).toBe(zoltarTab)
+		fireEvent.click(zoltarTab)
 		expect(routeChanges).toEqual([])
 	})
 
-	test('preserves the current hash query state in top-level tab hrefs', async () => {
+	test('keeps shared and destination-owned query state in top-level tab hrefs', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps()))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
 	test('preserves the current route for modified and auxiliary link clicks', async () => {

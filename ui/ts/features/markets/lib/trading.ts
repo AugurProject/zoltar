@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { assertNever } from '../../../lib/assert.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
@@ -11,61 +11,79 @@ import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary }
 
 const PRICE_PRECISION = 10n ** 18n
 const PERCENT_MULTIPLIER = 100n
+const BPS_DENOMINATOR = 10_000n
 
-type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
+type CollateralizationDisplayState = 'value' | 'noActiveCapacityOwnership' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
 
 export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized.'
 export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
-export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active capacity ownership.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 
-const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE]
+const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE]
 
-export function hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
-	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return undefined
-	return completeSetCollateralAmount === 0n && shareTokenSupply !== 0n
+export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return undefined
+	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
-export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply?: bigint | undefined) {
-	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
-	if (hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply) === true) return 0n
-	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
+export function calculateMintingCapacityAttoEth(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+	if (capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice === 0n || statoblastSecurityMultiplierBps === 0n) return undefined
+	if (capacityOwnershipAttoRep === 0n) return 0n
+	const capacityValueAttoEth = (capacityOwnershipAttoRep * PRICE_PRECISION) / repPerEthPrice
+	return (capacityValueAttoEth * BPS_DENOMINATOR) / statoblastSecurityMultiplierBps
 }
 
-function getCollateralizationPercent(repDeposit: bigint | undefined, securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	if (repDeposit === undefined || securityBondAllowance === undefined || repPerEthPrice === undefined || repPerEthPrice === 0n || securityBondAllowance === 0n) return undefined
-	return (repDeposit * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (securityBondAllowance * repPerEthPrice)
+export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
+	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
+	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n
+	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
-export function getPoolCollateralizationPercent(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(totalRepDeposit, totalSecurityBondAllowance, repPerEthPrice)
+function getCollateralizationPercent(qualifyingRepBackingAttoRep: bigint | undefined, capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	if (qualifyingRepBackingAttoRep === undefined || capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || repPerEthPrice === 0n || capacityOwnershipAttoRep === 0n) return undefined
+	return (qualifyingRepBackingAttoRep * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (capacityOwnershipAttoRep * repPerEthPrice)
 }
 
-export function getVaultCollateralizationPercent(repDepositShare: bigint | undefined, securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
+export function getPoolCollateralizationPercent(totalPoolHeldAttoRep: bigint | undefined, totalCapacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(totalPoolHeldAttoRep, totalCapacityOwnershipAttoRep, repPerEthPrice)
 }
 
-export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {
-	if (collateralizationPercent === undefined || securityMultiplier === undefined) return undefined
-	return collateralizationPercent < securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'danger' : 'success'
+export function getVaultCollateralizationPercent(vaultAttoRepBacking: bigint | undefined, capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(vaultAttoRepBacking, capacityOwnershipAttoRep, repPerEthPrice)
 }
 
-export function getCollateralizationDisplayState(securityBondAllowance: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {
-	if (securityBondAllowance === 0n) return 'noActiveAllowance'
+export function getCollateralizationTone(collateralizationPercent: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined): CollateralizationTone | undefined {
+	if (collateralizationPercent === undefined || statoblastSecurityMultiplierBps === undefined) return undefined
+	return collateralizationPercent < getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps) ? 'danger' : 'success'
+}
+
+function getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps: bigint) {
+	return (statoblastSecurityMultiplierBps * PERCENT_MULTIPLIER * PRICE_PRECISION) / BPS_DENOMINATOR
+}
+
+export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
+	const whole = statoblastSecurityMultiplierBps / BPS_DENOMINATOR
+	const fractional = (statoblastSecurityMultiplierBps % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
+	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
+}
+
+export function getCollateralizationDisplayState(capacityOwnershipAttoRep: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {
+	if (capacityOwnershipAttoRep === 0n) return 'noActiveCapacityOwnership'
 	return collateralizationPercent === undefined ? 'unavailable' : 'value'
 }
 
-export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {
-	return (totalRepDeposit ?? 0n) > 0n && (totalSecurityBondAllowance ?? 0n) === 0n
+export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCapacityOwnershipAttoRep: bigint | undefined) {
+	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleCapacityOwnershipAttoRep ?? 0n) === 0n
 }
 
 export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
 	if (shareBalances === undefined) return undefined
-	if (shareBalances.invalid <= shareBalances.yes && shareBalances.invalid <= shareBalances.no) return shareBalances.invalid
-	if (shareBalances.yes <= shareBalances.invalid && shareBalances.yes <= shareBalances.no) return shareBalances.yes
-	return shareBalances.no
+	if (shareBalances.invalidAttoShares <= shareBalances.yesAttoShares && shareBalances.invalidAttoShares <= shareBalances.noAttoShares) return shareBalances.invalidAttoShares
+	if (shareBalances.yesAttoShares <= shareBalances.invalidAttoShares && shareBalances.yesAttoShares <= shareBalances.noAttoShares) return shareBalances.yesAttoShares
+	return shareBalances.noAttoShares
 }
 
 function formatCompleteSetAmount(value: bigint) {
@@ -78,34 +96,34 @@ function divideRoundedUp(numerator: bigint, denominator: bigint) {
 	return (numerator + denominator - 1n) / denominator
 }
 
-export function convertShareAmountToCollateralAmount(shareAmount: undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): undefined
-export function convertShareAmountToCollateralAmount(shareAmount: bigint, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): bigint
-export function convertShareAmountToCollateralAmount(shareAmount: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined): bigint | undefined
-export function convertShareAmountToCollateralAmount(shareAmount: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
-	if (shareAmount === undefined) return undefined
-	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return shareAmount
-	if (shareTokenSupply === 0n) return shareAmount
-	return (shareAmount * completeSetCollateralAmount) / shareTokenSupply
+export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): undefined
+export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): bigint
+export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): bigint | undefined
+export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+	if (amountAttoShares === undefined) return undefined
+	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoShares
+	if (shareTokenSupplyAttoShares === 0n) return amountAttoShares
+	return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares
 }
 
-export function convertCollateralAmountToShareAmount(collateralAmount: bigint, completeSetCollateralAmount: bigint | undefined, shareTokenSupply: bigint | undefined) {
-	if (completeSetCollateralAmount === undefined || shareTokenSupply === undefined) return collateralAmount
-	if (completeSetCollateralAmount === 0n) {
-		if (shareTokenSupply !== 0n) return undefined
-		return collateralAmount
+export function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
+	if (settlementCollateralAttoEth === 0n) {
+		if (shareTokenSupplyAttoShares !== 0n) return undefined
+		return amountAttoEth
 	}
-	return divideRoundedUp(collateralAmount * shareTokenSupply, completeSetCollateralAmount)
+	return divideRoundedUp(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
 }
 
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {
 	if (shareBalances === undefined) return undefined
 	switch (outcome) {
 		case 'invalid':
-			return shareBalances.invalid
+			return shareBalances.invalidAttoShares
 		case 'yes':
-			return shareBalances.yes
+			return shareBalances.yesAttoShares
 		case 'no':
-			return shareBalances.no
+			return shareBalances.noAttoShares
 		default:
 			return assertNever(outcome)
 	}
@@ -146,37 +164,40 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 
 export function getTradingMintGuardMessage({
 	accountAddress,
-	completeSetCollateralAmount,
-	ethBalance,
+	settlementCollateralAttoEth,
+	ethBalanceAttoEth,
+	mintingCapacityAttoEth,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
+	isPriceValid,
 	mintAmountInput,
-	shareTokenSupply,
-	totalRepDeposit,
-	totalSecurityBondAllowance,
+	shareTokenSupplyAttoShares,
+	totalPoolHeldAttoRep,
 }: {
 	accountAddress: Address | undefined
-	completeSetCollateralAmount: bigint | undefined
-	ethBalance: bigint | undefined
+	settlementCollateralAttoEth: bigint | undefined
+	ethBalanceAttoEth: bigint | undefined
+	mintingCapacityAttoEth: bigint | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
+	isPriceValid?: boolean
 	mintAmountInput: string
-	shareTokenSupply: bigint | undefined
-	totalRepDeposit: bigint | undefined
-	totalSecurityBondAllowance: bigint | undefined
+	shareTokenSupplyAttoShares: bigint | undefined
+	totalPoolHeldAttoRep: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before minting.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
+	if (!hasSelectedPool) return 'Select a pool before minting.'
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	if (isPriceValid === false) return 'Refresh the REP price before minting.'
 
-	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply)
+	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
-	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount, shareTokenSupply)
+	const remainingCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
-		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+		if ((totalPoolHeldAttoRep ?? 0n) > 0n && mintingCapacityAttoEth === 0n) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
 		return 'No mint capacity remaining.'
 	}
@@ -188,38 +209,38 @@ export function getTradingMintGuardMessage({
 
 	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
 	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalance(remainingCapacity)} ETH.`
-	if (ethBalance === undefined) return 'Loading wallet ETH balance.'
-	if (mintAmount > ethBalance) return `Need ${formatCurrencyBalance(mintAmount - ethBalance)} more ETH in this wallet to mint the selected amount.`
+	if (ethBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (mintAmount > ethBalanceAttoEth) return `Need ${formatCurrencyBalance(mintAmount - ethBalanceAttoEth)} more ETH in this wallet to mint the selected amount.`
 	return undefined
 }
 
 export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress,
-	completeSetCollateralAmount,
+	settlementCollateralAttoEth,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
-	shareTokenSupply,
+	shareTokenSupplyAttoShares,
 }: {
 	accountAddress: Address | undefined
-	completeSetCollateralAmount: bigint | undefined
+	settlementCollateralAttoEth: bigint | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
-	shareTokenSupply: bigint | undefined
+	shareTokenSupplyAttoShares: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
+	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
-	const maxRedeemableCompleteSets = getMaxRedeemableCompleteSets(shareBalances)
-	if (maxRedeemableCompleteSets === undefined) return 'Loading wallet share balances.'
-	if (maxRedeemableCompleteSets === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
+	const maxRedeemableCompleteSetsAttoShares = getMaxRedeemableCompleteSets(shareBalances)
+	if (maxRedeemableCompleteSetsAttoShares === undefined) return 'Loading wallet share balances.'
+	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a redeem amount greater than zero.'
@@ -227,11 +248,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return 'Enter a redeem amount greater than zero.'
-	const redeemShareAmount = convertCollateralAmountToShareAmount(redeemAmount, completeSetCollateralAmount, shareTokenSupply)
-	if (redeemShareAmount === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
-	if (redeemShareAmount > maxRedeemableCompleteSets) {
-		const maxRedeemableCollateralAmount = convertShareAmountToCollateralAmount(maxRedeemableCompleteSets, completeSetCollateralAmount, shareTokenSupply)
-		return `Max redeemable amount is ${formatCompleteSetAmount(maxRedeemableCollateralAmount)}.`
+	const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmount, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
+	if (redeemAmountAttoShares === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
+	if (redeemAmountAttoShares > maxRedeemableCompleteSetsAttoShares) {
+		const maximumRedeemableAmountAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
+		return `Max redeemable amount is ${formatCompleteSetAmount(maximumRedeemableAmountAttoEth)}.`
 	}
 	return undefined
 }
@@ -239,7 +260,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 export function getTradingMigrateSharesGuardMessage({
 	accountAddress,
 	hasSelectedPool,
-	isMainnet,
+	isOnActiveAppChain,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	selectedShareOutcome,
@@ -249,7 +270,7 @@ export function getTradingMigrateSharesGuardMessage({
 }: {
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
 	selectedShareOutcome: ReportingOutcomeKey
@@ -257,14 +278,15 @@ export function getTradingMigrateSharesGuardMessage({
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before migrating shares.' })
+	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before migrating shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
 	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
+	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
@@ -275,9 +297,9 @@ export function getTradingMigrateSharesGuardMessage({
 	return undefined
 }
 
-export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
-	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
+export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isOnActiveAppChain }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isOnActiveAppChain: boolean }) {
+	if (!hasSelectedPool) return 'Select a pool before redeeming shares.'
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	return undefined
 }

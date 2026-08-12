@@ -1,8 +1,11 @@
 import * as commonCopy from '../../../copy/common.js'
 import type { LifecycleStagePresentation } from '../../types.js'
+import { LoadingAwareText } from '../../../components/LoadingText.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 
 type LifecycleStageBannerProps = {
+	detailId?: string | undefined
+	flat?: boolean
 	stage: LifecycleStagePresentation | undefined
 }
 
@@ -23,7 +26,7 @@ function renderStageActionGroup(label: string, items: string[], tone: 'available
 	)
 }
 
-export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
+export function LifecycleStageBanner({ detailId, flat = false, stage }: LifecycleStageBannerProps) {
 	if (stage === undefined) return undefined
 	const hasActions = stage.availableActions.length > 0 || stage.blockedActions.length > 0
 	const actions = !hasActions ? undefined : (
@@ -34,20 +37,28 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 	)
 	if (stage.tone === 'warning')
 		return (
-			<WarningSurface className='lifecycle-stage-banner'>
+			<WarningSurface className='lifecycle-stage-banner' surface={flat ? 'flat' : 'card'}>
 				<div className='lifecycle-stage-banner-main'>
 					<h3>{stage.label}</h3>
-					<p className='detail'>{stage.detail}</p>
+					{stage.detail === undefined ? undefined : (
+						<p className='detail' id={detailId}>
+							<LoadingAwareText>{stage.detail}</LoadingAwareText>
+						</p>
+					)}
 				</div>
 				{actions}
 			</WarningSurface>
 		)
 
 	return (
-		<section className={`lifecycle-stage-banner ${stage.tone}`}>
+		<section className={`lifecycle-stage-banner ${stage.tone}${flat ? ' flat' : ''}`}>
 			<div className='lifecycle-stage-banner-main'>
 				<h3>{stage.label}</h3>
-				<p className='detail'>{stage.detail}</p>
+				{stage.detail === undefined ? undefined : (
+					<p className='detail' id={detailId}>
+						<LoadingAwareText>{stage.detail}</LoadingAwareText>
+					</p>
+				)}
 			</div>
 			{actions}
 		</section>

@@ -6,40 +6,53 @@ import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FO
 
 export { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS }
 
-export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
-export const MIN_SECURITY_BOND_ALLOWANCE = 1n * 10n ** 18n
+export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
+const BPS_DENOMINATOR = 10_000n
 
-export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
-	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
-	if (trimmedSelectedVaultAddress !== '') return trimmedSelectedVaultAddress
+export function parseTargetHealthFactorBps(value: string) {
+	const trimmed = value.trim()
+	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error('Target health factor must be a number with at most four decimal places')
+	const [whole = '', fraction = ''] = trimmed.split('.')
+	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
+	if (factorBps < BPS_DENOMINATOR) throw new Error('Target health factor must be at least 1.00×')
+	return factorBps
+}
+
+function getMigrationSecurityMultiplierBps(poolSecurityMultiplierBps: bigint) {
+	return BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2n
+}
+
+export function getSelectedVaultOwner(selectedVaultOwner: string | undefined, accountAddress: Address | undefined) {
+	const trimmedSelectedVaultOwner = selectedVaultOwner?.trim() ?? ''
+	if (trimmedSelectedVaultOwner !== '') return trimmedSelectedVaultOwner
 	return accountAddress?.toString()
 }
 
-export function isSelectedVaultOwnedByAccount(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
-	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
-	if (trimmedSelectedVaultAddress === '' || accountAddress === undefined) return false
-	return sameAddress(trimmedSelectedVaultAddress, accountAddress)
+export function isSelectedVaultOwnedByAccount(selectedVaultOwner: string | undefined, accountAddress: Address | undefined) {
+	const trimmedSelectedVaultOwner = selectedVaultOwner?.trim() ?? ''
+	if (trimmedSelectedVaultOwner === '' || accountAddress === undefined) return false
+	return sameAddress(trimmedSelectedVaultOwner, accountAddress)
 }
 
-export function doesLoadedSecurityVaultMatchSelection({ accountAddress, securityPoolAddress, securityVaultDetails, selectedVaultAddress }: { accountAddress: Address | undefined; securityPoolAddress: string | undefined; securityVaultDetails: SecurityVaultDetails | undefined; selectedVaultAddress: string | undefined }) {
+export function doesLoadedSecurityVaultMatchSelection({ accountAddress, securityPoolAddress, securityVaultDetails, selectedVaultOwner }: { accountAddress: Address | undefined; securityPoolAddress: string | undefined; securityVaultDetails: SecurityVaultDetails | undefined; selectedVaultOwner: string | undefined }) {
 	if (securityVaultDetails === undefined) return false
-	const effectiveSelectedVaultAddress = getSelectedVaultAddress(selectedVaultAddress, accountAddress)
-	if (effectiveSelectedVaultAddress === undefined) return false
-	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultAddress)
+	const effectiveSelectedVaultOwner = getSelectedVaultOwner(selectedVaultOwner, accountAddress)
+	if (effectiveSelectedVaultOwner === undefined) return false
+	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
-export function isSecurityVaultDepositBelowMinimum(currentRepDeposit: bigint | undefined, depositAmount: bigint | undefined) {
+export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
 	if (depositAmount === undefined || depositAmount <= 0n) return false
-	return (currentRepDeposit ?? 0n) === 0n && depositAmount < MIN_SECURITY_VAULT_REP_DEPOSIT
+	return (currentVaultRepBackingAttoRep ?? 0n) === 0n && depositAmount < minimumVaultRepDepositAttoRep
 }
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
 	if (securityVaultDetails === undefined) return false
-	return securityVaultDetails.repDepositShare > 0n || securityVaultDetails.securityBondAllowance > 0n || securityVaultDetails.unpaidEthFees > 0n || securityVaultDetails.escalationEscrowedRep > 0n
+	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.capacityOwnershipAttoRep > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
 }
 
 function divideBigintRoundUp(value: bigint, divisor: bigint) {
@@ -47,68 +60,100 @@ function divideBigintRoundUp(value: bigint, divisor: bigint) {
 	return (value + divisor - 1n) / divisor
 }
 
-function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	if (securityBondAllowance === undefined || securityBondAllowance <= 0n) return 0n
-	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice, PRICE_PRECISION)
+function getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
+	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
+	return divideBigintRoundUp(capacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps, PRICE_PRECISION * BPS_DENOMINATOR)
 }
 
-function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	if (repAmount === undefined || repAmount <= 0n) return 0n
+function getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (capacityOwnershipAttoRep === undefined || capacityOwnershipAttoRep <= 0n) return 0n
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
+	if (multiplierBps === undefined || multiplierBps <= 0n) return undefined
+	return (capacityOwnershipAttoRep * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
+}
+
+function getBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+	if (attoRepAmount === undefined || attoRepAmount <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	const repCapacity = repAmount * PRICE_PRECISION
-	if (repCapacity <= 0n) return 0n
-	return (repCapacity - 1n) / repPerEthPrice
+	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return 0n
+	return (attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR) / (repPerEthPrice * statoblastSecurityMultiplierBps)
+}
+
+function getStrictlyBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (attoRepAmount === undefined || attoRepAmount <= 0n || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps <= 0n) return 0n
+	const numerator = attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR
+	return numerator === 0n ? 0n : (numerator - 1n) / (repPerEthPrice * multiplierBps)
 }
 
 export function getSecurityVaultWithdrawableRepAmount({
-	repDepositShare,
+	disputeStakedAttoRep = 0n,
+	vaultAttoRepBacking,
 	repPerEthPrice,
-	securityBondAllowance,
-	totalRepDeposit,
-	totalSecurityBondAllowance,
+	capacityOwnershipAttoRep,
+	statoblastSecurityMultiplierBps,
+	totalPoolHeldAttoRep,
+	totalCapacityOwnershipAttoRep,
 }: {
-	repDepositShare: bigint | undefined
+	vaultAttoRepBacking: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	securityBondAllowance: bigint | undefined
-	totalRepDeposit?: bigint | undefined
-	totalSecurityBondAllowance?: bigint | undefined
+	capacityOwnershipAttoRep: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
+	totalPoolHeldAttoRep?: bigint | undefined
+	totalCapacityOwnershipAttoRep?: bigint | undefined
 }) {
-	if (repDepositShare === undefined) return undefined
-	const requiredVaultRep = getAllowanceBackedRepFloor(securityBondAllowance, repPerEthPrice)
-	const maxLocalWithdrawal = repDepositShare > requiredVaultRep ? repDepositShare - requiredVaultRep : 0n
-	let maxWithdrawableRep = maxLocalWithdrawal
-	if (totalRepDeposit !== undefined && totalRepDeposit > 0n) {
-		const requiredPoolRep = getAllowanceBackedRepFloor(totalSecurityBondAllowance, repPerEthPrice)
-		const maxGlobalWithdrawal = totalRepDeposit > requiredPoolRep ? totalRepDeposit - requiredPoolRep : 0n
-		maxWithdrawableRep = maxWithdrawableRep < maxGlobalWithdrawal ? maxWithdrawableRep : maxGlobalWithdrawal
+	if (vaultAttoRepBacking === undefined) return undefined
+	if (disputeStakedAttoRep > 0n) return 0n
+	const requiredVaultAttoRep = getCapacityOwnershipBackedRepFloor(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+	if (requiredVaultAttoRep === undefined) return undefined
+	const associatedAttoRep = vaultAttoRepBacking + disputeStakedAttoRep
+	const ordinaryHeadroom = associatedAttoRep > requiredVaultAttoRep ? associatedAttoRep - requiredVaultAttoRep : 0n
+	const migrationRequiredRep = getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+	if (migrationRequiredRep === undefined) return undefined
+	const migrationHeadroom = vaultAttoRepBacking > migrationRequiredRep ? vaultAttoRepBacking - migrationRequiredRep : 0n
+	const maxLocalWithdrawal = vaultAttoRepBacking < ordinaryHeadroom ? vaultAttoRepBacking : ordinaryHeadroom
+	let maxWithdrawableAttoRep = maxLocalWithdrawal
+	if (migrationHeadroom < maxWithdrawableAttoRep) maxWithdrawableAttoRep = migrationHeadroom
+	if (totalPoolHeldAttoRep !== undefined && totalPoolHeldAttoRep > 0n) {
+		const requiredPoolRep = getCapacityOwnershipBackedRepFloor(totalCapacityOwnershipAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+		if (requiredPoolRep === undefined) return undefined
+		const maxGlobalWithdrawal = totalPoolHeldAttoRep > requiredPoolRep ? totalPoolHeldAttoRep - requiredPoolRep : 0n
+		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
 	}
-	return maxWithdrawableRep
+	return maxWithdrawableAttoRep
 }
 
-export function getSecurityVaultMaxBondAllowanceAmount({
-	currentSecurityBondAllowance,
-	repDepositShare,
+export function getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
+	currentCapacityOwnershipAttoRep,
+	disputeStakedAttoRep = 0n,
+	vaultAttoRepBacking,
 	repPerEthPrice,
-	totalRepDeposit,
-	totalSecurityBondAllowance,
+	statoblastSecurityMultiplierBps,
+	totalPoolHeldAttoRep,
+	totalCapacityOwnershipAttoRep,
 }: {
-	currentSecurityBondAllowance?: bigint | undefined
-	repDepositShare: bigint | undefined
+	currentCapacityOwnershipAttoRep?: bigint | undefined
+	disputeStakedAttoRep?: bigint | undefined
+	vaultAttoRepBacking: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	totalRepDeposit?: bigint | undefined
-	totalSecurityBondAllowance?: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
+	totalPoolHeldAttoRep?: bigint | undefined
+	totalCapacityOwnershipAttoRep?: bigint | undefined
 }) {
-	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice)
-	let maxBondAllowanceAmount = localAllowanceCeiling
-	if (totalRepDeposit !== undefined && totalSecurityBondAllowance !== undefined) {
-		const currentAllowance = currentSecurityBondAllowance ?? 0n
-		const otherVaultAllowance = totalSecurityBondAllowance > currentAllowance ? totalSecurityBondAllowance - currentAllowance : 0n
-		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice)
-		const remainingPoolAllowance = globalAllowanceCeiling > otherVaultAllowance ? globalAllowanceCeiling - otherVaultAllowance : 0n
-		maxBondAllowanceAmount = maxBondAllowanceAmount < remainingPoolAllowance ? maxBondAllowanceAmount : remainingPoolAllowance
+	const localCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling((vaultAttoRepBacking ?? 0n) + disputeStakedAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+	const migrationCapacityOwnershipCeilingAttoRep = getStrictlyBackedCapacityOwnershipCeiling(vaultAttoRepBacking, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+	let maxCapacityOwnershipAttoRepAmount = localCapacityOwnershipCeilingAttoRep
+	if (migrationCapacityOwnershipCeilingAttoRep < maxCapacityOwnershipAttoRepAmount) maxCapacityOwnershipAttoRepAmount = migrationCapacityOwnershipCeilingAttoRep
+	if (totalPoolHeldAttoRep !== undefined && totalCapacityOwnershipAttoRep !== undefined) {
+		const normalizedCurrentCapacityOwnershipAttoRep = currentCapacityOwnershipAttoRep ?? 0n
+		const otherVaultCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep > normalizedCurrentCapacityOwnershipAttoRep ? totalCapacityOwnershipAttoRep - normalizedCurrentCapacityOwnershipAttoRep : 0n
+		const globalCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling(totalPoolHeldAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
+		const remainingPoolCapacityOwnershipAttoRep = globalCapacityOwnershipCeilingAttoRep > otherVaultCapacityOwnershipAttoRep ? globalCapacityOwnershipCeilingAttoRep - otherVaultCapacityOwnershipAttoRep : 0n
+		maxCapacityOwnershipAttoRepAmount = maxCapacityOwnershipAttoRepAmount < remainingPoolCapacityOwnershipAttoRep ? maxCapacityOwnershipAttoRepAmount : remainingPoolCapacityOwnershipAttoRep
 	}
-	return maxBondAllowanceAmount
+	return maxCapacityOwnershipAttoRepAmount
 }
 
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {
@@ -116,12 +161,15 @@ export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefi
 	return timeoutMinutes * 60n
 }
 
-export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'managerAddress'> | undefined) {
+export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'managerAddress' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint) {
 	if (managerAddress === undefined || oracleManagerDetails === undefined) return false
 	if (!sameAddress(managerAddress, oracleManagerDetails.managerAddress)) return false
-	return oracleManagerDetails.isPriceValid
+	return isOracleManagerPriceUsable(oracleManagerDetails, currentTimestamp)
 }
 
-export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid'> | undefined) {
-	return oracleManagerDetails?.isPriceValid === true
+export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint | undefined) {
+	if (oracleManagerDetails?.isPriceValid !== true) return false
+	if (currentTimestamp === undefined) return true
+	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
+	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }

@@ -47,31 +47,62 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		if (!(routeSurface instanceof HTMLElement)) throw new Error('Expected selected pool route surface')
 		expect(routeSurface.classList.contains('surface')).toBe(true)
 		expect(routeSurface.classList.contains('default')).toBe(false)
-		expect(document.body.querySelector('.sticky-object-context.context-strip')).not.toBeNull()
+		expect(document.body.querySelector('.sticky-object-context.embedded-context-strip')).not.toBeNull()
+		const persistentContext = document.body.querySelector('.sticky-object-context.embedded-context-strip')
+		if (!(persistentContext instanceof HTMLElement)) throw new Error('Expected persistent selected-pool context')
+		expect(within(persistentContext).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
+		expect(within(persistentContext).getAllByText('Security Pool Address')).toHaveLength(1)
+		const readOnlyContextItems = persistentContext.querySelector('.sticky-object-context-items')
+		if (!(readOnlyContextItems instanceof HTMLElement)) throw new Error('Expected read-only selected-pool context items')
+		expect(within(readOnlyContextItems).getByText('Security Pool Address')).not.toBeNull()
+		expect(persistentContext.classList.contains('static')).toBe(false)
+		expect(persistentContext.classList.contains('context-strip')).toBe(true)
+		expect(within(persistentContext).getByText('Universe')).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
 		expect(contextDetails.hasAttribute('open')).toBe(false)
 		expect(contextDetails.querySelector('summary')?.textContent).toBe('Pool context and metrics')
+		expect(within(contextDetails).getByText('Known Vaults')).not.toBeNull()
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
+		expect(routeSurface.querySelectorAll('.section-block.default')).toHaveLength(0)
 		expectSectionVariant('Vault Operations', 'plain')
+		expectSectionVariant('Vault Actions', 'plain')
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
 		})
 		expectSectionVariant('Vault Directory', 'embedded')
+		expect(document.body.querySelector('.vault-position-strip .entity-card')).toBeNull()
 	})
 
 	test('renders staged operations as an unframed selected-pool workflow section', async () => {
 		await renderLoadedPool({ selectedPoolView: 'staged-operations' })
 
 		expectSectionVariant('Staged Operations', 'plain')
-		expectSectionVariant('Staged Operations List', 'embedded')
+		expect(document.body.querySelector('.section-block.embedded')).not.toBeNull()
 	})
 
-	test('renders open oracle as an unframed selected-pool workflow section', async () => {
+	test('renders price oracle as an unframed selected-pool workflow section', async () => {
 		await renderLoadedPool({ selectedPoolView: 'price-oracle' })
 
-		expectSectionVariant('Open Oracle', 'plain')
+		expectSectionVariant('Price Oracle', 'plain')
+	})
+
+	test('derives displayed minting headroom from the pool oracle rather than the market quote', async () => {
+		await renderLoadedPool({
+			repPerEthPrice: 1n * 10n ** 18n,
+			securityPools: [
+				createSelectedPool({
+					lastOraclePrice: 5n * 10n ** 18n,
+					statoblastSecurityMultiplierBps: 20_000n,
+					totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
+				}),
+			],
+		})
+
+		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
+		expect(pageText).toContain('≈ 10.00 ETH')
+		expect(pageText).not.toContain('≈ 50.00 ETH')
 	})
 
 	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
@@ -95,29 +126,39 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const priceOracleRender = await renderOffMainnetOracleView('price-oracle')
 		setCleanup(priceOracleRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Request New Price')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 
 		await priceOracleRender.cleanup()
 
 		const stagedOperationsRender = await renderOffMainnetOracleView('staged-operations')
 		setCleanup(stagedOperationsRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Execute Staged Operation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(getTransactionButtonState(document.body, 'Execute staged operation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 	})
 
 	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {
-		await renderWorkflow(createSecurityPoolWorkflowProps())
+		let browseCalls = 0
+		let createCalls = 0
+		await renderWorkflow({
+			...createSecurityPoolWorkflowProps(),
+			onBrowsePools: () => {
+				browseCalls += 1
+			},
+			onCreatePool: () => {
+				createCalls += 1
+			},
+		})
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('group', { name: 'Selected pool views' })).not.toBeNull()
 		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool actions' })
 		expect(within(secondaryGroup).getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
-		expect(within(secondaryGroup).getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
+		expect(within(secondaryGroup).getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Price Oracle']) {
 			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
-			expect(button.title).toBe('Load a pool before using pool actions.')
+			expect(button.title).toBe('Select a pool before using pool actions.')
 		}
 		expect(documentQueries.queryByRole('tab', { name: 'Migration' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Truth Auction' })).toBeNull()
@@ -125,6 +166,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Browse pools' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create pool' }))
+		})
+		expect(browseCalls).toBe(1)
+		expect(createCalls).toBe(1)
 		expect(documentQueries.queryByText('Paste a security pool address or browse pools.')).toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})
@@ -187,9 +234,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(document.body.textContent?.includes('Pool actions are locked until the app uses the same universe.')).toBe(true)
 		expect(documentQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
 		expect(document.body.textContent?.includes('0x2')).toBe(true)
-		expect(documentQueries.getByRole('button', { name: 'Switch to Pool Universe' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Return to Current Universe' })).not.toBeNull()
-		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
+		expect(documentQueries.getByRole('button', { name: 'Switch to pool universe' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Return to current universe' })).not.toBeNull()
+		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Price Oracle']) {
 			const tab = documentQueries.getByRole('button', { name: tabLabel })
 			expect(tab.getAttribute('title')).toBeNull()
 		}
@@ -208,14 +255,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				}),
 			],
 			securityVault: createSecurityVaultProps({
-				selectedPoolSecurityMultiplier: 2n,
+				selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 				securityVaultDetails: createSecurityVaultDetails({ vaultAddress: poolVault.vaultAddress }),
 				securityVaultForm: {
 					depositAmount: '',
 					repWithdrawAmount: '',
-					securityBondAllowanceAmount: '',
+					targetHealthFactor: '',
 					securityPoolAddress: zeroAddress,
-					selectedVaultAddress: zeroAddress,
+					selectedVaultOwner: zeroAddress,
 				},
 			}),
 		})
@@ -224,35 +271,40 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Open Oracle' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Open Interest Minted')).not.toBeNull()
-		expect(documentQueries.getByText('Total REP Backing')).not.toBeNull()
-		expect(documentQueries.queryByText('Total Security Bond Allowance')).toBeNull()
+		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
+		expect(documentQueries.queryByText('Total Capacity ownership')).toBeNull()
 		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
-		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
-		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a non-sticky selected pool context card')
-		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
-		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Backing')
-		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
-		const summaryPosition = selectedPoolContext.textContent?.indexOf(firstSummaryMetric.textContent ?? '') ?? -1
-		expect(lookupPosition).toBeGreaterThanOrEqual(0)
-		expect(summaryPosition).toBeGreaterThanOrEqual(0)
-		expect(lookupPosition < summaryPosition).toBe(true)
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
+		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a sticky selected pool context card')
+		expect(within(selectedPoolContext).getByText('Security Pool Address')).not.toBeNull()
+		const changePoolControl = document.body.querySelector('.selected-pool-change-control')
+		if (!(changePoolControl instanceof HTMLElement) || changePoolControl.tagName !== 'DETAILS') throw new Error('Expected a change-pool disclosure')
+		expect(changePoolControl.hasAttribute('open')).toBe(false)
+		await act(() => {
+			fireEvent.click(documentQueries.getByText('Change pool'))
+		})
+		expect(changePoolControl.hasAttribute('open')).toBe(true)
+		expect(documentQueries.getByRole('textbox', { name: 'Security Pool Address' })).not.toBeNull()
+		const contextDetails = document.body.querySelector('.selected-pool-context-details')
+		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
+		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: /Vault Summary/ })
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
-		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
+		expect(documentQueries.getByText('Selected Vault Owner')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
-		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
+		expect(documentQueries.getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
+		expect(documentQueries.getAllByRole('button', { name: 'Claim fees' }).length).toBeGreaterThan(0)
 		const vaultSummarySection = vaultSummaryHeading.closest('section')
 		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a vault summary section')
 		expect(within(vaultSummarySection).queryByText('Approved REP')).toBeNull()
@@ -263,7 +315,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
 		expect(documentQueries.getAllByText('Operational').length).toBeGreaterThan(0)
-		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
+		expect(documentQueries.getByText('Statoblast Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
 		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
 
@@ -272,7 +324,99 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		})
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
-		expect(documentQueries.getAllByText('Escrowed REP').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Dispute-staked REP').length).toBeGreaterThan(0)
+	})
+
+	test('distinguishes filtered current positions from an empty known-vault registry', async () => {
+		await renderLoadedPool({
+			securityPools: [createSelectedPool({ vaultCount: 2n, vaults: [] })],
+		})
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+		})
+
+		expect(within(document.body).getByText('No current positions among 2 known vaults.')).not.toBeNull()
+		expect(within(document.body).queryByText('No known vaults in this pool.')).toBeNull()
+	})
+
+	test('warns when the current-position directory reaches its registry scan limit', async () => {
+		await renderLoadedPool({
+			securityPools: [createSelectedPool({ vaultCount: 600n, vaultScanCapped: true, vaults: [] })],
+		})
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
+		})
+
+		expect(within(document.body).getByText('Registry scan limit reached. Some current positions may not be shown.')).not.toBeNull()
+		expect(within(document.body).getByText('No current positions found within the scan limit.')).not.toBeNull()
+		expect(within(document.body).queryByText('Showing 0 current positions from 600 known vaults, newest-registered first.')).toBeNull()
+		expect(within(document.body).queryByText('No current positions among 600 known vaults.')).toBeNull()
+	})
+
+	test('renders a selected bad-debt-only known vault as an existing position', async () => {
+		await renderLoadedPool({
+			securityVault: createSecurityVaultProps({
+				securityVaultDetails: createSecurityVaultDetails({
+					badDebtAttoEth: 2n,
+					capacityOwnershipAttoRep: 0n,
+					claimableFeesAttoEth: 0n,
+					disputeStakedAttoRep: 0n,
+					vaultAttoRepBacking: 0n,
+				}),
+			}),
+		})
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
+		expect(documentQueries.getByText('Bad Debt')).not.toBeNull()
+		expect(documentQueries.queryByText('This vault does not exist.')).toBeNull()
+	})
+
+	test('keeps directory liquidation review available when the oracle price is stale', async () => {
+		const liquidationRequests: Array<{ managerAddress: string; securityPoolAddress: string; vaultAddress: string }> = []
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000a4')
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a5')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					onOpenLiquidationModal: (managerAddress, securityPoolAddress, nextVaultAddress) => {
+						liquidationRequests.push({ managerAddress, securityPoolAddress, vaultAddress: nextVaultAddress })
+					},
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						managerAddress: zeroAddress,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							vaults: [createSecurityPoolVaultSummary({ vaultAddress })],
+						}),
+					],
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
+		})
+		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' })
+		if (!(reviewLiquidationButton instanceof HTMLButtonElement)) throw new Error('Expected Review liquidation button')
+		expect(reviewLiquidationButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(reviewLiquidationButton)
+		})
+
+		expect(liquidationRequests).toEqual([{ managerAddress: zeroAddress, securityPoolAddress: selectedPoolAddress, vaultAddress }])
 	})
 
 	test('shows a parent-pool metric for child pools in the selected summary', async () => {
@@ -326,7 +470,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Parent Pool')).toBeNull()
 	})
 
-	test('marks selected-pool collateralization as success when it is above the multiplier threshold', async () => {
+	test('does not present pool-held vault REP backing alone as selected-pool collateralization health', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -336,9 +480,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPoolAddress: zeroAddress,
 					securityPools: [
 						createSelectedPool({
-							securityMultiplier: 2n,
-							totalRepDeposit: 10_000n * 10n ** 18n,
-							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
+							statoblastSecurityMultiplierBps: 20_000n,
+							totalPoolHeldAttoRep: 10_000n * 10n ** 18n,
+							totalCapacityOwnershipAttoRep: 2_500n * 10n ** 18n,
 						}),
 					],
 				})}
@@ -348,8 +492,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const collateralizationMetric = document.querySelector('.security-pool-collateralization-display.tone-success, .security-pool-hero-collateralization.tone-success, .security-pool-card-title-collateralization.tone-success')
-		expect(collateralizationMetric).not.toBeNull()
-		expect(collateralizationMetric?.textContent?.includes('400')).toBe(true)
+		expect(collateralizationMetric).toBeNull()
+		expect(within(document.body).getByText('Pool-held REP')).not.toBeNull()
 	})
 
 	test('renders the claim-fees modal vault with the shared address value component', async () => {
@@ -368,14 +512,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						accountState: createAccountState({ address: vaultAddress }),
-						selectedPoolSecurityMultiplier: 2n,
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: zeroAddress,
-							selectedVaultAddress: vaultAddress,
+							selectedVaultOwner: vaultAddress,
 						},
 					}),
 				})}
@@ -385,7 +529,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const claimFeesButton = documentQueries.getAllByRole('button', { name: 'Claim Fees' })[0]
+		const claimFeesButton = documentQueries.getAllByRole('button', { name: 'Claim fees' })[0]
 		if (!(claimFeesButton instanceof HTMLElement)) throw new Error('Expected claim fees launcher button')
 
 		await act(() => {
@@ -413,9 +557,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: selectedPoolAddress,
+							selectedVaultOwner: selectedPoolAddress,
 						},
 					}),
 				})}
@@ -444,9 +588,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: '',
-							selectedVaultAddress: selectedPoolAddress,
+							selectedVaultOwner: selectedPoolAddress,
 						},
 					}),
 				})}
@@ -476,9 +620,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -492,16 +636,21 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
-		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
-		expectTransactionButtonDisabled(document.body, 'Claim Fees')
-		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before depositing REP.')
-		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before withdrawing REP.')
-		expect((documentQueries.getByRole('button', { name: 'Set Bond Allowance' }) as HTMLButtonElement).title).toBe('Refresh the vault before setting the security bond allowance.')
-		expect((documentQueries.getByRole('button', { name: 'Claim Fees' }) as HTMLButtonElement).title).toBe('Refresh the vault before claiming fees.')
-		expect((documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement).title).toBe('')
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
+		const refreshReason = documentQueries.getByText('Refresh the vault to use these actions.')
+		const refreshReasonId = refreshReason.getAttribute('id')
+		expect(refreshReasonId).not.toBeNull()
+		expect(documentQueries.getAllByText('Refresh the vault to use these actions.')).toHaveLength(1)
+		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Claim fees' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Claim fees' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement).title).toBe('')
 	})
 
-	test('shows an Ended badge, allows REP redemption, and blocks ended-pool collateral actions in the vault workflow', async () => {
+	test('shows an Ended badge, allows REP redemption, and blocks ended-pool settlement-collateral actions in the vault workflow', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -519,17 +668,17 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							escalationEscrowedRep: 0n,
+							disputeStakedAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
-						securityVaultRepBalance: 10n * 10n ** 18n,
+						walletRepBalanceAttoRep: 10n * 10n ** 18n,
 					}),
 					selectedPoolView: 'vaults',
 				})}
@@ -542,11 +691,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Finalized as Yes')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
-		expectTransactionButtonEnabled(document.body, 'Claim Fees')
-		expectTransactionButtonDisabled(document.body, 'Review Liquidation')
+		expectTransactionButtonEnabled(document.body, 'Claim fees')
+		expectTransactionButtonDisabled(document.body, 'Review liquidation')
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).title).toBe('')
-		expect(documentQueries.getByRole('button', { name: 'Review Liquidation' }).title).toBe('')
+		expect(documentQueries.getByRole('button', { name: 'Review liquidation' }).title).toBe('')
 	})
 
 	test('shows a vault-missing notice and hides the embedded summary for an empty selected vault', async () => {
@@ -559,18 +707,18 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							escalationEscrowedRep: 0n,
-							repDepositShare: 0n,
-							securityBondAllowance: 0n,
+							disputeStakedAttoRep: 0n,
+							vaultAttoRepBacking: 0n,
+							capacityOwnershipAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
-							unpaidEthFees: 0n,
+							claimableFeesAttoEth: 0n,
 						}),
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -583,12 +731,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
-		for (const actionLabel of ['Withdraw REP', 'Set Bond Allowance', 'Claim Fees', 'Review Liquidation']) {
+		for (const actionLabel of ['Withdraw REP', 'Claim fees', 'Review liquidation']) {
 			const actionButton = documentQueries.getByRole('button', { name: actionLabel }) as HTMLButtonElement
 			expect(actionButton.title).toBe('This vault does not exist.')
 		}
-		expectTransactionButtonDisabled(document.body, 'Review Liquidation')
-		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement
+		expectTransactionButtonDisabled(document.body, 'Review liquidation')
+		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
 
 		await act(() => {
 			fireEvent.click(reviewLiquidationButton)
@@ -597,7 +745,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
-	test('keeps Review Liquidation silently disabled when the wallet is disconnected', async () => {
+	test('keeps Review liquidation silently disabled when the wallet is disconnected', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b6')
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -617,9 +765,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -630,7 +778,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement
+		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
 		expect(reviewLiquidationButton.disabled).toBe(true)
 		expect(reviewLiquidationButton.title).toBe('')
 
@@ -641,7 +789,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
-	test('keeps Review Liquidation silently disabled for a vault owned by another account', async () => {
+	test('keeps Review liquidation silently disabled for a vault owned by another account', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b7')
 		const otherVaultAddress = getAddress('0x00000000000000000000000000000000000000b8')
 		const renderedComponent = await renderIntoDocument(
@@ -662,9 +810,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: otherVaultAddress,
+							selectedVaultOwner: otherVaultAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -675,7 +823,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement
+		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
 		expect(reviewLiquidationButton.disabled).toBe(true)
 		expect(reviewLiquidationButton.title).toBe('')
 
@@ -696,18 +844,18 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
-							escalationEscrowedRep: 1n,
-							repDepositShare: 0n,
-							securityBondAllowance: 0n,
+							disputeStakedAttoRep: 1n,
+							vaultAttoRepBacking: 0n,
+							capacityOwnershipAttoRep: 0n,
 							securityPoolAddress: selectedPoolAddress,
-							unpaidEthFees: 0n,
+							claimableFeesAttoEth: 0n,
 						}),
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							securityBondAllowanceAmount: '1',
+							targetHealthFactor: '1',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -720,7 +868,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Review Liquidation')
+		expectTransactionButtonEnabled(document.body, 'Review liquidation')
 	})
 
 	test('shows Fork Migration in the selected-pool badge once fork migration has started', async () => {
@@ -730,7 +878,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: selectedPoolAddress,
 					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+					securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
 					selectedPoolView: 'reporting',
 				})}
 				showHeader={false}
@@ -773,7 +921,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {
-		const formChanges: Array<{ selectedVaultAddress?: string }> = []
+		const formChanges: Array<{ selectedVaultOwner?: string }> = []
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -800,9 +948,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
-							securityBondAllowanceAmount: '',
+							targetHealthFactor: '',
 							securityPoolAddress: selectedPoolAddress,
-							selectedVaultAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
 						},
 					}),
 					selectedPoolView: 'vaults',
@@ -817,10 +965,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Select Vault' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Select vault' }))
 		})
 
-		expect(formChanges).toContainEqual({ selectedVaultAddress: vaultAddress })
+		expect(formChanges).toContainEqual({ selectedVaultOwner: vaultAddress })
 		expect(loadSecurityVaultCalls).toContain(vaultAddress)
 	})
 })

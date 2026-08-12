@@ -3,10 +3,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../testUtils/queries'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import { GlobalTransactionTray } from '../../app/components/GlobalTransactionTray.js'
 import { createMarketCreationSuccessPresentation, createSecurityPoolCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../lib/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -55,12 +57,52 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
+	test('reserves the transaction tray height in the viewport scroll area', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<main>
+				<GlobalTransactionTray transaction={{ dismissKey: 'reserved-space', title: 'Question Created', tone: 'success' }} />
+			</main>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.documentElement.style.scrollPaddingBottom).not.toBe('')
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
+		expect(document.documentElement.style.scrollPaddingBottom).toBe('')
+	})
+
+	test('keeps semantic object context visible and call data in a technical disclosure after completion', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				transaction={{
+					dismissKey: '0xprepared-price-request',
+					hash: '0xprepared-price-request',
+					rows: [{ label: 'Security Pool Address', value: '0xpool' }],
+					technicalRows: [
+						{ label: 'Function', value: 'requestPrice' },
+						{ label: 'Arguments', value: '0xpool, 1000000000000000000' },
+					],
+					title: 'Price Requested',
+					tone: 'success',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Security Pool Address')).not.toBeNull()
+		expect(documentQueries.getByText('0xpool')).not.toBeNull()
+		expect(documentQueries.getByText('Technical details', { selector: 'summary' })).not.toBeNull()
+		expect(documentQueries.getByText('Arguments')).not.toBeNull()
+	})
+
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const presentations = [
 			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
 			createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n }),
-			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', questionId, securityMultiplier: 2n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
+			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
 		]
 		const renderedComponent = await renderIntoDocument(
 			<>
@@ -81,6 +123,7 @@ describe('GlobalTransactionTray', () => {
 			<GlobalTransactionTray
 				transaction={{
 					detail: 'Waiting for confirmation.',
+					dismissKey: 'pending-question-creation',
 					hash: '0x2234000000000000000000000000000000000000000000000000000000000000',
 					title: 'Creating Question',
 					tone: 'pending',
@@ -91,17 +134,36 @@ describe('GlobalTransactionTray', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 	})
 
-	test('renders a wallet-awaiting transaction without a hash link or dismiss control', async () => {
+	test('renders a concise pending transaction when no extra explanation is needed', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				transaction={{
+					hash: '0x2234000000000000000000000000000000000000000000000000000000000001',
+					title: 'Creating Question',
+					tone: 'pending',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Creating Question')).not.toBeNull()
+		expect(documentQueries.getByText('Pending')).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-notice-detail')).toBeNull()
+	})
+
+	test('keeps a wallet-awaiting transaction visible with a spinner', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray
 				transaction={{
 					detail: 'Confirm the transaction in your wallet.',
-					dismissKey: 'transaction-request-1',
+					dismissKey: 'transaction-request-wallet-close',
 					title: 'Creating Question',
 					tone: 'awaiting-wallet',
 				}}
@@ -112,8 +174,25 @@ describe('GlobalTransactionTray', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Awaiting Wallet')).not.toBeNull()
 		expect(documentQueries.getByText('Confirm the transaction in your wallet.')).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-spinner')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Close transaction status' })).toBeNull()
+	})
+
+	test('shows a terminal failure after a wallet-awaiting transaction resolves', async () => {
+		const dismissKey = 'transaction-request-wallet-terminal'
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ dismissKey, title: 'Creating Question', tone: 'awaiting-wallet' }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
+
+		await act(() => {
+			render(<GlobalTransactionTray transaction={{ detail: 'Action canceled in wallet.', dismissKey, title: 'Creating Question', tone: 'error' }} />, renderedComponent.container)
+		})
+
+		expect(within(document.body).getByText('Failed')).not.toBeNull()
+		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
 	})
 
 	test('renders a simulation transaction as preparing without wallet copy', async () => {
@@ -150,10 +229,35 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('alert')).not.toBeNull()
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
 		expect(documentQueries.getByText('Action canceled in wallet.')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
+		expect(dismissButton.parentElement?.classList.contains('global-transaction-actions')).toBe(true)
+	})
+
+	test('does not hide a new request-scoped failure after the tray remounts', async () => {
+		const transaction = {
+			detail: 'Action canceled in wallet.',
+			dismissKey: 'transaction-request-remount-collision',
+			title: 'Creating Question',
+			tone: 'error' as const,
+		}
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
+		await act(() => {
+			renderedComponent.unmount()
+		})
+
+		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
+		cleanupRenderedComponent = rerenderedComponent.cleanup
+		expect(within(document.body).getByRole('alert')).not.toBeNull()
+		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
 	})
 
 	test('renders a failed submitted transaction with both the failure reason and hash link', async () => {
@@ -203,6 +307,76 @@ describe('GlobalTransactionTray', () => {
 		expect(rerenderedComponent.container.textContent).toBe('')
 	})
 
+	test('remembers a production-shaped hash-backed completion without hiding a fresh request failure', async () => {
+		const intent = {
+			action: 'createMarket',
+			requiresWalletConfirmation: false,
+			source: 'zoltar',
+			submittedTitle: 'Creating Question',
+		}
+		const hash = '0xa234000000000000000000000000000000000000000000000000000000000000' as const
+		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), intent)
+		transactionState = markTransactionSubmitted(transactionState, hash)
+		transactionState = markTransactionPresented(transactionState, {
+			dismissKey: hash,
+			hash,
+			title: 'Question Created',
+			tone: 'success',
+		})
+		const completedTransaction = transactionState.active
+		if (completedTransaction === undefined) throw new Error('Completed transaction should be active')
+		expect(completedTransaction.operationKey).toBe('transaction-request-1')
+
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+		})
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
+
+		const remountedCompletion = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
+		expect(remountedCompletion.container.textContent).toBe('')
+		await remountedCompletion.cleanup()
+
+		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), 'Action canceled in wallet.').active
+		if (freshRequestFailure === undefined) throw new Error('Fresh request failure should be active')
+		expect(freshRequestFailure.operationKey).toBe('transaction-request-1')
+		const freshRequestTray = await renderIntoDocument(<GlobalTransactionTray transaction={freshRequestFailure} />)
+		cleanupRenderedComponent = freshRequestTray.cleanup
+		expect(within(freshRequestTray.container).getByRole('alert')).not.toBeNull()
+		expect(within(freshRequestTray.container).getByText('Action canceled in wallet.')).not.toBeNull()
+	})
+
+	test('evicts the oldest remembered dismissal after the bounded limit', async () => {
+		const createTransaction = (index: number) => ({
+			dismissKey: `dismissal-cap-${index.toString()}`,
+			title: `Completed transaction ${index.toString()}`,
+			tone: 'success' as const,
+		})
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		for (let index = 0; index <= 100; index += 1) {
+			await act(() => {
+				render(<GlobalTransactionTray transaction={createTransaction(index)} />, renderedComponent.container)
+			})
+			await act(() => {
+				fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+			})
+		}
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
+
+		const evictedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
+		expect(within(evictedTransaction.container).getByText('Completed transaction 0')).not.toBeNull()
+		await evictedTransaction.cleanup()
+
+		const rememberedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(100)} />)
+		cleanupRenderedComponent = rememberedTransaction.cleanup
+		expect(rememberedTransaction.container.textContent).toBe('')
+	})
+
 	test('keeps a pending transaction visible when remounted with the same hash', async () => {
 		const transaction = {
 			detail: 'Waiting for confirmation.',
@@ -224,5 +398,129 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = rerenderedComponent.cleanup
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
 		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
+	})
+
+	test('shows terminal success after a pending transaction resolves', async () => {
+		const hash = '0x6234000000000000000000000000000000000000000000000000000000000000' as const
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
+
+		await act(() => {
+			render(<GlobalTransactionTray transaction={{ hash, title: 'Question Created', tone: 'success' }} />, renderedComponent.container)
+		})
+
+		expect(within(document.body).getByText('Confirmed')).not.toBeNull()
+		expect(within(document.body).getByText('Question Created')).not.toBeNull()
+	})
+
+	test('compacts a completed transaction after navigation while keeping details available', async () => {
+		const transaction = {
+			dismissKey: 'question-created-route-handoff',
+			hash: '0x7234000000000000000000000000000000000000000000000000000000000000' as const,
+			rows: [{ label: 'Question ID', value: '0x01' }],
+			title: 'Question Created',
+			tone: 'success' as const,
+		}
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={transaction} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.querySelector('.global-transaction-notice-compact')).toBeNull()
+
+		await act(() => {
+			render(<GlobalTransactionTray routeKey='security-pools:create' transaction={transaction} />, renderedComponent.container)
+		})
+
+		const compactNotice = document.body.querySelector('.global-transaction-notice-compact')
+		expect(compactNotice).not.toBeNull()
+		expect(within(document.body).getByText('Question Created')).not.toBeNull()
+		expect(within(document.body).getByText('View transaction details', { selector: 'summary' })).not.toBeNull()
+		expect(within(document.body).getByText('Question ID')).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Dismiss' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Close transaction status' })).not.toBeNull()
+	})
+
+	test('keeps the submission route as the origin when navigation happens before confirmation', async () => {
+		const hash = '0x8234000000000000000000000000000000000000000000000000000000000000' as const
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(<GlobalTransactionTray routeKey='zoltar:fork' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />, renderedComponent.container)
+		})
+		expect(document.body.querySelector('.global-transaction-notice-compact')).toBeNull()
+
+		await act(() => {
+			render(<GlobalTransactionTray routeKey='zoltar:fork' transaction={{ hash, title: 'Question Created', tone: 'success' }} />, renderedComponent.container)
+		})
+
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
+	})
+
+	test('keeps the request route as the origin when the transaction gains a hash after navigation', async () => {
+		const operationKey = 'transaction-request-before-navigation'
+		const hash = '0x9234000000000000000000000000000000000000000000000000000000000000' as const
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				routeKey='zoltar:create'
+				transaction={{
+					dismissKey: operationKey,
+					operationKey,
+					title: 'Creating Question',
+					tone: 'awaiting-wallet',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				<GlobalTransactionTray
+					routeKey='zoltar:fork'
+					transaction={{
+						dismissKey: operationKey,
+						operationKey,
+						title: 'Creating Question',
+						tone: 'awaiting-wallet',
+					}}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		await act(() => {
+			render(
+				<GlobalTransactionTray
+					routeKey='zoltar:fork'
+					transaction={{
+						dismissKey: hash,
+						hash,
+						operationKey,
+						title: 'Creating Question',
+						tone: 'pending',
+					}}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		await act(() => {
+			render(
+				<GlobalTransactionTray
+					routeKey='zoltar:fork'
+					transaction={{
+						dismissKey: hash,
+						hash,
+						operationKey,
+						title: 'Question Created',
+						tone: 'success',
+					}}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
 	})
 })

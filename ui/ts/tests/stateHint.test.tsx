@@ -41,6 +41,24 @@ describe('StateHint', () => {
 		expect(document.body.querySelector('.state-hint .badge')).toBeNull()
 	})
 
+	test('adds a spinner when loading copy is supplied without loading metadata', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<StateHint
+				presentation={{
+					badgeLabel: 'Pending',
+					badgeTone: 'pending',
+					detail: 'Loading truth auction status…',
+					key: 'loading',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = within(document.body).getByRole('status')
+		expect(loadingStatus.textContent).toContain('Loading truth auction status…')
+		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
+	})
+
 	test('does not render non-card badges for non-loading state hints', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<StateHint

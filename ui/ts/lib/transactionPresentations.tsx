@@ -1,38 +1,53 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
-import type { Account, Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { formatCurrencyBalance } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 
-export function buildPresentation({ detail, hash, rows, title, tone }: { detail: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+export function buildPresentation({ detail, hash, rows, title, tone }: { detail?: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[] | undefined; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
 	return {
-		detail,
 		dismissKey: hash,
 		hash,
+		...(detail === undefined ? {} : { detail }),
 		...(rows === undefined ? {} : { rows }),
 		title,
 		tone,
 	}
 }
 
-function buildHashlessPresentation({ detail, dismissKey, rows, title, tone }: { detail: ComponentChildren; dismissKey: string; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+function buildHashlessPresentation({
+	detail,
+	dismissKey,
+	rows,
+	technicalRows,
+	title,
+	tone,
+}: {
+	detail: ComponentChildren
+	dismissKey: string
+	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
+	title: GlobalTransactionPresentation['title']
+	tone: GlobalTransactionPresentation['tone']
+}): GlobalTransactionPresentation {
 	return {
 		detail,
 		dismissKey,
 		title,
 		tone,
 		...(rows === undefined ? {} : { rows }),
+		...(technicalRows === undefined ? {} : { technicalRows }),
 	}
 }
 
-export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[]; source: string; submittedDetail: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
+export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[] | undefined; source: string; submittedDetail?: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
 	return {
 		action,
 		...(rows === undefined ? {} : { rows }),
 		source,
-		submittedDetail,
+		...(submittedDetail === undefined ? {} : { submittedDetail }),
 		submittedTitle,
 	}
 }
@@ -43,11 +58,6 @@ export function withWarning(base: GlobalTransactionPresentation, detail: string)
 		detail,
 		tone: 'warning',
 	}
-}
-
-function getPreviewAccountAddress(account: Account | string | undefined) {
-	if (account === undefined) return undefined
-	return typeof account === 'string' ? account : account.address
 }
 
 function formatPreviewArgument(value: unknown, seenObjects: Set<object> = new Set()): string {
@@ -68,23 +78,16 @@ function formatPreviewArgument(value: unknown, seenObjects: Set<object> = new Se
 	return String(value)
 }
 
-function formatPreviewData(data: string) {
-	const byteLength = Math.max(0, (data.length - 2) / 2)
-	if (data.length <= 74) return data
-	return transactionCopy.formatValueTruncatedValueBytes(data.slice(0, 66), byteLength.toString())
+function formatRecipient(label: string | undefined, address: string) {
+	return label === undefined ? address : `${label} (${address})`
 }
 
-function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
-	const senderAddress = getPreviewAccountAddress(preview.account)
+function getPreparedTransactionTechnicalRows(preview: TransactionRequestPreview): GlobalTransactionRow[] {
 	return [
-		...(intent.rows ?? []),
-		...(senderAddress === undefined ? [] : [{ label: transactionCopy.sender, value: senderAddress }]),
-		...(preview.chainName === undefined ? [] : [{ label: transactionCopy.chain, value: preview.chainName }]),
-		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: preview.contractAddress }]),
-		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: preview.to }]),
+		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: formatRecipient(preview.contractLabel, preview.contractAddress) }]),
+		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: formatRecipient(preview.toLabel, preview.to) }]),
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
 		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
-		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? transactionCopy.calldata, value: formatPreviewData(preview.data) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(argument => formatPreviewArgument(argument)).join(', ') }]),
 	]
 }
@@ -113,7 +116,8 @@ export function createPreparedWalletPresentation(intent: TransactionIntent, prev
 	return buildHashlessPresentation({
 		detail: requiresWalletConfirmation ? transactionCopy.walletConfirmationReviewDetail : transactionCopy.simulationSubmissionReviewDetail,
 		dismissKey,
-		rows: getPreparedTransactionRows(intent, preview),
+		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		technicalRows: getPreparedTransactionTechnicalRows(preview),
 		title: intent.submittedTitle,
 		tone: requiresWalletConfirmation ? 'awaiting-wallet' : 'preparing',
 	})
@@ -126,5 +130,6 @@ export function createTransactionFailurePresentation(intent: TransactionIntent, 
 		title: intent.submittedTitle,
 		tone: 'error',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),
 	})
 }

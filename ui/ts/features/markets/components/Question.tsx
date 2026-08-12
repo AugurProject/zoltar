@@ -6,8 +6,9 @@ import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
-import { assertNever } from '../../../lib/assert.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
+import { getMarketTypeLabel } from '../lib/marketType.js'
+import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
 import type { MarketDetails } from '../../../types/contracts.js'
 
 type QuestionProps = {
@@ -45,31 +46,19 @@ function getQuestionDescription(question: MarketDetails) {
 	return question.description.trim()
 }
 
-function getQuestionTypeLabel(question: MarketDetails) {
-	switch (question.marketType) {
-		case 'binary':
-			return marketCopy.binary
-		case 'categorical':
-			return marketCopy.categorical
-		case 'scalar':
-			return marketCopy.scalar
-		default:
-			return assertNever(question.marketType)
-	}
-}
-
 function getDisplayedOutcomes(question: MarketDetails) {
 	const outcomes = question.outcomeLabels.length === 0 ? [marketCopy.scalar] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
 function getDisplayRange(question: MarketDetails) {
-	return question.answerUnit === '' ? `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()}` : `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()} ${question.answerUnit}`
+	const displayRange = `${formatScalarDisplayValue(question.displayValueMin)} to ${formatScalarDisplayValue(question.displayValueMax)}`
+	return question.answerUnit === '' ? displayRange : `${displayRange} ${question.answerUnit}`
 }
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
-		{ kind: 'text', label: marketCopy.questionType, value: getQuestionTypeLabel(question) },
+		{ kind: 'text', label: marketCopy.questionType, value: getMarketTypeLabel(question.marketType) },
 		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },
 		{ kind: 'timestamp', label: marketCopy.created, value: question.createdAt },
 		{ kind: 'timestamp', label: marketCopy.endTime, value: question.endTime },

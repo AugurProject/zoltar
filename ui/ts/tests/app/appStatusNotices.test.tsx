@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../testUtils/queries'
+import { fireEvent, within } from '../testUtils/queries'
 import { h } from 'preact'
 import { AppStatusNotices } from '../../app/components/AppStatusNotices.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
@@ -28,10 +28,8 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -46,10 +44,8 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -64,10 +60,8 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -82,10 +76,8 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -107,16 +99,16 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://query.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('URL-provided read RPC')).not.toBeNull()
+		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Technical details')).not.toBeNull()
 		expect(documentQueries.getByText('Active read RPC came from the page URL: https://query.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
 	})
 
@@ -132,16 +124,15 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://storage.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Read RPC override active')).not.toBeNull()
+		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
 		expect(documentQueries.getByText('Active read RPC came from local storage: https://storage.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
 	})
 
@@ -162,16 +153,15 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://ethereum.dark.florist',
 					transportMode: 'provider',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Read RPC override ignored')).not.toBeNull()
+		expect(documentQueries.getByText('A custom read RPC was ignored. The configured fallback is active.')).not.toBeNull()
 		expect(documentQueries.getByText('Ignored local storage RPC override (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
 	})
 
@@ -180,10 +170,8 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: 'Top-level error',
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: true,
-				showZoltarUniverseForkedWarning: false,
+				showAugurStatoblastDeploymentWarning: true,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -196,32 +184,56 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
 	})
 
-	test('shows a fork warning when the current universe has forked', async () => {
+	test('shows every concurrent top-level error', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
-				errorMessage: undefined,
+				errorMessages: ['Deployment failed', 'Wallet refresh failed'],
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: true,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: {
-					childUniverses: [],
-					forkThreshold: 1000n,
-					forkQuestionDetails: undefined,
-					forkTime: 1_700_000n,
-					forkingOutcomeIndex: 0n,
-					hasForked: true,
-					parentUniverseId: 0n,
-					reputationToken: '0x0000000000000000000000000000000000000000',
-					totalTheoreticalSupply: 0n,
-					universeId: 3n,
-				},
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Universe forked')).not.toBeNull()
-		expect(documentQueries.getByText(/Universe 3 has forked on/)).not.toBeNull()
+		expect(documentQueries.getByText('Deployment failed')).not.toBeNull()
+		expect(documentQueries.getByText('Wallet refresh failed')).not.toBeNull()
+	})
+
+	test('offers a retry for Zoltar universe load failures', async () => {
+		let retryCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				onRetryZoltarUniverse: () => {
+					retryCalls += 1
+				},
+				readBackendMessage: undefined,
+				showAugurStatoblastDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+				zoltarUniverseError: 'Universe service unavailable',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Universe service unavailable')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		expect(retryCalls).toBe(1)
+	})
+
+	test('disables the Zoltar universe retry while it is loading', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				loadingZoltarUniverse: true,
+				onRetryZoltarUniverse: () => undefined,
+				readBackendMessage: undefined,
+				showAugurStatoblastDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+				zoltarUniverseError: 'Universe service unavailable',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('button', { name: 'Retrying…' }).hasAttribute('disabled')).toBe(true)
 	})
 })

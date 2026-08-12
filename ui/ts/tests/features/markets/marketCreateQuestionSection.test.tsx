@@ -5,6 +5,7 @@ import { fireEvent, within } from '../../testUtils/queries'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketCreateQuestionSection } from '../../../features/markets/components/MarketCreateQuestionSection.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { createMarketParameters } from '../../../features/markets/lib/marketCreation.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../../../types/contracts.js'
@@ -71,7 +72,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={undefined}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -94,7 +95,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Write the question the way a resolver will read it.')).not.toBeNull()
+		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type: Binary' })
 		await act(() => {
 			fireEvent.click(questionTypeButton)
@@ -112,10 +113,10 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.input(documentQueries.getByLabelText('Start Time') as HTMLInputElement, { target: { value: '1200' } })
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
 		})
 
-		expectTransactionButtonDisabled(document.body, 'Create Question', 'Connect a wallet before creating a question.')
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Connect a wallet before creating a question.')
 		expect(updates.some(update => update.marketType === 'categorical')).toBe(true)
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
@@ -125,10 +126,10 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
-				marketForm={createMarketForm({ title: '' })}
+				marketForm={createMarketForm({ description: '', title: '' })}
 				marketResult={undefined}
 				loadingZoltarQuestions={false}
 				onCreateMarket={() => undefined}
@@ -143,11 +144,26 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const titleInput = documentQueries.getByLabelText('Title')
-		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Question Type Guidance' })).not.toBeNull()
+		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
+		expect(titleInput.required).toBe(true)
+		expect((documentQueries.getByLabelText('End Time') as HTMLInputElement).required).toBe(true)
+		expect(documentQueries.getByText('Required fields are marked with an asterisk (*).')).not.toBeNull()
+		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
+		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
+		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
+		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
-		expect(documentQueries.getByText('Placeholder origin security pools support this exact Yes / No question shape.')).not.toBeNull()
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		expect(within(draftPreview).getByText('Untitled question')).not.toBeNull()
+		expect(within(draftPreview).getByText('Binary')).not.toBeNull()
+		expect(within(draftPreview).queryByText('binary')).toBeNull()
+		expect(within(draftPreview).queryByText('Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.')).toBeNull()
+		expect(within(draftPreview).queryByText('Add a clear question title')).toBeNull()
+		expect(document.body.textContent?.includes('Statoblast origin security pools support this exact Yes / No question shape.')).toBe(false)
+		expect(documentQueries.queryByText('Context provided')).toBeNull()
+		expect(documentQueries.queryByText('Risk cue')).toBeNull()
 		expect(documentQueries.queryByText('Title is required')).toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBeNull()
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
@@ -159,6 +175,145 @@ describe('MarketCreateQuestionSection', () => {
 
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
+	})
+
+	test('associates chronology errors with both time fields and explains the disabled action', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ title: '', startTime: '2000', endTime: '1000' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const startTimeInput = documentQueries.getByLabelText('Start Time')
+		const endTimeInput = documentQueries.getByLabelText('End Time')
+		await act(() => {
+			startTimeInput.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getAllByText('End time must be after start time')).toHaveLength(1)
+		expect(startTimeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(endTimeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
+		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
+		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Fix invalid fields: End time must be after start time')
+	})
+
+	test('keeps scalar details and ended-state risk visible through reversible review and submission', async () => {
+		let createCount = 0
+		const scalarForm = createMarketForm({
+			answerUnit: 'USD',
+			endTime: '2000',
+			marketType: 'scalar',
+			scalarIncrement: '0.5',
+			scalarMax: '10',
+			scalarMin: '0',
+			startTime: '',
+		})
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={2_000_000_000n}>
+				<MarketCreateQuestionSection
+					accountAddress={zeroAddress}
+					hasForked={false}
+					isOnActiveAppChain={true}
+					marketCreating={false}
+					marketError={undefined}
+					marketForm={scalarForm}
+					marketResult={undefined}
+					loadingZoltarQuestions={false}
+					onCreateMarket={() => {
+						createCount += 1
+					}}
+					onMarketFormChange={() => undefined}
+					onOpenForkTab={() => undefined}
+					onResetMarket={() => undefined}
+					onUseQuestionForFork={() => undefined}
+					onUseQuestionForPool={() => undefined}
+					zoltarQuestions={[]}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
+		const reviewButton = documentQueries.getByRole('button', { name: 'Review question' }) as HTMLButtonElement
+		expect(reviewButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(reviewButton)
+		})
+		expect(createCount).toBe(0)
+		const review = documentQueries.getByRole('heading', { name: 'Transaction Review' }).closest('section')
+		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
+		const reviewQueries = within(review)
+		expect(reviewQueries.getByText('Scalar Min')).not.toBeNull()
+		expect(reviewQueries.getByText('Scalar Max')).not.toBeNull()
+		expect(reviewQueries.getByText('Scalar Increment')).not.toBeNull()
+		expect(reviewQueries.getByText('Answer Unit')).not.toBeNull()
+		for (const value of ['0', '10', '0.5', 'USD']) expect(reviewQueries.getByText(value)).not.toBeNull()
+		expect(reviewQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Back to question' }))
+		})
+		expect((documentQueries.getByLabelText('Scalar Min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
+		expect((documentQueries.getByLabelText('Scalar Max') as HTMLInputElement).value).toBe(scalarForm.scalarMax)
+		expect((documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement).value).toBe(scalarForm.scalarIncrement)
+		expect((documentQueries.getByLabelText('Answer Unit') as HTMLInputElement).value).toBe(scalarForm.answerUnit)
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
+		})
+		expect(createCount).toBe(1)
+	})
+
+	test('uses normalized market type and Augur Statoblast terminology for categorical questions', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ marketType: 'categorical' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
+		expect(documentQueries.getByText(/Augur Statoblast origin security pools/)).not.toBeNull()
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {
@@ -177,7 +332,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -207,9 +362,9 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.getByText(question.description)).not.toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Use For Fork' }))
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Pool From Question' }))
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Another Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
+			fireEvent.click(documentQueries.getByRole('button', { name: `Create pool from question: ${question.title} (${question.questionId})` }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create another question' }))
 		})
 
 		expect(useForForkCount).toBe(1)
@@ -224,7 +379,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -253,12 +408,55 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.input(documentQueries.getByLabelText('Outcome 1') as HTMLInputElement, { target: { value: 'Up' } })
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Add Outcome' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Add outcome' }))
 		})
 		await act(() => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement)
 		})
 		expect(updates.some(update => update.categoricalOutcomes !== undefined)).toBe(true)
+	})
+
+	test('marks the required categorical outcome slots and associates their shared error', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ categoricalOutcomes: ['', 'Yes', 'No'], marketType: 'categorical' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const outcomesGroup = document.body.querySelector('[role="group"][aria-labelledby="market-create-outcomes-label"]')
+		if (!(outcomesGroup instanceof HTMLElement)) throw new Error('Expected required outcomes group')
+		const outcome1 = documentQueries.getByLabelText('Outcome 1') as HTMLInputElement
+		const outcome2 = documentQueries.getByLabelText('Outcome 2') as HTMLInputElement
+		const outcome3 = documentQueries.getByLabelText('Outcome 3') as HTMLInputElement
+		expect(outcomesGroup.querySelector('.required-field-indicator')).not.toBeNull()
+		expect(outcome1.required).toBe(true)
+		expect(outcome2.required).toBe(true)
+		expect(outcome3.required).toBe(false)
+		expect(documentQueries.queryByText('Outcome 1 is required')).toBeNull()
+
+		await act(() => {
+			outcome1.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getByText('Outcome 1 is required')).not.toBeNull()
+		expect(outcome1.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
+		expect(outcome2.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
 	})
 
 	test('uses canonical categorical outcome ordering in the draft preview', async () => {
@@ -271,7 +469,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -305,7 +503,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -339,7 +537,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={marketForm}
@@ -372,7 +570,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -404,7 +602,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -430,7 +628,52 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create Question')
+		expectTransactionButtonDisabled(document.body, 'Review question')
+	})
+
+	test('marks scalar range fields required and associates their contextual errors', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isOnActiveAppChain={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ marketType: 'scalar', scalarIncrement: '', scalarMax: '', scalarMin: '' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const scalarMin = documentQueries.getByLabelText('Scalar Min') as HTMLInputElement
+		const scalarIncrement = documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement
+		const scalarMax = documentQueries.getByLabelText('Scalar Max') as HTMLInputElement
+		for (const input of [scalarMin, scalarIncrement, scalarMax]) {
+			expect(input.required).toBe(true)
+			expect(input.closest('label')?.querySelector('.required-field-indicator')).not.toBeNull()
+		}
+
+		await act(() => {
+			scalarMin.dispatchEvent(new Event('blur'))
+			scalarIncrement.dispatchEvent(new Event('blur'))
+			scalarMax.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getByText('Scalar Min is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar Increment is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar Max is required')).not.toBeNull()
+		expect(scalarMin.getAttribute('aria-describedby')).toBe('market-create-scalarMin-error')
+		expect(scalarIncrement.getAttribute('aria-describedby')).toBe('market-create-scalarIncrement-error')
+		expect(scalarMax.getAttribute('aria-describedby')).toBe('market-create-scalarMax-error')
 	})
 
 	test('calls create market handler when validation passes', async () => {
@@ -440,7 +683,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm()}
@@ -460,7 +703,12 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Review question' }))
+		})
+		expect(createCallCount).toBe(0)
+		expect(document.body.querySelector('.question-create-editor')?.hasAttribute('hidden')).toBe(true)
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
 		})
 
 		expect(createCallCount).toBe(1)
@@ -473,7 +721,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -521,7 +769,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({
@@ -566,7 +814,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError={undefined}
 				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
@@ -591,7 +839,7 @@ describe('MarketCreateQuestionSection', () => {
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				marketCreating={false}
 				marketError='Unable to load details'
 				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
@@ -609,8 +857,8 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = missingRender.cleanup
 		const missingQueries = within(document.body)
 		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: 'Already Forked' })).not.toBeNull()
+		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: 'Create Pool From Question' }).getAttribute('disabled')).toBe('')
+		expect(missingQueries.getByRole('button', { name: `Create pool from question: Question (${result.questionId})` }).getAttribute('disabled')).toBe('')
 	})
 })

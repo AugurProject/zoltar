@@ -1,44 +1,49 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
+import { sameAddress } from '../../../lib/address.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
 
-type PendingEscalationMigrationSelection = {
+type PendingParentEscalationClaimSelection = {
 	depositIndexes: bigint[]
 	outcome: ReportingOutcomeKey
 }
 
 type UseForkAuctionInteractionStateParameters = {
 	accountAddress: Address | undefined
-	connectedWalletEscrowedRep: bigint | undefined
+	connectedWalletDisputeStakedAttoRep: bigint | undefined
 	forkAuctionActiveAction: ForkAuctionSectionProps['forkAuctionActiveAction']
 	forkAuctionError: string | undefined
 	forkAuctionResult: ForkAuctionSectionProps['forkAuctionResult']
 	hasStartedTruthAuction: boolean
 	reportingDetails: ForkAuctionSectionProps['reportingDetails']
 	securityPoolAddress: Address | undefined
+	startTruthAuctionSecurityPoolAddress: Address | undefined
 }
 
-export function useForkAuctionInteractionState({ accountAddress, connectedWalletEscrowedRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress }: UseForkAuctionInteractionStateParameters) {
-	const [isStartTruthAuctionInProgressState, setIsStartTruthAuctionInProgressState] = useState(false)
+export function useForkAuctionInteractionState({ accountAddress, connectedWalletDisputeStakedAttoRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
+	const [pendingStartTruthAuctionSecurityPoolAddress, setPendingStartTruthAuctionSecurityPoolAddress] = useState<Address | undefined>(undefined)
+	const isStartTruthAuctionInProgressState = startTruthAuctionSecurityPoolAddress !== undefined && sameAddress(pendingStartTruthAuctionSecurityPoolAddress, startTruthAuctionSecurityPoolAddress)
 	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
 	const [hasCompletedVaultMigration, setHasCompletedVaultMigration] = useState(false)
-	const [pendingEscalationMigrationSelection, setPendingEscalationMigrationSelection] = useState<PendingEscalationMigrationSelection | undefined>(undefined)
-	const [optimisticMigratedEscalationRep, setOptimisticMigratedEscalationRep] = useState(0n)
+	const [pendingParentEscalationClaimSelection, setPendingParentEscalationClaimSelection] = useState<PendingParentEscalationClaimSelection | undefined>(undefined)
+	const [optimisticClaimedParentDisputeStakedRep, setOptimisticClaimedParentDisputeStakedRep] = useState(0n)
 	const previousVaultMigrationContextKeyRef = useRef<string | undefined>(undefined)
+	const vaultMigrationActionStartedRef = useRef(false)
 
 	useEffect(() => {
 		const nextContextKey = securityPoolAddress === undefined || accountAddress === undefined ? undefined : `${accountAddress.toLowerCase()}:${securityPoolAddress.toLowerCase()}`
 		if (previousVaultMigrationContextKeyRef.current === nextContextKey) return
 		previousVaultMigrationContextKeyRef.current = nextContextKey
 		setIsVaultMigrationPending(false)
+		vaultMigrationActionStartedRef.current = false
 		setHasCompletedVaultMigration(false)
-		setPendingEscalationMigrationSelection(undefined)
-		setOptimisticMigratedEscalationRep(0n)
+		setPendingParentEscalationClaimSelection(undefined)
+		setOptimisticClaimedParentDisputeStakedRep(0n)
 	}, [accountAddress, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateVault' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress)) {
 			return
 		}
 		setHasCompletedVaultMigration(true)
@@ -46,76 +51,87 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	}, [forkAuctionResult?.action, forkAuctionResult?.hash, forkAuctionResult?.securityPoolAddress, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || forkAuctionResult.securityPoolAddress !== securityPoolAddress) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateUnresolvedEscalation' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress)) {
 			return
 		}
 		setHasCompletedVaultMigration(true)
 		setIsVaultMigrationPending(false)
-		setPendingEscalationMigrationSelection(undefined)
-		if (connectedWalletEscrowedRep !== undefined) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + connectedWalletEscrowedRep)
+		setPendingParentEscalationClaimSelection(undefined)
+		if (connectedWalletDisputeStakedAttoRep !== undefined) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + connectedWalletDisputeStakedAttoRep)
 		}
-	}, [connectedWalletEscrowedRep, forkAuctionResult, securityPoolAddress])
+	}, [connectedWalletDisputeStakedAttoRep, forkAuctionResult, securityPoolAddress])
 
 	useEffect(() => {
-		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'migrateEscalationDeposits' || forkAuctionResult.securityPoolAddress !== securityPoolAddress || pendingEscalationMigrationSelection === undefined) {
+		if (forkAuctionResult === undefined || forkAuctionResult.action !== 'claimParentEscalationDeposits' || !sameAddress(forkAuctionResult.securityPoolAddress, securityPoolAddress) || pendingParentEscalationClaimSelection === undefined) {
 			return
 		}
-		const migrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingEscalationMigrationSelection.outcome)
-		const migratedRep = migrationSide?.userDeposits.filter(deposit => pendingEscalationMigrationSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amount, 0n)
-		if (migratedRep !== undefined && migratedRep > 0n) {
-			setOptimisticMigratedEscalationRep(currentReduction => currentReduction + migratedRep)
+		const claimSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === pendingParentEscalationClaimSelection.outcome)
+		const claimedAttoRep = claimSide?.userDeposits.filter(deposit => pendingParentEscalationClaimSelection.depositIndexes.includes(deposit.depositIndex)).reduce((total, deposit) => total + deposit.amountAttoRep, 0n)
+		if (claimedAttoRep !== undefined && claimedAttoRep > 0n) {
+			setOptimisticClaimedParentDisputeStakedRep(currentReduction => currentReduction + claimedAttoRep)
 		}
-		setPendingEscalationMigrationSelection(undefined)
-	}, [forkAuctionResult, pendingEscalationMigrationSelection, reportingDetails, securityPoolAddress])
+		setPendingParentEscalationClaimSelection(undefined)
+	}, [forkAuctionResult, pendingParentEscalationClaimSelection, reportingDetails, securityPoolAddress])
 
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
 		if (hasStartedTruthAuction) {
-			setIsStartTruthAuctionInProgressState(false)
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 			return
 		}
 		if (forkAuctionError !== undefined && forkAuctionActiveAction === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 		}
-	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState, securityPoolAddress])
+	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState])
+
+	useEffect(() => {
+		if (forkAuctionResult?.action !== 'startTruthAuction') return
+		if (!sameAddress(forkAuctionResult.securityPoolAddress, pendingStartTruthAuctionSecurityPoolAddress)) return
+		setPendingStartTruthAuctionSecurityPoolAddress(undefined)
+	}, [forkAuctionResult, pendingStartTruthAuctionSecurityPoolAddress])
 
 	useEffect(() => {
 		if (!isVaultMigrationPending) return
-		if (forkAuctionActiveAction === 'migrateVault') return
-		if (forkAuctionError === undefined || securityPoolAddress === undefined) return
-		setIsVaultMigrationPending(false)
-	}, [forkAuctionActiveAction, forkAuctionError, isVaultMigrationPending, securityPoolAddress])
-
-	useEffect(() => {
-		if (forkAuctionActiveAction === 'migrateEscalationDeposits' || forkAuctionActiveAction === 'migrateUnresolvedEscalation' || forkAuctionError === undefined) {
+		if (forkAuctionActiveAction === 'migrateVault' || forkAuctionActiveAction === 'migrateUnresolvedEscalation') {
+			vaultMigrationActionStartedRef.current = true
 			return
 		}
-		setPendingEscalationMigrationSelection(undefined)
+		if (!vaultMigrationActionStartedRef.current) return
+		vaultMigrationActionStartedRef.current = false
+		setIsVaultMigrationPending(false)
+	}, [forkAuctionActiveAction, isVaultMigrationPending])
+
+	useEffect(() => {
+		if (forkAuctionActiveAction === 'claimParentEscalationDeposits' || forkAuctionActiveAction === 'migrateUnresolvedEscalation' || forkAuctionError === undefined) {
+			return
+		}
+		setPendingParentEscalationClaimSelection(undefined)
 	}, [forkAuctionActiveAction, forkAuctionError])
 
 	useEffect(() => {
-		setOptimisticMigratedEscalationRep(0n)
-	}, [connectedWalletEscrowedRep])
+		setOptimisticClaimedParentDisputeStakedRep(0n)
+	}, [connectedWalletDisputeStakedAttoRep])
 
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
-		if (accountAddress === undefined || securityPoolAddress === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
+		if (accountAddress === undefined || startTruthAuctionSecurityPoolAddress === undefined) {
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 		}
-	}, [accountAddress, isStartTruthAuctionInProgressState, securityPoolAddress])
+	}, [accountAddress, isStartTruthAuctionInProgressState, startTruthAuctionSecurityPoolAddress])
 
 	return {
 		beginStartTruthAuctionProgress: () => {
-			setIsStartTruthAuctionInProgressState(true)
+			setPendingStartTruthAuctionSecurityPoolAddress(startTruthAuctionSecurityPoolAddress)
 		},
 		beginVaultMigrationProgress: () => {
+			vaultMigrationActionStartedRef.current = false
 			setIsVaultMigrationPending(true)
 		},
 		hasCompletedVaultMigration,
 		isStartTruthAuctionInProgressState,
 		isVaultMigrationPending,
-		optimisticMigratedEscalationRep,
-		setPendingEscalationMigrationSelection,
+		optimisticClaimedParentDisputeStakedRep,
+		setPendingParentEscalationClaimSelection,
 	}
 }

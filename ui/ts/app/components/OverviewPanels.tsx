@@ -1,7 +1,6 @@
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { useState } from 'preact/hooks'
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.js'
 import { RouteHeader } from '../../components/RouteHeader.js'
 import { AddressValue } from '../../components/AddressValue.js'
 import { Badge } from '../../components/Badge.js'
@@ -12,9 +11,32 @@ import { LoadingText } from '../../components/LoadingText.js'
 import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
-import { isMainnetChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
-import type { OverviewPanelsProps } from '../../features/types.js'
+import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
+import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
+import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
+
+function getWalletNetworkLabel(chainId: string | undefined) {
+	if (chainId === undefined) return appCopy.unknownNetwork
+	if (chainId === '0xaa36a7') return appCopy.sepoliaNetwork
+	const chainLabel = getChainDisplayLabel(chainId)
+	if (chainLabel === undefined) return appCopy.unknownNetwork
+	const chainName = getKnownChainName(chainId)
+	if (chainName === undefined) return chainLabel
+	const decimalChainId = getChainIdDecimalLabel(chainId)
+	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
+}
+
+function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
+	if (failure === undefined) return undefined
+	return (
+		<span className='currency-value unavailable' role='status'>
+			{failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity}
+		</span>
+	)
+}
+
 export function OverviewPanels({
 	activeUniverseId,
 	accountState,
@@ -31,9 +53,11 @@ export function OverviewPanels({
 	onSwitchNetwork,
 	parentUniverseId,
 	readBackendStatus,
+	repPerEthFailure,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	repUsdcFailure,
 	repUsdcPrice,
 	repUsdcSource,
 	repUsdcSourceUrl,
@@ -41,12 +65,11 @@ export function OverviewPanels({
 	universeHasForked,
 	universePresentation,
 	universeLabel,
-	universeRepBalance,
+	universeRepBalanceAttoRep,
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
 	const [showEnvironmentDetails, setShowEnvironmentDetails] = useState(false)
-	const { copied: addressCopied, copyText } = useCopyToClipboard()
 	const effectiveReadBackendStatus = readBackendStatus ?? {
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -58,12 +81,15 @@ export function OverviewPanels({
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
-	const walletOnMainnet = isMainnetChain(accountState.chainId)
-	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnMainnet && !isBrowserSimulationReadBackend
+	const activeNetworkProfile = getActiveNetworkProfile()
+	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
+	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
+	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
+	const hasWrongWalletNetwork = accountState.address !== undefined && !walletOnActiveNetwork && !isBrowserSimulationReadBackend
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
-		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.wrongNetworkBadgeLabel}</Badge>
+		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge>
 		if (accountState.address === undefined) return <Badge tone='pending'>{appCopy.readOnly}</Badge>
 		return <Badge tone='ok'>{appCopy.connected}</Badge>
 	})()
@@ -71,7 +97,12 @@ export function OverviewPanels({
 		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
-	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : appCopy.formatWalletNetwork(accountState.chainId)
+	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
+	const walletNetworkLabel = (() => {
+		if (!walletOnActiveNetwork) return getWalletNetworkLabel(accountState.chainId)
+		if (activeNetworkProfile.id === 'sepolia') return appCopy.sepoliaNetwork
+		return appCopy.ethereumMainnet
+	})()
 	const accountActions = (() => {
 		if (accountState.address === undefined)
 			return (
@@ -91,12 +122,9 @@ export function OverviewPanels({
 					<button className='secondary' type='button' onClick={onChangeWallet} disabled={isManagingWallet}>
 						{appCopy.changeWallet}
 					</button>
-					<button className='secondary' type='button' onClick={() => void copyText(accountState.address ?? '')} disabled={isManagingWallet}>
-						{addressCopied ? appCopy.addressCopied : appCopy.copyAddress}
-					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{appCopy.switchToEthereumMainnet}
+							{appCopy.formatSwitchToNetwork(getNetworkSwitchTarget(getActiveNetworkProfile()))}
 						</button>
 					) : undefined}
 					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
@@ -126,18 +154,19 @@ export function OverviewPanels({
 	})()
 	return (
 		<section className='overview-shell'>
-			<article className='overview-panel overview-wallet-panel'>
+			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
 				<RouteHeader
 					actions={accountActions}
 					badge={
 						<span className='environment-badge-row'>
+							{activeNetworkBadge}
 							{environmentBadge}
 							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
 					}
 					description={operationsHeaderDescription}
 					eyebrow={appCopy.operations}
-					title={appCopy.augurPlaceholderTitle}
+					title={appCopy.augurStatoblastTitle}
 				/>
 				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
 					<MetricField className='overview-address-metric' label={appCopy.address}>
@@ -151,19 +180,19 @@ export function OverviewPanels({
 								)
 							if (accountState.address === undefined) return appCopy.notConnected
 
-							return <AddressValue address={accountState.address} />
+							return <AddressValue address={accountState.address} responsiveAbbreviation />
 						})()}
 					</MetricField>
 					{showAccountBalances ? (
 						<>
-							<MetricField label={commonCopy.eth}>
-								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={commonCopy.eth} compactWhenOverflow />
+							<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
+								<CurrencyValue value={accountState.ethBalanceAttoEth} loading={isRefreshing && accountState.ethBalanceAttoEth === undefined} suffix={commonCopy.eth} compactWhenOverflow />
 							</MetricField>
 							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={commonCopy.weth} compactWhenOverflow />
+								<CurrencyValue value={accountState.wethBalanceAttoEth} loading={isRefreshing && accountState.wethBalanceAttoEth === undefined} suffix={commonCopy.weth} compactWhenOverflow />
 							</MetricField>
-							<MetricField label={commonCopy.rep}>
-								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
+							<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
+								<CurrencyValue value={universeRepBalanceAttoRep} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
 							</MetricField>
 						</>
 					) : undefined}
@@ -174,13 +203,15 @@ export function OverviewPanels({
 								<span>
 									{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 								</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-									↻
-								</button>
+								{isRepPricingUnavailable ? undefined : (
+									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+										↻
+									</button>
+								)}
 							</span>
 						}
 					>
-						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
 					</MetricField>
 					<MetricField
 						className='overview-metric-secondary'
@@ -190,9 +221,11 @@ export function OverviewPanels({
 							</>
 						}
 					>
-						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />
+						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
 					</MetricField>
-					<MetricField label={commonCopy.universe}>{universeLabel}</MetricField>
+					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
+						{universeLabel}
+					</MetricField>
 					{shouldShowParentUniverse ? (
 						<MetricField className='overview-metric-secondary' label={appCopy.parentUniverse}>
 							<UniverseLink universeId={parentUniverseId} />

@@ -1,0 +1,119 @@
+@import url("./shared.css");
+
+body.open-oracle-arbitrager-guide pre {
+	margin: 0.85rem 0 1rem;
+	padding: 1rem;
+	overflow-x: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+	color: var(--ink);
+	font-family: var(--docs-font-mono);
+	font-size: 0.86rem;
+	line-height: 1.55;
+}
+
+body.open-oracle-arbitrager-guide pre code {
+	padding: 0;
+	background: transparent;
+	font-size: inherit;
+}
+
+body.open-oracle-arbitrager-guide .guide-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.55rem;
+	margin-top: 1rem;
+}
+
+body.open-oracle-arbitrager-guide .guide-nav a {
+	padding: 0.35rem 0.7rem;
+	border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line));
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--blue-soft) 55%, var(--paper));
+	font-size: 0.88rem;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+body.open-oracle-arbitrager-guide .screenshot {
+	margin: 1.25rem 0;
+	padding: 0.5rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+}
+
+body.open-oracle-arbitrager-guide .screenshot img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: calc(var(--radius) - 0.2rem);
+	background: #111820;
+}
+
+body.open-oracle-arbitrager-guide .screenshot figcaption {
+	margin: 0.7rem 0.25rem 0.2rem;
+	color: var(--muted);
+	font-size: 0.94rem;
+}
+
+body.open-oracle-arbitrager-guide .status-sequence {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0.85rem 0 1rem;
+	padding: 0;
+	list-style: none;
+}
+
+body.open-oracle-arbitrager-guide .status-sequence li {
+	padding: 0.35rem 0.65rem;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	background: var(--soft);
+	font-family: var(--docs-font-mono);
+	font-size: 0.82rem;
+	font-weight: 700;
+}
+
+body.open-oracle-arbitrager-guide .status-sequence li + li::before {
+	content: "→";
+	margin-right: 0.65rem;
+	color: var(--muted);
+}
+
+body.open-oracle-arbitrager-guide .compact-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin: 0.85rem 0;
+}
+
+body.open-oracle-arbitrager-guide .compact-grid > div {
+	padding: 0.8rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+}
+
+body.open-oracle-arbitrager-guide .compact-grid strong {
+	display: block;
+	margin-bottom: 0.25rem;
+}
+
+@media (max-width: 640px) {
+	body.open-oracle-arbitrager-guide .compact-grid {
+		grid-template-columns: 1fr;
+	}
+
+	body.open-oracle-arbitrager-guide .status-sequence {
+		display: grid;
+	}
+
+	body.open-oracle-arbitrager-guide .status-sequence li + li::before {
+		content: "";
+		margin: 0;
+	}
+}

@@ -1,7 +1,7 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import * as transactionReviewCopy from '../../../copy/transactionReview.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
@@ -10,7 +10,7 @@ import { FormInput } from '../../../components/FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
 import { LifecycleStageBanner } from '../../security-pools/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '../../../components/LookupFieldRow.js'
-import { LoadingText } from '../../../components/LoadingText.js'
+import { LoadingAwareText, LoadingText } from '../../../components/LoadingText.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
@@ -19,11 +19,12 @@ import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
+import { WarningSurface } from '../../../components/WarningSurface.js'
 import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../../markets/lib/marketForm.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
@@ -37,7 +38,6 @@ import {
 	getSelectedOutcomeRewardWindowFillTimestamp,
 	getReportingTimerPreview,
 	isPoolQuestionFinalized,
-	isReportingClosed,
 	previewReportingContribution,
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
@@ -53,8 +53,8 @@ type EscalationSideDisplay = {
 	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
-const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
+const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequired
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const MAX_PROFIT_WINDOW_FILLED_REASON = reportingCopy.maxProfitWindowFilledReason
@@ -65,6 +65,9 @@ const FORK_TRIGGERED_REPORT_REASON = reportingCopy.forkTriggerInstruction
 const FORK_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkRequiredSettlementReason
 const FORK_ALREADY_TRIGGERED_REPORT_REASON = reportingCopy.forkAlreadyTriggeredReportReason
 const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkAlreadyTriggeredSettlementReason
+function isRedundantPresetReason(reason: string | undefined) {
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
+}
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active')
 		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
@@ -72,7 +75,7 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 			key: side.key,
 			label: side.label,
 			userDeposits: side.userDeposits,
-			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n),
+			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
 		}))
 	if (reportingDetails?.status === 'not-started')
 		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
@@ -89,9 +92,6 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 		userDeposits: undefined,
 		userStake: undefined,
 	}))
-}
-function isHiddenPresetReason(reason: string | undefined) {
-	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
 	return reportingDetails.questionOutcome === 'none' ? reportingCopy.pendingFinalization : getReportingOutcomeLabel(reportingDetails.questionOutcome)
@@ -190,32 +190,6 @@ function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
 	if (activationTime === undefined) return undefined
 	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
-function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimestamp, rewardWindowFillTimestamp, selectedOutcomeLabel }: { currentTimestamp: bigint | undefined; projectedFinalizationTimestamp: bigint | undefined; rewardWindowFillTimestamp: bigint | undefined; selectedOutcomeLabel: string }) {
-	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) return <>{reportingCopy.formatLatestOutcomeReminder(selectedOutcomeLabel)}</>
-	if (rewardWindowFillTimestamp !== undefined && currentTimestamp !== undefined && rewardWindowFillTimestamp > currentTimestamp)
-		return (
-			<>
-				{reportingCopy.latestOutcomeCheckLead}
-				<TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={rewardWindowFillTimestamp} />
-				{reportingCopy.confirmationSeparator}
-				{selectedOutcomeLabel}
-				{reportingCopy.remainingRewardLead}
-				{selectedOutcomeLabel}
-				{reportingCopy.rewardWindowFilledTail}
-			</>
-		)
-	if (projectedFinalizationTimestamp !== undefined)
-		return (
-			<>
-				{reportingCopy.latestOutcomeCheckLead}
-				<TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={projectedFinalizationTimestamp} />
-				{reportingCopy.confirmationSeparator}
-				{selectedOutcomeLabel}
-				{reportingCopy.leadingOutcomeTail}
-			</>
-		)
-	return <>{reportingCopy.formatReportingLatestOutcomeReminderLater(selectedOutcomeLabel)}</>
-}
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) return reportingDetails
 	return {
@@ -232,6 +206,7 @@ export function ReportingSection({
 	lockedReason,
 	onLoadReporting,
 	onOpenForkWorkflow,
+	onOpenPriceOracle,
 	onTriggerZoltarFork,
 	onReportOutcome,
 	onReportingFormChange,
@@ -241,15 +216,19 @@ export function ReportingSection({
 	reportingDetails,
 	reportingError,
 	reportingForm,
+	reportActionGuardMessage,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
 	triggerZoltarForkAvailability,
 	triggerZoltarForkPending = false,
 }: ReportingSectionProps) {
+	const presetBlockerId = useId()
+	const reportingStageDetailId = useId()
+	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
@@ -280,11 +259,14 @@ export function ReportingSection({
 	} else if (reportingStageKey === 'resolved') {
 		reportLifecycleReason = reportingCopy.poolFinalizedReason
 	}
-	const reportControlsLockedReason = showFullReporting ? pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
+	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.reportingDetailsRequired : undefined
+	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
 		settlementLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON
+	} else if (reportingStageKey === 'timedOut') {
+		settlementLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
 		settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
 	} else if (activeReportingDetails?.settlementState === 'migration-expired') {
@@ -292,7 +274,15 @@ export function ReportingSection({
 	} else if (reportingStageKey === 'activeLocked') {
 		settlementLifecycleReason = reportingCopy.questionFinalizationRequired
 	}
-	const withdrawControlsLockedReason = showSettlementSection && loadingReportingDetails ? reportingCopy.loadingEscalationDeposits : pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
+	let withdrawControlsLockedReason: string | undefined
+	if (showSettlementSection && loadingReportingDetails) {
+		withdrawControlsLockedReason = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDeposits
+	} else {
+		withdrawControlsLockedReason = pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
+	}
+	let settlementContextMessage: string | undefined
+	if (activeReportingDetails?.settlementState === 'migration-required') settlementContextMessage = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
+	else if (activeReportingDetails?.settlementState === 'migration-expired') settlementContextMessage = reportingCopy.unresolvedMigrationExpiredDetail
 	const withdrawControlsLocked = !withdrawEscalationEnabled || withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -327,156 +317,85 @@ export function ReportingSection({
 		}
 	}
 	const rewardWindowFillTimestamp = activeReportingDetails === undefined || selectedOutcome === undefined || actualReportDepositAmount === undefined ? undefined : getSelectedOutcomeRewardWindowFillTimestamp(activeReportingDetails, selectedOutcome, actualReportDepositAmount)
-	const getProjectedReportingPreview = () => {
-		if (activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails)) return undefined
-		const finalizationReminder = getLatestOutcomeReminder({
-			currentTimestamp: effectiveCurrentTimestamp,
-			projectedFinalizationTimestamp,
-			rewardWindowFillTimestamp,
-			selectedOutcomeLabel,
-		})
-		if (timerPreview === undefined) {
-			if (selectedEstimate === undefined) return undefined
-			return (
-				<>
-					{reportingCopy.conditionalLead}
-					{selectedOutcomeLabel}
-					{reportingCopy.projectedWinPayoutLead}
-					<CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} />
-					{reportingCopy.profitSeparator}
-					{finalizationReminder}
-				</>
-			)
-		}
-		if (timerPreview.kind === 'not-started') {
-			if (timerPreview.hypotheticalDuration > 0n)
-				return (
-					<>
-						{reportingCopy.uncontestedFinalizationLead}
-						{formatDuration(timerPreview.timeUntilStart)}
-						{reportingCopy.projectionNotStartedTail}
-						{reportingCopy.latestOutcomeCheckLead}
-						<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={projectedFinalizationTimestamp} />
-						{reportingCopy.confirmationSeparator}
-						{selectedOutcomeLabel}
-						{reportingCopy.laterDisputeStatusTail}
-					</>
-				)
-			return (
-				<>
-					{reportingCopy.uncontestedFinalizationLead}
-					{formatDuration(timerPreview.timeUntilStart)}
-					{reportingCopy.projectionNotStartedTail}
-					{finalizationReminder}
-				</>
-			)
-		}
-		if (selectedEstimate === undefined || activeReportingDetails === undefined) return undefined
-		if (timerPreview.actualState === 'ends-immediately')
-			return (
-				<>
-					{reportingCopy.conditionalLead}
-					{selectedOutcomeLabel}
-					{reportingCopy.projectedWinPayoutLead}
-					<CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} />
-					{reportingCopy.profitSeparator}
-					{reportingCopy.immediateFinalizationLead}
-					{finalizationReminder}
-				</>
-			)
-		const projectedFinalizationDuration = formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))
-		if (timerPreview.actualState === 'extends')
-			return (
-				<>
-					{reportingCopy.conditionalLead}
-					{selectedOutcomeLabel}
-					{reportingCopy.projectedWinPayoutLead}
-					<CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} />
-					{reportingCopy.profitSeparator}
-					{reportingCopy.timerExtensionLead}
-					{formatDuration(timerPreview.timerIncrease ?? 0n)}
-					{reportingCopy.uncontestedFinalizationTail}
-					{projectedFinalizationDuration}
-					{reportingCopy.projectionNotStartedTail}
-					{finalizationReminder}
-				</>
-			)
-		return (
-			<>
-				{reportingCopy.conditionalLead}
-				{selectedOutcomeLabel}
-				{reportingCopy.projectedWinPayoutLead}
-				<CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} />
-				{reportingCopy.profitSeparator}
-				{reportingCopy.noTimerExtensionProjectionLead}
-				{projectedFinalizationDuration}
-				{reportingCopy.projectionNotStartedTail}
-				{finalizationReminder}
-			</>
-		)
-	}
-	const projectedReportingPreview = getProjectedReportingPreview()
+	const reportingTimerChange = (() => {
+		if (timerPreview === undefined) return undefined
+		if (timerPreview.kind === 'not-started') return reportingCopy.startsEscalation
+		if (timerPreview.actualState === 'ends-immediately') return reportingCopy.finalizesImmediately
+		if (timerPreview.actualState === 'extends') return reportingCopy.formatTimerExtension(formatDuration(timerPreview.timerIncrease ?? 0n))
+		return reportingCopy.noTimerChange
+	})()
+	const reportingRecheckTimestamp = rewardWindowFillTimestamp !== undefined && effectiveCurrentTimestamp !== undefined && rewardWindowFillTimestamp > effectiveCurrentTimestamp ? rewardWindowFillTimestamp : projectedFinalizationTimestamp
 	const resultingAvailableReportingRep =
-		effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep ? undefined : effectiveReportingDetails.viewerVaultAvailableEscalationRep - actualReportDepositAmount
+		effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
+			? undefined
+			: effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep - actualReportDepositAmount
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
-	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
-	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
+	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
+	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
+	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
 	const maxContributionAmount = (() => {
-		if (selectedOutcome === undefined) return { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
-		if (effectiveReportingDetails === undefined) return { amount: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep === undefined) return { amount: undefined, reason: reportingCopy.loadingAvailableVaultRep }
-		if (effectiveReportingDetails.viewerVaultAvailableEscalationRep <= 0n) return { amount: undefined, reason: reportingCopy.unlockedReportingRepEmpty }
-		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amount: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
+		if (selectedOutcome === undefined) return { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
+		if (effectiveReportingDetails === undefined) return { amountAttoRep: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
+		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep === undefined) return { amountAttoRep: undefined, reason: reportingCopy.loadingPoolHeldVaultRepBacking }
+		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep <= 0n) return { amountAttoRep: undefined, reason: reportingCopy.poolHeldVaultRepBackingEmpty }
+		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amountAttoRep: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
 		if (effectiveReportingDetails.status === 'not-started') {
-			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerVaultAvailableEscalationRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerVaultAvailableEscalationRep : remainingSelectedOutcomeCapacity
-			if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep : remainingSelectedOutcomeCapacity
+			if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 			return {
-				amount: cappedAmount,
+				amountAttoRep: cappedAmount,
 				reason: undefined,
 			}
 		}
 		const selectedSide = effectiveReportingDetails.sides.find(side => side.key === selectedOutcome)
-		if (selectedSide === undefined) return { amount: undefined, reason: reportingCopy.selectedSideIsUnavailable }
-		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThreshold - selectedSide.balance)
-		if (maxContributionPreview.actualDepositAmount === undefined) return { amount: undefined, reason: maxContributionPreview.reason }
+		if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
+		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThresholdAttoRep - selectedSide.balance)
+		if (maxContributionPreview.actualDepositAmount === undefined) return { amountAttoRep: undefined, reason: maxContributionPreview.reason }
 		let cappedAmount = maxContributionPreview.actualDepositAmount
-		if (cappedAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep) cappedAmount = effectiveReportingDetails.viewerVaultAvailableEscalationRep
+		if (cappedAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep) cappedAmount = effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
 		if (remainingSelectedOutcomeCapacity !== undefined && cappedAmount > remainingSelectedOutcomeCapacity) cappedAmount = remainingSelectedOutcomeCapacity
-		if (cappedAmount < effectiveReportingDetails.startBond) return { amount: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
+		if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 		return {
-			amount: cappedAmount,
+			amountAttoRep: cappedAmount,
 			reason: undefined,
 		}
 	})()
-	const presetReasons = reportControlsLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? reportingCopy.reportAmountPreviewRequired : undefined
 	const reportGuardMessage =
+		fullReportingLoadingReason ??
+		reportActionGuardMessage ??
 		reportControlsLockedReason ??
 		getReportingReportGuardMessage({
 			actualDepositAmount: actualReportDepositAmount,
 			accountAddress: accountState.address,
 			contributionPreviewReason: reportContributionPreview?.reason,
-			isMainnet,
+			isOnActiveAppChain,
 			remainingSelectedOutcomeCapacity,
 			reportAmount: reportingForm.reportAmount,
 			reportingStatus,
 			selectedOutcome,
 			selectedAmount,
-			viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
+			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
+	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
+	const reportActionDisabledReason = !isOnActiveAppChain ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : reportButtonGuardMessage
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({
 			accountAddress: accountState.address,
-			isMainnet,
+			isOnActiveAppChain,
 			reportingStatus,
 		})
+	let displayedWithdrawGuardMessage = withdrawGuardMessage
+	if (loadingReportingDetails) {
+		displayedWithdrawGuardMessage = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDepositsDetail
+	}
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	let reportingOpenNotice: string | undefined
 	if (showFullReporting && reportingStatus === 'not-started' && effectiveReportingDetails?.questionOutcome === 'none') {
-		reportingOpenNotice = selectedOutcome === undefined ? reportingCopy.reportingOutcomeSelectionHint : reportingCopy.reportingOpenDetail
+		reportingOpenNotice = reportingCopy.reportingOpenDetail
 	}
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && reportingStatus !== 'missing' && withdrawableSides.length === 0
@@ -524,25 +443,17 @@ export function ReportingSection({
 			})
 		: undefined
 	const reportingStageBanner = reportingStage?.key === 'escalation-active' ? undefined : reportingStage
-	const reportingWorkflowSummary = reportingStage?.detail ?? reportingCopy.outcomeSelectionHelpText
+	const sharedReportSettlementDisabledReason = showFullReporting && reportActionDisabledReason !== undefined && reportActionDisabledReason === displayedWithdrawGuardMessage ? reportActionDisabledReason : undefined
+	let sharedReportSettlementDisabledReasonId: string | undefined
+	if (sharedReportSettlementDisabledReason !== undefined) {
+		sharedReportSettlementDisabledReasonId = reportingStageBanner?.detail === sharedReportSettlementDisabledReason ? reportingStageDetailId : settlementDisabledReasonId
+	}
+	const shouldRenderSharedReportSettlementDisabledReason = sharedReportSettlementDisabledReason !== undefined && sharedReportSettlementDisabledReasonId === settlementDisabledReasonId
+	const reportDisabledReasonElementId = sharedReportSettlementDisabledReasonId ?? (reportingStageBanner?.detail === reportActionDisabledReason ? reportingStageDetailId : undefined)
+	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
 		<>
-			{showFullReporting ? (
-				<SectionBlock className='reporting-workflow-section' title={reportingCopy.reportingWorkflow} density='compact' variant='plain'>
-					<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
-						<div className='workflow-guide-intro'>
-							<p className='detail'>{reportingWorkflowSummary}</p>
-						</div>
-						<div className='workflow-summary-strip-steps'>
-							<span className='current'>{reportingCopy.step1Outcome}</span>
-							<span>{reportingCopy.step2LockRep}</span>
-							<span>{reportingCopy.step3Settle}</span>
-						</div>
-					</div>
-				</SectionBlock>
-			) : undefined}
-
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -558,22 +469,22 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner detailId={reportingStageDetailId} flat stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label={reportingCopy.nonDecisionThreshold}>
-							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix={commonCopy.rep} />
+						<MetricField label={reportingCopy.nonDecisionThresholdAttoRep}>
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.timeLeft}>{activeReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label={reportingCopy.escalationStarted}>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
-						<MetricField label={reportingCopy.startBond}>
-							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix={commonCopy.rep} />
+						<MetricField label={reportingCopy.startBondAttoRep}>
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					</div>
 				</SectionBlock>
@@ -581,15 +492,27 @@ export function ReportingSection({
 
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-outcome-section' title={reportingCopy.reportOutcome} variant='embedded'>
+					{reportActionGuardMessage === undefined ? undefined : (
+						<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
+							<p>{reportActionGuardMessage}</p>
+							{onOpenPriceOracle === undefined ? undefined : (
+								<div className='actions'>
+									<button className='secondary' type='button' onClick={onOpenPriceOracle}>
+										{reportingCopy.managePoolPrice}
+									</button>
+								</div>
+							)}
+						</WarningSurface>
+					)}
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>{reportingCopy.totalSideStake}</span>
+								<span className='panel-label'>{reportingCopy.totalSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item'>
 								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>{reportingCopy.yourSideStake}</span>
+								<span className='panel-label'>{reportingCopy.yourSideDisputeStakedRep}</span>
 							</div>
 							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 								<span aria-hidden='true' className='escalation-sides-legend-marker' />
@@ -614,9 +537,9 @@ export function ReportingSection({
 						</div>
 					</div>
 					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
-					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
+					{effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined ? undefined : (
 						<p className='detail'>
-							{reportingCopy.availableUnlockedVaultRepForReporting} <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix={commonCopy.rep} />.
+							{reportingCopy.availablePoolHeldVaultRepBackingForReporting} <CurrencyValue value={effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep} suffix={commonCopy.rep} />.
 						</p>
 					)}
 					<div className='field'>
@@ -629,16 +552,15 @@ export function ReportingSection({
 								className='quiet field-inline-action'
 								type='button'
 								onClick={() => {
-									if (maxContributionAmount.amount === undefined) return
-									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amount) })
+									if (maxContributionAmount.amountAttoRep === undefined) return
+									onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amountAttoRep) })
 								}}
-								disabled={reportControlsLocked || maxContributionAmount.amount === undefined}
+								disabled={reportControlsLocked || maxContributionAmount.amountAttoRep === undefined}
 								title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
 							>
 								{commonCopy.max}
 							</button>
 						</div>
-						<p className='field-help'>{reportingCopy.escalationDepositHelpText}</p>
 					</div>
 
 					<div className='actions'>
@@ -646,10 +568,11 @@ export function ReportingSection({
 							className='secondary'
 							type='button'
 							onClick={() => {
-								if (minimumOutcomeChangeContribution.amount === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amount) })
+								if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
 							}}
-							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amount === undefined}
+							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
+							aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 						>
 							{reportingCopy.minToTakeTheLead}
@@ -658,25 +581,26 @@ export function ReportingSection({
 							className='secondary'
 							type='button'
 							onClick={() => {
-								if (maxProfitContribution.amount === undefined) return
-								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amount) })
+								if (maxProfitContribution.amountAttoRep === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
 							}}
-							disabled={reportControlsLocked || maxProfitContribution.amount === undefined}
+							disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
+							aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 							title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 						>
 							{reportingCopy.maxProfit}
 						</button>
 					</div>
-
-					{presetReasons.map(reason => (
-						<p key={reason} className='detail'>
-							{reason}
+					{presetBlocker === undefined ? undefined : (
+						<p id={presetBlockerId} className='detail'>
+							{presetBlocker}
 						</p>
-					))}
+					)}
+
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
 						<p className='detail'>
-							{reportingCopy.currentEscalationLockLead}
+							{reportingCopy.currentEscalationDisputeStakeLead}
 							<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
 							{reportingCopy.acceptedAmountTail}
 						</p>
@@ -684,49 +608,59 @@ export function ReportingSection({
 					<TransactionReview
 						context={[
 							{ label: commonCopy.question, value: marketDetails?.title ?? commonCopy.unavailable },
-							{ label: commonCopy.securityPoolAddress, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
 							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={effectiveReportingDetails?.universeId} /> },
-							{ label: reportingCopy.sourceVault, value: <AddressValue address={accountState.address} /> },
-							{ label: commonCopy.outcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
 						]}
 						primary={[
-							{ label: reportingCopy.repPlacedAtRisk, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.disputeStakedRepAfterReport, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
 						]}
 						details={[
-							{ label: reportingCopy.currentTentativeOutcome, value: leadingOutcome === undefined ? reportingCopy.pendingFinalization : getReportingOutcomeLabel(leadingOutcome) },
-							{ label: reportingCopy.timerEffect, value: projectedReportingPreview ?? commonCopy.metricUnavailablePlaceholder },
-							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.formatEstimatedProfitLabel(selectedOutcomeLabel), value: selectedEstimate === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.timerChange, value: reportingTimerChange ?? commonCopy.metricUnavailablePlaceholder },
+							{
+								label: reportingCopy.recheckBy,
+								value: reportingRecheckTimestamp === undefined ? commonCopy.metricUnavailablePlaceholder : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingRecheckTimestamp} />,
+							},
+							{ label: reportingCopy.poolHeldVaultRepBackingAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
+						]}
+						risks={[reportingCopy.reportingDisputeStakeRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
+						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
 							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
-						risks={[reportingCopy.ifThisSideLoses, reportingCopy.reportingLockRisk, reportingCopy.reportTimerRisk]}
 					/>
-					<div className='actions'>
-						<TransactionActionButton
-							idleLabel={reportButtonLabel}
-							pendingLabel={reportingCopy.submittingReport}
-							onClick={onReportOutcome}
-							pending={reportingActiveAction === 'reportOutcome'}
-							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: !isMainnet ? commonCopy.mainnetRequiredReason : reportGuardMessage }}
-						/>
+					<div className='reporting-shared-action-region'>
+						{shouldRenderSharedReportSettlementDisabledReason ? (
+							<p className='detail' id={settlementDisabledReasonId}>
+								<LoadingAwareText>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+							</p>
+						) : undefined}
+						<div className='actions'>
+							<TransactionActionButton
+								idleLabel={reportButtonLabel}
+								pendingLabel={reportingCopy.submittingReport}
+								onClick={onReportOutcome}
+								pending={reportingActiveAction === 'reportOutcome'}
+								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
+								disabledReasonElementId={reportDisabledReasonElementId}
+								showDisabledReason={reportDisabledReasonElementId === undefined}
+							/>
+						</div>
 					</div>
-					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
 				</SectionBlock>
 			) : undefined}
 
 			{showSettlementSection && reportingReady !== false ? (
 				<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
-					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
-					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail}</p> : undefined}
-					{activeReportingDetails?.settlementState === 'migration-expired' ? <p className='detail'>{reportingCopy.unresolvedMigrationExpiredDetail}</p> : undefined}
-					{hasImportedForkedDeposits ? <p className='detail'>{reportingCopy.forkCarriedSettlementRedirectDetail}</p> : undefined}
-					{loadingReportingDetails ? (
-						<p className='detail'>
-							<LoadingText>{reportingCopy.loadingEscalationDepositsDetail}</LoadingText>
+					{displayedWithdrawGuardMessage === undefined || displayedWithdrawGuardMessage === sharedReportSettlementDisabledReason ? undefined : (
+						<p className='detail' id={settlementDisabledReasonId}>
+							<LoadingAwareText>{displayedWithdrawGuardMessage}</LoadingAwareText>
 						</p>
-					) : undefined}
+					)}
+					{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <p className='detail'>{settlementContextMessage}</p>}
+					{hasImportedForkedDeposits ? <p className='detail'>{reportingCopy.forkCarriedSettlementRedirectDetail}</p> : undefined}
 					{shouldShowWithdrawEmptyState && activeReportingDetails?.settlementState !== 'migration-required' && activeReportingDetails?.settlementState !== 'migration-expired' ? <p className='detail'>{reportingCopy.walletUnsettledDepositsEmpty}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'
 						? undefined
@@ -735,6 +669,8 @@ export function ReportingSection({
 								const allWithdrawDepositIndexes = side.userDeposits.map(deposit => deposit.depositIndex)
 								const claimLabel = getWithdrawDepositClaimLabel(effectiveReportingDetails, side.key)
 								const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (!withdrawEscalationEnabled || selectedWithdrawDepositIndexes.length > 0 ? undefined : reportingCopy.settlementSelectionRequired)
+								const withdrawSelectedUsesSharedReason = withdrawGuardMessage !== undefined && withdrawSelectedGuardMessage === withdrawGuardMessage
+								const withdrawAllUsesSharedReason = withdrawGuardMessage !== undefined
 								const isPendingSide = withdrawActionPending && pendingWithdrawOutcome === side.key
 
 								return (
@@ -749,7 +685,7 @@ export function ReportingSection({
 														deposit,
 														details: [
 															<>
-																{reportingCopy.initiallyDeposited} <CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+																{reportingCopy.initiallyDeposited} <CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 															</>,
 															claimAmount === undefined ? (
 																reportingCopy.worthAfterFinalizationPendingFinalization
@@ -758,9 +694,11 @@ export function ReportingSection({
 																	{reportingCopy.worthNow} <CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 																</>
 															),
+														],
+														secondaryDetails: [
 															`${reportingCopy.currentClaimType} ${claimLabel ?? reportingCopy.pendingFinalization}`,
 															<>
-																{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+																{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 															</>,
 														],
 													}
@@ -784,8 +722,10 @@ export function ReportingSection({
 												onClick={() => handleWithdrawEscalation(side.key, selectedWithdrawDepositIndexes)}
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
+												disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												showDisabledReason={!withdrawSelectedUsesSharedReason}
 											/>
 											<TransactionActionButton
 												idleLabel={reportingCopy.formatSettleAllDepositsLabel(side.label)}
@@ -793,8 +733,10 @@ export function ReportingSection({
 												onClick={() => handleWithdrawEscalation(side.key, allWithdrawDepositIndexes)}
 												pending={isPendingSide}
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
+												disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isMainnet || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												showDisabledReason={!withdrawAllUsesSharedReason}
 											/>
 										</div>
 									</SectionBlock>
@@ -805,6 +747,13 @@ export function ReportingSection({
 			{forkTriggeredActions}
 
 			<ErrorNotice message={reportingError} />
+			{reportingError === undefined || showSecurityPoolAddressInput ? undefined : (
+				<div className='actions'>
+					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
+						{loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting}
+					</button>
+				</div>
+			)}
 		</>
 	)
 	if (embedInCard) return sections

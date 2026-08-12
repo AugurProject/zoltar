@@ -13,6 +13,7 @@ const uiRootPath = path.join(repositoryRootPath, 'ui')
 const uiProtocolPaths = ['forks.ts', 'openOracle.ts', 'trading.ts'].map(fileName => path.join(repositoryRootPath, 'ui', 'ts', 'protocol', fileName))
 const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
 const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'reporting', 'lib', 'reportingDomain.ts')
+const uiSepoliaDeploymentConfigPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'sepoliaDeploymentConfig.ts')
 const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
 const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
@@ -23,6 +24,8 @@ const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'i
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
+	'@zoltar/shared/openOracle': '../shared/js/openOracle.js',
+	'@zoltar/shared/sepoliaRepAllocations': '../shared/js/sepoliaRepAllocations.js',
 	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
@@ -231,7 +234,8 @@ function isBunStringLiteral(node: ts.Node) {
 
 function getSourceLocation(sourceFile: ts.SourceFile, node: ts.Node) {
 	const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-	return `${path.relative(repositoryRootPath, sourceFile.fileName)}:${line + 1}:${character + 1}`
+	const relativePath = path.relative(repositoryRootPath, sourceFile.fileName).replaceAll(path.sep, '/')
+	return `${relativePath}:${line + 1}:${character + 1}`
 }
 
 function collectBareBunStringLiterals(sourceFile: ts.SourceFile) {
@@ -309,13 +313,14 @@ function getExportedNames(filePath: string, imports: Record<string, string>, exp
 test('shared helper package imports resolve to browser-served shared outputs', () => {
 	const protocolSource = uiProtocolPaths.map(protocolPath => fs.readFileSync(protocolPath, 'utf8')).join('\n')
 	const deploymentHelpersSource = fs.readFileSync(uiDeploymentHelpersPath, 'utf8')
+	const sepoliaDeploymentConfigSource = fs.readFileSync(uiSepoliaDeploymentConfigPath, 'utf8')
 	const simulationBootstrapSource = fs.readFileSync(uiSimulationBootstrapPath, 'utf8')
 	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
 
 	expect(protocolSource).toContain("from './helpers.js'")
 	expect(protocolSource).toContain("from './deploymentHelpers.js'")
 	expect(protocolSource).toContain("from '@zoltar/shared/bigInt'")
-	expect(simulationBootstrapSource).toContain("from '@zoltar/shared/constants'")
+	expect(sepoliaDeploymentConfigSource).toContain("from '@zoltar/shared/sepoliaRepAllocations'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/oracleInitialReport'")
 	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
@@ -331,8 +336,10 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')

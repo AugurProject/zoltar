@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ScalarDeploymentSection } from '../../../features/markets/components/ScalarDeploymentSection.js'
 import { getScalarOutcomeIndex } from '../../../features/markets/lib/scalarOutcome.js'
@@ -65,7 +66,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={undefined}
 				childUniverses={[]}
 				hasForked={false}
-				isMainnet={false}
+				isOnActiveAppChain={false}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Unexpected deployment request without question details')
 				}}
@@ -79,6 +80,22 @@ describe('ScalarDeploymentSection', () => {
 		expect(documentQueries.getByText('Loading scalar range…')).not.toBeNull()
 	})
 
+	test('preserves hook order when question details finish loading', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ScalarDeploymentSection accountAddress={undefined} childUniverses={[]} hasForked={false} isOnActiveAppChain={false} onCreateChildUniverseForOutcomeIndex={() => undefined} questionDetails={undefined} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} />,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				<ScalarDeploymentSection accountAddress={undefined} childUniverses={[]} hasForked={false} isOnActiveAppChain={false} onCreateChildUniverseForOutcomeIndex={() => undefined} questionDetails={createQuestionDetails()} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} />,
+				renderedComponent.container,
+			)
+		})
+
+		expect(within(document.body).getByRole('slider')).not.toBeNull()
+	})
+
 	test('clamps selected ticks before confirming child universe deployment', async () => {
 		let createOutcome: bigint | undefined
 		const question = createQuestionDetails()
@@ -87,7 +104,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[]}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={outcomeIndex => {
 					createOutcome = outcomeIndex
 				}}
@@ -109,7 +126,7 @@ describe('ScalarDeploymentSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Deploy Universe' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Deploy universe' }))
 		})
 		expect(createOutcome).toBe(getScalarOutcomeIndex(question, 10n))
 	})
@@ -120,7 +137,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[]}
 				hasForked={false}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Unexpected deployment request before fork')
 				}}
@@ -144,7 +161,7 @@ describe('ScalarDeploymentSection', () => {
 				accountAddress={zeroAddress}
 				childUniverses={[createChildUniverse({ outcomeIndex: deployedOutcome, outcomeLabel: 'Below $50', exists: true })]}
 				hasForked={true}
-				isMainnet={true}
+				isOnActiveAppChain={true}
 				onCreateChildUniverseForOutcomeIndex={() => {
 					throw new Error('Should not deploy an already deployed outcome')
 				}}
@@ -156,5 +173,31 @@ describe('ScalarDeploymentSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expectTransactionButtonDisabled(document.body, 'Deployed', 'Child universe already deployed.')
 		expect(within(document.body).queryByRole('button', { name: 'Deployed' })).not.toBeNull()
+	})
+
+	test('renders selected child universe records as flat inside the deployment modal', async () => {
+		const question = createQuestionDetails()
+		const selectedOutcome = getScalarOutcomeIndex(question, 0n)
+		const renderedComponent = await renderIntoDocument(
+			<ScalarDeploymentSection
+				accountAddress={zeroAddress}
+				childUniverses={[createChildUniverse({ outcomeIndex: selectedOutcome })]}
+				hasForked={true}
+				isOnActiveAppChain={true}
+				onCreateChildUniverseForOutcomeIndex={() => undefined}
+				questionDetails={question}
+				zoltarChildUniverseError={undefined}
+				zoltarChildUniversePendingOutcomeIndex={undefined}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create child universe' }))
+		})
+
+		const dialog = within(document.body).getByRole('dialog')
+		expect(dialog.querySelector('.entity-card.flat')).not.toBeNull()
+		expect(dialog.querySelector('.entity-card:not(.flat)')).toBeNull()
 	})
 })

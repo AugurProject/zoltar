@@ -5,9 +5,9 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import {
 	ESCALATION_GAME_ACTIVATION_DELAY,
 	calculateEstimatedEscalationReturn,
-	computeEscalationTimeSinceStartFromAttritionCost,
+	computeEscalationTimeSinceStartFromAttritionCostAttoRep,
 	getEscalationBalanceTuple,
-	getEscalationBindingCapital,
+	getEscalationBindingCapitalAttoRep,
 	getEscalationTimeRemaining,
 	getEscalationPhase,
 	getEscalationDepositClaimAmount,
@@ -25,10 +25,10 @@ import {
 } from '../../../features/reporting/lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails, ReportingOutcomeKey } from '../../../types/contracts.js'
 
-const REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 
 function rep(value: bigint) {
-	return value * REP
+	return value * ATTO_REP
 }
 
 function createMarketDetails(): MarketDetails {
@@ -52,15 +52,15 @@ function createMarketDetails(): MarketDetails {
 function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: rep(10n),
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(20n),
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
-		forkThreshold: rep(200n),
+		forkThresholdAttoRep: rep(200n),
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: rep(100n),
+		nonDecisionThresholdAttoRep: rep(100n),
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
@@ -69,40 +69,40 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 			{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
 		activationTime: 120n,
-		startBond: rep(3n),
+		startBondAttoRep: rep(3n),
 		status: 'active',
 		systemState: 'operational',
-		totalCost: rep(20n),
+		totalCostAttoRep: rep(20n),
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 1n * REP,
-		viewerVaultRepDepositShare: 11n * REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 		...overrides,
 	}
 }
 
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentTime: 150n,
-		forkThreshold: rep(100n),
+		forkThresholdAttoRep: rep(100n),
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: rep(50n),
+		nonDecisionThresholdAttoRep: rep(50n),
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
-		startBond: rep(3n),
+		startBondAttoRep: rep(3n),
 		status: 'not-started',
 		systemState: 'operational',
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 0n,
-		viewerVaultRepDepositShare: 10n * REP,
+		viewerVaultDisputeStakedAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
 		...overrides,
 	}
 }
@@ -113,40 +113,40 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 		{ balance: rep(3n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 	]
-	const startBond = overrides.startBond ?? rep(1n)
-	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
-	const forkThreshold = overrides.forkThreshold ?? nonDecisionThreshold * 2n
+	const startBondAttoRep = overrides.startBondAttoRep ?? rep(1n)
+	const nonDecisionThresholdAttoRep = overrides.nonDecisionThresholdAttoRep ?? rep(20n)
+	const forkThresholdAttoRep = overrides.forkThresholdAttoRep ?? nonDecisionThresholdAttoRep * 2n
 	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
-	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
-	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+	const bindingCapital = getEscalationBindingCapitalAttoRep(getEscalationBalanceTuple(sides))
+	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, bindingCapital)
 
 	const baseDetails: ActiveReportingDetails = {
 		bindingCapital,
-		completeSetCollateralAmount: 1n,
+		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(2n),
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
-		forkThreshold,
+		forkThresholdAttoRep,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold,
+		nonDecisionThresholdAttoRep,
 		questionOutcome: 'none',
 		securityPoolAddress: zeroAddress,
 		sides,
-		startBond,
+		startBondAttoRep,
 		activationTime,
 		status: 'active',
 		systemState: 'operational',
-		totalCost: 0n,
+		totalCostAttoRep: 0n,
 		universeId: 1n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
-		viewerVaultEscrowedRep: 1n * REP,
-		viewerVaultRepDepositShare: 11n * REP,
+		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
+		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
 	}
 
 	return {
@@ -155,10 +155,10 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		bindingCapital,
 		currentTime,
 		escalationEndTime,
-		forkThreshold,
-		nonDecisionThreshold,
+		forkThresholdAttoRep,
+		nonDecisionThresholdAttoRep,
 		sides,
-		startBond,
+		startBondAttoRep,
 		activationTime,
 	}
 }
@@ -172,6 +172,16 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getEscalationPhase(details)).toBe('Fork Triggered')
+	})
+
+	test('reports no remaining escalation time after non-decision is reached', () => {
+		const details = createReportingDetails({
+			currentTime: 300n,
+			escalationEndTime: 2n ** 255n,
+			hasReachedNonDecision: true,
+		})
+
+		expect(getEscalationTimeRemaining(details)).toBe(0n)
 	})
 
 	test('getEscalationPhase keeps the exact timeout boundary active and times out one second later', () => {
@@ -226,7 +236,7 @@ describe('reportingDomain', () => {
 
 	test('getMinimumOutcomeChangeContribution returns the smallest strict lead', () => {
 		expect(getMinimumOutcomeChangeContribution(createReportingDetails(), 'yes')).toEqual({
-			amount: rep(4n),
+			amountAttoRep: rep(4n),
 			reason: undefined,
 		})
 	})
@@ -234,33 +244,33 @@ describe('reportingDomain', () => {
 	test('getMinimumOutcomeChangeContribution returns 1001 REP for 1000 REP on yes and no selected', () => {
 		const details = createReportingDetails({
 			currentRequiredBond: rep(1_000n),
-			nonDecisionThreshold: rep(2_000n),
+			nonDecisionThresholdAttoRep: rep(2_000n),
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			startBond: rep(1n),
+			startBondAttoRep: rep(1n),
 		})
 
 		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
-			amount: rep(1_001n),
+			amountAttoRep: rep(1_001n),
 			reason: undefined,
 		})
 	})
 
-	test('getMinimumOutcomeChangeContribution respects startBond when the lead delta is smaller than the minimum report', () => {
+	test('getMinimumOutcomeChangeContribution respects startBondAttoRep when the lead delta is smaller than the minimum report', () => {
 		const details = createReportingDetails({
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			startBond: rep(3n),
+			startBondAttoRep: rep(3n),
 		})
 
 		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
-			amount: rep(3n),
+			amountAttoRep: rep(3n),
 			reason: undefined,
 		})
 	})
@@ -276,7 +286,7 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
-			amount: 0n,
+			amountAttoRep: 0n,
 			reason: undefined,
 		})
 	})
@@ -291,8 +301,8 @@ describe('reportingDomain', () => {
 					deposits: [],
 					importedUserDeposits: [
 						{
-							amount: rep(2n),
-							cumulativeAmount: rep(1n),
+							amountAttoRep: rep(2n),
+							cumulativeAmountAttoRep: rep(1n),
 							depositor: zeroAddress,
 							parentDepositIndex: 7n,
 						},
@@ -307,8 +317,8 @@ describe('reportingDomain', () => {
 
 		expect(
 			getImportedEscalationDepositClaimAmount(details, 'yes', {
-				amount: rep(2n),
-				cumulativeAmount: rep(1n),
+				amountAttoRep: rep(2n),
+				cumulativeAmountAttoRep: rep(1n),
 				depositor: zeroAddress,
 				parentDepositIndex: 7n,
 			}),
@@ -326,8 +336,8 @@ describe('reportingDomain', () => {
 					deposits: [],
 					importedUserDeposits: [
 						{
-							amount: rep(2n),
-							cumulativeAmount: rep(1n),
+							amountAttoRep: rep(2n),
+							cumulativeAmountAttoRep: rep(1n),
 							depositor: zeroAddress,
 							parentDepositIndex: 7n,
 						},
@@ -342,8 +352,8 @@ describe('reportingDomain', () => {
 
 		expect(
 			getImportedEscalationDepositClaimAmount(details, 'yes', {
-				amount: rep(2n),
-				cumulativeAmount: rep(1n),
+				amountAttoRep: rep(2n),
+				cumulativeAmountAttoRep: rep(1n),
 				depositor: zeroAddress,
 				parentDepositIndex: 7n,
 			}),
@@ -370,8 +380,8 @@ describe('reportingDomain', () => {
 
 		expect(
 			getImportedEscalationDepositClaimAmount(details, 'yes', {
-				amount: rep(14n),
-				cumulativeAmount: rep(34n),
+				amountAttoRep: rep(14n),
+				cumulativeAmountAttoRep: rep(34n),
 				depositor: zeroAddress,
 				parentDepositIndex: 1n,
 			}),
@@ -388,31 +398,31 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Selected side already leads.',
 		})
 	})
 
 	test('getMinimumOutcomeChangeContribution falls back to the remaining threshold room when the selected side cannot take the lead', () => {
 		const details = createReportingDetails({
-			nonDecisionThreshold: rep(20n),
+			nonDecisionThresholdAttoRep: rep(20n),
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			startBond: rep(1n),
+			startBondAttoRep: rep(1n),
 		})
 
 		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
-			amount: rep(1n),
+			amountAttoRep: rep(1n),
 			reason: undefined,
 		})
 	})
 
 	test('getMaxProfitContribution fills the remaining reward window', () => {
 		expect(getMaxProfitContribution(createReportingDetails(), 'yes')).toEqual({
-			amount: rep(7n),
+			amountAttoRep: rep(7n),
 			reason: undefined,
 		})
 	})
@@ -420,17 +430,17 @@ describe('reportingDomain', () => {
 	test('getMaxProfitContribution returns 1500 REP for 1000 REP on yes and no selected', () => {
 		const details = createReportingDetails({
 			currentRequiredBond: rep(1_000n),
-			nonDecisionThreshold: rep(2_000n),
+			nonDecisionThresholdAttoRep: rep(2_000n),
 			sides: [
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(1_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			startBond: rep(1n),
+			startBondAttoRep: rep(1n),
 		})
 
 		expect(getMaxProfitContribution(details, 'no')).toEqual({
-			amount: rep(1_500n),
+			amountAttoRep: rep(1_500n),
 			reason: undefined,
 		})
 	})
@@ -445,7 +455,7 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getMaxProfitContribution(details, 'yes')).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
 		})
 	})
@@ -462,20 +472,20 @@ describe('reportingDomain', () => {
 				'invalid',
 			),
 		).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Selected side is unavailable.',
 		})
 	})
 
 	test('projecting an invalid-side report preserves branch coverage in balance recalculation helpers', () => {
 		const details = createReportingDetails({
-			nonDecisionThreshold: rep(5000n),
+			nonDecisionThresholdAttoRep: rep(5000n),
 			sides: [
 				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(4n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
-			startBond: rep(1n),
+			startBondAttoRep: rep(1n),
 		})
 
 		expect(previewReportingContribution(details, 'invalid', rep(1n))).toEqual({
@@ -487,7 +497,7 @@ describe('reportingDomain', () => {
 	test('getSelectedOutcomeRewardWindowFillTimestamp returns the future reward-window fill time when room remains', () => {
 		const details = createDynamicReportingDetails()
 
-		expect(getSelectedOutcomeRewardWindowFillTimestamp(details, 'no', rep(2n))).toBe(details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(12n)))
+		expect(getSelectedOutcomeRewardWindowFillTimestamp(details, 'no', rep(2n))).toBe(details.activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(12n)))
 	})
 
 	test('getSelectedOutcomeRewardWindowFillTimestamp returns undefined when the reward window is already filled', () => {
@@ -498,14 +508,14 @@ describe('reportingDomain', () => {
 
 	test('getReportingMinimumOutcomeChangeContribution returns the first-report minimum before the escalation game exists', () => {
 		expect(getReportingMinimumOutcomeChangeContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
-			amount: rep(3n),
+			amountAttoRep: rep(3n),
 			reason: undefined,
 		})
 	})
 
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Max profit becomes available after the escalation game starts.',
 		})
 	})
@@ -516,11 +526,11 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Escalation is already resolved.',
 		})
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
-			amount: undefined,
+			amountAttoRep: undefined,
 			reason: 'Escalation is already resolved.',
 		})
 	})
@@ -540,10 +550,10 @@ describe('reportingDomain', () => {
 	})
 
 	test('getReportingTimerPreview returns a pre-start timer preview for a valid first report', () => {
-		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n))
+		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCostAttoRep(rep(3n), rep(50n), rep(10n))
 
 		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(10n))).toEqual({
-			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n)),
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCostAttoRep(rep(3n), rep(50n), rep(10n)),
 			kind: 'not-started',
 			timeUntilEnd: ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration,
 			timeUntilStart: ESCALATION_GAME_ACTIVATION_DELAY,
@@ -558,7 +568,7 @@ describe('reportingDomain', () => {
 		const details = createDynamicReportingDetails()
 
 		expect(projectEscalationEndTime(details, 'yes', rep(1n))).toEqual({
-			acceptedAmount: rep(1n),
+			acceptedAmountAttoRep: rep(1n),
 			endsImmediately: false,
 			projectedEndTime: details.escalationEndTime,
 		})
@@ -569,7 +579,7 @@ describe('reportingDomain', () => {
 		const projection = projectEscalationEndTime(details, 'no', rep(2n))
 
 		expect(projection).toBeDefined()
-		expect(projection?.acceptedAmount).toBe(rep(2n))
+		expect(projection?.acceptedAmountAttoRep).toBe(rep(2n))
 		expect(projection?.endsImmediately).toBe(false)
 		expect(projection?.projectedEndTime).toBeGreaterThan(details.escalationEndTime)
 	})
@@ -578,11 +588,11 @@ describe('reportingDomain', () => {
 		const details = createDynamicReportingDetails()
 
 		expect(getReportingTimerPreview(details, 'no', rep(2n))).toEqual({
-			acceptedAmount: rep(2n),
+			acceptedAmountAttoRep: rep(2n),
 			actualState: 'extends',
-			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(2n)),
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(2n)),
 			kind: 'active-or-pending',
-			timerIncrease: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(5n)) - computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(3n)),
+			timerIncrease: computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(5n)) - computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(3n)),
 		})
 	})
 
@@ -590,9 +600,9 @@ describe('reportingDomain', () => {
 		const details = createDynamicReportingDetails()
 
 		expect(getReportingTimerPreview(details, 'yes', rep(5n))).toEqual({
-			acceptedAmount: rep(5n),
+			acceptedAmountAttoRep: rep(5n),
 			actualState: 'unchanged',
-			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(5n)),
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(5n)),
 			kind: 'active-or-pending',
 		})
 	})
@@ -606,12 +616,12 @@ describe('reportingDomain', () => {
 			],
 		})
 
-		expect(projectEscalationEndTime(details, 'yes', rep(5n))?.acceptedAmount).toBe(rep(5n) - 1n)
+		expect(projectEscalationEndTime(details, 'yes', rep(5n))?.acceptedAmountAttoRep).toBe(rep(5n) - 1n)
 	})
 
 	test('projectEscalationEndTime ends escalation immediately when a deposit creates a threshold tie', () => {
 		const details = createDynamicReportingDetails({
-			nonDecisionThreshold: rep(10n),
+			nonDecisionThresholdAttoRep: rep(10n),
 			sides: [
 				{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(9n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
@@ -620,7 +630,7 @@ describe('reportingDomain', () => {
 		})
 
 		expect(projectEscalationEndTime(details, 'yes', rep(1n))).toEqual({
-			acceptedAmount: rep(1n),
+			acceptedAmountAttoRep: rep(1n),
 			endsImmediately: true,
 			projectedEndTime: details.currentTime,
 		})
@@ -628,7 +638,7 @@ describe('reportingDomain', () => {
 
 	test('calculateEstimatedEscalationReturn only rewards the eligible slice when a deposit crosses the cap', () => {
 		const details = createReportingDetails({
-			nonDecisionThreshold: rep(40n),
+			nonDecisionThresholdAttoRep: rep(40n),
 			sides: [
 				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 				{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
@@ -698,7 +708,7 @@ describe('reportingDomain', () => {
 			],
 		})
 		expect(getRemainingSelectedOutcomeContributionCapacity(details, 'no')).toBe(0n)
-		expect(getRemainingSelectedOutcomeContributionCapacity({ ...details, nonDecisionThreshold: rep(20n) }, 'invalid')).toBe(rep(18n))
+		expect(getRemainingSelectedOutcomeContributionCapacity({ ...details, nonDecisionThresholdAttoRep: rep(20n) }, 'invalid')).toBe(rep(18n))
 	})
 
 	test('returns undefined amount/profit for zero-deposit and unknown-side contribution calculations', () => {
@@ -731,7 +741,7 @@ describe('reportingDomain', () => {
 			previewReportingContribution(
 				{
 					...createReportingDetails(),
-					nonDecisionThreshold: rep(10n),
+					nonDecisionThresholdAttoRep: rep(10n),
 					sides: [
 						{ balance: rep(10n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
@@ -761,8 +771,8 @@ describe('reportingDomain', () => {
 
 		expect(
 			getEscalationDepositClaimAmount(details, 'yes', {
-				amount: rep(1n),
-				cumulativeAmount: rep(1n),
+				amountAttoRep: rep(1n),
+				cumulativeAmountAttoRep: rep(1n),
 				depositIndex: 0n,
 				depositor: zeroAddress,
 			}),

@@ -1,10 +1,11 @@
 import * as commonCopy from '../copy/common.js'
 import * as pricingCopy from '../copy/pricing.js'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatCompactCurrencyBalance, formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
+import { CopyErrorMessage } from './CopyErrorMessage.js'
 
 type CurrencyValueProps = {
 	className?: string
@@ -12,27 +13,33 @@ type CurrencyValueProps = {
 	decimals?: number
 	loading?: boolean
 	copyable?: boolean
+	precision?: 'exact' | 'rounded'
 	suffix?: string
 	units?: number
 	value: bigint | undefined
 }
 
-export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, loading = false, suffix = '', units = 18, value }: CurrencyValueProps) {
-	const { copied, copyText } = useCopyToClipboard()
+export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, loading = false, precision = 'rounded', suffix = '', units = 18, value }: CurrencyValueProps) {
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const spanRef = useRef<HTMLSpanElement>(null)
 	const measureRef = useRef<HTMLSpanElement>(null)
 	const [shouldCompact, setShouldCompact] = useState(false)
-	const copiedValue = copied.value
 	const exactValue = value === undefined ? undefined : formatCurrencyBalance(value, units)
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exactValue)
+	const copiedValue = copied.value
 	const exactSuffix = suffix === '' ? '' : ` ${suffix}`
 
-	useEffect(() => {
-		copied.value = false
-	}, [exactValue])
-
-	const displayValue = value === undefined ? undefined : `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}${exactSuffix}`
-	const compactDisplayValue = value === undefined ? undefined : `≈ ${formatCompactCurrencyBalance(value, units)}${exactSuffix}`
+	let displayValue: string | undefined
+	let compactDisplayValue: string | undefined
+	if (value !== undefined && exactValue !== undefined) {
+		if (precision === 'exact') {
+			displayValue = `${exactValue}${exactSuffix}`
+			compactDisplayValue = displayValue
+		} else {
+			displayValue = `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}${exactSuffix}`
+			compactDisplayValue = `≈ ${formatCompactCurrencyBalance(value, units)}${exactSuffix}`
+		}
+	}
 
 	useLayoutEffect(() => {
 		if (!compactWhenOverflow || value === undefined || displayValue === undefined) {
@@ -90,9 +97,10 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 
 	return (
 		<span className='currency-value-wrap'>
-			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactValue)} onClick={() => copyText(exactValue)}>
+			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactValue)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(exactValue)}>
 				{copiedValue ? commonCopy.copied : resolvedDisplayValue}
 			</button>
+			<CopyErrorMessage id={copyErrorId} manualValue={exactValue} message={copyError.value} />
 			<span ref={measureRef} aria-hidden='true' className={measureClassName} />
 		</span>
 	)

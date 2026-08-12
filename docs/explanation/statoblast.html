@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Augur Statoblast White Paper</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="paper-page paper-statoblast">
+		<main id="main-content">
+			<header class="hero">
+				<div class="hero-label-row">
+					<p class="kicker"><span class="layer-dot" aria-hidden="true"></span>Prediction Market</p>
+					<p class="paper-status">draft</p>
+				</div>
+				<h1>Augur Statoblast White Paper</h1>
+			</header>
+
+			<section class="paper-section" id="abstract">
+				<p>This white paper develops the Statoblast prediction-market design, its REP-backed resolution path, and its security assumptions. The documentation overview introduces the system; the sections below provide the detailed protocol model and accounting rules.</p>
+				<p>Related topics: <a href="../documentation.html">documentation overview</a>, <a href="./escalation-game.html">escalation game</a>, <a href="./zoltar.html">Zoltar</a>, and <a href="../reference/security-model.html">security model</a>.</p>
+
+				<p>It is designed so that:</p>
+				<ul>
+					<li>Honest reporting is economically rewarded.</li>
+					<li>Dishonest reporting becomes increasingly expensive.</li>
+					<li>Anyone can challenge an incorrect resolution by risking REP.</li>
+					<li>Markets continue operating even when participants fundamentally disagree.</li>
+					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
+				</ul>
+
+				<p>Statoblasts design is based on <a href="https://github.com/AugurProject/oracle-research/blob/main/Arctic%20Tern%20Oracle.md">Artic Tern Oracle</a> and <a href="https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md">Sisyphean Exchnge</a>.</p>
+			</section>
+
+			<section class="paper-section" id="overview">
+				<div class="section-heading">
+					<h2>1. System Overview</h2>
+					<a class="anchor-link" href="#overview" aria-label="Link to System Overview">#</a>
+				</div>
+				<p>Statoblast consists of two separate protocol identities. <a href="./zoltar.html">Zoltar</a> is the base forking oracle layer for universes, questions, and REP branching. Augur Statoblast is the prediction market layer that adds market collateral (open interest), local disputes and fork resolution mechanisms</p>
+				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork.</p>
+				<ol>
+					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
+					<li>Vault owners deposit REP into security vaults and select a target health factor. Their REP-denominated capacity ownership is price independent; the current REP/ETH price converts the pool's aggregate ownership into live ETH minting capacity without iterating through vaults.</li>
+					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
+					<li>In the unfortunate case where the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.</li>
+					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, migrates its backing units there, and routes a proportional share of that pool's <a href="#term-settlement-collateral">settlement collateral</a>.</li>
+					<li>If a child pool is missing ETH collateral after migration, it sells child-universe REP through a <a href="truth-auctions.html">Truth Auction</a> to repair that collateral gap.</li>
+					<li>The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there.</li>
+				</ol>
+
+				<p>The lifecycle is shown in the <a href="#fig-statoblast-system-decision-flow">system decision-flow diagram</a> below: operation leads to local escalation, then either settlement or fork migration, auction repair, and child settlement.</p>
+			</section>
+
+			<section class="paper-section" id="roles">
+				<div class="section-heading">
+					<h2>2. Protocol participants</h2>
+					<a class="anchor-link" href="#roles" aria-label="Link to Protocol participants">#</a>
+				</div>
+				<section>
+					<h3>Traders / Liquidity providers</h3>
+					<ul>
+						<li>Deposit ETH to mint complete sets containing transferable <code>Yes</code>, <code>No</code>, and <code>Invalid</code> outcome shares.</li>
+						<li>Pay time-based fees in ETH to vault owners for the duration that the complete sets remain outstanding.</li>
+						<li>Trade by splitting complete sets into their individual outcome shares. This trading occurs outside the protocol.</li>
+						<li>Burn complete sets to recover ETH before resolution, or redeem individual winning shares for ETH after the market resolves.</li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>Vault owners</h3>
+					<ul>
+						<li>Deposit REP into a security pool.</li>
+						<li>Provide REP-backed security capacity for traders.</li>
+						<li>Receive time-based fees in ETH from traders holding outstanding complete sets.</li>
+						<li>Participate in the Escalation Game after the market ends.</li>
+						<li>Choose where to migrate their REP backing units and allocated share of pool settlement collateral after a fork.</li>
+						<li>Keep the value of their REP backing above the amount required to secure their allocated open interest.</li>
+						<li>Trigger OpenOracle games when a REP/ETH price is required for a protocol operation.</li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>REP holders</h3>
+					<ul>
+						<li>Decide whether to create a security pool for a question.</li>
+						<li>Decide whether to participate in an existing security pool.</li>
+						<li>Split their REP into outcome-specific child-universe REP during a Zoltar fork.</li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>OpenOracle disputers</h3>
+					<p>OpenOracle disputers, such as arbitrage bots, monitor active OpenOracle games and challenge inaccurate REP/ETH prices when doing so offers a profitable arbitrage opportunity.</p>
+				</section>
+
+				<section>
+					<h3>Truth auction participants</h3>
+					<p>After a Zoltar fork, truth auction participants provide ETH to acquire REP-backed positions from an auction. Their ETH helps repair missing settlement collateral in a child security pool.</p>
+				</section>
+
+				<section>
+					<h3>Liquidation receivers and operators</h3>
+					<p>A receiver vault accepts moved security-bond debt and receives the REP backing-unit and capacity-ownership award. An operator monitors vault health, submits the liquidation, and pays its gas and oracle costs; the protocol does not compensate the operator merely for submitting. The same account can fill both roles through the self-receiving route, or a receiver can grant a bounded approval for a separate operator. See <a href="liquidations.html">Capacity and delegated liquidation</a> for the complete role, approval, and execution lifecycle. A target becomes liquidatable when it no longer satisfies the protocol's required backing condition:</p>
+					<pre><code>value of REP backing ≥ security multiplier × open interest secured</code></pre>
+				</section>
+			</section>
+
+			<section class="paper-section" id="pools">
+				<div class="section-heading">
+					<h2>3. Security Pools</h2>
+					<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
+				</div>
+				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP backing: <code>value of REP backing ≥ security multiplier × secured open interest</code>.</p>
+
+				<p>This requirement protects outcome-share holders by making dishonest behavior economically unprofitable. If a vault owner attempts to manipulate the market's resolution, the REP they risk losing should be worth more than any potential gain. The protocol therefore rewards behavior that supports correct resolution and penalizes behavior that threatens it.</p>
+
+				<h3 id="dynamic-capacity">Target Health Factor and Dynamic Capacity</h3>
+				<p>Each REP deposit made for fee-earning capacity includes a target health factor of at least <code>10,000 BPS</code>. The deposit adds <code>⌊deposited REP × 10,000 / target health factor⌋</code> of REP-denominated capacity ownership. Solidity rounds this quotient downward, so an extremely high target factor can make a valid deposit add zero attoREP of ownership. Capacity ownership aggregates at pool level in constant time and determines the vault's fee share.</p>
+				<p>The pool's one Statoblast security multiplier and the current REP/ETH oracle quote convert total capacity ownership into ETH minting capacity: <code>capacity ownership ÷ REP per ETH ÷ security multiplier</code>. A higher REP-per-ETH quote means each REP is worth less ETH and therefore lowers live ETH capacity; a lower quote raises it. Neither change rewrites vaults or erases existing open interest. Vault health and liquidation instead compare live obligations against the vault's actual REP and proportional capacity ownership at the current price.</p>
+				<p>Withdrawals burn capacity ownership in proportion to the REP removed. Vault owners maintain a chosen health target through deposits rather than continually editing an ETH-denominated allowance.</p>
+
+				<h3>Fee Extraction and Retention Rate</h3>
+				<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
+				<p>Fee extraction and retention vary with vault capacity ownership and utilization; see <a href="./fees.html">Open Interest Fees</a> for the complete fee curve and epoch accounting.</p>
+				<a href="fees.html">read more from here on how fees work</a>
+
+				<h3>Shares and Complete Sets</h3>
+				<p><code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.</p>
+
+				<figure class="diagram" id="fig-statoblast-share-lifecycle">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="340" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span>Complete sets mint one Invalid, Yes, and No share; operational redemption burns the complete set, while finalized settlement redeems the winning outcome.</p>
+				</figure>
+			</section>
+
+			<section class="paper-section" id="escalation">
+				<div class="section-heading">
+					<h2>4. Escalation Resolution</h2>
+					<a class="anchor-link" href="#escalation" aria-label="Link to Escalation">#</a>
+				</div>
+				<p class="lede">When a market ends, Statoblast attempts to resolve its outcome by running an Escalation Game based on <a href="https://github.com/AugurProject/oracle-research/blob/main/The%20Isonzo%20Front.md">The Isonzo Front</a>. Participants escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>. Each deposit adds to that outcome's cumulative balance; it does not have to outbid the previous deposit or the current leader. The accepted deposit must normally meet the game's starting bond, unless it fills the selected outcome to the non-decision threshold.</p>
+				<p>The cumulative binding-capital threshold increases with elapsed time, and the median outcome balance determines the scheduled end. Individual deposits still use the fixed start bond. After that deadline, a strict balance leader resolves the question. If two outcomes instead reach the non-decision threshold, the game enters local non-decision and Statoblast proceeds to its fork-resolution path.</p>
+
+				<div class="callout"><strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded. The Escalation Game system is an optimization, and in theory the system would work without it as well, in a more inefficient manner.</div>
+
+				<a href="./escalation-game.html">read more from here on escalation game works</a>
+			</section>
+
+			<section class="paper-section" id="migration">
+				<div class="section-heading">
+					<h2>7. Forks and Migration</h2>
+					<a class="anchor-link" href="#migration" aria-label="Link to Forks and Migration">#</a>
+				</div>
+				<p>If the Escalation Game fails to reach consensus and enough REP has been committed to satisfy Zoltar's fork threshold, the game triggers a Zoltar fork and the fork resolution process begins.</p>
+				<p>A pool can also enter fork resolution when another Zoltar application forks the same universe. The pool then migrates to the child universes, runs a truth auction if needed, and continues there.</p>
+
+				<figure class="diagram" id="fig-statoblast-fork-state-machine">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, auction repair, and child settlement.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Fork Timeline</span>The parent pool pauses, vault owners select child universes, and each child resumes only after migration and any required collateral repair.</p>
+				</figure>
+
+				<p>Fork Steps</p>
+				<ol>
+					<li>The parent pool enters fork mode.</li>
+					<li>Anyone can deploy a child pool for a valid fork outcome.</li>
+					<li>Vault owners can migrate their REP backing units and <a href="#term-capacity-ownership">capacity ownership</a> to one child of their choosing. Claimable fees remain checkpointed, funded, and redeemable in the parent vault.</li>
+					<li>Unresolved ongoing escalation games fork into child pools and the games continue after a pause</li>
+					<li>The child starts a truth auction after the migration deadline if collateral is missing.</li>
+					<li>After the truth auction ends, winning bidders settle into REP backing units and capacity ownership.</li>
+					<li>Vault owners claim winning own-fork escalation deposits; the own-fork path is open only during the parent migration window. A successful direct claim invalidates that stable deposit identity in every current and future child continuation.</li>
+					<li>Shares migrate into new universes.</li>
+				</ol>
+
+				<h3>8 week migration</h3>
+				<p>Vault holders have eight weeks to choose a child universe. Migration happens one pool at a time: a vault's backing units divided by the pool's total backing units determine its share of that pool's settlement collateral. No collateral moves from other pools or markets in the universe.</p>
+
+				<p>During the migration period, vault owners choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the pool-level settlement collateral routed to it, migrated REP backing units and capacity ownerships, and converted child-universe REP backing that actually move into it.</p>
+
+				<p>For this mechanism to remain secure, the value of the pool-held REP backing must exceed the value of the pool settlement collateral it moves. Otherwise, a malicious vault could shift a significant portion of this pool's collateral to a universe in which they hold favorable positions.</p>
+
+				<div class="callout">
+					<h4>Example: backing-unit and settlement-collateral migration</h4>
+
+					<p>Bob's vault has <b>5 backing units</b> out of <b>20 backing units</b> in this pool. At the fork snapshot, the parent pool has <b>40 REP</b> represented by those 20 units and <b>10 ETH</b> of settlement collateral, so this example uses a 2 REP per backing-unit conversion.</p>
+
+					<p>When the oracle forks into REP<sub>A</sub> and REP<sub>B</sub>, Bob believes universe A is correct and migrates to universe A. As a result:</p>
+
+					<ul>
+						<li>
+							Bob's vault receives <b>5 backing units</b>; the child pool receives <b>10 REP<sub>A</sub></b> after applying the snapshot's 2 REP per backing-unit conversion.
+						</li>
+						<li>
+							A proportional share of this pool's settlement collateral moves to universe A:
+							<div class="equation" id="eq-statoblast-migration-share-a">
+								<math display="block" aria-label="five backing units divided by twenty backing units times ten ETH equals two point five ETH" data-source="(5 backing units / 20 backing units) × 10 ETH = 2.5 ETH">
+									<mrow>
+										<mfrac>
+											<mrow>
+												<mn>5</mn>
+												<mspace width="0.2em" />
+												<mtext>backing units</mtext>
+											</mrow>
+											<mrow>
+												<mn>20</mn>
+												<mspace width="0.2em" />
+												<mtext>backing units</mtext>
+											</mrow>
+										</mfrac>
+
+										<mspace width="0.4em" />
+										<mo>×</mo>
+										<mspace width="0.4em" />
+
+										<mn>10</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+
+										<mspace width="0.4em" />
+										<mo>=</mo>
+										<mspace width="0.4em" />
+
+										<mn>2.5</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+									</mrow>
+								</math>
+								<p class="equation-note">Bob's 5 of 20 pool backing units route 25% of this pool's 10 ETH settlement collateral, or 2.5 ETH, to the selected child.</p>
+							</div>
+						</li>
+					</ul>
+
+					<p>The remaining pool backing units route to universe B. Only this pool's collateral is divided; other markets and pools are unaffected.</p>
+					<ul>
+						<li>
+							Their vaults receive the remaining <b>15 backing units</b>; the child pool receives the corresponding <b>30 REP<sub>B</sub></b
+							>.
+						</li>
+						<li>
+							The remaining proportional share of this pool's settlement collateral moves to universe B:
+							<div class="equation" id="eq-statoblast-migration-share-b">
+								<math display="block" aria-label="fifteen backing units divided by twenty backing units times ten ETH equals seven point five ETH" data-source="(15 backing units / 20 backing units) × 10 ETH = 7.5 ETH">
+									<mrow>
+										<mfrac>
+											<mrow>
+												<mn>15</mn>
+												<mspace width="0.2em" />
+												<mtext>backing units</mtext>
+											</mrow>
+											<mrow>
+												<mn>20</mn>
+												<mspace width="0.2em" />
+												<mtext>backing units</mtext>
+											</mrow>
+										</mfrac>
+
+										<mspace width="0.4em" />
+										<mo>×</mo>
+										<mspace width="0.4em" />
+
+										<mn>10</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+
+										<mspace width="0.4em" />
+										<mo>=</mo>
+										<mspace width="0.4em" />
+
+										<mn>7.5</mn>
+										<mspace width="0.2em" />
+										<mtext>ETH</mtext>
+									</mrow>
+								</math>
+								<p class="equation-note">The remaining 15 of 20 pool backing units route the remaining 7.5 ETH of this pool's settlement collateral to universe B.</p>
+							</div>
+						</li>
+					</ul>
+
+					<p>After migration:</p>
+					<ul>
+						<li><b>Universe A</b> receives Bob's 5 backing units and 2.5 ETH of this pool's settlement collateral.</li>
+						<li><b>Universe B</b> receives the remaining 15 backing units and 7.5 ETH of this pool's settlement collateral.</li>
+					</ul>
+				</div>
+
+				<p>Escalation principal, rewards, carried claims, and externally supplied dispute-staked REP have zero parent-OI migration power. A losing participant would otherwise rationally route dispute-staked REP toward a false child merely to preserve valuable OI attached to it. Only pool-held vault REP backing determines a vault's migration weight.</p>
+				<div class="equation" id="eq-statoblast-migration-powered-rep">
+					<math display="block" aria-label="vault migration-powered REP in attoREP equals total associated REP in attoREP minus escalation-game REP in attoREP" data-source="vaultMigrationPoweredAttoRep = vaultTotalAssociatedAttoRep - vaultEscalationGameAttoRep">
+						<mrow><mi>vaultMigrationPoweredAttoRep</mi><mo>=</mo><mi>vaultTotalAssociatedAttoRep</mi><mo>&#x2212;</mo><mi>vaultEscalationGameAttoRep</mi></mrow>
+					</math>
+					<p class="equation-note">Escalation claims are excluded.</p>
+				</div>
+				<p>Migration safety uses only pool-held vault REP backing. The effective multiplier is floored at <code>10,500 BPS</code> so free backing normally funds the complete liquidation award. The exact live health rules are owned by the <a href="../explanation/liquidations.html#capacity-and-health">liquidation design</a>. This separation lets REP perform escalation work without letting contingent claims secure parent open interest.</p>
+				<p>A vault's settlement-collateral migration weight is its pool-held vault REP backing share of all pool-held vault REP backing at the fork. <code>migrateVault</code> transfers the vault's REP backing units and capacity ownership to one selected child and clears those two parent fields. The REP-backing share separately routes proportional pool-level settlement collateral, while the transferred capacity ownership determines the vault's live proportional open-interest allocation in the child. Claimable fees are checkpointed and remain funded and redeemable in the parent vault. The vault cannot divide or reuse its migration state across sibling universes.</p>
+
+				<h3 id="child-outcome-resolution">Child Outcome Resolution</h3>
+				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational.</p>
+
+				<figure class="diagram" id="fig-statoblast-system-decision-flow">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="500" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.</span></div>
+					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The lifecycle connects question registration, pool operation, local escalation, fork migration, auction repair, settlement, and recursive continuation when a child remains unresolved.</p>
+				</figure>
+
+				<h3>Shares migration</h3>
+				<p>When a fork occurs, share migration locks the source balance and accepts an ordered list of child targets. The first materialization gives each untouched selected child the full current source balance; later calls mint only that child's unmaterialized delta. Shares do not disappear from the source or split into a pro-rata remainder.</p>
+				<figure class="diagram" id="fig-statoblast-share-migration">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
+				</figure>
+			</section>
+			<section class="paper-section" id="auction">
+				<div class="section-heading">
+					<h2>8. Truth Auction</h2>
+					<a class="anchor-link" href="#auction" aria-label="Link to Truth Auction">#</a>
+				</div>
+
+				<p class="lede">After migration, a child pool may still have less ETH than it needs to support its open interest. A Truth Auction can sell some child-universe REP for ETH to repair that shortfall.</p>
+				<p>The auction has an ETH raise target and a cap on how much REP it may sell. The cap depends on migrated REP, pool-held REP, and unresolved dispute-staked REP; it may allow the full auctionable amount, reserve a small amount, apply a migration haircut, or be zero.</p>
+				<p>The child resumes with the collateral actually migrated and raised. See the <a href="../explanation/truth-auctions.html">Truth Auction design</a> for timing, caps, rounding, bidding, and settlement.</p>
+				<details class="interactive-example technical-details" id="collateral-repair-example">
+					<summary>See the collateral-repair illustrations</summary>
+					<div class="example-grid">
+						<label>Parent settlement collateral <input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" /><span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span></label>
+						<label>Migration-routed collateral <input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" /><span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span></label>
+						<label>Auction ETH raised <input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
+					</div>
+					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
+						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="360" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
+						<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction compares received settlement collateral with the parent settlement target and shows any remaining shortfall.</p>
+					</figure>
+					<div class="example-visual">
+						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
+						<p class="diagram-caption"><span class="figure-label">Collateral Repair Progress</span>Blue shows settlement collateral routed during migration, green shows auction repair, and the dashed line marks the parent settlement target.</p>
+						<div class="legend" aria-label="Collateral repair chart key">
+							<span class="legend-item"><span class="legend-swatch blue" aria-hidden="true"></span>Migration-routed collateral</span>
+							<span class="legend-item"><span class="legend-swatch green" aria-hidden="true"></span>Auction repair</span>
+							<span class="legend-item">Dashed line: parent settlement target</span>
+						</div>
+					</div>
+					<div class="example-output-grid">
+						<div><span>Routed collateral</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
+						<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
+						<div><span>Remaining shortfall</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
+						<div><span>Repair status</span><output data-example-output="repairStatus">no contribution required</output></div>
+					</div>
+				</details>
+			</section>
+
+			<section class="paper-section" id="oracle">
+				<div class="section-heading">
+					<h2>9. REP/ETH Price Oracle</h2>
+					<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
+				</div>
+
+				<p>Statoblast uses a REP/ETH price to evaluate pool security. The price feed supports operations whose safety depends on REP value relative to pool settlement collateral.</p>
+
+				<section id="statoblast-glossary">
+					<h2>Glossary</h2>
+					<dl>
+						<dt id="term-capacity-ownership">Capacity ownership</dt>
+						<dd>A REP-denominated, price-independent share of pool minting capacity and fee eligibility created from deposited REP and the selected target health factor. The live oracle quote converts it into ETH minting capacity; it is not the vault's ETH debt.</dd>
+						<dt id="term-settlement-collateral">Settlement collateral</dt>
+						<dd>ETH held by a security pool to redeem complete sets and settle the winning outcome.</dd>
+					</dl>
+				</section>
+				<p>Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a>; see the <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration</a> explanation for the coordinator lifecycle.</p>
+
+				<figure class="diagram" id="fig-statoblast-oracle-flow">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow for REP withdrawals and liquidations"><span class="plot-chart-fallback">A REP withdrawal or liquidation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
+					<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately; a stale price moves operations into a pending-settlement path whose callback batch is capped at four operations but whose duration is unbounded under paid rolling disputes.</p>
+				</figure>
+			</section>
+		</main>
+
+		<script src="../assets/js/chartRuntime.js"></script>
+		<script type="module" src="../assets/js/interactiveTools.js"></script>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

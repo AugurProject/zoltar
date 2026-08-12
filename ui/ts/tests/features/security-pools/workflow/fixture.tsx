@@ -105,6 +105,8 @@ export function createReportingAndOracleFixture() {
 	return pickFixtureProperties(fixture, [
 		'fireEvent',
 		'within',
+		'render',
+		'act',
 		'getAddress',
 		'zeroAddress',
 		'SecurityPoolWorkflowSection',

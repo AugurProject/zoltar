@@ -1,7 +1,7 @@
-import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
+import { LoadingText } from './LoadingText.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
-import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
+import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -17,7 +17,7 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
-	if (loading) return <span className={`timestamp-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</span>
+	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
 
 	if (timestamp === undefined) return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
 
@@ -29,10 +29,18 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 		)
 
 	const absoluteTimestamp = formatTimestamp(timestamp)
+	const dateTime = formatTimestampDateTime(timestamp)
+	if (dateTime === undefined)
+		return (
+			<span className={`timestamp-value error ${className}`} title={absoluteTimestamp}>
+				{absoluteTimestamp}
+			</span>
+		)
+
 	const relativeTimestamp = resolvedCurrentTimestamp === undefined ? undefined : formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
 
 	return (
-		<time className={`timestamp-value ${className}`} dateTime={new Date(Number(timestamp) * 1000).toISOString()} title={absoluteTimestamp}>
+		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={absoluteTimestamp}>
 			{absoluteTimestamp}
 			{relativeTimestamp === undefined ? null : (
 				<>

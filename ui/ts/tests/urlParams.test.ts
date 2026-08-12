@@ -5,6 +5,7 @@ import {
 	readOpenOracleReportIdQueryParam,
 	readOpenOracleViewQueryParam,
 	readSecurityPoolsViewQueryParam,
+	readSecurityPoolQuestionIdQueryParam,
 	readSecurityPoolQueryParam,
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
@@ -12,6 +13,7 @@ import {
 	writeOpenOracleReportIdQueryParam,
 	writeOpenOracleViewQueryParam,
 	writeSecurityPoolsViewQueryParam,
+	writeSecurityPoolQuestionIdQueryParam,
 	writeSecurityPoolQueryParam,
 	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
@@ -22,6 +24,7 @@ void describe('url params', () => {
 	void test('reads a universe query param', () => {
 		expect(readUniverseQueryParam('?universe=12')).toBe(12n)
 		expect(readUniverseQueryParam('?universe=invalid')).toBe(undefined)
+		expect(readUniverseQueryParam('?universe=-1')).toBe(undefined)
 		expect(readUniverseQueryParam('')).toBe(undefined)
 	})
 
@@ -39,6 +42,14 @@ void describe('url params', () => {
 		expect(writeSecurityPoolQueryParam('?foo=bar&securityPool=0x1234', undefined)).toBe('?foo=bar')
 		expect(writeSecurityPoolQueryParam('?securityPoolsView=create&selectedPoolView=reporting', '0x1234')).toBe('?securityPoolsView=operate&selectedPoolView=reporting&securityPool=0x1234')
 		expect(writeSecurityPoolQueryParam('?securityPoolsView=operate&selectedPoolView=reporting&securityPool=0x1234', undefined)).toBe('?securityPoolsView=operate')
+	})
+
+	void test('reads and writes a security pool question id query param', () => {
+		expect(readSecurityPoolQuestionIdQueryParam('?questionId=0x42')).toBe('0x42')
+		expect(readSecurityPoolQuestionIdQueryParam('?questionId=')).toBe(undefined)
+		expect(writeSecurityPoolQuestionIdQueryParam('', '0x42')).toBe('?questionId=0x42&securityPoolsView=create')
+		expect(writeSecurityPoolQuestionIdQueryParam('?securityPool=0x1234&selectedPoolView=vaults', '0x42')).toBe('?questionId=0x42&securityPoolsView=create')
+		expect(writeSecurityPoolQuestionIdQueryParam('?securityPoolsView=create&questionId=0x42', undefined)).toBe('?securityPoolsView=create')
 	})
 
 	void test('reads and writes an open oracle report id query param', () => {
@@ -64,6 +75,7 @@ void describe('url params', () => {
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar', 'operate')).toBe('?foo=bar&securityPoolsView=operate')
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar&securityPoolsView=operate', undefined)).toBe('?foo=bar')
 		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=operate&selectedPoolView=staged-operations&securityPool=0x1234', 'create')).toBe('?securityPoolsView=create')
+		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=create&questionId=0x42', 'browse')).toBe('?securityPoolsView=browse')
 	})
 
 	void test('reads and writes a selected pool view query param', () => {

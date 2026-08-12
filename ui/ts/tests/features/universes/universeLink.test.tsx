@@ -42,7 +42,7 @@ describe('UniverseLink', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const link = documentQueries.getByRole('link', { name: 'Universe 10' }) as HTMLAnchorElement
+		const link = documentQueries.getByRole('link', { name: 'Universe 0xa' }) as HTMLAnchorElement
 		const expectedHref = getUniverseLinkHref(10n)
 		expect(link.getAttribute('href')).toBe(expectedHref)
 		let popstateCount = 0
@@ -84,5 +84,16 @@ describe('UniverseLink', () => {
 		const documentQueries = within(document.body)
 		const link = documentQueries.getByRole('link', { name: '0xf' }) as HTMLAnchorElement
 		expect(link.getAttribute('href')).toBe(getUniverseLinkHref(15n))
+	})
+
+	test('abbreviates a long universe id visually while preserving its complete accessible name', async () => {
+		const universeId = BigInt('0x1234567890abcdef1234567890abcdef1234567890abcdef')
+		const renderedComponent = await renderIntoDocument(<UniverseLink universeId={universeId} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const fullLabel = `Universe 0x${universeId.toString(16)}`
+		const link = within(document.body).getByRole('link', { name: fullLabel }) as HTMLAnchorElement
+		expect(link.textContent).toBe('Universe 0x12345678…abcdef')
+		expect(link.title).toBe(fullLabel)
 	})
 })

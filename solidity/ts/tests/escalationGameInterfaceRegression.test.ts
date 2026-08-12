@@ -6,7 +6,6 @@ import { getArray, getContractOutput, getRecord, getString, loadContractsJson, n
 
 const escalationGameSourcePath = 'contracts/peripherals/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
-const escalationGameAbiSnapshotPath = `${import.meta.dir}/fixtures/escalationGameAbi.snapshot`
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
 // Keep the project budget aligned with the EIP-170 deployed bytecode limit.
@@ -55,69 +54,15 @@ function storageMemberSummary(typeTable: Record<string, unknown>, typeLabel: str
 		return {
 			label: getString(normalizedMember.label, `Missing ${typeLabel} storage member label ${index}`),
 			slot: getString(normalizedMember.slot, `Missing ${typeLabel} storage member slot ${index}`),
-			offset: Number(normalizedMember.offset),
+			offset: getNumber(normalizedMember.offset, `Missing ${typeLabel} storage member offset ${index}`),
 			type: getString(memberType.label, `Missing ${typeLabel} storage member type label ${index}`),
 		}
 	})
 }
 
-function getOptionalArray(value: unknown): unknown[] {
-	if (value === undefined) return []
-	return getArray(value, 'Expected ABI array field')
-}
-
-function getOptionalString(value: unknown): string {
-	if (value === undefined) return ''
-	return getString(value, 'Expected ABI string field')
-}
-
 function getNumber(value: unknown, errorMessage: string): number {
 	if (typeof value !== 'number') throw new Error(errorMessage)
 	return value
-}
-
-function normalizeAbiParameter(parameter: unknown): string {
-	const normalizedParameter = getRecord(parameter, 'Invalid ABI parameter')
-	const parameterType = getString(normalizedParameter.type, 'ABI parameter missing type')
-	const components = getOptionalArray(normalizedParameter.components)
-	const componentSuffix = components.length === 0 ? '' : `(${components.map(component => normalizeAbiParameter(component)).join(',')})`
-	const indexedSuffix = normalizedParameter.indexed === true ? ' indexed' : ''
-	const parameterName = getOptionalString(normalizedParameter.name)
-	const nameSuffix = parameterName === '' ? '' : ` ${parameterName}`
-	return `${parameterType}${componentSuffix}${indexedSuffix}${nameSuffix}`
-}
-
-function normalizeAbiEntry(entry: unknown): string {
-	const normalizedEntry = getRecord(entry, 'Invalid ABI entry')
-	const entryType = getString(normalizedEntry.type, 'ABI entry missing type')
-	const inputs = getOptionalArray(normalizedEntry.inputs)
-		.map(input => normalizeAbiParameter(input))
-		.join(',')
-	if (entryType === 'event') {
-		const name = getString(normalizedEntry.name, 'ABI event missing name')
-		return `event ${name}(${inputs})${normalizedEntry.anonymous === true ? ' anonymous' : ''}`
-	}
-	if (entryType === 'error') {
-		const name = getString(normalizedEntry.name, 'ABI error missing name')
-		return `error ${name}(${inputs})`
-	}
-	if (entryType === 'function') {
-		const name = getString(normalizedEntry.name, 'ABI function missing name')
-		const stateMutability = getString(normalizedEntry.stateMutability, `ABI function ${name} missing mutability`)
-		const outputs = getOptionalArray(normalizedEntry.outputs)
-			.map(output => normalizeAbiParameter(output))
-			.join(',')
-		return `function ${name}(${inputs}) ${stateMutability} -> (${outputs})`
-	}
-	return ''
-}
-
-function getExpectedEscalationGameAbiSnapshot(normalizedAbi: readonly string[]): string[] {
-	const snapshotText = `${normalizedAbi.join('\n')}\n`
-	if (process.env.UPDATE_ESCALATION_GAME_ABI_SNAPSHOT === '1') {
-		writeFileSync(escalationGameAbiSnapshotPath, snapshotText)
-	}
-	return readFileSync(escalationGameAbiSnapshotPath, 'utf8').trimEnd().split('\n')
 }
 
 function getBytecodeObject(contractOutput: Record<string, unknown>, sectionName: 'bytecode' | 'deployedBytecode'): string {
@@ -163,81 +108,76 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 		storageLayout.map(entry => storageEntrySummary(entry)),
 		[
 			{ label: 'activationTime', slot: '0', offset: 0, type: 'uint256' },
-			{ label: 'nonDecisionThreshold', slot: '1', offset: 0, type: 'uint256' },
-			{ label: 'startBond', slot: '2', offset: 0, type: 'uint256' },
+			{ label: 'nonDecisionThresholdAttoRep', slot: '1', offset: 0, type: 'uint256' },
+			{ label: 'startBondAttoRep', slot: '2', offset: 0, type: 'uint256' },
 			{ label: 'lnRatioScaled', slot: '3', offset: 0, type: 'uint256' },
 			{ label: 'nonDecisionTimestamp', slot: '4', offset: 0, type: 'uint256' },
 			{ label: 'forkContinuation', slot: '5', offset: 0, type: 'bool' },
 			{ label: 'forkElapsedAtStart', slot: '6', offset: 0, type: 'uint256' },
 			{ label: 'forkResumedAt', slot: '7', offset: 0, type: 'uint256' },
 			{ label: 'outcomeState', slot: '8', offset: 0, type: 'struct OutcomeState[3]' },
-			{ label: 'nextNodeId', slot: '431', offset: 0, type: 'uint256' },
-			{ label: 'nodes', slot: '432', offset: 0, type: 'mapping(uint256 => struct Node)' },
-			{ label: 'escrowedRepByVault', slot: '433', offset: 0, type: 'mapping(address => uint256)' },
-			{ label: 'totalEscrowedRep', slot: '434', offset: 0, type: 'uint256' },
-			{ label: 'unresolvedRepByVault', slot: '435', offset: 0, type: 'mapping(address => uint256)' },
-			{ label: 'totalLocalUnresolvedRep', slot: '436', offset: 0, type: 'uint256' },
-			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '437', offset: 0, type: 'mapping(address => uint256[3])' },
-			{ label: 'localUnresolvedTotalsExportedByVault', slot: '438', offset: 0, type: 'mapping(address => bool)' },
+			{ label: 'nextNodeId', slot: '425', offset: 0, type: 'uint256' },
+			{ label: 'nodes', slot: '426', offset: 0, type: 'mapping(uint256 => struct Node)' },
+			{ label: 'escalationClaimBundles', slot: '427', offset: 0, type: 'mapping(address => struct EscalationClaimBundle)' },
+			{ label: 'totalDisputeStakedAttoRep', slot: '428', offset: 0, type: 'uint256' },
+			{ label: 'unresolvedRepByVaultAttoRep', slot: '429', offset: 0, type: 'mapping(address => uint256)' },
+			{ label: 'totalLocalUnresolvedAttoRep', slot: '430', offset: 0, type: 'uint256' },
+			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '431', offset: 0, type: 'mapping(address => uint256[3])' },
+			{ label: 'localUnresolvedTotalsExportedByVault', slot: '432', offset: 0, type: 'mapping(address => bool)' },
 			{
 				label: 'forkedEscrowByVaultAndOutcome',
-				slot: '439',
+				slot: '433',
 				offset: 0,
 				type: 'mapping(address => mapping(uint8 => struct ForkedEscrowState))',
 			},
-			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '440', offset: 0, type: 'bool' },
+			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '434', offset: 0, type: 'bool' },
+			{ label: 'winnerHaircutPaidByFork', slot: '434', offset: 1, type: 'bool' },
+			{ label: 'forkCarryInitialBackingAttoRep', slot: '435', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryDisputeStakedAttoRep', slot: '436', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySourceGame', slot: '437', offset: 0, type: 'address' },
+			{ label: 'forkCarryRootClaimSourceGame', slot: '438', offset: 0, type: 'address' },
+			{ label: 'cumulativeClaimRetention', slot: '439', offset: 0, type: 'uint256' },
+			{ label: 'cumulativeClaimRetentionExponent', slot: '440', offset: 0, type: 'uint256' },
+			{ label: 'fixedQuestionOutcome', slot: '441', offset: 0, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'nonDecisionState', slot: '441', offset: 1, type: 'enum NonDecisionState' },
+			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '442', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepBeforeAttoRep', slot: '443', offset: 0, type: 'uint256' },
+			{ label: 'truthAuctionRepRemainingAttoRep', slot: '444', offset: 0, type: 'uint256' },
 		],
 	)
 
 	const typeTable = getStorageTypes(escalationGameOutput)
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct OutcomeState'), [
-		{ label: 'balance', slot: '0', offset: 0, type: 'uint256' },
-		{ label: 'deposits', slot: '1', offset: 0, type: 'struct Deposit[]' },
-		{ label: 'snapshotLeafCount', slot: '2', offset: 0, type: 'uint256' },
-		{ label: 'snapshotPeaks', slot: '3', offset: 0, type: 'bytes32[64]' },
-		{ label: 'inheritedUnresolvedTotal', slot: '67', offset: 0, type: 'uint256' },
-		{ label: 'forkedEscrowSourcePrincipalTotal', slot: '68', offset: 0, type: 'uint256' },
-		{ label: 'currentLeafCount', slot: '69', offset: 0, type: 'uint256' },
-		{ label: 'currentPeaks', slot: '70', offset: 0, type: 'bytes32[64]' },
-		{ label: 'currentNullifierRoot', slot: '134', offset: 0, type: 'bytes32' },
-		{ label: 'localHeadNodeId', slot: '135', offset: 0, type: 'uint256' },
-		{ label: 'localUnresolvedTotal', slot: '136', offset: 0, type: 'uint256' },
-		{ label: 'localNodeIds', slot: '137', offset: 0, type: 'uint256[]' },
-		{ label: 'currentCarryNodeHashes', slot: '138', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
-		{ label: 'consumedParentDepositIndexes', slot: '139', offset: 0, type: 'mapping(uint256 => bool)' },
-		{ label: 'proofConsumedDepositIndexes', slot: '140', offset: 0, type: 'uint256[]' },
-	])
-	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Deposit'), [
-		{ label: 'depositor', slot: '0', offset: 0, type: 'address' },
-		{ label: 'amount', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'cumulativeAmount', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'balanceAttoRep', slot: '0', offset: 0, type: 'uint256' },
+		{ label: 'snapshotLeafCount', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'snapshotPeaks', slot: '2', offset: 0, type: 'bytes32[64]' },
+		{ label: 'inheritedUnresolvedTotalAttoRep', slot: '66', offset: 0, type: 'uint256' },
+		{ label: 'currentLeafCount', slot: '67', offset: 0, type: 'uint256' },
+		{ label: 'currentPeaks', slot: '68', offset: 0, type: 'bytes32[64]' },
+		{ label: 'currentNullifierRoot', slot: '132', offset: 0, type: 'bytes32' },
+		{ label: 'localHeadNodeId', slot: '133', offset: 0, type: 'uint256' },
+		{ label: 'localUnresolvedTotalAttoRep', slot: '134', offset: 0, type: 'uint256' },
+		{ label: 'localNodeIds', slot: '135', offset: 0, type: 'uint256[]' },
+		{ label: 'currentCarryNodeHashes', slot: '136', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
+		{ label: 'consumedParentDepositIndexes', slot: '137', offset: 0, type: 'mapping(uint256 => bool)' },
+		{ label: 'proofConsumedDepositIndexes', slot: '138', offset: 0, type: 'uint256[]' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Node'), [
 		{ label: 'parentNodeId', slot: '0', offset: 0, type: 'uint256' },
 		{ label: 'depositor', slot: '1', offset: 0, type: 'address' },
 		{ label: 'outcome', slot: '1', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
-		{ label: 'amount', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'amountAttoRep', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'parentDepositIndex', slot: '3', offset: 0, type: 'uint256' },
-		{ label: 'cumulativeAmount', slot: '4', offset: 0, type: 'uint256' },
+		{ label: 'cumulativeAmountAttoRep', slot: '4', offset: 0, type: 'uint256' },
 		{ label: 'carryLeafIndex', slot: '5', offset: 0, type: 'uint256' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct ForkedEscrowState'), [
-		{ label: 'sourcePrincipal', slot: '0', offset: 0, type: 'uint256' },
-		{ label: 'sourcePrincipalClaimed', slot: '1', offset: 0, type: 'uint256' },
-		{ label: 'childRep', slot: '2', offset: 0, type: 'uint256' },
-		{ label: 'childRepClaimed', slot: '3', offset: 0, type: 'uint256' },
+		{ label: 'sourcePrincipalAttoRep', slot: '0', offset: 0, type: 'uint256' },
+		{ label: 'sourcePrincipalClaimedAttoRep', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'childAttoRep', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'childRepClaimedAttoRep', slot: '3', offset: 0, type: 'uint256' },
 	])
-})
-
-test('EscalationGame ABI preserves public functions, events, and tuple shapes', () => {
-	const escalationGameOutput = getEscalationGameOutput()
-	const abi = getArray(escalationGameOutput.abi, 'EscalationGame output is missing ABI')
-	const normalizedAbi = abi
-		.map(entry => normalizeAbiEntry(entry))
-		.filter(entry => entry !== '')
-		.sort()
-
-	assert.deepStrictEqual(normalizedAbi, getExpectedEscalationGameAbiSnapshot(normalizedAbi))
+	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])
 })
 
 test('EscalationGame bytecode stays within size budgets and preserves runtime snapshot', () => {

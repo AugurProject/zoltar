@@ -62,7 +62,7 @@ declare module 'solc' {
 				readonly creation: {
 					readonly codeDepositCost: string
 					readonly executionCost: string
-					readonly totalCost: string
+					readonly totalCostAttoRep: string
 				}
 				readonly external: {
 					readonly [functionSignature: string]: string
@@ -96,6 +96,14 @@ declare module 'solc' {
 		readonly compile: typeof compile
 		readonly version: typeof version
 		readonly loadRemoteVersion: typeof loadRemoteVersion
+	}
+	export default solc
+}
+
+declare module 'solc-0-8-28' {
+	const solc: {
+		compile(input: string): string
+		version(): string
 	}
 	export default solc
 }

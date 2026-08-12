@@ -70,9 +70,10 @@ function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecur
 				async () =>
 					({
 						deployPoolHash: '0x0' as Hash,
+						initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 						questionId: '0x0b',
 						securityPoolAddress: zeroAddress,
-						securityMultiplier: 2n,
+						statoblastSecurityMultiplierBps: 20_000n,
 						universeId: 0n,
 					}) as SecurityPoolCreationResult,
 			),
@@ -154,7 +155,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).loadMarketById('11')
 		})
-		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before loading a market')
+		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question')
 		expect(requireState(state).marketDetails).toBeUndefined()
 	})
 
@@ -309,12 +310,12 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: 'abc', securityMultiplier: 'bad' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: 'abc', statoblastSecurityMultiplierBps: 'bad' }))
 		})
 		expect(originSecurityPoolExists).toHaveBeenCalledTimes(0)
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
@@ -358,14 +359,14 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
 		})
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(2)
@@ -460,7 +461,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await act(() => {
 			requireState(state).loadMarketById('11')
@@ -482,9 +483,10 @@ describe('useSecurityPoolCreation', () => {
 			client.onTransactionSubmitted?.('0xabc')
 			return {
 				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				universeId: 0n,
 			} as SecurityPoolCreationResult
 		})
@@ -525,7 +527,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -585,7 +587,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			await requireState(state).loadMarketById('11')
 		})
 		expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -650,7 +652,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 		})
 
 		let createPromise = Promise.resolve()
@@ -716,7 +718,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -744,9 +746,10 @@ describe('useSecurityPoolCreation', () => {
 		}
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc',
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 			universeId: 0n,
 		})
 		await firstCreate
@@ -790,7 +793,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -815,9 +818,10 @@ describe('useSecurityPoolCreation', () => {
 
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc' as Hash,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 			universeId: 0n,
 		})
 
@@ -868,7 +872,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -895,9 +899,10 @@ describe('useSecurityPoolCreation', () => {
 
 		createPoolDeferred.resolve({
 			deployPoolHash: '0xabc',
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 			universeId: 0n,
 		})
 		await firstCreate
@@ -943,7 +948,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -971,9 +976,10 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool: mock(async () => ({
 				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 				universeId: 0n,
 			})),
 		})
@@ -989,11 +995,12 @@ describe('useSecurityPoolCreation', () => {
 
 	test('createPool snapshots the submitted form before wallet preflight resolves', async () => {
 		const activeAccounts = createDeferred<readonly Address[]>()
-		const createSecurityPool = mock(async (_client: unknown, parameters: { questionId: bigint; securityMultiplier: bigint }) => ({
+		const createSecurityPool = mock(async (_client: unknown, parameters: { questionId: bigint; statoblastSecurityMultiplierBps: bigint }) => ({
 			deployPoolHash: '0xabc' as Hash,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId: `0x${parameters.questionId.toString(16)}`,
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			securityMultiplier: parameters.securityMultiplier,
+			statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,
 			universeId: 0n,
 		}))
 		setupContractMocks({
@@ -1032,7 +1039,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', securityMultiplier: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
 		})
 
 		let createPromise = Promise.resolve()
@@ -1041,7 +1048,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', securityMultiplier: '3' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', statoblastSecurityMultiplierBps: '3' }))
 		})
 
 		await act(async () => {
@@ -1052,7 +1059,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(createSecurityPool).toHaveBeenCalledTimes(1)
 		expect(createSecurityPool.mock.calls[0]?.[1]).toMatchObject({
 			questionId: 11n,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 		expect(requireState(state).securityPoolResult?.questionId).toBe('0xb')
 	})

@@ -5,12 +5,12 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier, peripherals_EscalationGame_EscalationGame, test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
-import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_TIME_LENGTH, getEscalationBindingCapital, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/shared/escalationMath'
+import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, getEscalationBindingCapitalAttoRep, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/shared/escalationMath'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 
 const initializeForkCarrySnapshotTestPoolAbi: Abi = [
@@ -36,7 +36,7 @@ describe('Escalation math parity', () => {
 	const NULLIFIER_DEPTH = 64
 	const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 	const reportBond = 1n * 10n ** 18n
-	const nonDecisionThreshold = 1000n * 10n ** 18n
+	const nonDecisionThresholdAttoRep = 1000n * 10n ** 18n
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
@@ -57,7 +57,7 @@ describe('Escalation math parity', () => {
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
-			functionName: 'getBindingCapital',
+			functionName: 'getBindingCapitalAttoRep',
 			args: [],
 		})
 
@@ -69,19 +69,19 @@ describe('Escalation math parity', () => {
 			args: [],
 		})
 
-	const readPreviewDepositOnOutcome = async (escalationGame: `0x${string}`, outcome: QuestionOutcome, amount: bigint) =>
+	const readPreviewDepositOnOutcome = async (escalationGame: `0x${string}`, outcome: QuestionOutcome, amountAttoRep: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'previewDepositOnOutcome',
-			args: [outcome, amount],
+			args: [outcome, amountAttoRep],
 		})
 
 	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${string}`, attritionCost: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
-			functionName: 'computeTimeSinceStartFromAttritionCost',
+			functionName: 'computeTimeSinceStartFromAttritionCostAttoRep',
 			args: [attritionCost],
 		})
 
@@ -93,18 +93,18 @@ describe('Escalation math parity', () => {
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
-					args: [reportBond, nonDecisionThreshold, elapsedAtFork],
+					args: [reportBond, nonDecisionThresholdAttoRep, elapsedAtFork, QuestionOutcome.None, false, 0n],
 				}),
 		)
 
-	const resumeEscalationFromFork = async (escalationGameAddress: Address) =>
+	const resumeEscalationFromFork = async (testSecurityPoolAddress: Address) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					address: escalationGameAddress,
-					functionName: 'resumeFromFork',
+					abi: escalationGameProofTestPoolArtifact.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'resumeEscalationGameFromFork',
 					args: [],
 				}),
 		)
@@ -119,7 +119,7 @@ describe('Escalation math parity', () => {
 
 	const readCarryPeaks = async (escalationGameAddress: Address, outcome: QuestionOutcome) => requireHexArray(Reflect.get(await readOutcomeState(escalationGameAddress, outcome), 'currentPeaks'), 'Current carry peaks')
 	const readCarryLeafCount = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentLeafCount
-	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotal
+	const readCarryTotal = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentCarryTotalAttoRep
 	const readNullifierRoot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => (await readOutcomeState(escalationGameAddress, outcome)).currentNullifierRoot
 
 	const startEscalation = async (escalationGame: Address) =>
@@ -130,7 +130,7 @@ describe('Escalation math parity', () => {
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGame,
 					functionName: 'start',
-					args: [reportBond, nonDecisionThreshold],
+					args: [reportBond, nonDecisionThresholdAttoRep],
 				}),
 		)
 
@@ -170,7 +170,7 @@ describe('Escalation math parity', () => {
 			data: encodeDeployData({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress],
+				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -200,7 +200,7 @@ describe('Escalation math parity', () => {
 		return deployment
 	}
 
-	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
+	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint) =>
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -208,7 +208,7 @@ describe('Escalation math parity', () => {
 					abi: escalationGameProofTestPoolArtifact.abi,
 					address: testSecurityPoolAddress,
 					functionName: 'depositOnOutcome',
-					args: [depositor, outcome, amount],
+					args: [depositor, outcome, amountAttoRep],
 				}),
 		)
 
@@ -232,7 +232,7 @@ describe('Escalation math parity', () => {
 				}),
 		)
 
-	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipal: bigint, childRepAmount: bigint) =>
+	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipalAttoRep: bigint, childRepAmountAttoRep: bigint) =>
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -240,7 +240,7 @@ describe('Escalation math parity', () => {
 					abi: escalationGameProofTestPoolArtifact.abi,
 					address: testSecurityPoolAddress,
 					functionName: 'recordForkedEscrowForOutcome',
-					args: [depositor, outcome, sourcePrincipal, childRepAmount],
+					args: [depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep],
 				}),
 		)
 
@@ -249,9 +249,9 @@ describe('Escalation math parity', () => {
 		outcome: QuestionOutcome,
 		proof: {
 			depositor: Address
-			amount: bigint
+			amountAttoRep: bigint
 			parentDepositIndex: bigint
-			cumulativeAmount: bigint
+			cumulativeAmountAttoRep: bigint
 			sourceNodeId: bigint
 			leafIndex: bigint
 			merkleMountainRangeSiblings: readonly Hex[]
@@ -270,8 +270,8 @@ describe('Escalation math parity', () => {
 				}),
 		)
 
-	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) =>
-		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) =>
+		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 
 	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
 
@@ -296,9 +296,9 @@ describe('Escalation math parity', () => {
 		})
 		return {
 			depositor: node[1],
-			amount: node[3],
+			amountAttoRep: node[3],
 			parentDepositIndex,
-			cumulativeAmount: node[5],
+			cumulativeAmountAttoRep: node[5],
 			sourceNodeId: leafIndex + 1n,
 			leafIndex,
 			merkleMountainRangeSiblings,
@@ -342,46 +342,46 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared binding capital and attrition-time inversion match the deployed contract', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 15n * reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
 
 		const balances = await getBalances(client, escalationGame)
-		const sharedBindingCapital = getEscalationBindingCapital([balances.invalid, balances.yes, balances.no])
+		const sharedBindingCapital = getEscalationBindingCapitalAttoRep([balances.invalid, balances.yes, balances.no])
 		assert.strictEqual(await readBindingCapital(escalationGame), sharedBindingCapital, 'shared binding capital should match the contract median balance')
 
-		for (const attritionCost of [reportBond, sharedBindingCapital, nonDecisionThreshold]) {
+		for (const attritionCost of [reportBond, sharedBindingCapital, nonDecisionThresholdAttoRep]) {
 			const solidityTimeSinceStart = await readTimeSinceStartFromAttritionCost(escalationGame, attritionCost)
-			const sharedTimeSinceStart = computeEscalationTimeSinceStartFromAttritionCost(reportBond, nonDecisionThreshold, attritionCost)
+			const sharedTimeSinceStart = computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, attritionCost)
 			assert.strictEqual(solidityTimeSinceStart, sharedTimeSinceStart, `attrition inversion mismatch at ${attritionCost.toString()}`)
 		}
 	})
 
 	test('shared deposit projection matches previewDepositOnOutcome and projected end time', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 6n * reportBond)
 
 		const balances = await getBalances(client, escalationGame)
 		const requestedAmount = 8n * reportBond
 		const projection = projectEscalationDeposit({
-			amount: requestedAmount,
-			balances: [balances.invalid, balances.yes, balances.no],
-			nonDecisionThreshold,
+			amountAttoRep: requestedAmount,
+			balancesAttoRep: [balances.invalid, balances.yes, balances.no],
+			nonDecisionThresholdAttoRep,
 			outcome: 'invalid',
-			startBond: reportBond,
+			startBondAttoRep: reportBond,
 		})
 		assert.ok(projection !== undefined, 'shared projection should accept this deposit')
 		if (projection === undefined) return
 
 		const [acceptedAmount, resultingCumulativeAmount] = await readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, requestedAmount)
-		assert.strictEqual(acceptedAmount, projection.acceptedAmount, 'accepted amount should match previewDepositOnOutcome')
-		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalances[0], 'projected invalid balance should match preview cumulative amount')
+		assert.strictEqual(acceptedAmount, projection.acceptedAmountAttoRep, 'accepted amount should match previewDepositOnOutcome')
+		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalancesAttoRep[0], 'projected invalid balance should match preview cumulative amount')
 
 		const activationTime = await getActivationTime(client, escalationGame)
-		const projectedBindingCapital = getEscalationBindingCapital(projection.projectedBalances)
-		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(reportBond, nonDecisionThreshold, projectedBindingCapital)
+		const projectedBindingCapital = getEscalationBindingCapitalAttoRep(projection.projectedBalancesAttoRep)
+		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, projectedBindingCapital)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
@@ -401,12 +401,12 @@ describe('Escalation math parity', () => {
 
 		const balances = await getBalances(client, escalationGameAddress)
 		const sharedWithdrawal = getWinningEscalationDepositClaimAmount({
-			bindingCapital: await readBindingCapital(escalationGameAddress),
-			cumulativeAmount: firstWinningDeposit.cumulativeAmount,
-			depositAmount: firstWinningDeposit.amount,
-			forkThreshold: nonDecisionThreshold,
-			nonDecisionThreshold,
-			winningOutcomeBalance: balances.yes,
+			bindingCapitalAttoRep: await readBindingCapital(escalationGameAddress),
+			cumulativeAmountAttoRep: firstWinningDeposit.cumulativeAmountAttoRep,
+			depositAmountAttoRep: firstWinningDeposit.amountAttoRep,
+			forkThresholdAttoRep: nonDecisionThresholdAttoRep,
+			nonDecisionThresholdAttoRep,
+			winningOutcomeBalanceAttoRep: balances.yes,
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,
@@ -414,8 +414,8 @@ describe('Escalation math parity', () => {
 			functionName: 'claimDepositForWinning',
 			args: [0n, QuestionOutcome.Yes],
 		})
-		const [, claimedAmount, originalDepositAmount] = preview.result
-		assert.strictEqual(originalDepositAmount, firstWinningDeposit.amount, 'claim preview should preserve the original winning principal size')
+		const [, claimedAmount, originalDepositAmountAttoRep] = preview.result
+		assert.strictEqual(originalDepositAmountAttoRep, firstWinningDeposit.amountAttoRep, 'claim preview should preserve the original winning principal size')
 		assert.strictEqual(sharedWithdrawal, claimedAmount, 'shared model should match the contract winning-withdrawal amount')
 	})
 
@@ -454,7 +454,7 @@ describe('Escalation math parity', () => {
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentYesCarryTotal, parentYesCarryTotal)
 		const childBindingCapital = await readBindingCapital(child.escalationGameAddress)
 		assert.strictEqual(childBindingCapital, losingDepositAmount, 'child fork should inherit the parent binding-capital depth for this snapshot')
-		await resumeEscalationFromFork(child.escalationGameAddress)
+		await resumeEscalationFromFork(child.testSecurityPoolAddress)
 		const forkResumedAt = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
@@ -463,17 +463,19 @@ describe('Escalation math parity', () => {
 		})
 		const resolvingAttritionCost = (25n * reportBond) / 10n
 		const elapsedAtTargetCost = await readTimeSinceStartFromAttritionCost(child.escalationGameAddress, resolvingAttritionCost)
-		await mockWindow.setTime(forkResumedAt + (elapsedAtTargetCost > 0n ? elapsedAtTargetCost : 1n))
+		const freshResponsePeriod = 3n * 24n * 60n * 60n
+		const elapsedAfterResume = elapsedAtTargetCost > freshResponsePeriod ? elapsedAtTargetCost : freshResponsePeriod
+		await mockWindow.setTime(forkResumedAt + elapsedAfterResume + 1n)
 
 		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash], new SparseNullifierTree().getProof(1n))
 		const childBalances = await getBalances(client, child.escalationGameAddress)
 		const sharedWithdrawal = getWinningImportedEscalationDepositClaimAmount({
-			bindingCapital: childBindingCapital,
-			depositAmount: secondProof.amount,
-			forkThreshold: nonDecisionThreshold,
-			nonDecisionThreshold,
-			postDepositCumulativeAmount: secondProof.cumulativeAmount,
-			winningOutcomeBalance: childBalances.yes,
+			bindingCapitalAttoRep: childBindingCapital,
+			depositAmountAttoRep: secondProof.amountAttoRep,
+			forkThresholdAttoRep: nonDecisionThresholdAttoRep,
+			nonDecisionThresholdAttoRep,
+			postDepositCumulativeAmountAttoRep: secondProof.cumulativeAmountAttoRep,
+			winningOutcomeBalanceAttoRep: childBalances.yes,
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,
@@ -481,8 +483,8 @@ describe('Escalation math parity', () => {
 			functionName: 'withdrawDeposit',
 			args: [QuestionOutcome.Yes, secondProof],
 		})
-		const [, claimedAmount, originalDepositAmount] = preview.result
-		assert.strictEqual(originalDepositAmount, secondProof.amount, 'proof preview should preserve the original imported winning principal size')
+		const [, claimedAmount, originalDepositAmountAttoRep] = preview.result
+		assert.strictEqual(originalDepositAmountAttoRep, secondProof.amountAttoRep, 'proof preview should preserve the original imported winning principal size')
 		assert.strictEqual(sharedWithdrawal, claimedAmount, 'shared imported model should match carried proof settlement')
 
 		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, secondProof)

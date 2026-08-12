@@ -31,11 +31,12 @@ describe('Multicall3', () => {
 			}),
 		)
 
-	const executeCall = async (address: Address, data: Hex) => {
+	const executeCall = async (address: Address, data: Hex, value = 0n) => {
 		await writeContractAndWait(client, () =>
 			client.sendTransaction({
 				to: address,
 				data,
+				value,
 			}),
 		)
 	}
@@ -87,5 +88,57 @@ describe('Multicall3', () => {
 		assert.ok(blockNumber > previousBlockNumber, 'block number should advance while getter transactions execute')
 		assert.ok(prevrandao >= 0n, 'prevrandao should be readable through the compatibility getter')
 		assert.strictEqual(chainId, 1n, 'test chain id mismatch')
+	})
+
+	test('every required-success aggregate variant exposes the canonical call failure', async () => {
+		const multicall = await deployMulticall()
+		const abi = peripherals_Multicall3_Multicall3.abi
+		const failingCall = { callData: '0xdeadbeef' as Hex, target: multicall }
+		const failureCases = [
+			encodeFunctionData({ abi, functionName: 'aggregate', args: [[failingCall]] }),
+			encodeFunctionData({ abi, functionName: 'tryAggregate', args: [true, [failingCall]] }),
+			encodeFunctionData({ abi, functionName: 'tryBlockAndAggregate', args: [true, [failingCall]] }),
+			encodeFunctionData({ abi, functionName: 'blockAndAggregate', args: [[failingCall]] }),
+			encodeFunctionData({
+				abi,
+				functionName: 'aggregate3',
+				args: [[{ ...failingCall, allowFailure: false }]],
+			}),
+			encodeFunctionData({
+				abi,
+				functionName: 'aggregate3Value',
+				args: [[{ ...failingCall, allowFailure: false, value: 0n }]],
+			}),
+		]
+
+		for (const data of failureCases) {
+			await assert.rejects(executeCall(multicall, data), /Multicall3: call failed/)
+		}
+		assert.strictEqual(await client.getBalance({ address: multicall }), 0n, 'rejected aggregate calls must not retain ETH')
+	})
+
+	test('aggregate3Value rejects a value mismatch and rolls back successful subcalls', async () => {
+		const multicall = await deployMulticall()
+		const recipient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const recipientBalanceBefore = await client.getBalance({ address: recipient })
+		const multicallBalanceBefore = await client.getBalance({ address: multicall })
+		const data = encodeFunctionData({
+			abi: peripherals_Multicall3_Multicall3.abi,
+			functionName: 'aggregate3Value',
+			args: [
+				[
+					{
+						allowFailure: false,
+						callData: '0x',
+						target: recipient,
+						value: 1n,
+					},
+				],
+			],
+		})
+
+		await assert.rejects(executeCall(multicall, data, 2n), /Multicall3: value mismatch/)
+		assert.strictEqual(await client.getBalance({ address: recipient }), recipientBalanceBefore, 'value mismatch must roll back successful value subcalls')
+		assert.strictEqual(await client.getBalance({ address: multicall }), multicallBalanceBefore, 'value mismatch must not retain the excess msg.value')
 	})
 })

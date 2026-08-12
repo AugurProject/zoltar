@@ -25,6 +25,10 @@ abstract contract SecurityPoolForkerStorage {
 	mapping(ISecurityPool => EscalationForkSnapshot) internal escalationForkSnapshotByPool;
 	mapping(ISecurityPool => mapping(uint256 => bool)) internal escalationBackingMaterializedByPoolAndOutcome;
 	mapping(address => bool) internal trustedAuctionAddresses;
-	mapping(ISecurityPool => mapping(uint8 => mapping(uint256 => bool)))
-		internal directlyClaimedEscalationDepositByPoolOutcomeAndIndex;
+	mapping(bytes32 => bool) internal directlyClaimedEscalationDepositById;
+	mapping(ISecurityPool => mapping(uint8 => uint256)) internal directlyClaimedEscalationPrincipalByPoolAndOutcome;
+	mapping(ISecurityPool => uint256) internal badDebtAtForkByPool;
+	mapping(ISecurityPool => uint256) internal migratedBadDebtByPool;
+	mapping(ISecurityPool => uint256) internal auctionedBadDebtByPool;
+	mapping(ISecurityPool => uint256) internal claimedAuctionedBadDebtByPool;
 }

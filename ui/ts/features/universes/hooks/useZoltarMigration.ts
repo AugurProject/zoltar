@@ -18,6 +18,7 @@ import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../../.
 
 type UseZoltarMigrationParameters = {
 	accountAddress: Address | undefined
+	activeUniverseId: bigint
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
@@ -26,10 +27,10 @@ type UseZoltarMigrationParameters = {
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: WriteOperationsParameters['refreshState']
-	refreshZoltarForkAccess: () => Promise<void>
-	refreshZoltarUniverse: () => Promise<void>
-	zoltarForkRepBalance: bigint | undefined
-	zoltarMigrationPreparedRepBalance: bigint | undefined
+	refreshZoltarForkAccess: (universe?: ZoltarUniverseSummary) => Promise<void>
+	refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
+	zoltarForkRepBalanceAttoRep: bigint | undefined
+	zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined
 }
 
 type RunZoltarMigrationActionParameters = {
@@ -38,20 +39,21 @@ type RunZoltarMigrationActionParameters = {
 	errorFallback: string
 	refreshAfter: boolean
 	requiresOutcomeIndexes: boolean
-	resolveAmount?: (amount: bigint, preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) => bigint
+	resolveAmount?: (amountAttoRep: bigint, preparedRepBalanceAttoRep: bigint | undefined, repBalanceAttoRep: bigint | undefined) => bigint
 }
 
-function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) {
-	const currentPreparedBalance = preparedRepBalance ?? 0n
-	const missingAmount = amount > currentPreparedBalance ? amount - currentPreparedBalance : 0n
-	if (missingAmount === 0n) throw new Error('Selected amount is already prepared')
-	const currentRepBalance = repBalance ?? 0n
-	if (currentRepBalance < missingAmount) throw new Error('Not enough REP in this universe to prepare the selected amount')
-	return missingAmount
+function resolvePrepareMigrationAmount(amountAttoRep: bigint, preparedRepBalanceAttoRep: bigint | undefined, repBalanceAttoRep: bigint | undefined) {
+	const currentPreparedBalanceAttoRep = preparedRepBalanceAttoRep ?? 0n
+	const missingAmountAttoRep = amountAttoRep > currentPreparedBalanceAttoRep ? amountAttoRep - currentPreparedBalanceAttoRep : 0n
+	if (missingAmountAttoRep === 0n) throw new Error('Selected amount is already prepared')
+	const currentRepBalanceAttoRep = repBalanceAttoRep ?? 0n
+	if (currentRepBalanceAttoRep < missingAmountAttoRep) throw new Error('Not enough REP in this universe to prepare the selected amount')
+	return missingAmountAttoRep
 }
 
 export function useZoltarMigration({
 	accountAddress,
+	activeUniverseId,
 	ensureZoltarUniverse,
 	onTransactionFailed,
 	onTransactionFinished,
@@ -62,8 +64,8 @@ export function useZoltarMigration({
 	refreshState,
 	refreshZoltarForkAccess,
 	refreshZoltarUniverse,
-	zoltarForkRepBalance,
-	zoltarMigrationPreparedRepBalance,
+	zoltarForkRepBalanceAttoRep,
+	zoltarMigrationPreparedRepBalanceAttoRep,
 }: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
@@ -99,12 +101,18 @@ export function useZoltarMigration({
 
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
+				onTransactionRequested(
+					createZoltarMigrationTransactionIntent(actionName, {
+						amount: submittedForm.amount,
+						outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
+						universeId: activeUniverseId,
+					}),
+				)
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
-				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
+				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalanceAttoRep, zoltarForkRepBalanceAttoRep)
 				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(submittedForm.outcomeIndexes, 'Outcome indexes') : []
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 				zoltarMigrationResult.value = result
@@ -123,11 +131,12 @@ export function useZoltarMigration({
 
 			try {
 				if (writeFailed) return
+				let refreshedUniverse: ZoltarUniverseSummary | undefined
 				if (refreshAfter) {
 					await refreshWalletStateOnly(refreshState)
-					await refreshZoltarUniverse()
+					refreshedUniverse = await refreshZoltarUniverse()
 				}
-				await refreshZoltarForkAccess()
+				await refreshZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
 				const latestResult = zoltarMigrationResult.value
@@ -146,8 +155,8 @@ export function useZoltarMigration({
 			refreshState,
 			refreshZoltarForkAccess,
 			refreshZoltarUniverse,
-			zoltarForkRepBalance,
-			zoltarMigrationPreparedRepBalance,
+			zoltarForkRepBalanceAttoRep,
+			zoltarMigrationPreparedRepBalanceAttoRep,
 			zoltarMigrationError,
 			zoltarMigrationPending,
 			zoltarMigrationResult,
@@ -185,6 +194,5 @@ export function useZoltarMigration({
 		zoltarMigrationFeedback: zoltarMigrationFeedback.value,
 		zoltarMigrationForm: zoltarMigrationForm.value,
 		zoltarMigrationPending: zoltarMigrationPending.value,
-		zoltarMigrationResult: zoltarMigrationResult.value,
 	}
 }

@@ -6,6 +6,9 @@ import { OverviewPanels } from '../../app/components/OverviewPanels.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { createFakeBackend } from '../testUtils/fakeBackend.js'
 
 describe('OverviewPanels', () => {
 	type MetricElement = {
@@ -29,8 +32,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: undefined,
 				chainId: '0x1',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 			isConnectingWallet: false,
 			isManagingWallet: false,
@@ -45,9 +48,11 @@ describe('OverviewPanels', () => {
 			onRefreshRepPrices: () => undefined,
 			onSwitchNetwork: () => undefined,
 			parentUniverseId: undefined,
+			repPerEthFailure: undefined,
 			repPerEthPrice: undefined,
 			repPerEthSource: undefined,
 			repPerEthSourceUrl: undefined,
+			repUsdcFailure: undefined,
 			repUsdcPrice: undefined,
 			repUsdcSource: undefined,
 			repUsdcSourceUrl: undefined,
@@ -55,7 +60,7 @@ describe('OverviewPanels', () => {
 			universeHasForked: false,
 			universeLabel: 'Genesis universe',
 			universePresentation: undefined,
-			universeRepBalance: undefined,
+			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
 		}
 
@@ -142,6 +147,38 @@ describe('OverviewPanels', () => {
 		expect(connectButton.disabled).toBe(false)
 	})
 
+	test('keeps the active Sepolia deployment target visible while disconnected', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const documentQueries = await renderOverviewPanels({
+				accountState: {
+					address: undefined,
+					chainId: SEPOLIA_NETWORK_PROFILE.chainIdHex,
+					ethBalanceAttoEth: undefined,
+					wethBalanceAttoEth: undefined,
+				},
+			})
+
+			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
+			expect(documentQueries.getByText('Read-only')).not.toBeNull()
+			expect(documentQueries.queryByText('Not configured on Sepolia')).toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('distinguishes missing liquidity from a failed REP price request', async () => {
+		const documentQueries = await renderOverviewPanels({
+			repPerEthFailure: 'no-liquidity',
+			repUsdcFailure: 'rpc-error',
+		})
+
+		expect(documentQueries.getByText('No pool quote')).not.toBeNull()
+		expect(documentQueries.getByText('Quote failed')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
+	})
+
 	test('shows a disabled spinner button while a wallet connection request is pending', async () => {
 		const documentQueries = await renderOverviewPanels({
 			isConnectingWallet: true,
@@ -160,8 +197,8 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0xaa36a7',
-				ethBalance: undefined,
-				wethBalance: undefined,
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
 			},
 			onChangeWallet,
 			onDisconnectWallet,
@@ -170,13 +207,63 @@ describe('OverviewPanels', () => {
 
 		fireEvent.click(documentQueries.getByText('Account Menu'))
 		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Change Wallet' }))
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum Mainnet' }))
+		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum mainnet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
 
 		expect(onChangeWallet).toHaveBeenCalledTimes(1)
 		expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
 		expect(onDisconnectWallet).toHaveBeenCalledTimes(1)
+	})
+
+	test('provides the responsive account-address presentation for a normal provider wallet', async () => {
+		const address = '0x1234567890123456789012345678901234567890'
+		const documentQueries = await renderOverviewPanels({
+			accountState: {
+				address,
+				chainId: '0x1',
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
+			},
+		})
+
+		const walletPanel = document.body.querySelector('.overview-wallet-panel')
+		if (!(walletPanel instanceof HTMLElement)) throw new Error('Expected wallet overview panel')
+		expect(walletPanel.classList.contains('is-simulation')).toBe(false)
+
+		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
+		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(addressButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+	})
+
+	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
+		let documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0x2105',
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
+			},
+		})
+
+		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
+
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0xcc6b',
+				ethBalanceAttoEth: undefined,
+				wethBalanceAttoEth: undefined,
+			},
+		})
+
+		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
+		fireEvent.click(documentQueries.getByText('Account Menu'))
+		expect(document.body.querySelector('.account-menu-network strong')?.textContent).toBe('52331')
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {
@@ -249,7 +336,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Forked')).toBeDefined()
-		expect(document.body.textContent?.includes('Zoltar forked on')).toBe(true)
+		expect(document.body.textContent?.includes('Universe forked on')).toBe(true)
 	})
 
 	test('renders the forked badge in the dedicated route-header badge slot', async () => {
@@ -296,7 +383,7 @@ describe('OverviewPanels', () => {
 			universeLabel: 'Universe 11',
 		})
 
-		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 3' })
+		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 0x3' })
 		expect(parentUniverseLink).toBeDefined()
 		expect(document.body.textContent?.includes('Parent Universe')).toBe(true)
 	})
@@ -329,10 +416,10 @@ describe('OverviewPanels', () => {
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
 				chainId: '0x1',
-				ethBalance: 999999990000n * 10n ** 18n,
-				wethBalance: 10000n * 10n ** 18n,
+				ethBalanceAttoEth: 999999990000n * 10n ** 18n,
+				wethBalanceAttoEth: 10000n * 10n ** 18n,
 			},
-			universeRepBalance: 5n * 10n ** 18n,
+			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
 		await act(() => {

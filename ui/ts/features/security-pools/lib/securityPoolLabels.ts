@@ -1,7 +1,31 @@
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '../../../lib/assert.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
+
+type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit'
+type RepExitMode = 'redeem' | 'withdraw'
+
+export function formatSecurityPoolPageSummary(matchingPoolCount: number, loadedPoolCount: number) {
+	const poolLabel = loadedPoolCount === 1 ? securityPoolCopy.poolCountSingular : securityPoolCopy.poolCountPlural
+	const matchVerb = matchingPoolCount === 1 ? securityPoolCopy.poolSummarySingularVerb : securityPoolCopy.poolSummaryPluralVerb
+	return securityPoolCopy.formatPoolPageSummary(matchingPoolCount, loadedPoolCount, poolLabel, matchVerb)
+}
+
+export function getVaultLauncherWalletReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
+	if (action === 'claim-fees') return securityPoolCopy.connectWalletBeforeClaimingFees
+	if (action === 'deposit-rep') return securityPoolCopy.connectWalletBeforeDepositingRep
+	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.connectWalletBeforeRedeemingRep : securityPoolCopy.connectWalletBeforeWithdrawingRep
+	return assertNever(action)
+}
+
+export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
+	if (action === 'claim-fees') return securityPoolCopy.selectOwnVaultToClaimFees
+	if (action === 'deposit-rep') return securityPoolCopy.selectOwnVaultToDepositRep
+	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.selectOwnVaultToRedeemRep : securityPoolCopy.selectOwnVaultToWithdrawRep
+	return assertNever(action)
+}
 
 export function getSecurityPoolLifecycleLabel(state: SecurityPoolLifecycleState | undefined) {
 	if (state === undefined) return 'Unknown'

@@ -16,13 +16,15 @@ import {
 	parseRepAmountInput,
 	parseTimestampInput,
 	parseTradingAmountInput,
+	tryParseTimestampInput,
 } from '../../../features/markets/lib/marketForm.js'
 
 describe('market form defaults and conversion helpers', () => {
 	test('returns stable default form snapshots across all supported forms', () => {
 		expect(getDefaultMarketFormState().marketType).toBe('binary')
 		expect(getDefaultMarketFormState().categoricalOutcomes).toEqual(['Yes', 'No'])
-		expect(getDefaultSecurityPoolFormState().securityMultiplier).toBe('2')
+		expect(getDefaultSecurityPoolFormState().statoblastSecurityMultiplierBps).toBe('2')
+		expect(getDefaultSecurityPoolFormState().initialReportPriorityFeeGwei).toBe('10')
 		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('0')
 		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')
 		expect(getDefaultReportingFormState().selectedOutcome).toBeUndefined()
@@ -30,6 +32,8 @@ describe('market form defaults and conversion helpers', () => {
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
 		expect(getDefaultOpenOracleFormState().stateHash).toBe('0x0000000000000000000000000000000000000000000000000000000000000000')
 		expect(getDefaultOpenOracleCreateFormState().multiplier).toBe('100')
+		expect(getDefaultOpenOracleCreateFormState().disputeDelay).toBe('3600')
+		expect(getDefaultOpenOracleCreateFormState().settlementTime).toBe('86400')
 		expect(getDefaultForkAuctionFormState().repMigrationOutcomes).toBe('yes')
 		expect(getDefaultZoltarMigrationFormState().amount).toBe('0.0')
 		expect(getDefaultZoltarMigrationFormState().outcomeIndexes).toBe('')
@@ -59,5 +63,7 @@ describe('market form defaults and conversion helpers', () => {
 	test('throws clear message for malformed timestamps and parses valid date strings', () => {
 		expect(parseTimestampInput('2025-01-01T00:00:00Z', 'End time')).toBeGreaterThan(0n)
 		expect(() => parseTimestampInput('nonsense', 'End time')).toThrow('End time is invalid')
+		expect(tryParseTimestampInput('2025-01-01T00:00:00Z')).toBeGreaterThan(0n)
+		expect(tryParseTimestampInput('nonsense')).toBeUndefined()
 	})
 })

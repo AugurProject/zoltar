@@ -1,0 +1,15 @@
+name: zoltar-liquidator
+
+services:
+  liquidator:
+    build:
+      context: ../..
+      dockerfile: bots/liquidator/Dockerfile
+    image: zoltar-liquidator
+    user: ${LIQUIDATOR_UID:?Set LIQUIDATOR_UID in .env}:${LIQUIDATOR_GID:?Set LIQUIDATOR_GID in .env}
+    environment:
+      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
+    ports:
+      - 127.0.0.1:4183:4183
+    volumes:
+      - ./.state:/app/bots/liquidator/.state

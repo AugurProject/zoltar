@@ -168,6 +168,8 @@ type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends Ab
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
+	blockHash?: Hash | undefined
+	blockNumber?: bigint | undefined
 	blockTag?: BlockTag | undefined
 	gas?: bigint | undefined
 	value?: bigint | undefined
@@ -179,10 +181,24 @@ type ContractSimulateParameters<TAbi extends Abi, TFunctionName extends string> 
 	maxPriorityFeePerGas?: bigint | undefined
 }
 
-type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractSimulateParameters<TAbi, TFunctionName>
+type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
+	account?: Account | Address | undefined
+	gas?: bigint | undefined
+	value?: bigint | undefined
+}
 
 type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
+	value?: bigint | undefined
+}
+
+export type EstimateGasParameters = {
+	account?: Account | Address | undefined
+	data?: Hex | undefined
+	gasPrice?: bigint | undefined
+	maxFeePerGas?: bigint | undefined
+	maxPriorityFeePerGas?: bigint | undefined
+	to?: Address | undefined
 	value?: bigint | undefined
 }
 
@@ -324,13 +340,23 @@ export type ParsedTransaction = {
 	value?: bigint | undefined
 }
 
+type TransportRetryOptions = {
+	batch?: unknown
+	retryCount?: number | undefined
+	retryDelay?: number | undefined
+}
+
 type TypedTransport =
 	| {
 			kind: 'custom'
 			provider: EIP1193Provider
+			retryCount: number
+			retryDelay: number
 	  }
 	| {
 			kind: 'http'
+			retryCount: number
+			retryDelay: number
 			url: string
 	  }
 
@@ -380,21 +406,28 @@ type ClientRequestParameters = {
 }
 
 type BlockTag = 'earliest' | 'latest' | 'pending'
+type LogTopicFilter = Hex | readonly Hex[] | null
+
+const DEFAULT_RATE_LIMIT_RETRY_COUNT = 3
+export const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
 
 type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
 	chain: TChain
 	extend: <TExtension extends object>(extension: (client: PublicClientShape<TTransport, TChain>) => TExtension) => PublicClientShape<TTransport, TChain> & TExtension
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
+	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
-	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
+	getGasPrice: () => Promise<bigint>
+	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
+	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
-	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
-	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
+	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
+	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
 	simulateContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => Promise<{ result: ContractFunctionResult<TAbi, TFunctionName> }>
 	transport: TTransport
 	waitForTransactionReceipt: (parameters: WaitForTransactionReceiptParameters) => Promise<TransactionReceipt>
@@ -508,6 +541,11 @@ function normalizeQuantityValue(value: bigint | number) {
 	}
 	if (value < 0n) throw new Error(`Number "${value.toString()}n" is not in safe integer range`)
 	return value
+}
+
+export function bigintToSafeNumber(value: bigint, label = 'Value') {
+	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
+	return Number.parseInt(value.toString(), 10)
 }
 
 function hexQuantity(value: bigint | number) {
@@ -998,7 +1036,7 @@ function ensureConstructorAbi(abi: readonly unknown[]) {
 			]
 }
 
-async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+async function requestTransportOnce<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	if (transport.kind === 'custom') {
 		try {
 			return (await transport.provider.request({
@@ -1024,6 +1062,7 @@ async function requestTransport<TValue>(transport: Transport, parameters: Client
 	})
 	if (!response.ok) {
 		throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
+			code: response.status,
 			shortMessage: `HTTP ${response.status} while calling ${parameters.method}`,
 		})
 	}
@@ -1044,6 +1083,33 @@ async function requestTransport<TValue>(transport: Transport, parameters: Client
 		})
 	}
 	return payload.result as TValue
+}
+
+async function retryRateLimited<TValue>(operation: () => Promise<TValue>, options: { retryCount?: number | undefined; retryDelay: number; startTime?: number | undefined; timeout?: number | undefined }) {
+	const startTime = options.timeout === undefined ? undefined : (options.startTime ?? Date.now())
+	let retries = 0
+	while (true) {
+		try {
+			return await operation()
+		} catch (error) {
+			if (!isRateLimitError(error) || (options.retryCount !== undefined && retries >= options.retryCount)) throw error
+			const remainingMilliseconds = options.timeout === undefined || startTime === undefined ? undefined : options.timeout - (Date.now() - startTime)
+			if (remainingMilliseconds !== undefined && remainingMilliseconds <= 0) throw error
+			const delayMilliseconds = remainingMilliseconds === undefined ? options.retryDelay : Math.min(options.retryDelay, remainingMilliseconds)
+			await new Promise(resolve => {
+				setTimeout(resolve, delayMilliseconds)
+			})
+			if (options.timeout !== undefined && startTime !== undefined && Date.now() - startTime >= options.timeout) throw error
+			retries += 1
+		}
+	}
+}
+
+async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
+		retryCount: transport.retryCount,
+		retryDelay: transport.retryDelay,
+	})
 }
 
 function toRpcError(error: unknown, fallbackMessage: string) {
@@ -1147,6 +1213,14 @@ function isTransactionNotFoundError(error: unknown) {
 	return error instanceof Error && error.message.includes('could not be found')
 }
 
+function isRateLimitError(error: unknown) {
+	return error instanceof RpcError && (error.code === 429 || error.code === '429' || error.message.includes('HTTP 429'))
+}
+
+function isAlreadyKnownTransactionError(error: unknown) {
+	return error instanceof RpcError && error.message.toLowerCase().includes('already known')
+}
+
 function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
 	if (replacementTransaction.to?.toLowerCase() === originalTransaction.from.toLowerCase() && replacementTransaction.value === 0n && replacementTransaction.input === '0x') return 'cancelled'
 	if (replacementTransaction.to?.toLowerCase() === originalTransaction.to?.toLowerCase() && replacementTransaction.value === originalTransaction.value && replacementTransaction.input === originalTransaction.input) return 'repriced'
@@ -1155,9 +1229,9 @@ function getReplacementReason(originalTransaction: BlockTransaction, replacement
 
 const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
 
-async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }) {
+async function findReplacementTransaction(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
 	for (let blockNumber = parameters.fromBlock; blockNumber <= parameters.toBlock; blockNumber += 1n) {
-		const block = await actions.getBlock({
+		const block = await blockReader.getBlock({
 			blockNumber,
 			includeTransactions: true,
 		})
@@ -1200,6 +1274,11 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 }
 
 async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
+	const selectedBlocks = [parameters.blockHash, parameters.blockNumber, parameters.blockTag].filter(value => value !== undefined)
+	if (selectedBlocks.length > 1) throw new Error('Contract reads accept only one block selector')
+	let blockSelector: BlockTag | Hex | Readonly<{ blockHash: Hash; requireCanonical: true }> = parameters.blockTag ?? 'latest'
+	if (parameters.blockNumber !== undefined) blockSelector = hexQuantity(parameters.blockNumber)
+	if (parameters.blockHash !== undefined) blockSelector = { blockHash: parameters.blockHash, requireCanonical: true }
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -1217,7 +1296,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				parameters.blockTag ?? 'latest',
+				blockSelector,
 			],
 		}),
 	)
@@ -1255,6 +1334,13 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					],
 				}),
 			),
+		estimateGas: async parameters =>
+			normalizeRpcBigInt(
+				await requestTransport<string>(transport, {
+					method: 'eth_estimateGas',
+					params: [buildRpcTransactionRequest(parameters)],
+				}),
+			),
 		getBalance: async parameters =>
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {
@@ -1272,7 +1358,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			return normalizeBlock(block, includeTransactions)
 		},
 		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => Number(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' }))),
+		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode: async parameters => {
 			const result = normalizeRpcHex(
 				await requestTransport<string>(transport, {
@@ -1282,15 +1368,25 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			)
 			return result === '0x' ? undefined : result
 		},
-		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined }) => {
+		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
+		getTransactionCount: async parameters =>
+			normalizeRpcBigInt(
+				await requestTransport<string>(transport, {
+					method: 'eth_getTransactionCount',
+					params: [getAddress(parameters.address), parameters.blockTag ?? 'latest'],
+				}),
+			),
+		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
+			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
 			const topics =
-				event === undefined
+				parameters.topics ??
+				(event === undefined
 					? undefined
 					: encodeEventTopics({
 							abi: [event],
 							eventName: event.name ?? 'event',
-						})
+						}))
 			const rawLogs = await requestTransport<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
@@ -1333,7 +1429,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${parameters.hash}" could not be found.`)
 			return normalizeReceipt(rawReceipt)
 		},
-		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => {
+		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => {
 			const calls: { allowFailure: boolean; callData: Hex; target: Address }[] = []
 			for (const contract of parameters.contracts) {
 				calls.push({
@@ -1350,6 +1446,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				abi: MULTICALL3_ABI,
 				address: parameters.multicallAddress,
 				args: [calls] as never,
+				blockNumber: parameters.blockNumber,
 				functionName: 'aggregate3',
 			})) as {
 				abiItem: AbiParameter
@@ -1392,7 +1489,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				return decodeFunctionOutput(abiItem, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},
-		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => {
+		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => {
 			const { abiItem, data } = await readContractRaw(transport, parameters)
 			return decodeFunctionOutput(abiItem, data) as ContractFunctionResult<TAbi, TFunctionName>
 		},
@@ -1406,49 +1503,74 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const timeoutMilliseconds = parameters.timeout ?? 180_000
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
-			const actions = buildPublicClientActions({ chain, transport })
+			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
+			const waitForNextPoll = async () => {
+				await new Promise(resolve => {
+					setTimeout(resolve, pollingInterval)
+				})
+			}
+			const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) =>
+				await retryRateLimited(operation, {
+					retryDelay: transport.retryDelay,
+					startTime,
+					timeout: timeoutMilliseconds,
+				})
 			let originalTransaction: BlockTransaction | undefined
 			let lastScannedReplacementBlock: bigint | undefined
 			if (parameters.onReplaced !== undefined) {
 				try {
-					originalTransaction = await actions.getTransaction({
-						hash: parameters.hash,
-					})
+					originalTransaction = await retryReceiptRateLimited(
+						async () =>
+							await actions.getTransaction({
+								hash: parameters.hash,
+							}),
+					)
 				} catch (error) {
 					if (!isTransactionNotFoundError(error)) throw error
 				}
 			}
 			while (true) {
 				try {
-					return await actions.getTransactionReceipt({
-						hash: parameters.hash,
-					})
+					return await retryReceiptRateLimited(
+						async () =>
+							await actions.getTransactionReceipt({
+								hash: parameters.hash,
+							}),
+					)
 				} catch (error) {
 					if (!isTransactionNotFoundError(error)) throw error
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
-							originalTransaction = await actions.getTransaction({
-								hash: parameters.hash,
-							})
+							originalTransaction = await retryReceiptRateLimited(
+								async () =>
+									await actions.getTransaction({
+										hash: parameters.hash,
+									}),
+							)
 						} catch (transactionError) {
 							if (!isTransactionNotFoundError(transactionError)) throw transactionError
 						}
 					}
 					if (originalTransaction !== undefined) {
-						const latestBlockNumber = await actions.getBlockNumber()
+						const transactionToReplace = originalTransaction
+						const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
 						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
 						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
 							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 						}
-						const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, originalTransaction, { fromBlock: firstScanBlock, toBlock: latestBlockNumber })
+						const replacementTransaction =
+							firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
 						lastScannedReplacementBlock = latestBlockNumber
 						if (replacementTransaction !== undefined) {
-							const transactionReceipt = await actions.getTransactionReceipt({
-								hash: replacementTransaction.hash,
-							})
+							const transactionReceipt = await retryReceiptRateLimited(
+								async () =>
+									await actions.getTransactionReceipt({
+										hash: replacementTransaction.hash,
+									}),
+							)
 							parameters.onReplaced?.({
-								reason: getReplacementReason(originalTransaction, replacementTransaction),
-								replacedTransaction: originalTransaction,
+								reason: getReplacementReason(transactionToReplace, replacementTransaction),
+								replacedTransaction: transactionToReplace,
 								transaction: replacementTransaction,
 								transactionReceipt,
 							})
@@ -1456,9 +1578,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}
 					}
 					if (Date.now() - startTime >= timeoutMilliseconds) throw error
-					await new Promise(resolve => {
-						setTimeout(resolve, pollingInterval)
-					})
+					await waitForNextPoll()
 				}
 			}
 		},
@@ -1572,13 +1692,19 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				...parameters,
 				account: parameters.account ?? normalizedAccount,
 			}),
-		sendRawTransaction: async parameters =>
-			normalizeHash(
-				await requestTransport<string>(transport, {
-					method: 'eth_sendRawTransaction',
-					params: [parameters.serializedTransaction],
-				}),
-			),
+		sendRawTransaction: async parameters => {
+			try {
+				return normalizeHash(
+					await requestTransport<string>(transport, {
+						method: 'eth_sendRawTransaction',
+						params: [parameters.serializedTransaction],
+					}),
+				)
+			} catch (error) {
+				if (!isAlreadyKnownTransactionError(error)) throw error
+				return keccak256(parameters.serializedTransaction)
+			}
+		},
 		simulateContract: async parameters =>
 			await baseClient.simulateContract({
 				...parameters,
@@ -1648,17 +1774,27 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 	return walletClient
 }
 
-export function http(url: string, _options?: unknown) {
+function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
+	const retryCount = options.retryCount ?? DEFAULT_RATE_LIMIT_RETRY_COUNT
+	const retryDelay = options.retryDelay ?? RATE_LIMIT_RETRY_DELAY_MILLISECONDS
+	if (!Number.isSafeInteger(retryCount) || retryCount < 0) throw new Error('RPC retry count must be a non-negative safe integer')
+	if (!Number.isSafeInteger(retryDelay) || retryDelay < 0) throw new Error('RPC retry delay must be a non-negative safe integer')
+	return { retryCount, retryDelay }
+}
+
+export function http(url: string, options?: TransportRetryOptions) {
 	return {
 		kind: 'http',
+		...normalizeTransportRetryOptions(options),
 		url,
 	} satisfies Transport
 }
 
-export function custom(provider: EIP1193Provider, _options?: unknown) {
+export function custom(provider: EIP1193Provider, options?: TransportRetryOptions) {
 	return {
 		kind: 'custom',
 		provider,
+		...normalizeTransportRetryOptions(options),
 	} satisfies Transport
 }
 

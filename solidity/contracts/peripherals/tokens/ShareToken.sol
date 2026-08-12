@@ -5,9 +5,9 @@ import '../../Constants.sol';
 import './TokenId.sol';
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
+import '../interfaces/ISecurityPoolForker.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
-import '../SecurityPoolUtils.sol';
 import './ERC1155.sol';
 
 /**
@@ -19,7 +19,13 @@ contract ShareToken is ERC1155, IShareToken {
 	string public symbol;
 	Zoltar public immutable zoltar;
 	mapping(address => bool) private authorized;
-	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 fromIdBalance);
+	mapping(uint248 => ISecurityPool) public canonicalPoolByUniverse;
+	// Forked source shares remain as branch-independent entitlements. Once an
+	// account materializes any branch, its source balance is locked so a transfer
+	// cannot let both sender and receiver reproduce the same claim.
+	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
+	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
+	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 amountAttoShares);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
@@ -51,7 +57,12 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to add another authorized pool');
+		require(address(_securityPoolCandidate.shareToken()) == address(this), 'ShareToken candidate must use this share token');
+		uint248 candidateUniverseId = _securityPoolCandidate.universeId();
+		ISecurityPool currentCanonicalPool = canonicalPoolByUniverse[candidateUniverseId];
+		require(address(currentCanonicalPool) == address(0x0) || address(currentCanonicalPool) == address(_securityPoolCandidate), 'ShareToken universe already has a canonical pool');
 		if (authorized[address(_securityPoolCandidate)]) return;
+		canonicalPoolByUniverse[candidateUniverseId] = _securityPoolCandidate;
 		authorized[address(_securityPoolCandidate)] = true;
 		emit AuthorizationUpdated(address(_securityPoolCandidate), msg.sender, true);
 	}
@@ -75,140 +86,151 @@ contract ShareToken is ERC1155, IShareToken {
 		}
 	}
 
-	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
+	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
-		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
-		require(isReconciled, 'Share supply mismatch');
-		require(_cashAmount > 0, 'Exchange rate undefined');
+		require(amountAttoShares > 0, 'Exchange rate undefined');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
-			_values[i] = _cashAmount;
+			_values[i] = amountAttoShares;
 		}
 
 		_mintBatch(_account, _tokenIds, _values);
 	}
 
-	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external {
+	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
-		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
-		require(isReconciled, 'Share supply mismatch');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
-			_values[i] = _amount;
+			_values[i] = amountAttoShares;
 		}
 
 		_burnBatch(_owner, _tokenIds, _values);
 	}
 
-	function burnTokenIdAndGetRemainingSupply(
-		uint256 _tokenId,
-		address _owner
-	) external returns (uint256 balance, uint256 remainingSupply) {
+	function burnTokenIdAndGetRemainingSupply(uint256 _tokenId, address _owner) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares) {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn this token id');
-		balance = balanceOf(_owner, _tokenId);
-		_burn(_owner, _tokenId, balance);
-		remainingSupply = totalSupply(_tokenId);
+		balanceAttoShares = balanceOf(_owner, _tokenId);
+		_burn(_owner, _tokenId, balanceAttoShares);
+		remainingSupplyAttoShares = totalSupply(_tokenId);
 	}
 
-	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
+	function _getChildUniverseId(uint248 universeId, uint256 outcomeIndex) private pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	function totalSupplyForOutcome(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome
-	) public view returns (uint256) {
+	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public view returns (uint256 totalSupplyAttoShares) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return totalSupply(_tokenId);
 	}
 
-	function _getActualCompleteSetSupply(
-		uint248 _universeId
-	) private view returns (bool isReconciled, uint256 actualSupply) {
-		actualSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
-		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
-		uint256 noSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
-		isReconciled = actualSupply == yesSupply && yesSupply == noSupply;
+	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupplyAttoShares) {
+		maximumSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
+		uint256 yesSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
+		uint256 noSupplyAttoShares = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
+		if (yesSupplyAttoShares > maximumSupplyAttoShares) maximumSupplyAttoShares = yesSupplyAttoShares;
+		if (noSupplyAttoShares > maximumSupplyAttoShares) maximumSupplyAttoShares = noSupplyAttoShares;
 	}
 
-	function reconciledCompleteSetSupply(uint248 _universeId, uint256 _fallbackSupply) external view returns (uint256) {
-		(bool isReconciled, uint256 actualSupply) = _getActualCompleteSetSupply(_universeId);
-		return isReconciled ? actualSupply : _fallbackSupply;
-	}
-
-	function balanceOfOutcome(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome,
-		address _account
-	) public view returns (uint256) {
+	function balanceOfOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome, address _account) public view returns (uint256 balanceAttoShares) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return balanceOf(_account, _tokenId);
 	}
 
-	function balanceOfShares(uint248 _universeId, address _account) public view returns (uint256[3] memory balances) {
-		balances[0] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Invalid));
-		balances[1] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Yes));
-		balances[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
+	function balanceOfShares(uint248 _universeId, address _account) public view returns (uint256[3] memory balancesAttoShares) {
+		balancesAttoShares[0] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Invalid));
+		balancesAttoShares[1] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Yes));
+		balancesAttoShares[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
 	}
 
-	function getTokenId(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome _outcome
-	) public pure returns (uint256 _tokenId) {
+	function getMigratedShareAmountAttoShares(uint256 fromId, uint248 targetUniverseId, address account) external view returns (uint256) {
+		return migratedShareAmountAttoShares[fromId][targetUniverseId][account];
+	}
+
+	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public pure returns (uint256 _tokenId) {
 		return TokenId.getTokenId(_universeId, _outcome);
 	}
 
-	function getTokenIds(
-		uint248 _universeId,
-		BinaryOutcomes.BinaryOutcome[] calldata _outcomes
-	) external pure returns (uint256[] memory _tokenIds) {
+	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] calldata _outcomes) external pure returns (uint256[] memory _tokenIds) {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(
-		uint256 _tokenId
-	) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
+	function unpackTokenId(uint256 _tokenId) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
-		uint256 forkTime = zoltar.getForkTime(universeId);
-		require(forkTime > 0, 'ShareToken universe has not forked, so shares cannot migrate');
-		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME, 'ShareToken migration window closed');
+		require(zoltar.getForkTime(universeId) > 0, 'ShareToken universe has not forked, so shares cannot migrate');
 		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
-		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
-		require(fromIdBalance > 0, 'ShareToken holder has no balance to migrate from the source token id');
-
-		// Burn from the old token ID using the base ERC1155 _burn function
-		_burn(msg.sender, fromId, fromIdBalance);
+		uint256 fromIdBalanceAttoShares = balanceOf(msg.sender, fromId);
+		require(fromIdBalanceAttoShares > 0, 'ShareToken holder has no balance to migrate from the source token id');
 
 		(, uint256 questionId, , , ) = zoltar.universes(universeId);
 		uint256 targetOutcomeIndexesLength = targetOutcomeIndexes.length;
 		uint256 previousOutcomeIndex;
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint256 outcomeIndex = targetOutcomeIndexes[i];
-			require(
-				!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex),
-				'ShareToken target outcome is malformed for the fork question'
-			);
+			require(!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex), 'ShareToken target outcome is malformed for the fork question');
 			if (i > 0)
-				require(
-					outcomeIndex > previousOutcomeIndex,
-					'ShareToken target outcomes must be provided in strictly increasing order'
-				);
+				require(outcomeIndex > previousOutcomeIndex, 'ShareToken target outcomes must be provided in strictly increasing order');
 			previousOutcomeIndex = outcomeIndex;
-
-			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomeIndex));
-			_mint(msg.sender, toId, fromIdBalance);
-			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}
+
+		ISecurityPool sourcePool = canonicalPoolByUniverse[universeId];
+		require(address(sourcePool) != address(0x0), 'ShareToken source universe is missing a canonical pool');
+		ISecurityPoolForker forker = ISecurityPoolForker(sourcePool.securityPoolForker());
+		if (sourcePool.systemState() == SystemState.Operational) {
+			forker.initiateSecurityPoolFork(sourcePool);
+		}
+		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');
+
+		uint248[] memory targetUniverseIds = new uint248[](targetOutcomeIndexesLength);
+		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
+			uint256 outcomeIndex = targetOutcomeIndexes[i];
+			uint248 targetUniverseId = _getChildUniverseId(universeId, outcomeIndex);
+			ISecurityPool targetPool = canonicalPoolByUniverse[targetUniverseId];
+			if (address(targetPool) == address(0x0)) {
+				require(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools');
+				forker.createChildUniverse(sourcePool, outcomeIndex);
+				targetPool = canonicalPoolByUniverse[targetUniverseId];
+			}
+			require(address(targetPool) != address(0x0) && address(targetPool.parent()) == address(sourcePool), 'ShareToken destination is missing a canonical child pool');
+			targetUniverseIds[i] = targetUniverseId;
+		}
+
+		bool migratedAnyShares;
+		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
+			uint248 targetUniverseId = targetUniverseIds[i];
+			uint256 alreadyMigratedAttoShares = migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender];
+			require(alreadyMigratedAttoShares <= fromIdBalanceAttoShares, 'ShareToken migrated amount exceeds source balance');
+			uint256 amountAttoShares = fromIdBalanceAttoShares - alreadyMigratedAttoShares;
+			if (amountAttoShares == 0) continue;
+			migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender] = fromIdBalanceAttoShares;
+			migratedSourceBalanceLocked[fromId][msg.sender] = true;
+			migratedAnyShares = true;
+			uint256 toId = getChildId(fromId, targetUniverseId);
+			_mint(msg.sender, toId, amountAttoShares);
+			emit Migrate(msg.sender, fromId, toId, amountAttoShares);
+		}
+		require(migratedAnyShares, 'ShareToken has no new shares to migrate');
+	}
+
+	function _internalTransferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal override {
+		require(!migratedSourceBalanceLocked[id][from], 'ShareToken migrated source balance is locked');
+		super._internalTransferFrom(from, to, id, value, data);
+	}
+
+	function _internalBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal override {
+		for (uint256 i = 0; i < ids.length; i++) {
+			require(!migratedSourceBalanceLocked[ids[i]][from], 'ShareToken migrated source balance is locked');
+		}
+		super._internalBatchTransferFrom(from, to, ids, values, data);
 	}
 }

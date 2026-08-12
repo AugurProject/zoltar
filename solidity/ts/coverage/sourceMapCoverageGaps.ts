@@ -35,17 +35,9 @@ export const knownSourceMapCoverageGaps = [
 				linePattern: /^require\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*!=\s*BinaryOutcomes\.BinaryOutcome\.None,\s*'No outcome'\s*\);$/,
 				precededBy: {
 					maxPreviousLines: 8,
-					linePattern: /^uint256\s+[A-Za-z_][A-Za-z0-9_]*Index,?$/,
+					linePattern: /^(?:uint256\s+[A-Za-z_][A-Za-z0-9_]*Index,?|function\s+[A-Za-z_][A-Za-z0-9_]*\([^)]*uint256\s+[A-Za-z_][A-Za-z0-9_]*Index,)/,
 				},
 			},
-		],
-	},
-	{
-		sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol',
-		lineRules: [
-			{ currentSourceMatches: 1, linePattern: /^uint256\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*state\.sourcePrincipalClaimed\s*\+\s*[A-Za-z_][A-Za-z0-9_]*;$/ },
-			{ currentSourceMatches: 1, linePattern: /^state\.sourcePrincipalClaimed\s*=\s*next[A-Za-z_][A-Za-z0-9_]*;$/ },
-			{ currentSourceMatches: 1, linePattern: /^state\.childRepClaimed\s*=\s*next[A-Za-z_][A-Za-z0-9_]*;$/ },
 		],
 	},
 	{

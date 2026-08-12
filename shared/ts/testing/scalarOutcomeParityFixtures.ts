@@ -35,7 +35,8 @@ export type ScalarParityEncodingFixture = {
 	secondPart: bigint
 }
 
-export const SCALAR_PARITY_DECIMALS = 18n
+const SCALAR_PARITY_DECIMAL_PLACES = 18
+export const SCALAR_PARITY_DECIMALS = BigInt(SCALAR_PARITY_DECIMAL_PLACES)
 export const SCALAR_PARITY_DECIMAL_BASE = 10n ** SCALAR_PARITY_DECIMALS
 export const SCALAR_PARITY_PART_BIT_LENGTH = 120n
 export const SCALAR_PARITY_TOTAL_BITS = 256n
@@ -251,6 +252,6 @@ function formatSignedDecimal(value: bigint) {
 	const integerPart = absoluteValue / SCALAR_PARITY_DECIMAL_BASE
 	const fractionalPart = absoluteValue % SCALAR_PARITY_DECIMAL_BASE
 	if (fractionalPart === 0n) return `${isNegative ? '-' : ''}${integerPart.toString()}`
-	const fractionalString = fractionalPart.toString().padStart(Number(SCALAR_PARITY_DECIMALS), '0').replace(/0+$/, '')
+	const fractionalString = fractionalPart.toString().padStart(SCALAR_PARITY_DECIMAL_PLACES, '0').replace(/0+$/, '')
 	return `${isNegative ? '-' : ''}${integerPart.toString()}.${fractionalString}`
 }

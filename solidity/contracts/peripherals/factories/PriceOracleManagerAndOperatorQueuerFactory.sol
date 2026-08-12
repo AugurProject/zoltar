@@ -7,12 +7,73 @@ import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
+import { LiquidationApprovalRegistry } from '../LiquidationApprovalRegistry.sol';
 import {
 	OpenOracleOperationBountyBoard,
 	OpenOracleOperationBountyBoardFactory
 } from '../OpenOracleOperationBountyBoard.sol';
 
+contract LiquidationApprovalRegistryDeployer {
+	address private immutable factory;
+	LiquidationApprovalRegistry private immutable implementation;
+
+	constructor() {
+		factory = msg.sender;
+		implementation = new LiquidationApprovalRegistry();
+	}
+
+	function deploy(address coordinator, bytes32 salt) external returns (LiquidationApprovalRegistry) {
+		require(msg.sender == factory, 'Only factory');
+		bytes memory initCode = abi.encodePacked(hex'3d602d80600a3d3981f3', hex'363d3d373d3d3d363d73', address(implementation), hex'5af43d82803e903d91602b57fd5bf3');
+		address deployed;
+		assembly ('memory-safe') {
+			deployed := create2(0, add(initCode, 0x20), mload(initCode), salt)
+		}
+		require(deployed != address(0), 'Registry deployment failed');
+		LiquidationApprovalRegistry registry = LiquidationApprovalRegistry(deployed);
+		registry.initialize(coordinator);
+		return registry;
+	}
+}
+
+contract PriceCoordinatorDeploymentWorker {
+	address private immutable factory;
+	bytes private creationCode;
+
+	constructor() {
+		factory = msg.sender;
+		creationCode = type(OpenOraclePriceCoordinator).creationCode;
+	}
+
+	function deploy(bytes calldata constructorArguments, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
+		require(msg.sender == factory, 'Only factory');
+		bytes memory initCode = abi.encodePacked(creationCode, constructorArguments);
+		address deployed;
+		assembly ('memory-safe') {
+			deployed := create2(0, add(initCode, 0x20), mload(initCode), salt)
+			if iszero(deployed) {
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
+			}
+		}
+		return OpenOraclePriceCoordinator(deployed);
+	}
+
+	function configureLiquidationApprovalRegistry(OpenOraclePriceCoordinator coordinator, LiquidationApprovalRegistry registry) external {
+		require(msg.sender == factory, 'Only factory');
+		coordinator.setLiquidationApprovalRegistry(registry);
+	}
+
+	function configureOperationBountyBoard(OpenOraclePriceCoordinator coordinator, OpenOracleOperationBountyBoard board) external {
+		require(msg.sender == factory, 'Only factory');
+		coordinator.setOperationBountyBoard(address(board));
+	}
+}
+
 contract PriceOracleManagerAndOperatorQueuerFactory {
+	LiquidationApprovalRegistryDeployer private immutable liquidationApprovalRegistryDeployer;
+	PriceCoordinatorDeploymentWorker private immutable priceCoordinatorDeploymentWorker;
+	OpenOracleOperationBountyBoardFactory public immutable operationBountyBoardFactory;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -30,28 +91,11 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
-	OpenOracleOperationBountyBoardFactory public immutable operationBountyBoardFactory;
-	PriceOracleCoordinatorDeploymentWorker private immutable deploymentWorker;
 
-	constructor(
-		IWeth9 _weth,
-		uint256 _gasConsumedOpenOracleReportPrice,
-		uint32 _gasConsumedSettlement,
-		uint256 _gasUnitsForOneDispute,
-		uint256 _targetPriceErrorForDispute,
-		uint256 _openOracleSecurityMultiplierBps,
-		uint48 _settlementTime,
-		uint24 _disputeDelay,
-		uint24 _protocolFee,
-		uint24 _feePercentage,
-		uint16 _multiplier,
-		bool _timeType,
-		bool _trackDisputes,
-		address _protocolFeeRecipient,
-		uint256 _escalationHaltMultiplierBps,
-		uint256 _maxSettlementBaseFeeMultiplierBps,
-		uint256 _minLiquidationPriceDistanceBps
-	) {
+	constructor(IWeth9 _weth, uint256 _gasConsumedOpenOracleReportPrice, uint32 _gasConsumedSettlement, uint256 _gasUnitsForOneDispute, uint256 _targetPriceErrorForDispute, uint256 _openOracleSecurityMultiplierBps, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, bool _timeType, bool _trackDisputes, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps) {
+		liquidationApprovalRegistryDeployer = new LiquidationApprovalRegistryDeployer();
+		priceCoordinatorDeploymentWorker = new PriceCoordinatorDeploymentWorker();
+		operationBountyBoardFactory = new OpenOracleOperationBountyBoardFactory();
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
@@ -69,98 +113,15 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
-		operationBountyBoardFactory = new OpenOracleOperationBountyBoardFactory();
-		PriceOracleCoordinatorCreationCode creationCode = new PriceOracleCoordinatorCreationCode();
-		deploymentWorker = new PriceOracleCoordinatorDeploymentWorker(address(creationCode));
 	}
 
-	function deployPriceOracleManagerAndOperatorQueuer(
-		OpenOracle _openOracle,
-		ReputationToken _reputationToken,
-		bytes32 salt
-	) external returns (OpenOraclePriceCoordinator) {
+	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, uint256 _initialReportPriorityFeeAttoEthPerGas, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
 		bytes32 deploymentSalt = keccak256(abi.encode(msg.sender, salt));
-		bytes memory constructorArguments = abi.encode(
-			address(this),
-			_openOracle,
-			_reputationToken,
-			weth,
-			gasConsumedOpenOracleReportPrice,
-			gasConsumedSettlement,
-			gasUnitsForOneDispute,
-			targetPriceErrorForDispute,
-			openOracleSecurityMultiplierBps,
-			settlementTime,
-			disputeDelay,
-			protocolFee,
-			feePercentage,
-			multiplier,
-			timeType,
-			trackDisputes,
-			protocolFeeRecipient,
-			escalationHaltMultiplierBps,
-			maxSettlementBaseFeeMultiplierBps,
-			minLiquidationPriceDistanceBps
-		);
-		OpenOraclePriceCoordinator coordinator = deploymentWorker.deploy(deploymentSalt, constructorArguments);
-		OpenOracleOperationBountyBoard board = operationBountyBoardFactory.deploy(
-			coordinator,
-			_reputationToken,
-			weth,
-			deploymentSalt
-		);
-		coordinator.setOperationBountyBoard(address(board));
+		OpenOraclePriceCoordinator coordinator = priceCoordinatorDeploymentWorker.deploy(abi.encode(_openOracle, _reputationToken, weth, gasConsumedOpenOracleReportPrice, gasConsumedSettlement, gasUnitsForOneDispute, _initialReportPriorityFeeAttoEthPerGas, targetPriceErrorForDispute, openOracleSecurityMultiplierBps, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps, minLiquidationPriceDistanceBps), deploymentSalt);
+		LiquidationApprovalRegistry registry = liquidationApprovalRegistryDeployer.deploy(address(coordinator), deploymentSalt);
+		priceCoordinatorDeploymentWorker.configureLiquidationApprovalRegistry(coordinator, registry);
+		OpenOracleOperationBountyBoard board = operationBountyBoardFactory.deploy(coordinator, _reputationToken, weth, deploymentSalt);
+		priceCoordinatorDeploymentWorker.configureOperationBountyBoard(coordinator, board);
 		return coordinator;
-	}
-}
-
-// Keep the coordinator creation code in contract bytecode so each security-pool
-// deployment can copy it cheaply instead of loading hundreds of storage slots.
-contract PriceOracleCoordinatorCreationCode {
-	constructor() {
-		bytes memory creationCode = type(OpenOraclePriceCoordinator).creationCode;
-		assembly {
-			return(add(creationCode, 0x20), mload(creationCode))
-		}
-	}
-}
-
-contract PriceOracleCoordinatorDeploymentWorker {
-	address private immutable factory;
-	address private immutable creationCodeStore;
-
-	constructor(address _creationCodeStore) {
-		factory = msg.sender;
-		creationCodeStore = _creationCodeStore;
-	}
-
-	function deploy(
-		bytes32 salt,
-		bytes calldata constructorArguments
-	) external returns (OpenOraclePriceCoordinator coordinator) {
-		require(msg.sender == factory, 'Only the price oracle factory can use the deployment worker');
-		address codeStore = creationCodeStore;
-		uint256 creationCodeSize = codeStore.code.length;
-		require(creationCodeSize > 0, 'Price oracle coordinator creation code is unavailable');
-		bytes memory initCode = new bytes(creationCodeSize + constructorArguments.length);
-		address deployed;
-		assembly {
-			extcodecopy(codeStore, add(initCode, 0x20), 0, creationCodeSize)
-			calldatacopy(
-				add(add(initCode, 0x20), creationCodeSize),
-				constructorArguments.offset,
-				constructorArguments.length
-			)
-			deployed := create2(0, add(initCode, 0x20), mload(initCode), salt)
-			if iszero(deployed) {
-				let revertDataSize := returndatasize()
-				if gt(revertDataSize, 0) {
-					returndatacopy(0, 0, revertDataSize)
-					revert(0, revertDataSize)
-				}
-			}
-		}
-		require(deployed != address(0), 'Price oracle coordinator deployment failed');
-		return OpenOraclePriceCoordinator(deployed);
 	}
 }

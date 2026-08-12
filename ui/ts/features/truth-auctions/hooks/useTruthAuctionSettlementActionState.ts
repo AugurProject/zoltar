@@ -13,9 +13,10 @@ type UseTruthAuctionSettlementActionStateParams = {
 	accountAddress: Address | undefined
 	forkAuctionError: string | undefined
 	forkAuctionResult: ForkAuctionActionResult | undefined
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => void
-	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
+	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
 	selectedAuctionPoolAddress: Address | undefined
+	selectedAuctionUniverseId?: bigint | undefined
 	selectedStage: ForkWorkflowSelectionStage
 	settlementBidRows: TruthAuctionSettlementBidRow[]
 	truthAuctionFinalized: boolean
@@ -31,7 +32,7 @@ function resolveSettlementBidKeyUpdate(currentKeys: string[], update: Settlement
 	return update
 }
 
-export function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError, forkAuctionResult, onClaimAuctionProceeds, onRefundLosingBids, selectedAuctionPoolAddress, selectedStage, settlementBidRows, truthAuctionFinalized }: UseTruthAuctionSettlementActionStateParams) {
+export function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError, forkAuctionResult, onClaimAuctionProceeds, onRefundLosingBids, selectedAuctionPoolAddress, selectedAuctionUniverseId, selectedStage, settlementBidRows, truthAuctionFinalized }: UseTruthAuctionSettlementActionStateParams) {
 	const [settlementActionState, setSettlementActionState] = useState(createTruthAuctionSettlementActionState)
 	const settlementSelectionState = getTruthAuctionSettlementSelectionState({
 		selectedBidKeys: settlementActionState.selectedBidKeys,
@@ -62,7 +63,7 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 			refundKeys: [],
 			type: 'submit',
 		})
-		onClaimAuctionProceeds(selectedAuctionPoolAddress, claimBids)
+		onClaimAuctionProceeds(selectedAuctionPoolAddress, claimBids, undefined, selectedAuctionUniverseId)
 	}
 	const submitRefundBidsByKeys = (refundBidKeys: string[]) => {
 		if (selectedAuctionPoolAddress === undefined || isSettleSelectedBidsInProgress) return
@@ -82,10 +83,10 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 			type: 'submit',
 		})
 		if (settlementAction === 'claimAuctionProceeds') {
-			onClaimAuctionProceeds(selectedAuctionPoolAddress, [], refundBids)
+			onClaimAuctionProceeds(selectedAuctionPoolAddress, [], refundBids, selectedAuctionUniverseId)
 			return
 		}
-		onRefundLosingBids(selectedAuctionPoolAddress, refundBids)
+		onRefundLosingBids(selectedAuctionPoolAddress, refundBids, selectedAuctionUniverseId)
 	}
 	const submitSelectedSettlementBids = () => {
 		if (settlementSelectionState.selectedRows.length === 0) return
@@ -108,10 +109,10 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 			type: 'submit',
 		})
 		if (settlementAction === 'claimAuctionProceeds') {
-			onClaimAuctionProceeds(selectedAuctionPoolAddress, selectedClaimSettlementBids, selectedRefundSettlementBids)
+			onClaimAuctionProceeds(selectedAuctionPoolAddress, selectedClaimSettlementBids, selectedRefundSettlementBids, selectedAuctionUniverseId)
 			return
 		}
-		onRefundLosingBids(selectedAuctionPoolAddress, selectedRefundSettlementBids)
+		onRefundLosingBids(selectedAuctionPoolAddress, selectedRefundSettlementBids, selectedAuctionUniverseId)
 	}
 
 	useEffect(() => {

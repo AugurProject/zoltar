@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { approveErc20, depositRepToSecurityPool, loadErc20Allowance, loadErc20Balance, loadSecurityVaultDetails } from '../../../protocol/index.js'
+import { approveErc20, depositRepToVaultToSecurityPool, loadErc20Allowance, loadErc20Balance, loadSecurityVaultDetails } from '../../../protocol/index.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import type { InjectedEthereum } from '../../../injectedEthereum.js'
 import { DAY, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
@@ -14,7 +14,7 @@ import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getSecurityVault, getVaultCount, getVaults, poolOwnershipToRep } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
+import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -35,7 +35,7 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 }
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const outcomes = ['Yes', 'No']
 const depositAmount = 10_000n * 10n ** 18n
 const belowMinimumDepositAmount = 9n * 10n ** 18n
@@ -74,14 +74,14 @@ describe('Security vault integration', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
-		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	})
 
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {
 		const initialVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		if (initialVaultDetails === undefined) throw new Error('Expected security vault details to load')
-		expect(initialVaultDetails.repDepositShare).toBe(0n)
+		expect(initialVaultDetails.vaultAttoRepBacking).toBe(0n)
 
 		const startPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
 		const approvalResult = await approveErc20(uiWriteClient, initialVaultDetails.repToken, securityPoolAddress, depositAmount, 'approveRep')
@@ -90,8 +90,8 @@ describe('Security vault integration', () => {
 		const approvedRep = await loadErc20Allowance(uiReadClient, initialVaultDetails.repToken, walletAddress, securityPoolAddress)
 		expect(approvedRep).toBe(depositAmount)
 
-		const depositResult = await depositRepToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount)
-		expect(depositResult.action).toBe('depositRep')
+		const depositResult = await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount)
+		expect(depositResult.action).toBe('depositRepToVault')
 
 		const endPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
 		expect(endPoolRepBalance - startPoolRepBalance).toEqual(depositAmount)
@@ -102,14 +102,14 @@ describe('Security vault integration', () => {
 		expect(vaults).toEqual([walletAddress])
 
 		const vault = await getSecurityVault(client, securityPoolAddress, walletAddress)
-		const repFromOwnership = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
-		expect(repFromOwnership).toBe(depositAmount)
+		const repFromBackingUnits = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
+		expect(repFromBackingUnits).toBe(depositAmount)
 
 		const updatedVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		if (updatedVaultDetails === undefined) throw new Error('Expected updated security vault details to load')
 		expect(updatedVaultDetails.vaultAddress).toBe(walletAddress)
 		expect(updatedVaultDetails.securityPoolAddress).toBe(securityPoolAddress)
-		expect(updatedVaultDetails.repDepositShare).toBe(depositAmount)
+		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {
@@ -118,6 +118,6 @@ describe('Security vault integration', () => {
 
 		await approveErc20(uiWriteClient, vaultDetails.repToken, securityPoolAddress, belowMinimumDepositAmount, 'approveRep')
 
-		await expect(depositRepToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount)).rejects.toThrow('Vault REP below minimum')
+		await expect(depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount)).rejects.toThrow('Vault REP below minimum')
 	})
 })

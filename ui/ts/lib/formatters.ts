@@ -1,6 +1,7 @@
-import { formatEther, formatUnits } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, formatEther, formatUnits } from '@zoltar/shared/ethereum'
 
 const MILLISECONDS_PER_SECOND = 1000
+const MAX_DATE_TIMESTAMP_SECONDS = 8_640_000_000_000n
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
@@ -66,8 +67,16 @@ function formatTimestampPart(value: number) {
 }
 
 function formatUtcTimestamp(timestamp: bigint) {
-	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	if (timestamp < -MAX_DATE_TIMESTAMP_SECONDS || timestamp > MAX_DATE_TIMESTAMP_SECONDS) return undefined
+	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
+	if (Number.isNaN(date.getTime())) return undefined
 	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
+}
+
+export function formatTimestampDateTime(timestamp: bigint) {
+	if (timestamp < -MAX_DATE_TIMESTAMP_SECONDS || timestamp > MAX_DATE_TIMESTAMP_SECONDS) return undefined
+	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
+	return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
 function getEffectiveRoundedDecimals(absoluteValue: bigint, units: number, decimals: number) {
@@ -142,7 +151,7 @@ export function formatCompactCurrencyBalance(value: bigint | undefined, units: n
 
 export function formatTimestamp(timestamp: bigint) {
 	if (timestamp === 0n) return 'Immediate'
-	return formatUtcTimestamp(timestamp)
+	return formatUtcTimestamp(timestamp) ?? `Invalid timestamp (${timestamp.toString()})`
 }
 
 function formatRelativeDuration(seconds: bigint) {

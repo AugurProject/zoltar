@@ -1,0 +1,290 @@
+import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
+import { parseStrategy } from '../src/config/settings.ts'
+
+let paused = false
+let configurationRequests = 0
+const longUniverseId = '452312848583266388373324160190187140051835877600158453279131187530910662655'
+let approvedUniverses = ['101', longUniverseId]
+let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
+const centralizedMarkets = {
+	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+	assetChainId: 1,
+	assetSymbol: 'REP',
+	depthBps: 500,
+	maximumDexDeviationBps: 1000,
+	maximumObservationAgeMilliseconds: 30000,
+	maximumVenueDispersionBps: 500,
+	minimumAskDepthEth: '2',
+	minimumBidDepthEth: '2',
+	minimumSourceCount: 2,
+	orderBookLimit: 20,
+	requestTimeoutMilliseconds: 5000,
+	requiredForExecution: true,
+	sources: [
+		{ ethMarket: 'ETH/USD', exchangeId: 'kraken', repMarket: 'REP/USD' },
+		{ ethMarket: null, exchangeId: 'coinbase', repMarket: 'REP/ETH' },
+	],
+	venueConsensus: {
+		allowSingleGroupFallback: false,
+		dexProbeDepthEth: '1',
+		dexSources: [
+			{ feeBps: 30, pair: '0xdddddddddddddddddddddddddddddddddddddddd', sourceId: 'uniswap-v2' },
+			{ feeBps: 30, pair: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', sourceId: 'sushiswap-v2' },
+		],
+		maximumGroupDeviationBps: 500,
+		minimumDexAskDepthEth: '0.5',
+		minimumDexBidDepthEth: '0.5',
+		minimumDexSourceCount: 2,
+		minimumSourceObservationCount: 2,
+		minimumSourceObservationSpanMilliseconds: 10000,
+		minimumTotalSourceCount: 3,
+	},
+}
+const childMarketConfigurations: unknown[] = []
+const desiredPools = [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '42', statoblastSecurityMultiplierBps: '12500', universeId: '101' }]
+let strategy = {
+	allowAutomaticDeposits: true,
+	allowAutomaticPoolCreation: false,
+	allowAutomaticVaultMigrations: true,
+	allowAutomaticWithdrawals: true,
+	candidatePriority: 'largest-bonus',
+	fallbackRepPerEthPrice: '12.4',
+	maximumGasCostEth: '0.02',
+	maximumLiquidationDebtEth: '25',
+	maximumOracleRequestCostEth: '0.02',
+	maximumPerPoolRep: '10000',
+	maximumTotalDeployedRep: '25000',
+	minimumLiquidationDebtEth: '1',
+	minimumRepWithdrawalRep: '10',
+	minimumRewardValueEth: '0.02',
+	redeemFeesAboveEth: '0.01',
+	stalePriceFundingBufferBps: 15000,
+	stagedOperationValidForSeconds: 240,
+	vaultTargetHealthBps: 12500,
+	vaultTopUpHealthBps: 11000,
+	vaultWithdrawHealthBps: 15000,
+	walletReserveRep: '100',
+}
+
+function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {
+	return {
+		knownVaultCount: candidateCount === 0 ? '4' : '18',
+		address,
+		approvedUniverse,
+		botVault: {
+			address: '0x9999999999999999999999999999999999999999',
+			capacityOwnershipRep: selected ? '650' : '0',
+			openInterestDisplay: selected ? '32.5' : '0',
+			healthBps: selected ? '12500' : undefined,
+			backingUnits: '0',
+			vaultRepBacking: selected ? '818.42' : '0',
+			claimableFeesEth: selected ? '0.0084' : '0',
+		},
+		candidates: Array.from({ length: candidateCount }, (_, index) => ({
+			bonusValueEth: (1.25 - index * 0.1).toFixed(2),
+			requestedDebtEth: (25 - index).toString(),
+			priceDistanceBps: '1820',
+			vaultRepBackingToTransferRep: '262.5',
+			resultingHealthBps: '12500',
+			target: `0x${(index + 4).toString(16).padStart(40, '0')}`,
+			topUpRep: '362.5',
+		})),
+		settlementCollateralEth: '1942.73',
+		centralizedPriceAllowed: true,
+		centralizedPriceDeviationBps: '86',
+		currentRetentionRate: '999999987000000000',
+		forkActivationTime: systemState === '1' ? '1785416250' : '0',
+		forkOutcomeIndex,
+		initialReportPriorityFeeAttoEthPerGas: '2000000000',
+		isPriceValid,
+		lastPrice: '10.284',
+		lastSettlementTimestamp: '1785416250',
+		manager: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+		minLiquidationPriceDistanceBps: '1000',
+		minimumToken1ReportEth: '1',
+		multiplierBps: '20000',
+		parent,
+		parentUniverseId: parent === '0x0000000000000000000000000000000000000000' ? undefined : '0',
+		pendingReportId: isPriceValid ? '0' : '8124',
+		pendingReportSponsor: isPriceValid ? '0x0000000000000000000000000000000000000000' : '0x9999999999999999999999999999999999999999',
+		questionId,
+		repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+		requestPriceCostEth: '0.0042',
+		selected,
+		securityPoolForker: '0xcccccccccccccccccccccccccccccccccccccccc',
+		stagedOperations: [],
+		systemState,
+		totalCapacityOwnershipRep: '1644.2',
+		totalPoolHeldRep: '14628.817',
+		truncatedVaults: false,
+		universeId,
+		vaults: [],
+	}
+}
+
+const activities = [
+	{
+		at: new Date(Date.now() - 25_000).toISOString(),
+		details: 'pool=0x1111…1111 target=0x0000…0004 openInterestAttoEth=25000000000000000000',
+		kind: 'liquidation',
+		message: 'Liquidation candidate selected',
+		status: 'dry-run',
+	},
+	{
+		at: new Date(Date.now() - 95_000).toISOString(),
+		kind: 'scan',
+		message: 'Factory registry reconciled',
+		status: 'info',
+	},
+	{
+		at: new Date(Date.now() - 180_000).toISOString(),
+		kind: 'deposit',
+		message: 'Deposit REP for liquidator vault health',
+		status: 'confirmed',
+	},
+]
+
+const server = startDashboardServer(4183, {
+	getConfiguration: async () => {
+		await Bun.sleep(400)
+		configurationRequests += 1
+		if (configurationRequests === 1) throw new Error('Fixture configuration temporarily unavailable')
+		return { approvedUniverses, centralizedMarkets, childMarketConfigurations, desiredPools, selectedPools, strategy }
+	},
+	getState: () => ({
+		activities,
+		alerts: [{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }],
+		centralizedMarket: {
+			assetId: '0x0000000000000000000000000000000000000abc',
+			askDepthEth: '6.3',
+			bidDepthEth: '7.1',
+			maximumPriceRepPerEth: '10.42',
+			minimumPriceRepPerEth: '10.31',
+			observations: [
+				{ askDepthEth: '3.4', bestAskQuote: '9.72', bestBidQuote: '9.68', bidDepthEth: '3.8', exchangeId: 'kraken', observedAt: new Date().toISOString(), priceRepPerEth: '10.31', repMarket: 'REP/USD' },
+				{ askDepthEth: '2.9', bestAskQuote: '0.097', bestBidQuote: '0.096', bidDepthEth: '3.3', exchangeId: 'coinbase', observedAt: new Date().toISOString(), priceRepPerEth: '10.42', repMarket: 'REP/ETH' },
+			],
+			priceRepPerEth: '10.365',
+			reasons: [],
+			reliable: true,
+		},
+		marketConsensus: {
+			assetId: '0x0000000000000000000000000000000000000abc',
+			cex: { askDepthEth: '6.3', bidDepthEth: '7.1', priceRepPerEth: '10.365', reasons: [], reliable: true, sourceCount: 2 },
+			dex: { askDepthEth: '4.8', bidDepthEth: '5.2', priceRepPerEth: '10.39', reasons: [], reliable: true, sourceCount: 2 },
+			priceRepPerEth: '10.3775',
+			reasons: [],
+			reliable: true,
+			sourceCount: 4,
+		},
+		execute: false,
+		lastScanAt: new Date().toISOString(),
+		lastScannedBlock: '8842011',
+		metrics: {
+			approvedUniverseCount: approvedUniverses.length,
+			assumedOpenInterestEth: '58.9',
+			candidateCount: 4,
+			deployedRep: '1636.84',
+			eligiblePoolCount: 1,
+			poolCount: 3,
+			selectedPoolCount: selectedPools.length,
+			walletEth: '2.184',
+			walletRep: '2508.19',
+		},
+		paused,
+		pendingTransactions: [
+			{
+				hash: `0x${'12'.repeat(32)}`,
+				kind: 'liquidation',
+				label: 'Liquidate vault 0x0000…0004',
+				maxBlockNumber: '8842020',
+				mode: 'public',
+				nonce: '19',
+				requiresMarketEvidence: true,
+				submissionBlock: '8842011',
+			},
+		],
+		pools: [
+			pool('0x1111111111111111111111111111111111111111', '42', true, true, 0, '0', false, undefined, '1'),
+			pool('0x2222222222222222222222222222222222222222', '42', false, true, 0, '101', true, '0x1111111111111111111111111111111111111111', '2', '1'),
+			pool('0x3333333333333333333333333333333333333333', '900719925474099312345', true, false, 4, longUniverseId, true),
+		],
+		scanning: false,
+		startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+		status: paused ? 'paused' : 'dry-run',
+		marketSources: [
+			{ assetId: centralizedMarkets.assetAddress, id: 'kraken', kind: 'cex', market: 'REP/USD', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'coinbase', kind: 'cex', market: 'REP/ETH', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'uniswap-v2', kind: 'dex', market: '0xdddddddddddddddddddddddddddddddddddddddd', status: 'admitted' },
+			{ assetId: centralizedMarkets.assetAddress, id: 'sushiswap-v2', kind: 'dex', market: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', reason: 'Observed but excluded by persistence policy', status: 'excluded' },
+		],
+		universes: [
+			{ approved: false, forkedPoolCount: 1, forkQuestionId: '42', forkTime: '1785416250', id: '0', migratableVaultCount: 0, operationalPoolCount: 0, poolCount: 1, repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', selectedPoolCount: 1 },
+			{ approved: true, forkedPoolCount: 0, forkQuestionId: '42', forkTime: '0', id: '101', migratableVaultCount: 1, operationalPoolCount: 0, outcomeIndex: '1', parentId: '0', poolCount: 1, repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', selectedPoolCount: 0 },
+			{ approved: true, forkedPoolCount: 0, forkQuestionId: '900719925474099312345', forkTime: '0', id: longUniverseId, migratableVaultCount: 0, operationalPoolCount: 1, poolCount: 1, repToken: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', selectedPoolCount: 1 },
+			{ approved: false, forkedPoolCount: 0, forkQuestionId: '900719925474099312345', forkTime: '0', id: '301', migratableVaultCount: 0, operationalPoolCount: 0, outcomeIndex: '2', parentId: longUniverseId, poolCount: 0, repToken: '0xdddddddddddddddddddddddddddddddddddddddd', selectedPoolCount: 0 },
+		],
+		wallet: '0x9999999999999999999999999999999999999999',
+		walletRep: {
+			'0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb': '2508.19',
+		},
+	}),
+	hostname: '127.0.0.1',
+	reconcileTransaction: value => {
+		if (!paused) throw new Error('Pause the bot before reconciling a replacement transaction')
+		return { intentHash: Reflect.get(value as object, 'intentHash'), replacementHash: Reflect.get(value as object, 'replacementHash'), replacementStatus: 'success' }
+	},
+	setPaused: value => {
+		paused = Reflect.get(value as object, 'paused') === true
+		return { paused }
+	},
+	setSelectedPools: value => {
+		if (!Array.isArray(value)) throw new Error('Expected selected-pool array')
+		selectedPools = value.map(String)
+		return { approvedUniverses, selectedPools, strategy }
+	},
+	setApprovedUniverses: value => {
+		if (!Array.isArray(value)) throw new Error('Expected approved-universe array')
+		approvedUniverses = value.map(String)
+		return { approvedUniverses, selectedPools, strategy }
+	},
+	setMarketConfiguration: value => {
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected market configuration object')
+		return {
+			approvedUniverses,
+			centralizedMarkets: Reflect.get(value, 'root'),
+			childMarketConfigurations: Reflect.get(value, 'children'),
+			desiredPools: Reflect.get(value, 'desiredPools'),
+			selectedPools,
+			strategy,
+		}
+	},
+	setSigner: value => ({
+		wallet: Reflect.get(value as object, 'privateKey') === '' ? undefined : '0x9999999999999999999999999999999999999999',
+	}),
+	setStrategy: value => {
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+			throw new Error('Expected strategy object')
+		}
+		parseStrategy(value)
+		strategy = { ...strategy, ...value }
+		return { approvedUniverses, selectedPools, strategy }
+	},
+	testMarketSources: () => ({
+		assets: [
+			{
+				assetId: centralizedMarkets.assetAddress,
+				sources: [
+					{ id: 'kraken', kind: 'cex', market: 'REP/USD', status: 'observed' },
+					{ id: 'coinbase', kind: 'cex', market: 'REP/ETH', status: 'observed' },
+					{ id: 'uniswap-v2', kind: 'dex', market: '0xdddddddddddddddddddddddddddddddddddddddd', status: 'observed' },
+					{ id: 'sushiswap-v2', kind: 'dex', market: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', status: 'observed' },
+				],
+			},
+		],
+		blockNumber: '8842011',
+		observedAt: new Date().toISOString(),
+	}),
+})
+
+console.log(`Liquidator dashboard fixture: ${server.url}`)

@@ -5,13 +5,13 @@ import { AddressValue } from '../../../components/AddressValue.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
-import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
+import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
+import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 
@@ -21,34 +21,14 @@ type SecurityPoolSummaryMetricsProps = {
 	currentTimestamp?: bigint | undefined
 	metricVariant?: MetricGridVariant
 	pool: ListedSecurityPool
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'mock' | 'v3' | 'v4' | undefined
-	repPerEthSourceUrl: string | undefined
-	showCollateralizationGauge?: boolean
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
 	showUniverse?: boolean
 	variant?: 'embedded' | 'hero'
 }
 
-export function SecurityPoolSummaryMetrics({
-	children,
-	className = '',
-	currentTimestamp,
-	metricVariant = 'default',
-	pool,
-	repPerEthPrice,
-	repPerEthSource: _repPerEthSource,
-	repPerEthSourceUrl: _repPerEthSourceUrl,
-	showCollateralizationGauge = true,
-	showPoolAddress = false,
-	showTotalBacking = false,
-	showUniverse = false,
-	variant = 'embedded',
-}: SecurityPoolSummaryMetricsProps) {
-	const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
-	const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
-
+export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, showUniverse = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
@@ -62,18 +42,19 @@ export function SecurityPoolSummaryMetrics({
 						<UniverseLink universeId={pool.universeId} />
 					</MetricField>
 				) : undefined}
-				<MetricField label={securityPoolCopy.vaults}>{pool.vaultCount.toString()}</MetricField>
-				<MetricField label={commonCopy.securityMultiplier}>{pool.securityMultiplier.toString()}</MetricField>
+				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
+				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
+				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeAttoEthPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>
 				{showTotalBacking ? (
-					<MetricField label={securityPoolCopy.totalRepCollateral}>
-						<CurrencyValue value={pool.totalRepDeposit} suffix={commonCopy.rep} />
+					<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>
+						<CurrencyValue value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
-					<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} /> / <CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
+					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 				</MetricField>
 				{children}
 			</MetricGrid>
@@ -81,15 +62,14 @@ export function SecurityPoolSummaryMetrics({
 
 	return (
 		<div className={['security-pool-hero-metrics', className].filter(Boolean).join(' ')}>
-			{showCollateralizationGauge ? <CollateralizationCircle className='security-pool-hero-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} /> : undefined}
 			<div className='security-pool-hero-ribbon'>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.vaultCount}</span>
 					<strong className='security-pool-ribbon-stat-value'>{pool.vaultCount.toString()}</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{commonCopy.securityMultiplier}</span>
-					<strong className='security-pool-ribbon-stat-value'>{pool.securityMultiplier.toString()}x</strong>
+					<span className='security-pool-ribbon-stat-label'>{commonCopy.statoblastSecurityMultiplierBps}</span>
+					<strong className='security-pool-ribbon-stat-value'>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.annualFee}</span>
@@ -98,9 +78,9 @@ export function SecurityPoolSummaryMetrics({
 					</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalRepBacking}</span>
+					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldAttoRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
-						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalRepDeposit} suffix={commonCopy.rep} />
+						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</strong>
 				</div>
 			</div>
@@ -116,20 +96,20 @@ export function SecurityPoolSummaryMetrics({
 					<ProgressMeter
 						className='security-pool-hero-meter'
 						label={securityPoolCopy.openInterestMinted}
-						maxValue={pool.totalSecurityBondAllowance}
+						maxValue={mintingCapacityAttoEth ?? 0n}
 						secondaryValue={
 							<span className='detail'>
 								{securityPoolCopy.maxLead}
-								<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
+								{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 							</span>
 						}
 						tone={getToneRatioThreshold({
-							ratio: getVisualRatio({ value: pool.completeSetCollateralAmount, maxValue: pool.totalSecurityBondAllowance }),
+							ratio: getVisualRatio({ value: pool.settlementCollateralAttoEth, maxValue: mintingCapacityAttoEth ?? 0n }),
 							successThreshold: 0.6,
 							warningThreshold: 0.85,
 						})}
-						value={pool.completeSetCollateralAmount}
-						valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} />}
+						value={pool.settlementCollateralAttoEth}
+						valueText={<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} />}
 					/>
 				</div>
 			</div>

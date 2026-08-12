@@ -1,142 +1,133 @@
-/// <reference types='bun-types' />
+/// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { h } from 'preact'
+import { act } from 'preact/test-utils'
 import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '../../../features/open-oracle/hooks/usePriceOracleManager.js'
-import type { OracleManagerDetails, OracleOperationBounty } from '../../../types/contracts.js'
+import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
+import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
+type TestWriteClient = { kind: 'price-oracle-write-client' }
 type UsePriceOracleManagerState = ReturnType<typeof usePriceOracleManager>
 
-const MANAGER_A = getAddress('0x00000000000000000000000000000000000000a1')
-const MANAGER_B = getAddress('0x00000000000000000000000000000000000000b2')
-const BOARD_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
-function createManagerDetails(managerAddress: typeof MANAGER_A, operationBounties: OracleOperationBounty[] = []): OracleManagerDetails {
-	return createOracleManagerDetails({
-		managerAddress,
-		operationBounties,
-		operationBountyBoardAddress: BOARD_ADDRESS,
-	})
-}
-
-function createBounty(): OracleOperationBounty {
-	return {
-		acceptanceDeadline: 2_000n,
-		amount: 0n,
-		bountyId: 1n,
-		creator: MANAGER_A,
-		executionErrorMessage: undefined,
-		executionStatus: 'none',
-		maximumInitialWeth: 0n,
-		minimumInitialWeth: 0n,
-		operation: 'setSecurityBondsAllowance',
-		operationId: 0n,
-		operator: zeroAddress,
-		refundAvailableAt: undefined,
-		reportId: 0n,
-		rewardAmount: 1n,
-		rewardToken: BOARD_ADDRESS,
-		state: 'open',
-		targetVault: MANAGER_A,
-		validForSeconds: 300n,
-	}
-}
+const MANAGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
+const POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
+const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a3')
+const TRANSACTION_HASH = '0x00000000000000000000000000000000000000000000000000000000000000a4' as const
 
 function requireHookState(state: UsePriceOracleManagerState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 	return state
 }
 
-function createHarness(dependencies: UsePriceOracleManagerDependencies, onRender: (state: UsePriceOracleManagerState) => void) {
-	return function PriceOracleManagerHarness() {
-		const state = usePriceOracleManager(
-			{
-				accountAddress: undefined,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-			},
-			dependencies,
-		)
-		onRender(state)
-		return <div />
-	}
-}
-
 describe('usePriceOracleManager', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	let restoreActiveEnvironment: (() => void) | undefined
+	let restoreDomEnvironment: (() => void) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment().cleanup
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
 		mock.restore()
 	})
 
-	test('manager reloads discard stale bounty lookup results and errors', async () => {
-		const staleBountyLookup = createDeferred<OracleOperationBounty>()
-		const staleLookupError = createDeferred<OracleOperationBounty>()
-		const managerLoads = [createManagerDetails(MANAGER_A), createManagerDetails(MANAGER_A), createManagerDetails(MANAGER_B)]
-		const bountyLookups = [staleBountyLookup.promise, staleLookupError.promise]
-		const dependencies: UsePriceOracleManagerDependencies = {
-			loadOracleManagerDetails: mock(async () => {
-				const details = managerLoads.shift()
-				if (details === undefined) throw new Error('Unexpected manager load')
-				return details
+	test('re-reads manager validity immediately before requesting a price', async () => {
+		let managerLoadCount = 0
+		const loadOracleManagerDetails = mock(async () => {
+			managerLoadCount += 1
+			return createOracleManagerDetails({
+				isPriceValid: managerLoadCount === 1,
+				managerAddress: MANAGER_ADDRESS,
+				pendingReportId: 0n,
+			})
+		})
+		const requestOraclePrice = mock(async () => {
+			expect(managerLoadCount).toBe(2)
+			return {
+				action: 'requestPrice' as const,
+				hash: TRANSACTION_HASH,
+			}
+		})
+		const dependencies: UsePriceOracleManagerDependencies<TestWriteClient> = {
+			acceptOracleOperationBounty: async () => {
+				throw new Error('acceptOracleOperationBounty should not be called in this test')
+			},
+			claimOracleOperationBounty: async () => {
+				throw new Error('claimOracleOperationBounty should not be called in this test')
+			},
+			createConnectedReadClient: () => ({
+				getBalance: async () => 100n,
 			}),
-			loadOracleOperationBounty: mock(async () => {
-				const bounty = bountyLookups.shift()
-				if (bounty === undefined) throw new Error('Unexpected bounty lookup')
-				return await bounty
+			createWalletWriteClient: () => ({ kind: 'price-oracle-write-client' }),
+			executeOracleManagerStagedOperation: async () => {
+				throw new Error('executeOracleManagerStagedOperation should not be called in this test')
+			},
+			loadCoordinatorInitialReportFundingRequirement: async () => ({
+				currentRepBalanceAttoRep: 10n,
+				currentWethBalanceAttoEth: 10n,
+				initialReportAmount2: 1n,
+				maximumInitialAttoWeth: 1n,
+				minimumToken1ReportAttoEth: 1n,
+				proposedRepPerEthPrice: 1n,
+				reputationTokenAddress: zeroAddress,
+				requestedInitialAttoWeth: 0n,
+				wethShortfallAttoEth: 0n,
 			}),
+			loadOracleManagerDetails,
+			loadOracleOperationBounty: async () => {
+				throw new Error('loadOracleOperationBounty should not be called in this test')
+			},
+			postOracleOperationBounty: async () => {
+				throw new Error('postOracleOperationBounty should not be called in this test')
+			},
+			refundOracleOperationBounty: async () => {
+				throw new Error('refundOracleOperationBounty should not be called in this test')
+			},
+			requestOraclePrice,
 		}
 		let hookState: UsePriceOracleManagerState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(<Harness />)
+		function Harness() {
+			hookState = usePriceOracleManager(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await act(async () => await requireHookState(hookState).loadPoolOracleManager(MANAGER_A))
-		let staleLookupPromise: Promise<void> | undefined
-		await act(() => {
-			staleLookupPromise = requireHookState(hookState).loadPoolOperationBounty(MANAGER_A, 1n)
+		await act(async () => {
+			await requireHookState(hookState).loadPoolOracleManager(MANAGER_ADDRESS)
 		})
-		await act(async () => await requireHookState(hookState).loadPoolOracleManager(MANAGER_A))
-		staleBountyLookup.resolve(createBounty())
-		await act(async () => await staleLookupPromise)
-		expect(requireHookState(hookState).poolOracleManagerDetails?.operationBounties).toEqual([])
+		expect(requireHookState(hookState).poolOracleManagerDetails?.isPriceValid).toBe(true)
 
-		let staleErrorPromise: Promise<void> | undefined
-		await act(() => {
-			staleErrorPromise = requireHookState(hookState).loadPoolOperationBounty(MANAGER_A, 1n)
+		await act(async () => {
+			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n)
 		})
-		await act(async () => await requireHookState(hookState).loadPoolOracleManager(MANAGER_B))
-		staleLookupError.reject(new Error('stale lookup failure'))
-		await act(async () => await staleErrorPromise)
-		expect(requireHookState(hookState).poolOracleManagerDetails?.managerAddress).toBe(MANAGER_B)
-		expect(requireHookState(hookState).poolOperationBountyLookupError).toBeUndefined()
+
+		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
+		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)
+		expect(requireHookState(hookState).poolPriceOracleResult?.action).toBe('requestPrice')
 	})
 })

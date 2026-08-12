@@ -11,45 +11,45 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: undefined,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Connect a wallet before reporting on a market.')
+		).toBe('Connect a wallet before reporting on a question.')
 
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: undefined,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: undefined,
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Select an outcome side before reporting on a market.')
+		).toBe('Select an outcome side before reporting on a question.')
 
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '0',
 				reportingStatus: 'active',
 				selectedAmount: 0n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Enter a valid report amount greater than zero.')
@@ -61,29 +61,29 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'missing',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Load reporting details before reporting on an outcome.')
+		).toBe('Loading reporting details.')
 
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'not-started',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -93,13 +93,13 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -111,13 +111,13 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
@@ -129,47 +129,47 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
 	})
 
-	test('blocks reporting when the vault lacks unlocked REP or the contribution preview is invalid', () => {
+	test('blocks reporting when the vault lacks pool-held REP backing or the contribution preview is invalid', () => {
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 5n * 10n ** 18n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '5',
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 2n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 2n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Need 3 more unlocked REP in your vault before reporting.')
+		).toBe("Deposit 3 more REP into your vault's pool-held backing before reporting.")
 
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: undefined,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Increase the report amount slightly to avoid a tie at the minimum bond.')
@@ -179,16 +179,16 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: undefined,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 0n,
+				viewerPoolHeldVaultRepBackingAttoRep: 0n,
 				viewerVaultExists: false,
 			}),
-		).toBe('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
+		).toBe('Reporting moves pool-held REP backing from your security vault into dispute-staked REP. Deposit REP into your vault before reporting.')
 	})
 
 	test('blocks reporting when the contribution would exceed the remaining selected-side threshold capacity', () => {
@@ -197,13 +197,13 @@ describe('reporting guards', () => {
 				actualDepositAmount: 5n * 10n ** 18n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: 2n * 10n ** 18n,
 				reportAmount: '5',
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n * 10n ** 18n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
 		).toBe('Only 2 REP remains before the selected side reaches the threshold.')
@@ -213,13 +213,13 @@ describe('reporting guards', () => {
 				actualDepositAmount: 1n,
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				remainingSelectedOutcomeCapacity: 0n,
 				reportAmount: '1',
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
-				viewerVaultAvailableEscalationRep: 10n,
+				viewerPoolHeldVaultRepBackingAttoRep: 10n,
 				viewerVaultExists: true,
 			}),
 		).toBe('No remaining contribution capacity is available on the selected side.')
@@ -229,7 +229,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: undefined,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBe('Connect a wallet before settling escalation deposits.')
@@ -237,7 +237,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 				reportingStatus: 'active',
 			}),
 		).toBe('Switch to Ethereum mainnet.')
@@ -245,17 +245,17 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'missing',
 			}),
-		).toBe('Load reporting details before settling escalation deposits.')
+		).toBe('Loading reporting details.')
 	})
 
 	test('leaves withdrawal lifecycle handling to the shared action matrix', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()
@@ -263,7 +263,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()
@@ -271,7 +271,7 @@ describe('reporting guards', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				reportingStatus: 'active',
 			}),
 		).toBeUndefined()

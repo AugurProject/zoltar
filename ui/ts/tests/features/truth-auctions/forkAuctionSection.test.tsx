@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../../../features/truth-auctions/components/ForkAuctionSection.js'
@@ -17,10 +17,18 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
-		ethBalance: 0n,
-		wethBalance: 0n,
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
 		...overrides,
 	}
+}
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
 }
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
@@ -78,8 +86,8 @@ function createReportingForm(overrides: Partial<ReportingFormState> = {}): Repor
 
 function createReportingDeposit(overrides: Partial<EscalationDeposit> = {}): EscalationDeposit {
 	return {
-		amount: 10n,
-		cumulativeAmount: 10n,
+		amountAttoRep: 10n,
+		cumulativeAmountAttoRep: 10n,
 		depositIndex: 0n,
 		depositor: zeroAddress,
 		...overrides,
@@ -89,15 +97,15 @@ function createReportingDeposit(overrides: Partial<EscalationDeposit> = {}): Esc
 function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
 		bindingCapital: 5n,
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRequiredBond: 1n,
 		currentTime: 3n,
 		escalationEndTime: 50n,
 		escalationGameAddress: getAddress('0x00000000000000000000000000000000000000fa'),
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: 100n,
+		nonDecisionThresholdAttoRep: 100n,
 		questionOutcome: 'none',
 		securityPoolAddress: PARENT_POOL_ADDRESS,
 		settlementState: 'locked',
@@ -106,36 +114,36 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 			{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
-		startBond: 1n,
+		startBondAttoRep: 1n,
 		status: 'active',
 		systemState: 'operational',
 		universeId: 1n,
 		parentWithdrawalEnabled: false,
-		viewerVaultAvailableEscalationRep: 0n,
+		viewerPoolHeldVaultRepBackingAttoRep: 0n,
 		viewerVaultExists: false,
-		viewerVaultEscrowedRep: 0n,
-		viewerVaultRepDepositShare: 0n,
+		viewerVaultDisputeStakedAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 0n,
 		activationTime: 1n,
-		totalCost: 1n,
+		totalCostAttoRep: 1n,
 		...overrides,
 	}
 }
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedSecurityBondAllowance: 0n,
+		auctionedCapacityOwnershipAttoRep: 0n,
 		claimingAvailable: false,
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedAttoRep: 1n,
 		migrationEndsAt: 100n,
 		parentSecurityPoolAddress: zeroAddress,
 		questionOutcome: 'yes',
-		auctionableRepAtFork: 0n,
+		auctionableAttoRepAtFork: 0n,
 		securityPoolAddress: PARENT_POOL_ADDRESS,
 		systemState: 'forkTruthAuction',
 		truthAuction: undefined,
@@ -148,25 +156,27 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 
 function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
-		completeSetCollateralAmount: 0n,
+		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleCapacityOwnershipAttoRep: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		migratedRep: 1n,
+		migratedAttoRep: 1n,
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: '0x00000000000000000000000000000000000000f1',
-		shareTokenSupply: 0n,
+		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
-		totalRepDeposit: 0n,
-		totalSecurityBondAllowance: 0n,
+		totalPoolHeldAttoRep: 0n,
+		totalCapacityOwnershipAttoRep: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -216,7 +226,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: () => undefined,
+		onClaimParentEscalationDeposits: () => undefined,
 		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
 		onMigrateRepToZoltar: () => undefined,
 		onMigrateVault: () => undefined,
@@ -346,7 +356,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The system is not forking.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Fork Not Triggered' })).not.toBeNull()
+		expect(documentQueries.queryByText('The system is not forking.')).toBeNull()
 		expect(documentQueries.queryByText('System is forking')).toBeNull()
 	})
 
@@ -360,23 +371,23 @@ describe('ForkAuctionSection', () => {
 						claimingAvailable: true,
 						systemState: 'operational',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 10n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: true,
 							hitCap: true,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 0n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 					}),
 					selectedStageView: 'settlement',
@@ -420,7 +431,7 @@ describe('ForkAuctionSection', () => {
 		}
 	})
 
-	test('shows only the selected-deposit migration action in the migration panel', async () => {
+	test('shows only the direct parent-deposit claim action in the migration panel', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -444,7 +455,11 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.getByText('This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Claim selected Yes deposits' })).not.toBeNull()
+		expect(documentQueries.queryByText('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.')).toBeNull()
+		expect(documentQueries.queryByText(/migratable escalation deposits/i)).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Migrate All Yes Deposits' })).toBeNull()
 		expect(documentQueries.getByText('Open')).not.toBeNull()
 	})
@@ -458,9 +473,9 @@ describe('ForkAuctionSection', () => {
 					forkAuctionDetails: createForkAuctionDetails({
 						forkOwnSecurityPool: true,
 						ownForkRepBuckets: {
-							vaultRepAtFork: 12n,
-							escalationChildRepPerSelectedOutcome: 9n,
-							escrowSourceRepAtFork: 18n,
+							vaultRepAtForkAttoRep: 12n,
+							escalationChildRepPerSelectedOutcomeAttoRep: 9n,
+							escrowSourceRepAtForkAttoRep: 18n,
 						},
 						systemState: 'forkMigration',
 						truthAuction: undefined,
@@ -474,9 +489,9 @@ describe('ForkAuctionSection', () => {
 
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
-		expect(documentQueries.getByText('Pool REP At Fork')).not.toBeNull()
-		expect(documentQueries.getByText('Escalation Child REP per Selected Outcome')).not.toBeNull()
-		expect(documentQueries.getByText('Escrow Source REP At Fork')).not.toBeNull()
+		expect(documentQueries.getByText('Pool-held REP at fork')).not.toBeNull()
+		expect(documentQueries.getByText('Dispute-staked REP per selected outcome')).not.toBeNull()
+		expect(documentQueries.getByText('Dispute-staked REP source at fork')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -501,16 +516,16 @@ describe('ForkAuctionSection', () => {
 
 		documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
-		expect(documentQueries.queryByText('Pool REP At Fork')).toBeNull()
-		expect(documentQueries.queryByText('Escalation Child REP per Selected Outcome')).toBeNull()
-		expect(documentQueries.queryByText('Escrow Source REP At Fork')).toBeNull()
+		expect(documentQueries.queryByText('Pool-held REP at fork')).toBeNull()
+		expect(documentQueries.queryByText('Dispute-staked REP per selected outcome')).toBeNull()
+		expect(documentQueries.queryByText('Dispute-staked REP source at fork')).toBeNull()
 	})
 
 	test('disables unresolved escalation migration after the migration window closes', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ab')
 		const unresolvedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -536,8 +551,8 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultEscrowedRep: 12n,
-						viewerVaultRepDepositShare: 12n,
+						viewerVaultDisputeStakedAttoRep: 12n,
+						viewerVaultRepBackingAttoRep: 12n,
 					}),
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: {
@@ -553,17 +568,60 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })
+		expect(
+			documentQueries.getByText(
+				'First transfers this wallet’s REP backing units and capacity ownership to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
+			),
+		).not.toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
 	})
 
+	test('renders unresolved parent escalation-deposit accounting loading with the shared accessible spinner', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ac')
+		const unresolvedDeposit = createReportingDeposit({ depositor: walletAddress })
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					loadingReportingDetails: true,
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'migration-required',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 10n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerVaultDisputeStakedAttoRep: 10n,
+						viewerVaultExists: true,
+						viewerVaultRepBackingAttoRep: 10n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = within(document.body).getByText('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
+		expect(loadingStatus.textContent).toContain('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
+		expect(loadingStatus.getAttribute('role')).toBe('status')
+		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
+	})
+
 	test('keeps an exported escalation entitlement available for another selected child', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
 		const consumedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -575,10 +633,10 @@ describe('ForkAuctionSection', () => {
 			systemState: 'forkMigration',
 			vaults: [
 				{
-					escalationEscrowedRep: 0n,
-					repDepositShare: 0n,
-					securityBondAllowance: 0n,
-					unpaidEthFees: 0n,
+					disputeStakedAttoRep: 0n,
+					vaultAttoRepBacking: 0n,
+					capacityOwnershipAttoRep: 0n,
+					claimableFeesAttoEth: 0n,
 					vaultAddress: walletAddress,
 				},
 			],
@@ -610,9 +668,9 @@ describe('ForkAuctionSection', () => {
 						viewerEscalationMigrationEntitlement: {
 							initialized: true,
 							materializedByOutcome: { invalid: false, yes: true, no: false },
-							totalCurrentRep: 12n,
+							totalCurrentAttoRep: 12n,
 						},
-						viewerVaultEscrowedRep: 0n,
+						viewerVaultDisputeStakedAttoRep: 0n,
 					}),
 					securityPools: [parentPool, createChildPool({ questionOutcome: 'yes' })],
 					selectedStageView: 'migration',
@@ -622,20 +680,20 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.getByText('Unresolved parent escalation-deposit accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
 		fireEvent.click(button)
 		expect(onMigrateUnresolvedEscalation).toHaveBeenLastCalledWith('no')
 	})
 
-	test('does not fall back to resolved-deposit migration after unresolved escalation migration expires', async () => {
+	test('does not fall back to direct parent-deposit claims after unresolved escalation cleanup expires', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ae')
 		const unresolvedDeposit = createReportingDeposit({
-			amount: 12n,
-			cumulativeAmount: 18n,
+			amountAttoRep: 12n,
+			cumulativeAmountAttoRep: 18n,
 			depositIndex: 4n,
 			depositor: walletAddress,
 		})
@@ -653,8 +711,8 @@ describe('ForkAuctionSection', () => {
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						viewerVaultExists: true,
-						viewerVaultEscrowedRep: 12n,
-						viewerVaultRepDepositShare: 12n,
+						viewerVaultDisputeStakedAttoRep: 12n,
+						viewerVaultRepBackingAttoRep: 12n,
 					}),
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: {
@@ -670,11 +728,11 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The migration window for these unresolved parent escalation deposits has closed.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Migrate Unresolved Escalation Locks' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Migrate Resolved Escalation Deposits' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Migrate Selected Yes Deposits' })).toBeNull()
+		expect(documentQueries.getByText('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Unresolved Parent Escalation-Deposit Accounting' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
 
 	test('disables vault migration after the migration window closes', async () => {
@@ -696,10 +754,10 @@ describe('ForkAuctionSection', () => {
 					previewPool: createChildPool({
 						vaults: [
 							{
-								escalationEscrowedRep: 0n,
-								repDepositShare: 20n,
-								securityBondAllowance: 3n,
-								unpaidEthFees: 0n,
+								disputeStakedAttoRep: 0n,
+								vaultAttoRepBacking: 20n,
+								capacityOwnershipAttoRep: 3n,
+								claimableFeesAttoEth: 0n,
 								vaultAddress: walletAddress,
 							},
 						],
@@ -711,7 +769,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Migrate Vault To Yes' })
+		const button = documentQueries.getByRole('button', { name: 'Migrate vault to Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
@@ -734,8 +792,8 @@ describe('ForkAuctionSection', () => {
 								deposits: [],
 								importedUserDeposits: [
 									{
-										amount: 12n,
-										cumulativeAmount: 6n,
+										amountAttoRep: 12n,
+										cumulativeAmountAttoRep: 6n,
 										depositor: walletAddress,
 										parentDepositIndex: 9n,
 									},
@@ -755,10 +813,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('keeps fork-carried settlement disabled when the child outcome is known before the pool becomes operational', async () => {
@@ -779,8 +837,8 @@ describe('ForkAuctionSection', () => {
 								deposits: [],
 								importedUserDeposits: [
 									{
-										amount: 12n,
-										cumulativeAmount: 6n,
+										amountAttoRep: 12n,
+										cumulativeAmountAttoRep: 6n,
 										depositor: walletAddress,
 										parentDepositIndex: 9n,
 									},
@@ -800,10 +858,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {
@@ -855,6 +913,43 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('Security Pool for Yes universe does not exist.')).toBeNull()
 	})
 
+	test('replaces the start action with auction status after the truth auction has started', async () => {
+		const startedChildPool = createChildPool({
+			systemState: 'forkTruthAuction',
+			truthAuctionStartedAt: 10n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					auctionDetailsOverride: createForkAuctionDetails({
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						securityPoolAddress: startedChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuctionStartedAt: 10n,
+						universeId: startedChildPool.universeId,
+					}),
+					currentStageView: 'auction',
+					currentTimestamp: 20n,
+					securityPools: [startedChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const statusHeading = documentQueries.getByRole('heading', { name: 'Truth Auction Status' })
+		const statusHeader = statusHeading.closest('.section-block-header')
+		if (!(statusHeader instanceof HTMLElement)) throw new Error('Expected truth auction status header')
+		expect(statusHeader.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Started')
+		expect(documentQueries.getByText('1970-01-01 00:00:10 UTC')).not.toBeNull()
+		expect(documentQueries.queryByText('Inactive')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Start Truth Auction' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Start truth auction' })).toBeNull()
+		expect(documentQueries.queryByText('Truth auction already started.')).toBeNull()
+	})
+
 	test('shows truth auction end time as a timestamp instead of a standalone time-left field', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
@@ -875,23 +970,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -919,7 +1014,7 @@ describe('ForkAuctionSection', () => {
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 	})
 
-	test('makes the auctioned bond allowance and debt transfer explicit during bidding', async () => {
+	test('keeps the submit bid form before the current auction bids', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -930,37 +1025,32 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({
-						address: getAddress('0x00000000000000000000000000000000000000aa'),
-						ethBalance: 10n ** 18n,
-					}),
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedSecurityBondAllowance: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -975,9 +1065,153 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
-		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
-		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
+		const currentBidsHeading = documentQueries.getByRole('heading', { name: 'Current Bids' })
+		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My Bids' })
+		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
+		expect(documentQueries.getByText('Market Depth')).not.toBeNull()
+		expect(documentQueries.queryByText('Market Depth & Bid History')).toBeNull()
+		expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(myBidsHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(currentBidsHeading.closest('details')).toBeNull()
+	})
+
+	test('shows bid-book failure recovery and repeats the automatic read', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const retriedTickCount = createDeferred<bigint>()
+		let activeTickCountCalls = 0
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					if (activeTickCountCalls === 1) throw new Error('Bidbook RPC unavailable')
+					return await retriedTickCount.promise
+				}
+				if (request.functionName === 'getActiveTickPage') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const props = createProps({
+			accountState: createAccountState({ address: undefined }),
+			currentStageView: 'auction',
+			currentTimestamp: 5n,
+			forkAuctionDetails: createForkAuctionDetails({
+				currentTime: 5n,
+				parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+				questionOutcome: 'yes',
+				securityPoolAddress: currentChildPool.securityPoolAddress,
+				systemState: 'forkTruthAuction',
+				truthAuction: {
+					accumulatedBidAttoEth: 0n,
+					auctionEndsAt: 604_801n,
+					clearingPrice: 1n,
+					clearingTick: 0n,
+					bidAtClearingTickAttoEth: 0n,
+					attoEthRaiseCap: 1n,
+					attoEthRaised: 0n,
+					finalized: false,
+					hitCap: false,
+					maxAttoRepBeingSold: 1n,
+					minBidSizeAttoEth: 1n,
+					attoRepPurchasableAtBid: undefined,
+					timeRemaining: 604_796n,
+					totalAttoRepPurchased: 0n,
+					underfunded: false,
+					underfundedThreshold: undefined,
+					underfundedWinningAttoEth: 0n,
+				},
+				truthAuctionAddress: currentChildPool.truthAuctionAddress,
+				truthAuctionStartedAt: 1n,
+				universeId: currentChildPool.universeId,
+			}),
+			previewPool: currentChildPool,
+			securityPools: [currentChildPool],
+			selectedStageView: 'auction',
+			truthAuctionReadClient,
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, props))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByText('Failed to load truth auction price levels. Reason: Bidbook RPC unavailable')).not.toBeNull()
+		})
+		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		fireEvent.click(documentQueries.getByText('Market Depth'))
+		expect(documentQueries.queryByText('No live price levels are currently active for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('No active levels are visible.')).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
+		await waitFor(() => {
+			const retryingButton = documentQueries.getByRole('button', { name: 'Retry current bids' })
+			expect(retryingButton.hasAttribute('disabled')).toBe(true)
+			expect(retryingButton.textContent).toContain('Retrying auction bids…')
+			expect(activeTickCountCalls).toBe(2)
+		})
+	})
+
+	test('makes the auctioned capacity ownership transfer explicit during bidding', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({
+						address: getAddress('0x00000000000000000000000000000000000000aa'),
+						ethBalanceAttoEth: 10n ** 18n,
+					}),
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						auctionedCapacityOwnershipAttoRep: 7n,
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedBidAttoEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalAttoRepPurchased: 0n,
+							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningAttoEth: 0n,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Auctioned capacity ownership')).not.toBeNull()
+		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool capacity ownership.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
@@ -993,7 +1227,7 @@ describe('ForkAuctionSection', () => {
 				createProps({
 					accountState: createAccountState({
 						address: getAddress('0x00000000000000000000000000000000000000aa'),
-						ethBalance: 10n ** 18n,
+						ethBalanceAttoEth: 10n ** 18n,
 					}),
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
@@ -1004,23 +1238,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: undefined,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1039,8 +1273,15 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
+		const youPayRow = documentQueries.getByText('You Pay').closest('.transaction-review-row')
+		const resultingEthBalanceRow = documentQueries.getByText('Resulting ETH Balance').closest('.transaction-review-detail-row')
+		if (!(youPayRow instanceof HTMLElement) || !(resultingEthBalanceRow instanceof HTMLElement)) throw new Error('Expected ETH bid review rows')
+		expect(youPayRow.textContent).toContain('ETH')
+		expect(youPayRow.textContent).not.toContain('REP')
+		expect(resultingEthBalanceRow.textContent).toContain('ETH')
+		expect(resultingEthBalanceRow.textContent).not.toContain('REP')
 		expect(submitBidButton.getAttribute('title')).toBe('Bid price is outside the supported auction range.')
 		expect(submitBidButton.disabled).toBe(true)
 	})
@@ -1056,7 +1297,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1065,23 +1306,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: 0n,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1100,8 +1341,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
 		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
@@ -1118,7 +1359,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalance: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1127,23 +1368,23 @@ describe('ForkAuctionSection', () => {
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
 						truthAuction: {
-							accumulatedEth: 0n,
+							accumulatedBidAttoEth: 0n,
 							auctionEndsAt: 604_801n,
 							clearingPrice: 1n,
 							clearingTick: 0n,
-							ethAtClearingTick: 0n,
-							ethRaiseCap: 1n,
-							ethRaised: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
 							finalized: false,
 							hitCap: false,
-							maxRepBeingSold: 1n,
-							minBidSize: 1n,
-							repPurchasableAtBid: undefined,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
 							timeRemaining: 604_796n,
-							totalRepPurchased: 0n,
+							totalAttoRepPurchased: 0n,
 							underfunded: false,
 							underfundedThreshold: 0n,
-							underfundedWinningEth: 0n,
+							underfundedWinningAttoEth: 0n,
 						},
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
@@ -1162,8 +1403,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
 		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
 	})
@@ -1177,7 +1418,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'migration',
 					forkAuctionDetails: createForkAuctionDetails({
 						forkOutcome: 'none',
-						migratedRep: 0n,
+						migratedAttoRep: 0n,
 						systemState: 'poolForked',
 						truthAuction: undefined,
 						truthAuctionStartedAt: 0n,
@@ -1251,7 +1492,7 @@ describe('ForkAuctionSection', () => {
 		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 		expect(within(migrationCard).getByText('REP At Fork')).not.toBeNull()
 		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
-		expect(within(migrationCard).getByText('Collateral')).not.toBeNull()
+		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
 	})
 
 	test('shows a closed migration badge once the truth auction timeline has started', async () => {

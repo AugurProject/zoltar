@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { loadAllSecurityPools, loadSecurityVaultDetails } from '../../protocol/index.js'
 import type { SimulationScenario } from '../../simulation/scenarios.js'
-import { createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
 
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SEEDED_SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
+const SEEDED_CAPACITY_OWNERSHIP_ATTO_REP = 80n * 10n ** 18n
 
 void describe('security-pool simulation backends', () => {
 	let securityPoolBackend: SimulationBackend
@@ -22,10 +22,14 @@ void describe('security-pool simulation backends', () => {
 		securityPoolBackend = nextSecurityPoolBackend
 		securityPoolX2Backend = nextSecurityPoolX2Backend
 		securityPoolX2AuctionBackend = nextSecurityPoolX2AuctionBackend
-		securityPoolBackend.setTransactionDelayMilliseconds(0)
-		securityPoolX2Backend.setTransactionDelayMilliseconds(0)
-		securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
+		await securityPoolBackend.setTransactionDelayMilliseconds(0)
+		await securityPoolX2Backend.setTransactionDelayMilliseconds(0)
+		await securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
+
+	beforeEach(() => {
+		activateSimulationBackendProfile(securityPoolBackend)
+	})
 
 	afterAll(async () => {
 		if (securityPoolBackend !== undefined) await securityPoolBackend.dispose()
@@ -61,9 +65,9 @@ void describe('security-pool simulation backends', () => {
 		expect(backend.currentScenario).toBe('security-pool')
 		expect(pools).toHaveLength(1)
 		expect(seededPool.vaultCount).toBe(1n)
-		expect(seededPool.totalRepDeposit).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededPool.totalSecurityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
-		expect(seededVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+		expect(seededPool.totalPoolHeldAttoRep).toBe(SEEDED_REP_DEPOSIT)
+		expect(seededPool.totalCapacityOwnershipAttoRep).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
+		expect(seededVault.vaultAttoRepBacking).toBe(SEEDED_REP_DEPOSIT)
+		expect(seededVault.capacityOwnershipAttoRep).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
 	}, 60_000)
 })

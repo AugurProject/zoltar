@@ -2,7 +2,8 @@ import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../../../types/contracts.js'
 import { assertNever } from '../../../lib/assert.js'
-import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput } from './marketForm.js'
+import { parseDecimalInput } from '../../../lib/decimal.js'
+import { parseStatoblastSecurityMultiplierBpsInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {
@@ -52,9 +53,17 @@ function createQuestionData(form: MarketFormState): QuestionData {
 function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
+function getMissingRequiredCategoricalOutcomeLabels(form: MarketFormState) {
+	return [0, 1].filter(index => normalizeOutcomeLabel(form.categoricalOutcomes[index] ?? '') === '').map(index => `Outcome ${index + 1}`)
+}
+function getRequiredCategoricalOutcomeMessage(missingOutcomeLabels: string[]) {
+	if (missingOutcomeLabels.length === 1) return `${missingOutcomeLabels[0]} is required`
+	return `${missingOutcomeLabels.join(' and ')} are required`
+}
 function getCategoricalOutcomeLabels(form: MarketFormState) {
+	const missingRequiredOutcomeLabels = getMissingRequiredCategoricalOutcomeLabels(form)
+	if (missingRequiredOutcomeLabels.length > 0) throw new Error(getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
 	const outcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-	if (outcomeLabels.length < 2) throw new Error('Categorical markets require at least 2 outcomes')
 	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcomes must be unique')
 	return sortStringArrayByKeccak(outcomeLabels)
 }
@@ -74,6 +83,12 @@ function getOutcomeLabels(form: MarketFormState) {
 export function getMarketCreationOutcomeLabels(form: MarketFormState) {
 	return getOutcomeLabels(form)
 }
+
+export function hasMarketEndTimePassed(form: MarketFormState, currentTimestamp: bigint | undefined) {
+	if (currentTimestamp === undefined || form.endTime.trim() === '') return false
+	const endTimestamp = tryParseTimestampInput(form.endTime)
+	return endTimestamp !== undefined && endTimestamp <= currentTimestamp
+}
 function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
 	if (fieldErrors[field] !== undefined) return
 	fieldErrors[field] = message
@@ -91,7 +106,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 	}
 	const startTime = form.startTime.trim()
 	const endTime = form.endTime.trim()
-	let parsedStartTime: bigint | undefined
+	let parsedStartTime = 0n
 	let parsedEndTime: bigint | undefined
 	if (startTime !== '')
 		try {
@@ -113,17 +128,17 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			invalidMessages.push(message)
 		}
 	}
-	if (parsedEndTime !== undefined && parsedStartTime !== undefined && parsedEndTime <= parsedStartTime) {
+	if (parsedEndTime !== undefined && parsedEndTime <= parsedStartTime) {
 		const message = 'End time must be after start time'
-		setFieldError(fieldErrors, 'startTime', message)
+		if (startTime !== '') setFieldError(fieldErrors, 'startTime', message)
 		setFieldError(fieldErrors, 'endTime', message)
 		invalidMessages.push(message)
 	}
 	if (form.marketType === 'categorical') {
-		const normalizedOutcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-		if (normalizedOutcomeLabels.length === 0) {
-			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcomes are required')
-			missingFields.push('Outcomes')
+		const missingRequiredOutcomeLabels = getMissingRequiredCategoricalOutcomeLabels(form)
+		if (missingRequiredOutcomeLabels.length > 0) {
+			setFieldError(fieldErrors, 'categoricalOutcomes', getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
+			missingFields.push(...missingRequiredOutcomeLabels)
 		} else {
 			try {
 				getCategoricalOutcomeLabels(form)
@@ -190,10 +205,14 @@ function parseQuestionIdInput(value: string) {
 	return parsed
 }
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
-	const securityMultiplier = parseBigIntInput(form.securityMultiplier, 'Security multiplier')
-	if (securityMultiplier <= 1n) throw new Error('Security multiplier must be greater than 1')
+	const questionId = parseQuestionIdInput(form.marketId)
+	const statoblastSecurityMultiplierBps = parseStatoblastSecurityMultiplierBpsInput(form.statoblastSecurityMultiplierBps)
+	if (statoblastSecurityMultiplierBps <= 10_001n) throw new Error('Statoblast security multiplier must be at least 1.0002')
+	const initialReportPriorityFeeAttoEthPerGas = parseDecimalInput(form.initialReportPriorityFeeGwei, 'Initial report priority fee', 9)
+	if (initialReportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Initial report priority fee must be greater than 0')
 	return {
-		questionId: parseQuestionIdInput(form.marketId),
-		securityMultiplier,
+		initialReportPriorityFeeAttoEthPerGas,
+		questionId,
+		statoblastSecurityMultiplierBps,
 	}
 }

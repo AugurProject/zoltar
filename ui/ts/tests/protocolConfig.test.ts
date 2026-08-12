@@ -52,7 +52,7 @@ describe('protocolConfig', () => {
 		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, '4')
 		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
 			forkBurnDivisor: '9',
-			initialEscalationGameDeposit: '5',
+			initialEscalationGameDepositAttoRep: DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
 		})
 
 		expect(
@@ -60,16 +60,20 @@ describe('protocolConfig', () => {
 				forkThresholdDivisor: '11',
 			}),
 		).toEqual({
+			...DEFAULT_PROTOCOL_CONFIG,
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDeposit: 5n,
+			initialEscalationGameDepositAttoRep: 10n ** 18n,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 1n })).toThrow('forkBurnDivisor must be greater than 1')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDeposit: 0n })).toThrow('initialEscalationGameDeposit must be greater than 0')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 0n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 2n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
+		expect(validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: 0n }).minimumVaultRepDepositAttoRep).toBe(0n)
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: -1n })).toThrow('minimumVaultRepDepositAttoRep cannot be negative')
 	})
 
 	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {
@@ -94,7 +98,7 @@ describe('protocolConfig', () => {
 
 		expect(
 			getMainnetProtocolConfig({
-				initialEscalationGameDeposit: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDeposit.toString(),
+				initialEscalationGameDepositAttoRep: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
 			}),
 		).toEqual(MAINNET_PROTOCOL_CONFIG)
 	})

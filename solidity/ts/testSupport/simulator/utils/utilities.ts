@@ -9,7 +9,7 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 export { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
-const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
+const TOTAL_REP_SUPPLY_ATTO_REP = 11_000_000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = (1n << 256n) - 1n
 const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
@@ -106,7 +106,11 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	}
 
 	const ethValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: ETH_AMOUNT_TO_MINT }))
-	const tokenValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
+	const baseTokenAmount = TOTAL_REP_SUPPLY_ATTO_REP / BigInt(TEST_ADDRESSES.length)
+	const tokenRemainder = TOTAL_REP_SUPPLY_ATTO_REP - baseTokenAmount * BigInt(TEST_ADDRESSES.length)
+	const tokenValues = TEST_ADDRESSES.map((address, index) => ({ address: addressString(address), amount: baseTokenAmount + (index === 0 ? tokenRemainder : 0n) }))
+	const seededTotalRep = tokenValues.reduce((total, allocation) => total + allocation.amount, 0n)
+	if (seededTotalRep !== TOTAL_REP_SUPPLY_ATTO_REP) throw new Error('Seeded REP balances must equal the configured total supply')
 	await mintETH(anvilWindowEthereum, ethValues)
 	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
 	await mintERC20(anvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), tokenValues, 0n)
@@ -135,13 +139,13 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 
 	// Set total theoretical supply for REP token.
 	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
-	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
-	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
+	// `totalTheoreticalSupplyAttoRep` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
 	const theoreticalSupplySlot = `0x${REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT.toString(16).padStart(64, '0')}`
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
-				[theoreticalSupplySlot]: totalTheoreticalSupply,
+				[storageSlot(2n)]: TOTAL_REP_SUPPLY_ATTO_REP,
+				[theoreticalSupplySlot]: TOTAL_REP_SUPPLY_ATTO_REP,
 			},
 		},
 	})

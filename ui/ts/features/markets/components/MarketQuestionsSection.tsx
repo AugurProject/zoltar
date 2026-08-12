@@ -9,6 +9,7 @@ import { PaginationControls } from '../../../components/PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
+import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { getSecurityPoolStatusBadgeLabel } from '../../security-pools/lib/securityPoolLabels.js'
@@ -30,6 +31,7 @@ type MarketQuestionsSectionProps = {
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
 	onCreateQuestion: () => void
+	onLoadZoltarQuestions: () => Promise<void>
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onLoadSecurityPools: () => void
 	onOpenForkTab: () => void
@@ -39,6 +41,7 @@ type MarketQuestionsSectionProps = {
 	securityPoolsLoadError: string | undefined
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
+	zoltarQuestionsError: string | undefined
 }
 export function MarketQuestionsSection({
 	environmentRefreshKey,
@@ -49,6 +52,7 @@ export function MarketQuestionsSection({
 	loadingZoltarQuestions,
 	onCreateQuestion,
 	onLoadSecurityPools,
+	onLoadZoltarQuestions,
 	onLoadZoltarQuestionPage,
 	onOpenForkTab,
 	onUseQuestionForFork,
@@ -57,6 +61,7 @@ export function MarketQuestionsSection({
 	securityPoolsLoadError,
 	zoltarQuestionCount,
 	zoltarQuestionPage,
+	zoltarQuestionsError,
 }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 	const [pageIndex, setPageIndex] = useState(0)
@@ -104,10 +109,29 @@ export function MarketQuestionsSection({
 	}, [activePageRequestKey, environmentRefreshKey, lastFailedPageRequestKey, loadingZoltarQuestionCount, onLoadZoltarQuestionPage, pageIndex, zoltarQuestionCount, zoltarQuestionPage])
 	const hasPreviousPage = pageIndex > 0
 	const hasNextPage = getHasNextPaginationPage(pageIndex, questionPageCount)
+	const retryQuestionLoad = () => {
+		if (loadingZoltarQuestionCount || loadingZoltarQuestions) return
+		if (zoltarQuestionCount === undefined) {
+			void onLoadZoltarQuestions().catch(() => undefined)
+			return
+		}
+		const pageRequestKey = currentPageRequestKey
+		lastRequestedPageKeyRef.current = pageRequestKey
+		setLastFailedPageRequestKey(undefined)
+		setActivePageRequestKey(pageRequestKey)
+		void onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE)
+			.catch(() => {
+				setLastFailedPageRequestKey(current => (current === undefined ? pageRequestKey : current))
+			})
+			.finally(() => {
+				setActivePageRequestKey(current => (current === pageRequestKey ? undefined : current))
+			})
+	}
 	return (
 		<SectionBlock
 			density='compact'
-			title={commonCopy.markets}
+			title={marketCopy.questions}
+			variant='plain'
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
@@ -119,6 +143,16 @@ export function MarketQuestionsSection({
 				/>
 			}
 		>
+			{zoltarQuestionsError === undefined ? undefined : (
+				<>
+					<ErrorNotice message={zoltarQuestionsError} />
+					<div className='actions'>
+						<button type='button' className='secondary' disabled={loadingZoltarQuestionCount || loadingZoltarQuestions} onClick={retryQuestionLoad}>
+							{loadingZoltarQuestionCount || loadingZoltarQuestions ? marketCopy.retryingQuestions : marketCopy.retryQuestions}
+						</button>
+					</div>
+				</>
+			)}
 			{visibleQuestions.length === 0 ? (
 				(() => {
 					if (loadingZoltarQuestionCount || loadingZoltarQuestions || isWaitingForPageData)
@@ -134,17 +168,16 @@ export function MarketQuestionsSection({
 									key: 'empty',
 									badgeLabel: marketCopy.noQuestions,
 									badgeTone: 'muted',
-									detail: marketCopy.noQuestionsDetail,
 								}}
 								title={marketCopy.noQuestions}
 								actions={
 									<button className='primary' type='button' onClick={onCreateQuestion}>
-										{commonCopy.createQuestion}
+										{commonCopy.createQuestionAction}
 									</button>
 								}
 							/>
 						)
-					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{marketCopy.questionPageUnavailable}</p>
+					if (zoltarQuestionsError === undefined && effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{marketCopy.questionPageUnavailable}</p>
 
 					return undefined
 				})()
@@ -157,6 +190,7 @@ export function MarketQuestionsSection({
 							actions={
 								<div className='actions'>
 									<button
+										aria-label={hasForked ? marketCopy.formatAlreadyForkedLabel(getQuestionTitle(question), question.questionId) : marketCopy.formatUseForForkLabel(getQuestionTitle(question), question.questionId)}
 										className='secondary'
 										disabled={hasForked}
 										onClick={() => {
@@ -167,14 +201,20 @@ export function MarketQuestionsSection({
 									>
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
 									</button>
-									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
+									{question.marketType === 'binary' ? undefined : <Badge tone='muted'>{marketCopy.binaryPoolsOnly}</Badge>}
+									<button
+										aria-label={marketCopy.formatCreatePoolFromQuestionLabel(getQuestionTitle(question), question.questionId)}
+										className='secondary'
+										onClick={() => onUseQuestionForPool(question.questionId)}
+										disabled={question.marketType !== 'binary'}
+										title={question.marketType === 'binary' ? undefined : marketCopy.binaryPoolsOnly}
+									>
 										{marketCopy.createPoolFromQuestion}
 									</button>
 								</div>
 							}
 						>
 							<Question question={question} showTitle={false} />
-							{question.marketType !== 'binary' ? <p className='detail'>{marketCopy.nonBinaryPoolCompatibilityDetail}</p> : undefined}
 							{(() => {
 								const linkedPools = securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, question.questionId))
 								const linkedPoolsContent = (() => {
@@ -216,21 +256,20 @@ export function MarketQuestionsSection({
 																{commonCopy.universe}: <UniverseLink universeId={pool.universeId} />
 															</span>
 															<span>
-																<strong>{marketCopy.openInterest}</strong>: <CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
+																<strong>{marketCopy.openInterest}</strong>: <CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
 															</span>
 															<span>
-																<strong>{marketCopy.shareSupply}</strong>: <CurrencyValue value={pool.shareTokenSupply} copyable={false} />
+																<strong>{marketCopy.shareSupply}</strong>: <CurrencyValue className='market-linked-pool-share-supply' compactWhenOverflow value={pool.shareTokenSupplyAttoShares} copyable={false} />
 															</span>
 														</div>
 														<div className='market-linked-pool-participation'>
 															<strong>{marketCopy.completeSetOperations}</strong>
-															<span>{marketCopy.completeSetOperationsDetail}</span>
 														</div>
 														<div className='actions'>
-															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
+															<SecurityPoolLink ariaLabel={marketCopy.formatOpenSharesAndPositionLabel(getQuestionTitle(question), pool.universeId, pool.securityPoolAddress)} className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
 																{marketCopy.openSharesAndPosition}
 															</SecurityPoolLink>
-															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='reporting' universeId={pool.universeId}>
+															<SecurityPoolLink ariaLabel={marketCopy.formatOpenReportingLabel(getQuestionTitle(question), pool.universeId, pool.securityPoolAddress)} className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='reporting' universeId={pool.universeId}>
 																{marketCopy.openReporting}
 															</SecurityPoolLink>
 														</div>
@@ -244,7 +283,6 @@ export function MarketQuestionsSection({
 									<section className='market-linked-pools' aria-label={marketCopy.linkedPools}>
 										<div className='market-linked-pools-header'>
 											<strong>{marketCopy.linkedPools}</strong>
-											<span>{marketCopy.linkedPoolsDetail}</span>
 										</div>
 										{linkedPoolsContent}
 									</section>

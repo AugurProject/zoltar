@@ -4,10 +4,9 @@ type ActionList = readonly SecurityPoolActionId[]
 
 export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'approveRep',
-	'depositRep',
+	'depositRepToVault',
 	'queueWithdrawRep',
-	'redeemRep',
-	'queueSetSecurityBondAllowance',
+	'redeemRepFromVault',
 	'redeemFees',
 	'createCompleteSet',
 	'redeemCompleteSet',
@@ -24,7 +23,7 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'createChildUniverse',
 	'migrateRepToZoltar',
 	'migrateVault',
-	'migrateEscalationDeposits',
+	'claimParentEscalationDeposits',
 	'migrateUnresolvedEscalation',
 	'startTruthAuction',
 	'submitBid',
@@ -34,7 +33,7 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'settleForkedEscalation',
 ]
 
-export const LIFECYCLE_ACTIONS: ActionList = ['approveRep', 'depositRep', 'queueWithdrawRep', 'redeemRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'migrateShares', 'redeemShares', 'requestPrice', 'executeStagedOperation', 'queueLiquidation']
+export const LIFECYCLE_ACTIONS: ActionList = ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'migrateShares', 'redeemShares', 'requestPrice', 'executeStagedOperation', 'queueLiquidation']
 
 export const REPORTING_ACTIONS: ActionList = ['reportOutcome', 'withdrawEscalation']
 
@@ -45,7 +44,7 @@ export const FORK_ACTIONS: ActionList = [
 	'createChildUniverse',
 	'migrateRepToZoltar',
 	'migrateVault',
-	'migrateEscalationDeposits',
+	'claimParentEscalationDeposits',
 	'migrateUnresolvedEscalation',
 	'startTruthAuction',
 	'submitBid',
@@ -56,8 +55,8 @@ export const FORK_ACTIONS: ActionList = [
 ]
 
 export const ENABLED_ACTIONS_BY_LIFECYCLE: Record<SecurityPoolLifecycleState, ActionList> = {
-	operational: ['approveRep', 'depositRep', 'queueWithdrawRep', 'queueSetSecurityBondAllowance', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
-	ended: ['redeemRep', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'],
+	operational: ['approveRep', 'depositRepToVault', 'queueWithdrawRep', 'redeemFees', 'createCompleteSet', 'redeemCompleteSet', 'requestPrice', 'executeStagedOperation', 'queueLiquidation'],
+	ended: ['redeemRepFromVault', 'redeemFees', 'redeemCompleteSet', 'redeemShares', 'requestPrice'],
 	poolForked: ['redeemFees'],
 	forkMigration: ['redeemFees'],
 	forkTruthAuction: ['redeemFees'],
@@ -76,7 +75,7 @@ export const ENABLED_ACTIONS_BY_REPORTING_STAGE: Record<SecurityPoolReportingSta
 export const ENABLED_ACTIONS_BY_FORK_STAGE: Record<SecurityPoolForkStage, ActionList> = {
 	disabled: [],
 	initiate: ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'],
-	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
+	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'claimParentEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
 	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'],
 	settlement: ['claimAuctionProceeds', 'settleForkedEscalation'],
 }

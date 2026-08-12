@@ -3,15 +3,20 @@ import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { useEffect, useState } from 'preact/hooks'
 import { DataGrid } from '../../../components/DataGrid.js'
+import { IdentifierValue } from '../../../components/IdentifierValue.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
+import { Question } from './Question.js'
+import { LoadingText } from '../../../components/LoadingText.js'
+import { ActionLauncherButton } from '../../../components/ActionLauncherButton.js'
 import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
-import { isMainnetChain } from '../../../lib/network.js'
+import { isActiveAppChain } from '../../../lib/network.js'
+import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketSectionProps } from '../../types.js'
 
 export function MarketSection({
@@ -36,6 +41,7 @@ export function MarketSection({
 	onCreateChildUniverseForOutcomeIndex,
 	onCreateMarket,
 	onForkZoltar,
+	onLoadZoltarQuestions,
 	onLoadZoltarQuestionPage,
 	onLoadSecurityPools,
 	onMarketFormChange,
@@ -52,30 +58,42 @@ export function MarketSection({
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
-	zoltarForkRepBalance,
-	zoltarMigrationChildRepBalances,
+	zoltarForkRepBalanceAttoRep,
+	zoltarMigrationChildRepBalancesAttoRep,
 	zoltarMigrationActiveAction,
 	zoltarMigrationError,
 	zoltarMigrationForm,
 	zoltarMigrationPending,
-	zoltarMigrationPreparedRepBalance,
-	zoltarMigrationResult,
+	zoltarMigrationPreparedRepBalanceAttoRep,
 	zoltarQuestionCount,
 	zoltarQuestionPage,
 	zoltarQuestions,
+	zoltarQuestionsError,
 	zoltarUniverse,
 	zoltarUniverseState,
 	securityPoolsLoadError,
 }: MarketSectionProps) {
 	const hasForked = zoltarUniverse?.hasForked === true
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
-	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
-	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetails : zoltarCopy.forkZoltar
+	const localForkQuestionId = zoltarForkQuestionId.trim()
+	const canonicalForkQuestion = zoltarUniverse?.forkQuestionDetails
+	const selectedForkQuestionId = hasForked ? canonicalForkQuestion?.questionId : localForkQuestionId || canonicalForkQuestion?.questionId
+	const selectedForkQuestion =
+		selectedForkQuestionId === undefined ? undefined : (zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase()) ?? (canonicalForkQuestion?.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase() ? canonicalForkQuestion : undefined))
+	const forkQuestionMetadataFallback = loadingZoltarQuestions ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
+	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetailsTitle : zoltarCopy.forkZoltar
+	const forkQuestionAvailable = selectedForkQuestion !== undefined || (zoltarQuestionCount !== undefined && zoltarQuestionCount > 0n)
+	const forkLauncherDisabledReason = (() => {
+		if (hasForked) return undefined
+		if (loadingZoltarQuestions || loadingZoltarQuestionCount || zoltarQuestionCount === undefined) return marketCopy.loadingQuestions
+		if (!forkQuestionAvailable) return marketCopy.forkQuestionUnavailableReason
+		return undefined
+	})()
 	const forkContext = [
-		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.noneSelected : zoltarForkQuestionId) },
+		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? selectedForkQuestionId ?? commonCopy.noneSelected },
 		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
 	]
 
@@ -88,11 +106,11 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title={commonCopy.markets}>
+			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' description={marketCopy.zoltarIntroduction} title={commonCopy.zoltar} variant='plain'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 						zoltarChildUniverseError={zoltarChildUniverseError}
@@ -104,7 +122,7 @@ export function MarketSection({
 					<DataGrid columns='auto'>
 						<div>
 							<p className='detail'>{commonCopy.universe}</p>
-							<strong>{zoltarUniverse?.universeId.toString() ?? commonCopy.loadingWithEllipsis}</strong>
+							<strong>{zoltarUniverse === undefined ? <LoadingText /> : <TransactionUniverseValue universeId={zoltarUniverse.universeId} />}</strong>
 						</div>
 						<div>
 							<p className='detail'>{commonCopy.status}</p>
@@ -133,6 +151,7 @@ export function MarketSection({
 							environmentRefreshKey={environmentRefreshKey}
 							hasForked={hasForked}
 							onCreateQuestion={() => onActiveViewChange('create')}
+							onLoadZoltarQuestions={onLoadZoltarQuestions}
 							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}
 							loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 							loadingZoltarQuestions={loadingZoltarQuestions}
@@ -144,6 +163,7 @@ export function MarketSection({
 							onUseQuestionForPool={onUseQuestionForPool}
 							zoltarQuestionCount={zoltarQuestionCount}
 							zoltarQuestionPage={zoltarQuestionPage}
+							zoltarQuestionsError={zoltarQuestionsError}
 							securityPools={securityPools}
 							securityPoolsLoadError={securityPoolsLoadError}
 						/>
@@ -154,7 +174,7 @@ export function MarketSection({
 					<MarketCreateQuestionSection
 						accountAddress={accountState.address}
 						hasForked={hasForked}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						marketCreating={marketCreating}
 						marketError={marketError}
@@ -172,19 +192,73 @@ export function MarketSection({
 
 				{view === 'fork' ? (
 					<>
-						<SectionBlock title={marketCopy.fork}>
+						<SectionBlock title={marketCopy.fork} description={marketCopy.forkIntroduction}>
+							<ul className='fork-readiness-list'>
+								<li>{marketCopy.forkQuestionRequirement}</li>
+								<li>{marketCopy.forkRepRequirement}</li>
+								<li>{marketCopy.forkConsequence}</li>
+							</ul>
 							<div className='actions'>
-								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
-									{forkModalTitle}
-								</button>
+								<ActionLauncherButton availability={{ disabled: forkLauncherDisabledReason !== undefined, reason: forkLauncherDisabledReason }} idleLabel={hasForked ? zoltarCopy.viewForkDetails : forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} showDisabledReason />
+								{forkLauncherDisabledReason === marketCopy.forkQuestionUnavailableReason ? (
+									<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
+										{commonCopy.createQuestionAction}
+									</button>
+								) : undefined}
 							</div>
-							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>{marketCopy.formatSelectedForkQuestionDetail(zoltarForkQuestionId)}</p>}
+							{selectedForkQuestionId === undefined ? undefined : (
+								<section aria-label={marketCopy.selectedForkQuestionSummary} className='selected-fork-question-summary'>
+									<p className='panel-label'>{marketCopy.selectedForkQuestionSummary}</p>
+									{selectedForkQuestion === undefined ? (
+										<DataGrid columns='auto'>
+											<div>
+												<p className='detail'>{marketCopy.title}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{marketCopy.outcomes}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{marketCopy.questionType}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{commonCopy.universe}</p>
+												<strong>
+													<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
+												</strong>
+											</div>
+											<div>
+												<p className='detail'>{commonCopy.questionId}</p>
+												<IdentifierValue value={selectedForkQuestionId} />
+											</div>
+										</DataGrid>
+									) : (
+										<>
+											<Question question={selectedForkQuestion} variant='preview' />
+											<DataGrid columns='auto'>
+												<div>
+													<p className='detail'>{marketCopy.questionType}</p>
+													<strong>{getMarketTypeLabel(selectedForkQuestion.marketType)}</strong>
+												</div>
+												<div>
+													<p className='detail'>{commonCopy.universe}</p>
+													<strong>
+														<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
+													</strong>
+												</div>
+											</DataGrid>
+										</>
+									)}
+								</section>
+							)}
 						</SectionBlock>
 						<OperationModal context={forkContext} isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={forkModalTitle}>
 							<ForkZoltarSection
 								accountAddress={accountState.address}
 								hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
-								isMainnet={isMainnet}
+								isOnActiveAppChain={isOnActiveAppChain}
 								loadingZoltarForkAccess={loadingZoltarForkAccess}
 								loadingZoltarQuestions={loadingZoltarQuestions || loadingZoltarQuestionCount}
 								onApproveZoltarForkRep={onApproveZoltarForkRep}
@@ -194,8 +268,8 @@ export function MarketSection({
 								zoltarForkApproval={zoltarForkApproval}
 								zoltarForkError={zoltarForkError}
 								zoltarForkPending={zoltarForkPending}
-								zoltarForkQuestionId={zoltarForkQuestionId}
-								zoltarForkRepBalance={zoltarForkRepBalance}
+								zoltarForkQuestionId={selectedForkQuestionId ?? ''}
+								zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 								zoltarQuestions={zoltarQuestions}
 								zoltarUniverse={zoltarUniverse}
 								zoltarUniverseState={zoltarUniverseState}
@@ -207,22 +281,21 @@ export function MarketSection({
 				{view === 'migrate' ? (
 					<ZoltarMigrationSection
 						accountAddress={accountState.address}
-						isMainnet={isMainnet}
+						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onMigrateInternalRep={onMigrateInternalRep}
 						onPrepareRepForMigration={onPrepareRepForMigration}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
-						zoltarForkRepBalance={zoltarForkRepBalance}
+						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkActiveAction={zoltarForkActiveAction}
-						zoltarMigrationChildRepBalances={zoltarMigrationChildRepBalances}
+						zoltarMigrationChildRepBalancesAttoRep={zoltarMigrationChildRepBalancesAttoRep}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationError={zoltarMigrationError}
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
-						zoltarMigrationPreparedRepBalance={zoltarMigrationPreparedRepBalance}
-						zoltarMigrationResult={zoltarMigrationResult}
+						zoltarMigrationPreparedRepBalanceAttoRep={zoltarMigrationPreparedRepBalanceAttoRep}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}

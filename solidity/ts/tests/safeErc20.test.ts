@@ -10,6 +10,7 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import {
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
+	ReputationToken_ReputationToken,
 	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness,
 	test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
@@ -67,7 +68,7 @@ describe('Safe ERC20 Operations', () => {
 					args: [falseToken, receiver, 1n],
 				}),
 			),
-			/token returned false/i,
+			/SafeERC20Ops token returned false from ERC20 call/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -78,7 +79,7 @@ describe('Safe ERC20 Operations', () => {
 					args: [falseToken, receiver, 1n],
 				}),
 			),
-			/token returned false/i,
+			/SafeERC20Ops token returned false from ERC20 call/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -89,7 +90,30 @@ describe('Safe ERC20 Operations', () => {
 					args: [falseToken, receiver, receiver, 1n],
 				}),
 			),
-			/token returned false/i,
+			/SafeERC20Ops token returned false from ERC20 call/,
+		)
+	})
+
+	test('safe helper wrappers replace an underlying token revert with the canonical call failure', async () => {
+		const harness = await deployHarness()
+		const reputationToken = await deployContract(
+			encodeDeployData({
+				abi: ReputationToken_ReputationToken.abi,
+				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+				args: [client.account.address],
+			}),
+		)
+
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					address: harness,
+					functionName: 'safeTransferToken',
+					args: [reputationToken, client.account.address, 1n],
+				}),
+			),
+			/SafeERC20Ops token call reverted/,
 		)
 	})
 
@@ -107,8 +131,32 @@ describe('Safe ERC20 Operations', () => {
 
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deploymentData })),
-			/token returned false/i,
+			/SafeERC20Ops token returned false from ERC20 call/,
 		)
+	})
+
+	test('migration proxy rejects every privileged operation from a non-owner', async () => {
+		const reputationToken = await deployContract(
+			encodeDeployData({
+				abi: ReputationToken_ReputationToken.abi,
+				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+				args: [client.account.address],
+			}),
+		)
+		const proxy = await deployContract(
+			encodeDeployData({
+				abi: peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
+				bytecode: `0x${peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
+				args: [client.account.address, reputationToken, 0n, zeroAddress],
+			}),
+		)
+		const proxyAbi = peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi
+		const reason = /Only the security pool forker can use this migration proxy/
+
+		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'lockRep', args: [1n] }), reason)
+		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'forkUniverse', args: [1n] }), reason)
+		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'splitToChild', args: [1n, [0n]] }), reason)
+		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'sweepChildRep', args: [client.account.address, reputationToken, 1n] }), reason)
 	})
 
 	test('security pool deployment worker bubbles constructor revert reasons', async () => {

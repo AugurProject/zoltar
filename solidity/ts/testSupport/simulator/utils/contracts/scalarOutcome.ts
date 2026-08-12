@@ -5,7 +5,8 @@ type ScalarQuestionDetails = {
 	numTicks: bigint
 }
 
-const SCALAR_DECIMALS = 18n
+const SCALAR_DECIMAL_PLACES = 18
+const SCALAR_DECIMALS = BigInt(SCALAR_DECIMAL_PLACES)
 const SCALAR_DECIMAL_BASE = 10n ** SCALAR_DECIMALS
 const SCALAR_PART_BIT_LENGTH = 120n
 const SCALAR_TOTAL_BITS = 256n
@@ -24,7 +25,7 @@ function formatSignedDecimal(value: bigint) {
 	const integerPart = absoluteValue / SCALAR_DECIMAL_BASE
 	const fractionalPart = absoluteValue % SCALAR_DECIMAL_BASE
 	if (fractionalPart === 0n) return `${isNegative ? '-' : ''}${integerPart.toString()}`
-	const fractionalString = fractionalPart.toString().padStart(Number(SCALAR_DECIMALS), '0').replace(/0+$/, '')
+	const fractionalString = fractionalPart.toString().padStart(SCALAR_DECIMAL_PLACES, '0').replace(/0+$/, '')
 	return `${isNegative ? '-' : ''}${integerPart.toString()}.${fractionalString}`
 }
 

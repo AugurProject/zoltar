@@ -14,6 +14,7 @@ import {
 	getSelectedPoolForkWorkflowView,
 	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
+	getSelectedPoolViewForForkWorkflowSelectionStage,
 	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
@@ -28,7 +29,7 @@ import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/securi
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
+		expect(getSelectedPoolCardTitle('Will the event happen?')).toBe('Will the event happen?')
 
 		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 
@@ -56,6 +57,10 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveForkWorkflowSelectionStage('fork-migration')).toBe('migration')
 		expect(resolveForkWorkflowSelectionStage('fork-auction')).toBe('auction')
 		expect(resolveForkWorkflowSelectionStage('fork-settlement')).toBe('settlement')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('fork-triggered')).toBe('fork-workflow')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('migration')).toBe('fork-migration')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('auction')).toBe('fork-auction')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('settlement')).toBe('fork-settlement')
 		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('fork-triggered')
 	})
 
@@ -72,7 +77,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: undefined,
 				selectedPool: {
 					forkOutcome: 'yes',
-					migratedRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkMigration',
 					truthAuctionStartedAt: 0n,
 				},
@@ -84,7 +89,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -98,7 +103,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: true,
 					forkOutcome: 'yes',
-					migratedRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'operational',
 					truthAuction: {
 						finalized: true,
@@ -113,7 +118,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRep: 1n,
+					migratedAttoRep: 1n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -185,7 +190,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					hasForkActivity: true,
-					migratedRep: 5n,
+					migratedAttoRep: 5n,
 					truthAuction: {
 						finalized: false,
 					},
@@ -222,7 +227,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'yes',
-					migratedRep: 5n,
+					migratedAttoRep: 5n,
 					systemState: 'forkTruthAuction',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 10n,
@@ -230,7 +235,7 @@ void describe('selected pool workflow lookup state', () => {
 				selectedPool: {
 					forkOutcome: 'yes',
 					hasForkActivity: true,
-					migratedRep: 5n,
+					migratedAttoRep: 5n,
 					systemState: 'operational',
 					truthAuctionStartedAt: 10n,
 				},
@@ -244,7 +249,7 @@ void describe('selected pool workflow lookup state', () => {
 				forkAuctionDetails: {
 					claimingAvailable: false,
 					forkOutcome: 'none',
-					migratedRep: 0n,
+					migratedAttoRep: 0n,
 					systemState: 'operational',
 					truthAuction: undefined,
 					truthAuctionStartedAt: 0n,
@@ -261,9 +266,9 @@ void describe('selected pool workflow lookup state', () => {
 		expect(
 			getCurrentSelectedPoolReportingDetails({
 				reportingDetails: {
-					completeSetCollateralAmount: 1n,
+					settlementCollateralAttoEth: 1n,
 					currentTime: 5n,
-					forkThreshold: 100n,
+					forkThresholdAttoRep: 100n,
 					marketDetails: {
 						answerUnit: '',
 						createdAt: 1n,
@@ -279,19 +284,19 @@ void describe('selected pool workflow lookup state', () => {
 						startTime: 1n,
 						title: 'Will this resolve?',
 					},
-					nonDecisionThreshold: 50n,
+					nonDecisionThresholdAttoRep: 50n,
 					parentWithdrawalEnabled: false,
 					questionOutcome: 'none',
 					securityPoolAddress: zeroAddress,
 					settlementState: 'locked',
-					startBond: 1n,
+					startBondAttoRep: 1n,
 					status: 'active',
 					systemState: 'forkTruthAuction',
 					universeId: 1n,
-					viewerVaultAvailableEscalationRep: 0n,
+					viewerPoolHeldVaultRepBackingAttoRep: 0n,
 					viewerVaultExists: false,
-					viewerVaultEscrowedRep: 0n,
-					viewerVaultRepDepositShare: 0n,
+					viewerVaultDisputeStakedAttoRep: 0n,
+					viewerVaultRepBackingAttoRep: 0n,
 					activationTime: 1n,
 					bindingCapital: 1n,
 					currentRequiredBond: 1n,
@@ -303,7 +308,7 @@ void describe('selected pool workflow lookup state', () => {
 						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 					],
-					totalCost: 1n,
+					totalCostAttoRep: 1n,
 				},
 				selectedPool: {
 					hasForkActivity: true,
@@ -318,9 +323,9 @@ void describe('selected pool workflow lookup state', () => {
 		expect(
 			getCurrentSelectedPoolReportingDetails({
 				reportingDetails: {
-					completeSetCollateralAmount: 1n,
+					settlementCollateralAttoEth: 1n,
 					currentTime: 5n,
-					forkThreshold: 100n,
+					forkThresholdAttoRep: 100n,
 					marketDetails: {
 						answerUnit: '',
 						createdAt: 1n,
@@ -336,19 +341,19 @@ void describe('selected pool workflow lookup state', () => {
 						startTime: 1n,
 						title: 'Will this resolve?',
 					},
-					nonDecisionThreshold: 50n,
+					nonDecisionThresholdAttoRep: 50n,
 					parentWithdrawalEnabled: true,
 					questionOutcome: 'yes',
 					securityPoolAddress: zeroAddress,
 					settlementState: 'resolved',
-					startBond: 1n,
+					startBondAttoRep: 1n,
 					status: 'active',
 					systemState: 'operational',
 					universeId: 1n,
-					viewerVaultAvailableEscalationRep: 0n,
+					viewerPoolHeldVaultRepBackingAttoRep: 0n,
 					viewerVaultExists: false,
-					viewerVaultEscrowedRep: 0n,
-					viewerVaultRepDepositShare: 0n,
+					viewerVaultDisputeStakedAttoRep: 0n,
+					viewerVaultRepBackingAttoRep: 0n,
 					activationTime: 1n,
 					bindingCapital: 1n,
 					currentRequiredBond: 1n,
@@ -360,7 +365,7 @@ void describe('selected pool workflow lookup state', () => {
 						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 					],
-					totalCost: 1n,
+					totalCostAttoRep: 1n,
 				},
 				selectedPool: {
 					hasForkActivity: true,
@@ -423,7 +428,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'unknown',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a pool before using pool actions.')
+		).toBe('Select a pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -431,7 +436,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'loading',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Wait for this pool to finish loading.')
+		).toBe('Loading pool…')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -439,7 +444,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'missing',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a valid pool before using pool actions.')
+		).toBe('Select a valid pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -520,8 +525,8 @@ void describe('selected pool oracle price display', () => {
 			pendingSettlementQueueCapacity: 4n,
 			pendingReportId: 0n,
 			priceValidUntilTimestamp: 2n,
-			queuedOperationEthCost: 1n,
-			requestPriceEthCost: 3n,
+			queuedOperationCostAttoEth: 1n,
+			requestPriceCostAttoEth: 3n,
 			token1: undefined,
 			token2: undefined,
 		}
@@ -558,8 +563,8 @@ void describe('selected pool oracle price display', () => {
 					pendingSettlementQueueCapacity: 4n,
 					pendingReportId: 0n,
 					priceValidUntilTimestamp: undefined,
-					queuedOperationEthCost: 0n,
-					requestPriceEthCost: 0n,
+					queuedOperationCostAttoEth: 0n,
+					requestPriceCostAttoEth: 0n,
 					token1: undefined,
 					token2: undefined,
 				},

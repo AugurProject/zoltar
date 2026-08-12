@@ -6,10 +6,9 @@ export type SecurityPoolForkStage = 'disabled' | 'initiate' | 'migration' | 'auc
 
 export type SecurityPoolActionId =
 	| 'approveRep'
-	| 'depositRep'
+	| 'depositRepToVault'
 	| 'queueWithdrawRep'
-	| 'redeemRep'
-	| 'queueSetSecurityBondAllowance'
+	| 'redeemRepFromVault'
 	| 'redeemFees'
 	| 'createCompleteSet'
 	| 'redeemCompleteSet'
@@ -26,7 +25,7 @@ export type SecurityPoolActionId =
 	| 'createChildUniverse'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
-	| 'migrateEscalationDeposits'
+	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'

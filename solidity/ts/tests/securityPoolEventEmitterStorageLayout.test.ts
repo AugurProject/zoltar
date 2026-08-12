@@ -6,17 +6,17 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 	const artifacts = loadContractsJson(import.meta.dir)
 	const layout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPool.sol', 'SecurityPool'))
 	const expectedSlots = new Map<string, string>([
-		['totalSecurityBondAllowance', '1'],
-		['completeSetCollateralAmount', '2'],
-		['poolOwnershipDenominator', '3'],
-		['totalFeesOwedToVaults', '6'],
+		['totalCapacityOwnershipAttoRep', '1'],
+		['settlementCollateralAttoEth', '2'],
+		['totalRepBackingUnits', '3'],
+		['totalClaimableVaultFeesAttoEth', '6'],
 		['lastUpdatedFeeAccumulator', '7'],
 		['feeIndex', '8'],
 		['feeIndexRemainder', '9'],
 		['totalFeesOwedRemainder', '10'],
-		['unallocatedFeeReserve', '11'],
-		['feeEligibleSecurityBondAllowance', '12'],
-		['uncheckpointedFeeEligibleAllowance', '13'],
+		['unallocatedAccruedFeesAttoEth', '11'],
+		['feeEligibleCapacityOwnershipAttoRep', '12'],
+		['uncheckpointedFeeEligibleCapacityOwnershipAttoRep', '13'],
 		['currentRetentionRate', '14'],
 		['securityVaults', '16'],
 		['vaultFeeRemainders', '17'],
@@ -45,10 +45,23 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 			}
 		}),
 		[
-			{ label: 'poolOwnership', slot: '0', offset: 0 },
-			{ label: 'securityBondAllowance', slot: '1', offset: 0 },
-			{ label: 'unpaidEthFees', slot: '2', offset: 0 },
+			{ label: 'repBackingUnits', slot: '0', offset: 0 },
+			{ label: 'capacityOwnershipAttoRep', slot: '1', offset: 0 },
+			{ label: 'claimableFeesAttoEth', slot: '2', offset: 0 },
 			{ label: 'feeIndex', slot: '3', offset: 0 },
 		],
 	)
+})
+
+test('SecurityPool liquidation delegate retains the exact host storage sequence', () => {
+	const artifacts = loadContractsJson(import.meta.dir)
+	const hostLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPool.sol', 'SecurityPool'))
+	const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate'))
+	const summarize = (layout: typeof hostLayout) =>
+		layout.map(entry => ({
+			label: entry.label,
+			offset: entry.offset,
+			slot: entry.slot,
+		}))
+	assert.deepStrictEqual(summarize(delegateLayout), summarize(hostLayout), 'delegatecall storage layouts diverged')
 })

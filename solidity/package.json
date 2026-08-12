@@ -13,7 +13,7 @@
 		"setup": "bun ../scripts/install-frozen.mjs . && bun run compile-contracts",
 		"generate:contract-artifacts": "bun run compile-contracts",
 		"compile-contracts": "bun run shared && bun run refresh:shared-dependency && bun tsc --project tsconfig-compile.json && bun ./js/compile.js && cd .. && bun run generate:ui-contract-artifact && bun ./scripts/ensure-contract-artifacts.mts --sync-contract-freshness",
-		"gas-costs": "cd .. && bun run ensure-shared-build && cd solidity && bun run check:shared-dependency && bun tsc && bun run ./js/gas-costs.js",
+		"gas-costs": "cd .. && bun run ensure-shared-build && cd solidity && bun run check:shared-dependency && bun run ./ts/gas-costs.ts",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependency && bun tsc && bun test --timeout 300000 ./js/tests/"
 	},
 	"keywords": [],
@@ -27,6 +27,7 @@
 		"knip": "6.17.1",
 		"bun-types": "1.3.11",
 		"solc": "0.8.35",
+		"solc-0-8-28": "npm:solc@0.8.28",
 		"tsx": "4.19.3",
 		"typescript": "5.8.2"
 	},

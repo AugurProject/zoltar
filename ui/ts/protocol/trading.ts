@@ -1,7 +1,7 @@
 import { type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from '../lib/assert.js'
-import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from './core.js'
@@ -9,50 +9,70 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
-	completeSetCollateralAmount: bigint
-	shareTokenSupply: bigint
-	totalRepDeposit: bigint
-	totalSecurityBondAllowance: bigint
+	settlementCollateralAttoEth: bigint
+	feeEligibleCapacityOwnershipAttoRep: bigint
+	mintingCapacityAttoEth: bigint
+	shareTokenSupplyAttoShares: bigint
+	totalPoolHeldAttoRep: bigint
+	totalCapacityOwnershipAttoRep: bigint
+	isPriceValid: boolean
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [completeSetCollateralAmount, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'completeSetCollateralAmount',
+			functionName: 'getPoolAccountingSnapshot',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'shareTokenSupply',
+			functionName: 'shareTokenSupplyAttoShares',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalRepBalance',
+			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalSecurityBondAllowance',
+			functionName: 'getCurrentMintingCapacityAttoEth',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'priceOracleManagerAndOperatorQueuer',
 			address: securityPoolAddress,
 			args: [],
 		},
 	])
+	const [isPriceValid] = await readRequiredMulticall(client, [
+		{
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'isPriceValid',
+			address: priceOracleManagerAndOperatorQueuer,
+			args: [],
+		},
+	])
 	return {
-		completeSetCollateralAmount,
-		shareTokenSupply,
-		totalRepDeposit,
-		totalSecurityBondAllowance,
+		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
+		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
+		mintingCapacityAttoEth,
+		shareTokenSupplyAttoShares,
+		totalPoolHeldAttoRep,
+		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
+		isPriceValid,
 	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {
 		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 		return {
-			maxRedeemableCompleteSets: undefined,
+			maxRedeemableCompleteSetsAttoShares: undefined,
 			shareBalances: undefined,
 			universeId,
 		}
@@ -79,12 +99,12 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	})
 	if (!isBigintTriple(shareBalancesResult)) throw new Error('Unexpected trading share balances response')
 	const shareBalances: TradingShareBalances = {
-		invalid: shareBalancesResult[0],
-		no: shareBalancesResult[2],
-		yes: shareBalancesResult[1],
+		invalidAttoShares: shareBalancesResult[0],
+		noAttoShares: shareBalancesResult[2],
+		yesAttoShares: shareBalancesResult[1],
 	}
 	return {
-		maxRedeemableCompleteSets: getMinBigintValue([shareBalances.invalid, shareBalances.yes, shareBalances.no]),
+		maxRedeemableCompleteSetsAttoShares: getMinBigintValue([shareBalances.invalidAttoShares, shareBalances.yesAttoShares, shareBalances.noAttoShares]),
 		shareBalances,
 		universeId,
 	}

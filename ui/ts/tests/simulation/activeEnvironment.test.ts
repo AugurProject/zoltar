@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isActiveAppChain, isSupportedAppChain } from '../../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../../simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
@@ -14,6 +14,15 @@ import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTr
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
+}
+
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
@@ -22,6 +31,19 @@ void describe('active environment', () => {
 	void test('uses the injected backend by default when no environment has been initialized', () => {
 		expect(getActiveBackend().id).toBe('injected')
 		expect(getActiveBackend().profile.id).toBe('mainnet')
+	})
+
+	void test('selects Sepolia from either page or route query parameters', async () => {
+		const pageBackend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia' })
+		expect(pageBackend.profile.id).toBe('sepolia')
+		expect(pageBackend.profile.chainIdHex).toBe('0xaa36a7')
+
+		const routeBackend = await initializeActiveEnvironment({ hash: '#/deploy?network=sepolia', hostname: 'localhost', search: '' })
+		expect(routeBackend.profile.id).toBe('sepolia')
+		expect(isSupportedAppChain('0xaa36a7')).toBe(true)
+		expect(isActiveAppChain('0xaa36a7')).toBe(true)
+		expect(isActiveAppChain('0x1')).toBe(false)
+		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
 	})
 
 	void test('enables simulation mode when the explicit URL flag is present', () => {
@@ -38,6 +60,7 @@ void describe('active environment', () => {
 
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
 		expect(isSupportedAppChain('0x1')).toBe(true)
+		expect(isSupportedAppChain('0x01')).toBe(true)
 
 		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
@@ -48,6 +71,37 @@ void describe('active environment', () => {
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
 		resetEnvironment()
+	})
+
+	void test('labels common EVM chains and falls back to a decimal chain ID', () => {
+		const commonChains = [
+			['0x1', 'Ethereum'],
+			['0xa', 'Optimism'],
+			['0x19', 'Cronos'],
+			['0x38', 'BNB Smart Chain'],
+			['0x64', 'Gnosis'],
+			['0x89', 'Polygon'],
+			['0xa9', 'Manta Pacific'],
+			['0xfa', 'Fantom'],
+			['0x144', 'zkSync Era'],
+			['0x44d', 'Polygon zkEVM'],
+			['0x504', 'Moonbeam'],
+			['0x1388', 'Mantle'],
+			['0x2105', 'Base'],
+			['0xa4b1', 'Arbitrum One'],
+			['0xa4ba', 'Arbitrum Nova'],
+			['0xa4ec', 'Celo'],
+			['0xa86a', 'Avalanche'],
+			['0xe708', 'Linea'],
+			['0x13e31', 'Blast'],
+			['0x82750', 'Scroll'],
+			['0xaa36a7', 'Sepolia'],
+		] as const
+
+		expect(commonChains.map(([chainId, _name]) => getChainDisplayLabel(chainId))).toEqual(commonChains.map(([_chainId, name]) => name))
+		expect(getChainDisplayLabel('0xcc6b')).toBe('52331')
+		expect(getChainIdDecimalLabel('0x2105')).toBe('8453')
+		expect(getChainIdDecimalLabel('invalid-chain')).toBeUndefined()
 	})
 
 	void test('clears wallet-scoped account access when the connected wallet is on the wrong network', () => {
@@ -76,6 +130,131 @@ void describe('active environment', () => {
 
 		expect(disposeCalls).toBe(1)
 		expect(getActiveBackend().id).toBe('injected')
+		resetEnvironment()
+	})
+
+	void test('keeps the current simulation usable when replacement construction fails', async () => {
+		let disposeCalls = 0
+		const currentBackend = createFakeBackend({
+			profile: createFakeSimulationProfile(),
+		})
+		const currentController = {
+			dispose: async () => {
+				disposeCalls += 1
+			},
+		} as Awaited<ReturnType<typeof createSimulationBackend>>
+		const resetEnvironment = installActiveEnvironmentForTesting(currentBackend, currentController)
+
+		await expect(
+			initializeActiveEnvironment(
+				{ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' },
+				{
+					createSimulationBackend: async () => {
+						throw new Error('replacement construction failed')
+					},
+				},
+			),
+		).rejects.toThrow('replacement construction failed')
+
+		expect(getActiveBackend()).toBe(currentBackend)
+		expect(disposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('keeps the newest environment when overlapping replacements resolve out of order', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const firstReplacement = createDeferred<SimulationBackend>()
+		const secondReplacement = createDeferred<SimulationBackend>()
+		let replacementRequestCount = 0
+		let initialDisposeCalls = 0
+		let firstDisposeCalls = 0
+		let secondDisposeCalls = 0
+		const createReplacement = (dispose: () => void) =>
+			Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+				bootstrap: async () => undefined,
+				dispose: async () => dispose(),
+			}) as SimulationBackend
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => {
+					initialDisposeCalls += 1
+				},
+			}) as SimulationBackend,
+		)
+		const dependencies = {
+			createSimulationBackend: async () => {
+				replacementRequestCount += 1
+				return await (replacementRequestCount === 1 ? firstReplacement.promise : secondReplacement.promise)
+			},
+		}
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, dependencies)
+		const secondInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, dependencies)
+		const newestBackend = createReplacement(() => {
+			secondDisposeCalls += 1
+		})
+		secondReplacement.resolve(newestBackend)
+		await secondInitialization
+		expect(getActiveBackend()).toBe(newestBackend)
+
+		const staleBackend = createReplacement(() => {
+			firstDisposeCalls += 1
+		})
+		firstReplacement.resolve(staleBackend)
+		await firstInitialization
+
+		expect(getActiveBackend()).toBe(newestBackend)
+		expect(initialDisposeCalls).toBe(1)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondDisposeCalls).toBe(0)
+		resetEnvironment()
+	})
+
+	void test('does not bootstrap a replacement superseded while disposing the previous environment', async () => {
+		type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
+		const initialDispose = createDeferred<void>()
+		let firstBootstrapCalls = 0
+		let firstDisposeCalls = 0
+		let secondBootstrapCalls = 0
+		const initialBackend = createFakeBackend({ profile: createFakeSimulationProfile() })
+		const resetEnvironment = installActiveEnvironmentForTesting(
+			initialBackend,
+			Object.assign(initialBackend, {
+				dispose: async () => await initialDispose.promise,
+			}) as SimulationBackend,
+		)
+		const firstBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				firstBootstrapCalls += 1
+			},
+			dispose: async () => {
+				firstDisposeCalls += 1
+			},
+		}) as SimulationBackend
+		const secondBackend = Object.assign(createFakeBackend({ profile: createFakeSimulationProfile() }), {
+			bootstrap: async () => {
+				secondBootstrapCalls += 1
+			},
+			dispose: async () => undefined,
+		}) as SimulationBackend
+
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=baseline' }, { createSimulationBackend: async () => firstBackend })
+		await Promise.resolve()
+		expect(getActiveBackend()).toBe(firstBackend)
+
+		const secondResult = await initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed' }, { createSimulationBackend: async () => secondBackend })
+		expect(secondResult).toBe(secondBackend)
+		expect(firstDisposeCalls).toBe(1)
+		expect(secondBootstrapCalls).toBe(1)
+
+		initialDispose.resolve()
+		const firstResult = await firstInitialization
+
+		expect(firstResult).toBe(secondBackend)
+		expect(getActiveBackend()).toBe(secondBackend)
+		expect(firstBootstrapCalls).toBe(0)
 		resetEnvironment()
 	})
 
@@ -172,7 +351,7 @@ void describe('simulation backend', () => {
 	beforeAll(async () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
 		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
-		warmBaselineBackend.setTransactionDelayMilliseconds(0)
+		await warmBaselineBackend.setTransactionDelayMilliseconds(0)
 	}, 180_000)
 
 	beforeEach(async () => {
@@ -268,15 +447,15 @@ void describe('simulation backend', () => {
 		const wethCode = await readClient.getCode({
 			address: backend.profile.wethAddress,
 		})
-		const repBalance = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
-		const wethBalance = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
+		const repBalanceAttoRep = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+		const wethBalanceAttoEth = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
 		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
 
 		expect(repCode).not.toBe('0x')
 		expect(wethCode).not.toBe('0x')
-		expect(repBalance > 0n).toBe(true)
-		expect(wethBalance > 0n).toBe(true)
-		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(false)
+		expect(repBalanceAttoRep > 0n).toBe(true)
+		expect(wethBalanceAttoEth > 0n).toBe(true)
+		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
 	}, 30_000)
 
@@ -320,7 +499,7 @@ void describe('simulation backend', () => {
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -344,7 +523,7 @@ void describe('simulation backend', () => {
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
-		backend.setTransactionDelayMilliseconds(0)
+		await backend.setTransactionDelayMilliseconds(0)
 
 		try {
 			const fromAccount = backend.accounts[0]
@@ -389,7 +568,7 @@ void describe('simulation backend', () => {
 			const toAccount = backend.accounts[1]
 			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
-			backend.setTransactionDelayMilliseconds(250)
+			await backend.setTransactionDelayMilliseconds(250)
 			expect(backend.transactionDelayMilliseconds).toBe(250)
 
 			const writeClient = backend.createWriteClient(fromAccount)
@@ -411,9 +590,9 @@ void describe('simulation backend', () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		await backend.setRepPerEthPrice(2n * 10n ** 18n)
 		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
-		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
+		await backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
@@ -429,9 +608,9 @@ void describe('simulation backend', () => {
 			const secondaryAccount = sourceBackend.accounts[1]
 			if (secondaryAccount === undefined) throw new Error('Expected a secondary simulation QA account')
 
-			sourceBackend.setQueryDelayMilliseconds(250)
-			sourceBackend.setTransactionDelayMilliseconds(0)
-			sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
+			await sourceBackend.setQueryDelayMilliseconds(250)
+			await sourceBackend.setTransactionDelayMilliseconds(0)
+			await sourceBackend.setRepPerEthPrice(2n * 10n ** 18n)
 			await sourceBackend.selectAccount(secondaryAccount)
 			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 
@@ -447,8 +626,8 @@ void describe('simulation backend', () => {
 				expect(restoredBackend.queryDelayMilliseconds).toBe(250)
 				expect(restoredBackend.transactionDelayMilliseconds).toBe(0)
 				expect(restoredBackend.repPerEthPrice).toBe(2n * 10n ** 18n)
-				const repBalance = await loadErc20Balance(restoredBackend.createReadClient(), restoredBackend.profile.genesisRepTokenAddress, secondaryAccount)
-				expect(repBalance >= SIMULATION_REP_MINT_AMOUNT).toBe(true)
+				const repBalanceAttoRep = await loadErc20Balance(restoredBackend.createReadClient(), restoredBackend.profile.genesisRepTokenAddress, secondaryAccount)
+				expect(repBalanceAttoRep >= SIMULATION_REP_MINT_AMOUNT).toBe(true)
 
 				await restoredBackend.reset()
 				expect(restoredBackend.selectedAccount).toBe(secondaryAccount)

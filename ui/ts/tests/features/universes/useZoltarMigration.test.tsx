@@ -28,14 +28,14 @@ function createDeferred<T>() {
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
 		childUniverses: [],
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		forkQuestionDetails: undefined,
 		forkTime: 1n,
 		forkingOutcomeIndex: 0n,
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1000n,
+		totalTheoreticalSupplyAttoRep: 1000n,
 		universeId: 1n,
 		...overrides,
 	}
@@ -98,8 +98,8 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalance: 10n ** 19n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 10n ** 19n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -151,8 +151,8 @@ describe('useZoltarMigration', () => {
 				refreshState: async () => undefined,
 				refreshZoltarForkAccess: async () => undefined,
 				refreshZoltarUniverse: async () => undefined,
-				zoltarForkRepBalance: 10n ** 19n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 10n ** 19n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -186,7 +186,7 @@ describe('useZoltarMigration', () => {
 			expect(outcomeIndexes).toEqual([1n, 2n])
 			return {
 				action: 'splitMigrationRep' as const,
-				amount,
+				amountAttoRep: amount,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000cd' as Hash,
 				outcomeIndexes,
 				universeId,
@@ -204,7 +204,20 @@ describe('useZoltarMigration', () => {
 		}))
 
 		const refreshState = mock(async () => undefined)
-		const refreshZoltarUniverse = mock(async () => undefined)
+		const refreshedUniverse = createUniverse({
+			childUniverses: [
+				{
+					exists: true,
+					forkTime: 1n,
+					outcomeIndex: 1n,
+					outcomeLabel: 'Yes',
+					parentUniverseId: 1n,
+					reputationToken: getAddress('0x00000000000000000000000000000000000000b2'),
+					universeId: 2n,
+				},
+			],
+		})
+		const refreshZoltarUniverse = mock(async () => refreshedUniverse)
 		const refreshZoltarForkAccess = mock(async () => undefined)
 		const { useZoltarMigration } = await import(`../../../features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarMigrationState | undefined
@@ -219,8 +232,8 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalance: 100n * 10n ** 18n,
-				zoltarMigrationPreparedRepBalance: 0n,
+				zoltarForkRepBalanceAttoRep: 100n * 10n ** 18n,
+				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -259,7 +272,7 @@ describe('useZoltarMigration', () => {
 		expect(migrateInternalRepInZoltar).toHaveBeenCalledTimes(1)
 		expect(refreshState).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarUniverse).toHaveBeenCalledTimes(1)
-		expect(refreshZoltarForkAccess).toHaveBeenCalledTimes(1)
+		expect(refreshZoltarForkAccess).toHaveBeenCalledWith(refreshedUniverse)
 		expect(requireHookState(hookState).zoltarMigrationFeedback?.status.tone).toBe('success')
 	})
 })

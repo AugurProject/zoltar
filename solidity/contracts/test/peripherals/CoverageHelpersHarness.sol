@@ -40,21 +40,11 @@ contract ERC1155CoverageHarness is ERC1155 {
 		_internalTransferFrom(from, to, id, value);
 	}
 
-	function batchTransferWithLegacyHelper(
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values
-	) external {
+	function batchTransferWithLegacyHelper(address from, address to, uint256[] memory ids, uint256[] memory values) external {
 		_batchTransferFrom(from, to, ids, values);
 	}
 
-	function internalBatchTransferWithLegacyHelper(
-		address from,
-		address to,
-		uint256[] memory ids,
-		uint256[] memory values
-	) external {
+	function internalBatchTransferWithLegacyHelper(address from, address to, uint256[] memory ids, uint256[] memory values) external {
 		_internalBatchTransferFrom(from, to, ids, values);
 	}
 }
@@ -88,21 +78,17 @@ contract EscalationGameFactoryCoverageSecurityPool {
 		repToken = configuredRepToken;
 	}
 
-	function deployStartedGame(
-		EscalationGameFactory factory,
-		uint256 startBond,
-		uint256 nonDecisionThreshold
-	) external returns (EscalationGame) {
-		return factory.deployEscalationGame(startBond, nonDecisionThreshold);
+	function parent() external pure returns (address) {
+		return address(0);
 	}
 
-	function deployForkedGame(
-		EscalationGameFactory factory,
-		uint256 startBond,
-		uint256 nonDecisionThreshold,
-		uint256 elapsedAtFork
-	) external returns (EscalationGame) {
-		return factory.deployEscalationGameFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+	function deployStartedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep) external returns (EscalationGame) {
+		return factory.deployEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep);
+	}
+
+	function deployForkedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork) external returns (EscalationGame) {
+		return
+			factory.deployEscalationGameFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, BinaryOutcomes.BinaryOutcome.None);
 	}
 }
 
@@ -115,9 +101,7 @@ contract CoverageHelpersHarness {
 		proofVerifier = new EscalationGameProofVerifier();
 	}
 
-	function deployDeploymentStatusOracle(
-		address[] memory deploymentAddresses
-	) external returns (DeploymentStatusOracle) {
+	function deployDeploymentStatusOracle(address[] memory deploymentAddresses) external returns (DeploymentStatusOracle) {
 		return new DeploymentStatusOracle(deploymentAddresses);
 	}
 
@@ -137,36 +121,17 @@ contract CoverageHelpersHarness {
 		return TokenId.getTokenId(universeId, outcome);
 	}
 
-	function getTokenIds(
-		uint248 universeId,
-		BinaryOutcomes.BinaryOutcome[] calldata outcomes
-	) external pure returns (uint256[] memory) {
+	function getTokenIds(uint248 universeId, BinaryOutcomes.BinaryOutcome[] calldata outcomes) external pure returns (uint256[] memory) {
 		return TokenId.getTokenIds(universeId, outcomes);
 	}
 
-	function unpackTokenId(
-		uint256 tokenId
-	) external pure returns (uint248 universe, BinaryOutcomes.BinaryOutcome outcome) {
+	function unpackTokenId(uint256 tokenId) external pure returns (uint248 universe, BinaryOutcomes.BinaryOutcome outcome) {
 		return TokenId.unpackTokenId(tokenId);
 	}
 
-	function hashLeaf(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amount,
-		uint256 parentDepositIndex,
-		uint256 cumulativeAmount,
-		uint256 sourceNodeId
-	) external pure returns (bytes32) {
+	function hashLeaf(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId) external pure returns (bytes32) {
 		return
-			MerkleMountainRange.hashLeaf(
-				depositor,
-				outcome,
-				amount,
-				parentDepositIndex,
-				cumulativeAmount,
-				sourceNodeId
-			);
+			MerkleMountainRange.hashLeaf(depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId);
 	}
 
 	function hashParent(bytes32 left, bytes32 right) external pure returns (bytes32) {
@@ -181,57 +146,31 @@ contract CoverageHelpersHarness {
 		return proofVerifier.computeEmptyNullifierRoot();
 	}
 
-	function getCurrentCarryPeakForLeaf(
-		uint256 leafCount,
-		uint256 leafIndex
-	) external view returns (uint256 peakHeight, uint256 peakStartIndex) {
+	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external view returns (uint256 peakHeight, uint256 peakStartIndex) {
 		return proofVerifier.getCurrentCarryPeakForLeaf(leafCount, leafIndex);
 	}
 
-	function bagCarryPeaks(
-		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes,
-		uint256 leafCount
-	) external view returns (bytes32) {
+	function bagCarryPeaks(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes, uint256 leafCount) external view returns (bytes32) {
 		return proofVerifier.bagCarryPeaks(peakHashes, leafCount);
 	}
 
-	function bagCarryPeakSamples(
-		bytes32 firstPeakHash,
-		bytes32 secondPeakHash,
-		uint256 leafCount
-	) external view returns (bytes32) {
+	function bagCarryPeakSamples(bytes32 firstPeakHash, bytes32 secondPeakHash, uint256 leafCount) external view returns (bytes32) {
 		bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes;
 		peakHashes[0] = firstPeakHash;
 		peakHashes[1] = secondPeakHash;
 		return proofVerifier.bagCarryPeaks(peakHashes, leafCount);
 	}
 
-	function computeMerkleMountainRangeRootFromProof(
-		bytes32 leafHash,
-		uint256 leafCount,
-		uint256 leafIndex,
-		uint256 peakHeight,
-		bytes32[] calldata siblings
-	) external view returns (bytes32) {
+	function computeMerkleMountainRangeRootFromProof(bytes32 leafHash, uint256 leafCount, uint256 leafIndex, uint256 peakHeight, bytes32[] calldata siblings) external view returns (bytes32) {
 		return
 			proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, leafIndex, peakHeight, siblings);
 	}
 
-	function computeNullifierRoot(
-		uint256 parentDepositIndex,
-		bytes32[] calldata siblings,
-		bytes32 leafValue
-	) external view returns (bytes32) {
+	function computeNullifierRoot(uint256 parentDepositIndex, bytes32[] calldata siblings, bytes32 leafValue) external view returns (bytes32) {
 		return proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, leafValue);
 	}
 
-	function getScalarOutcomeName(
-		uint120[2] memory payoutNumerators,
-		string memory unit,
-		uint256 numTicks,
-		int256 minValue,
-		int256 maxValue
-	) external pure returns (string memory) {
+	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) external pure returns (string memory) {
 		return ScalarOutcomes.getScalarOutcomeName(payoutNumerators, unit, numTicks, minValue, maxValue);
 	}
 

@@ -1,3 +1,4 @@
+import * as commonCopy from '../../../copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
@@ -10,6 +11,7 @@ const ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE = 25
 type EscalationDepositSelectionItem = {
 	deposit: EscalationDeposit
 	details: ComponentChildren[]
+	secondaryDetails?: ComponentChildren[]
 }
 
 type EscalationDepositSelectionListProps = {
@@ -39,30 +41,42 @@ export function EscalationDepositSelectionList({ disabled = false, items, onSele
 		<>
 			<div className='withdraw-deposit-list'>
 				{visibleItems.map(item => {
-					const { deposit, details } = item
+					const { deposit, details, secondaryDetails = [] } = item
 					const isChecked = selectedDepositIndexes.includes(deposit.depositIndex)
 
 					return (
-						<label key={deposit.depositIndex.toString()} className='withdraw-deposit-option'>
-							<input
-								type='checkbox'
-								checked={isChecked}
-								disabled={disabled}
-								onChange={event => {
-									const nextSelectedDepositIndexes = event.currentTarget.checked ? [...selectedDepositIndexes, deposit.depositIndex] : selectedDepositIndexes.filter(index => index !== deposit.depositIndex)
-									onSelectionChange(nextSelectedDepositIndexes)
-								}}
-							/>
-							<span className='withdraw-deposit-copy'>
-								<strong>
-									{forkAuctionCopy.depositNumber}
-									{deposit.depositIndex.toString()}
-								</strong>
-								{details.map((detail, detailIndex) => (
-									<span key={`${deposit.depositIndex.toString()}:${detailIndex.toString()}`}>{detail}</span>
-								))}
-							</span>
-						</label>
+						<div key={deposit.depositIndex.toString()} className='withdraw-deposit-option'>
+							<label className='withdraw-deposit-selection'>
+								<input
+									type='checkbox'
+									checked={isChecked}
+									disabled={disabled}
+									onChange={event => {
+										const nextSelectedDepositIndexes = event.currentTarget.checked ? [...selectedDepositIndexes, deposit.depositIndex] : selectedDepositIndexes.filter(index => index !== deposit.depositIndex)
+										onSelectionChange(nextSelectedDepositIndexes)
+									}}
+								/>
+								<span className='withdraw-deposit-copy'>
+									<strong>
+										{forkAuctionCopy.depositNumber}
+										{deposit.depositIndex.toString()}
+									</strong>
+									{details.map((detail, detailIndex) => (
+										<span key={`${deposit.depositIndex.toString()}:${detailIndex.toString()}`}>{detail}</span>
+									))}
+								</span>
+							</label>
+							{secondaryDetails.length === 0 ? undefined : (
+								<details className='withdraw-deposit-details'>
+									<summary>{commonCopy.technicalDetails}</summary>
+									<div>
+										{secondaryDetails.map((detail, detailIndex) => (
+											<span key={`${deposit.depositIndex.toString()}:secondary:${detailIndex.toString()}`}>{detail}</span>
+										))}
+									</div>
+								</details>
+							)}
+						</div>
 					)
 				})}
 			</div>

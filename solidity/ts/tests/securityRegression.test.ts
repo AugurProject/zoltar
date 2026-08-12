@@ -7,12 +7,22 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/si
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice } from '../testSupport/simulator/utils/contracts/peripherals'
-import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
-import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testSupport/simulator/utils/contracts/securityPool'
-import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import {
+	executeStagedOperation,
+	getEthRaiseCapAttoEth,
+	getIsPriceValid,
+	getRequestPriceCostAttoEth,
+	getStagedOperation,
+	getStagedOperationCounter,
+	OperationType,
+	requestPriceIfNeededAndStageOperation,
+	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
+} from '../testSupport/simulator/utils/contracts/peripherals'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getRepToken, getSecurityVault, getTotalCapacityOwnershipAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -30,9 +40,9 @@ import { isIgnorableLogDecodeError } from './logDecodeErrors'
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
-const repDeposit = 1000n * 10n ** 18n
-const initialEscalationGameDeposit = 1n * 10n ** 18n
+const statoblastSecurityMultiplierBps = 20_000n
+const repDeposit = 7000n * 10n ** 18n
+const initialEscalationGameDepositAttoRep = 70n * 10n ** 18n
 const largeEscalationGameDeposit = 100n * 10n ** 18n
 const outcomes = ['Yes', 'No']
 describe('security regression coverage', () => {
@@ -63,9 +73,9 @@ describe('security regression coverage', () => {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
-		await approveAndDepositRep(client, repDeposit, questionId)
-		securityPoolAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		await approveAndDepositRepToVault(client, repDeposit, questionId)
+		securityPoolAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	}
 
 	beforeAll(async () => {
@@ -81,8 +91,9 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
-		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		return getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -102,11 +113,19 @@ describe('security regression coverage', () => {
 		return contractAddress
 	}
 
+	test('complete-set minting rejects an expired cached REP price', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 30n * 10n ** 18n)
+		await mockWindow.advanceTime(5n * 60n)
+
+		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n, true), /Stale price/)
+	})
+
 	test('nested complete-set checkpoints fold in callback log order', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const initialValue = 6n * 10n ** 18n
 		const reentrantValue = 6n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 20n * 10n ** 18n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 30n * 10n ** 18n)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
 		assert.equal(
 			await client.readContract({
@@ -151,18 +170,18 @@ describe('security regression coverage', () => {
 			throw new Error('complete-set checkpoint missing')
 		}
 		assert.equal(outerLog.args.creator, receiver)
-		assert.equal(outerLog.args.ethAmount, initialValue)
-		assert.equal(outerLog.args.resultingCollateral, initialValue)
+		assert.equal(outerLog.args.settlementCollateralProvidedAttoEth, initialValue)
+		assert.equal(outerLog.args.resultingSettlementCollateralAttoEth, initialValue)
 		assert.equal(nestedLog.args.creator, receiver)
-		assert.equal(nestedLog.args.ethAmount, reentrantValue)
-		assert.equal(nestedLog.args.resultingCollateral, initialValue + reentrantValue)
-		assert.equal(nestedLog.args.resultingCollateral, await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool))
+		assert.equal(nestedLog.args.settlementCollateralProvidedAttoEth, reentrantValue)
+		assert.equal(nestedLog.args.resultingSettlementCollateralAttoEth, initialValue + reentrantValue)
+		assert.equal(nestedLog.args.resultingSettlementCollateralAttoEth, await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool))
 	})
 
 	test('complete-set capacity is enforced across ERC1155 receiver reentrancy', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const capacity = 10n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, capacity)
+		const capacity = 20n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacity)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
 		const blockBeforeAttack = await client.getBlockNumber()
 
@@ -179,7 +198,7 @@ describe('security regression coverage', () => {
 			),
 			/receiver rejected tokens/,
 		)
-		assert.equal(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n)
+		assert.equal(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), 0n)
 		assert.deepStrictEqual(
 			await client.getLogs({
 				address: securityPoolAddresses.securityPool,
@@ -194,39 +213,41 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attacker, repDeposit, questionId)
+		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
-		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attacker.account.address, 0n)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		const { vaultRepAtFork } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+		const { vaultRepAtForkAttoRep } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		const migratedRep = await getMigratedRep(client, yesChild.securityPool)
+		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const migratedAttoRep = await getMigratedAttoRep(client, yesChild.securityPool)
 		const childPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
-		assert.ok(migratedRep > 0n, 'vault migration should credit migrated REP')
-		assert.ok(childPoolRepBalance >= migratedRep, 'child pool REP must back migrated vault accounting')
-		assert.ok(migratedRep < vaultRepAtFork, 'single-vault migration should leave remaining branch REP unsplit')
+		assert.ok(migratedAttoRep > 0n, 'vault migration should credit migrated REP')
+		assert.ok(childPoolRepBalance >= migratedAttoRep, 'child pool-held REP must back migrated vault accounting')
+		assert.ok(migratedAttoRep < vaultRepAtForkAttoRep, 'single-vault migration should leave remaining branch REP unsplit')
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		const toppedUpChildPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
-		assert.ok(toppedUpChildPoolRepBalance >= vaultRepAtFork, 'bulk migration should top up the remaining branch REP')
+		assert.ok(toppedUpChildPoolRepBalance >= vaultRepAtForkAttoRep, 'bulk migration should top up the remaining branch REP')
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		assert.equal(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool), toppedUpChildPoolRepBalance)
 	})
 
 	test('escalation deposits can fill final threshold dust below the start bond', async () => {
-		const startBond = 10n * 10n ** 18n
-		const nonDecisionThreshold = 25n * 10n ** 18n
-		const escalationGame = await deployEscalationGame(client, startBond, nonDecisionThreshold)
+		const startBondAttoRep = 10n * 10n ** 18n
+		const nonDecisionThresholdAttoRep = 25n * 10n ** 18n
+		const escalationGame = await deployEscalationGame(client, startBondAttoRep, nonDecisionThresholdAttoRep)
 
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThreshold)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThreshold - 1n)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, startBond)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep - 1n)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, startBondAttoRep)
 
 		const noState = await getEscalationGameOutcomeState(client, escalationGame, QuestionOutcome.No)
 		const nonDecisionTimestamp = await client.readContract({
@@ -234,11 +255,11 @@ describe('security regression coverage', () => {
 			address: escalationGame,
 			functionName: 'nonDecisionTimestamp',
 		})
-		assert.equal(noState.balance, nonDecisionThreshold)
+		assert.equal(noState.balanceAttoRep, nonDecisionThresholdAttoRep)
 		assert.ok(nonDecisionTimestamp > 0n, 'final dust fill should trigger non-decision')
 	})
 
-	test('external scalar Zoltar forks allow Placeholder REP migration to the scalar child branch', async () => {
+	test('external scalar Zoltar forks allow Statoblast REP migration to the scalar child branch', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const scalarQuestionData = {
 			title: `external scalar fork ${await mockWindow.getTime()}`,
@@ -261,19 +282,19 @@ describe('security regression coverage', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [scalarOutcomeIndex])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, scalarOutcomeIndex)
 		const scalarUniverse = getChildUniverseId(genesisUniverse, scalarOutcomeIndex)
-		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, securityMultiplier)
+		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, statoblastSecurityMultiplierBps)
 		assert.ok(await contractExists(client, scalarChildPool.securityPool), 'scalar child security pool should deploy')
 	})
 
 	test('child truth-auction address cannot be reserved by an untrusted caller', async () => {
 		const yesUniverse = await prepareOwnForkToYes()
-		const securityPoolSalt = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier]))
+		const securityPoolSalt = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps]))
 
 		await deployUniformPriceDualCapBatchAuction(client, getInfraContractAddresses().securityPoolForker, securityPoolSalt)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		assert.ok((await getEthRaiseCap(client, yesChild.truthAuction)) === 0n, 'legitimate child auction should deploy at its reserved address')
+		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		assert.ok((await getEthRaiseCapAttoEth(client, yesChild.truthAuction)) === 0n, 'legitimate child auction should deploy at its reserved address')
 	})
 
 	test('origin share-token address cannot be reserved by an untrusted caller', async () => {
@@ -291,8 +312,8 @@ describe('security regression coverage', () => {
 			answerUnit: '',
 		}
 		const squattedQuestionId = getQuestionId(squattedQuestionData, outcomes)
-		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, squattedQuestionId]))
-		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, securityMultiplier)
+		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [squattedQuestionId, statoblastSecurityMultiplierBps, genesisUniverse]))
+		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, statoblastSecurityMultiplierBps)
 		const squatterShareTokenAddress = getCreate2Address({
 			bytecode: encodeDeployData({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
@@ -317,7 +338,7 @@ describe('security regression coverage', () => {
 		assert.ok(await contractExists(client, squatterShareTokenAddress), 'untrusted caller should deploy only its own share token')
 		assert.equal(await contractExists(client, expectedAddresses.shareToken), false, 'canonical share token address should remain available')
 
-		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, statoblastSecurityMultiplierBps)
 		assert.ok(await contractExists(client, expectedAddresses.securityPool), 'canonical origin security pool should deploy')
 		assert.ok(await contractExists(client, expectedAddresses.shareToken), 'canonical origin share token should deploy')
 	})
@@ -325,37 +346,40 @@ describe('security regression coverage', () => {
 	test('stale liquidation is consumed without executing after target state changes', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
-		const targetAllowance = repDeposit / 4n
+		const targetCapacityOwnershipAttoRep = repDeposit / 4n
 		const forcedLiquidationPrice = 10n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, targetCapacityOwnershipAttoRep)
 
 		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
+		await approveAndDepositRepToVault(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
 		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
 			liquidator,
 			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-			OperationType.SetSecurityBondsAllowance,
+			OperationType.WithdrawRep,
 			liquidator.account.address,
-			1n,
+			1n * 10n ** 18n,
 			5n * 60n,
 			forcedLiquidationPrice,
-			await getRequestPriceEthCost(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
+			await getRequestPriceCostAttoEth(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
 		)
 		for (let index = 1; index < 4; index++) {
-			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidator.account.address, BigInt(index + 1))
+			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, liquidator.account.address, BigInt(index + 1) * 10n ** 18n)
 		}
-		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetAllowance)
+		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetCapacityOwnershipAttoRep)
 		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice, liquidator.account.address)
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		const expectedTargetCapacityOwnershipAttoRep = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep
+		const expectedLiquidatorCapacityOwnershipAttoRep = (await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)).capacityOwnershipAttoRep
+		const expectedTotalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
 		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 
 		const targetVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)
-		const totalAllowance = await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)
+		const totalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
 		const stagedOperation = await getStagedOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 		const staleExecutionReceipt = await liquidator.waitForTransactionReceipt({ hash: staleExecutionHash })
 		const executionLog = staleExecutionReceipt.logs
@@ -374,9 +398,9 @@ describe('security regression coverage', () => {
 			.find(log => log?.eventName === 'ExecutedStagedOperation')
 		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation event')
 
-		assert.equal(targetVault.securityBondAllowance, 0n)
-		assert.equal(liquidatorVault.securityBondAllowance, 0n)
-		assert.equal(totalAllowance, 0n)
+		assert.equal(targetVault.capacityOwnershipAttoRep, expectedTargetCapacityOwnershipAttoRep)
+		assert.equal(liquidatorVault.capacityOwnershipAttoRep, expectedLiquidatorCapacityOwnershipAttoRep)
+		assert.equal(totalCapacityOwnershipAttoRep, expectedTotalCapacityOwnershipAttoRep)
 		assert.equal(stagedOperation[1], zeroAddress)
 		assert.equal(executionLog.args.operationId, liquidationOperationId)
 		assert.equal(executionLog.args.operation, BigInt(OperationType.Liquidation))
@@ -384,22 +408,22 @@ describe('security regression coverage', () => {
 		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
 	})
 
-	test('first escalation deposits reject stale oracle prices while bond allowance is active', async () => {
+	test('first escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const securityBondAllowance = 100n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
+		const capacityOwnershipAttoRep = 100n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
 
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDeposit), /Oracle price is stale|Stale price/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDepositAttoRep), /Oracle price is stale|Stale price/)
 	})
 
-	test('large escalation deposits reject stale oracle prices while bond allowance is active', async () => {
+	test('large escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const securityBondAllowance = 100n * 10n ** 18n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
+		const capacityOwnershipAttoRep = 100n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)

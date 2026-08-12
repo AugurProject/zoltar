@@ -5,10 +5,12 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import {
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
-	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
-	convertCollateralAmountToShareAmount,
-	convertShareAmountToCollateralAmount,
+	calculateMintingCapacityAttoEth,
+	convertSettlementCollateralAttoEthToAttoShares,
+	convertAttoSharesToSettlementCollateralAttoEth,
+	formatStatoblastSecurityMultiplier,
 	getCollateralizationDisplayState,
 	getCollateralizationTone,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -22,7 +24,7 @@ import {
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
 	getVaultCollateralizationPercent,
-	hasRepBackedPoolWithNoActiveAllowance,
+	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
 } from '../../../features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '../../../features/markets/lib/scalarOutcome.js'
@@ -43,9 +45,9 @@ void describe('trading helpers', () => {
 	})
 
 	const shareBalances = {
-		invalid: 2n * 10n ** 18n,
-		no: 4n * 10n ** 18n,
-		yes: 3n * 10n ** 18n,
+		invalidAttoShares: 2n * 10n ** 18n,
+		noAttoShares: 4n * 10n ** 18n,
+		yesAttoShares: 3n * 10n ** 18n,
 	}
 	const binaryForkUniverse = {
 		childUniverses: [
@@ -77,7 +79,7 @@ void describe('trading helpers', () => {
 				universeId: 12n,
 			},
 		],
-		forkThreshold: 1n,
+		forkThresholdAttoRep: 1n,
 		forkQuestionDetails: {
 			answerUnit: '',
 			createdAt: 1n,
@@ -98,12 +100,12 @@ void describe('trading helpers', () => {
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 100n,
+		totalTheoreticalSupplyAttoRep: 100n,
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 	const scalarForkUniverse = {
 		childUniverses: [],
-		forkThreshold: 1n,
+		forkThresholdAttoRep: 1n,
 		forkQuestionDetails: {
 			answerUnit: 'km',
 			createdAt: 1n,
@@ -124,15 +126,22 @@ void describe('trading helpers', () => {
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 100n,
+		totalTheoreticalSupplyAttoRep: 100n,
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 
-	void test('computes remaining mint capacity from total bond allowance and minted open interest', () => {
+	void test('computes remaining mint capacity from live ETH capacity and minted open interest', () => {
 		expect(getRemainingMintCapacity(10n, 4n)).toBe(6n)
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('converts REP capacity ownership into live ETH minting capacity', () => {
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(13_333_333_333_333_333_333n)
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(6_666_666_666_666_666_666n)
+		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBeUndefined()
 	})
 
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
@@ -148,32 +157,38 @@ void describe('trading helpers', () => {
 		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, 0n)).toBeUndefined()
 	})
 
-	void test('computes vault collateralization as a percentage using the canonical REP/ETH price', () => {
+	void test('computes vault REP-backing collateralization as a percentage using the canonical REP/ETH price', () => {
 		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(200n * TOKEN_PRECISION)
 		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
 	})
 
 	void test('marks collateralization green when it is at or above the security multiplier threshold', () => {
-		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 2n)).toBe('danger')
-		expect(getCollateralizationTone(undefined, 2n)).toBeUndefined()
+		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 20_000n)).toBe('success')
+		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 20_000n)).toBe('success')
+		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 20_000n)).toBe('danger')
+		expect(getCollateralizationTone(undefined, 20_000n)).toBeUndefined()
 	})
 
-	void test('surfaces no active allowance separately from unavailable quotes', () => {
-		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveAllowance')
+	void test('formats Statoblast security multiplier basis points as fractional x values', () => {
+		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
+		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
+		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
+	})
+
+	void test('surfaces no active capacity ownership separately from unavailable quotes', () => {
+		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveCapacityOwnership')
 		expect(getCollateralizationDisplayState(TOKEN_PRECISION, undefined)).toBe('unavailable')
 		expect(getCollateralizationDisplayState(TOKEN_PRECISION, 150n * TOKEN_PRECISION)).toBe('value')
 	})
 
-	void test('returns zero percent when REP backing is zero but allowance is active', () => {
+	void test('returns zero percent when REP backing is zero but capacity ownership is active', () => {
 		expect(getPoolCollateralizationPercent(0n, TOKEN_PRECISION, TOKEN_PRECISION)).toBe(0n)
 	})
 
-	void test('detects pools that have REP backing but no active allowance', () => {
-		expect(hasRepBackedPoolWithNoActiveAllowance(20n * 10n ** 18n, 0n)).toBe(true)
-		expect(hasRepBackedPoolWithNoActiveAllowance(20n * 10n ** 18n, 1n)).toBe(false)
-		expect(hasRepBackedPoolWithNoActiveAllowance(0n, 0n)).toBe(false)
+	void test('detects pools that have REP backing but no active capacity ownership', () => {
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 0n)).toBe(true)
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 1n)).toBe(false)
+		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
 	})
 
 	void test('derives the max redeemable complete sets from wallet share balances', () => {
@@ -187,7 +202,7 @@ void describe('trading helpers', () => {
 	})
 
 	void test('suppresses only the targeted trading guard copy in the UI', () => {
-		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)).toBeUndefined()
 		expect(getTradingGuardDisplayMessage(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)).toBeUndefined()
 		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
 		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBe(MARKET_NOT_FINALIZED_MESSAGE)
@@ -199,142 +214,159 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: undefined,
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '1',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Connect a wallet before minting complete sets.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n,
 				hasSelectedPool: false,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '1',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Load a pool before minting.')
+		).toBe('Select a pool before minting.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n,
 				hasSelectedPool: true,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 				mintAmountInput: '1',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
+	})
+
+	void test("blocks minting when the pool's REP price is stale", () => {
+		expect(
+			getTradingMintGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				settlementCollateralAttoEth: 1n,
+				ethBalanceAttoEth: 10n,
+				hasSelectedPool: true,
+				isOnActiveAppChain: true,
+				isPriceValid: false,
+				mintAmountInput: '1',
+				shareTokenSupplyAttoShares: 1n,
+				totalPoolHeldAttoRep: 10n,
+				mintingCapacityAttoEth: 10n,
+			}),
+		).toBe('Refresh the REP price before minting.')
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: undefined,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: undefined,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '100',
-				shareTokenSupply: undefined,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				shareTokenSupplyAttoShares: undefined,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('Loading mint capacity.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: 10n,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '100',
-				shareTokenSupply: 10n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				shareTokenSupplyAttoShares: 10n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n,
 			}),
 		).toBe('No mint capacity remaining.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '100',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 20n * 10n ** 18n,
-				totalSecurityBondAllowance: 0n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
+				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active security bond allowance.')
+		).toBe('No mint capacity. No active capacity ownership.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: 'abc',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a valid mint amount.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '0',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Enter a mint amount greater than zero.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 8n * 10n ** 17n,
-				ethBalance: 10n ** 18n,
+				settlementCollateralAttoEth: 8n * 10n ** 17n,
+				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '0.3',
-				shareTokenSupply: 10n ** 18n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				shareTokenSupplyAttoShares: 10n ** 18n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 10n ** 18n,
 			}),
 		).toBe('Max mint capacity is 0.2 ETH.')
 
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 5n * 10n ** 17n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 5n * 10n ** 17n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '1',
-				shareTokenSupply: 0n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
 	})
@@ -343,14 +375,14 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 2n * 10n ** 18n,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: 2n * 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '1',
-				shareTokenSupply: 10n * 10n ** 18n,
-				totalRepDeposit: 20n * 10n ** 18n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+				totalPoolHeldAttoRep: 20n * 10n ** 18n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
 	})
@@ -359,14 +391,14 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 4n * 10n ** 17n,
-				ethBalance: 2n * 10n ** 18n,
+				settlementCollateralAttoEth: 4n * 10n ** 17n,
+				ethBalanceAttoEth: 2n * 10n ** 18n,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				mintAmountInput: '0.5',
-				shareTokenSupply: 10n ** 18n,
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				shareTokenSupplyAttoShares: 10n ** 18n,
+				totalPoolHeldAttoRep: 0n,
+				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBeUndefined()
 	})
@@ -375,104 +407,104 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '0',
 				shareBalances,
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Enter a redeem amount greater than zero.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: true,
 				redeemAmountInput: '1',
 				shareBalances: undefined,
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Loading wallet share balances.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '1',
 				shareBalances: {
-					invalid: 0n,
-					no: 2n * 10n ** 18n,
-					yes: 2n * 10n ** 18n,
+					invalidAttoShares: 0n,
+					noAttoShares: 2n * 10n ** 18n,
+					yesAttoShares: 2n * 10n ** 18n,
 				},
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Need matching Invalid, Yes, and No shares to redeem complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: 'abc',
 				shareBalances,
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Enter a valid redeem amount.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2.1',
 				shareBalances,
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Max redeemable amount is 2 complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 10n * TOKEN_PRECISION,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2',
 				shareBalances,
-				shareTokenSupply: 10n * TOKEN_PRECISION,
+				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBeUndefined()
 	})
 
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
 		const firstMintShareAmount = TOKEN_PRECISION * TOKEN_PRECISION
-		expect(convertShareAmountToCollateralAmount(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
-		expect(convertCollateralAmountToShareAmount(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
+		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
+		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: TOKEN_PRECISION,
+				settlementCollateralAttoEth: TOKEN_PRECISION,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '1.1',
 				shareBalances: {
-					invalid: firstMintShareAmount,
-					no: firstMintShareAmount,
-					yes: firstMintShareAmount,
+					invalidAttoShares: firstMintShareAmount,
+					noAttoShares: firstMintShareAmount,
+					yesAttoShares: firstMintShareAmount,
 				},
-				shareTokenSupply: firstMintShareAmount,
+				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
 		).toBe('Max redeemable amount is 1 complete set.')
 	})
@@ -482,7 +514,7 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
@@ -496,14 +528,28 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
+				loadingTradingForkUniverse: false,
+				loadingTradingDetails: false,
+				selectedShareOutcome: 'yes',
+				shareBalances,
+				targetOutcomeIndexesInput: '0, 1, 1',
+				tradingForkUniverse: binaryForkUniverse,
+			}),
+		).toBe('Select each target child universe only once.')
+
+		expect(
+			getTradingMigrateSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'invalid',
 				shareBalances: {
-					invalid: 0n,
-					no: 4n * 10n ** 18n,
-					yes: 3n * 10n ** 18n,
+					invalidAttoShares: 0n,
+					noAttoShares: 4n * 10n ** 18n,
+					yesAttoShares: 3n * 10n ** 18n,
 				},
 				targetOutcomeIndexesInput: '0, 1, 2',
 				tradingForkUniverse: binaryForkUniverse,
@@ -514,7 +560,7 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
@@ -528,7 +574,7 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
@@ -542,7 +588,7 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
@@ -556,7 +602,7 @@ void describe('trading helpers', () => {
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
@@ -572,7 +618,7 @@ void describe('trading helpers', () => {
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: undefined,
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 			}),
 		).toBe('Connect a wallet before redeeming shares.')
 
@@ -580,15 +626,15 @@ void describe('trading helpers', () => {
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: false,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 			}),
-		).toBe('Load a pool before redeeming shares.')
+		).toBe('Select a pool before redeeming shares.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: false,
+				isOnActiveAppChain: false,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
 
@@ -596,7 +642,7 @@ void describe('trading helpers', () => {
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 			}),
 		).toBeUndefined()
 
@@ -604,7 +650,7 @@ void describe('trading helpers', () => {
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
+				isOnActiveAppChain: true,
 			}),
 		).toBeUndefined()
 	})

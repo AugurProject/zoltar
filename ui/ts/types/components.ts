@@ -14,6 +14,7 @@ export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'war
 export type NoticeItem = {
 	detail: ComponentChildren
 	id: string
+	technicalDetails?: ComponentChildren
 	title?: ComponentChildren
 	tone: NoticeTone
 }
@@ -21,6 +22,7 @@ export type NoticeItem = {
 type GlobalTransactionTone = 'preparing' | 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
 
 export type GlobalTransactionRow = {
+	identityKey?: string
 	label: string
 	value: ComponentChildren
 }
@@ -29,16 +31,19 @@ export type TransactionIntent = {
 	action: string
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
 	source: string
-	submittedDetail: ComponentChildren
+	submittedDetail?: ComponentChildren
 	submittedTitle: ComponentChildren
 }
 
 export type GlobalTransactionPresentation = {
-	detail: ComponentChildren
+	detail?: ComponentChildren
 	dismissKey?: string
 	hash?: Hash
+	operationKey?: string
 	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren
 	tone: GlobalTransactionTone
 }
@@ -49,6 +54,7 @@ export type StickyContextItem = {
 }
 
 export type TransactionContextItem = {
+	identityKey?: string
 	label: ComponentChildren
 	value: ComponentChildren
 }
@@ -56,7 +62,7 @@ export type TransactionContextItem = {
 export type LifecycleStagePresentation = {
 	availableActions: string[]
 	blockedActions: string[]
-	detail: string
+	detail?: string
 	key: string
 	label: string
 	tone: 'critical' | 'default' | 'success' | 'warning'
@@ -72,7 +78,8 @@ export type ReadinessBlocker = {
 export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string
-	description: string
+	description?: string
+	disabledReasonId?: string
 	onAction?: () => void
 	readiness: 'blocked' | 'ready' | 'warning'
 	key: string
@@ -86,12 +93,14 @@ export type TransactionStatusCardProps = {
 	detail?: ComponentChildren
 	metrics?: ComponentChildren
 	secondaryDetail?: ComponentChildren
+	surface?: 'card' | 'flat'
 	title: ComponentChildren
 }
 
 export type RouteHeaderProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren
+	className?: string
 	description?: ComponentChildren
 	eyebrow?: ComponentChildren
 	summary?: ComponentChildren
@@ -180,6 +189,7 @@ export type ViewTabsProps<TValue extends string> = {
 		values: readonly TValue[]
 	}>
 	onChange: (value: TValue) => void
+	onOverflowEdgesChange?: (edges: { end: boolean; start: boolean }) => void
 	orientation?: 'horizontal' | 'vertical'
 	options: ViewTabOption<TValue>[]
 	semantics?: 'navigation' | 'switcher' | 'tabs'
@@ -189,9 +199,11 @@ export type ViewTabsProps<TValue extends string> = {
 }
 
 export type TransactionActionButtonProps = {
+	ariaLabel?: string
 	availability?: ActionAvailability
 	className?: string
 	disabled?: boolean
+	disabledReasonElementId?: string | undefined
 	idleLabel: ComponentChildren
 	onClick: () => void
 	pending?: boolean
@@ -203,6 +215,8 @@ export type TransactionActionButtonProps = {
 
 export type OperationModalProps = {
 	children: ComponentChildren
+	closeDisabled?: boolean
+	closeOnSuccessKey?: string | undefined
 	context?: TransactionContextItem[]
 	description?: ComponentChildren
 	isOpen: boolean
@@ -213,7 +227,7 @@ export type OperationModalProps = {
 export type TabNavigationProps = {
 	route: Route
 	showDeployTab?: boolean
-	augurPlaceHolderDeployed: boolean
+	augurStatoblastDeployed: boolean
 	deployRoute: string
 	marketRoute: string
 	openOracleRoute: string

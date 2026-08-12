@@ -12,9 +12,9 @@ import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
-const REP = 10n ** 18n
+const ATTO_REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
-const HASH = '0x0000000000000000000000000000000000000000000000000000000000000001' as const
+const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000b2' as const
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -29,14 +29,14 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 				universeId: 2n,
 			},
 		],
-		forkThreshold: 100n,
+		forkThresholdAttoRep: 100n,
 		forkQuestionDetails: undefined,
 		forkTime: 1n,
 		forkingOutcomeIndex: 0n,
 		hasForked: true,
 		parentUniverseId: 0n,
 		reputationToken: zeroAddress,
-		totalTheoreticalSupply: 1000n,
+		totalTheoreticalSupplyAttoRep: 1000n,
 		universeId: 1n,
 		zoltarAddress: ZOLTAR_ADDRESS,
 		...overrides,
@@ -54,7 +54,7 @@ function createForm(overrides: Partial<ZoltarMigrationFormState> = {}): ZoltarMi
 function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): ZoltarMigrationSectionProps {
 	return {
 		accountAddress: zeroAddress,
-		isMainnet: true,
+		isOnActiveAppChain: true,
 		loadingZoltarForkAccess: false,
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
@@ -65,15 +65,15 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarForkApproval: {
 			error: undefined,
 			loading: false,
-			value: 20n * REP,
+			value: 20n * ATTO_REP,
 		},
-		zoltarForkRepBalance: 20n * REP,
+		zoltarForkRepBalanceAttoRep: 20n * ATTO_REP,
 		zoltarMigrationActiveAction: undefined,
-		zoltarMigrationChildRepBalances: { '2': 0n },
+		zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
 		zoltarMigrationError: undefined,
 		zoltarMigrationForm: createForm(),
 		zoltarMigrationPending: false,
-		zoltarMigrationPreparedRepBalance: 10n * REP,
+		zoltarMigrationPreparedRepBalanceAttoRep: 10n * ATTO_REP,
 		zoltarUniverse: createUniverse(),
 		zoltarUniverseState: 'ready',
 		...overrides,
@@ -108,8 +108,9 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Prepare REP', '3. Split REP'])
 		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
-		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'Available after this universe forks.')
 	})
 
 	test('labels the irreversible migration amount and requires an explicit destination', async () => {
@@ -136,9 +137,9 @@ describe('ZoltarMigrationSection', () => {
 					zoltarForkApproval: {
 						error: undefined,
 						loading: false,
-						value: 10n * REP,
+						value: 10n * ATTO_REP,
 					},
-					zoltarMigrationPreparedRepBalance: 0n,
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 				}),
 			),
 		)
@@ -159,13 +160,13 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					isMainnet: false,
+					isOnActiveAppChain: false,
 					zoltarForkApproval: {
 						error: undefined,
 						loading: false,
 						value: 0n,
 					},
-					zoltarMigrationPreparedRepBalance: 0n,
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 				}),
 			),
 		)
@@ -184,7 +185,7 @@ describe('ZoltarMigrationSection', () => {
 			h(
 				ZoltarMigrationSection,
 				createProps({
-					isMainnet: false,
+					isOnActiveAppChain: false,
 				}),
 			),
 		)
@@ -196,26 +197,14 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('advances to one verify stage after the selected split succeeds', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ZoltarMigrationSection,
-				createProps({
-					zoltarMigrationResult: {
-						action: 'splitMigrationRep',
-						amount: 10n * REP,
-						hash: HASH,
-						outcomeIndexes: [1n],
-						universeId: 1n,
-					},
-				}),
-			),
-		)
+	test('shows the final workflow stage when destinations and prepared REP are ready', async () => {
+		const renderedComponent = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const currentSteps = document.body.querySelectorAll('.migration-workflow-steps .current')
 		expect(currentSteps).toHaveLength(1)
-		expect(currentSteps[0]?.textContent).toBe('6. Verify destination REP')
+		expect(currentSteps[0]?.textContent).toBe('3. Split REP')
+		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
 	test('reviews labeled child-universe outputs against the Zoltar contract without consuming custody', async () => {
@@ -224,10 +213,60 @@ describe('ZoltarMigrationSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Yes · Universe 2')
+		expect(review.textContent).toContain('Yes · Universe 0x2')
 		expect(review.textContent).toContain('Child-Universe REP Received')
-		expect(review.textContent).toContain('Custody REP After Split (Unchanged)')
 		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
-		expect(review.textContent).not.toContain('Selected Destinations1')
+		expect(review.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
+		const balanceChanges = within(document.body).getByText('Balance Changes').closest('details')
+		if (balanceChanges === null) throw new Error('Expected balance changes disclosure')
+		expect(balanceChanges.textContent).toContain('Custody REP After Split (Unchanged)')
+		expect(balanceChanges.closest('.actions')).toBeNull()
+		const migrationActions = balanceChanges.nextElementSibling
+		if (!(migrationActions instanceof HTMLElement)) throw new Error('Expected migration action row after balance changes')
+		expect(migrationActions.classList.contains('actions')).toBe(true)
+		expect(within(migrationActions).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
+		expect(within(migrationActions).getByRole('button', { name: 'Split REP' })).not.toBeNull()
+	})
+
+	test('shows wallet import access only for deployed child tokens the account holds', async () => {
+		const heldChild = {
+			exists: true,
+			forkTime: 1n,
+			outcomeIndex: 1n,
+			outcomeLabel: 'Yes',
+			parentUniverseId: 1n,
+			reputationToken: CHILD_REP_ADDRESS,
+			universeId: 2n,
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * ATTO_REP },
+					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const walletTokensHeading = within(document.body).getByRole('heading', { name: 'Wallet REP Tokens' })
+		const walletTokensSection = walletTokensHeading.closest('section')
+		if (walletTokensSection === null) throw new Error('Expected wallet REP tokens section')
+		expect(walletTokensSection.textContent).toContain('Yes')
+		expect(walletTokensSection.textContent).toContain(CHILD_REP_ADDRESS)
+
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+		const withoutHeldTokens = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
+					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = withoutHeldTokens.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'Wallet REP Tokens' })).toBeNull()
 	})
 })

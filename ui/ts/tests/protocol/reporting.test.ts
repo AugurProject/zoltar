@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, migrateEscalationDeposits, migrateVaultWithUnresolvedEscalation, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
+import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
 import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../contractArtifact.js'
 import type { EscalationSide } from '../../types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from './testSupport.js'
@@ -13,10 +13,10 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
-const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
+const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
-function hashCarryLeafForTest(depositor: Address, outcome: bigint, amount: bigint, parentDepositIndex: bigint, cumulativeAmount: bigint, sourceNodeId: bigint) {
-	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amount, parentDepositIndex, cumulativeAmount, sourceNodeId]))
+function hashCarryLeafForTest(depositor: Address, outcome: bigint, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) {
+	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 }
 
 function hashCarryParentForTest(left: Hex, right: Hex) {
@@ -25,15 +25,47 @@ function hashCarryParentForTest(left: Hex, right: Hex) {
 
 function computeEmptyNullifierRootForTest() {
 	let currentHash = ('0x' + '00'.repeat(32)) as Hex
-	for (let depth = 1; depth < 64; depth += 1) currentHash = hashCarryParentForTest(currentHash, currentHash)
+	for (let depth = 0; depth < 64; depth += 1) currentHash = hashCarryParentForTest(currentHash, currentHash)
 	return currentHash
 }
 
+function computeSingleConsumedNullifierRootForTest(parentDepositIndex: bigint) {
+	let path = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
+	let currentHash = ('0x' + '00'.repeat(31) + '01') as Hex
+	let zeroHash = ('0x' + '00'.repeat(32)) as Hex
+	for (let depth = 0; depth < 64; depth += 1) {
+		currentHash = (path & 1n) === 0n ? hashCarryParentForTest(currentHash, zeroHash) : hashCarryParentForTest(zeroHash, currentHash)
+		zeroHash = hashCarryParentForTest(zeroHash, zeroHash)
+		path >>= 1n
+	}
+	return currentHash
+}
+
+function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
+	const zeroHash = ('0x' + '00'.repeat(32)) as Hex
+	const peaks = Array.from({ length: 64 }, () => zeroHash)
+	let leafCount = 0n
+	for (const initialLeafHash of leafHashes) {
+		let carryHash = initialLeafHash
+		let peakHeight = 0
+		while (((leafCount >> BigInt(peakHeight)) & 1n) === 1n) {
+			const peak = peaks[peakHeight]
+			if (peak === undefined) throw new Error('Missing test carry peak')
+			carryHash = hashCarryParentForTest(peak, carryHash)
+			peaks[peakHeight] = zeroHash
+			peakHeight += 1
+		}
+		peaks[peakHeight] = carryHash
+		leafCount += 1n
+	}
+	return peaks
+}
+
 describe('reporting protocol client', () => {
-	test('loadReportingDetails reports unlocked pool REP and hides exported parent deposits from settlement', async () => {
+	test('loadReportingDetails keeps proof deposits visible after optional unresolved parent escalation-deposit accounting cleanup', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const unlockedPoolClaim = 70n
+		const poolHeldVaultRepBackingAttoRep = 70n
 		const escrowedRep = 30n
 		const client = {
 			getBlock: async () => createBlockWithTimestamp(88n),
@@ -43,15 +75,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -65,17 +97,17 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return escrowedRep
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return escrowedRep
 				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [true, escrowedRep, [false, true, false]]
-				if (request.functionName === 'poolOwnershipToRep') return unlockedPoolClaim
+				if (request.functionName === 'backingUnitsToAttoRep') return poolHeldVaultRepBackingAttoRep
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
-					return args[0] === 1 ? [{ amount: escrowedRep, cumulativeAmount: escrowedRep, depositor: viewerAddress }] : []
+					return args[0] === 1 ? [{ amountAttoRep: escrowedRep, cumulativeAmountAttoRep: escrowedRep, depositor: viewerAddress }] : []
 				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
@@ -84,18 +116,18 @@ describe('reporting protocol client', () => {
 		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
-		expect(details.viewerVaultRepDepositShare).toBe(unlockedPoolClaim)
-		expect(details.viewerVaultEscrowedRep).toBe(escrowedRep)
-		expect(details.viewerVaultAvailableEscalationRep).toBe(unlockedPoolClaim)
+		expect(details.viewerVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
+		expect(details.viewerVaultDisputeStakedAttoRep).toBe(escrowedRep)
+		expect(details.viewerPoolHeldVaultRepBackingAttoRep).toBe(poolHeldVaultRepBackingAttoRep)
 		expect(details.viewerEscalationMigrationEntitlement).toEqual({
 			initialized: true,
 			materializedByOutcome: { invalid: false, yes: true, no: false },
-			totalCurrentRep: escrowedRep,
+			totalCurrentAttoRep: escrowedRep,
 		})
 		const yesSide = details.sides.find(side => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')
 		expect(yesSide.deposits).toHaveLength(1)
-		expect(yesSide.userDeposits).toEqual([])
+		expect(yesSide.userDeposits).toEqual(yesSide.deposits)
 	})
 
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
@@ -109,15 +141,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -131,9 +163,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return 9n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -141,7 +173,7 @@ describe('reporting protocol client', () => {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
 					if (args[0] === 1) {
-						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+						return [{ amountAttoRep: 9n, cumulativeAmountAttoRep: 17n, depositor: viewerAddress }]
 					}
 					return []
 				}
@@ -172,15 +204,15 @@ describe('reporting protocol client', () => {
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
-				if (functionName === 'startBond') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
+				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'startBond') return 7n
-				if (request.functionName === 'nonDecisionThreshold') return 50n
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
-				if (request.functionName === 'totalCost') return 22n
-				if (request.functionName === 'getBindingCapital') return 11n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
 				if (request.functionName === 'getOutcomeState') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
@@ -194,9 +226,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
-				if (request.functionName === 'escrowedRepByVault') return 9n
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -204,7 +236,7 @@ describe('reporting protocol client', () => {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
 					if (args[0] === 1) {
-						return [{ amount: 9n, cumulativeAmount: 17n, depositor: viewerAddress }]
+						return [{ amountAttoRep: 9n, cumulativeAmountAttoRep: 17n, depositor: viewerAddress }]
 					}
 					return []
 				}
@@ -219,7 +251,7 @@ describe('reporting protocol client', () => {
 		expect(details.parentWithdrawalEnabled).toBe(false)
 	})
 
-	test('loadReportingDetails keeps pool-level finality when no escalation game exists', async () => {
+	test('loadReportingDetails keeps pool-level finality and previews the live reduced bond when no game exists', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
 			getBlock: async () => createBlockWithTimestamp(88n),
@@ -232,7 +264,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -245,6 +277,8 @@ describe('reporting protocol client', () => {
 		expect(details.questionOutcome).toBe('yes')
 		expect(details.settlementState).toBe('resolved')
 		expect(details.parentWithdrawalEnabled).toBe(false)
+		expect(details.nonDecisionThresholdAttoRep).toBe(5n)
+		expect(details.startBondAttoRep).toBe(4n)
 	})
 
 	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
@@ -261,7 +295,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') {
 					forkContinuationRead = true
@@ -290,7 +324,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -313,7 +347,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -334,14 +368,14 @@ describe('reporting protocol client', () => {
 		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
 		const readCalls: bigint[] = []
 		const firstPage = Array.from({ length: 30 }, (_, index) => ({
-			amount: index === 29 ? 0n : BigInt(index + 1),
-			cumulativeAmount: BigInt(index + 1),
+			amountAttoRep: index === 29 ? 0n : BigInt(index + 1),
+			cumulativeAmountAttoRep: BigInt(index + 1),
 			depositor,
 		}))
 		const secondPage = [
 			{
-				amount: 31n,
-				cumulativeAmount: 31n,
+				amountAttoRep: 31n,
+				cumulativeAmountAttoRep: 31n,
 				depositor,
 			},
 		]
@@ -362,7 +396,7 @@ describe('reporting protocol client', () => {
 
 		expect(readCalls).toEqual([0n, 30n])
 		expect(deposits).toHaveLength(30)
-		expect(deposits.some(deposit => deposit.amount === 0n)).toBe(false)
+		expect(deposits.some(deposit => deposit.amountAttoRep === 0n)).toBe(false)
 		expect(deposits[28]?.depositIndex).toBe(28n)
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
@@ -370,7 +404,7 @@ describe('reporting protocol client', () => {
 	test('loadEscalationDeposits rejects malformed deposit pages instead of dropping entries', async () => {
 		const client = createMockReadClient(async request => {
 			if (request.functionName === 'getDepositsByOutcome') {
-				return [{ amount: 1n, cumulativeAmount: 1n, depositor: 'not-an-address' }]
+				return [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }]
 			}
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -378,7 +412,7 @@ describe('reporting protocol client', () => {
 		await expect(loadEscalationDeposits(client, escalationGameAddress, 'yes')).rejects.toThrow('Unexpected escalation deposit page response')
 	})
 
-	test('buildForkCarriedEscalationProofs rejects malformed carry leaf pages instead of dropping entries', async () => {
+	test('buildForkCarriedEscalationProofs rejects malformed historical carry nodes instead of dropping entries', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 		const client = {
@@ -395,15 +429,18 @@ describe('reporting protocol client', () => {
 						currentCarryRoot: zeroHash,
 						currentLeafCount: 0n,
 						currentNullifierRoot: zeroHash,
+						localHeadNodeId: request.address === parentEscalationGameAddress ? 1n : 0n,
+						snapshotLeafCount: 0n,
+						snapshotPeaks: Array.from({ length: 64 }, () => zeroHash),
 					}
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'getCarryLeafPageByOutcome') return [[{ amount: 1n, cumulativeAmount: 1n, depositor: vaultAddress, parentDepositIndex: 'bad-index', sourceNodeId: 1n }], 0n]
+				if (request.functionName === 'nodes') return [0n, vaultAddress, 1, 1n, 'bad-index', 1n, 0n]
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected carry leaf page response')
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected historical carry node parent deposit index response')
 	})
 
 	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {
@@ -434,6 +471,86 @@ describe('reporting protocol client', () => {
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
+	test('buildForkCarriedEscalationProofs retains a directly claimed leaf when hashing the frozen child snapshot', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const firstDepositor = getAddress('0x00000000000000000000000000000000000000f2')
+		const secondDepositor = getAddress('0x00000000000000000000000000000000000000f3')
+		const securityPoolForkerAddress = getAddress('0x00000000000000000000000000000000000000f4')
+		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
+		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
+		const firstLeaf = {
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
+			depositor: firstDepositor,
+			parentDepositIndex: 0n,
+			sourceNodeId: 1n,
+		}
+		const secondLeaf = {
+			amountAttoRep: 5n,
+			cumulativeAmountAttoRep: 8n,
+			depositor: secondDepositor,
+			parentDepositIndex: 1n,
+			sourceNodeId: 2n,
+		}
+		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
+		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
+		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
+		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		snapshotPeaks[1] = frozenRoot
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return {
+						currentCarryRoot: secondLeafHash,
+						currentLeafCount: 2n,
+						currentNullifierRoot: emptyNullifierRoot,
+						localHeadNodeId: 2n,
+						snapshotLeafCount: 0n,
+					}
+				}
+				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
+					return {
+						currentCarryRoot: frozenRoot,
+						currentLeafCount: 2n,
+						currentNullifierRoot: emptyNullifierRoot,
+						snapshotLeafCount: 2n,
+						snapshotPeaks,
+					}
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return false
+				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'securityPoolForker') return securityPoolForkerAddress
+				if (request.address === securityPoolForkerAddress && request.functionName === 'isEscalationDepositClaimedDirectly') return true
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[secondLeaf], 0n]
+				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
+					const args = request.args
+					if (!Array.isArray(args)) throw new Error('Expected node args')
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
+					throw new Error(`Unexpected node id: ${String(args[0])}`)
+				}
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
+			{
+				depositor: secondDepositor,
+				leafIndex: 1n,
+				merkleMountainRangeSiblings: [firstLeafHash],
+				parentDepositIndex: secondLeaf.parentDepositIndex,
+			},
+		])
+	})
+
 	test('buildForkCarriedEscalationProofs preserves recursive carry append order instead of sorting by parentDepositIndex', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
@@ -442,22 +559,24 @@ describe('reporting protocol client', () => {
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
-			amount: 3n,
-			cumulativeAmount: 3n,
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
 			depositor,
 			parentDepositIndex: 9n,
 			sourceNodeId: 1n,
 		}
 		const childLocalLeaf = {
-			amount: 1n,
-			cumulativeAmount: 4n,
+			amountAttoRep: 1n,
+			cumulativeAmountAttoRep: 4n,
 			depositor,
 			parentDepositIndex: 1n,
 			sourceNodeId: 2n,
 		}
-		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amount, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmount, inheritedLeaf.sourceNodeId)
-		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amount, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmount, childLocalLeaf.sourceNodeId)
+		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
+		const childLocalLeafHash = hashCarryLeafForTest(childLocalLeaf.depositor, 1n, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, childLocalLeaf.sourceNodeId)
 		const parentCarryRoot = hashCarryParentForTest(inheritedLeafHash, childLocalLeafHash)
+		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		snapshotPeaks[1] = parentCarryRoot
 		const client = {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
@@ -473,6 +592,8 @@ describe('reporting protocol client', () => {
 						currentCarryRoot: parentCarryRoot,
 						currentLeafCount: 2n,
 						currentNullifierRoot: zeroHash,
+						localHeadNodeId: 2n,
+						snapshotLeafCount: 1n,
 					}
 				}
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -480,6 +601,8 @@ describe('reporting protocol client', () => {
 						currentCarryRoot: zeroHash,
 						currentLeafCount: 0n,
 						currentNullifierRoot: emptyNullifierRoot,
+						snapshotLeafCount: 2n,
+						snapshotPeaks,
 					}
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -487,6 +610,8 @@ describe('reporting protocol client', () => {
 						currentCarryRoot: inheritedLeafHash,
 						currentLeafCount: 1n,
 						currentNullifierRoot: zeroHash,
+						localHeadNodeId: 1n,
+						snapshotLeafCount: 0n,
 					}
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
@@ -495,6 +620,12 @@ describe('reporting protocol client', () => {
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
 				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
 				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
+					return [0n, childLocalLeaf.depositor, 1, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, 1n]
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
+					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, 0n]
+				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') {
 					return [[childLocalLeaf], 0n]
 				}
@@ -510,6 +641,194 @@ describe('reporting protocol client', () => {
 			{ leafIndex: 0n, parentDepositIndex: 9n },
 			{ leafIndex: 1n, parentDepositIndex: 1n },
 		])
+	})
+
+	test('buildForkCarriedEscalationProofs preserves a zeroed local position in a recursive frozen snapshot', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
+		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
+		const securityPoolForkerAddress = getAddress('0x00000000000000000000000000000000000000f5')
+		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
+		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
+		const inheritedLeaf = {
+			amountAttoRep: 3n,
+			cumulativeAmountAttoRep: 3n,
+			depositor,
+			parentDepositIndex: 9n,
+			sourceNodeId: 1n,
+		}
+		const settledLocalLeaf = {
+			amountAttoRep: 1n,
+			cumulativeAmountAttoRep: 4n,
+			depositor,
+			parentDepositIndex: 1n,
+			sourceNodeId: 2n,
+		}
+		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
+		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, zeroHash)
+		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		snapshotPeaks[1] = frozenRoot
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 2n, snapshotLeafCount: 1n }
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 1n, snapshotLeafCount: 0n }
+				}
+				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: emptyNullifierRoot, snapshotLeafCount: 2n, snapshotPeaks }
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
+				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.functionName === 'securityPoolForker') return securityPoolForkerAddress
+				if (request.functionName === 'isEscalationDepositClaimedDirectly') return false
+				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
+					return [0n, settledLocalLeaf.depositor, 1, settledLocalLeaf.amountAttoRep, settledLocalLeaf.parentDepositIndex, settledLocalLeaf.cumulativeAmountAttoRep, 1n]
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
+					return [0n, inheritedLeaf.depositor, 1, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, 0n]
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[inheritedLeaf], 0n]
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [inheritedLeaf.parentDepositIndex])).resolves.toMatchObject([
+			{
+				leafIndex: 0n,
+				merkleMountainRangeSiblings: [zeroHash],
+				parentDepositIndex: inheritedLeaf.parentDepositIndex,
+			},
+		])
+	})
+
+	test('buildForkCarriedEscalationProofs inherits recursive proof consumption and rejects the consumed leaf', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
+		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
+		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
+		const firstLeaf = { amountAttoRep: 3n, cumulativeAmountAttoRep: 3n, depositor, parentDepositIndex: 9n, sourceNodeId: 1n }
+		const secondLeaf = { amountAttoRep: 5n, cumulativeAmountAttoRep: 8n, depositor, parentDepositIndex: 10n, sourceNodeId: 2n }
+		const firstLeafHash = hashCarryLeafForTest(firstLeaf.depositor, 1n, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, firstLeaf.sourceNodeId)
+		const secondLeafHash = hashCarryLeafForTest(secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, secondLeaf.sourceNodeId)
+		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
+		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
+		snapshotPeaks[1] = frozenRoot
+		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(firstLeaf.parentDepositIndex)
+		const client = {
+			multicall: createMulticallStub(async request => {
+				const firstContract = request.contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: inheritedNullifierRoot, snapshotLeafCount: 2n, snapshotPeaks }
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: inheritedNullifierRoot, localHeadNodeId: 0n, snapshotLeafCount: 2n }
+				}
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+					return { currentNullifierRoot: computeEmptyNullifierRootForTest(), localHeadNodeId: 2n, snapshotLeafCount: 0n }
+				}
+				if (request.address === escalationGameAddress && request.functionName === 'forkContinuation') return true
+				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
+				if (request.address === escalationGameAddress && request.functionName === 'securityPool') return securityPoolAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
+				if (request.address === securityPoolAddress && request.functionName === 'parent') return alternateSecurityPoolAddress
+				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
+				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
+					const args = request.args
+					if (!Array.isArray(args)) throw new Error('Expected node args')
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
+				}
+				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[secondLeaf, firstLeaf], 0n]
+				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') {
+					return request.address === parentEscalationGameAddress ? [firstLeaf.parentDepositIndex] : []
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
+			}),
+		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent carry leaf 9 is already settled.')
+	})
+
+	test('buildForkCarriedEscalationProofs encodes peak-relative indexes for three- and six-leaf tail peaks', async () => {
+		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
+		const depositor = getAddress('0x00000000000000000000000000000000000000f2')
+		for (const { leafCount, targetGlobalIndex, targetPeakIndex } of [
+			{ leafCount: 3, targetGlobalIndex: 2, targetPeakIndex: 0n },
+			{ leafCount: 6, targetGlobalIndex: 5, targetPeakIndex: 1n },
+		]) {
+			const leaves = Array.from({ length: leafCount }, (_, index) => ({
+				amountAttoRep: BigInt(index + 1),
+				cumulativeAmountAttoRep: BigInt(((index + 1) * (index + 2)) / 2),
+				depositor,
+				parentDepositIndex: BigInt(100 + index),
+				sourceNodeId: BigInt(index + 1),
+			}))
+			const leafHashes = leaves.map(leaf => hashCarryLeafForTest(leaf.depositor, 1n, leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, leaf.sourceNodeId))
+			const snapshotPeaks = buildCarrySnapshotPeaksForTest(leafHashes)
+			const targetLeaf = leaves[targetGlobalIndex]
+			if (targetLeaf === undefined) throw new Error('Missing target test leaf')
+			const client = {
+				multicall: createMulticallStub(async request => {
+					const firstContract = request.contracts[0]
+					const functionName = getContractFunctionName(firstContract)
+					if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+					throw new Error(`Unexpected multicall contract: ${functionName}`)
+				}),
+				readContract: createReadContractStub(async request => {
+					if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+					if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
+						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotPeaks }
+					}
+					if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
+						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), localHeadNodeId: BigInt(leafCount), snapshotLeafCount: 0n }
+					}
+					if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return false
+					if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
+						const args = request.args
+						if (!Array.isArray(args) || typeof args[0] !== 'bigint') throw new Error('Expected node id')
+						const nodeIndex = Number.parseInt((args[0] - 1n).toString(), 10)
+						const leaf = leaves[nodeIndex]
+						if (leaf === undefined) throw new Error(`Unexpected node id: ${args[0].toString()}`)
+						return [args[0] - 1n, leaf.depositor, 1, leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, BigInt(nodeIndex)]
+					}
+					if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[...leaves].reverse(), 0n]
+					if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
+					throw new Error(`Unexpected readContract function: ${request.functionName} at ${String(request.address)}`)
+				}),
+			} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
+
+			await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: targetPeakIndex, parentDepositIndex: targetLeaf.parentDepositIndex }])
+		}
 	})
 
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
@@ -542,7 +861,7 @@ describe('reporting protocol client', () => {
 		})
 	})
 
-	test('migrateEscalationDeposits helper keeps deposit indexes as uint256 values', async () => {
+	test('claimParentEscalationDeposits helper keeps deposit indexes as uint256 values', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(request => {
@@ -550,7 +869,7 @@ describe('reporting protocol client', () => {
 			capturedTo = request.to
 		})
 
-		const result = await migrateEscalationDeposits(asWriteClient(client), securityPoolAddress, 9n, vaultAddress, 'yes', [0n, 255n, 256n])
+		const result = await claimParentEscalationDeposits(asWriteClient(client), securityPoolAddress, 9n, vaultAddress, 'yes', [0n, 255n, 256n])
 
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
@@ -566,7 +885,7 @@ describe('reporting protocol client', () => {
 		expect(decodedArgs[2]).toBe(1n)
 		expect(decodedArgs[3]).toEqual([0n, 255n, 256n])
 		expect(result).toEqual({
-			action: 'migrateEscalationDeposits',
+			action: 'claimParentEscalationDeposits',
 			hash: mockTransactionHash,
 			securityPoolAddress,
 			universeId: 9n,
@@ -592,9 +911,9 @@ describe('reporting protocol client', () => {
 		const result = await withdrawForkedEscalationDeposits(asWriteClient(client), securityPoolAddress, 'yes', [
 			{
 				depositor: vaultAddress,
-				amount: 5n,
+				amountAttoRep: 5n,
 				parentDepositIndex: 3n,
-				cumulativeAmount: 8n,
+				cumulativeAmountAttoRep: 8n,
 				sourceNodeId: 2n,
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
@@ -614,9 +933,9 @@ describe('reporting protocol client', () => {
 		expect(decodedCall.args[1]).toMatchObject([
 			{
 				depositor: vaultAddress,
-				amount: 5n,
+				amountAttoRep: 5n,
 				parentDepositIndex: 3n,
-				cumulativeAmount: 8n,
+				cumulativeAmountAttoRep: 8n,
 				sourceNodeId: 2n,
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],

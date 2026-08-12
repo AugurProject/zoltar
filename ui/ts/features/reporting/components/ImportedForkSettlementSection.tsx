@@ -25,6 +25,7 @@ type ImportedForkSettlementSectionProps = {
 	resolved: boolean
 	selectedDepositIndexesByOutcome: Record<ReportingOutcomeKey, bigint[]>
 	sides: Pick<EscalationSide, 'importedUserDeposits' | 'key' | 'label'>[]
+	winningOutcome: ReportingOutcomeKey | undefined
 }
 
 type ImportedForkSettlementSideProps = {
@@ -68,33 +69,38 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 						const selected = selectedDepositIndexes.includes(deposit.parentDepositIndex)
 						const claimAmount = getImportedEscalationDepositClaimAmount(activeReportingDetails, side.key, deposit)
 						return (
-							<label className='escalation-selection-item' key={deposit.parentDepositIndex.toString()}>
-								<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
-								<div className='escalation-selection-item-copy'>
-									<strong>
-										{forkAuctionCopy.parentDepositNumber}
-										{deposit.parentDepositIndex.toString()}
-									</strong>
-									<span>
-										{forkAuctionCopy.initiallyDepositedLead}
-										<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+							<div className='escalation-selection-item' key={deposit.parentDepositIndex.toString()}>
+								<label className='escalation-selection-control'>
+									<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
+									<span className='escalation-selection-item-copy'>
+										<strong>
+											{forkAuctionCopy.parentDepositNumber}
+											{deposit.parentDepositIndex.toString()}
+										</strong>
+										<span>
+											{forkAuctionCopy.initiallyDepositedLead}
+											<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
+										</span>
+										<span>
+											{claimAmount === undefined ? (
+												forkAuctionCopy.worthNowPendingFinalSettlement
+											) : (
+												<>
+													{forkAuctionCopy.worthNowLead}
+													<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
+												</>
+											)}
+										</span>
 									</span>
-									<span>
-										{claimAmount === undefined ? (
-											forkAuctionCopy.worthNowPendingFinalSettlement
-										) : (
-											<>
-												{forkAuctionCopy.worthNowLead}
-												<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
-											</>
-										)}
-									</span>
+								</label>
+								<details className='escalation-selection-details'>
+									<summary>{commonCopy.technicalDetails}</summary>
 									<span>
 										{forkAuctionCopy.importedEntryDepthLead}
-										<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
+										<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 									</span>
-								</div>
-							</label>
+								</details>
+							</div>
 						)
 					})}
 				</div>
@@ -121,14 +127,16 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	)
 }
 
-export function ImportedForkSettlementSection({ activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexesByOutcome, sides }: ImportedForkSettlementSectionProps) {
-	if (sides.length === 0) return undefined
+export function ImportedForkSettlementSection({ activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexesByOutcome, sides, winningOutcome }: ImportedForkSettlementSectionProps) {
+	const settleableSides = resolved && winningOutcome !== undefined ? sides.filter(side => side.key === winningOutcome) : sides
+	if (settleableSides.length === 0) return undefined
 
 	return (
-		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits}>
+		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits} variant='embedded'>
 			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
 			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
-			{sides.map(side => (
+			<p className='detail'>{forkAuctionCopy.escalationAuctionHaircutDetail}</p>
+			{settleableSides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}
 		</SectionBlock>

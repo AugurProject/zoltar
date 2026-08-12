@@ -200,10 +200,45 @@ describe('runWriteAction', () => {
 		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
 	})
 
+	test('accepts an equivalent zero-padded active chain ID', async () => {
+		let activeChainId: string | undefined
+		let transactionRequested = false
+		let writeExecuted = false
+		let errorMessage: string | undefined
+		installWalletBackend({ chainId: '0x01' })
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async (_walletAddress, activeWallet) => {
+				activeChainId = activeWallet.chainId
+				writeExecuted = true
+				return { hash: transactionHash }
+			},
+			'Failed to report on outcome',
+		)
+
+		expect(transactionRequested).toBe(true)
+		expect(writeExecuted).toBe(true)
+		expect(activeChainId).toBe('0x01')
+		expect(errorMessage).toBeUndefined()
+	})
+
 	test('uses simulation transaction copy through the shared write action config', async () => {
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress, profile: createFakeSimulationProfile() }))
 		let transactionState = createInitialTransactionTrayState()
+		let requestedRequiresWalletConfirmation: boolean | undefined
 		const errorSignal: { value: string | undefined } = { value: undefined }
 		const writeActionConfig = buildWriteActionConfig(
 			{
@@ -219,6 +254,7 @@ describe('runWriteAction', () => {
 				onTransactionPrepared: undefined,
 				onTransactionRequested: intent => {
 					transactionState = markTransactionRequested(transactionState, intent)
+					requestedRequiresWalletConfirmation = transactionState.pendingIntent?.requiresWalletConfirmation
 				},
 				refreshState: async () => undefined,
 			},
@@ -236,7 +272,8 @@ describe('runWriteAction', () => {
 
 		expect(transactionState.active?.tone).toBe('preparing')
 		expect(transactionState.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
-		expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		expect(requestedRequiresWalletConfirmation).toBe(false)
+		expect(transactionState.pendingIntent).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(0)
 		expect(errorSignal.value).toBeUndefined()
 	})

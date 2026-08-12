@@ -1,0 +1,352 @@
+:root {
+	--docs-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--docs-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+	--docs-page-width: 1280px;
+	--docs-page-tablet-width: 860px;
+	--docs-page-inline-gutter-desktop: 1rem;
+	--docs-page-inline-gutter-tablet: 0.75rem;
+	--docs-page-inline-gutter-mobile: 0.5rem;
+}
+
+body.doc-openoracle {
+	color-scheme: light dark;
+	--bg: #f5f7f8;
+	--paper: #fff;
+	--ink: #1f2529;
+	--muted: #5f6d75;
+	--line: #d8e0e4;
+	--soft: #edf3f5;
+	--blue: #245f9f;
+	--blue-soft: #dceaf8;
+	--green: #1d735d;
+	--green-soft: #dcefe8;
+	--gold: #8a5d18;
+	--gold-soft: #f3e4c6;
+	--red: #99453f;
+	--red-soft: #f2d9d6;
+	--radius: 0.5rem;
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--docs-font-sans);
+	font-size: 1rem;
+	line-height: 1.62;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.doc-openoracle {
+		--bg: #111517;
+		--paper: #1a2022;
+		--ink: #f1f5f3;
+		--muted: #b2bec4;
+		--line: #3a464b;
+		--soft: #222b2f;
+		--blue: #93c2f5;
+		--blue-soft: #172a41;
+		--green: #75cdae;
+		--green-soft: #153a30;
+		--gold: #e6bf70;
+		--gold-soft: #3b2f18;
+		--red: #ee968f;
+		--red-soft: #3b2421;
+	}
+}
+
+body.doc-openoracle * {
+	box-sizing: border-box;
+}
+
+body.doc-openoracle main {
+	width: min(var(--docs-page-width), calc(100% - var(--docs-page-inline-gutter-desktop)));
+	margin: 0 auto;
+	padding: 3rem 0 4rem;
+}
+
+body.doc-openoracle header,
+body.doc-openoracle section {
+	margin-bottom: 1.25rem;
+	padding: 1rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--paper);
+}
+
+body.doc-openoracle h1,
+body.doc-openoracle h2 {
+	margin: 0 0 0.75rem;
+	line-height: 1.18;
+}
+
+body.doc-openoracle h1 {
+	font-size: clamp(2rem, 6vw, 3.5rem);
+}
+
+body.doc-openoracle h2 {
+	font-size: 1.35rem;
+}
+
+body.doc-openoracle p {
+	margin: 0 0 1rem;
+}
+
+body.doc-openoracle p:last-child,
+body.doc-openoracle ul:last-child {
+	margin-bottom: 0;
+}
+
+body.doc-openoracle a {
+	color: var(--blue);
+	text-underline-offset: 0.18em;
+}
+
+body.doc-openoracle code {
+	padding: 0.08rem 0.25rem;
+	border-radius: 0.25rem;
+	background: var(--soft);
+	font-size: 0.94em;
+	overflow-wrap: anywhere;
+}
+
+body.doc-openoracle pre {
+	max-width: 100%;
+	margin: 0.85rem 0 1rem;
+	padding: 1rem;
+	overflow-x: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+	color: var(--ink);
+	font-family: var(--docs-font-mono);
+	font-size: 0.86rem;
+	line-height: 1.55;
+}
+
+body.doc-openoracle pre code {
+	padding: 0;
+	background: transparent;
+	font-size: inherit;
+}
+
+body.doc-openoracle pre:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
+
+body.doc-openoracle td > code:only-child {
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+body.doc-openoracle ul {
+	margin-top: 0;
+	padding-left: 1.25rem;
+}
+
+body.doc-openoracle .callout {
+	margin: 0.85rem 0;
+	padding: 0.85rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line));
+	border-left: 0.3rem solid var(--gold);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--gold-soft) 55%, var(--paper));
+}
+
+body.doc-openoracle .callout strong {
+	display: block;
+	margin-bottom: 0.25rem;
+}
+
+body.doc-openoracle table {
+	width: 100%;
+	margin-top: 0.75rem;
+	border-collapse: collapse;
+	font-size: 0.95rem;
+}
+
+body.doc-openoracle .table-scroll {
+	margin-top: 0.75rem;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+
+body.doc-openoracle .table-scroll table {
+	min-width: 54rem;
+	margin-top: 0;
+}
+
+body.doc-openoracle th,
+body.doc-openoracle td {
+	padding: 0.7rem;
+	border: 1px solid var(--line);
+	text-align: left;
+	vertical-align: top;
+}
+
+body.doc-openoracle th {
+	background: var(--soft);
+}
+
+body.doc-openoracle .diagram,
+body.doc-openoracle .equation {
+	margin: 1.25rem 0;
+	padding: 0.5rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+
+body.doc-openoracle .diagram-wide > svg,
+body.doc-openoracle .diagram-wide > .plot-chart {
+	min-width: 60rem;
+}
+
+body.doc-openoracle .table-scroll:focus-visible,
+body.doc-openoracle .diagram:focus-visible,
+body.doc-openoracle .equation:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
+
+.plot-chart {
+	width: 100%;
+}
+
+.plot-chart > svg {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+}
+
+.plot-chart .svg-box {
+	fill: var(--paper);
+	stroke: var(--line);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-blue {
+	fill: var(--blue-soft);
+	stroke: var(--blue);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-green {
+	fill: var(--green-soft);
+	stroke: var(--green);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-gold,
+.plot-chart .svg-amber {
+	fill: var(--gold-soft);
+	stroke: var(--gold);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-red,
+.plot-chart .svg-rose {
+	fill: var(--red-soft);
+	stroke: var(--red);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-slate {
+	fill: var(--paper);
+	stroke: var(--muted);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-line {
+	fill: none;
+	stroke: var(--muted);
+	stroke-width: 2.5;
+}
+
+.plot-chart .svg-arrowhead {
+	fill: var(--muted);
+}
+
+.plot-chart .svg-label {
+	fill: var(--ink);
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.plot-chart .svg-small,
+.plot-chart .svg-note {
+	fill: var(--muted);
+	font-size: 13px;
+}
+
+.plot-chart-fallback {
+	display: block;
+	padding: 1rem;
+	color: var(--muted);
+	line-height: 1.5;
+	text-align: center;
+}
+
+body.doc-openoracle .diagram-caption,
+body.doc-openoracle .equation-caption {
+	margin: 0.75rem 0 0;
+	color: var(--muted);
+	font-size: 0.94rem;
+}
+
+body.doc-openoracle .figure-label,
+body.doc-openoracle .equation-label {
+	margin-right: 0.35rem;
+	color: var(--ink);
+	font-weight: 700;
+}
+
+body.doc-openoracle .equation math {
+	display: block;
+	width: max-content;
+	margin-inline: auto;
+	padding: 0.25rem 0;
+	font-size: clamp(0.84rem, 1.6vw, 1.05rem);
+}
+
+body.doc-openoracle p math,
+body.doc-openoracle li math,
+body.doc-openoracle td math {
+	display: inline math;
+	width: auto;
+	min-width: 0;
+	padding: 0;
+	font-size: 1em;
+}
+
+@media (max-width: 1000px) {
+	body.doc-openoracle main {
+		width: min(var(--docs-page-tablet-width), calc(100% - var(--docs-page-inline-gutter-tablet)));
+	}
+}
+
+@media (max-width: 640px) {
+	body.doc-openoracle main {
+		width: min(var(--docs-page-tablet-width), calc(100% - var(--docs-page-inline-gutter-mobile)));
+		padding-top: 1rem;
+	}
+
+	body.doc-openoracle header,
+	body.doc-openoracle section {
+		padding: 1rem;
+	}
+
+	body.doc-openoracle table {
+		display: block;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+
+	body.doc-openoracle .table-scroll table {
+		display: table;
+		overflow-x: visible;
+	}
+}

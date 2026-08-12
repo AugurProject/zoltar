@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
-import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
@@ -9,48 +9,48 @@ export function getReportingReportGuardMessage({
 	actualDepositAmount,
 	accountAddress,
 	contributionPreviewReason,
-	isMainnet,
+	isOnActiveAppChain,
 	remainingSelectedOutcomeCapacity,
 	reportAmount,
 	reportingStatus,
 	selectedOutcome,
 	selectedAmount,
-	viewerVaultAvailableEscalationRep,
+	viewerPoolHeldVaultRepBackingAttoRep,
 	viewerVaultExists,
 }: {
 	actualDepositAmount: bigint | undefined
 	accountAddress: Address | undefined
 	contributionPreviewReason: string | undefined
-	isMainnet: boolean
+	isOnActiveAppChain: boolean
 	remainingSelectedOutcomeCapacity: bigint | undefined
 	reportAmount: string
 	reportingStatus: ReportingStatus
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedAmount: bigint | undefined
-	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerVaultExists: boolean
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a market.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before reporting on a question.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
-	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a market.'
+	if (reportingStatus === 'missing') return 'Loading reporting details.'
+	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a question.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
 	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
-	if (!viewerVaultExists) return 'Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.'
-	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would be locked for this report.'
-	if (viewerVaultAvailableEscalationRep === undefined) return 'Loading available vault REP.'
+	if (!viewerVaultExists) return 'Reporting moves pool-held REP backing from your security vault into dispute-staked REP. Deposit REP into your vault before reporting.'
+	if (actualDepositAmount === undefined) return 'Unable to preview the REP backing that would become dispute-staked for this report.'
+	if (viewerPoolHeldVaultRepBackingAttoRep === undefined) return 'Loading pool-held vault REP backing.'
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {
 		if (remainingSelectedOutcomeCapacity === 0n) return 'No remaining contribution capacity is available on the selected side.'
 		return `Only ${formatCurrencyBalance(remainingSelectedOutcomeCapacity)} REP remains before the selected side reaches the threshold.`
 	}
-	if (actualDepositAmount > viewerVaultAvailableEscalationRep) return `Need ${formatCurrencyBalance(actualDepositAmount - viewerVaultAvailableEscalationRep)} more unlocked REP in your vault before reporting.`
+	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep)} more REP into your vault's pool-held backing before reporting.`
 	return undefined
 }
 
-export function getReportingWithdrawGuardMessage({ accountAddress, isMainnet, reportingStatus }: { accountAddress: Address | undefined; isMainnet: boolean; reportingStatus: ReportingStatus }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
+export function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, reportingStatus }: { accountAddress: Address | undefined; isOnActiveAppChain: boolean; reportingStatus: ReportingStatus }) {
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (reportingStatus === 'missing') return 'Load reporting details before settling escalation deposits.'
+	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	return undefined
 }

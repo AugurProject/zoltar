@@ -5,28 +5,17 @@ import { getOpenOracleStagePresentation } from '../../../features/open-oracle/li
 
 describe('open oracle stage presentation', () => {
 	test('maps every action mode to its lifecycle presentation', () => {
-		expect(getOpenOracleStagePresentation('initial-report')).toEqual({
-			availableActions: ['Submit initial report'],
-			blockedActions: ['Dispute', 'Settle'],
-			detail: 'This report is waiting for its first report submission.',
-			key: 'awaiting-initial-report',
-			label: 'Awaiting Initial Report',
-			tone: 'warning',
-		})
-
 		expect(getOpenOracleStagePresentation('dispute')).toEqual({
-			availableActions: ['Dispute report', 'Settle when the dispute window ends'],
+			availableActions: [],
 			blockedActions: [],
-			detail: 'This report has an active lifecycle and may still be disputed.',
 			key: 'dispute-window',
 			label: 'Dispute Window Open',
 			tone: 'default',
 		})
 
 		expect(getOpenOracleStagePresentation('settle')).toEqual({
-			availableActions: ['Settle report'],
-			blockedActions: ['Further disputes'],
-			detail: 'The dispute window has ended and this report is ready to settle.',
+			availableActions: [],
+			blockedActions: [],
 			key: 'ready-to-settle',
 			label: 'Ready To Settle',
 			tone: 'success',
@@ -34,11 +23,54 @@ describe('open oracle stage presentation', () => {
 
 		expect(getOpenOracleStagePresentation('read-only')).toEqual({
 			availableActions: [],
-			blockedActions: ['Initial report', 'Dispute', 'Settle'],
-			detail: 'This report is already settled and no further write actions are available.',
+			blockedActions: [],
 			key: 'settled',
 			label: 'Settled',
 			tone: 'success',
+		})
+	})
+
+	test('keeps the dispute stage pending until its actual opening time', () => {
+		expect(
+			getOpenOracleStagePresentation('dispute', {
+				currentBlockNumber: 1n,
+				currentTime: 120n,
+				disputeDelay: 60n,
+				reportTimestamp: 100n,
+				timeType: true,
+			}),
+		).toEqual({
+			availableActions: [],
+			blockedActions: [],
+			detail: 'Disputes open in less than a minute.',
+			key: 'dispute-pending',
+			label: 'Waiting For Dispute Window',
+			tone: 'warning',
+		})
+	})
+
+	test('uses the block clock before and at the dispute boundary', () => {
+		const blockClockReport = {
+			currentBlockNumber: 12n,
+			currentTime: 999n,
+			disputeDelay: 3n,
+			reportTimestamp: 10n,
+			timeType: false,
+		}
+		expect(getOpenOracleStagePresentation('dispute', blockClockReport)).toEqual({
+			availableActions: [],
+			blockedActions: [],
+			detail: 'Disputes open in 1 block.',
+			key: 'dispute-pending',
+			label: 'Waiting For Dispute Window',
+			tone: 'warning',
+		})
+		expect(getOpenOracleStagePresentation('dispute', { ...blockClockReport, currentBlockNumber: 13n })).toEqual({
+			availableActions: [],
+			blockedActions: [],
+			key: 'dispute-window',
+			label: 'Dispute Window Open',
+			tone: 'default',
 		})
 	})
 })

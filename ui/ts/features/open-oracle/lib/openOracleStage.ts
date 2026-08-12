@@ -1,32 +1,45 @@
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import { assertNever } from '../../../lib/assert.js'
+import { formatDuration } from '../../../lib/formatters.js'
 import type { LifecycleStagePresentation } from '../../types.js'
+import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 
-export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedReportActionMode): LifecycleStagePresentation {
+type OpenOracleStageReport = Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'disputeDelay' | 'reportTimestamp' | 'timeType'>
+
+function getDisputeWindowPendingPresentation(report: OpenOracleStageReport): LifecycleStagePresentation | undefined {
+	const currentClock = report.timeType ? report.currentTime : report.currentBlockNumber
+	const disputeStart = report.reportTimestamp + report.disputeDelay
+	if (currentClock >= disputeStart) return undefined
+	const remaining = disputeStart - currentClock
+	const duration = report.timeType ? formatDuration(remaining) : `${remaining.toString()} block${remaining === 1n ? '' : 's'}`
+	return {
+		availableActions: [],
+		blockedActions: [],
+		detail: `Disputes open in ${duration}.`,
+		key: 'dispute-pending',
+		label: 'Waiting For Dispute Window',
+		tone: 'warning',
+	}
+}
+
+export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedReportActionMode, report?: OpenOracleStageReport | undefined): LifecycleStagePresentation {
 	switch (actionMode) {
-		case 'initial-report':
-			return {
-				availableActions: ['Submit initial report'],
-				blockedActions: ['Dispute', 'Settle'],
-				detail: 'This report is waiting for its first report submission.',
-				key: 'awaiting-initial-report',
-				label: 'Awaiting Initial Report',
-				tone: 'warning',
-			}
 		case 'dispute':
+			if (report !== undefined) {
+				const pendingPresentation = getDisputeWindowPendingPresentation(report)
+				if (pendingPresentation !== undefined) return pendingPresentation
+			}
 			return {
-				availableActions: ['Dispute report', 'Settle when the dispute window ends'],
+				availableActions: [],
 				blockedActions: [],
-				detail: 'This report has an active lifecycle and may still be disputed.',
 				key: 'dispute-window',
 				label: 'Dispute Window Open',
 				tone: 'default',
 			}
 		case 'settle':
 			return {
-				availableActions: ['Settle report'],
-				blockedActions: ['Further disputes'],
-				detail: 'The dispute window has ended and this report is ready to settle.',
+				availableActions: [],
+				blockedActions: [],
 				key: 'ready-to-settle',
 				label: 'Ready To Settle',
 				tone: 'success',
@@ -34,8 +47,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 		case 'read-only':
 			return {
 				availableActions: [],
-				blockedActions: ['Initial report', 'Dispute', 'Settle'],
-				detail: 'This report is already settled and no further write actions are available.',
+				blockedActions: [],
 				key: 'settled',
 				label: 'Settled',
 				tone: 'success',

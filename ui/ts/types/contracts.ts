@@ -5,6 +5,8 @@ export type { ReadClient, WriteClient } from '../lib/clients.js'
 export type DeploymentStepId =
 	| 'proxyDeployer'
 	| 'deploymentStatusOracle'
+	| 'weth'
+	| 'reputationToken'
 	| 'multicall3'
 	| 'uniformPriceDualCapBatchAuctionFactory'
 	| 'scalarOutcomes'
@@ -15,9 +17,31 @@ export type DeploymentStepId =
 	| 'shareTokenFactory'
 	| 'priceOracleManagerAndOperatorQueuerFactory'
 	| 'securityPoolForker'
+	| 'escalationGameClaimDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
+
+export type LiquidationApprovalDetails = {
+	registryAddress: Address
+	params: {
+		securityPool: Address
+		receiverVault: Address
+		operator: Address
+		targetVault: Address
+		maxCumulativeDebtAttoEth: bigint
+		maxDebtPerLiquidationAttoEth: bigint
+		minPostLiquidationHealthFactorBps: bigint
+		validAfter: bigint
+		validUntil: bigint
+		nonce: bigint
+	}
+	availableDebtAttoEth: bigint
+	reservedDebtAttoEth: bigint
+	consumedDebtAttoEth: bigint
+	minimumValidNonce: bigint
+	revoked: boolean
+}
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
@@ -27,7 +51,7 @@ export type ForkAuctionAction =
 	| 'createChildUniverse'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
-	| 'migrateEscalationDeposits'
+	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'
@@ -37,7 +61,7 @@ export type ForkAuctionAction =
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
-export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep'
 export type OracleOperationBountyState = 'open' | 'assigned' | 'paid' | 'refunded'
 export type OracleOperationExecutionStatus = 'none' | 'pending' | 'succeeded' | 'failed'
 export type OracleOperationBounty = {
@@ -45,10 +69,9 @@ export type OracleOperationBounty = {
 	amount: bigint
 	bountyId: bigint
 	creator: Address
-	executionErrorMessage: string | undefined
 	executionStatus: OracleOperationExecutionStatus
-	maximumInitialWeth: bigint
-	minimumInitialWeth: bigint
+	maximumInitialAttoWeth: bigint
+	minimumInitialAttoWeth: bigint
 	operation: OracleQueueOperation
 	operationId: bigint
 	operator: Address
@@ -63,8 +86,8 @@ export type OracleOperationBounty = {
 export type OracleOperationBountyInput = {
 	acceptanceDeadline: bigint
 	amount: bigint
-	maximumInitialWeth: bigint
-	minimumInitialWeth: bigint
+	maximumInitialAttoWeth: bigint
+	minimumInitialAttoWeth: bigint
 	operation: OracleQueueOperation
 	rewardAmount: bigint
 	rewardToken: Address
@@ -73,7 +96,7 @@ export type OracleOperationBountyInput = {
 }
 export type StagedOracleOperation = {
 	amount: bigint
-	initiatorVault: Address
+	operator: Address
 	operation: OracleQueueOperation
 	operationId: bigint
 	targetVault: Address
@@ -116,14 +139,14 @@ export type ZoltarChildUniverseSummary = {
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkBurnDivisor?: bigint
-	forkThreshold: bigint
+	forkThresholdAttoRep: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
 	parentUniverseId: bigint
 	reputationToken: Address
-	totalTheoreticalSupply: bigint
+	totalTheoreticalSupplyAttoRep: bigint
 	universeId: bigint
 	zoltarAddress?: Address
 }
@@ -134,6 +157,8 @@ export type DeploymentStep = {
 	address: Address
 	dependencies: DeploymentStepId[]
 	deploy: (client: ClientsWriteClient) => Promise<Hash>
+	expectedRuntimeCodeHash?: Hash
+	trustedSimulationCodePresence?: true
 }
 
 export type DeploymentStatus = DeploymentStep & {
@@ -141,7 +166,7 @@ export type DeploymentStatus = DeploymentStep & {
 }
 
 export type DeploymentStatusSnapshot = {
-	augurPlaceHolderDeployed: boolean
+	augurStatoblastDeployed: boolean
 	deploymentStatuses: DeploymentStatus[]
 }
 
@@ -167,19 +192,19 @@ export type ZoltarChildUniverseActionResult = ActionResult & {
 
 export type ZoltarMigrationActionResult = ActionResult & {
 	action: 'addRepToMigrationBalance' | 'splitMigrationRep'
-	amount: bigint
+	amountAttoRep: bigint
 	outcomeIndexes: bigint[]
 	universeId: bigint
 }
 
 export type LiquidationFundingPreview = {
-	currentRepBalance: bigint
-	currentWethBalance: bigint
-	initialReportRepRequired: bigint
-	initialReportWethRequired: bigint
-	queueOperationEthValue: bigint
-	totalWalletEthRequired: bigint
-	wethShortfall: bigint
+	currentRepBalanceAttoRep: bigint
+	currentWethBalanceAttoEth: bigint
+	initialReportRepRequiredAttoRep: bigint
+	initialReportWethRequiredAttoEth: bigint
+	queueOperationValueAttoEth: bigint
+	totalWalletEthRequiredAttoEth: bigint
+	wethShortfallAttoEth: bigint
 }
 
 export type MarketDetails = QuestionData & {
@@ -199,29 +224,33 @@ export type MarketDetailsPage = {
 
 export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	questionId: string
 	securityPoolAddress: Address
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
 }
 
 export type SecurityVaultDetails = {
+	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
-	escalationEscrowedRep: bigint
+	disputeStakedAttoRep: bigint
 	managerAddress: Address
-	poolOwnershipDenominator: bigint
-	repDepositShare: bigint
+	minimumSecurityBondDebtAttoEth?: bigint
+	minimumVaultRepDepositAttoRep?: bigint
+	totalRepBackingUnits: bigint
+	vaultAttoRepBacking: bigint
 	repToken: Address
-	securityBondAllowance: bigint
+	capacityOwnershipAttoRep: bigint
 	securityPoolAddress: Address
-	totalSecurityBondAllowance: bigint
-	unpaidEthFees: bigint
+	totalCapacityOwnershipAttoRep: bigint
+	claimableFeesAttoEth: bigint
 	universeId: bigint
 	vaultAddress: Address
 }
 
 export type SecurityVaultActionResult = ActionResult & {
-	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
+	action: 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -243,9 +272,10 @@ export type OracleManagerDetails = {
 	pendingSettlementQueueCapacity: bigint
 	pendingReportId: bigint
 	priceValidUntilTimestamp: bigint | undefined
-	queuedOperationEthCost: bigint
+	queuedOperationCostAttoEth: bigint
+	requestPriceCostAttoEth: bigint
+	settlementTime?: bigint
 	reputationTokenAddress?: Address
-	requestPriceEthCost: bigint
 	stagedOperations?: StagedOracleOperation[]
 	token1: Address | undefined
 	token2: Address | undefined
@@ -253,9 +283,15 @@ export type OracleManagerDetails = {
 }
 
 export type OpenOracleActionResult = ActionResult & {
-	action: 'acceptOperationBounty' | 'approveToken1' | 'approveToken2' | 'claimOperationBounty' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'postOperationBounty' | 'queueOperation' | 'refundOperationBounty' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
+	action: 'acceptOperationBounty' | 'approveToken1' | 'approveToken2' | 'claimOperationBounty' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'postOperationBounty' | 'queueOperation' | 'refundOperationBounty' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
+}
+
+export type OpenOracleWithdrawableBalances = {
+	ethAttoEth: bigint
+	token1: bigint
+	token2: bigint
 }
 
 export type OpenOracleReportSummary = {
@@ -269,6 +305,7 @@ export type OpenOracleReportSummary = {
 	reportId: bigint
 	reportTimestamp: bigint
 	settlementTimestamp: bigint
+	timeType: boolean
 	token1: Address
 	token2: Address
 	token1Decimals: number
@@ -293,7 +330,7 @@ export type OpenOracleReportDetails = {
 	exactToken1Report: bigint
 	escalationHalt: bigint
 	fee: bigint
-	settlerReward: bigint
+	settlerRewardAttoEth: bigint
 	token1: Address
 	token2: Address
 	settlementTime: bigint
@@ -325,31 +362,36 @@ export type OpenOracleReportDetails = {
 }
 
 export type ListedSecurityPool = {
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
+	feeEligibleCapacityOwnershipAttoRep: bigint
 	hasForkActivity: boolean
+	initialReportPriorityFeeAttoEthPerGas: bigint
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
 	managerAddress: Address
+	minimumSecurityBondDebtAttoEth?: bigint
+	minimumVaultRepDepositAttoRep?: bigint
 	marketDetails: MarketDetails
-	migratedRep: bigint
+	migratedAttoRep: bigint
 	parent: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	securityPoolAddress: Address
-	shareTokenSupply: bigint
+	shareTokenSupplyAttoShares: bigint
 	systemState: SecurityPoolSystemState
-	totalRepDeposit: bigint
-	totalSecurityBondAllowance: bigint
+	totalPoolHeldAttoRep: bigint
+	totalCapacityOwnershipAttoRep: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	universeHasForked: boolean
 	universeId: bigint
 	vaultCount: bigint
 	hasLoadedVaults?: boolean
+	vaultScanCapped?: boolean
 	vaults: SecurityPoolVaultSummary[]
 }
 
@@ -365,17 +407,22 @@ export type SecurityPoolBrowsePage = SecurityPoolPage & {
 }
 
 export type SecurityPoolVaultSummary = {
-	escalationEscrowedRep: bigint
-	repDepositShare: bigint
-	securityBondAllowance: bigint
-	unpaidEthFees: bigint
+	badDebtAttoEth?: bigint
+	openInterestAttoEth?: bigint
+	disputeStakedAttoRep: bigint
+	repBackingUnits?: bigint
+	totalRepBackingUnits?: bigint
+	vaultAttoRepBacking: bigint
+	capacityOwnershipAttoRep: bigint
+	totalPoolHeldRepBalanceAttoRep?: bigint
+	claimableFeesAttoEth: bigint
 	vaultAddress: Address
 }
 
 type OwnForkRepBuckets = {
-	vaultRepAtFork: bigint
-	escalationChildRepPerSelectedOutcome: bigint
-	escrowSourceRepAtFork: bigint
+	vaultRepAtForkAttoRep: bigint
+	escalationChildRepPerSelectedOutcomeAttoRep: bigint
+	escrowSourceRepAtForkAttoRep: bigint
 }
 
 export type SecurityPoolOverviewActionResult = ActionResult & {
@@ -386,13 +433,13 @@ export type SecurityPoolOverviewActionResult = ActionResult & {
 }
 
 export type TradingShareBalances = {
-	invalid: bigint
-	no: bigint
-	yes: bigint
+	invalidAttoShares: bigint
+	noAttoShares: bigint
+	yesAttoShares: bigint
 }
 
 export type TradingDetails = {
-	maxRedeemableCompleteSets: bigint | undefined
+	maxRedeemableCompleteSetsAttoShares: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
 	universeId: bigint
 }
@@ -406,24 +453,24 @@ export type TradingActionResult = ActionResult & {
 }
 
 export type EscalationDeposit = {
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 	depositIndex: bigint
 	depositor: Address
 }
 
 export type ImportedEscalationDeposit = {
-	amount: bigint
-	cumulativeAmount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
 	depositor: Address
 	parentDepositIndex: bigint
 }
 
 export type CarriedDepositProof = {
 	depositor: Address
-	amount: bigint
+	amountAttoRep: bigint
 	parentDepositIndex: bigint
-	cumulativeAmount: bigint
+	cumulativeAmountAttoRep: bigint
 	sourceNodeId: bigint
 	leafIndex: bigint
 	merkleMountainRangeSiblings: Hex[]
@@ -445,28 +492,28 @@ export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-requir
 type EscalationMigrationEntitlementStatus = {
 	initialized: boolean
 	materializedByOutcome: Record<ReportingOutcomeKey, boolean>
-	totalCurrentRep: bigint
+	totalCurrentAttoRep: bigint
 }
 
 type ReportingDetailsBase = {
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentTime: bigint
-	forkThreshold: bigint
+	forkThresholdAttoRep: bigint
 	marketDetails: MarketDetails
-	nonDecisionThreshold: bigint
+	nonDecisionThresholdAttoRep: bigint
 	parentSecurityPoolAddress?: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
 	settlementState: ReportingSettlementState
-	startBond: bigint
+	startBondAttoRep: bigint
 	systemState: SecurityPoolSystemState
 	universeId: bigint
 	parentWithdrawalEnabled: boolean
-	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
 	viewerEscalationMigrationEntitlement?: EscalationMigrationEntitlementStatus | undefined
 	viewerVaultExists: boolean
-	viewerVaultEscrowedRep: bigint | undefined
-	viewerVaultRepDepositShare: bigint | undefined
+	viewerVaultDisputeStakedAttoRep: bigint | undefined
+	viewerVaultRepBackingAttoRep: bigint | undefined
 }
 
 export type ActiveReportingDetails = ReportingDetailsBase & {
@@ -478,7 +525,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	hasReachedNonDecision: boolean
 	sides: EscalationSide[]
 	activationTime: bigint
-	totalCost: bigint
+	totalCostAttoRep: bigint
 }
 
 export type ReportingDetails =
@@ -495,29 +542,29 @@ export type ReportingActionResult = ActionResult & {
 }
 
 export type TruthAuctionMetrics = {
-	accumulatedEth: bigint
+	accumulatedBidAttoEth: bigint
 	auctionEndsAt: bigint | undefined
 	clearingPrice: bigint | undefined
 	clearingTick: bigint | undefined
-	ethAtClearingTick: bigint
-	ethRaiseCap: bigint
-	ethRaised: bigint
+	bidAtClearingTickAttoEth: bigint
+	attoEthRaiseCap: bigint
+	attoEthRaised: bigint
 	finalized: boolean
 	hitCap: boolean
-	maxRepBeingSold: bigint
-	minBidSize: bigint
-	repPurchasableAtBid: bigint | undefined
+	maxAttoRepBeingSold: bigint
+	minBidSizeAttoEth: bigint
+	attoRepPurchasableAtBid: bigint | undefined
 	timeRemaining: bigint | undefined
-	totalRepPurchased: bigint
+	totalAttoRepPurchased: bigint
 	underfunded: boolean
 	underfundedThreshold: bigint | undefined
-	underfundedWinningEth: bigint
+	underfundedWinningAttoEth: bigint
 }
 
 export type TruthAuctionTickSummary = {
 	tick: bigint
 	price: bigint
-	currentTotalEth: bigint
+	currentTotalBidAttoEth: bigint
 	submissionCount: bigint
 	active: boolean
 }
@@ -526,9 +573,9 @@ export type TruthAuctionBidView = {
 	tick: bigint
 	bidIndex: bigint
 	bidder: Address
-	ethAmount: bigint
-	cumulativeEth: bigint
-	activeCumulativeEthBeforeBid: bigint
+	bidAmountAttoEth: bigint
+	cumulativeBidAttoEth: bigint
+	activeCumulativeBidBeforeAttoEth: bigint
 	claimed: boolean
 	refunded: boolean
 }
@@ -557,20 +604,20 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
-	auctionedSecurityBondAllowance: bigint
+	auctionedCapacityOwnershipAttoRep: bigint
 	claimingAvailable: boolean
-	completeSetCollateralAmount: bigint
+	settlementCollateralAttoEth: bigint
 	currentTime: bigint
 	hasForkActivity: boolean
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	marketDetails: MarketDetails
-	migratedRep: bigint
+	migratedAttoRep: bigint
 	migrationEndsAt: bigint | undefined
 	parentSecurityPoolAddress: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	ownForkRepBuckets?: OwnForkRepBuckets | undefined
-	auctionableRepAtFork: bigint
+	auctionableAttoRepAtFork: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
 	truthAuction: TruthAuctionMetrics | undefined

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
-import { LoadingText } from '../components/LoadingText.js'
+import { LoadingAwareText, LoadingText, isLoadingText } from '../components/LoadingText.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -31,6 +31,8 @@ describe('LoadingText', () => {
 
 		expect(wrapper).not.toBeNull()
 		expect(wrapper.className).toContain('loading-value')
+		expect(wrapper.getAttribute('role')).toBe('status')
+		expect(wrapper.getAttribute('aria-live')).toBe('polite')
 		expect(document.body.querySelector('.loading-value .spinner')).not.toBeNull()
 	})
 
@@ -45,5 +47,26 @@ describe('LoadingText', () => {
 		expect(document.body.querySelector('.loading-value.compact')).not.toBeNull()
 		expect(document.body.querySelector('.loading-value .spinner')).not.toBeNull()
 		expect(document.body.querySelector('.loading-value')?.textContent).toContain('Working')
+	})
+
+	test('recognizes and decorates user-facing loading messages', async () => {
+		expect(isLoadingText('Loading truth auction status…')).toBe(true)
+		expect(isLoadingText('  loading auction bids…')).toBe(true)
+		expect(isLoadingText('Auction loaded.')).toBe(false)
+
+		const renderedComponent = await renderIntoDocument(<LoadingAwareText>Loading truth auction status…</LoadingAwareText>)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('status').textContent).toContain('Loading truth auction status…')
+		expect(document.body.querySelector('.loading-value .spinner')).not.toBeNull()
+	})
+
+	test('leaves non-loading messages unchanged', async () => {
+		const renderedComponent = await renderIntoDocument(<LoadingAwareText>Connect a wallet before submitting.</LoadingAwareText>)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Connect a wallet before submitting.')).not.toBeNull()
+		expect(document.body.querySelector('.spinner')).toBeNull()
+		expect(within(document.body).queryByRole('status')).toBeNull()
 	})
 })

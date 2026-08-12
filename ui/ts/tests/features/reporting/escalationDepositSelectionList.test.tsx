@@ -28,8 +28,8 @@ describe('EscalationDepositSelectionList', () => {
 		const deposits = [
 			{
 				deposit: {
-					amount: 10n,
-					cumulativeAmount: 10n,
+					amountAttoRep: 10n,
+					cumulativeAmountAttoRep: 10n,
 					depositIndex: 7n,
 					depositor: zeroAddress,
 				},
@@ -37,8 +37,8 @@ describe('EscalationDepositSelectionList', () => {
 			},
 			{
 				deposit: {
-					amount: 20n,
-					cumulativeAmount: 30n,
+					amountAttoRep: 20n,
+					cumulativeAmountAttoRep: 30n,
 					depositIndex: 8n,
 					depositor: zeroAddress,
 				},
@@ -84,8 +84,8 @@ describe('EscalationDepositSelectionList', () => {
 		const deposits = [
 			{
 				deposit: {
-					amount: 10n,
-					cumulativeAmount: 10n,
+					amountAttoRep: 10n,
+					cumulativeAmountAttoRep: 10n,
 					depositIndex: 8n,
 					depositor: zeroAddress,
 				},
@@ -115,8 +115,8 @@ describe('EscalationDepositSelectionList', () => {
 			const depositIndex = 250n + BigInt(index)
 			return {
 				deposit: {
-					amount: depositIndex,
-					cumulativeAmount: depositIndex,
+					amountAttoRep: depositIndex,
+					cumulativeAmountAttoRep: depositIndex,
 					depositIndex,
 					depositor: zeroAddress,
 				},
@@ -143,8 +143,8 @@ describe('EscalationDepositSelectionList', () => {
 		})
 		expect(deposit256Checkbox.checked).toBe(true)
 
-		const nextButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Next Deposits')
-		if (nextButton === undefined) throw new Error('Next Deposits button missing')
+		const nextButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Next deposits')
+		if (nextButton === undefined) throw new Error('Next deposits button missing')
 		await act(() => {
 			fireEvent.click(nextButton)
 		})
@@ -160,8 +160,8 @@ describe('EscalationDepositSelectionList', () => {
 		})
 		expect(deposit276Checkbox.checked).toBe(true)
 
-		const previousButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Previous Deposits')
-		if (previousButton === undefined) throw new Error('Previous Deposits button missing')
+		const previousButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Previous deposits')
+		if (previousButton === undefined) throw new Error('Previous deposits button missing')
 		await act(() => {
 			fireEvent.click(previousButton)
 		})

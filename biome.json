@@ -43,6 +43,15 @@
 	},
 	"overrides": [
 		{
+			"includes": ["docs/assets/js/chartRuntime.js", "docs/assets/js/docsData.js", "docs/assets/js/docsSearchData.js"],
+			"formatter": {
+				"enabled": false
+			},
+			"linter": {
+				"enabled": false
+			}
+		},
+		{
 			"includes": ["solidity/ts/testSupport/simulator/types/wire-types.js"],
 			"formatter": {
 				"enabled": false
@@ -52,12 +61,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.test.ts",
-				"**/*.test.tsx",
-				"**/*.spec.ts",
-				"**/*.spec.tsx"
-			],
+			"includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
 			"linter": {
 				"domains": {
 					"test": "recommended"

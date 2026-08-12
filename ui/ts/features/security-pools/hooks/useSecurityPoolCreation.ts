@@ -11,7 +11,8 @@ import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { createSecurityPoolCreationSuccessPresentation, createSecurityPoolCreationTransactionIntent, createSecurityPoolCreationWarningPresentation } from '../../transactionPresentations.js'
 import { runWriteAction } from '../../../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../../markets/lib/marketCreation.js'
-import { getDefaultSecurityPoolFormState, tryParseBigIntInput } from '../../markets/lib/marketForm.js'
+import { getDefaultSecurityPoolFormState, tryParseBigIntInput, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
+import { tryParseDecimalInput } from '../../../lib/decimal.js'
 import type { SecurityPoolFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../../../types/contracts.js'
 
@@ -60,22 +61,24 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const loadDuplicateOriginPoolState = async () => {
 		const isCurrent = nextDuplicateCheck()
 		const marketId = securityPoolForm.value.marketId.trim()
-		const securityMultiplierInput = securityPoolForm.value.securityMultiplier.trim()
-		if (marketId === '' || securityMultiplierInput === '') {
+		const statoblastSecurityMultiplierBpsInput = securityPoolForm.value.statoblastSecurityMultiplierBps.trim()
+		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeGwei.trim()
+		if (marketId === '' || statoblastSecurityMultiplierBpsInput === '' || initialReportPriorityFeeInput === '') {
 			duplicateOriginPoolExists.value = false
 			return
 		}
 
 		const questionId = tryParseBigIntInput(marketId)
-		const securityMultiplier = tryParseBigIntInput(securityMultiplierInput)
-		if (questionId === undefined || securityMultiplier === undefined) {
+		const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(statoblastSecurityMultiplierBpsInput)
+		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 9)
+		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeAttoEthPerGas === undefined || initialReportPriorityFeeAttoEthPerGas <= 0n) {
 			duplicateOriginPoolExists.value = false
 			return
 		}
 
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
-				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
+				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
 			} catch (error) {
@@ -88,7 +91,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			securityPoolError.value = 'Deploy ZoltarQuestionData before loading a market'
+			securityPoolError.value = 'Deploy ZoltarQuestionData before selecting a question'
 			return
 		}
 
@@ -125,6 +128,11 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			return
 		}
 		const submittedSecurityPoolForm = securityPoolForm.value
+		const transactionContext = {
+			initialReportPriorityFeeGwei: submittedSecurityPoolForm.initialReportPriorityFeeGwei,
+			questionId: submittedSecurityPoolForm.marketId,
+			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
+		}
 		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
@@ -145,7 +153,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 					},
 					onTransactionRequested: () => {
 						securityPoolCreating.value = true
-						onTransactionRequested(createSecurityPoolCreationTransactionIntent())
+						onTransactionRequested(createSecurityPoolCreationTransactionIntent(transactionContext))
 					},
 					onTransactionFinished: () => {
 						securityPoolCreating.value = false
@@ -174,11 +182,11 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 						}
 						throw new Error('Security pools can only be deployed for binary markets')
 					}
-					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)) {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
 							marketDetails.value = details
 						}
-						throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
+						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
 
 					capturedDetails = details
@@ -211,7 +219,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	useEffect(() => {
 		if (!enabled) return
 		void loadDuplicateOriginPoolState()
-	}, [enabled, securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
+	}, [enabled, securityPoolForm.value.initialReportPriorityFeeGwei, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
 
 	useEffect(() => {
 		if (!enabled) return
