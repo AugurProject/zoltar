@@ -56,23 +56,42 @@ const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDe
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
-	escalationGameCreationCodePartOne: '0xbe6a6916d55eeba0175b3a5fde1eb80459724eba114bde0cf7cab81718f3b62f',
-	escalationGameCreationCodePartTwo: '0x54a83092515c9171019202e4c5033f73aa6ae6e8ca653ccee918445339ce64dd',
-	escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-	liquidationApprovalRegistryDeployer: '0xa8f7b2738683cd84126b088d894cefec66fdcc5db345220bcc89255e1f2b6641',
-	liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
-	priceCoordinatorDeploymentWorker: '0x80ec360d09188ba1bd2ef3fa1f0589d93b53e4fe472ff942276b8c5dc866fd1a',
-	securityPoolDeployer: '0x8293608c02ece57482187b1031002cb17a58bdeb0e848bda705b040face1ca24',
-	securityPoolDeploymentWorker: '0x81fed38ece591ddc97fb02b08dfcf6b0a4a54bd192e17bfec78c0424f975e3d5',
-	securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-	securityPoolForkerEscalationGameForkerDelegate: '0x1ee02600bf6bb603784151f26850b4cc21bb5a395d561ef9a753b771de114ef1',
-	securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-	securityPoolForkerVaultMigrationDelegate: '0x6152969b18168c3da571996dcd6615cb404bca67771b34f0ae987ebaa1e1ee7b',
 	uniswapV3Factory: '0x6377aa1b105d3ee2a54d73d3652812d6209ca56871954f61ad6e87d9c184fa5e',
 	uniswapV3Quoter: '0x8410f80f6ddf60c46fe39dc3394f3b245c16d62d1c401f4ebc2d030afbb1a264',
 	uniswapV3SwapRouter: '0xf552d94a11865ed5100a536873ca827262cd361e489af067f4759a899833b5f5',
 	uniswapV4PoolManager: '0xa761717f06c9ace7b3599d9a5fe795c17ef062a378d317d562f2aea4d52d2c49',
 	uniswapV4Quoter: '0x988a8710947628ebe53e490c56f534703e45cf6d31c9707d8e0288d9ff65623b',
+}
+
+const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainnet' | 'sepolia', Readonly<Record<string, Hash>>>> = {
+	sepolia: {
+		escalationGameCreationCodePartOne: '0x52a4d390db4466028d21a9a860bcb8d813a75d8992d4a60802d394c0a48c894f',
+		escalationGameCreationCodePartTwo: '0x459bfd493b790b379f3277d3743179fffbe696e202f275f0c9d79e6c510a235e',
+		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
+		liquidationApprovalRegistryDeployer: '0xa8f7b2738683cd84126b088d894cefec66fdcc5db345220bcc89255e1f2b6641',
+		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+		priceCoordinatorDeploymentWorker: '0x80ec360d09188ba1bd2ef3fa1f0589d93b53e4fe472ff942276b8c5dc866fd1a',
+		securityPoolDeployer: '0xb13f11b999a80e2f36c85c724b597991c6999bc733d8a25d78242d1f948a5aad',
+		securityPoolDeploymentWorker: '0x83f0d4d49245c856397c0dcf76aa527c5257ae7d0bbf4304e90e9392ccdf4d2f',
+		securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
+		securityPoolForkerEscalationGameForkerDelegate: '0x1a087c4065743488f8e9e1fb06371b7a8bb16ece688f96970a60e3085f2109d5',
+		securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
+		securityPoolForkerVaultMigrationDelegate: '0xdcc1ac37f5d921fce2657bfc177026d6d5c25848537f4e2039749a9aad81be6b',
+	},
+	mainnet: {
+		escalationGameCreationCodePartOne: '0x52a4d390db4466028d21a9a860bcb8d813a75d8992d4a60802d394c0a48c894f',
+		escalationGameCreationCodePartTwo: '0x459bfd493b790b379f3277d3743179fffbe696e202f275f0c9d79e6c510a235e',
+		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
+		liquidationApprovalRegistryDeployer: '0xc2c5302fe42bb61eed5d3ea2e7eccb3b2971009765ef311bf312d0c1790cbb13',
+		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
+		priceCoordinatorDeploymentWorker: '0xac18a4e43a334bfefc20016ad223361ee5b37d09bf9e0eb3bf2ae4a77ab39dfa',
+		securityPoolDeployer: '0xd7007be85ee3952b273d96c8346fbe0ef749884f4239765f4424b3740d0e61f3',
+		securityPoolDeploymentWorker: '0x2061e23869a0c115626636d7fdda13408147a7e22f22738de4326f3761cf8bfe',
+		securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
+		securityPoolForkerEscalationGameForkerDelegate: '0x7dcb3ac7aafad729212b36a17f07ebfcf595692333f1308a356f089e77efa273',
+		securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
+		securityPoolForkerVaultMigrationDelegate: '0xe751effe31909d312b519427f51f004bb8e0090c656799e807b4bcc0db3b422b',
+	},
 }
 
 type DeploymentPlanStep<TClient> = {
@@ -476,10 +495,14 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 
 export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile) {
 	const bootstrapDescendants = getBootstrapDescendantAddresses(profile)
+	if (profile.id === 'simulation') throw new Error('Exact bootstrap descendant runtime-code verification is unavailable for simulation')
+	const expectedRuntimeCodeHashes = EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[profile.id]
 	for (const [id, address] of Object.entries(bootstrapDescendants)) {
 		const code = await client.getCode({ address })
 		if (!hasCode(code)) throw new Error(`Bootstrap descendant ${id} is missing at ${address}`)
-		assertExpectedRuntimeCode(id, address, code, getExpectedRuntimeCodeHash(id))
+		const expectedRuntimeCodeHash = expectedRuntimeCodeHashes[id]
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Bootstrap descendant ${id} has no expected runtime code hash for ${profile.id}`)
+		assertExpectedRuntimeCode(id, address, code, expectedRuntimeCodeHash)
 	}
 	return bootstrapDescendants
 }
@@ -491,7 +514,7 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 	await appendFile(summaryPath, `## Testnet deployment\n\nChain ID: \`${chainId.toString()}\`  \nDeployer: \`${account}\`\n\n| Contract | Result | Address | Transaction |\n| --- | --- | --- | --- |\n${rows}\n`)
 }
 
-export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void }) {
+export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
 	const log = parameters.log ?? console.log
@@ -537,7 +560,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	const results = await runDeploymentPlan(plan, client, log)
 	await assertProxyCode(client)
 	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile)
-	await writeGitHubSummary(chainId, client.account.address, results)
+	if (parameters.writeGitHubSummary !== false) await writeGitHubSummary(chainId, client.account.address, results)
 	return { account: client.account.address, proofVerifier: bootstrapDescendants.escalationGameProofVerifier, results }
 }
 
