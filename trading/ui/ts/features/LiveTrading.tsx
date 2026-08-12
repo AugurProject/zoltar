@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, Hash, PublicClient, WalletClient } from '@zoltar/shared/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
 import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
+import { ForkMigrationTargets } from './ForkMigrationTargets.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
+import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.ts'
 import {
 	approveLpRouter,
 	approveRouter,
@@ -62,6 +64,20 @@ export type WalletSummaryState = Readonly<{
 	universeId: string | undefined
 }>
 type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
+
+type LiveSettlementServices = Readonly<{
+	createPublicClient(configuration: DeploymentConfiguration): PublicClient
+	loadForkContext: typeof loadForkMigrationContext
+	simulate: typeof simulateSettlement
+	submit: typeof submitFreshSettlement
+}>
+
+const liveSettlementServices: LiveSettlementServices = {
+	createPublicClient: createTradingPublicClient,
+	loadForkContext: loadForkMigrationContext,
+	simulate: simulateSettlement,
+	submit: submitFreshSettlement,
+}
 
 const ignoreWalletSummaryChange = () => undefined
 
@@ -345,26 +361,31 @@ export function insuredExitLimitMessage(requested: bigint, maximum: bigint, inva
 	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
 }
 
-export function parseForkOutcomeIndex(value: string) {
-	if (!/^\d+$/.test(value)) return undefined
-	return BigInt(value)
+export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
+	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${sourceOutcome} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
 }
 
-export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetOutcomeIndex: bigint) {
-	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${sourceOutcome} balance will be copied to child outcome index ${targetOutcomeIndex.toString()} and locked in the parent universe.`
-}
-
-export function settlementInputBlocker(operation: SettlementOperation, operationAvailable: boolean, completeSets: bigint, parsedAmount: bigint | undefined, parsedTargetOutcome: bigint | undefined, sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined) {
+export function settlementInputBlocker(operation: SettlementOperation, operationAvailable: boolean, completeSets: bigint, parsedAmount: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined) {
 	if (!operationAvailable) return 'The selected settlement action is unavailable for the current lifecycle state or wallet balances'
 	if (operation === 'redeem-complete-set') {
 		if (parsedAmount === undefined || parsedAmount === 0n) return 'Enter a valid positive complete-set share amount'
 		if (parsedAmount > completeSets) return `Enter no more than the available complete-set balance of ${formatShareAmount(completeSets)}`
 	}
 	if (operation === 'migrate-shares') {
-		if (parsedTargetOutcome === undefined) return 'Enter the explicit non-negative outcome index for the child universe'
+		if (targetOutcomeIndexes.length === 0) return 'Select at least one child branch from the fork question'
 		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${sourceOutcome} balance is zero`
 	}
 	return undefined
+}
+
+export function forkMigrationBatchBlocker(targets: readonly ForkTarget[]) {
+	if (targets.length <= 1 || targets.every(target => target.canonicalPool !== undefined)) return undefined
+	return 'This selection includes a missing child pool; migrate each missing target separately for the current source share'
+}
+
+export function forkMigrationBatchWarning(targets: readonly ForkTarget[]) {
+	if (forkMigrationBatchBlocker(targets) === undefined) return undefined
+	return 'For this source share, submit each missing child as a separate migration. After confirmation, do not select that same source-child pair again. A different source share may batch those children once their pools are ready.'
 }
 
 export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, outcome?: ShareOutcome) {
@@ -2049,13 +2070,13 @@ export function settlementQuoteMatchesInputs(
 	operation: SettlementOperation,
 	parsedAmount: bigint | undefined,
 	sourceOutcome: ShareOutcome,
-	parsedTargetOutcome: bigint | undefined,
+	targetOutcomeIndexes: readonly bigint[],
 	account: Address | undefined,
 	walletClient: WalletClient | undefined,
 ) {
 	if (quote === undefined || quote.inputRevision !== inputRevision || quote.market.pool !== market.pool || quote.operation !== operation || quote.account !== account || quote.walletClient !== walletClient) return false
 	if (quote.operation === 'redeem-complete-set') return quote.amount === parsedAmount
-	if (quote.operation === 'migrate-shares') return quote.sourceOutcome === sourceOutcome && quote.targetOutcomeIndex === parsedTargetOutcome
+	if (quote.operation === 'migrate-shares') return quote.sourceOutcome === sourceOutcome && quote.targetOutcomeIndexes.length === targetOutcomeIndexes.length && quote.targetOutcomeIndexes.every((target, index) => target === targetOutcomeIndexes[index])
 	return true
 }
 
@@ -2063,7 +2084,7 @@ export function settlementQuoteCanSubmit(balanceState: BalanceState, inputBlocke
 	return balanceState === 'ready' && inputBlocker === undefined && quoteMatchesInputs
 }
 
-function LiveSettlementControls({
+export function LiveSettlementControls({
 	configuration,
 	market,
 	balances,
@@ -2080,6 +2101,7 @@ function LiveSettlementControls({
 	createGuardedWalletWrite,
 	retryBalances,
 	onWorkflowLockChange,
+	services = liveSettlementServices,
 }: {
 	configuration: DeploymentConfiguration
 	market: LiveMarket
@@ -2097,6 +2119,7 @@ function LiveSettlementControls({
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	retryBalances(): Promise<void>
 	onWorkflowLockChange(locked: boolean): void
+	services?: LiveSettlementServices
 }) {
 	let initialOperation: SettlementOperation = 'redeem-complete-set'
 	if (market.universeForkTime !== 0n) initialOperation = 'migrate-shares'
@@ -2104,7 +2127,11 @@ function LiveSettlementControls({
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
 	const [amount, setAmount] = useState('0.01')
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
-	const [targetOutcomeIndex, setTargetOutcomeIndex] = useState('')
+	const [forkContext, setForkContext] = useState<ForkMigrationContext>()
+	const [forkContextState, setForkContextState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+	const [forkContextError, setForkContextError] = useState<string>()
+	const [forkContextNonce, setForkContextNonce] = useState(0)
+	const [selectedForkTargets, setSelectedForkTargets] = useState<readonly ForkTarget[]>([])
 	const [quote, setQuote] = useState<SettlementQuote>()
 	const [state, setState] = useState<TransactionState>('idle')
 	const [error, setError] = useState<string>()
@@ -2112,12 +2139,13 @@ function LiveSettlementControls({
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const inputRevision = useRef(0)
+	const preserveConfirmedForkTargetReset = useRef(false)
+	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
 	const winningOutcome = resolvedQuestionOutcome(market.questionOutcome)
 	const parsedAmount = parseUnitsOrUndefined(amount)
-	const parsedTargetOutcome = useMemo(() => {
-		return parseForkOutcomeIndex(targetOutcomeIndex)
-	}, [targetOutcomeIndex])
+	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
+	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
 	let operationAvailable = availability.canMigrateShares
 	if (operation === 'redeem-complete-set') operationAvailable = availability.canRedeemCompleteSets
 	else if (operation === 'redeem-winning-shares') operationAvailable = availability.canRedeemWinningShares
@@ -2125,9 +2153,14 @@ function LiveSettlementControls({
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
 	const workflowLocked = externallyLocked || state === 'approval' || state === 'pending' || receiptWarning !== undefined
-	const inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, parsedTargetOutcome, sourceOutcome, sourceBalance)
+	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance)
+	if (operation === 'migrate-shares' && operationAvailable) {
+		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = 'Loading the universe fork question and child branches'
+		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? 'Fork question details are unavailable'
+		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
+	}
 	const approvalRequired = operation === 'redeem-complete-set' && balances?.approved === false
-	const quoteMatchesInputs = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, parsedTargetOutcome, account, walletClient)
+	const quoteMatchesInputs = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, targetOutcomeIndexes, account, walletClient)
 	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, quoteMatchesInputs) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
 	submitContext.current = { balanceState, inputBlocker, actionableQuote }
@@ -2143,7 +2176,7 @@ function LiveSettlementControls({
 		else if (inputBlocker !== undefined) settlementStatus = inputBlocker
 		else if (state === 'simulating') settlementStatus = 'Simulating the authoritative settlement call…'
 		else if (state === 'ready' && actionableQuote !== undefined) {
-			if (actionableQuote.operation === 'migrate-shares') settlementStatus = migrationSimulationSummary(actionableQuote.blockNumber, actionableQuote.sourceOutcome, actionableQuote.targetOutcomeIndex)
+			if (actionableQuote.operation === 'migrate-shares') settlementStatus = migrationSimulationSummary(actionableQuote.blockNumber, actionableQuote.sourceOutcome, BigInt(actionableQuote.targetOutcomeIndexes.length))
 			else if (actionableQuote.operation === 'redeem-complete-set') settlementStatus = `Authoritative redemption simulation at block ${actionableQuote.blockNumber.toString()}: ${formatUnits(actionableQuote.expectedAttoEth)} ETH expected, ${formatUnits(actionableQuote.minimumAttoEth)} ETH minimum`
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
 		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
@@ -2158,18 +2191,64 @@ function LiveSettlementControls({
 		if (!workflow.isActive()) setState('idle')
 	}
 
+	function updateForkTargets(targets: readonly ForkTarget[]) {
+		invalidateSettlementInputs()
+		setSelectedForkTargets(targets)
+	}
+
 	useEffect(() => {
-		if (receiptWarning !== undefined) return
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		if (!workflow.isActive()) setState('idle')
-	}, [account, amount, market.pool, market.systemState, market.awaitingForkContinuation, market.universeForkTime, market.questionOutcome, operation, receiptWarning, sourceOutcome, targetOutcomeIndex, walletClient])
+		if (market.universeForkTime === 0n) {
+			setForkContext(undefined)
+			setForkContextState('idle')
+			setForkContextError(undefined)
+			setSelectedForkTargets([])
+			return
+		}
+		let active = true
+		setForkContext(undefined)
+		setForkContextState('loading')
+		setForkContextError(undefined)
+		setSelectedForkTargets([])
+		void services
+			.loadForkContext(forkClient, market)
+			.then(context => {
+				if (!active) return
+				setForkContext(context)
+				setForkContextState('ready')
+			})
+			.catch(caught => {
+				if (!active) return
+				setForkContextState('error')
+				setForkContextError(publicErrorMessage(caught, 'Fork question details failed to load'))
+			})
+		return () => {
+			active = false
+		}
+	}, [forkClient, forkContextNonce, market.pool, market.shareToken, market.universeForkTime, market.universeId, services])
 
 	useEffect(() => {
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!workflow.isActive()) setState(current => (current === 'confirmed' ? current : 'idle'))
+		if (!workflow.isActive()) setState('idle')
+	}, [account, amount, market.pool, market.systemState, market.awaitingForkContinuation, market.universeForkTime, market.questionOutcome, operation, receiptWarning, sourceOutcome, walletClient])
+
+	useEffect(() => {
+		if (receiptWarning !== undefined) return
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!workflow.isActive()) {
+			const preserveConfirmed = preserveConfirmedForkTargetReset.current
+			preserveConfirmedForkTargetReset.current = false
+			setState(current => (preserveConfirmed && current === 'confirmed' ? current : 'idle'))
+		}
+	}, [receiptWarning, targetOutcomeKey])
+
+	useEffect(() => {
+		if (receiptWarning !== undefined) return
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		if (!workflow.isActive()) setState('idle')
 	}, [balances, balanceState, receiptWarning])
 
 	useEffect(
@@ -2188,10 +2267,10 @@ function LiveSettlementControls({
 		setState('simulating')
 		setError(undefined)
 		try {
-			let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
+			let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
 			if (operation === 'redeem-complete-set' && parsedAmount !== undefined) parameters = { amount: parsedAmount }
-			else if (operation === 'migrate-shares' && parsedTargetOutcome !== undefined) parameters = { sourceOutcome, targetOutcomeIndex: parsedTargetOutcome }
-			const simulation = await simulateSettlement(walletClient, configuration, market, account, operation, parameters)
+			else if (operation === 'migrate-shares') parameters = { sourceOutcome, targetOutcomeIndexes }
+			const simulation = await services.simulate(walletClient, configuration, market, account, operation, parameters)
 			if (!simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
 			setQuote({ ...simulation, account, walletClient, inputRevision: revision })
 			setState('ready')
@@ -2218,13 +2297,17 @@ function LiveSettlementControls({
 			await executeWithCurrentWalletContext(account, 'Wallet network changed; reconnect and simulate again', 'Wallet account changed; reconnect and simulate again', async () => undefined)
 			const current = submitContext.current
 			if (current.balanceState !== 'ready' || current.inputBlocker !== undefined || current.actionableQuote !== selectedQuote) throw new Error('Settlement inputs or balances changed; simulate again')
-			broadcastHash = await submitFreshSettlement(walletClient, configuration, account, selectedQuote, createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again'))
+			broadcastHash = await services.submit(walletClient, configuration, account, selectedQuote, createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again'))
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Settlement transaction reverted')
 			setQuote(undefined)
 			setReceiptWarning(undefined)
 			await refresh()
+			if (selectedQuote.operation === 'migrate-shares') {
+				preserveConfirmedForkTargetReset.current = true
+				setForkContextNonce(current => current + 1)
+			}
 			setState('confirmed')
 		} catch (caught) {
 			if (broadcastHash !== undefined && !receiptKnown) {
@@ -2370,7 +2453,7 @@ function LiveSettlementControls({
 					)
 				return (
 					<>
-						<p>Migration copies the entire selected outcome balance into the explicitly selected child branch and locks the parent balance. It never chooses a branch automatically.</p>
+						<p>Choose the market share separately from the fork branches. Migration permanently locks parent-universe transfers for the selected share. The same source can still migrate later into other children.</p>
 						<label class='field'>
 							<span>Source share</span>
 							<select
@@ -2390,18 +2473,17 @@ function LiveSettlementControls({
 							</select>
 						</label>
 						<p>Selected source balance: {settlementBalanceLabel(balanceState, sourceBalance, sourceOutcome)}</p>
-						<label class='field'>
-							<span>Fork outcome index for the child universe</span>
-							<input
-								value={targetOutcomeIndex}
-								disabled={workflowLocked}
-								inputMode='numeric'
-								onInput={event => {
-									invalidateSettlementInputs()
-									setTargetOutcomeIndex(event.currentTarget.value)
-								}}
-							/>
-						</label>
+						{forkContextState === 'loading' || forkContextState === 'idle' ? <p role='status'>Loading fork question and child branches…</p> : null}
+						{forkContextState === 'error' ? (
+							<div class='error' role='alert'>
+								<p>{forkContextError ?? 'Fork question details are unavailable.'}</p>
+								<button type='button' class='secondary-action' disabled={workflowLocked} onClick={() => setForkContextNonce(current => current + 1)}>
+									Retry fork details
+								</button>
+							</div>
+						) : null}
+						{forkContext === undefined ? null : <ForkMigrationTargets context={forkContext} selectedTargets={selectedForkTargets} disabled={workflowLocked} onChange={updateForkTargets} />}
+						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? null : <p class='warning'>{forkMigrationBatchWarning(selectedForkTargets)}</p>}
 					</>
 				)
 			})()}
@@ -2436,7 +2518,7 @@ function LiveSettlementControls({
 			) : null}
 			{!approvalRequired && actionableQuote !== undefined ? (
 				<button class='primary-action' disabled={workflowLocked || state !== 'ready'} onClick={() => void submitCurrent()}>
-					{actionableQuote.operation === 'migrate-shares' ? `Submit migration to child outcome ${actionableQuote.targetOutcomeIndex.toString()}` : 'Submit settlement transaction'}
+					{actionableQuote.operation === 'migrate-shares' ? `Submit migration to ${actionableQuote.targetOutcomeIndexes.length.toString()} child ${actionableQuote.targetOutcomeIndexes.length === 1 ? 'branch' : 'branches'}` : 'Submit settlement transaction'}
 				</button>
 			) : null}
 		</div>

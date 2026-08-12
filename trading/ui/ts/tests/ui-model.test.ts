@@ -7,13 +7,14 @@ import {
 	broadcastUncertainMessage,
 	discoveryCommitAllowed,
 	failedSubmissionTransition,
+	forkMigrationBatchBlocker,
+	forkMigrationBatchWarning,
 	insuredExitLimitMessage,
 	liquidityApprovalRequired,
 	liquidityOperationAvailable,
 	livePairInitialized,
 	marketSelectionAfterDiscovery,
 	migrationSimulationSummary,
-	parseForkOutcomeIndex,
 	positionControlsWorkflowLocked,
 	securityPoolAddressFromRoute,
 	settlementBalanceLabel,
@@ -415,10 +416,18 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('requires an explicit fork branch and names the irreversible consequence', () => {
-		expect(parseForkOutcomeIndex('')).toBeUndefined()
-		expect(parseForkOutcomeIndex('-1')).toBeUndefined()
-		expect(parseForkOutcomeIndex('12')).toBe(12n)
-		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied to child outcome index 12 and locked in the parent universe.')
+		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied into 12 selected child branches and locked in the parent universe.')
+	})
+
+	test('allows many ready fork children while requiring missing children to be created singly', () => {
+		const ready = { outcomeIndex: 1n, universeId: 11n, label: 'Ready', canonicalPool: `0x${'11'.repeat(20)}` as const }
+		const missing = { outcomeIndex: 2n, universeId: 12n, label: 'Missing', canonicalPool: undefined }
+		expect(forkMigrationBatchBlocker([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
+		expect(forkMigrationBatchBlocker([missing])).toBeUndefined()
+		expect(forkMigrationBatchBlocker([ready, missing])).toContain('separately for the current source share')
+		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).toContain('do not select that same source-child pair again')
+		expect(forkMigrationBatchWarning([ready, missing])).toContain('A different source share may batch those children once their pools are ready')
+		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
 	test('preserves same-page market context but selects the first pool after navigation', () => {
@@ -431,11 +440,11 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('explains every settlement input that keeps simulation disabled', () => {
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, undefined, 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, undefined, 'YES', 1n)).toContain('complete-set balance of 5 shares')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, undefined, 'YES', 1n)).toContain('explicit non-negative outcome index')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, 0n, 'YES', 0n)).toBe('The selected YES balance is zero')
-		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, undefined, 'NO', 0n)).toContain('unavailable')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n)).toContain('complete-set balance of 5 shares')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n)).toContain('at least one child branch')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n)).toBe('The selected YES balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n)).toContain('unavailable')
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {
