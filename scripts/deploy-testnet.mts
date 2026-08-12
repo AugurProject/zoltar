@@ -116,6 +116,24 @@ type CodeReader = {
 	getCode: (parameters: { address: Address }) => Promise<Hex | undefined>
 }
 
+function formatDeploymentLogBranch(title: string, fields: readonly (readonly [label: string, value: string])[]) {
+	const lines = [`  ├─ ${title}`]
+	for (const [index, [label, value]] of fields.entries()) {
+		const connector = index === fields.length - 1 ? '└─' : '├─'
+		lines.push(`  │  ${connector} ${label}: ${value}`)
+	}
+	return lines.join('\n')
+}
+
+function formatLogSection(title: string, fields: readonly (readonly [label: string, value: string])[]) {
+	const lines = [title]
+	for (const [index, [label, value]] of fields.entries()) {
+		const connector = index === fields.length - 1 ? '└─' : '├─'
+		lines.push(`  ${connector} ${label}: ${value}`)
+	}
+	return lines.join('\n')
+}
+
 function option(name: string, argv = process.argv.slice(2)) {
 	const prefix = `--${name}=`
 	return argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
@@ -275,7 +293,7 @@ type DeploymentBudget = ReturnType<typeof createDeploymentBudget>
 export function createBudgetedTransactionSender(wallet: BudgetedWallet, account: Account, limits: { budget?: DeploymentBudget; maxFeePerGas: bigint; maxTotalCost: bigint }, log: (message: string) => void = () => undefined) {
 	const budget = limits.budget ?? createDeploymentBudget(limits.maxTotalCost)
 	const sendTransaction: WriteClient['sendTransaction'] = async transaction => {
-		log(`transaction prepare account=${account.address} fetching_nonce_and_fees`)
+		log(formatDeploymentLogBranch('Prepare transaction', [['Account', account.address]]))
 		const [nonce, gasPrice, block] = await Promise.all([wallet.getTransactionCount({ address: account.address, blockTag: 'pending' }), wallet.getGasPrice(), wallet.getBlock()])
 		const baseFeePerGas = block.baseFeePerGas
 		if (baseFeePerGas === undefined) throw new Error('Deployment transactions require an EIP-1559 base fee')
@@ -284,7 +302,14 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		const maxPriorityFeePerGas = gasPrice > baseFeePerGas ? gasPrice - baseFeePerGas : 0n
 		const candidateMaxFeePerGas = baseFeePerGas * 2n + maxPriorityFeePerGas
 		const maxFeePerGas = candidateMaxFeePerGas > limits.maxFeePerGas ? limits.maxFeePerGas : candidateMaxFeePerGas
-		log(`transaction estimate nonce=${nonce.toString()} base_fee=${formatEther(baseFeePerGas * 1_000_000_000n)} gwei priority_fee=${formatEther(maxPriorityFeePerGas * 1_000_000_000n)} gwei max_fee=${formatEther(maxFeePerGas * 1_000_000_000n)} gwei`)
+		log(
+			formatDeploymentLogBranch('Estimate transaction', [
+				['Nonce', nonce.toString()],
+				['Base fee', `${formatEther(baseFeePerGas * 1_000_000_000n)} gwei`],
+				['Priority fee', `${formatEther(maxPriorityFeePerGas * 1_000_000_000n)} gwei`],
+				['Maximum fee', `${formatEther(maxFeePerGas * 1_000_000_000n)} gwei`],
+			]),
+		)
 		const gas = paddedGas(
 			await wallet.estimateGas({
 				account: account.address,
@@ -298,7 +323,15 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		const transactionValue = transaction.value ?? transaction.amount ?? 0n
 		const worstCaseCost = gas * maxFeePerGas + transactionValue
 		budget.recordWalletTransaction(worstCaseCost)
-		log(`transaction submit nonce=${nonce.toString()} to=${transaction.to ?? 'contract_creation'} gas=${gas.toString()} value=${formatEther(transactionValue)} ETH worst_case_cost=${formatEther(worstCaseCost)} ETH`)
+		log(
+			formatDeploymentLogBranch('Submit transaction', [
+				['Nonce', nonce.toString()],
+				['To', transaction.to ?? 'contract creation'],
+				['Gas limit', gas.toString()],
+				['Value', `${formatEther(transactionValue)} ETH`],
+				['Maximum cost', `${formatEther(worstCaseCost)} ETH`],
+			]),
+		)
 		const hash = await wallet.sendTransaction({
 			...transaction,
 			account,
@@ -308,7 +341,12 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 			maxPriorityFeePerGas,
 			nonce,
 		})
-		log(`transaction submitted nonce=${nonce.toString()} hash=${hash}`)
+		log(
+			formatDeploymentLogBranch('Transaction submitted', [
+				['Nonce', nonce.toString()],
+				['Transaction', hash],
+			]),
+		)
 		return hash
 	}
 	return sendTransaction
@@ -317,12 +355,24 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 export function createDeploymentReceiptWaiter(client: Pick<WriteClient, 'waitForTransactionReceipt'>, log: (message: string) => void = () => undefined) {
 	const waitForTransactionReceipt: WriteClient['waitForTransactionReceipt'] = async parameters => {
 		const timeout = parameters.timeout ?? DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS
-		log(`receipt wait hash=${parameters.hash} timeout=${(timeout / 1_000).toString()}s`)
+		log(
+			formatDeploymentLogBranch('Wait for receipt', [
+				['Transaction', parameters.hash],
+				['Timeout', `${(timeout / 1_000).toString()}s`],
+			]),
+		)
 		const receipt = await client.waitForTransactionReceipt({
 			...parameters,
 			timeout,
 		})
-		log(`receipt confirmed hash=${receipt.transactionHash} status=${receipt.status} block=${receipt.blockNumber.toString()} gas_used=${receipt.gasUsed.toString()}`)
+		log(
+			formatDeploymentLogBranch('Receipt confirmed', [
+				['Transaction', receipt.transactionHash],
+				['Status', receipt.status],
+				['Block', receipt.blockNumber.toString()],
+				['Gas used', receipt.gasUsed.toString()],
+			]),
+		)
 		return receipt
 	}
 	return waitForTransactionReceipt
@@ -425,23 +475,33 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 		if (await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address }))) {
 			completed.add(step.id)
 			results.push({ address: step.address, id: step.id, label: step.label, status: 'skipped', transactionHash: undefined })
-			log(`skip ${step.id} ${step.address}`)
+			log(
+				formatLogSection(`${step.label} (${step.id})`, [
+					['Address', step.address],
+					['Status', 'already deployed'],
+				]),
+			)
 			continue
 		}
 
-		log(`deploy ${step.id} ${step.address}`)
-		const transactionHash = await step.deploy(client)
-		const code = await client.getCode({ address: step.address })
-		if (!hasCode(code)) throw new Error(`${step.label} deployment transaction ${transactionHash} succeeded without installing code at ${step.address}`)
-		await assertDeploymentPlanStepRuntimeCode(step, client, code)
-		completed.add(step.id)
-		if (transactionHash === ZERO_HASH) {
-			results.push({ address: step.address, id: step.id, label: step.label, status: 'skipped', transactionHash: undefined })
-			log(`skip ${step.id} ${step.address} installed without a submitted transaction`)
-			continue
+		log(`${step.label} (${step.id})\n  ├─ Address: ${step.address}`)
+		try {
+			const transactionHash = await step.deploy(client)
+			const code = await client.getCode({ address: step.address })
+			if (!hasCode(code)) throw new Error(`${step.label} deployment transaction ${transactionHash} succeeded without installing code at ${step.address}`)
+			await assertDeploymentPlanStepRuntimeCode(step, client, code)
+			completed.add(step.id)
+			if (transactionHash === ZERO_HASH) {
+				results.push({ address: step.address, id: step.id, label: step.label, status: 'skipped', transactionHash: undefined })
+				log('  └─ Status: ready (installed without a submitted transaction)')
+				continue
+			}
+			results.push({ address: step.address, id: step.id, label: step.label, status: 'deployed', transactionHash })
+			log(`  ├─ Transaction: ${transactionHash}\n  └─ Status: deployed`)
+		} catch (error) {
+			log('  └─ Status: failed')
+			throw error
 		}
-		results.push({ address: step.address, id: step.id, label: step.label, status: 'deployed', transactionHash })
-		log(`deployed ${step.id} ${transactionHash}`)
 	}
 	return results
 }
@@ -543,7 +603,14 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	}
 	const plan = createCompleteDeploymentPlan(profile, uniswap)
 	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost)
-	log(`preflight missing=${estimate.missingStepIds.length.toString()} estimated_upper_bound=${formatEther(estimate.estimatedCostAttoEth)} ETH max_total=${formatEther(authorizedMaxTotalCost)} ETH fee_ceiling=${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`)
+	log(
+		formatLogSection('Preflight', [
+			['Missing contracts', estimate.missingStepIds.length.toString()],
+			['Estimated maximum cost', `${formatEther(estimate.estimatedCostAttoEth)} ETH`],
+			['Authorized total', `${formatEther(authorizedMaxTotalCost)} ETH`],
+			['Fee ceiling', `${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`],
+		]),
+	)
 	if (!hasCode(proxyCode)) {
 		const activity = await getProxyDeployerActivity(client)
 		if (activity.pending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
@@ -556,7 +623,12 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 		}
 	}
 
-	log(`network chain=${chainId.toString()} deployer=${client.account.address}`)
+	log(
+		formatLogSection('Network', [
+			['Chain ID', chainId.toString()],
+			['Deployer', client.account.address],
+		]),
+	)
 	const results = await runDeploymentPlan(plan, client, log)
 	await assertProxyCode(client)
 	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile)
