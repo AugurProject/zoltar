@@ -12,6 +12,7 @@ import {
 	type Hex,
 	isAddress,
 	keccak256,
+	parseAbi,
 	stringToHex,
 	toEventSelector,
 	toFunctionSelector,
@@ -27,6 +28,8 @@ type CatalogFile = {
 const catalogFile = (await Bun.file(path.resolve(import.meta.dir, '../config/abis.json')).json()) as CatalogFile
 
 const kindToContractName: Readonly<Record<string, string>> = {
+	ammFactory: 'TwoWayConstantProductFactory',
+	ammPair: 'TwoWayConstantProductPair',
 	deploymentStatusOracle: 'DeploymentStatusOracle',
 	escalationGame: 'EscalationGame',
 	escalationGameClaimDelegate: 'EscalationGameClaimDelegate',
@@ -52,7 +55,23 @@ const kindToContractName: Readonly<Record<string, string>> = {
 	zoltarQuestionData: 'ZoltarQuestionData',
 }
 
+const externalAbis: Readonly<Record<string, Abi>> = {
+	uniswapV2Factory: parseAbi(['event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)']),
+	uniswapV2Pair: parseAbi(['event Sync(uint112 reserve0,uint112 reserve1)']),
+	uniswapV3Factory: parseAbi(['event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)']),
+	uniswapV3Pool: parseAbi([
+		'event Initialize(uint160 sqrtPriceX96,int24 tick)',
+		'event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)',
+	]),
+	uniswapV4PoolManager: parseAbi([
+		'event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)',
+		'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
+	]),
+}
+
 export const abiForKind = (kind: string): Abi | undefined => {
+	const externalAbi = externalAbis[kind]
+	if (externalAbi !== undefined) return externalAbi
 	const name = kindToContractName[kind]
 	const catalogAbi = name === undefined ? undefined : catalogFile.contracts[name]?.abi
 	if (catalogAbi !== undefined) return catalogAbi
@@ -488,6 +507,7 @@ export const decodeAction = (
 
 type Discovery = { readonly argument: string; readonly kind: string; readonly label: string }
 const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
+	PairCreated: [{ argument: 'pair', kind: 'ammPair', label: 'Augur AMM Pair' }],
 	DeploySecurityPool: [
 		{ argument: 'securityPool', kind: 'securityPool', label: 'Security Pool' },
 		{ argument: 'truthAuction', kind: 'truthAuction', label: 'Truth Auction' },
@@ -498,8 +518,31 @@ const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	EscalationGameSet: [{ argument: 'escalationGame', kind: 'escalationGame', label: 'Escalation Game' }],
 }
 
-export const discoveriesFrom = (decoded: DecodedRecord): readonly Omit<ContractMetadata, 'provenance'>[] => {
+const isKnownRepWethPair = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata>): boolean => {
+	const token0 = decoded.arguments?.['token0']
+	const token1 = decoded.arguments?.['token1']
+	if (typeof token0 !== 'string' || !isAddress(token0) || typeof token1 !== 'string' || !isAddress(token1)) return false
+	const kinds = [contracts.get(token0.toLowerCase())?.kind, contracts.get(token1.toLowerCase())?.kind]
+	return kinds.includes('reputationToken') && kinds.includes('weth')
+}
+
+export const discoveriesFrom = (
+	decoded: DecodedRecord,
+	contracts: ReadonlyMap<string, ContractMetadata> = new Map(),
+): readonly Omit<ContractMetadata, 'provenance'>[] => {
 	if (decoded.name === undefined || decoded.arguments === undefined) return []
+	if (decoded.name === 'PairCreated' && decoded.arguments['token0'] !== undefined) {
+		const pair = decoded.arguments['pair']
+		return isKnownRepWethPair(decoded, contracts) && typeof pair === 'string' && isAddress(pair)
+			? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / WETH Pair' }]
+			: []
+	}
+	if (decoded.name === 'PoolCreated') {
+		const pool = decoded.arguments['pool']
+		return isKnownRepWethPair(decoded, contracts) && typeof pool === 'string' && isAddress(pool)
+			? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / WETH Pool' }]
+			: []
+	}
 	return (discoveries[decoded.name] ?? []).flatMap((rule) => {
 		const value = decoded.arguments?.[rule.argument]
 		return typeof value === 'string' && isAddress(value) && value.toLowerCase() !== zeroAddress
