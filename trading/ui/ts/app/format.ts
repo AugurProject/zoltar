@@ -11,6 +11,10 @@ export function formatShareAmount(value: bigint, maximumFractionDigits = 4) {
 	return `${formatUnits(value, 18, maximumFractionDigits)} shares`
 }
 
+export function formatOutcomeAmount(value: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4) {
+	return `${formatUnits(value, 18, maximumFractionDigits)} ${outcome}`
+}
+
 export function formatEthPerShare(collateralWei: bigint, atomicShareSupply: bigint, maximumSignificantDigits = 4) {
 	if (collateralWei < 0n || atomicShareSupply <= 0n) throw new Error('Collateral rate requires nonnegative collateral and positive share supply')
 	const precision = 36

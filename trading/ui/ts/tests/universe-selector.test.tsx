@@ -100,6 +100,33 @@ describe('universe selector', () => {
 		expect(repBalance?.textContent).toBe('REP1,750')
 	})
 
+	test('keeps an unknown demo pool deep link scoped to its unavailable state', async () => {
+		const unknownPool = `0x${'99'.repeat(20)}`
+		window.history.replaceState(undefined, '', `/?demo=1#/security-pool/${unknownPool}`)
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('main')?.textContent).toContain('This security pool is not available in the selected universe.')
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain('MarketsTrading open')
+		expect(window.location.hash).toBe(`#/security-pool/${unknownPool}`)
+	})
+
+	test('shows scoped unavailability when the selected universe does not contain the routed demo pool', async () => {
+		const routedPool = demoMarket('baseline').pool
+		window.history.replaceState(undefined, '', `/?demo=1#/security-pool/${routedPool}`)
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain('Security multiplier2×')
+		const select = rendered.container.querySelector<HTMLSelectElement>('.universe-selector select')
+		if (select === null) throw new Error('Universe selector is unavailable')
+		await act(() => {
+			select.value = select.options[1]?.value ?? ''
+			select.dispatchEvent(new Event('change', { bubbles: true }))
+		})
+		expect(rendered.container.querySelector('main')?.textContent).toContain('This security pool is not available in the selected universe.')
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain('Security multiplier')
+		expect(window.location.hash).toBe(`#/security-pool/${routedPool}`)
+	})
+
 	test('initializes the selector from the scenario universe', async () => {
 		window.history.replaceState(undefined, '', '/?demo=1&scenario=max-token-ids#/portfolio')
 		const rendered = await renderIntoDocument(<App />)
@@ -113,7 +140,8 @@ describe('universe selector', () => {
 		expect(longOptions).toHaveLength(2)
 		expect(longOptions[0]?.textContent).not.toBe(longOptions[1]?.textContent)
 		expect(longOptions.every(option => option.textContent?.includes('…') === true)).toBeTrue()
-		expect(rendered.container.querySelector('main')?.textContent).toContain(((1n << 256n) - 256n).toString())
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain(((1n << 256n) - 256n).toString())
+		expect(rendered.container.querySelector(`a[href="#/security-pool/${demoMarket('max-token-ids').pool}"]`)).not.toBeNull()
 	})
 
 	test('keeps wallet balance failures visible without abbreviating the account', async () => {

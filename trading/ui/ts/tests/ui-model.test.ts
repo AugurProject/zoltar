@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../features/MarketDetail.tsx'
 import {
@@ -15,6 +15,7 @@ import {
 	migrationSimulationSummary,
 	parseForkOutcomeIndex,
 	positionControlsWorkflowLocked,
+	securityPoolAddressFromRoute,
 	settlementBalanceLabel,
 	settlementInputBlocker,
 } from '../features/LiveTrading.tsx'
@@ -27,6 +28,7 @@ import {
 	marketAcceptsNewRisk,
 	marketDiscoveryPage,
 	marketDiscoveryRanges,
+	publicErrorMessage,
 	marketNewRiskBlocker,
 	mapWithConcurrency,
 	maximumAfterSlippage,
@@ -42,6 +44,24 @@ import {
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 
 describe('standalone trading UI model', () => {
+	test('keeps provider identifiers out of public error copy', () => {
+		const pool = `0x${'12'.repeat(20)}`
+		const shareToken = `0x${'34'.repeat(20)}`
+		const tokenId = '1793'
+		const providerError = new Error(`Contract read failed at ${pool}: share token ${shareToken}, token ID ${tokenId}, call arguments unavailable`)
+		const message = publicErrorMessage(providerError, 'Balance refresh failed')
+		expect(message).toBe('Balance refresh failed')
+		expect(message).not.toContain(pool)
+		expect(message).not.toContain(shareToken)
+		expect(message).not.toContain(tokenId)
+		expect(publicErrorMessage(new Error('RPC temporarily unavailable'), 'Balance refresh failed')).toBe('RPC temporarily unavailable')
+	})
+	test('parses only exact security pool detail routes', () => {
+		const address = `0x${'AB'.repeat(20)}`
+		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(address.toLowerCase())
+		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
+	})
+
 	test('derives exact lifecycle reasons', () => {
 		expect(tradingClosedReason(demoMarket('ended').lifecycle)).toBe('Question ended')
 		expect(tradingClosedReason(demoMarket('forked').lifecycle)).toBe('Parent universe forked')
@@ -133,6 +153,7 @@ describe('standalone trading UI model', () => {
 
 	test('formats 18-decimal shares and Statoblast settings for display', () => {
 		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
+		expect(formatOutcomeAmount(10n * 10n ** 18n, 'YES')).toBe('10 YES')
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
 		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10,000 / 9,500 REP')
 		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
@@ -344,11 +365,14 @@ describe('standalone trading UI model', () => {
 		const pool = `0x${'12'.repeat(20)}` as const
 		const shareToken = `0x${'34'.repeat(20)}` as const
 		const deployments = [{ securityPool: pool, shareToken, universeId: 7n, questionId: 9n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }]
-		const results = [{ status: 'rejected', reason: new Error('RPC read failed') }] satisfies PromiseRejectedResult[]
+		const results = [{ status: 'rejected', reason: new Error(`Contract read failed at ${pool}: share token ${shareToken}, token ID 1793, call arguments unavailable`) }] satisfies PromiseRejectedResult[]
 		const [market] = collateMarketDiscoveryResults(deployments, results, 30)
 		if (market === undefined) throw new Error('Expected unavailable market row')
 		expect(market.pool).toBe(pool)
-		expect(market.loadError).toBe('RPC read failed')
+		expect(market.loadError).toBe('Market reads failed')
+		expect(market.loadError).not.toContain(pool)
+		expect(market.loadError).not.toContain(shareToken)
+		expect(market.loadError).not.toContain('1793')
 		expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
 	})
 
@@ -410,7 +434,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, undefined, 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
 		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, undefined, 'YES', 1n)).toContain('complete-set balance of 5 shares')
 		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, undefined, 'YES', 1n)).toContain('explicit non-negative outcome index')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, 0n, 'YES', 0n)).toBe('The selected YES source-share balance is zero')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, 0n, 'YES', 0n)).toBe('The selected YES balance is zero')
 		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, undefined, 'NO', 0n)).toContain('unavailable')
 	})
 
@@ -419,6 +443,9 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('loading', 0n)).toBe('Loading…')
 		expect(settlementBalanceLabel('error', 0n)).toBe('Unavailable')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n)).toBe('5 shares')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'YES')).toBe('5 YES')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'NO')).toBe('5 NO')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'INVALID')).toBe('5 INVALID')
 	})
 
 	test('discards failed submission quotes so every workflow can simulate again', () => {
