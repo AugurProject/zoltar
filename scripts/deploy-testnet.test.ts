@@ -3,8 +3,10 @@ import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Addr
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/ts/protocol/deployment.ts'
 import {
 	assertBootstrapDescendantCode,
+	assertConfirmedProxyCode,
 	assertRequiredEvmCompatible,
 	assertEip1559Compatible,
 	assertNoPendingDeployerTransactions,
@@ -23,6 +25,7 @@ import {
 	parsePrivateKey,
 	parseRpcUrl,
 	preflightDeploymentPlan,
+	resolveCanonicalProxyDeployerForPreflight,
 	runDeploymentPlan,
 } from './deploy-testnet.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
@@ -34,6 +37,40 @@ const SECOND_HASH: Hex = '0x0202020202020202020202020202020202020202020202020202
 const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 describe('testnet deployment inputs', () => {
+	test('retries canonical proxy code after its signer nonce is confirmed', async () => {
+		let codeReadCount = 0
+		const retryDelays: number[] = []
+		await assertConfirmedProxyCode(
+			{
+				getCode: async () => {
+					codeReadCount += 1
+					return codeReadCount < 2 ? undefined : PROXY_DEPLOYER_RUNTIME_CODE
+				},
+			},
+			async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			},
+		)
+
+		expect(retryDelays).toEqual([250])
+	})
+
+	test('rejects unexpected proxy code that appears during confirmed-state resolution', async () => {
+		let codeReadCount = 0
+		await expect(
+			resolveCanonicalProxyDeployerForPreflight(
+				{
+					getBalance: async () => 0n,
+					getCode: async () => {
+						codeReadCount += 1
+						return codeReadCount === 1 ? undefined : '0x1234'
+					},
+					getTransactionCount: async () => 1n,
+				},
+				async () => undefined,
+			),
+		).rejects.toThrow('Unexpected code at canonical proxy deployer')
+	})
 	test('defaults the chain ID to Sepolia and requires an explicitly selected RPC', () => {
 		expect(parseChainId(undefined)).toBe(11_155_111)
 		expect(() => parseRpcUrl(undefined)).toThrow('RPC_URL or --rpc-url is required')
@@ -398,6 +435,28 @@ describe('testnet deployment plan', () => {
 		expect(estimate.estimatedCostAttoEth).toBe(10_000_000_000_005_000n)
 	})
 
+	test('does not charge restrictive resume budgets for canonical code already resolved through a lagging RPC', async () => {
+		const estimate = await preflightDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => FIRST_HASH,
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'proxyDeployer',
+					label: 'Proxy Deployer',
+				},
+			],
+			{ getCode: async () => undefined },
+			{ proxyDeployer: 500n },
+			1n,
+			1n,
+			new Set([FIRST_ADDRESS]),
+		)
+
+		expect(estimate).toEqual({ estimatedCostAttoEth: 0n, estimatedGas: 0n, missingStepIds: [] })
+	})
+
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
 		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
 		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
@@ -521,6 +580,39 @@ describe('testnet deployment plan', () => {
 		expect(logs.join('\n')).not.toContain(ZERO_HASH)
 	})
 
+	test('keeps exact-known canonical deployments skipped when execution RPC reads are stale', async () => {
+		let deployCalled = false
+		let codeReadCount = 0
+		const results = await runDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => {
+						deployCalled = true
+						return FIRST_HASH
+					},
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'proxyDeployer',
+					label: 'Proxy Deployer',
+				},
+			],
+			{
+				getCode: async () => {
+					codeReadCount += 1
+					return undefined
+				},
+			},
+			() => undefined,
+			undefined,
+			new Set([FIRST_ADDRESS]),
+		)
+
+		expect(results).toEqual([{ address: FIRST_ADDRESS, id: 'proxyDeployer', label: 'Proxy Deployer', status: 'skipped', transactionHash: undefined }])
+		expect(deployCalled).toBe(false)
+		expect(codeReadCount).toBe(0)
+	})
+
 	test('fails when ordering omits a dependency or a successful transaction installs no code', async () => {
 		const client = {
 			getCode: async () => undefined,
@@ -557,9 +649,40 @@ describe('testnet deployment plan', () => {
 				],
 				client,
 				message => logs.push(message),
+				async () => undefined,
 			),
 		).rejects.toThrow('succeeded without installing code')
 		expect(logs).toEqual([`First (first)\n  ├─ Address: ${FIRST_ADDRESS}`, '  └─ Status: failed'])
+	})
+
+	test('retries code verification when the RPC latest state lags a successful receipt', async () => {
+		let codeReadCount = 0
+		const retryDelays: number[] = []
+		const results = await runDeploymentPlan(
+			[
+				{
+					address: FIRST_ADDRESS,
+					dependencies: [],
+					deploy: async () => FIRST_HASH,
+					expectedRuntimeCodeHash: keccak256('0x01'),
+					id: 'first',
+					label: 'First',
+				},
+			],
+			{
+				getCode: async () => {
+					codeReadCount += 1
+					return codeReadCount < 3 ? undefined : '0x01'
+				},
+			},
+			() => undefined,
+			async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			},
+		)
+
+		expect(results).toEqual([{ address: FIRST_ADDRESS, id: 'first', label: 'First', status: 'deployed', transactionHash: FIRST_HASH }])
+		expect(retryDelays).toEqual([250])
 	})
 
 	test('closes the contract log when deployment fails', async () => {
@@ -603,7 +726,32 @@ describe('testnet deployment plan', () => {
 			),
 		).rejects.toThrow('Unexpected runtime code for first')
 
-		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
+		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
 		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')
+	})
+
+	test('retries bootstrap descendants as one batch when RPC code state lags', async () => {
+		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
+		const descendantCount = Object.keys(descendants).length
+		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))
+		const retryDelays: number[] = []
+		let codeReadCount = 0
+
+		await assertBootstrapDescendantCode(
+			{
+				getCode: async () => {
+					codeReadCount += 1
+					return codeReadCount <= descendantCount ? undefined : '0x01'
+				},
+			},
+			SEPOLIA_NETWORK_PROFILE,
+			async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			},
+			expectedRuntimeCodeHashes,
+		)
+
+		expect(retryDelays).toEqual([250])
+		expect(codeReadCount).toBe(descendantCount * 2)
 	})
 })

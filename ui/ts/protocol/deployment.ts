@@ -25,7 +25,7 @@ import {
 	getZoltarInitCode,
 	getZoltarQuestionDataByteCode,
 } from './deploymentHelpers.js'
-import { waitForSubmittedTransactionReceipt } from './core.js'
+import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
@@ -195,13 +195,27 @@ function accountCanonicalRawTransaction(client: WriteClient, signer: Address) {
 	client.recordCanonicalRawTransaction?.(signer, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 }
 
-async function waitForCanonicalProxyDeployer(client: WriteClient) {
+async function proxyDeployerIsInstalledAfterReceipt(client: WriteClient, wait?: RpcStateRetryWait) {
+	return await readWithRpcStateRetries(
+		() => proxyDeployerIsInstalled(client),
+		installed => installed,
+		wait,
+	)
+}
+
+async function resolveConfirmedProxyDeployer(client: WriteClient, wait?: RpcStateRetryWait) {
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
+	return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+}
+
+async function waitForCanonicalProxyDeployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	const { hash } = await waitForSubmittedTransactionReceipt(client, PROXY_DEPLOYER_RAW_TRANSACTION_HASH)
-	if (!(await proxyDeployerIsInstalled(client))) throw new Error(`Canonical proxy deployer transaction ${hash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical proxy deployer transaction ${hash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
 	return hash
 }
 
-async function resolveProxyDeployerBroadcastRace(client: WriteClient, broadcastError: unknown) {
+async function resolveProxyDeployerBroadcastRace(client: WriteClient, broadcastError: unknown, wait?: RpcStateRetryWait) {
 	if (await proxyDeployerIsInstalled(client)) {
 		client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 		return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
@@ -209,19 +223,19 @@ async function resolveProxyDeployerBroadcastRace(client: WriteClient, broadcastE
 	const activity = await getProxyDeployerActivity(client)
 	if (activity.deploymentPending) {
 		client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
-		return await waitForCanonicalProxyDeployer(client)
+		return await waitForCanonicalProxyDeployer(client, wait)
 	}
 	if (activity.confirmedNonce !== 0n) {
-		if (await proxyDeployerIsInstalled(client)) {
-			client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
-			return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
+		try {
+			return await resolveConfirmedProxyDeployer(client, wait)
+		} catch (error) {
+			throw new Error('The deterministic proxy deployer signer nonce was consumed without installing the canonical proxy', { cause: error ?? broadcastError })
 		}
-		throw new Error('The deterministic proxy deployer signer nonce was consumed without installing the canonical proxy', { cause: broadcastError })
 	}
 	throw broadcastError
 }
 
-async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsufficientFunds: boolean) {
+async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsufficientFunds: boolean, wait?: RpcStateRetryWait) {
 	markDeploymentTransactionPrepared(client, {
 		account: PROXY_DEPLOYER_SIGNER,
 		data: PROXY_DEPLOYER_RAW_TRANSACTION,
@@ -244,7 +258,7 @@ async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsuffi
 			return undefined
 		}
 		try {
-			return await resolveProxyDeployerBroadcastRace(client, error)
+			return await resolveProxyDeployerBroadcastRace(client, error, wait)
 		} catch (resolvedError) {
 			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical proxy deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
 			throw resolvedError
@@ -252,7 +266,7 @@ async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsuffi
 	}
 	client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
-	if (!(await proxyDeployerIsInstalled(client))) throw new Error(`Canonical proxy deployer transaction ${resolvedDeployHash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical proxy deployer transaction ${resolvedDeployHash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
 	return resolvedDeployHash
 }
 
@@ -349,7 +363,7 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	return resolvedHash
 }
 
-async function ensureProxyDeployerDeployed(client: WriteClient) {
+async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateRetryWait) {
 	if (await proxyDeployerIsInstalled(client)) return undefined
 	if (client.installSimulationProxyDeployer !== undefined) {
 		await client.installSimulationProxyDeployer({
@@ -361,15 +375,15 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const activity = await getProxyDeployerActivity(client)
 	if (activity.deploymentPending) {
 		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
-		return await waitForCanonicalProxyDeployer(client)
+		return await waitForCanonicalProxyDeployer(client, wait)
 	}
 	if (activity.fundingPending) {
 		throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	}
 	if (await proxyDeployerIsInstalled(client)) return undefined
-	if (activity.confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	if (activity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 	await assertCanonicalRawTransactionFeeCompatible(client, 'Deterministic proxy deployer')
-	const preFundingDeploymentHash = await broadcastCanonicalProxyDeployer(client, true)
+	const preFundingDeploymentHash = await broadcastCanonicalProxyDeployer(client, true, wait)
 	if (preFundingDeploymentHash !== undefined) return preFundingDeploymentHash
 
 	const fundingShortfall = await getProxyDeployerFundingShortfall(client)
@@ -380,7 +394,7 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 		}
 		if (await proxyDeployerIsInstalled(client)) return undefined
 		const confirmedNonce = await client.getTransactionCount({ address: PROXY_DEPLOYER_SIGNER, blockTag: 'latest' })
-		if (confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+		if (confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 		const finalFundingShortfall = await getProxyDeployerFundingShortfall(client)
 		if (finalFundingShortfall > 0n) {
 			await fundCanonicalDeployerSigner(client, {
@@ -398,12 +412,12 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const postFundingActivity = await getProxyDeployerActivity(client)
 	if (postFundingActivity.deploymentPending) {
 		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
-		return await waitForCanonicalProxyDeployer(client)
+		return await waitForCanonicalProxyDeployer(client, wait)
 	}
 	if (postFundingActivity.fundingPending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
-	if (postFundingActivity.confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	if (postFundingActivity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 
-	const resolvedDeployHash = await broadcastCanonicalProxyDeployer(client, false)
+	const resolvedDeployHash = await broadcastCanonicalProxyDeployer(client, false, wait)
 	if (resolvedDeployHash === undefined) throw new Error('Canonical proxy deployer broadcast unexpectedly returned without a transaction hash')
 	return resolvedDeployHash
 }
@@ -419,7 +433,7 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 	)
 }
 
-export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()): DeploymentStep[] {
+export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: RpcStateRetryWait): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
 	const testTokenSteps =
 		profile.id === 'sepolia'
@@ -448,7 +462,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			address: PROXY_DEPLOYER_ADDRESS,
 			dependencies: [],
 			deploy: async client => {
-				const hash = await ensureProxyDeployerDeployed(client)
+				const hash = await ensureProxyDeployerDeployed(client, wait)
 				return hash ?? ZERO_HASH
 			},
 		},

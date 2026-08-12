@@ -11,6 +11,7 @@ import { assertActiveWallet } from '../../../lib/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '../../../types/contracts.js'
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
 
 type UseDeploymentFlowParameters = {
 	accountAddress: Address | undefined
@@ -22,9 +23,10 @@ type UseDeploymentFlowParameters = {
 	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
+	rpcStateRetryWait?: RpcStateRetryWait
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -72,7 +74,11 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			}
 			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const hash = await step.deploy(client)
-			const code = await client.getCode({ address: step.address })
+			const code = await readWithRpcStateRetries(
+				() => client.getCode({ address: step.address }),
+				candidate => candidate !== undefined && candidate !== '0x',
+				rpcStateRetryWait,
+			)
 			if (!assertDeploymentStepRuntimeCode(step, code)) {
 				const message = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
 				errorMessage.value = message

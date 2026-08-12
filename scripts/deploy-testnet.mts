@@ -19,7 +19,8 @@ import {
 import { PROXY_DEPLOYER_ADDRESS } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, type UniswapDeployment } from './uniswap-deployment.mts'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '../ui/ts/protocol/core.ts'
+import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, type UniswapDeployment } from './uniswap-deployment.mts'
 
 const DEFAULT_CHAIN_ID = 11_155_111
 export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '100'
@@ -477,13 +478,13 @@ async function assertDeploymentPlanStepRuntimeCode<TClient>(step: DeploymentPlan
 	return assertExpectedRuntimeCode(step.id, step.address, code, step.expectedRuntimeCodeHash)
 }
 
-export async function runDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, log: (message: string) => void = console.log): Promise<DeploymentStepResult[]> {
+export async function runDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, log: (message: string) => void = console.log, wait?: RpcStateRetryWait, knownInstalledAddresses: ReadonlySet<Address> = new Set()): Promise<DeploymentStepResult[]> {
 	const completed = new Set<string>()
 	const results: DeploymentStepResult[] = []
 	for (const step of steps) {
 		const missingDependency = step.dependencies.find(dependency => !completed.has(dependency))
 		if (missingDependency !== undefined) throw new Error(`${step.label} requires incomplete deployment step ${missingDependency}`)
-		if (await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address }))) {
+		if (knownInstalledAddresses.has(step.address) || (await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address })))) {
 			completed.add(step.id)
 			results.push({ address: step.address, id: step.id, label: step.label, status: 'skipped', transactionHash: undefined })
 			log(
@@ -498,7 +499,7 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 		log(`${step.label} (${step.id})\n  ├─ Address: ${step.address}`)
 		try {
 			const transactionHash = await step.deploy(client)
-			const code = await client.getCode({ address: step.address })
+			const code = await readWithRpcStateRetries(() => client.getCode({ address: step.address }), hasCode, wait)
 			if (!hasCode(code)) throw new Error(`${step.label} deployment transaction ${transactionHash} succeeded without installing code at ${step.address}`)
 			await assertDeploymentPlanStepRuntimeCode(step, client, code)
 			completed.add(step.id)
@@ -517,7 +518,7 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 	return results
 }
 
-export async function preflightDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, gasAllowances: Readonly<Record<string, bigint>>, maxFeePerGas: bigint, maxTotalCost: bigint) {
+export async function preflightDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, gasAllowances: Readonly<Record<string, bigint>>, maxFeePerGas: bigint, maxTotalCost: bigint, knownInstalledAddresses: ReadonlySet<Address> = new Set()) {
 	const completed = new Set<string>()
 	const missingStepIds: string[] = []
 	let estimatedGas = 0n
@@ -525,7 +526,7 @@ export async function preflightDeploymentPlan<TClient extends CodeReader>(steps:
 	for (const step of steps) {
 		const missingDependency = step.dependencies.find(dependency => !completed.has(dependency))
 		if (missingDependency !== undefined) throw new Error(`${step.label} requires incomplete deployment step ${missingDependency}`)
-		const installed = await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address }))
+		const installed = knownInstalledAddresses.has(step.address) || (await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address })))
 		completed.add(step.id)
 		if (installed) continue
 		const gasAllowance = gasAllowances[step.id]
@@ -548,6 +549,24 @@ async function assertProxyCode(client: CodeReader) {
 	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical proxy deployer ${PROXY_DEPLOYER_ADDRESS}`)
 }
 
+export async function assertConfirmedProxyCode(client: CodeReader, wait?: RpcStateRetryWait) {
+	const code = await readWithRpcStateRetries(() => client.getCode({ address: PROXY_DEPLOYER_ADDRESS }), hasCode, wait)
+	if (!hasCode(code)) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical proxy deployer ${PROXY_DEPLOYER_ADDRESS}`)
+}
+
+export async function resolveCanonicalProxyDeployerForPreflight(client: CodeReader & Pick<WriteClient, 'getBalance' | 'getTransactionCount'>, wait?: RpcStateRetryWait) {
+	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
+	if (hasCode(code)) {
+		if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical proxy deployer ${PROXY_DEPLOYER_ADDRESS}`)
+		return true
+	}
+	const activity = await getProxyDeployerActivity(client)
+	if (activity.confirmedNonce === 0n) return false
+	await assertConfirmedProxyCode(client, wait)
+	return true
+}
+
 async function assertCanonicalCreate2DeployerCode(client: CodeReader) {
 	const code = await client.getCode({ address: ARACHNID_CREATE2_DEPLOYER_ADDRESS })
 	if (code === undefined || code === '0x') return
@@ -564,16 +583,29 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, ...protocolStepsWithExternalDependencies].map(step => (!('verifyRuntimeCode' in step) || step.verifyRuntimeCode === undefined ? { ...step, expectedRuntimeCodeHash: getExpectedRuntimeCodeHash(step.id) } : step))
 }
 
-export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile) {
+export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>>) {
 	const bootstrapDescendants = getBootstrapDescendantAddresses(profile)
 	if (profile.id === 'simulation') throw new Error('Exact bootstrap descendant runtime-code verification is unavailable for simulation')
-	const expectedRuntimeCodeHashes = EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[profile.id]
-	for (const [id, address] of Object.entries(bootstrapDescendants)) {
-		const code = await client.getCode({ address })
+	const resolvedExpectedRuntimeCodeHashes = expectedRuntimeCodeHashes ?? EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[profile.id]
+	const entries = Object.entries(bootstrapDescendants)
+	const codes = await readWithRpcStateRetries(
+		async () => {
+			const currentCodes = await Promise.all(entries.map(async ([, address]) => await client.getCode({ address })))
+			for (const [index, [id, address]] of entries.entries()) {
+				const code = currentCodes[index]
+				if (!hasCode(code)) continue
+				const expectedRuntimeCodeHash = resolvedExpectedRuntimeCodeHashes[id]
+				if (expectedRuntimeCodeHash === undefined) throw new Error(`Bootstrap descendant ${id} has no expected runtime code hash for ${profile.id}`)
+				assertExpectedRuntimeCode(id, address, code, expectedRuntimeCodeHash)
+			}
+			return currentCodes
+		},
+		currentCodes => currentCodes.every(hasCode),
+		wait,
+	)
+	for (const [index, [id, address]] of entries.entries()) {
+		const code = codes[index]
 		if (!hasCode(code)) throw new Error(`Bootstrap descendant ${id} is missing at ${address}`)
-		const expectedRuntimeCodeHash = expectedRuntimeCodeHashes[id]
-		if (expectedRuntimeCodeHash === undefined) throw new Error(`Bootstrap descendant ${id} has no expected runtime code hash for ${profile.id}`)
-		assertExpectedRuntimeCode(id, address, code, expectedRuntimeCodeHash)
 	}
 	return bootstrapDescendants
 }
@@ -609,12 +641,16 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	await assertProxyCode(client)
 	const authorizedMaxFeePerGas = parameters.maxFeePerGas ?? parseMaxFeePerGas(undefined)
 	const authorizedMaxTotalCost = parameters.maxTotalCost ?? parseMaxTotalCost(undefined)
-	const [canonicalCreate2Code, proxyCode] = await Promise.all([client.getCode({ address: ARACHNID_CREATE2_DEPLOYER_ADDRESS }), client.getCode({ address: PROXY_DEPLOYER_ADDRESS })])
-	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!hasCode(canonicalCreate2Code) || !hasCode(proxyCode))) {
+	const canonicalCreate2Installed = await resolveCanonicalCreate2DeployerForPreflight(client)
+	const proxyInstalled = await resolveCanonicalProxyDeployerForPreflight(client)
+	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
 		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
 	const plan = createCompleteDeploymentPlan(profile, uniswap)
-	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost)
+	const knownInstalledAddresses = new Set<Address>()
+	if (canonicalCreate2Installed) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
+	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
+	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost, knownInstalledAddresses)
 	log(
 		formatLogSection('Preflight', [
 			['Missing contracts', estimate.missingStepIds.length.toString()],
@@ -623,15 +659,17 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 			['Fee ceiling', `${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`],
 		]),
 	)
-	if (!hasCode(proxyCode)) {
+	if (!proxyInstalled) {
 		const activity = await getProxyDeployerActivity(client)
 		if (activity.pending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 		await assertProxyCode(client)
 		if (!hasCode(await client.getCode({ address: PROXY_DEPLOYER_ADDRESS }))) {
-			if (activity.confirmedNonce !== 0n) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
-			const fundingShortfall = await getProxyDeployerFundingShortfall(client)
-			const balance = await client.getBalance({ address: client.account.address })
-			if (balance < fundingShortfall) throw new Error(`Deployer ${client.account.address} needs at least ${formatEther(fundingShortfall)} ETH to finish funding the canonical proxy deployer signer`)
+			if (activity.confirmedNonce !== 0n) await assertConfirmedProxyCode(client)
+			else {
+				const fundingShortfall = await getProxyDeployerFundingShortfall(client)
+				const balance = await client.getBalance({ address: client.account.address })
+				if (balance < fundingShortfall) throw new Error(`Deployer ${client.account.address} needs at least ${formatEther(fundingShortfall)} ETH to finish funding the canonical proxy deployer signer`)
+			}
 		}
 	}
 
@@ -641,7 +679,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 			['Deployer', client.account.address],
 		]),
 	)
-	const results = await runDeploymentPlan(plan, client, log)
+	const results = await runDeploymentPlan(plan, client, log, undefined, knownInstalledAddresses)
 	await assertProxyCode(client)
 	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile)
 	if (parameters.writeGitHubSummary !== false) await writeGitHubSummary(chainId, client.account.address, results)
