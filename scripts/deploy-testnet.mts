@@ -253,9 +253,10 @@ export function createDeploymentBudget(maxTotalCost: bigint) {
 
 type DeploymentBudget = ReturnType<typeof createDeploymentBudget>
 
-export function createBudgetedTransactionSender(wallet: BudgetedWallet, account: Account, limits: { budget?: DeploymentBudget; maxFeePerGas: bigint; maxTotalCost: bigint }) {
+export function createBudgetedTransactionSender(wallet: BudgetedWallet, account: Account, limits: { budget?: DeploymentBudget; maxFeePerGas: bigint; maxTotalCost: bigint }, log: (message: string) => void = () => undefined) {
 	const budget = limits.budget ?? createDeploymentBudget(limits.maxTotalCost)
 	const sendTransaction: WriteClient['sendTransaction'] = async transaction => {
+		log(`transaction prepare account=${account.address} fetching_nonce_and_fees`)
 		const [nonce, gasPrice, block] = await Promise.all([wallet.getTransactionCount({ address: account.address, blockTag: 'pending' }), wallet.getGasPrice(), wallet.getBlock()])
 		const baseFeePerGas = block.baseFeePerGas
 		if (baseFeePerGas === undefined) throw new Error('Deployment transactions require an EIP-1559 base fee')
@@ -264,6 +265,7 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		const maxPriorityFeePerGas = gasPrice > baseFeePerGas ? gasPrice - baseFeePerGas : 0n
 		const candidateMaxFeePerGas = baseFeePerGas * 2n + maxPriorityFeePerGas
 		const maxFeePerGas = candidateMaxFeePerGas > limits.maxFeePerGas ? limits.maxFeePerGas : candidateMaxFeePerGas
+		log(`transaction estimate nonce=${nonce.toString()} base_fee=${formatEther(baseFeePerGas * 1_000_000_000n)} gwei priority_fee=${formatEther(maxPriorityFeePerGas * 1_000_000_000n)} gwei max_fee=${formatEther(maxFeePerGas * 1_000_000_000n)} gwei`)
 		const gas = paddedGas(
 			await wallet.estimateGas({
 				account: account.address,
@@ -277,6 +279,7 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 		const transactionValue = transaction.value ?? transaction.amount ?? 0n
 		const worstCaseCost = gas * maxFeePerGas + transactionValue
 		budget.recordWalletTransaction(worstCaseCost)
+		log(`transaction submit nonce=${nonce.toString()} to=${transaction.to ?? 'contract_creation'} gas=${gas.toString()} value=${formatEther(transactionValue)} ETH worst_case_cost=${formatEther(worstCaseCost)} ETH`)
 		const hash = await wallet.sendTransaction({
 			...transaction,
 			account,
@@ -286,21 +289,27 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 			maxPriorityFeePerGas,
 			nonce,
 		})
+		log(`transaction submitted nonce=${nonce.toString()} hash=${hash}`)
 		return hash
 	}
 	return sendTransaction
 }
 
-export function createDeploymentReceiptWaiter(client: Pick<WriteClient, 'waitForTransactionReceipt'>) {
-	const waitForTransactionReceipt: WriteClient['waitForTransactionReceipt'] = async parameters =>
-		await client.waitForTransactionReceipt({
+export function createDeploymentReceiptWaiter(client: Pick<WriteClient, 'waitForTransactionReceipt'>, log: (message: string) => void = () => undefined) {
+	const waitForTransactionReceipt: WriteClient['waitForTransactionReceipt'] = async parameters => {
+		const timeout = parameters.timeout ?? DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS
+		log(`receipt wait hash=${parameters.hash} timeout=${(timeout / 1_000).toString()}s`)
+		const receipt = await client.waitForTransactionReceipt({
 			...parameters,
-			timeout: parameters.timeout ?? DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS,
+			timeout,
 		})
+		log(`receipt confirmed hash=${receipt.transactionHash} status=${receipt.status} block=${receipt.blockNumber.toString()} gas_used=${receipt.gasUsed.toString()}`)
+		return receipt
+	}
 	return waitForTransactionReceipt
 }
 
-export function createPreparedDeploymentClient(parameters: { chain: Chain; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string }): WriteClient {
+export function createPreparedDeploymentClient(parameters: { chain: Chain; log?: (message: string) => void; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string }): WriteClient {
 	const account = privateKeyToAccount(parameters.privateKey)
 	const wallet = createWalletClient({
 		account,
@@ -309,12 +318,17 @@ export function createPreparedDeploymentClient(parameters: { chain: Chain; maxFe
 	})
 	const maxTotalCost = parameters.maxTotalCost ?? parseMaxTotalCost(undefined)
 	const budget = createDeploymentBudget(maxTotalCost)
-	const sendTransaction = createBudgetedTransactionSender(wallet, account, {
-		budget,
-		maxFeePerGas: parameters.maxFeePerGas ?? parseMaxFeePerGas(undefined),
-		maxTotalCost,
-	})
-	const waitForTransactionReceipt = createDeploymentReceiptWaiter(wallet)
+	const sendTransaction = createBudgetedTransactionSender(
+		wallet,
+		account,
+		{
+			budget,
+			maxFeePerGas: parameters.maxFeePerGas ?? parseMaxFeePerGas(undefined),
+			maxTotalCost,
+		},
+		parameters.log,
+	)
+	const waitForTransactionReceipt = createDeploymentReceiptWaiter(wallet, parameters.log)
 
 	return {
 		...wallet,
@@ -480,10 +494,12 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void }) {
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
+	const log = parameters.log ?? console.log
 	const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
 	const profile = createDeploymentProfile(chainId, rpcUrl, uniswap.addresses)
 	const client = createPreparedDeploymentClient({
 		chain: profile.chain,
+		log,
 		...(parameters.maxFeePerGas === undefined ? {} : { maxFeePerGas: parameters.maxFeePerGas }),
 		...(parameters.maxTotalCost === undefined ? {} : { maxTotalCost: parameters.maxTotalCost }),
 		privateKey: parameters.privateKey,
@@ -502,7 +518,6 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!hasCode(canonicalCreate2Code) || !hasCode(proxyCode))) {
 		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
-	const log = parameters.log ?? console.log
 	const plan = createCompleteDeploymentPlan(profile, uniswap)
 	const estimate = await preflightDeploymentPlan(plan, client, CONSERVATIVE_DEPLOYMENT_GAS, authorizedMaxFeePerGas, authorizedMaxTotalCost)
 	log(`preflight missing=${estimate.missingStepIds.length.toString()} estimated_upper_bound=${formatEther(estimate.estimatedCostAttoEth)} ETH max_total=${formatEther(authorizedMaxTotalCost)} ETH fee_ceiling=${formatEther(authorizedMaxFeePerGas * 1_000_000_000n)} gwei`)

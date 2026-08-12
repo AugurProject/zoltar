@@ -166,18 +166,23 @@ describe('testnet deployment inputs', () => {
 
 	test('waits significantly longer for deployment transaction receipts', async () => {
 		const requests: Parameters<WriteClient['waitForTransactionReceipt']>[0][] = []
-		const waitForTransactionReceipt = createDeploymentReceiptWaiter({
-			waitForTransactionReceipt: async parameters => {
-				requests.push(parameters)
-				return { status: 'success' } as never
+		const logs: string[] = []
+		const waitForTransactionReceipt = createDeploymentReceiptWaiter(
+			{
+				waitForTransactionReceipt: async parameters => {
+					requests.push(parameters)
+					return { blockNumber: 99n, gasUsed: 123_456n, status: 'success', transactionHash: parameters.hash } as never
+				},
 			},
-		})
+			message => logs.push(message),
+		)
 
 		await waitForTransactionReceipt({ hash: FIRST_HASH })
 		await waitForTransactionReceipt({ hash: SECOND_HASH, timeout: 12_345 })
 
 		expect(DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS).toBe(60 * 60 * 1_000)
 		expect(requests.map(request => request.timeout)).toEqual([DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS, 12_345])
+		expect(logs).toEqual([`receipt wait hash=${FIRST_HASH} timeout=3600s`, `receipt confirmed hash=${FIRST_HASH} status=success block=99 gas_used=123456`, `receipt wait hash=${SECOND_HASH} timeout=12.345s`, `receipt confirmed hash=${SECOND_HASH} status=success block=99 gas_used=123456`])
 	})
 
 	test('enforces chain and RPC safety at the transaction-capable entry point', async () => {
@@ -203,6 +208,7 @@ describe('testnet deployment transaction authorization', () => {
 
 	test('sends EIP-1559 transactions bounded by the authorized fee', async () => {
 		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
+		const logs: string[] = []
 		const send = createBudgetedTransactionSender(
 			wallet({
 				sendTransaction: async request => {
@@ -212,10 +218,17 @@ describe('testnet deployment transaction authorization', () => {
 			}),
 			account,
 			{ maxFeePerGas: 100n, maxTotalCost: 4_000_001n },
+			message => logs.push(message),
 		)
 
 		expect(await send({ to: FIRST_ADDRESS, value: 1n })).toBe(FIRST_HASH)
 		expect(submitted).toMatchObject({ gas: 130_000n, gasPrice: undefined, maxFeePerGas: 30n, maxPriorityFeePerGas: 10n, nonce: 7n, to: FIRST_ADDRESS, value: 1n })
+		expect(logs).toEqual([
+			`transaction prepare account=${account.address} fetching_nonce_and_fees`,
+			'transaction estimate nonce=7 base_fee=0.00000001 gwei priority_fee=0.00000001 gwei max_fee=0.00000003 gwei',
+			`transaction submit nonce=7 to=${FIRST_ADDRESS} gas=130000 value=0.000000000000000001 ETH worst_case_cost=0.000000000003900001 ETH`,
+			`transaction submitted nonce=7 hash=${FIRST_HASH}`,
+		])
 	})
 
 	test('caps padding at the transaction signer gas limit', async () => {
