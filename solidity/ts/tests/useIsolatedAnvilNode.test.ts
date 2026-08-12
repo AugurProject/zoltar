@@ -83,6 +83,8 @@ test('isolated Anvil nodes atomically select a port and limit their runtime thre
 
 	expect(getIsolatedAnvilArgs()).toEqual(expectedBaseArgs)
 	expect(getIsolatedAnvilArgs({ printTraces: true })).toEqual([...expectedBaseArgs, '--print-traces'])
+	expect(getIsolatedAnvilArgs({ chainId: 11_155_111, disableCodeSizeLimit: true, gasLimit: 100_000_000n, hardfork: 'osaka' })).toEqual([...expectedBaseArgs.slice(0, 7), '11155111', ...expectedBaseArgs.slice(8), '--hardfork', 'osaka', '--gas-limit', '100000000', '--disable-code-size-limit'])
+	expect(getIsolatedAnvilArgs({ zeroFees: false })).toEqual(['--host', '127.0.0.1', '--port', '0', '--threads', '1', '--chain-id', '1', '--timestamp', '1', '--max-persisted-states', '0'])
 })
 
 test('isolated Anvil startup reads the OS-assigned listening port', () => {

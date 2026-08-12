@@ -213,14 +213,28 @@ export const connectToExistingAnvilNode = async (rpcUrl: string, context: string
 	}
 }
 
-export const getIsolatedAnvilArgs = ({ printTraces = false }: { printTraces?: boolean } = {}): string[] => {
-	const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', OS_ASSIGNED_PORT.toString(), '--threads', ANVIL_THREADS, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee', '--max-persisted-states', ANVIL_MAX_PERSISTED_STATES]
+type IsolatedAnvilOptions = {
+	chainId?: number
+	disableCodeSizeLimit?: boolean
+	gasLimit?: bigint
+	hardfork?: string
+	printTraces?: boolean
+	zeroFees?: boolean
+}
+
+export const getIsolatedAnvilArgs = ({ chainId = 1, disableCodeSizeLimit = false, gasLimit, hardfork, printTraces = false, zeroFees = true }: IsolatedAnvilOptions = {}): string[] => {
+	const anvilArgs = ['--host', DEFAULT_ANVIL_HOST, '--port', OS_ASSIGNED_PORT.toString(), '--threads', ANVIL_THREADS, '--chain-id', chainId.toString(), '--timestamp', '1']
+	if (zeroFees) anvilArgs.push('--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee')
+	anvilArgs.push('--max-persisted-states', ANVIL_MAX_PERSISTED_STATES)
+	if (hardfork !== undefined) anvilArgs.push('--hardfork', hardfork)
+	if (gasLimit !== undefined) anvilArgs.push('--gas-limit', gasLimit.toString())
+	if (disableCodeSizeLimit) anvilArgs.push('--disable-code-size-limit')
 	if (printTraces) anvilArgs.push('--print-traces')
 	return anvilArgs
 }
 
-const createIsolatedAnvilNode = async ({ context, printTraces = false, startTimestamp }: { context: string; printTraces?: boolean; startTimestamp?: bigint }): Promise<AnvilNode> => {
-	const anvilArgs = getIsolatedAnvilArgs({ printTraces })
+const createIsolatedAnvilNode = async ({ context, startTimestamp, ...anvilOptions }: { context: string; startTimestamp?: bigint } & IsolatedAnvilOptions): Promise<AnvilNode> => {
+	const anvilArgs = getIsolatedAnvilArgs(anvilOptions)
 	const anvilBinary = resolveAnvilBinary()
 
 	const childProcess = spawn(anvilBinary, anvilArgs, {
@@ -291,7 +305,7 @@ const createIsolatedAnvilNode = async ({ context, printTraces = false, startTime
 	}
 }
 
-export const createAnvilNodeForConnectionMode = async (connectionMode: AnvilConnectionMode, options: { context: string; printTraces?: boolean; startTimestamp?: bigint }): Promise<AnvilNode> => {
+export const createAnvilNodeForConnectionMode = async (connectionMode: AnvilConnectionMode, options: { context: string; startTimestamp?: bigint } & IsolatedAnvilOptions): Promise<AnvilNode> => {
 	if (connectionMode.type === 'use-existing') return await connectToExistingAnvilNode(connectionMode.rpcUrl, options.context)
 	return await createIsolatedAnvilNode(options)
 }
