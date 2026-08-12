@@ -224,6 +224,7 @@ describe('useDeploymentFlow', () => {
 				onTransactionPresented,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
+				rpcStateRetryWait: async () => undefined,
 				setDeploymentStatuses,
 			})
 
@@ -244,13 +245,85 @@ describe('useDeploymentFlow', () => {
 		expect(requireHookState(hookState).errorMessage).toBe(failedMessage)
 	})
 
-	test('does not mark a deployment successful when unexpected code is installed', async () => {
+	test('marks deployment successful when expected code appears after an RPC state retry', async () => {
+		let codeReadCount = 0
 		const writeClient = createWalletClient({
 			account: WALLET_ADDRESS,
 			chain: MAINNET_NETWORK_PROFILE.chain,
 			transport: custom({
 				request: async request => {
-					if (request.method === 'eth_getCode') return '0x1234'
+					if (request.method === 'eth_getCode') {
+						codeReadCount += 1
+						return codeReadCount < 3 ? '0x' : '0x1234'
+					}
+					throw new Error(`Unexpected RPC method ${request.method}`)
+				},
+			}),
+		}).extend(publicActions)
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
+			createWriteClient: () => writeClient,
+		})
+		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
+		const onTransactionFailed = mock(() => undefined)
+		const onTransactionPresented = mock(() => undefined)
+		const retryDelays: number[] = []
+		let deployed = false
+		const deploymentStatuses: DeploymentStatus[] = [
+			{
+				address: getAddress('0x00000000000000000000000000000000000000d1'),
+				dependencies: [],
+				deploy,
+				deployed: false,
+				expectedRuntimeCodeHash: keccak256('0x1234'),
+				id: 'zoltar',
+				label: 'Zoltar',
+			},
+		]
+		let hookState: UseDeploymentFlowState | undefined
+		const Harness = function DeploymentFlowHarness() {
+			hookState = useDeploymentFlow({
+				accountAddress: WALLET_ADDRESS,
+				deploymentStatuses,
+				onTransactionFailed,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				rpcStateRetryWait: async delayMilliseconds => {
+					retryDelays.push(delayMilliseconds)
+				},
+				setDeploymentStatuses: update => {
+					deployed = update(deploymentStatuses)[0]?.deployed ?? false
+				},
+			})
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).deployStep('zoltar')
+		})
+
+		expect(deployed).toBe(true)
+		expect(retryDelays).toEqual([250])
+		expect(onTransactionPresented).toHaveBeenCalledTimes(1)
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test('does not mark a deployment successful when unexpected code is installed', async () => {
+		let codeReadCount = 0
+		const writeClient = createWalletClient({
+			account: WALLET_ADDRESS,
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async request => {
+					if (request.method === 'eth_getCode') {
+						codeReadCount += 1
+						return codeReadCount === 1 ? '0x' : '0x1234'
+					}
 					throw new Error(`Unexpected RPC method ${request.method}`)
 				},
 			}),
@@ -297,7 +370,7 @@ describe('useDeploymentFlow', () => {
 		})
 
 		expect(onTransactionFailed).toHaveBeenCalledTimes(1)
-		expect(deploy).not.toHaveBeenCalled()
+		expect(deploy).toHaveBeenCalledTimes(1)
 		expect(setDeploymentStatuses).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).errorMessage).toContain('Unexpected runtime code for zoltar')
 	})
