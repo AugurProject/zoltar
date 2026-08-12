@@ -25,6 +25,7 @@ const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePa
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
 	'@zoltar/shared/openOracle': '../shared/js/openOracle.js',
+	'@zoltar/shared/scalarOutcome': '../shared/js/scalarOutcome.js',
 	'@zoltar/shared/sepoliaRepAllocations': '../shared/js/sepoliaRepAllocations.js',
 	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
@@ -339,6 +340,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
