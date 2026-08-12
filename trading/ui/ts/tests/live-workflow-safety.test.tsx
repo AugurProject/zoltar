@@ -216,6 +216,7 @@ describe('live workflow safety boundary', () => {
 				side: 'YES' as const,
 				market,
 				deadline: now + 1_200n,
+				slippageBps: 50n,
 				minimumLongShares: 1n,
 				result: {
 					completeSetShares: 1n,
