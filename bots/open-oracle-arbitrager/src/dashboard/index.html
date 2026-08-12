@@ -146,9 +146,17 @@
 						</div>
 						<span id="network-value" class="badge">Unknown network</span>
 					</div>
+					<p id="network-target-status" class="muted" role="status" aria-live="polite" hidden></p>
 					<form id="connectivity-form">
 						<fieldset id="connectivity-fieldset" disabled>
 							<div class="connectivity-grid">
+								<label>
+									<span>Chain</span>
+									<select id="network-name" required>
+										<option value="mainnet">Ethereum mainnet · chain 1</option>
+										<option value="sepolia">Sepolia · chain 11155111</option>
+									</select>
+								</label>
 								<label>
 									<span>Read RPC URL</span>
 									<input id="read-rpc-url" type="url" spellcheck="false" required />

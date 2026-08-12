@@ -33,6 +33,31 @@
 				</div>
 				<div id="metrics" class="metric-grid"></div>
 			</section>
+			<section aria-labelledby="network-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Network safety</p>
+						<h2 id="network-title">Chain and RPC connectivity</h2>
+					</div>
+				</div>
+				<form id="network-form">
+					<fieldset id="network-fields" disabled>
+						<div class="form-grid">
+							<label
+								><span>Chain</span
+								><select id="network-name" required>
+									<option value="mainnet">Ethereum mainnet · chain 1</option>
+									<option value="sepolia">Sepolia · chain 11155111</option>
+								</select></label
+							>
+							<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
+							<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
+							<label><span>Independent quorum RPC URLs · one per line</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
+						</div>
+						<div class="form-actions"><span id="network-status" class="muted" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
+					</fieldset>
+				</form>
+			</section>
 			<section aria-labelledby="universes-title">
 				<div class="section-heading">
 					<div>

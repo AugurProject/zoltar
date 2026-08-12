@@ -35,30 +35,25 @@ install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
 ```
 
-In `.env`, set a unique dashboard password of at least 16 characters and set
-`ZOLTAR_BOT_RPC_URLS` to a comma-separated list of RPC URLs. The first URL is the
-primary reader, every URL receives public transaction broadcasts, and every URL
-after the first is an independent quorum reader. Live execution therefore requires
-at least two independently operated origins. Set `LIQUIDATOR_UID` and
-`LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this lets the container read
-and update the owner-only state files without making them public.
+In `.env`, set a unique dashboard password of at least 16 characters. Set
+`LIQUIDATOR_UID` and `LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this
+lets the container read and update the owner-only state files without making them
+public.
 
 In `.state/operator.json`, add the reviewed deployment settings and set
-`runtime.uiHost` to `0.0.0.0`. The file's connectivity settings remain the fallback
-when `ZOLTAR_BOT_RPC_URLS` is blank; a non-empty environment value overrides all
-three RPC roles at startup without modifying the file. These settings are not
-editable from the liquidator dashboard, and the operator file must remain
-owner-only. Keep `runtime.execute` false while testing the setup. Then build and
-start the bot:
+`runtime.uiHost` to `0.0.0.0`. Keep the operator file owner-only and keep
+`runtime.execute` false while testing the setup. Then build and start the bot:
 
 ```bash
 docker compose up --build --detach
 ```
 
-Open `http://127.0.0.1:4183` and sign in as `operator` with the password from
-`.env`. Run `docker compose down` to stop the bot and `docker compose up --detach`
-to start it again. The bind-mounted `.state` directory preserves its configuration,
-history, and recovery state.
+The example starts paused. Open `http://127.0.0.1:4183`, sign in as `operator` with
+the password from `.env`, save the chain and RPCs in **Chain and RPC
+connectivity**, finish the remaining configuration, and resume only after reviewing
+the saved settings. Run `docker compose down` to stop the bot and
+`docker compose up --detach` to start it again. The bind-mounted `.state` directory
+preserves its configuration, history, and recovery state.
 
 Do not publish the dashboard on a public interface. Loopback RPC URLs refer to
 the container itself, so use a container-reachable RPC address when the node runs
@@ -79,9 +74,18 @@ Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
 command-line arguments. The dashboard defaults to
 `http://127.0.0.1:4183`.
 
-`ZOLTAR_BOT_RPC_URLS` applies to direct Bun runs as well as Compose. Separate URLs
-with commas; URL query parameters are supported, but the separator itself must not
-appear inside a URL.
+The dashboard's **Chain and RPC connectivity** form is the source of network and
+endpoint selection. It chain-checks the read, public-submission, and independent
+quorum RPCs before saving them. Same-chain RPC changes apply at the next scan. To
+change chains after live execution has been enabled, stop the bot, set
+`runtime.execute` to `false` and choose a new chain-specific `runtime.stateFile` in
+the operator file, restart it, and then save the new chain and RPCs in the
+dashboard. Stop the bot again and replace the deployment addresses and market
+assets with reviewed settings for the destination chain. Restart in dry-run mode
+and review the complete saved configuration before restoring `runtime.execute`.
+Do not reuse or delete the old chain's recovery state unless its disposition has
+been reviewed. Pausing alone does not enable a chain change. Live execution
+requires at least one independent quorum RPC.
 
 Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The

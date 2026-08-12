@@ -204,11 +204,8 @@ cd bots/open-oracle-arbitrager
 install -m 600 .env.example .env
 ```
 
-Edit `.env`, set a unique dashboard password of at least 16 characters, and set
-`ZOLTAR_BOT_RPC_URLS` to a comma-separated list of RPC URLs. The first URL is the
-primary reader, every URL receives public transaction broadcasts, and every URL
-after the first is an independent quorum reader. Live execution therefore requires
-at least two independently operated origins. Then build and start the container:
+Edit `.env` and set a unique dashboard password of at least 16 characters. Then
+build and start the container:
 
 ```bash
 docker compose up --build --detach
@@ -218,9 +215,12 @@ On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
 password from `.env`.
 
-Open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration),
-add the reviewed deployment and endpoint settings, and save them. Configuration
-changes apply after restart:
+In **RPC connectivity**, select the chain, enter its read and public RPC URLs, and
+save so every endpoint is checked against that chain. Reload the dashboard, then
+open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration).
+Add the reviewed deployment settings, set the centralized-market REP address to
+match `deployment.rep`, choose chain-specific history, price, and position paths,
+and save. Configuration changes apply after restart:
 
 ```bash
 docker compose restart
@@ -287,8 +287,14 @@ complete active-game context is operationally important.
 
 ## Run on Sepolia
 
-For Sepolia, set `network` to `sepolia` and replace every deployment address and
-RPC URL with values from the same reviewed test environment:
+If live execution is enabled, stop the bot, set `runtime.execute` to `false`, and
+restart before saving a different chain; pausing alone is not sufficient.
+Then save `sepolia` and its RPC URLs in **RPC connectivity**, and reload the
+dashboard so **Complete bot configuration** contains the persisted network. Replace
+every deployment address with values from the same reviewed test environment, set
+`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
+use separate history, price, and position paths before saving the complete
+configuration and restarting:
 
 ```bash
 bun run run
@@ -654,11 +660,8 @@ security.
 ## Persistent operator settings
 
 `.state/operator.json` is the source of persisted bot settings. The bot accepts no
-command-line arguments. `ZOLTAR_BOT_RPC_URLS` can override its RPC settings at
-startup; the first comma-separated URL becomes the primary reader, all listed URLs
-become public broadcast endpoints, and the remaining URLs become quorum readers.
-The override does not modify the settings file, whose connectivity values remain
-the fallback when the variable is blank. Copy the example before first startup:
+command-line arguments and does not read chain or RPC settings from environment
+variables. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
@@ -667,8 +670,16 @@ install -m 600 config/operator.example.json .state/operator.json
 
 `OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
 any value inside the document. This locator is useful for service managers and
-tests. `ZOLTAR_BOT_RPC_URLS` applies to direct Bun runs as well as Compose. URL query
-parameters are supported, but the comma separator must not appear inside a URL.
+tests. Select the chain and enter the read and public RPC URLs in **RPC
+connectivity**. Every endpoint is checked against the selected chain before it is
+saved. A chain change applies after restart; an RPC-only change on the active chain
+applies at the next scan boundary. Before restarting after a chain change, follow
+the [network-switch steps](#run-on-sepolia): update the reviewed deployment
+identities in **Complete bot configuration**, set the centralized-market REP
+address to match the deployment, and use network-specific history, price, and
+position paths. Reload the dashboard after saving the chain so the complete editor
+contains the persisted network. Configure independent quorum readers with the
+deployment controls before enabling execution.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the

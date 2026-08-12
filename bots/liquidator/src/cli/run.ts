@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
 import { createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
-import { checkConnectivity, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, settingsForPersistence, type OperatorSettings } from '#config/settings'
+import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
@@ -18,6 +18,7 @@ import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
+import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -40,7 +41,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
 	const queueSettingsUpdate = createSettingsUpdateQueue()
-	const chain = chainFor(settings)
+	let chain = chainFor(settings)
 	let client = createPublicClient({
 		chain,
 		transport: http(settings.connectivity.readRpcUrl),
@@ -60,10 +61,11 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	state.pendingStagedOperations = durable.pendingStagedOperations
 	state.pendingTransactions = durable.pendingTransactions
 	const persistSettings = async (update: (current: OperatorSettings) => OperatorSettings) => {
-		await queueSettingsUpdate(async () => {
+		return await queueSettingsUpdate(async () => {
 			const next = update(settings)
-			settingsRevision = await saveSettings(loaded.path, settingsForPersistence(next, loaded.persistedConnectivity), settingsRevision)
+			settingsRevision = await saveSettings(loaded.path, next, settingsRevision)
 			settings = next
+			return next
 		})
 	}
 	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
@@ -244,6 +246,22 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						})
 						return serializedSettings(settings, true)
 					}),
+				setNetworkConnectivity: value =>
+					configurationMutationGate.run(async () => {
+						const next = await updateNetworkConnectivity({
+							apply: applied => {
+								chain = chainFor(applied)
+								client = createPublicClient({ chain, transport: http(applied.connectivity.readRpcUrl) })
+								wallet = activePrivateKey === undefined ? undefined : createWalletClient({ account: privateKeyToAccount(activePrivateKey), chain, transport: http(applied.connectivity.readRpcUrl) })
+								clearMarketEvidenceForConfigurationChange(state)
+							},
+							persist: persistSettings,
+							settings,
+							value,
+						})
+						recordActivity(state, { details: `chain=${next.network.chainId.toString()} readRpc=${endpointLabel(next.connectivity.readRpcUrl)}`, kind: 'configuration', message: 'Chain and RPC configuration saved', status: 'info' })
+						return serializedSettings(next, true)
+					}),
 				setSelectedPools: value =>
 					configurationMutationGate.run(async () => {
 						if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) {
@@ -283,7 +301,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							await commitSignerMutation(
 								candidate,
 								rememberSigner,
-								async signer => persistSettings(current => ({ ...current, privateKey: signer.privateKey })),
+								async signer => {
+									await persistSettings(current => ({ ...current, privateKey: signer.privateKey }))
+								},
 								signer => {
 									activePrivateKey = signer.privateKey
 									wallet =
@@ -342,6 +362,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
 			}
 		}
+		await checkSubmissionEndpoints(settings.submission, settings.network.chainId)
 	} catch (error) {
 		dashboard?.stop()
 		throw error

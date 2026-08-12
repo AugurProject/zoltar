@@ -6,11 +6,14 @@ import {
 	botStatusLabels,
 	chartPointX,
 	chartTimeTickIndexes,
+	connectivityControlsDisabled,
 	countLabel,
 	exactAmount,
 	marketPoolStrategyUse,
 	marketPriceChartDescription,
+	networkTargetStatus,
 	opportunityDecisionReason,
+	persistedConnectivity,
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
@@ -27,6 +30,8 @@ let latestSnapshot: OperatorSnapshot | undefined
 let settingsLoaded = false
 let submissionLoaded = false
 let connectivityLoaded = false
+let connectivityRequestPending = false
+let persistedNetwork: 'mainnet' | 'sepolia' | undefined
 let deploymentLoaded = false
 let tokensLoaded = false
 let configurationLoaded = false
@@ -67,7 +72,7 @@ function setControlsEnabled(enabled: boolean) {
 	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
-		fieldset.disabled = !enabled
+		fieldset.disabled = id === 'connectivity-fieldset' ? connectivityControlsDisabled(enabled, connectivityRequestPending) : !enabled
 	}
 	updateConfigurationControls()
 }
@@ -77,6 +82,23 @@ function updateConfigurationControls() {
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
 	fieldset.disabled = !connected || !configurationLoaded || configurationLoading
 	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || configurationLoading
+}
+
+function updateNetworkTargetStatus() {
+	const target = element('network-target-status')
+	const status = networkTargetStatus(latestSnapshot?.network, persistedNetwork)
+	target.hidden = status === undefined
+	if (status !== undefined) setText('network-target-status', status)
+}
+
+function synchronizePersistedConnectivity(configuration: unknown) {
+	const focused = persistedConnectivity(configuration)
+	if (focused === undefined) throw new Error('Bot returned configuration without valid network and RPC settings')
+	loadConnectivity(focused.connectivity)
+	element<HTMLSelectElement>('network-name').value = focused.network
+	persistedNetwork = focused.network
+	connectivityLoaded = true
+	updateNetworkTargetStatus()
 }
 
 function shorten(value: string, leading = 8, trailing = 6) {
@@ -136,6 +158,7 @@ async function loadCompleteConfiguration() {
 		const envelope = await api<unknown>('/api/configuration')
 		if (!isConfigurationEnvelope(envelope)) throw new Error('Bot returned an invalid configuration document')
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(envelope.configuration)
+		synchronizePersistedConnectivity(envelope.configuration)
 		configurationRevision = envelope.revision
 		configurationLoaded = true
 		setText('configuration-status', 'Changes are schema-validated before the owner-only configuration file is replaced.')
@@ -738,6 +761,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 	if (!connectivityLoaded) {
 		loadConnectivity(snapshot.connectivity)
+		element<HTMLSelectElement>('network-name').value = snapshot.network
 		connectivityLoaded = true
 	}
 	if (!deploymentLoaded) {
@@ -770,7 +794,8 @@ function render(snapshot: OperatorSnapshot) {
 	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
-	setText('network-value', `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
+	setText('network-value', `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
+	updateNetworkTargetStatus()
 	setText('chain-safety', `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.`)
 	renderSignerStatus(snapshot)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
@@ -866,6 +891,7 @@ element<HTMLFormElement>('configuration-form').addEventListener('submit', async 
 		})
 		if (!isConfigurationEnvelope(response)) throw new Error('Bot returned an invalid configuration document')
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(response.configuration)
+		synchronizePersistedConnectivity(response.configuration)
 		configurationRevision = response.revision
 		setText('configuration-status', 'Complete configuration saved. Restart the bot to apply every field.')
 	} catch (error) {
@@ -978,10 +1004,14 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 
 element<HTMLFormElement>('connectivity-form').addEventListener('submit', async event => {
 	event.preventDefault()
-	const button = element<HTMLFormElement>('connectivity-form').querySelector('button[type="submit"]')
-	if (!(button instanceof HTMLButtonElement)) return
-	button.disabled = true
-	setText('connectivity-status', `Checking every endpoint for ${latestSnapshot?.network ?? 'the selected network'}…`)
+	if (connectivityRequestPending) return
+	const fieldset = element<HTMLFieldSetElement>('connectivity-fieldset')
+	const networkSelect = element<HTMLSelectElement>('network-name')
+	const selectedNetwork = networkSelect.value
+	const selectedNetworkLabel = networkSelect.selectedOptions.item(0)?.textContent?.trim() ?? 'the selected chain'
+	connectivityRequestPending = true
+	fieldset.disabled = true
+	setText('connectivity-status', `Checking every endpoint for ${selectedNetworkLabel}…`)
 	try {
 		const connectivity = {
 			publicRpcUrls: element<HTMLTextAreaElement>('public-rpc-urls')
@@ -990,19 +1020,23 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 				.filter(value => value !== ''),
 			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
 		}
-		const response = await api<{ connectivity: ConnectivitySettings }>('/api/connectivity', {
-			body: JSON.stringify(connectivity),
+		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; restartRequired: boolean }>('/api/connectivity', {
+			body: JSON.stringify({ connectivity, network: selectedNetwork }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
 		loadConnectivity(response.connectivity)
-		setText('connectivity-status', 'RPCs passed chain checks and were saved for the next scan and future restarts.')
+		element<HTMLSelectElement>('network-name').value = response.network
+		persistedNetwork = response.network
+		updateNetworkTargetStatus()
+		setText('connectivity-status', response.restartRequired ? 'Chain and RPCs passed validation and were saved. Restart the bot to apply the selected chain.' : 'RPCs passed chain checks and were saved for the next scan and future restarts.')
 		await refresh()
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		await refresh()
 	} finally {
-		button.disabled = !connected
+		connectivityRequestPending = false
+		fieldset.disabled = connectivityControlsDisabled(connected, connectivityRequestPending)
 	}
 })
 

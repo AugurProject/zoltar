@@ -126,7 +126,9 @@ type Configuration = {
 	approvedUniverses: string[]
 	childMarketConfigurations: unknown[]
 	centralizedMarkets: unknown
+	connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
 	desiredPools: unknown[]
+	network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -138,6 +140,13 @@ function element<T extends Element>(id: string, constructor: { new (): T }) {
 }
 
 const metrics = element('metrics', HTMLDivElement)
+const networkForm = element('network-form', HTMLFormElement)
+const networkFields = element('network-fields', HTMLFieldSetElement)
+const networkName = element('network-name', HTMLSelectElement)
+const readRpcUrl = element('read-rpc-url', HTMLInputElement)
+const publicRpcUrls = element('public-rpc-urls', HTMLTextAreaElement)
+const quorumRpcUrls = element('quorum-rpc-urls', HTMLTextAreaElement)
+const networkStatus = element('network-status', HTMLSpanElement)
 const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
 const centralizedMarketStatus = element('centralized-market-status', HTMLParagraphElement)
 const centralizedMarketPrice = element('centralized-market-price', HTMLElement)
@@ -714,6 +723,11 @@ function populateConfiguration(configuration: Configuration) {
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
+	networkName.value = configuration.network.name
+	readRpcUrl.value = configuration.connectivity.readRpcUrl
+	publicRpcUrls.value = configuration.connectivity.publicRpcUrls.join('\n')
+	quorumRpcUrls.value = configuration.connectivity.quorumRpcUrls.join('\n')
+	networkFields.disabled = false
 	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
 	marketConfigurationFields.disabled = false
 	strategyFields.disabled = false
@@ -724,6 +738,29 @@ function populateConfiguration(configuration: Configuration) {
 		renderPools(currentSnapshot)
 	}
 }
+
+networkForm.addEventListener('submit', async event => {
+	event.preventDefault()
+	networkFields.disabled = true
+	actionStatus(networkStatus, 'Checking every RPC against the selected chain…')
+	try {
+		const lines = (value: string) =>
+			value
+				.split('\n')
+				.map(entry => entry.trim())
+				.filter(Boolean)
+		const configuration = await put<Configuration>('/api/network-connectivity', {
+			connectivity: { publicRpcUrls: lines(publicRpcUrls.value), quorumRpcUrls: lines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim() },
+			network: networkName.value,
+		})
+		populateConfiguration(configuration)
+		actionStatus(networkStatus, 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
+	} catch (error) {
+		actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.'), true)
+	} finally {
+		networkFields.disabled = false
+	}
+})
 
 marketConfigurationForm.addEventListener('submit', async event => {
 	event.preventDefault()

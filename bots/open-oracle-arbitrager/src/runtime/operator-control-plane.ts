@@ -10,10 +10,11 @@ import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-l
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { authenticatedExecutionToken } from '#config/runtime-deployment'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettingsForQuorum, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
+import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 
 export type PendingOperatorUpdates = {
 	connectivity: ConnectivitySettings | undefined
@@ -30,6 +31,14 @@ export type PendingOperatorUpdates = {
 export async function deployExecutorFromConnectivity(parameters: { chain: Configuration['network']['chain']; connectivity: ConnectivitySettings; privateKey: Hex; salt: unknown }, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
 	return await deploy({ chain: parameters.chain, privateKey: parameters.privateKey, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
+}
+
+export function requireActivePersistedNetwork(activeNetwork: Configuration['network']['name'], persistedNetwork: PersistedOperatorSettings['network']) {
+	if (persistedNetwork !== activeNetwork) throw new Error('Restart to apply the saved network before deploying the executor')
+}
+
+export function requirePausedExecutorDeployment(execute: boolean, paused: boolean) {
+	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
 
 export function startOperatorControlPlane(parameters: { config: Configuration; fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }; getCursor: () => SyncCursor | undefined; lockManager: ExecutionLockManager | undefined; signerOperationGate: SignerOperationGate; state: OperatorState }) {
@@ -79,6 +88,11 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
+				if (next.network !== config.network.name && (config.execute || next.runtime.execute)) throw new Error('Disable live execution and restart before changing chains')
+				const expectedChainId = next.network === 'mainnet' ? 1 : 11_155_111
+				await checkConnectivity(next.connectivity, expectedChainId)
+				await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
+				await checkSubmissionEndpoints(next.submission, expectedChainId)
 				const savedRevision = await persistSettings(next, value.revision)
 				pending.connectivity = undefined
 				pending.deployment = undefined
@@ -99,32 +113,50 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
 			}),
 		updateConnectivity: async value => {
-			const next = validateConnectivitySettingsForQuorum(value, (pending.deployment ?? fixedState.deployment).quorumRpcUrls)
-			await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
 			return queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => {
-					validateIndependentReadRpcUrls(next.readRpcUrl, settings.deployment.quorumRpcUrls)
-					return { ...settings, connectivity: next }
+				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+				if (latest === undefined) throw configurationRevisionConflict()
+				const next = await updateOperatorConnectivity({
+					activeNetwork: config.network.name,
+					deployment: latest.settings.deployment,
+					endpointState: state,
+					execute: config.execute || latest.settings.runtime.execute,
+					persist: async update => {
+						await persistSettings(update(latest.settings), latest.revision)
+					},
+					submission: latest.settings.submission,
+					value,
 				})
-				pending.connectivity = next
-				recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
+				if (!next.restartRequired) {
+					pending.connectivity = next.connectivity
+				}
+				recordOperation(state, {
+					category: 'configuration',
+					details: next.connectivity.publicRpcUrls.map(endpointLabel).join(', '),
+					level: 'info',
+					message: 'Network and RPC configuration verified and saved',
+					reason: next.restartRequired ? `Restart to apply ${next.network}` : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
+					reportId: undefined,
+				})
 				return next
 			})
 		},
 		updateDeployment: value => {
 			const next = validateDeploymentSettings(value)
-			validateIndependentReadRpcUrls((pending.connectivity ?? config.connectivity).readRpcUrl, next.quorumRpcUrls)
 			return queueSettingsUpdate(async () => {
-				const previous = pending.deployment ?? fixedState.deployment
-				const tokens = prepareDeploymentTokenTransition(pending.tokenAddresses ?? config.tokenAddresses, pending.restartTokenAddresses, previous.rep, next.rep)
-				await persistFocusedSettings(settings => {
-					assertFocusedDeploymentCompatible(next.rep, settings.centralizedMarkets)
-					validateIndependentReadRpcUrls(settings.connectivity.readRpcUrl, next.quorumRpcUrls)
-					return { ...settings, deployment: next, tokenAddresses: tokens.restart }
-				})
+				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+				if (latest === undefined) throw configurationRevisionConflict()
+				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
+				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
+				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
+				await checkIndependentRpcChains(next.quorumRpcUrls, expectedChainId)
+				const persistedTokens = prepareDeploymentTokenTransition(latest.settings.tokenAddresses, undefined, latest.settings.deployment.rep, next.rep)
+				await persistSettings({ ...latest.settings, deployment: next, tokenAddresses: persistedTokens.restart }, latest.revision)
+				const activeDeployment = pending.deployment ?? fixedState.deployment
+				const activeTokens = prepareDeploymentTokenTransition(pending.tokenAddresses ?? config.tokenAddresses, pending.restartTokenAddresses, activeDeployment.rep, next.rep)
 				pending.deployment = next
-				pending.tokenAddresses = tokens.active
-				pending.restartTokenAddresses = tokens.restart
+				pending.tokenAddresses = activeTokens.active
+				pending.restartTokenAddresses = persistedTokens.restart
 				fixedState.deployment = next
 				recordOperation(state, { category: 'configuration', details: `OpenOracle ${next.openOracle}; executor ${next.executor ?? 'not configured'}`, level: 'info', message: 'Deployment configuration saved', reason: 'Protocol identities and independent RPCs apply after restart', reportId: undefined })
 				return next
@@ -137,20 +169,24 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 		},
 		deployExecutor: async value => {
 			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
-			if (config.execute && !state.paused) throw new Error('Pause execution before deploying with the active signer')
+			requirePausedExecutorDeployment(config.execute, state.paused)
 			if (config.privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
-			const deploymentConnectivity = pending.connectivity ?? config.connectivity
+			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(value['salt'])
-			if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
-			let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
-			try {
-				deployed = await deployExecutorFromConnectivity({ chain: config.network.chain, connectivity: deploymentConnectivity, privateKey: config.privateKey, salt: plan.salt })
-			} finally {
-				signerOperationGate.release('deployment')
-			}
-			const next = { ...(pending.deployment ?? fixedState.deployment), deploymentManifest: undefined, executor: deployed.address }
-			await queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => ({ ...settings, deployment: next }))
+			return await queueSettingsUpdate(async () => {
+				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+				if (latest === undefined) throw configurationRevisionConflict()
+				requireActivePersistedNetwork(config.network.name, latest.settings.network)
+				requirePausedExecutorDeployment(config.execute, state.paused)
+				if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+				let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
+				try {
+					deployed = await deployExecutorFromConnectivity({ chain: config.network.chain, connectivity: latest.settings.connectivity, privateKey, salt: plan.salt })
+				} finally {
+					signerOperationGate.release('deployment')
+				}
+				const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
+				await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
 				pending.deployment = next
 				fixedState.deployment = next
 				recordOperation(state, {
@@ -161,8 +197,8 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 					reason: `Saved predictable executor ${deployed.address} for restart`,
 					reportId: undefined,
 				})
+				return deployed
 			})
-			return deployed
 		},
 		updateSigner: async value => {
 			const signerRecord = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
@@ -206,11 +242,22 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 		},
 		updateSubmission: async value => {
 			const next = validateSubmissionSettings(value)
-			await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
 			return queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => ({ ...settings, submission: next }))
-				pending.submission = next
-				recordOperation(state, { category: 'configuration', details: next.relayUrls.map(endpointLabel).join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
+				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+				if (latest === undefined) throw configurationRevisionConflict()
+				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
+				if (latest.settings.network === config.network.name) await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, expectedChainId))
+				else await checkSubmissionEndpoints(next, expectedChainId)
+				await persistSettings({ ...latest.settings, submission: next }, latest.revision)
+				if (latest.settings.network === config.network.name) pending.submission = next
+				recordOperation(state, {
+					category: 'configuration',
+					details: next.relayUrls.map(endpointLabel).join(', ') || undefined,
+					level: 'info',
+					message: `Submission mode ${next.mode} verified and saved`,
+					reason: latest.settings.network === config.network.name ? 'Applied at the next scan boundary' : 'Applies after restart with the saved network',
+					reportId: undefined,
+				})
 				return next
 			})
 		},

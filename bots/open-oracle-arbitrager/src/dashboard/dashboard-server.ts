@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
-import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
@@ -12,7 +11,7 @@ type DashboardController = {
 	hostname?: '0.0.0.0' | '127.0.0.1'
 	password?: string | undefined
 	setPaused: (paused: boolean) => void | Promise<void>
-	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
+	updateConnectivity: (value: unknown) => unknown | Promise<unknown>
 	updateConfiguration?: (value: unknown) => unknown | Promise<unknown>
 	updateDeployment?: (value: unknown) => DeploymentSettings | Promise<DeploymentSettings>
 	deployExecutor?: (value: unknown) => { address: string; alreadyDeployed: boolean; transactionHash: string | undefined } | Promise<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>
@@ -202,7 +201,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ connectivity: await controller.updateConnectivity(await boundedDashboardJson(request)) })
+					return json(await controller.updateConnectivity(await boundedDashboardJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

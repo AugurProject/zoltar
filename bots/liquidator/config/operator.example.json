@@ -85,6 +85,6 @@
 		"vaultWithdrawHealthBps": 15000,
 		"walletReserveRep": "100"
 	},
-	"paused": false,
+	"paused": true,
 	"privateKey": null
 }
