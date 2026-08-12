@@ -78,12 +78,13 @@ const poolDetailsAssertion = `(${capacityFactsAssertion}) && document.body.textC
 const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.toLowerCase() ?? ''; return !['binary shares for', 'invalid is insurance', 'invalid is not traded or priced by this amm', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei', 'positions grouped by securitypool', 'securitypool used by this amm'].some(phrase => text.includes(phrase)) && !/\\b(?:yes|no|invalid) shares?\\b/.test(description); })()`
 const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Select universe' && document.querySelector('.universe-selector > span') === null && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe'`
 const genesisWalletSummaryAssertion = `(() => { const summary = document.querySelector('.wallet-summary'); const address = summary?.querySelector('.wallet-summary__address')?.textContent ?? ''; const eth = summary?.querySelector('[data-wallet-asset="ETH"] strong')?.textContent; const rep = summary?.querySelector('[data-wallet-asset="REP"] strong')?.textContent; return /^0x[0-9a-f]{40}$/i.test(address) && !address.includes('…') && eth === '64' && rep === '12,500' && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
-const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()).filter(value => value.width > 0 && value.height > 0); const compact = document.querySelector('.wallet-summary__address--compact')?.getBoundingClientRect(); const visibleContentFits = values.length === 2 ? values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) : compact !== undefined && compact.width > 0 && compact.left >= wallet.left && compact.right <= wallet.right; return wallet !== undefined && visibleContentFits && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()).filter(value => value.width > 0 && value.height > 0); const compact = document.querySelector('.wallet-summary__address--compact')?.getBoundingClientRect(); const visibleContentFits = values.length === 2 ? values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) : compact !== undefined && compact.width > 0 && compact.left >= wallet.left && compact.right <= wallet.right; return wallet !== undefined && visibleContentFits && document.documentElement.scrollWidth <= innerWidth })()`
 const maximumWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true)`
 const smallWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '0.000000000000000001')`
-const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= innerWidth })()`
 const visibleHeaderContextAssertion = `(() => { const selectors = ['.demo-banner', '.brand', '.network-pill', '.universe-selector select']; const bounds = selectors.map(selector => document.querySelector(selector)?.getBoundingClientRect()); return bounds.every(value => value !== undefined && value.width > 0 && value.height > 0 && value.left >= 0 && value.right <= innerWidth && value.top >= 0 && value.bottom <= innerHeight) && document.querySelector('.demo-banner')?.textContent?.includes('SIMULATED DATA') === true && document.querySelector('.brand')?.textContent?.includes('Zoltar') === true && document.querySelector('.network-pill')?.textContent?.includes('Anvil 31337') === true && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe' })()`
 const expandedWalletInFlowAssertion = `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return panel !== undefined && nav !== undefined && main !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.bottom <= nav.top && panel.bottom <= main.top })()`
+const transactionStateLayoutAssertion = `(() => { const panel = document.querySelector('.trade-panel')?.getBoundingClientRect(); const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const status = document.querySelector('.transaction-message')?.getBoundingClientRect(); const hash = document.querySelector('.transaction-hash'); const hashBounds = hash?.getBoundingClientRect(); const hashCode = hash?.querySelector('code'); const hashFits = hash === null || (hashBounds !== undefined && hashBounds.left >= panel.left && hashBounds.right <= panel.right && hashCode?.textContent?.length === 66); return panel !== undefined && action !== undefined && status !== undefined && action.bottom <= status.top && hashFits && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
 		name: 'disconnected-market-list',
@@ -111,6 +112,15 @@ const scenarios = [
 	{ name: 'market-list-1181', width: 1181, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{ name: 'market-list-1501', width: 1501, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
 	{ name: 'market-list-1600', width: 1600, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
+	{
+		name: 'wallet-ready-desktop-expanded',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=baseline#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === true && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1' && document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0 && document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= innerWidth`,
+	},
 	{
 		name: 'wallet-balance-loading',
 		width: 1440,
@@ -186,7 +196,15 @@ const scenarios = [
 		clickWaitMs: 50,
 		assertExpression: `(${maximumWalletBalancesAssertion}) && [...document.querySelectorAll('.wallet-summary__detail-balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true && value.getBoundingClientRect().width > 0) && (${expandedWalletInFlowAssertion})`,
 	},
-	{ name: 'wallet-max-balances-1501', width: 1501, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
+	{
+		name: 'wallet-max-balances-1501',
+		width: 1501,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-max-balances#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === false && (${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})`,
+	},
 	{ name: 'wallet-max-balances-1600', width: 1600, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
 	{ name: 'wallet-small-balances-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
 	{ name: 'wallet-small-balances-900', width: 900, height: 844, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
@@ -356,16 +374,25 @@ const scenarios = [
 	},
 	{ name: 'forked-mobile', width: 390, height: 844, path: '/?demo=1&scenario=forked#/market' },
 	{ name: 'resolved-invalid', width: 1440, height: 900, path: '/?demo=1&scenario=resolved-invalid#/market' },
+	{ name: 'preparing', width: 1440, height: 900, path: '/?demo=1&scenario=preparing#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('Preparing Enter YES') === true`, scrollY: 900 },
+	{ name: 'preparing-mobile', width: 390, height: 844, path: '/?demo=1&scenario=preparing#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('Preparing Enter YES') === true`, scrollY: 900 },
+	{ name: 'approval', width: 1440, height: 900, path: '/?demo=1&scenario=approval&mode=exit#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('approval is pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'approval-mobile', width: 390, height: 844, path: '/?demo=1&scenario=approval&mode=exit#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('approval is pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'submitting', width: 1440, height: 900, path: '/?demo=1&scenario=submitting#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'submitting-mobile', width: 390, height: 844, path: '/?demo=1&scenario=submitting#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending in the wallet') === true`, scrollY: 900 },
 	{
 		name: 'pending',
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=pending#/market',
-		assertExpression: `document.querySelector('.transaction-message')?.textContent?.includes('pending confirmation') === true`,
+		assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending confirmation') === true && document.querySelector('.transaction-hash code')?.textContent?.length === 66`,
 		scrollY: 900,
 	},
-	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', scrollY: 900 },
-	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', scrollY: 900 },
+	{ name: 'pending-mobile', width: 390, height: 844, path: '/?demo=1&scenario=pending#/market', assertExpression: transactionStateLayoutAssertion, scrollY: 900 },
+	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'success-mobile', width: 390, height: 844, path: '/?demo=1&scenario=success#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'failure-mobile', width: 390, height: 844, path: '/?demo=1&scenario=failure#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
 	{
 		name: 'clicked-pending',
 		width: 1440,

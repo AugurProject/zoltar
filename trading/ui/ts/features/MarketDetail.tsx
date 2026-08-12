@@ -8,13 +8,17 @@ import { SecurityPoolAddressLink, Status } from '../components/Status.tsx'
 import { insuredExitLimitMessage } from './LiveTrading.tsx'
 import { createExclusiveWorkflowGuard } from '../app/latestRequest.ts'
 
-type TransactionState = 'idle' | 'approval' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
+type TransactionState = 'idle' | 'preparing' | 'approval' | 'submitting' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
+
+const demoTransactionHash = `0x${'88'.repeat(32)}`
 
 function initialTransactionState(scenario: string): TransactionState {
+	if (scenario === 'preparing') return 'preparing'
 	if (scenario === 'pending') return 'pending'
 	if (scenario === 'failure') return 'reverted'
 	if (scenario === 'success') return 'confirmed'
 	if (scenario === 'approval') return 'approval'
+	if (scenario === 'submitting') return 'submitting'
 	return 'idle'
 }
 
@@ -36,14 +40,18 @@ export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closed
 function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
 	if (!pairExists) return 'Create pair before trading'
 	if (closedReason !== undefined) return closedReason
+	if (transactionState === 'preparing') return `Preparing ${mode === 'enter' ? `Enter ${side}` : `insured ${side} exit`}…`
 	if (transactionState === 'approval') return `Approving insured ${side} exit…`
+	if (transactionState === 'submitting') return `${mode === 'enter' ? `Enter ${side}` : `Insured ${side} exit`} in wallet…`
 	if (transactionState === 'pending') return mode === 'enter' ? `Entering ${side}…` : `Exiting insured ${side}…`
 	return mode === 'enter' ? `Enter ${side}` : `Exit insured ${side}`
 }
 
 export function transactionMessage(transactionState: TransactionState, mode: 'enter' | 'exit' = 'enter', side: 'YES' | 'NO' = 'YES') {
 	const action = mode === 'enter' ? `Enter ${side}` : `Insured ${side} exit`
+	if (transactionState === 'preparing') return `Preparing ${action}.`
 	if (transactionState === 'approval') return `${action} approval is pending in the wallet.`
+	if (transactionState === 'submitting') return `${action} is pending in the wallet.`
 	if (transactionState === 'pending') return `${action} is pending confirmation.`
 	if (transactionState === 'confirmed') return `${action} confirmed. Demo balances and reserves remain unchanged.`
 	if (transactionState === 'reverted') return 'Failure shown. Change the amount or outcome and try again.'
@@ -189,7 +197,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 	const capacityAvailable = mode !== 'exit' || parsed.value === undefined || parsed.value < oppositeReserve
 	const displayedQuoteStatus = demoPreviewPresentation({ scenario, hasQuote: quote !== undefined, pairExists: initialized, closedReason, inputValid, capacityAvailable })
-	const workflowLocked = transactionState === 'approval' || transactionState === 'pending'
+	const workflowLocked = transactionState === 'preparing' || transactionState === 'approval' || transactionState === 'submitting' || transactionState === 'pending'
 	useEffect(() => {
 		if (workflowLocked) onWorkflowLockChange(true)
 		return () => {
@@ -366,6 +374,12 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 						<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
 							{transactionMessage(transactionState, mode, side)}
 						</div>
+						{transactionState === 'pending' || transactionState === 'confirmed' || transactionState === 'reverted' ? (
+							<p class='transaction-hash'>
+								<span>Transaction</span>
+								<code title={demoTransactionHash}>{demoTransactionHash}</code>
+							</p>
+						) : null}
 						{quote === undefined ? null : (
 							<details class='trade-breakdown'>
 								<summary>Full trade breakdown</summary>

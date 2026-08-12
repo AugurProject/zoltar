@@ -241,19 +241,21 @@ nav a[aria-current="page"] {
 .wallet-summary {
 	position: relative;
 	min-width: 0;
+	max-width: min(100%, 720px);
 	border: 1px solid var(--line-strong);
 	border-radius: 4px;
 	background: var(--surface-raised);
 }
 .wallet-summary__trigger {
 	display: flex;
+	max-width: 100%;
 	min-height: 36px;
 	align-items: center;
 	gap: 0.7rem;
 	padding: 0.45rem 1.7rem 0.45rem 0.65rem;
-	cursor: default;
+	cursor: pointer;
 	list-style: none;
-	pointer-events: none;
+	pointer-events: auto;
 }
 .wallet-summary__trigger::-webkit-details-marker {
 	display: none;
@@ -261,7 +263,7 @@ nav a[aria-current="page"] {
 .wallet-summary__trigger::after {
 	position: absolute;
 	right: 0.65rem;
-	display: none;
+	display: block;
 	content: "▾";
 	color: var(--muted);
 	font-size: 10px;
@@ -334,9 +336,19 @@ nav a[aria-current="page"] {
 	color: var(--muted);
 	font-size: 12px;
 }
-.wallet-summary:not(.wallet-summary--error) .wallet-summary__details,
-.wallet-summary__identity {
+.wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__details,
+.wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__identity {
 	display: none;
+}
+.wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__identity,
+.wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__detail-balances {
+	display: grid;
+}
+.wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__detail-balances {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.65rem;
+	padding-top: 0.65rem;
+	border-top: 1px solid var(--line);
 }
 .wallet-summary--error .wallet-summary__details {
 	position: static;
