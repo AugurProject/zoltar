@@ -11,6 +11,7 @@ describe('liquidator dashboard server', () => {
 	test('serves the dashboard and protects configuration mutations by origin', async () => {
 		let paused = false
 		let marketConfiguration: unknown
+		let networkConnectivity: unknown
 		let reconciliation: unknown
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
@@ -23,6 +24,10 @@ describe('liquidator dashboard server', () => {
 			setApprovedUniverses: value => value,
 			setMarketConfiguration: value => {
 				marketConfiguration = value
+				return value
+			},
+			setNetworkConnectivity: value => {
+				networkConnectivity = value
 				return value
 			},
 			setPaused: value => {
@@ -46,6 +51,7 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="dex-market-price"')
 		expect(pageSource).toContain('id="guarded-market-price"')
 		expect(pageSource).toContain('id="market-configuration-json"')
+		expect(pageSource).toContain('id="network-name"')
 		expect(pageSource).toContain('id="test-market-sources"')
 		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).not.toContain('public CCXT sources')
@@ -77,6 +83,13 @@ describe('liquidator dashboard server', () => {
 		})
 		expect(marketMutation.status).toBe(200)
 		expect(marketConfiguration).toEqual({ sources: [] })
+		const networkMutation = await fetch(new URL('/api/network-connectivity', server.url), {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example' }, network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		expect(networkMutation.status).toBe(200)
+		expect(networkConnectivity).toEqual({ connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example' }, network: 'sepolia' })
 		const sourceTest = await fetch(new URL('/api/test-market-sources', server.url), {
 			body: '{}',
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
