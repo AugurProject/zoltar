@@ -1,5 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { waitForSubmittedTransactionReceipt } from '../ui/ts/protocol/core.ts'
+import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from '../ui/ts/protocol/core.ts'
 import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../ui/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../ui/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
@@ -251,9 +251,31 @@ function arachnidCreate2DeployerShortfall(balance: bigint) {
 	return balance >= ARACHNID_CREATE2_DEPLOYER_FUNDING ? 0n : ARACHNID_CREATE2_DEPLOYER_FUNDING - balance
 }
 
-async function waitForCanonicalCreate2Deployer(client: WriteClient) {
+async function create2DeployerIsInstalledAfterReceipt(client: WriteClient, wait?: RpcStateRetryWait) {
+	return await readWithRpcStateRetries(
+		() => arachnidCreate2DeployerIsInstalled(client),
+		installed => installed,
+		wait,
+	)
+}
+
+async function resolveConfirmedCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
+	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
+	accountCanonicalRawTransaction(client)
+	return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+}
+
+export async function resolveCanonicalCreate2DeployerForPreflight(client: WriteClient, wait?: RpcStateRetryWait) {
+	if (await arachnidCreate2DeployerIsInstalled(client)) return true
+	const confirmedNonce = await client.getTransactionCount({ address: ARACHNID_CREATE2_DEPLOYER_SIGNER, blockTag: 'latest' })
+	if (confirmedNonce === 0n) return false
+	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
+	return true
+}
+
+async function waitForCanonicalCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	const { hash } = await waitForSubmittedTransactionReceipt(client, ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH)
-	if (!(await arachnidCreate2DeployerIsInstalled(client))) throw new Error(`Canonical CREATE2 deployer transaction ${hash} confirmed without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
+	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical CREATE2 deployer transaction ${hash} confirmed without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 	return hash
 }
 
@@ -262,7 +284,7 @@ function accountCanonicalRawTransaction(client: WriteClient) {
 	client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 }
 
-async function resolveCreate2DeployerBroadcastRace(client: WriteClient, broadcastError: unknown) {
+async function resolveCreate2DeployerBroadcastRace(client: WriteClient, broadcastError: unknown, wait?: RpcStateRetryWait) {
 	if (await arachnidCreate2DeployerIsInstalled(client)) {
 		client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 		return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
@@ -270,19 +292,19 @@ async function resolveCreate2DeployerBroadcastRace(client: WriteClient, broadcas
 	const activity = await getArachnidCreate2DeployerActivity(client)
 	if (activity.deploymentPending) {
 		client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
-		return await waitForCanonicalCreate2Deployer(client)
+		return await waitForCanonicalCreate2Deployer(client, wait)
 	}
 	if (activity.confirmedNonce !== 0n) {
-		if (await arachnidCreate2DeployerIsInstalled(client)) {
-			client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
-			return ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH
+		try {
+			return await resolveConfirmedCreate2Deployer(client, wait)
+		} catch (error) {
+			throw new Error('The canonical CREATE2 deployer signer nonce was consumed without installing the deployer', { cause: error ?? broadcastError })
 		}
-		throw new Error('The canonical CREATE2 deployer signer nonce was consumed without installing the deployer', { cause: broadcastError })
 	}
 	throw broadcastError
 }
 
-async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsufficientFunds: boolean) {
+async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsufficientFunds: boolean, wait?: RpcStateRetryWait) {
 	client.assertCanonicalRawTransactionCost?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 	let hash: Hash
 	try {
@@ -296,7 +318,7 @@ async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsuf
 			return undefined
 		}
 		try {
-			return await resolveCreate2DeployerBroadcastRace(client, error)
+			return await resolveCreate2DeployerBroadcastRace(client, error, wait)
 		} catch (resolvedError) {
 			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical CREATE2 deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
 			throw resolvedError
@@ -304,27 +326,27 @@ async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsuf
 	}
 	client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
-	if (!(await arachnidCreate2DeployerIsInstalled(client))) throw new Error(`Canonical CREATE2 deployer transaction ${resolvedHash} succeeded without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
+	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical CREATE2 deployer transaction ${resolvedHash} succeeded without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 	return resolvedHash
 }
 
-async function deployArachnidCreate2Deployer(client: WriteClient) {
+async function deployArachnidCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
 	const activity = await getArachnidCreate2DeployerActivity(client)
 	if (activity.deploymentPending) {
 		accountCanonicalRawTransaction(client)
-		return await waitForCanonicalCreate2Deployer(client)
+		return await waitForCanonicalCreate2Deployer(client, wait)
 	}
 	if (activity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
-	if (activity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
+	if (activity.confirmedNonce !== 0n) return await resolveConfirmedCreate2Deployer(client, wait)
 	const finalActivity = await getArachnidCreate2DeployerActivity(client)
-	if (finalActivity.deploymentPending) return await waitForCanonicalCreate2Deployer(client)
+	if (finalActivity.deploymentPending) return await waitForCanonicalCreate2Deployer(client, wait)
 	if (finalActivity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
 	if (await arachnidCreate2DeployerIsInstalled(client)) return ZERO_HASH
-	if (finalActivity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
+	if (finalActivity.confirmedNonce !== 0n) return await resolveConfirmedCreate2Deployer(client, wait)
 	await assertCanonicalRawTransactionFeeCompatible(client, 'Canonical CREATE2 deployer')
-	const preFundingDeploymentHash = await broadcastCanonicalCreate2Deployer(client, true)
+	const preFundingDeploymentHash = await broadcastCanonicalCreate2Deployer(client, true, wait)
 	if (preFundingDeploymentHash !== undefined) return preFundingDeploymentHash
 	const shortfall = arachnidCreate2DeployerShortfall(finalActivity.confirmedBalance)
 	if (shortfall > 0n) {
@@ -342,11 +364,11 @@ async function deployArachnidCreate2Deployer(client: WriteClient) {
 	const postFundingActivity = await getArachnidCreate2DeployerActivity(client)
 	if (postFundingActivity.deploymentPending) {
 		accountCanonicalRawTransaction(client)
-		return await waitForCanonicalCreate2Deployer(client)
+		return await waitForCanonicalCreate2Deployer(client, wait)
 	}
 	if (postFundingActivity.fundingPending) throw new Error('The canonical CREATE2 deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
-	if (postFundingActivity.confirmedNonce !== 0n) throw new Error('The canonical CREATE2 deployer signer nonce has already been consumed, but the deployer is missing')
-	const resolvedHash = await broadcastCanonicalCreate2Deployer(client, false)
+	if (postFundingActivity.confirmedNonce !== 0n) return await resolveConfirmedCreate2Deployer(client, wait)
+	const resolvedHash = await broadcastCanonicalCreate2Deployer(client, false, wait)
 	if (resolvedHash === undefined) throw new Error('Canonical CREATE2 deployer broadcast unexpectedly returned without a transaction hash')
 	return resolvedHash
 }
@@ -357,7 +379,7 @@ async function deployPermit2(client: WriteClient, initCode: Hex) {
 	return resolvedHash
 }
 
-export async function getUniswapDeployment(wethAddress: Address): Promise<UniswapDeployment> {
+export async function getUniswapDeployment(wethAddress: Address, wait?: RpcStateRetryWait): Promise<UniswapDeployment> {
 	const artifacts = await getUniswapDeploymentArtifacts()
 	const permit2Compilation = artifacts.permit2
 	const permit2InitCode = permit2Compilation.initCode
@@ -404,7 +426,7 @@ export async function getUniswapDeployment(wethAddress: Address): Promise<Uniswa
 			{
 				address: ARACHNID_CREATE2_DEPLOYER_ADDRESS,
 				dependencies: [],
-				deploy: deployArachnidCreate2Deployer,
+				deploy: async client => await deployArachnidCreate2Deployer(client, wait),
 				id: 'arachnidCreate2Deployer',
 				label: 'Canonical CREATE2 Deployer',
 			},
