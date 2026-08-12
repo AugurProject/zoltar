@@ -7,21 +7,25 @@ import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { ReadClient } from '../types/contracts.js'
 
 function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ...args: TArgs) => Promise<bigint>) {
-	const signal = useSignal<bigint | undefined>(undefined)
+	const signal = useSignal<{ error: string | undefined; loading: boolean; value: bigint | undefined }>({ error: undefined, loading: false, value: undefined })
 	const nextLoad = useRequestGuard()
 	const invalidate = () => {
 		void nextLoad()
 	}
 	const reload = async (...args: TArgs) => {
 		const isCurrent = nextLoad()
+		signal.value = { ...signal.value, error: undefined, loading: true }
 		try {
 			const value = await loadFn(createConnectedReadClient(), ...args)
 			if (!isCurrent()) return
-			signal.value = value
+			signal.value = { error: undefined, loading: false, value }
 		} catch (error) {
-			if (!isRecoverableContractReadError(error)) throw error
 			if (!isCurrent()) return
-			signal.value = undefined
+			if (!isRecoverableContractReadError(error)) {
+				signal.value = { ...signal.value, loading: false }
+				throw error
+			}
+			signal.value = { error: getErrorMessage(error, 'Failed to load token balance'), loading: false, value: undefined }
 		}
 	}
 	return { invalidate, signal, reload }

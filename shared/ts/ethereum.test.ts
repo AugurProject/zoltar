@@ -1457,6 +1457,8 @@ describe('shared ethereum compatibility layer', () => {
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
 		expect(RATE_LIMIT_RETRY_DELAY_MILLISECONDS).toBe(10_000)
 		expect(http('https://rpc.example.test').retryDelay).toBe(RATE_LIMIT_RETRY_DELAY_MILLISECONDS)
+		expect(http('https://rpc.example.test').requestTimeout).toBe(30_000)
+		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('request timeout')
 		const responses = [
 			new Response(undefined, { status: 429 }),
 			Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' }),
@@ -1511,6 +1513,39 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(responses).toHaveLength(0)
+	})
+
+	test('HTTP transport rejects malformed JSON-RPC envelopes and supplies a request timeout signal', async () => {
+		const originalFetch = globalThis.fetch
+		let requestSignal: AbortSignal | null | undefined
+		const testFetch = async (_input: string | URL | Request, init?: RequestInit) => {
+			requestSignal = init?.signal
+			return Response.json({ id: 2, jsonrpc: '2.0', result: '0x1234' })
+		}
+		testFetch.preconnect = originalFetch.preconnect
+		globalThis.fetch = testFetch
+		try {
+			const client = createPublicClient({ transport: http('https://rpc.example.test', { requestTimeout: 25 }) })
+			await expect(client.getCode({ address: TOKEN_ADDRESS })).rejects.toThrow('Malformed JSON-RPC response')
+			expect(requestSignal).toBeInstanceOf(AbortSignal)
+		} finally {
+			globalThis.fetch = originalFetch
+		}
+	})
+
+	test('HTTP transport rejects JSON-RPC error objects without an integer code and string message', async () => {
+		const originalFetch = globalThis.fetch
+		try {
+			for (const malformedError of [{}, { code: '-1', message: 'failed' }, { code: -1 }]) {
+				const testFetch = async () => Response.json({ id: 1, jsonrpc: '2.0', error: malformedError })
+				testFetch.preconnect = originalFetch.preconnect
+				globalThis.fetch = testFetch
+				const client = createPublicClient({ transport: http('https://rpc.example.test') })
+				await expect(client.getCode({ address: TOKEN_ADDRESS })).rejects.toThrow('Malformed JSON-RPC error')
+			}
+		} finally {
+			globalThis.fetch = originalFetch
+		}
 	})
 
 	test('wallet client defaults simulations and gas estimates to its configured account', async () => {

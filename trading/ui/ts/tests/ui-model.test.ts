@@ -30,6 +30,7 @@ import {
 	marketNewRiskBlocker,
 	mapWithConcurrency,
 	maximumAfterSlippage,
+	futureTransactionDeadline,
 	minimumAfterSlippage,
 	retainApprovedMaximum,
 	retainApprovedMinimum,
@@ -124,6 +125,14 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('70.25', 2)).toBe(7_025n)
 		expect(parseUnitsOrUndefined('70.251', 2)).toBeUndefined()
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
+		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
+		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
+		expect(() => formatEthPerShare(1n, 2n, 0)).toThrow('Maximum significant digits must be a positive safe integer')
+	})
+
+	test('creates transaction deadlines from one shared twenty-minute policy', () => {
+		expect(futureTransactionDeadline(1_234_999)).toBe(2_434n)
+		expect(() => futureTransactionDeadline(-1)).toThrow('Current time must be a nonnegative safe integer')
 	})
 
 	test('converts to a number only after proving the bigint is safe', () => {

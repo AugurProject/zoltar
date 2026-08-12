@@ -7,8 +7,19 @@ import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../pr
 import { createTradingPublicClient, validateLiveDeployment } from '../protocol/live.ts'
 import { formatUnits } from './format.ts'
 
-function currentRoute() {
-	return window.location.hash.replace(/^#\/?/, '') || 'markets'
+const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'help', 'developer'] as const
+type TradingRoute = (typeof tradingRoutes)[number] | 'not-found'
+
+export function currentRoute(): TradingRoute {
+	const route = window.location.hash.replace(/^#\/?/, '') || 'markets'
+	return tradingRoutes.find(candidate => candidate === route) ?? 'not-found'
+}
+
+export function tradingDocumentTitle(route: TradingRoute) {
+	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
+	if (route === 'not-found') label = 'Not found'
+	if (route === 'market') label = 'Market'
+	return `${label} · Zoltar Trading`
 }
 
 function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>, onWorkflowLockChange: (locked: boolean) => void) {
@@ -17,7 +28,19 @@ function renderRoute(route: string, scenario: string, market: ReturnType<typeof 
 	if (route === 'portfolio') return <Portfolio market={market} />
 	if (route === 'help') return <Help />
 	if (route === 'developer') return <Developer />
-	return <MarketList market={market} />
+	if (route === 'markets') return <MarketList market={market} />
+	return (
+		<main class='route' id='main-content'>
+			<header class='route-header'>
+				<div>
+					<h1>Page not found</h1>
+				</div>
+			</header>
+			<a class='primary-link' href='#/markets'>
+				Return to markets
+			</a>
+		</main>
+	)
 }
 
 function renderBanner(scenario: string, demo: boolean) {
@@ -268,6 +291,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	}, [demo, selectedUniverseId])
 	useEffect(() => {
 		window.scrollTo(0, 0)
+		document.title = tradingDocumentTitle(route)
 	}, [route])
 	useEffect(() => {
 		if (demo) return
@@ -294,7 +318,8 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
 	if (!demo) {
-		if (route === 'help') content = <Help />
+		if (route === 'not-found') content = resolvedContent
+		else if (route === 'help') content = <Help />
 		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
 		else
 			content = (

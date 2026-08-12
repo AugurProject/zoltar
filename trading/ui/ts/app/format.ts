@@ -1,4 +1,12 @@
+import { bigintToSafeNumber, parseUnits as parseSharedUnits } from '@zoltar/shared/ethereum'
+
+function requireNonNegativeSafeInteger(value: number, label: string) {
+	if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a nonnegative safe integer`)
+}
+
 export function formatUnits(value: bigint, decimals = 18, maximumFractionDigits = 4) {
+	requireNonNegativeSafeInteger(decimals, 'Decimals')
+	requireNonNegativeSafeInteger(maximumFractionDigits, 'Maximum fraction digits')
 	const negative = value < 0n
 	const absolute = negative ? -value : value
 	const base = 10n ** BigInt(decimals)
@@ -12,6 +20,7 @@ export function formatShareAmount(value: bigint, maximumFractionDigits = 4) {
 }
 
 export function formatEthPerShare(collateralWei: bigint, atomicShareSupply: bigint, maximumSignificantDigits = 4) {
+	if (!Number.isSafeInteger(maximumSignificantDigits) || maximumSignificantDigits < 1) throw new Error('Maximum significant digits must be a positive safe integer')
 	if (collateralWei < 0n || atomicShareSupply <= 0n) throw new Error('Collateral rate requires nonnegative collateral and positive share supply')
 	const precision = 36
 	const scaled = (collateralWei * 10n ** BigInt(precision)) / atomicShareSupply
@@ -38,16 +47,14 @@ export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: big
 	return `${formatUnits(mintedAttoEth)} / ${formatUnits(maximumAttoEth)} ETH`
 }
 
-export function bigintToSafeNumber(value: bigint, label = 'Value') {
-	if (value < -9_007_199_254_740_991n || value > 9_007_199_254_740_991n) throw new Error(`${label} exceeds the JavaScript safe integer range`)
-	return Number.parseInt(value.toString(), 10)
-}
+export { bigintToSafeNumber }
 
 export function parseUnits(value: string, decimals = 18) {
+	requireNonNegativeSafeInteger(decimals, 'Decimals')
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') throw new Error('Enter a valid nonnegative amount')
 	const [whole = '0', fraction = ''] = value.split('.')
 	if (fraction.length > decimals) throw new Error(`Use no more than ${decimals} decimal places`)
-	return BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, '0') || '0')
+	return parseSharedUnits(`${whole || '0'}.${fraction}`, decimals)
 }
 
 export function parseUnitsOrUndefined(value: string, decimals = 18) {
@@ -55,7 +62,7 @@ export function parseUnitsOrUndefined(value: string, decimals = 18) {
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') return undefined
 	const [whole = '0', fraction = ''] = value.split('.')
 	if (fraction.length > decimals) return undefined
-	return BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, '0') || '0')
+	return parseSharedUnits(`${whole || '0'}.${fraction}`, decimals)
 }
 
 export function shortAddress(address: string) {

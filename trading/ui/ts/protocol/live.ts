@@ -659,7 +659,14 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 	return { scope, invalid, yes, no, approved, lp, lpAllowance }
 }
 
-export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
+const TRANSACTION_DEADLINE_SECONDS = 1_200n
+
+export function futureTransactionDeadline(nowMilliseconds = Date.now()) {
+	if (!Number.isSafeInteger(nowMilliseconds) || nowMilliseconds < 0) throw new Error('Current time must be a nonnegative safe integer')
+	return BigInt(Math.floor(nowMilliseconds / 1_000)) + TRANSACTION_DEADLINE_SECONDS
+}
+
+export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = futureTransactionDeadline()) {
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Create and initialize the pair before trading')
 	const {
@@ -682,7 +689,7 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount }))
 }
 
-export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
+export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, deadline = futureTransactionDeadline()) {
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Pair is unavailable')
 	const {
@@ -725,7 +732,7 @@ export async function approveRouter(client: WalletClient, market: LiveMarket, co
 export type LiquidityOperation = 'initialize' | 'add' | 'remove'
 
 export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n) {
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const deadline = futureTransactionDeadline()
 	const pairAddress = market.pair
 	if (operation === 'initialize') {
 		const {
@@ -752,7 +759,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 	await requireQuoteBlock(client, quote)
 	const refreshed = await simulateLiquidity(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Quote changed blocks during revalidation')
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+	const deadline = futureTransactionDeadline()
 	if (quote.operation === 'initialize') {
 		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity), refreshed.expectedLiquidity, 'LP tokens')
 		const initializedPairAddress = quote.market.pair
@@ -780,7 +787,7 @@ export async function simulateSettlement(client: WalletClient, configuration: De
 	if (operation === 'redeem-complete-set') {
 		const amount = parameters.amount
 		if (amount === undefined || amount <= 0n) throw new Error('Enter a positive complete-set share amount')
-		const deadline = parameters.deadline ?? BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+		const deadline = parameters.deadline ?? futureTransactionDeadline()
 		const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash }))
 		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
 		return { blockNumber, blockHash, operation, market, amount, deadline, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result) }
