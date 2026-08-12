@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
-import { AddressValue, Status } from '../components/Status.tsx'
+import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.tsx'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
 import {
@@ -20,6 +20,7 @@ import {
 	marketAcceptsNewRisk,
 	marketNewRiskBlocker,
 	mapWithConcurrency,
+	publicErrorMessage,
 	settlementAvailability,
 	shareBalanceScope,
 	simulateEntry,
@@ -110,6 +111,13 @@ function questionOutcomeLabel(outcome: number) {
 	return `Unknown outcome ${outcome}`
 }
 
+function resolvedQuestionOutcome(outcome: number): ShareOutcome | undefined {
+	if (outcome === 0) return 'INVALID'
+	if (outcome === 1) return 'YES'
+	if (outcome === 2) return 'NO'
+	return undefined
+}
+
 function formatTimestamp(timestamp: bigint) {
 	const maximumDateSeconds = 8_640_000_000_000n
 	if (timestamp < 0n || timestamp > maximumDateSeconds) return 'Unsupported on-chain timestamp'
@@ -133,7 +141,7 @@ function stateLabel(state: TransactionState) {
 }
 
 export function failedSubmissionTransition(caught: unknown, fallback: string) {
-	return { quote: undefined, state: 'error' as const, message: caught instanceof Error ? caught.message : fallback }
+	return { quote: undefined, state: 'error' as const, message: publicErrorMessage(caught, fallback) }
 }
 
 export function broadcastUncertainMessage(label: string, hash: Hash) {
@@ -142,7 +150,7 @@ export function broadcastUncertainMessage(label: string, hash: Hash) {
 
 export function approvalFailureTransition(label: string, broadcastHash: Hash | undefined, receiptKnown: boolean, caught: unknown, fallback: string) {
 	if (broadcastHash !== undefined && !receiptKnown) return { keepLocked: true, state: 'pending' as const, message: undefined, warning: broadcastUncertainMessage(label, broadcastHash) }
-	return { keepLocked: false, state: 'error' as const, message: caught instanceof Error ? caught.message : fallback, warning: undefined }
+	return { keepLocked: false, state: 'error' as const, message: publicErrorMessage(caught, fallback), warning: undefined }
 }
 
 export function positionControlsWorkflowLocked(state: TransactionState, receiptWarning: string | undefined) {
@@ -174,18 +182,18 @@ function BalanceLoadError({ message, retry, disabled = false }: { message: strin
 	)
 }
 
-function MarketShareIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'questionId'> }) {
+function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
 	return (
 		<>
 			<div>
-				<dt>SecurityPool</dt>
+				<dt>Security pool address</dt>
 				<dd>
 					<AddressValue value={scope.pool} />
 				</dd>
 			</div>
 			<div>
-				<dt>ShareToken</dt>
+				<dt>Share token address</dt>
 				<dd>
 					<AddressValue value={scope.shareToken} />
 				</dd>
@@ -202,6 +210,11 @@ function MarketShareIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' |
 			</div>
 		</>
 	)
+}
+
+export function securityPoolAddressFromRoute(route: string) {
+	const match = /^security-pool\/(0x[0-9a-fA-F]{40})$/.exec(route)
+	return match?.[1]?.toLowerCase()
 }
 
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {
@@ -234,6 +247,99 @@ function PairInitializationAction({ market }: { market: LiveMarket }) {
 	)
 }
 
+export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean }) {
+	const hasLoadedDetails = market.loadError === undefined
+	let refreshMessage: string | undefined
+	if (refreshing) refreshMessage = hasLoadedDetails ? 'Refreshing security pool; showing the last successful result.' : 'Retrying security pool details…'
+	let errorMessage: string | undefined
+	if (market.loadError !== undefined) errorMessage = refreshError === undefined ? `Security pool details could not be loaded: ${market.loadError}` : `Security pool details could not be loaded: ${market.loadError}. Latest retry failed: ${refreshError}`
+	else if (refreshError !== undefined) errorMessage = `SecurityPool refresh failed; showing the last successful result: ${refreshError}`
+	return (
+		<main class='route' id='main-content'>
+			<header class='route-header'>
+				<div>
+					<a class='eyebrow' href='#/markets'>
+						← Markets
+					</a>
+					<h1>Security pool</h1>
+					<p>{market.title}</p>
+				</div>
+				{market.loadError === undefined ? null : <Status tone='warn'>Pool data unavailable</Status>}
+			</header>
+			<section class='section' aria-busy={refreshing}>
+				{refreshMessage === undefined ? null : <p role='status'>{refreshMessage}</p>}
+				{errorMessage === undefined ? null : (
+					<>
+						<p class='error' role='alert'>
+							{errorMessage}
+						</p>
+						{refreshing ? null : (
+							<button class='secondary-action' disabled={workflowLocked} onClick={retry}>
+								{hasLoadedDetails ? 'Retry refresh' : 'Retry security pool'}
+							</button>
+						)}
+					</>
+				)}
+				{market.loadError === undefined ? (
+					<dl class='fact-list'>
+						<SecurityPoolIdentityRows market={market} />
+						<div>
+							<dt>Question end</dt>
+							<dd>{formatTimestamp(market.endTime)}</dd>
+						</div>
+						<div>
+							<dt>System state</dt>
+							<dd>{systemStateLabel(market.systemState)}</dd>
+						</div>
+						<div>
+							<dt>Universe fork</dt>
+							<dd>{market.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(market.universeForkTime)}`}</dd>
+						</div>
+						{market.questionOutcome === 3 ? null : (
+							<div>
+								<dt>Outcome</dt>
+								<dd>{questionOutcomeLabel(market.questionOutcome)}</dd>
+							</div>
+						)}
+						<div>
+							<dt>Security multiplier</dt>
+							<dd>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</dd>
+						</div>
+						<div>
+							<dt>Initial report priority fee</dt>
+							<dd>{formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
+						</div>
+						<div>
+							<dt>Registered vaults</dt>
+							<dd>{market.vaultCount.toString()}</dd>
+						</div>
+						<div>
+							<dt>Per-second retention multiplier</dt>
+							<dd>{formatUnits(market.currentRetentionRate, 18, 12)}×</dd>
+						</div>
+						<div>
+							<dt>Total / fee-eligible capacity ownership</dt>
+							<dd>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</dd>
+						</div>
+						<div>
+							<dt>Minting capacity</dt>
+							<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
+						</div>
+						<div>
+							<dt>Checkpointed collateral / share ratio</dt>
+							<dd>{market.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
+						</div>
+					</dl>
+				) : (
+					<dl class='fact-list'>
+						<SecurityPoolIdentityRows market={market} />
+					</dl>
+				)}
+			</section>
+		</main>
+	)
+}
+
 export function insuredExitLimitMessage(requested: bigint, maximum: bigint, invalidBalance: bigint) {
 	if (maximum === invalidBalance && requested > invalidBalance) return `Your INVALID balance covers only ${formatUnits(invalidBalance)} complete sets. Excess YES/NO profit must remain as shares unless you acquire more INVALID.`
 	return `Your current long-share balance and pair liquidity support an insured exit of at most ${formatUnits(maximum)} complete sets. Reduce the exit amount; excess directional shares remain in your wallet.`
@@ -256,16 +362,32 @@ export function settlementInputBlocker(operation: SettlementOperation, operation
 	}
 	if (operation === 'migrate-shares') {
 		if (parsedTargetOutcome === undefined) return 'Enter the explicit non-negative outcome index for the child universe'
-		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${sourceOutcome} source-share balance is zero`
+		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${sourceOutcome} balance is zero`
 	}
 	return undefined
 }
 
-export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined) {
+export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, outcome?: ShareOutcome) {
 	if (balanceState === 'loading') return 'Loading…'
 	if (balanceState === 'error') return 'Unavailable'
 	if (balanceState !== 'ready' || balance === undefined) return 'Not loaded'
-	return formatShareAmount(balance)
+	return outcome === undefined ? formatShareAmount(balance) : formatOutcomeAmount(balance, outcome)
+}
+
+export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
+	if (discoveryState === 'loading') return <p role='status'>Loading security pool details…</p>
+	if (discoveryState === 'error')
+		return (
+			<>
+				<p class='error' role='alert'>
+					Security pool discovery failed: {discoveryError ?? 'unknown discovery error'}
+				</p>
+				<button class='secondary-action' disabled={workflowLocked} onClick={retry}>
+					Retry discovery
+				</button>
+			</>
+		)
+	return <p class='error'>This security pool is not available in the selected universe.</p>
 }
 
 export function filterMarketsByUniverse(markets: readonly LiveMarket[], selectedUniverseId: string | undefined) {
@@ -487,7 +609,9 @@ export function LiveTrading({
 	}, [onWalletSummaryChange, selectedUniverseId, walletSummaryRequests])
 	const visibleMarkets = filterMarketsByUniverse(markets, selectedUniverseId)
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
-	const selected = visibleMarkets.find(market => market.pool === selectedPool) ?? visibleMarkets[0]
+	const routePool = securityPoolAddressFromRoute(route)
+	const routeSelected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool)
+	const selected = routePool === undefined ? (visibleMarkets.find(market => market.pool.toLowerCase() === selectedPool?.toLowerCase()) ?? visibleMarkets[0]) : routeSelected
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
@@ -541,7 +665,7 @@ export function LiveTrading({
 			error => {
 				if (!walletSummaryRequests.isCurrent(request) || accountRef.current !== account) return
 				setWalletSummaryStatus('error')
-				setWalletSummaryError(error instanceof Error ? error.message : 'Wallet ETH and REP balances could not be loaded')
+				setWalletSummaryError(publicErrorMessage(error, 'Wallet ETH and REP balances could not be loaded'))
 				setWalletSummaryErrorLabel('Wallet balance read failed')
 			},
 		)
@@ -572,7 +696,7 @@ export function LiveTrading({
 			await validateLiveDeployment(client, nextConfiguration)
 			if (!discoveryRequests.isCurrent(request)) return
 			const requestedUniverseId = parsedUniverseId(selectedUniverseId)
-			const discovered = route === 'portfolio' ? await discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, deploymentIndex) : await discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, deploymentIndex)
+			const discovered = route === 'portfolio' || routePool !== undefined ? await discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, deploymentIndex) : await discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, deploymentIndex)
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, positionWorkflowLockedRef.current, liquidityWorkflowLockedRef.current)) {
 				setDiscoveryState('ready')
@@ -589,7 +713,7 @@ export function LiveTrading({
 				setDiscoveryState('ready')
 				return
 			}
-			const detail = error instanceof Error ? error.message : 'SecurityPool discovery failed'
+			const detail = publicErrorMessage(error, 'SecurityPool discovery failed')
 			setDiscoveryError(detail)
 			setDiscoveryState('error')
 			if (route === 'portfolio') {
@@ -716,7 +840,7 @@ export function LiveTrading({
 				const loaded = await loadLiveBalances(client, market, account, configuration.router)
 				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
 			} catch (error) {
-				entry = { market, balances: undefined, error: error instanceof Error ? error.message : 'Balance refresh failed' }
+				entry = { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
 			}
 			if (portfolioBalanceRequests.isCurrent(request) && accountRef.current === account) setPortfolioEntries(current => current.map((currentEntry, currentIndex) => (currentIndex === index ? entry : currentEntry)))
 			return entry
@@ -730,7 +854,7 @@ export function LiveTrading({
 			.catch(error => {
 				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
 				setPortfolioBalanceState('error')
-				setPortfolioBalanceError(error instanceof Error ? error.message : 'Portfolio balance refresh failed')
+				setPortfolioBalanceError(publicErrorMessage(error, 'Portfolio balance refresh failed'))
 			})
 		return () => portfolioBalanceRequests.invalidate()
 	}, [account, configuration, markets, portfolioBalanceRequests, portfolioRefreshNonce, route, selectedUniverseId, walletContextInvalidated])
@@ -763,7 +887,7 @@ export function LiveTrading({
 			error => {
 				if (balanceRequests.isCurrent(request)) {
 					setBalanceState('error')
-					setBalanceError(error instanceof Error ? error.message : 'Balance refresh failed')
+					setBalanceError(publicErrorMessage(error, 'Balance refresh failed'))
 				}
 			},
 		)
@@ -792,7 +916,7 @@ export function LiveTrading({
 		} catch (error) {
 			if (!balanceRequests.isCurrent(request)) return
 			setBalanceState('error')
-			setBalanceError(error instanceof Error ? error.message : 'Balance refresh failed')
+			setBalanceError(publicErrorMessage(error, 'Balance refresh failed'))
 		}
 	}
 
@@ -870,7 +994,7 @@ export function LiveTrading({
 			await refresh(configuration)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request)) return
-			invalidateWalletIdentity(error instanceof Error ? error.message : 'Wallet connection failed')
+			invalidateWalletIdentity(publicErrorMessage(error, 'Wallet connection failed'))
 		}
 	}
 	walletConnectHandler.current = () => {
@@ -937,7 +1061,7 @@ export function LiveTrading({
 			await refresh(configuration)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request)) return
-			invalidateWalletIdentity(error instanceof Error ? `${contextLabel}: ${error.message}` : `${contextLabel}: wallet refresh failed`)
+			invalidateWalletIdentity(`${contextLabel}: ${publicErrorMessage(error, 'wallet refresh failed')}`)
 			setState('error')
 		}
 	}
@@ -959,7 +1083,7 @@ export function LiveTrading({
 			return 'ready'
 		} catch (error) {
 			if (accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
-			const detail = error instanceof Error ? error.message : 'Balance refresh failed'
+			const detail = publicErrorMessage(error, 'Balance refresh failed')
 			setBalanceState('error')
 			setBalanceError(`${label} confirmed, but balances could not be refreshed: ${detail}`)
 			return 'refresh-error'
@@ -981,7 +1105,7 @@ export function LiveTrading({
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(undefined)
 			setState('error')
-			setMessage(error instanceof Error ? error.message : 'Router simulation failed')
+			setMessage(publicErrorMessage(error, 'Router simulation failed'))
 		}
 	}
 
@@ -1148,7 +1272,6 @@ export function LiveTrading({
 			>
 				<strong>{market.title}</strong>
 				<span>{statusLabel(market, nowSeconds)}</span>
-				<code>{shortAddress(market.pool)}</code>
 			</button>
 		))
 		discoveryContent =
@@ -1165,6 +1288,24 @@ export function LiveTrading({
 			) : (
 				marketButtons
 			)
+	}
+	if (routePool !== undefined) {
+		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} />
+		return (
+			<main class='route' id='main-content'>
+				<header class='route-header'>
+					<div>
+						<a class='eyebrow' href='#/markets'>
+							← Markets
+						</a>
+						<h1>Security pool</h1>
+					</div>
+				</header>
+				<section class='section' aria-busy={discoveryState === 'loading'}>
+					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
+				</section>
+			</main>
+		)
 	}
 	if (route === 'portfolio')
 		return (
@@ -1263,7 +1404,12 @@ export function LiveTrading({
 									This SecurityPool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: {selected.loadError}
 								</p>
 								<dl class='fact-list'>
-									<MarketShareIdentityRows market={selected} />
+									<div>
+										<dt>Security pool</dt>
+										<dd>
+											<SecurityPoolAddressLink value={selected.pool} disabled={workflowLocked} />
+										</dd>
+									</div>
 								</dl>
 							</section>
 						)
@@ -1282,9 +1428,9 @@ export function LiveTrading({
 							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
 							<dl class='fact-list'>
 								<div>
-									<dt>SecurityPool</dt>
+									<dt>Security pool</dt>
 									<dd>
-										<AddressValue value={selected.pool} />
+										<SecurityPoolAddressLink value={selected.pool} disabled={workflowLocked} />
 									</dd>
 								</div>
 								<div>
@@ -1292,52 +1438,8 @@ export function LiveTrading({
 									<dd>{selected.pair === undefined ? 'Not created' : <AddressValue value={selected.pair} />}</dd>
 								</div>
 								<div>
-									<dt>Question ID</dt>
-									<dd>{selected.questionId.toString()}</dd>
-								</div>
-								<div>
 									<dt>Question end</dt>
 									<dd>{formatTimestamp(selected.endTime)}</dd>
-								</div>
-								<div>
-									<dt>System state</dt>
-									<dd>{systemStateLabel(selected.systemState)}</dd>
-								</div>
-								<div>
-									<dt>Universe fork</dt>
-									<dd>{selected.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(selected.universeForkTime)}`}</dd>
-								</div>
-								<div>
-									<dt>Question outcome</dt>
-									<dd>{questionOutcomeLabel(selected.questionOutcome)}</dd>
-								</div>
-								<div>
-									<dt>Security multiplier</dt>
-									<dd>{formatBpsMultiplier(selected.statoblastSecurityMultiplierBps)}</dd>
-								</div>
-								<div>
-									<dt>Initial report priority fee</dt>
-									<dd>{formatUnits(selected.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
-								</div>
-								<div>
-									<dt>Registered vaults</dt>
-									<dd>{selected.vaultCount.toString()}</dd>
-								</div>
-								<div>
-									<dt>Per-second retention multiplier</dt>
-									<dd>{formatUnits(selected.currentRetentionRate, 18, 12)}×</dd>
-								</div>
-								<div>
-									<dt>Total / fee-eligible capacity ownership</dt>
-									<dd>{formatCapacityOwnership(selected.totalCapacityOwnershipAttoRep, selected.feeEligibleCapacityOwnershipAttoRep)}</dd>
-								</div>
-								<div>
-									<dt>Minting capacity</dt>
-									<dd>{formatMintingCapacity(selected.settlementCollateralAttoEth, selected.mintingCapacityCeilingAttoEth)}</dd>
-								</div>
-								<div>
-									<dt>Checkpointed collateral / share ratio</dt>
-									<dd>{selected.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(selected.settlementCollateralAttoEth, selected.shareTokenSupplyAttoShares)}</dd>
 								</div>
 								<div>
 									<dt>AMM fee</dt>
@@ -1548,7 +1650,7 @@ function LiveLiquidityControls({
 		} catch (caught) {
 			if (!simulationRequests.isCurrent(request)) return
 			setState('error')
-			setError(caught instanceof Error ? caught.message : 'Liquidity simulation failed')
+			setError(publicErrorMessage(caught, 'Liquidity simulation failed'))
 		}
 	}
 
@@ -1762,11 +1864,11 @@ function LiveLiquidityControls({
 							<>
 								<div>
 									<dt>Raw YES returned</dt>
-									<dd>{formatShareAmount(quote.expectedYes)}</dd>
+									<dd>{formatOutcomeAmount(quote.expectedYes, 'YES')}</dd>
 								</div>
 								<div>
 									<dt>Raw NO returned</dt>
-									<dd>{formatShareAmount(quote.expectedNo)}</dd>
+									<dd>{formatOutcomeAmount(quote.expectedNo, 'NO')}</dd>
 								</div>
 							</>
 						) : (
@@ -1782,18 +1884,18 @@ function LiveLiquidityControls({
 								<div>
 									<dt>YES / NO deposited</dt>
 									<dd>
-										{formatShareAmount(quote.result.yesUsed)} / {formatShareAmount(quote.result.noUsed)}
+										{formatOutcomeAmount(quote.result.yesUsed, 'YES')} / {formatOutcomeAmount(quote.result.noUsed, 'NO')}
 									</dd>
 								</div>
 								<div>
 									<dt>Unused YES / NO returned</dt>
 									<dd>
-										{formatShareAmount(quote.result.yesReturned)} / {formatShareAmount(quote.result.noReturned)}
+										{formatOutcomeAmount(quote.result.yesReturned, 'YES')} / {formatOutcomeAmount(quote.result.noReturned, 'NO')}
 									</dd>
 								</div>
 								<div>
 									<dt>INVALID retained</dt>
-									<dd>{formatShareAmount(quote.result.invalidInsurance)}</dd>
+									<dd>{formatOutcomeAmount(quote.result.invalidInsurance, 'INVALID')}</dd>
 								</div>
 								<div>
 									<dt>LP tokens expected</dt>
@@ -1849,15 +1951,15 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 			<dl class='metrics'>
 				<div>
 					<dt>YES</dt>
-					<dd>{formatShareAmount(balances.yes)}</dd>
+					<dd>{formatOutcomeAmount(balances.yes, 'YES')}</dd>
 				</div>
 				<div>
 					<dt>NO</dt>
-					<dd>{formatShareAmount(balances.no)}</dd>
+					<dd>{formatOutcomeAmount(balances.no, 'NO')}</dd>
 				</div>
 				<div>
 					<dt>INVALID</dt>
-					<dd>{formatShareAmount(balances.invalid)}</dd>
+					<dd>{formatOutcomeAmount(balances.invalid, 'INVALID')}</dd>
 				</div>
 				<div>
 					<dt>LP tokens</dt>
@@ -1865,11 +1967,11 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 				</div>
 				<div>
 					<dt>LP YES claim</dt>
-					<dd>{formatShareAmount(yesClaim)}</dd>
+					<dd>{formatOutcomeAmount(yesClaim, 'YES')}</dd>
 				</div>
 				<div>
 					<dt>LP NO claim</dt>
-					<dd>{formatShareAmount(noClaim)}</dd>
+					<dd>{formatOutcomeAmount(noClaim, 'NO')}</dd>
 				</div>
 				<div>
 					<dt>Claim covered by separate INVALID</dt>
@@ -1877,11 +1979,11 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 				</div>
 				<div>
 					<dt>Maximum insured YES exit</dt>
-					<dd>{formatShareAmount(maximumYesExit)}</dd>
+					<dd>{formatOutcomeAmount(maximumYesExit, 'YES')}</dd>
 				</div>
 				<div>
 					<dt>Maximum insured NO exit</dt>
-					<dd>{formatShareAmount(maximumNoExit)}</dd>
+					<dd>{formatOutcomeAmount(maximumNoExit, 'NO')}</dd>
 				</div>
 				<div>
 					<dt>Share approval</dt>
@@ -1919,7 +2021,12 @@ export function LivePortfolio({ entries, balanceState, balanceError, retryBalanc
 						{entry.error === undefined ? null : <Status tone='warn'>Balance unavailable</Status>}
 					</div>
 					<dl class='metrics'>
-						<MarketShareIdentityRows market={entry.market} />
+						<div>
+							<dt>Security pool</dt>
+							<dd>
+								<SecurityPoolAddressLink value={entry.market.pool} />
+							</dd>
+						</div>
 					</dl>
 					{entry.error === undefined ? null : <BalanceLoadError message={`This SecurityPool’s balances could not be loaded: ${entry.error}`} retry={retryBalances} />}
 					{entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={entry.market} balances={entry.balances} />}
@@ -2002,6 +2109,7 @@ function LiveSettlementControls({
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const inputRevision = useRef(0)
 	const availability = settlementAvailability(market, balances)
+	const winningOutcome = resolvedQuestionOutcome(market.questionOutcome)
 	const parsedAmount = parseUnitsOrUndefined(amount)
 	const parsedTargetOutcome = useMemo(() => {
 		return parseForkOutcomeIndex(targetOutcomeIndex)
@@ -2086,7 +2194,7 @@ function LiveSettlementControls({
 		} catch (caught) {
 			if (!simulationRequests.isCurrent(request)) return
 			setState('error')
-			setError(caught instanceof Error ? caught.message : 'Settlement simulation failed')
+			setError(publicErrorMessage(caught, 'Settlement simulation failed'))
 		}
 	}
 
@@ -2203,16 +2311,18 @@ function LiveSettlementControls({
 				>
 					Complete set
 				</button>
-				<button
-					aria-pressed={operation === 'redeem-winning-shares'}
-					disabled={workflowLocked}
-					onClick={() => {
-						invalidateSettlementInputs()
-						setOperation('redeem-winning-shares')
-					}}
-				>
-					Winning shares
-				</button>
+				{winningOutcome === undefined ? null : (
+					<button
+						aria-pressed={operation === 'redeem-winning-shares'}
+						disabled={workflowLocked}
+						onClick={() => {
+							invalidateSettlementInputs()
+							setOperation('redeem-winning-shares')
+						}}
+					>
+						Redeem {winningOutcome}
+					</button>
+				)}
 				<button
 					aria-pressed={operation === 'migrate-shares'}
 					disabled={workflowLocked}
@@ -2228,7 +2338,7 @@ function LiveSettlementControls({
 				if (operation === 'redeem-complete-set')
 					return (
 						<>
-							<p>Burn equal wallet INVALID, YES, and NO shares for ETH at the SecurityPool’s current collateral rate. Available complete sets: {settlementBalanceLabel(balanceState, availability.completeSets)}.</p>
+							<p>Burn equal amounts of wallet INVALID, YES, and NO for ETH at the security pool’s current collateral rate. Available complete sets: {settlementBalanceLabel(balanceState, availability.completeSets)}.</p>
 							<label class='field'>
 								<span>Complete-set shares to redeem</span>
 								<div class='amount-input'>
@@ -2247,14 +2357,16 @@ function LiveSettlementControls({
 						</>
 					)
 				if (operation === 'redeem-winning-shares')
-					return (
+					return winningOutcome === undefined ? (
+						<p>Winning-outcome redemption becomes available after the market finalizes.</p>
+					) : (
 						<p>
-							Redeem the wallet’s entire {questionOutcomeLabel(market.questionOutcome)} winning-share balance ({settlementBalanceLabel(balanceState, availability.winningBalance)}) through this exact SecurityPool.
+							Redeem the wallet’s entire {winningOutcome} balance ({settlementBalanceLabel(balanceState, availability.winningBalance, winningOutcome)}) through this exact security pool.
 						</p>
 					)
 				return (
 					<>
-						<p>Migration copies the entire selected source-share balance into the explicitly selected child branch and locks the parent balance. It never chooses a branch automatically.</p>
+						<p>Migration copies the entire selected outcome balance into the explicitly selected child branch and locks the parent balance. It never chooses a branch automatically.</p>
 						<label class='field'>
 							<span>Source share</span>
 							<select
@@ -2273,7 +2385,7 @@ function LiveSettlementControls({
 								<option value='NO'>NO</option>
 							</select>
 						</label>
-						<p>Selected source balance: {settlementBalanceLabel(balanceState, sourceBalance)}</p>
+						<p>Selected source balance: {settlementBalanceLabel(balanceState, sourceBalance, sourceOutcome)}</p>
 						<label class='field'>
 							<span>Fork outcome index for the child universe</span>
 							<input
@@ -2307,7 +2419,7 @@ function LiveSettlementControls({
 			) : null}
 			{approvalRequired ? (
 				<>
-					<p>This ERC-1155 approval covers every token ID in the pool's ShareToken, including shares on other universe branches. Revoke it through a compatible wallet or ShareToken contract interface when it is no longer needed.</p>
+					<p>This ERC-1155 approval covers every token ID in the pool's share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
 					<button class='primary-action' disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
 						Approve router for complete-set redemption
 					</button>
@@ -2369,6 +2481,7 @@ function LivePositionControls({
 	retryBalances(): Promise<void>
 }) {
 	const yesPercent = market.yesReserve + market.noReserve === 0n ? 0 : bigintToSafeNumber((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve), 'Conditional YES tenths') / 10
+	const oppositeOutcome = side === 'YES' ? 'NO' : 'YES'
 	const closed = !marketAcceptsNewRisk(market, nowSeconds)
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
@@ -2376,8 +2489,8 @@ function LivePositionControls({
 	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
 	const entryPriceImpactBps = quote?.kind === 'entry' ? quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore : undefined
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
-	const walletBalanceLabel = (value: bigint | undefined) => {
-		if (value !== undefined) return formatShareAmount(value)
+	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
+		if (value !== undefined) return formatOutcomeAmount(value, outcome)
 		if (balanceState === 'loading') return 'Loading…'
 		if (balanceState === 'error') return 'Unavailable'
 		return 'Connect wallet'
@@ -2387,29 +2500,29 @@ function LivePositionControls({
 			<ProbabilityBar yesPercent={yesPercent} />
 			{mode === 'entry' ? (
 				<p class='pool-mint-note'>
-					Submitted ETH goes to Statoblast SecurityPool <code class='pool-mint-note__address'>{market.pool}</code>. That exact pool reconciles collateral and mints complete-set shares at its live rate.
+					Submitted ETH goes to Statoblast security pool <SecurityPoolAddressLink value={market.pool} disabled={workflowLocked} />. That exact pool reconciles collateral and mints complete-set shares at its live rate.
 				</p>
 			) : null}
 			<dl class='metrics'>
 				<div>
 					<dt>YES reserve</dt>
-					<dd>{formatShareAmount(market.yesReserve)}</dd>
+					<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
 				</div>
 				<div>
 					<dt>NO reserve</dt>
-					<dd>{formatShareAmount(market.noReserve)}</dd>
+					<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
 				</div>
 				<div>
 					<dt>Wallet YES</dt>
-					<dd>{walletBalanceLabel(balances?.yes)}</dd>
+					<dd>{walletBalanceLabel(balances?.yes, 'YES')}</dd>
 				</div>
 				<div>
 					<dt>Wallet NO</dt>
-					<dd>{walletBalanceLabel(balances?.no)}</dd>
+					<dd>{walletBalanceLabel(balances?.no, 'NO')}</dd>
 				</div>
 				<div>
 					<dt>Wallet INVALID</dt>
-					<dd>{walletBalanceLabel(balances?.invalid)}</dd>
+					<dd>{walletBalanceLabel(balances?.invalid, 'INVALID')}</dd>
 				</div>
 			</dl>
 			{balanceState === 'loading' ? <p role='status'>Refreshing wallet balances and approvals…</p> : null}
@@ -2439,7 +2552,7 @@ function LivePositionControls({
 			</label>
 			{mode !== 'exit' || maximumExit === undefined ? null : (
 				<p>
-					Maximum insured {side} exit: {formatShareAmount(maximumExit)}.
+					Maximum insured {side} exit: {formatOutcomeAmount(maximumExit, side)}.
 				</p>
 			)}
 			{exceedsInsurance ? (
@@ -2458,28 +2571,28 @@ function LivePositionControls({
 						<dd>{formatShareAmount(quote.value.result.completeSetShares)}</dd>
 					</div>
 					<div>
-						<dt>{quote.kind === 'entry' ? 'Opposite shares swapped' : `${side} shares swapped`}</dt>
-						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped)}</dd>
+						<dt>{quote.kind === 'entry' ? 'Opposite outcome swapped' : `${side} swapped`}</dt>
+						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
 					</div>
 					<div>
 						<dt>{quote.kind === 'entry' ? `Additional ${side} received` : `Total ${side} required`}</dt>
-						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares)}</dd>
+						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
 					</div>
 					<div>
 						<dt>{quote.kind === 'entry' ? `Total ${side} delivered` : 'INVALID required'}</dt>
-						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance)}</dd>
+						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
 					</div>
 					<div>
 						<dt>{quote.kind === 'entry' ? 'INVALID received' : 'Estimated ETH out'}</dt>
-						<dd>{quote.kind === 'entry' ? formatShareAmount(quote.value.result.invalidInsurance) : `${formatUnits(quote.value.result.ethOut)} ETH`}</dd>
+						<dd>{quote.kind === 'entry' ? formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') : `${formatUnits(quote.value.result.ethOut)} ETH`}</dd>
 					</div>
 					<div>
 						<dt>AMM fee</dt>
-						<dd>{formatShareAmount(quote.value.result.feeAmount)}</dd>
+						<dd>{formatOutcomeAmount(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
 					</div>
 					<div>
 						<dt>{quote.kind === 'entry' ? `Minimum ${side} received` : `Maximum ${side} required`}</dt>
-						<dd>{formatShareAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares)}</dd>
+						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
 					</div>
 					<div>
 						<dt>{quote.kind === 'entry' ? 'Average ETH per long share' : 'Minimum ETH received'}</dt>
@@ -2519,9 +2632,9 @@ function LivePositionControls({
 			)}
 			{mode === 'exit' && balances?.approved === false ? (
 				<>
-					<p>This ERC-1155 approval covers every token ID in the pool’s ShareToken, including shares on other universe branches. Revoke it through a compatible wallet or ShareToken contract interface when it is no longer needed.</p>
+					<p>This ERC-1155 approval covers every token ID in the pool’s share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
 					<button class='primary-action' disabled={closed || balanceState !== 'ready' || workflowLocked} onClick={approve}>
-						Approve router for all ShareToken shares
+						Approve router for all outcome tokens
 					</button>
 				</>
 			) : null}

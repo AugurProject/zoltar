@@ -14,3 +14,15 @@ export function AddressValue({ value }: { value: string }) {
 		</code>
 	)
 }
+
+export function securityPoolHref(value: string) {
+	return `#/security-pool/${value}`
+}
+
+export function SecurityPoolAddressLink({ value, disabled = false }: { value: string; disabled?: boolean }) {
+	return (
+		<a class='security-pool-link' href={securityPoolHref(value)} aria-label={`Open security pool ${value}`} aria-disabled={disabled} onClick={disabled ? event => event.preventDefault() : undefined}>
+			<AddressValue value={value} />
+		</a>
+	)
+}

@@ -113,7 +113,8 @@ describe('universe selector', () => {
 		expect(longOptions).toHaveLength(2)
 		expect(longOptions[0]?.textContent).not.toBe(longOptions[1]?.textContent)
 		expect(longOptions.every(option => option.textContent?.includes('…') === true)).toBeTrue()
-		expect(rendered.container.querySelector('main')?.textContent).toContain(((1n << 256n) - 256n).toString())
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain(((1n << 256n) - 256n).toString())
+		expect(rendered.container.querySelector(`a[href="#/security-pool/${demoMarket('max-token-ids').pool}"]`)).not.toBeNull()
 	})
 
 	test('keeps wallet balance failures visible without abbreviating the account', async () => {
