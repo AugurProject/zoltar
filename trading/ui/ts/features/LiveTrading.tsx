@@ -387,7 +387,11 @@ export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, wo
 				</button>
 			</>
 		)
-	return <p class='error'>This security pool is not available in the selected universe.</p>
+	return (
+		<p class='error' role='alert'>
+			This security pool is not available in the selected universe.
+		</p>
+	)
 }
 
 export function filterMarketsByUniverse(markets: readonly LiveMarket[], selectedUniverseId: string | undefined) {

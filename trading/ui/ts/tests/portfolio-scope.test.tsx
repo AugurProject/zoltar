@@ -186,4 +186,10 @@ describe('live portfolio scope', () => {
 		retry.click()
 		expect(retries).toBe(1)
 	})
+
+	test('announces when a routed live pool is unavailable in the selected universe', async () => {
+		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('This security pool is not available in the selected universe.')
+	})
 })
