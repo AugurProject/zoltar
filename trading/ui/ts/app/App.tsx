@@ -12,6 +12,7 @@ type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` |
 
 export function currentRoute(): TradingRoute {
 	const route = window.location.hash.replace(/^#\/?/, '') || 'markets'
+	if (route === 'developer') return 'markets'
 	return tradingRoutes.find(candidate => candidate === route) ?? (/^security-pool\/0x[0-9a-f]{40}$/i.test(route) ? `security-pool/${route.slice('security-pool/'.length)}` : 'not-found')
 }
 
