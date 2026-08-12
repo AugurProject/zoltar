@@ -69,8 +69,8 @@
 	},
 	"submission": {
 		"minimumBundleRelaySuccesses": 1,
-		"mode": "private",
-		"relayUrls": ["https://relay.flashbots.net"]
+		"mode": "public",
+		"relayUrls": []
 	},
 	"tokenAddresses": [],
 	"version": 4

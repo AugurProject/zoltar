@@ -109,6 +109,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		expectedChainId: number
 		explorerUrl: string
 		network: NetworkConfiguration['name']
+		networkConfigured: boolean
 		openOracle: Address
 		queuedWallet: Address | null | undefined
 		savedWallet: Address | undefined
@@ -134,6 +135,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		expectedChainId: config.network.chain.id,
 		explorerUrl: config.network.explorerUrl,
 		network: config.network.name,
+		networkConfigured: config.networkConfigured,
 		openOracle: config.openOracle,
 		queuedWallet: undefined,
 		savedWallet: config.persistedPrivateKey === undefined ? undefined : privateKeyToAccount(config.persistedPrivateKey).address,
@@ -181,7 +183,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard, then restart',
 		reportId: undefined,
 	})
-	console.log(config.networkConfigured ? `network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}` : 'network=unconfigured mode=paused configure the chain and RPC endpoints in the dashboard')
+	console.log(
+		config.networkConfigured
+			? `network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`
+			: 'network=unconfigured mode=paused configure the chain and RPC endpoints in the dashboard',
+	)
 	try {
 		await pollUntilStopped(
 			async () => {

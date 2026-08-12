@@ -191,7 +191,7 @@ describe('file-only startup configuration', () => {
 		const rpc = Bun.serve({
 			async fetch(request) {
 				const body = (await request.json()) as { id: unknown }
-				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
+				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
 			},
 			hostname: '127.0.0.1',
 			port: 0,
@@ -217,14 +217,34 @@ describe('file-only startup configuration', () => {
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 		const response = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toMatchObject({ network: 'mainnet', restartRequired: true })
+		expect(await response.json()).toMatchObject({ network: 'sepolia', restartRequired: true })
 		expect((await loadOperatorSettings(path))?.networkConfigured).toBe(true)
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
+		const configuredContents = await Bun.file(path).text()
+		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(oppositeChain.status).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		const configuredEnvelope = await waitForJson(origin, '/api/configuration')
+		const configuredDocument = configuredEnvelope['configuration']
+		if (typeof configuredDocument !== 'object' || configuredDocument === null || Array.isArray(configuredDocument)) throw new Error('Configured document is missing')
+		Reflect.deleteProperty(configuredDocument, 'network')
+		Reflect.deleteProperty(configuredDocument, 'connectivity')
+		const removal = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(configuredEnvelope),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(removal.status).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
 	})
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {

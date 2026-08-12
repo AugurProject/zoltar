@@ -97,12 +97,14 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 		element<HTMLInputElement>('read-rpc-url').value = ''
 		element<HTMLTextAreaElement>('public-rpc-urls').value = ''
 		persistedNetwork = undefined
+		element<HTMLSelectElement>('network-name').disabled = false
 		connectivityLoaded = true
 		updateNetworkTargetStatus()
 		return
 	}
 	loadConnectivity(focused.connectivity)
 	element<HTMLSelectElement>('network-name').value = focused.network
+	element<HTMLSelectElement>('network-name').disabled = true
 	persistedNetwork = focused.network
 	connectivityLoaded = true
 	updateNetworkTargetStatus()
@@ -768,7 +770,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 	if (!connectivityLoaded) {
 		loadConnectivity(snapshot.connectivity)
-		element<HTMLSelectElement>('network-name').value = snapshot.network
+		if (snapshot.networkConfigured) element<HTMLSelectElement>('network-name').value = snapshot.network
 		connectivityLoaded = true
 	}
 	if (!deploymentLoaded) {
@@ -801,14 +803,18 @@ function render(snapshot: OperatorSnapshot) {
 	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
-	setText('network-value', `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
+	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.`)
+	setText('chain-safety', snapshot.networkConfigured ? `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.` : 'Set the chain and RPC endpoints in RPC connectivity, then restart before scanning.')
 	renderSignerStatus(snapshot)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
 	const launchNotice = element('launch-notice')
-	if (snapshot.network === 'mainnet') {
+	if (!snapshot.networkConfigured) {
+		setText('launch-notice-title', 'Network setup required')
+		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. The bot remains paused until the saved network is applied on restart.')
+		launchNotice.dataset['tone'] = 'warning'
+	} else if (snapshot.network === 'mainnet') {
 		setText('launch-notice-title', 'Mainnet execution network')
 		setText('launch-notice-copy', 'Use only reviewed deployments, current market evidence, low risk limits, and supervised recovery procedures.')
 		launchNotice.dataset['tone'] = 'warning'
@@ -1034,6 +1040,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		})
 		loadConnectivity(response.connectivity)
 		element<HTMLSelectElement>('network-name').value = response.network
+		element<HTMLSelectElement>('network-name').disabled = true
 		persistedNetwork = response.network
 		updateNetworkTargetStatus()
 		setText('connectivity-status', response.restartRequired ? 'Chain and RPCs passed validation and were saved. Restart the bot to apply the selected chain.' : 'RPCs passed chain checks and were saved for the next scan and future restarts.')

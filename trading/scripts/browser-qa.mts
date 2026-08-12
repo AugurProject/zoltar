@@ -73,7 +73,9 @@ await command('Page.enable')
 await command('Runtime.enable')
 await command('Log.enable')
 const capacityFactsAssertion = `document.body.textContent?.includes('Total / fee-eligible capacity ownership') === true && document.body.textContent?.includes('10,000 / 9,500 REP') === true && document.body.textContent?.includes('Minting capacity') === true && document.body.textContent?.includes('2,468.5 / 10,000 ETH') === true && document.body.textContent?.includes('Available minting capacity') === false && document.body.textContent?.includes('Fork continuation') === false && document.body.textContent?.includes('Demo discovery snapshot') === false && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
-const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); return !['binary shares for', 'invalid is insurance', 'invalid is not traded or priced by this amm', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei', 'positions grouped by securitypool', 'securitypool used by this amm'].some(phrase => text.includes(phrase)); })()`
+const poolInternalsHiddenAssertion = `!['Outcome token IDs', 'System state', 'Security multiplier', 'Total / fee-eligible capacity ownership', 'Minting capacity'].some(label => document.body.textContent?.includes(label) === true)`
+const poolDetailsAssertion = `(${capacityFactsAssertion}) && document.body.textContent?.includes('Share token address') === true && document.body.textContent?.includes('Outcome token IDs') === true && document.body.textContent?.includes('System stateOperational') === true && document.body.textContent?.includes('Security multiplier2×') === true && document.body.textContent?.includes('OutcomeUnresolved') === false`
+const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.toLowerCase() ?? ''; return !['binary shares for', 'invalid is insurance', 'invalid is not traded or priced by this amm', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei', 'positions grouped by securitypool', 'securitypool used by this amm'].some(phrase => text.includes(phrase)) && !/\\b(?:yes|no|invalid) shares?\\b/.test(description); })()`
 const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Select universe' && document.querySelector('.universe-selector > span') === null && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe'`
 const genesisWalletSummaryAssertion = `(() => { const summary = document.querySelector('.wallet-summary'); const address = summary?.querySelector('.wallet-summary__address')?.textContent ?? ''; const eth = summary?.querySelector('[data-wallet-asset="ETH"] strong')?.textContent; const rep = summary?.querySelector('[data-wallet-asset="REP"] strong')?.textContent; return /^0x[0-9a-f]{40}$/i.test(address) && !address.includes('…') && eth === '64' && rep === '12,500' && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()); return wallet !== undefined && values.length === 2 && values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
@@ -101,7 +103,7 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const checks = { capacity: ${capacityFactsAssertion}, removedCopy: ${removedCopyAssertion}, universeSelector: ${universeSelectorAssertion}, walletSummary: ${genesisWalletSummaryAssertion} }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(() => { const checks = { poolInternalsHidden: ${poolInternalsHiddenAssertion}, removedCopy: ${removedCopyAssertion}, universeSelector: ${universeSelectorAssertion}, walletSummary: ${genesisWalletSummaryAssertion} }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{ name: 'market-list-1280', width: 1280, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{ name: 'market-list-1181', width: 1181, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
@@ -206,21 +208,36 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'SecurityPool' && fact.querySelector('.address')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const capacityFactsVisible = ${capacityFactsAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !capacityFactsVisible || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 210 || rowActionHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, capacityFactsVisible, walletSummaryVisible, selectorBounds, rowActionHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
+		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'Security pool' && fact.querySelector('.security-pool-link')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const poolLinkHeights = [...document.querySelectorAll('.security-pool-link')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const poolInternalsHidden = ${poolInternalsHiddenAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !poolInternalsHidden || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 210 || rowActionHeights.some(height => height < 44) || poolLinkHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, poolInternalsHidden, walletSummaryVisible, selectorBounds, rowActionHeights, poolLinkHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
 	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets', assertExpression: removedCopyAssertion },
-	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: `(${capacityFactsAssertion}) && (${removedCopyAssertion})` },
+	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: `(${poolInternalsHiddenAssertion}) && (${removedCopyAssertion})` },
 	{
 		name: 'market-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/market',
-		assertExpression: `(${capacityFactsAssertion}) && [...document.querySelectorAll('.segmented button, .brand, .eyebrow[href], details summary')].every(control => control.getBoundingClientRect().height >= 44)`,
+		assertExpression: `(${poolInternalsHiddenAssertion}) && [...document.querySelectorAll('.segmented button, .brand, .eyebrow[href], details summary, .security-pool-link')].every(control => control.getBoundingClientRect().height >= 44)`,
+	},
+	{ name: 'security-pool-desktop', width: 1440, height: 900, path: `/?demo=1&scenario=baseline#/security-pool/0x${'3a'.repeat(20)}`, assertExpression: poolDetailsAssertion },
+	{ name: 'security-pool-mobile', width: 390, height: 844, path: `/?demo=1&scenario=baseline#/security-pool/0x${'3a'.repeat(20)}`, assertExpression: `(${poolDetailsAssertion}) && document.documentElement.scrollWidth <= document.documentElement.clientWidth` },
+	{
+		name: 'security-pool-unavailable-desktop',
+		width: 1440,
+		height: 900,
+		path: `/?demo=1&scenario=baseline#/security-pool/0x${'99'.repeat(20)}`,
+		assertExpression: `(() => { const alertVisible = document.querySelector('main [role="alert"]')?.textContent?.includes('This security pool is not available in the selected universe.') === true; const marketListHidden = document.querySelector('main')?.textContent?.includes('Trading open') !== true; if (!alertVisible || !marketListHidden) throw new Error(JSON.stringify({ alertVisible, marketListHidden, main: document.querySelector('main')?.textContent, hash: window.location.hash })); return true })()`,
+	},
+	{
+		name: 'security-pool-unavailable-mobile',
+		width: 390,
+		height: 844,
+		path: `/?demo=1&scenario=baseline#/security-pool/0x${'99'.repeat(20)}`,
+		assertExpression: `document.querySelector('main [role="alert"]')?.textContent?.includes('This security pool is not available in the selected universe.') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{ name: 'help-mobile', width: 390, height: 844, path: '/#/help', assertExpression: removedCopyAssertion },
-	{ name: 'developer-live', width: 1440, height: 900, path: '/#/developer' },
 	{ name: 'no-entry', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&side=no#/market' },
 	{ name: 'insured-exit', width: 1440, height: 900, path: '/?demo=1&scenario=baseline&mode=exit#/market' },
 	{
@@ -288,7 +305,7 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/portfolio',
-		assertExpression: `document.querySelectorAll('[data-portfolio-pool]').length === 1 && !document.body.textContent?.includes('Balance scope') && document.querySelector('.universe-selector select')?.getBoundingClientRect().height === 44 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `document.querySelectorAll('[data-portfolio-pool]').length === 1 && !document.body.textContent?.includes('Balance scope') && document.querySelector('.universe-selector select')?.getBoundingClientRect().height === 44 && [...document.querySelectorAll('.security-pool-link')].every(control => control.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{
 		name: 'portfolio-child-universe-mobile',
@@ -303,7 +320,7 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=max-token-ids#/portfolio',
-		assertExpression: `(() => { const selector = document.querySelector('.universe-selector select'); const longOptions = selector instanceof HTMLSelectElement ? [...selector.options].filter(option => option.value.length > 18) : []; return document.body.textContent?.includes('${((1n << 256n) - 256n).toString()}') === true && selector?.value === '${((1n << 248n) - 1n).toString()}' && selector?.selectedOptions[0]?.textContent?.startsWith('Universe ') === true && selector?.selectedOptions[0]?.textContent?.includes('…') === true && selector?.selectedOptions[0]?.getAttribute('aria-label') === 'Universe ${((1n << 248n) - 1n).toString()}' && longOptions.length === 2 && longOptions[0]?.textContent !== longOptions[1]?.textContent && document.querySelector('.universe-selector > span') === null && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		assertExpression: `(() => { const selector = document.querySelector('.universe-selector select'); const longOptions = selector instanceof HTMLSelectElement ? [...selector.options].filter(option => option.value.length > 18) : []; return document.body.textContent?.includes('${((1n << 256n) - 256n).toString()}') === false && document.querySelector('.security-pool-link') !== null && selector?.value === '${((1n << 248n) - 1n).toString()}' && selector?.selectedOptions[0]?.textContent?.startsWith('Universe ') === true && selector?.selectedOptions[0]?.textContent?.includes('…') === true && selector?.selectedOptions[0]?.getAttribute('aria-label') === 'Universe ${((1n << 248n) - 1n).toString()}' && longOptions.length === 2 && longOptions[0]?.textContent !== longOptions[1]?.textContent && document.querySelector('.universe-selector > span') === null && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 		scrollY: 240,
 	},
 	{ name: 'ended', width: 1440, height: 900, path: '/?demo=1&scenario=ended#/market', assertExpression: `document.body.textContent?.includes('Trading closed') === true && document.body.textContent?.includes('Waiting for input') !== true` },

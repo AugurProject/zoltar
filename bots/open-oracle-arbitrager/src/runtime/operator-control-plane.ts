@@ -88,7 +88,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
-				if (config.networkConfigured && next.networkConfigured && next.network !== config.network.name) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
 				const expectedChainId = next.network === 'mainnet' ? 1 : 11_155_111
 				if (next.networkConfigured) {
 					await checkConnectivity(next.connectivity, expectedChainId)
@@ -119,6 +119,9 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
+				if (latest.settings.networkConfigured) {
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+				}
 				const next = await updateOperatorConnectivity({
 					activeNetwork: config.networkConfigured ? config.network.name : undefined,
 					deployment: latest.settings.deployment,

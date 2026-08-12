@@ -138,15 +138,16 @@
 			</div>
 
 			<div class="dashboard-grid">
-				<section class="panel">
+				<section id="network-connectivity" class="panel">
 					<div class="section-heading">
 						<div>
 							<p class="eyebrow">Network safety</p>
-							<h2>RPC connectivity</h2>
+							<h2>Chain and RPC connectivity</h2>
 						</div>
 						<span id="network-value" class="badge">Unknown network</span>
 					</div>
 					<p id="network-target-status" class="muted" role="status" aria-live="polite" hidden></p>
+					<p class="muted">The chain is locked after initial setup. Use a separate operator configuration and durable journal paths for another chain.</p>
 					<form id="connectivity-form">
 						<fieldset id="connectivity-fieldset" disabled>
 							<div class="connectivity-grid">
@@ -168,7 +169,7 @@
 							</div>
 							<div class="form-actions">
 								<span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span>
-								<button class="button" type="submit">Check &amp; apply RPCs</button>
+								<button class="button" type="submit">Check &amp; apply network</button>
 							</div>
 						</fieldset>
 					</form>

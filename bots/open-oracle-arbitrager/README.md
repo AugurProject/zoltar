@@ -174,8 +174,10 @@ cd bots/open-oracle-arbitrager
 bun install --frozen-lockfile
 ```
 
-Create the single operator configuration, edit its deployment and endpoint values,
-then run the executable with no arguments:
+Copy the paused example and run the executable with no arguments. On first start,
+save the chain and RPC endpoints through **Chain and RPC connectivity** in the dashboard;
+then review deployment values in **Complete bot configuration** before enabling
+execution:
 
 ```bash
 install -d -m 700 .state
@@ -215,7 +217,7 @@ On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
 password from `.env`.
 
-In **RPC connectivity**, select the chain, enter its read and public RPC URLs, and
+In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then
 open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration).
 Add the reviewed deployment settings, set the centralized-market REP address to
@@ -292,7 +294,7 @@ complete active-game context is operationally important.
 Use a separate operator configuration and separate history, price, and position
 paths for Sepolia; an existing configured operator file cannot be retargeted to
 another chain. Start the new file paused and unconfigured, then save `sepolia` and
-its RPC URLs in **RPC connectivity**. Reload the dashboard so **Complete bot
+its RPC URLs in **Chain and RPC connectivity**. Reload the dashboard so **Complete bot
 configuration** contains the persisted network. Replace
 every deployment address with values from the same reviewed test environment, set
 `centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
@@ -300,8 +302,15 @@ use separate history, price, and position paths before saving the complete
 configuration and restarting:
 
 ```bash
-bun run run
+install -m 600 config/operator.example.json .state/operator-sepolia.json
+OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json bun run run
 ```
+
+Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` on the restart
+command and in the service definition. Before enabling execution, set the file's
+runtime paths to distinct Sepolia-specific files such as
+`.state/history-sepolia.jsonl`, `.state/prices-sepolia.jsonl`, and
+`.state/positions-sepolia.json`.
 
 Deployment addresses can be changed in the complete JSON editor and apply only
 after restart. The selected chain cannot be changed after initial configuration,

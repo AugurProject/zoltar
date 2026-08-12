@@ -725,10 +725,12 @@ function populateConfiguration(configuration: Configuration) {
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
 	if (configuration.network !== undefined && configuration.connectivity !== undefined) {
 		networkName.value = configuration.network.name
+		networkName.disabled = true
 		readRpcUrl.value = configuration.connectivity.readRpcUrl
 		publicRpcUrls.value = configuration.connectivity.publicRpcUrls.join('\n')
 		quorumRpcUrls.value = configuration.connectivity.quorumRpcUrls.join('\n')
 	} else {
+		networkName.disabled = false
 		readRpcUrl.value = ''
 		publicRpcUrls.value = ''
 		quorumRpcUrls.value = ''

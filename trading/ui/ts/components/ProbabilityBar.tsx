@@ -15,7 +15,7 @@ export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: numb
 				<div class='probability__yes' style={{ width: `${yesPercent}%` }} />
 				{beforePercent === undefined ? null : <span class='probability__marker' style={{ left: `${beforePercent}%` }} aria-label={`Before ${beforePercent.toFixed(1)} percent`} />}
 			</div>
-			<figcaption>YES share of valid outcomes</figcaption>
+			<figcaption>YES among valid outcomes</figcaption>
 		</figure>
 	)
 }
