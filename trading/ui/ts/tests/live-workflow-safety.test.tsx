@@ -71,6 +71,11 @@ describe('live workflow safety boundary', () => {
 		let connectedAccount = account
 		let contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		let waitForContextApprovalReceipt = false
+		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		let waitForPositionReceipt = false
+		let positionBroadcast = deferred<undefined>()
+		let positionWalletWrite = deferred<undefined>()
+		let deferPositionBroadcast = false
 		let approved = false
 		let approveRouterCalls = 0
 		let rejectWalletChainRead = false
@@ -100,6 +105,7 @@ describe('live workflow safety boundary', () => {
 		Reflect.set(window, 'ethereum', injectedProvider)
 		const walletClient = {
 			waitForTransactionReceipt: async () => {
+				if (waitForPositionReceipt) return await positionReceipt.promise
 				if (waitForContextApprovalReceipt) return await contextApprovalReceipt.promise
 				return { status: 'success' as const }
 			},
@@ -210,6 +216,7 @@ describe('live workflow safety boundary', () => {
 				side: 'YES' as const,
 				market,
 				deadline: now + 1_200n,
+				slippageBps: 50n,
 				minimumLongShares: 1n,
 				result: {
 					completeSetShares: 1n,
@@ -222,7 +229,13 @@ describe('live workflow safety boundary', () => {
 					conditionalYesBpsAfter: 5_001n,
 				},
 			}),
-			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => await guardedWrite(async () => transactionHash),
+			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+				if (deferPositionBroadcast) await positionBroadcast.promise
+				return await guardedWrite(async () => {
+					if (deferPositionBroadcast) await positionWalletWrite.promise
+					return transactionHash
+				})
+			},
 		}))
 		const { LiveTrading } = await import('../features/LiveTrading.tsx')
 		const workflowLocks: boolean[] = []
@@ -466,7 +479,72 @@ describe('live workflow safety boundary', () => {
 		await act(async () => button('Connect wallet').click())
 		await settleAsyncWorkflow()
 
+		await act(async () => button('Enter').click())
+		await act(async () => button('Preview trade').click())
+		await settleAsyncWorkflow()
+		deferPositionBroadcast = true
+		waitForPositionReceipt = true
+		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		positionBroadcast = deferred<undefined>()
+		positionWalletWrite = deferred<undefined>()
+		await act(async () => button('Enter YES').click())
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Preparing Enter YES')
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+		positionBroadcast.resolve(undefined)
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Enter YES pending in wallet')
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+		positionWalletWrite.resolve(undefined)
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Enter YES pending on-chain')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		positionReceipt.resolve({ status: 'success' })
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		deferPositionBroadcast = false
+		waitForPositionReceipt = false
+		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.operation-block .execution-settings input')
+		if (protectionInputs.length !== 2) throw new Error('Missing position transaction protection fields')
+		await act(() => {
+			const slippageInput = protectionInputs[0]
+			const validityInput = protectionInputs[1]
+			if (slippageInput === undefined || validityInput === undefined) throw new Error('Missing position transaction protection input')
+			slippageInput.value = '0.6'
+			slippageInput.dispatchEvent(new Event('input', { bubbles: true }))
+			validityInput.value = '21'
+			validityInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+
 		await act(async () => button('Exit').click())
+		const positionAction = document.querySelector('.operation-block .primary-action')
+		const poolMechanics = document.querySelector('.operation-block .pool-mechanics')
+		if (positionAction === null || poolMechanics === null) throw new Error('Missing position action or pool mechanics disclosure')
+		expect(positionAction.compareDocumentPosition(poolMechanics) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		waitForContextApprovalReceipt = true
+		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await act(async () => button('Approve router for all outcome tokens').click())
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Insured YES exit approval pending on-chain')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(button('Approve router for all outcome tokens').getAttribute('aria-busy')).toBe('true')
+		contextApprovalReceipt.resolve({ status: 'success' })
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Insured YES exit approval confirmed on-chain')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		const secondMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Second rendered workflow market') === true)
+		if (secondMarketButton === undefined) throw new Error('Missing second market selector')
+		await act(async () => secondMarketButton.click())
+		await settleAsyncWorkflow()
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+		approved = false
+		const firstMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Rendered workflow market') === true && candidate.textContent?.includes('Second') !== true)
+		if (firstMarketButton === undefined) throw new Error('Missing first market selector')
+		await act(async () => firstMarketButton.click())
+		await settleAsyncWorkflow()
+		waitForContextApprovalReceipt = false
 		rejectBalanceRefresh = true
 		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
@@ -524,7 +602,9 @@ describe('live workflow safety boundary', () => {
 			await contextApprovalReceipt.promise
 		})
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Wallet context changed while the LP-token approval was pending')
+		expect(document.body.textContent).toContain('Liquidity transaction approval confirmed on-chain')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(document.body.textContent).toContain('Wallet account changed')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
 
@@ -557,7 +637,8 @@ describe('live workflow safety boundary', () => {
 			await contextApprovalReceipt.promise
 		})
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(document.body.textContent).toContain('Wallet account changed')
 		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
 		expect(workflowLocks.at(-1)).toBeFalse()
 
