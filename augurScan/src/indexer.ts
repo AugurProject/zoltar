@@ -11,13 +11,16 @@ import {
 import {
 	type Address,
 	createPublicClient,
+	encodeAbiParameters,
 	getAddress,
 	type Hash,
 	type Hex,
 	http,
+	keccak256,
 	type Log,
 	type PublicClient,
 	parseAbi,
+	parseAbiItem,
 	type Transaction,
 	type TransactionReceipt,
 	zeroAddress,
@@ -39,6 +42,36 @@ const erc20MetadataAbi = parseAbi([
 ])
 const erc20BalanceAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 const priceCoordinatorDependenciesAbi = parseAbi(['function liquidationApprovalRegistry() view returns (address)'])
+const uniswapV4InitializeEvent = parseAbiItem(
+	'event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)',
+)
+const uniswapV2PairCreatedEvent = parseAbiItem('event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)')
+const uniswapV3PoolCreatedEvent = parseAbiItem(
+	'event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)',
+)
+const uniswapV4SwapEvent = parseAbiItem(
+	'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
+)
+const uniswapV4PoolConfigurations = [
+	{ fee: 100, tickSpacing: 1 },
+	{ fee: 500, tickSpacing: 10 },
+	{ fee: 3_000, tickSpacing: 60 },
+	{ fee: 10_000, tickSpacing: 200 },
+] as const
+
+export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata>): readonly Hex[] =>
+	[...contracts.values()]
+		.filter(({ kind }) => kind === 'reputationToken')
+		.flatMap(({ address }) =>
+			uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) =>
+				keccak256(
+					encodeAbiParameters(
+						[{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }],
+						[zeroAddress, address, fee, tickSpacing, zeroAddress],
+					),
+				),
+			),
+		)
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
 	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)
@@ -911,7 +944,7 @@ class NetworkIndexer {
 		let segment: { readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }
 		let headers: readonly RpcBlockHeader[]
 		try {
-			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses)
+			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses, contracts)
 			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
 			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
 			const endHeader = headers.at(-1)
@@ -947,11 +980,20 @@ class NetworkIndexer {
 			const newlyDiscoveredActivityAddresses = [...indexed.contracts]
 				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
 				.map(([, contract]) => contract.address)
-			if (newlyDiscoveredActivityAddresses.length > 0 && nextBlock < end) {
+			const discoveredRep = [...indexed.contracts].some(([address, contract]) => !contractsBeforeBlock.has(address) && contract.kind === 'reputationToken')
+			const additionalAddresses = [
+				...newlyDiscoveredActivityAddresses,
+				...(discoveredRep
+					? [...indexed.contracts.values()]
+							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
+							.map(({ address }) => address)
+					: []),
+			]
+			if (additionalAddresses.length > 0 && nextBlock < end) {
 				try {
 					this.#mergeLogs(
 						logsByBlock,
-						await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses, (blockNumber) => {
+						await this.#getAllLogs(nextBlock + 1n, end, additionalAddresses, indexed.contracts, (blockNumber) => {
 							const expected = headers[Number(blockNumber - batchStart)]
 							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
 							return expected.hash
@@ -988,15 +1030,50 @@ class NetworkIndexer {
 		return end >= observedHead
 	}
 
-	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+	async #getLogs(
+		fromBlock: bigint,
+		toBlock: bigint,
+		addresses: readonly Address[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
+	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
 		const range = await queryCanonicalLogRange(
 			toBlock,
 			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
 			async () => {
-				const groups = rpcLogAddressGroups(addresses)
-				const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
+				const addressesOfKind = (kind: string): readonly Address[] => addresses.filter((address) => contracts.get(address.toLowerCase())?.kind === kind)
+				const managerAddresses = addressesOfKind('uniswapV4PoolManager')
+				const v2FactoryAddresses = addressesOfKind('uniswapV2Factory')
+				const v3FactoryAddresses = addressesOfKind('uniswapV3Factory')
+				const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
+				const ordinaryAddresses = addresses.filter((address) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
+				const groups = rpcLogAddressGroups(ordinaryAddresses)
+				const ordinaryPages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
+				const repTokens = [...contracts.values()].filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
+				const wethTokens = [...contracts.values()].filter(({ kind }) => kind === 'weth').map(({ address }) => address)
+				const tokenPairs = repTokens.flatMap((rep) =>
+					wethTokens.flatMap((weth) => [
+						{ token0: rep, token1: weth },
+						{ token0: weth, token1: rep },
+					]),
+				)
+				const v2Queries = v2FactoryAddresses.flatMap((address) => tokenPairs.map((tokens) => ({ address, ...tokens })))
+				const v2Pages = await mapLimit(v2Queries, 3, ({ address, token0, token1 }) =>
+					this.#client.getLogs({ address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock, toBlock }),
+				)
+				const v3Queries = v3FactoryAddresses.flatMap((address) => tokenPairs.map((tokens) => ({ address, ...tokens })))
+				const v3Pages = await mapLimit(v3Queries, 3, ({ address, token0, token1 }) =>
+					this.#client.getLogs({ address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock, toBlock }),
+				)
+				const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
+				const v4Queries = managerAddresses.flatMap((address) => poolIdGroups.map((ids) => ({ address, ids })))
+				const initializePages = await mapLimit(v4Queries, 3, ({ address, ids }) =>
+					this.#client.getLogs({ address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock, toBlock }),
+				)
+				const swapPages = await mapLimit(v4Queries, 3, ({ address, ids }) =>
+					this.#client.getLogs({ address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock, toBlock }),
+				)
 				const unique = new Map<string, Log>()
-				for (const log of pages.flat()) {
+				for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
 					const position = requireLogPosition(log)
 					if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
 						throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
@@ -1016,6 +1093,7 @@ class NetworkIndexer {
 		fromBlock: bigint,
 		maximumToBlock: bigint,
 		addresses: readonly Address[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
 	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }> {
 		if (addresses.length === 0) {
 			const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
@@ -1027,7 +1105,7 @@ class NetworkIndexer {
 			maximumToBlock,
 			runtimeConfig.logScanRangeSize,
 			async (rangeStart, rangeEnd) => {
-				const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+				const range = await this.#getLogs(rangeStart, rangeEnd, addresses, contracts)
 				endBlockHash = range.endBlockHash
 				return range.logs
 			},
@@ -1045,6 +1123,7 @@ class NetworkIndexer {
 		fromBlock: bigint,
 		toBlock: bigint,
 		addresses: readonly Address[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
 		expectedBlockHash: (blockNumber: bigint) => Hash,
 	): Promise<readonly Log[]> {
 		const logs: Log[] = []
@@ -1055,7 +1134,7 @@ class NetworkIndexer {
 				toBlock,
 				runtimeConfig.logScanRangeSize,
 				async (rangeStart, rangeEnd) => {
-					const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+					const range = await this.#getLogs(rangeStart, rangeEnd, addresses, contracts)
 					if (range.endBlockHash !== expectedBlockHash(rangeEnd))
 						throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
 					return range.logs
@@ -1093,8 +1172,8 @@ class NetworkIndexer {
 		}
 	}
 
-	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
-		const range = await this.#getLogs(blockNumber, blockNumber, addresses)
+	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]> {
+		const range = await this.#getLogs(blockNumber, blockNumber, addresses, contracts)
 		if (range.endBlockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
 		for (const log of range.logs) {
 			if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
@@ -1152,7 +1231,7 @@ class NetworkIndexer {
 					const contract = contracts.get(emitter)
 					if (contract === undefined) continue
 					const decoded = decodeLogRecord(contract.kind, log.topics, log.data, labels)
-					for (const candidate of discoveriesFrom(decoded)) {
+					for (const candidate of discoveriesFrom(decoded, contracts)) {
 						const key = candidate.address.toLowerCase()
 						if (contracts.has(key)) continue
 						const metadata: ContractMetadata = {
@@ -1191,7 +1270,16 @@ class NetworkIndexer {
 			}
 			if (discoveredAddresses.length === 0) break
 			const activityAddresses = discoveredAddresses.filter((address) => isProtocolActivitySource(contracts.get(address.toLowerCase())))
-			for (const log of activityAddresses.length === 0 ? [] : await this.#getKnownLogs(number, activityAddresses, block.hash)) {
+			const discoveredRep = discoveredAddresses.some((address) => contracts.get(address.toLowerCase())?.kind === 'reputationToken')
+			const queryAddresses = [
+				...activityAddresses,
+				...(discoveredRep
+					? [...contracts.values()]
+							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
+							.map(({ address }) => address)
+					: []),
+			]
+			for (const log of queryAddresses.length === 0 ? [] : await this.#getKnownLogs(number, queryAddresses, contracts, block.hash)) {
 				relevantHashes.add(requireLogPosition(log).transactionHash)
 			}
 			await fetchMissingEvidence()

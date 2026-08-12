@@ -310,11 +310,73 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 	if (type === 'pools') {
 		const address = parts[2]?.toLowerCase()
 		if (parts.length !== 3 || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: 'Invalid pool address' }, 400)
-		const [snapshots, events] = await Promise.all([
+		const [snapshots, events, markets, ammPrices, repEthPrices, uniswapRepEthPrices] = await Promise.all([
 			sql`SELECT s.*, b.timestamp FROM pool_snapshots s JOIN blocks b ON b.chain_id = s.chain_id AND b.hash = s.block_hash WHERE s.chain_id = ${chainId} AND s.pool_address = ${address} AND s.canonical ORDER BY s.block_number DESC, s.log_index DESC LIMIT ${queryLimit}`,
 			sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical ORDER BY e.block_number DESC, e.log_index DESC LIMIT ${queryLimit}`,
+			sql`SELECT market.chain_id::text AS chain_id, market.block_hash, market.tx_hash, market.log_index, market.block_number::text AS block_number, market.pair_address, market.pool_address, market.share_token_address, market.universe_id::text AS universe_id, market.fee_bps::text AS fee_bps, market.canonical, block.timestamp FROM amm_markets market JOIN blocks block ON block.chain_id = market.chain_id AND block.hash = market.block_hash WHERE market.chain_id = ${chainId} AND market.pool_address = ${address} AND market.canonical ORDER BY market.block_number DESC, market.log_index DESC LIMIT 1`,
+			sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.pair_address, price.yes_reserve_atto_shares::text AS yes_reserve_atto_shares, price.no_reserve_atto_shares::text AS no_reserve_atto_shares, price.conditional_yes_bps::text AS conditional_yes_bps, price.conditional_no_bps::text AS conditional_no_bps, price.canonical, block.timestamp FROM amm_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN amm_markets market ON market.chain_id = price.chain_id AND market.pair_address = price.pair_address AND market.canonical WHERE price.chain_id = ${chainId} AND market.pool_address = ${address} AND price.canonical ORDER BY price.block_number DESC, price.log_index DESC LIMIT ${queryLimit}`,
+			sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.coordinator_address, price.event_name, price.report_id::text AS report_id, price.rep_per_eth_1e18::text AS rep_per_eth_1e18, price.settlement_timestamp, price.canonical, block.timestamp FROM rep_eth_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN pools pool ON pool.chain_id = price.chain_id AND pool.coordinator_address = price.coordinator_address AND pool.canonical WHERE price.chain_id = ${chainId} AND pool.pool_address = ${address} AND price.canonical ORDER BY price.block_number DESC, price.log_index DESC LIMIT ${queryLimit}`,
+			sql`
+				WITH target_pool AS (
+					SELECT pools.universe_id FROM pools
+					WHERE pools.chain_id = ${chainId} AND pools.pool_address = ${address} AND pools.canonical
+					ORDER BY pools.block_number DESC, pools.log_index DESC LIMIT 1
+				), universe_rep AS (
+					SELECT universe_events.reputation_token_address
+					FROM universe_events CROSS JOIN target_pool
+					WHERE universe_events.chain_id = ${chainId}
+						AND universe_events.universe_id = target_pool.universe_id
+						AND universe_events.reputation_token_address IS NOT NULL
+						AND universe_events.canonical
+					ORDER BY universe_events.block_number DESC, universe_events.log_index DESC LIMIT 1
+				)
+				SELECT observation.chain_id::text AS chain_id, observation.block_hash, observation.tx_hash,
+					observation.log_index, observation.block_number::text AS block_number, observation.venue,
+					observation.market_id, observation.event_name, market.contract_address, market.token0_address,
+					market.token1_address, market.fee_hundredths_bip::text AS fee_hundredths_bip,
+					market.tick_spacing, market.hooks_address,
+					CASE WHEN observation.venue = 'v4' THEN 'ETH' ELSE 'WETH' END AS quote_symbol,
+					CASE
+						WHEN market.token0_address = universe_rep.reputation_token_address THEN market.token1_address
+						ELSE market.token0_address
+					END AS quote_token_address,
+					TRUNC(CASE
+						WHEN observation.venue = 'v2' AND market.token0_address = universe_rep.reputation_token_address
+							THEN observation.reserve0 * 1000000000000000000 / observation.reserve1
+						WHEN observation.venue = 'v2'
+							THEN observation.reserve1 * 1000000000000000000 / observation.reserve0
+						WHEN market.token0_address = universe_rep.reputation_token_address
+							THEN 6277101735386680763835789423207666416102355444464034512896 * 1000000000000000000
+								/ (observation.sqrt_price_x96 * observation.sqrt_price_x96)
+						ELSE observation.sqrt_price_x96 * observation.sqrt_price_x96 * 1000000000000000000
+							/ 6277101735386680763835789423207666416102355444464034512896
+					END)::text AS rep_per_eth_1e18,
+					block.timestamp
+				FROM uniswap_rep_eth_price_observations observation
+				JOIN uniswap_rep_eth_markets market ON market.chain_id = observation.chain_id
+					AND market.venue = observation.venue AND market.market_id = observation.market_id AND market.canonical
+				JOIN universe_rep ON market.token0_address = universe_rep.reputation_token_address
+					OR market.token1_address = universe_rep.reputation_token_address
+				JOIN blocks block ON block.chain_id = observation.chain_id AND block.hash = observation.block_hash
+				WHERE observation.chain_id = ${chainId} AND observation.canonical
+					AND CASE WHEN observation.venue = 'v2'
+						THEN observation.reserve0 > 0 AND observation.reserve1 > 0
+						ELSE observation.sqrt_price_x96 > 0
+					END
+				ORDER BY observation.block_number DESC, observation.log_index DESC LIMIT ${queryLimit}
+			`,
 		])
-		return json({ snapshots: chronological(snapshots), events: chronological(events), truncated: snapshots.length > limit || events.length > limit, limit })
+		return json({
+			snapshots: chronological(snapshots),
+			events: chronological(events),
+			market: markets[0],
+			ammPrices: chronological(ammPrices),
+			repEthPrices: chronological(repEthPrices),
+			uniswapRepEthPrices: chronological(uniswapRepEthPrices),
+			truncated:
+				snapshots.length > limit || events.length > limit || ammPrices.length > limit || repEthPrices.length > limit || uniswapRepEthPrices.length > limit,
+			limit,
+		})
 	}
 	if (type === 'vaults') {
 		const pool = parts[2]?.toLowerCase()

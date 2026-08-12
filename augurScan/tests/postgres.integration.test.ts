@@ -28,6 +28,9 @@ const orphanOnlyAddress = getAddress('0x5000000000000000000000000000000000000005
 const wethAddress = getAddress('0x6000000000000000000000000000000000000006')
 const secondWethAddress = getAddress('0x6000000000000000000000000000000000000007')
 const referencedOnlyAddress = getAddress('0x7000000000000000000000000000000000000008')
+const pairAddress = getAddress('0x8000000000000000000000000000000000000009')
+const uniswapPairAddress = getAddress('0x9000000000000000000000000000000000000009')
+const inverseUniswapPairAddress = getAddress('0xa000000000000000000000000000000000000009')
 const transactionHash = keccak256(stringToHex('augurScan integration transaction'))
 const blockHash = (name: string) => keccak256(stringToHex(name))
 
@@ -75,6 +78,80 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 		},
 	},
 })
+
+const decodedLog = (
+	hash: ReturnType<typeof blockHash>,
+	logIndex: number,
+	emitter: ReturnType<typeof getAddress>,
+	name: string,
+	argumentsValue: Record<string, unknown>,
+): StoredLog => ({
+	...log(hash, name),
+	logIndex,
+	address: emitter,
+	decoded: { status: 'decoded', name, summary: name, arguments: argumentsValue },
+})
+
+const repPriceLog = (hash: ReturnType<typeof blockHash>, price: string): StoredLog =>
+	decodedLog(hash, 5, promotedAddress, 'PriceReported', {
+		reportId: '42',
+		price,
+		lastSettlementTimestamp: '1767312000',
+	})
+
+const priceHistoryLogs = (hash: ReturnType<typeof blockHash>): readonly StoredLog[] => [
+	decodedLog(hash, 2, address, 'DeploySecurityPool', {
+		securityPool: discoveredAddress,
+		parent: '0x0000000000000000000000000000000000000000',
+		universeId: '0',
+		questionId: '42',
+		truthAuction: rediscoveredAddress,
+		priceOracleManagerAndOperatorQueuer: promotedAddress,
+		shareToken: wethAddress,
+		statoblastSecurityMultiplierBps: '15000',
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n.toString(),
+		currentRetentionRate: '999999000000000000',
+		settlementCollateralAttoEth: 12_000_000_000_000_000_000n.toString(),
+	}),
+	decodedLog(hash, 3, address, 'PairCreated', {
+		securityPool: discoveredAddress,
+		shareToken: wethAddress,
+		universeId: '0',
+		pair: pairAddress,
+		feeBps: '30',
+	}),
+	decodedLog(hash, 4, pairAddress, 'Sync', { yesReserve: '300000000000000000000', noReserve: '700000000000000000000' }),
+	repPriceLog(hash, '19500000000000000000'),
+	decodedLog(hash, 6, address, 'UniverseInitialized', {
+		universeId: '0',
+		parentUniverseId: '0',
+		forkingOutcomeIndex: '0',
+		reputationToken: rediscoveredAddress,
+		forkQuestionId: '0',
+		forkTime: '0',
+		universeTheoreticalSupplyAttoRep: 10_000_000_000_000_000_000_000_000n.toString(),
+	}),
+	decodedLog(hash, 7, address, 'PairCreated', {
+		token0: rediscoveredAddress,
+		token1: wethAddress,
+		pair: uniswapPairAddress,
+		'3': '1',
+	}),
+	decodedLog(hash, 8, uniswapPairAddress, 'Sync', {
+		reserve0: '1800000000000000000000',
+		reserve1: '100000000000000000000',
+	}),
+	decodedLog(hash, 9, address, 'PairCreated', {
+		token0: wethAddress,
+		token1: rediscoveredAddress,
+		pair: inverseUniswapPairAddress,
+		'3': '2',
+	}),
+	decodedLog(hash, 10, inverseUniswapPairAddress, 'Sync', {
+		reserve0: '100000000000000000000',
+		reserve1: '2400000000000000000000',
+	}),
+]
 
 const indexedBlock = (
 	name: string,
@@ -371,11 +448,14 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			address: orphanOnlyAddress,
 			label: 'Orphan-only helper',
 		}
+		const orphanBase = indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery, laterRediscovery, orphanOnlyDiscovery], 'orphan event', [
+			{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
+			{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
+		])
+		const orphanPrice = repPriceLog(orphanBase.hash, '99000000000000000000')
 		const orphan: IndexedBlock = {
-			...indexedBlock('block-two-orphan', first.hash, [discovery, promotedDiscovery, laterRediscovery, orphanOnlyDiscovery], 'orphan event', [
-				{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
-				{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
-			]),
+			...orphanBase,
+			logs: [...orphanBase.logs, orphanPrice],
 			logScanCursors: [
 				{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },
 				{ contractAddress: discoveredAddress, startBlock: 2n, lastRetrievedBlock: 2n },
@@ -403,6 +483,9 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		await database.recordContractDeployment(chainId, address, 2n, { block: 2n, timestamp: new Date('2026-01-02T00:00:00Z'), exact: true }, writeLease)
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).toMatchObject({ deploymentBlock: 2n, deploymentCheckedBlock: 2n })
 		await database.rewind(chainId, 1n, first.hash, writeLease)
+		const canonicalOrphanPrices =
+			await database.sql`SELECT * FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND block_hash = ${orphan.hash} AND canonical`
+		expect(canonicalOrphanPrices).toHaveLength(0)
 		expect(await database.logScanCursors(chainId)).toEqual(
 			new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]),
 		)
@@ -426,9 +509,27 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		const replacementBase = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [
 			{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 18, readBlock: 2n },
 		])
+		const uniswapPairDiscovery: ContractMetadata = {
+			address: uniswapPairAddress,
+			label: 'Uniswap V2 REP / WETH Pair',
+			kind: 'uniswapV2Pair',
+			provenance: 'Uniswap V2 Factory.PairCreated',
+			discoveryBlock: 2n,
+			discoveryTxHash: transactionHash,
+		}
+		const inverseUniswapPairDiscovery: ContractMetadata = {
+			address: inverseUniswapPairAddress,
+			label: 'Uniswap V2 WETH / REP Pair',
+			kind: 'uniswapV2Pair',
+			provenance: 'Uniswap V2 Factory.PairCreated',
+			discoveryBlock: 2n,
+			discoveryTxHash: transactionHash,
+		}
+		const replacementPrices = priceHistoryLogs(replacementBase.hash)
 		const replacement: IndexedBlock = {
 			...replacementBase,
-			logs: [...replacementBase.logs, vaultCheckpoint(replacementBase.hash)],
+			contracts: [...replacementBase.contracts, uniswapPairDiscovery, inverseUniswapPairDiscovery],
+			logs: [...replacementBase.logs, vaultCheckpoint(replacementBase.hash), ...replacementPrices],
 			addressActivity: [{ transactionHash, address, poolAddress: discoveredAddress, role: 'sender' }],
 			logScanCursors: [
 				{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },
@@ -436,6 +537,107 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			],
 		}
 		await database.storeBlock(chainId, replacement, writeLease)
+		const poolHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/pools/${chainId}/${discoveredAddress.toLowerCase()}`), database.sql)
+		if (poolHistoryResponse === undefined) throw new Error('pool history API did not return a response')
+		const poolHistory = await poolHistoryResponse.json()
+		if (
+			typeof poolHistory !== 'object' ||
+			poolHistory === null ||
+			Array.isArray(poolHistory) ||
+			!('market' in poolHistory) ||
+			!('ammPrices' in poolHistory) ||
+			!('repEthPrices' in poolHistory) ||
+			!('uniswapRepEthPrices' in poolHistory)
+		)
+			throw new Error('pool history API returned an invalid price payload')
+		expect(poolHistory.market).toEqual({
+			chain_id: chainId.toString(),
+			block_hash: replacement.hash,
+			tx_hash: transactionHash,
+			log_index: 3,
+			block_number: '2',
+			pair_address: pairAddress.toLowerCase(),
+			pool_address: discoveredAddress.toLowerCase(),
+			share_token_address: wethAddress.toLowerCase(),
+			universe_id: '0',
+			fee_bps: '30',
+			canonical: true,
+			timestamp: '2026-01-02T00:00:00.000Z',
+		})
+		expect(poolHistory.ammPrices).toEqual([
+			{
+				chain_id: chainId.toString(),
+				block_hash: replacement.hash,
+				tx_hash: transactionHash,
+				log_index: 4,
+				block_number: '2',
+				pair_address: pairAddress.toLowerCase(),
+				yes_reserve_atto_shares: '300000000000000000000',
+				no_reserve_atto_shares: '700000000000000000000',
+				conditional_yes_bps: '7000',
+				conditional_no_bps: '3000',
+				canonical: true,
+				timestamp: '2026-01-02T00:00:00.000Z',
+			},
+		])
+		expect(poolHistory.repEthPrices).toEqual([
+			{
+				chain_id: chainId.toString(),
+				block_hash: replacement.hash,
+				tx_hash: transactionHash,
+				log_index: 5,
+				block_number: '2',
+				coordinator_address: promotedAddress.toLowerCase(),
+				event_name: 'PriceReported',
+				report_id: '42',
+				rep_per_eth_1e18: '19500000000000000000',
+				settlement_timestamp: '2026-01-02T00:00:00.000Z',
+				canonical: true,
+				timestamp: '2026-01-02T00:00:00.000Z',
+			},
+		])
+		expect(poolHistory.uniswapRepEthPrices).toEqual([
+			{
+				chain_id: chainId.toString(),
+				block_hash: replacement.hash,
+				tx_hash: transactionHash,
+				log_index: 8,
+				block_number: '2',
+				venue: 'v2',
+				market_id: uniswapPairAddress.toLowerCase(),
+				event_name: 'Sync',
+				contract_address: uniswapPairAddress.toLowerCase(),
+				token0_address: rediscoveredAddress.toLowerCase(),
+				token1_address: wethAddress.toLowerCase(),
+				fee_hundredths_bip: '3000',
+				tick_spacing: null,
+				hooks_address: null,
+				quote_symbol: 'WETH',
+				quote_token_address: wethAddress.toLowerCase(),
+				rep_per_eth_1e18: '18000000000000000000',
+				timestamp: '2026-01-02T00:00:00.000Z',
+			},
+			{
+				chain_id: chainId.toString(),
+				block_hash: replacement.hash,
+				tx_hash: transactionHash,
+				log_index: 10,
+				block_number: '2',
+				venue: 'v2',
+				market_id: inverseUniswapPairAddress.toLowerCase(),
+				event_name: 'Sync',
+				contract_address: inverseUniswapPairAddress.toLowerCase(),
+				token0_address: wethAddress.toLowerCase(),
+				token1_address: rediscoveredAddress.toLowerCase(),
+				fee_hundredths_bip: '3000',
+				tick_spacing: null,
+				hooks_address: null,
+				quote_symbol: 'WETH',
+				quote_token_address: wethAddress.toLowerCase(),
+				rep_per_eth_1e18: '24000000000000000000',
+				timestamp: '2026-01-02T00:00:00.000Z',
+			},
+		])
 		await database.storeRichListBalances(
 			chainId,
 			2n,

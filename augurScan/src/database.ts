@@ -566,6 +566,11 @@ export class ScannerDatabase {
 			await transaction`UPDATE pool_state_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE vault_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE universe_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE amm_markets SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE amm_price_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE rep_eth_price_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE uniswap_rep_eth_markets SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE uniswap_rep_eth_price_observations SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
@@ -746,6 +751,63 @@ export class ScannerDatabase {
 							INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical)
 							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.eventName}, ${JSON.stringify(projection.state)}, true)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true, state = EXCLUDED.state
+						`
+						continue
+					}
+					if (projection.type === 'ammMarket') {
+						await transaction`
+							INSERT INTO amm_markets (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address, share_token_address, universe_id, fee_bps, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.pairAddress}, ${projection.poolAddress}, ${projection.shareTokenAddress}, ${projection.universeId}, ${projection.feeBps}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pair_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'ammPrice') {
+						await transaction`
+							INSERT INTO amm_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, yes_reserve_atto_shares, no_reserve_atto_shares, conditional_yes_bps, conditional_no_bps, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.pairAddress}, ${projection.yesReserveAttoShares}, ${projection.noReserveAttoShares}, ${projection.conditionalYesBps}, ${projection.conditionalNoBps}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pair_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'repEthPrice') {
+						await transaction`
+							INSERT INTO rep_eth_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, coordinator_address, event_name, report_id, rep_per_eth_1e18, settlement_timestamp, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.coordinatorAddress}, ${projection.eventName}, ${projection.reportId ?? null}, ${projection.repPerEth1e18}, ${projection.settlementTimestamp ?? null}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, coordinator_address) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'uniswapMarket') {
+						await transaction`
+							INSERT INTO uniswap_rep_eth_markets (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, contract_address, token0_address, token1_address, fee_hundredths_bip, tick_spacing, hooks_address, canonical)
+							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.contractAddress}, ${projection.token0Address}, ${projection.token1Address}, ${projection.feeHundredthsBip}, ${projection.tickSpacing ?? null}, ${projection.hooksAddress ?? null}, true
+							WHERE (
+								${projection.venue} IN ('v2', 'v3') AND (
+									EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'reputationToken' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'weth' AND canonical)
+									OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'weth' AND canonical)
+								)
+							) OR (
+								${projection.venue} = 'v4'
+								AND ${projection.token0Address} = '0x0000000000000000000000000000000000000000'
+								AND ${projection.hooksAddress ?? null} = '0x0000000000000000000000000000000000000000'
+								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+							)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_id) DO UPDATE SET canonical = true
+						`
+						continue
+					}
+					if (projection.type === 'uniswapPrice') {
+						await transaction`
+							INSERT INTO uniswap_rep_eth_price_observations (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, event_name, reserve0, reserve1, sqrt_price_x96, canonical)
+							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.eventName}, ${projection.reserve0 ?? null}, ${projection.reserve1 ?? null}, ${projection.sqrtPriceX96 ?? null}, true
+							WHERE EXISTS (
+								SELECT 1 FROM uniswap_rep_eth_markets
+								WHERE chain_id = ${chainId} AND venue = ${projection.venue} AND market_id = ${projection.marketId} AND canonical
+							)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_id) DO UPDATE SET canonical = true
 						`
 						continue
 					}

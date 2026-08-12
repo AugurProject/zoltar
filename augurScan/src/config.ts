@@ -8,6 +8,13 @@ type NetworkFile = {
 	readonly chainId: number
 	readonly rpcUrlEnv: string
 	readonly startBlockEnv: string
+	readonly ammFactoryAddressEnv: string
+	readonly uniswapV2FactoryAddressEnv: string
+	readonly uniswapV3FactoryAddressEnv: string
+	readonly uniswapV4PoolManagerAddressEnv: string
+	readonly defaultUniswapV2FactoryAddress?: string
+	readonly defaultUniswapV3FactoryAddress?: string
+	readonly defaultUniswapV4PoolManagerAddress?: string
 	readonly defaultRpcUrl: string
 	readonly explorerBaseUrl: string
 	readonly nativeSymbol: string
@@ -61,6 +68,25 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 				}
 				const startBlock = BigInt(process.env[definition.startBlockEnv] ?? '0')
 				if (startBlock < 0n) throw new Error(`${definition.startBlockEnv} must not be negative`)
+				const contracts = [...(await parseManifest(definition.manifest))]
+				const ammFactoryAddress = process.env[definition.ammFactoryAddressEnv]?.trim()
+				if (ammFactoryAddress !== undefined && ammFactoryAddress !== '') {
+					if (!isAddress(ammFactoryAddress)) throw new Error(`${definition.ammFactoryAddressEnv} must be a complete 20-byte EVM address`)
+					const normalized = getAddress(ammFactoryAddress)
+					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase()))
+						contracts.push([normalized, 'Augur AMM Factory', 'ammFactory'])
+				}
+				for (const [environmentName, defaultAddress, label, kind] of [
+					[definition.uniswapV2FactoryAddressEnv, definition.defaultUniswapV2FactoryAddress, 'Uniswap V2 Factory', 'uniswapV2Factory'],
+					[definition.uniswapV3FactoryAddressEnv, definition.defaultUniswapV3FactoryAddress, 'Uniswap V3 Factory', 'uniswapV3Factory'],
+					[definition.uniswapV4PoolManagerAddressEnv, definition.defaultUniswapV4PoolManagerAddress, 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'],
+				] as const) {
+					const configuredAddress = process.env[environmentName]?.trim() ?? defaultAddress
+					if (configuredAddress === undefined || configuredAddress === '') continue
+					if (!isAddress(configuredAddress)) throw new Error(`${environmentName} must be a complete 20-byte EVM address`)
+					const normalized = getAddress(configuredAddress)
+					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, label, kind])
+				}
 				return {
 					id: definition.id,
 					name: definition.name,
@@ -70,7 +96,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					explorerBaseUrl: definition.explorerBaseUrl,
 					nativeSymbol: definition.nativeSymbol,
 					confirmationDepth: BigInt(definition.confirmationDepth),
-					contracts: await parseManifest(definition.manifest),
+					contracts,
 				} satisfies NetworkConfig
 			}),
 	)

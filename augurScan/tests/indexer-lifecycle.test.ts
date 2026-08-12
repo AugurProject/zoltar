@@ -41,6 +41,7 @@ import {
 	safeIndexerFailure,
 	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
+	uniswapV4PoolIds,
 	waitForIndexerDelay,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
@@ -72,6 +73,25 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
+		const contracts = new Map<string, ContractMetadata>([
+			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
+			[
+				'0x2000000000000000000000000000000000000002',
+				{
+					address: '0x2000000000000000000000000000000000000002',
+					kind: 'weth',
+					label: 'WETH',
+					provenance: 'manifest',
+				},
+			],
+		])
+		const ids = uniswapV4PoolIds(contracts)
+		expect(ids).toHaveLength(4)
+		expect(new Set(ids).size).toBe(4)
+		expect(ids.every((id) => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
+	})
+
 	test('splits oversized inclusive log ranges without gaps or duplicate boundary blocks', async () => {
 		const attempts: Array<readonly [bigint, bigint]> = []
 		const query = async (fromBlock: bigint, toBlock: bigint): Promise<readonly bigint[]> => {

@@ -141,4 +141,145 @@ describe('state projections', () => {
 		expect(createdSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(100n) } })
 		expect(redeemedSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(60n) } })
 	})
+
+	test('records Augur AMM identity and derives complementary conditional prices from Sync reserves', () => {
+		const pair = getAddress('0x3333333333333333333333333333333333333333')
+		const [market] = projectionsFrom(
+			log('PairCreated', {
+				securityPool: pool,
+				shareToken: vault,
+				universeId: '7',
+				pair,
+				feeBps: '30',
+			}),
+		)
+		expect(market).toMatchObject({
+			type: 'ammMarket',
+			pairAddress: pair.toLowerCase(),
+			poolAddress: pool.toLowerCase(),
+			universeId: '7',
+			feeBps: '30',
+		})
+
+		const [price] = projectionsFrom(log('Sync', { yesReserve: '300', noReserve: '700' }, pair))
+		expect(price).toEqual({
+			type: 'ammPrice',
+			pairAddress: pair.toLowerCase(),
+			yesReserveAttoShares: atomic(300n),
+			noReserveAttoShares: atomic(700n),
+			conditionalYesBps: '7000',
+			conditionalNoBps: '3000',
+		})
+		const [roundedPrice] = projectionsFrom(log('Sync', { yesReserve: '1', noReserve: '2' }, pair))
+		expect(roundedPrice).toMatchObject({ conditionalYesBps: '6666', conditionalNoBps: '3334' })
+		expect(projectionsFrom(log('Sync', { yesReserve: '0', noReserve: '0' }, pair))).toEqual([])
+	})
+
+	test('ignores an Augur AMM Swap and still projects its following Sync', () => {
+		const pair = getAddress('0x3333333333333333333333333333333333333333')
+		expect(
+			projectionsFrom(
+				log(
+					'Swap',
+					{
+						sender: pool,
+						recipient: vault,
+						yesForNo: true,
+						exactOutput: false,
+						amountIn: '100',
+						amountOut: '90',
+						feeAmount: '1',
+						resultingYesReserve: '400',
+						resultingNoReserve: '600',
+					},
+					pair,
+				),
+			),
+		).toEqual([])
+		expect(projectionsFrom(log('Sync', { yesReserve: '400', noReserve: '600' }, pair))).toEqual([
+			{
+				type: 'ammPrice',
+				pairAddress: pair.toLowerCase(),
+				yesReserveAttoShares: atomic(400n),
+				noReserveAttoShares: atomic(600n),
+				conditionalYesBps: '6000',
+				conditionalNoBps: '4000',
+			},
+		])
+	})
+
+	test('distinguishes initialization seeds from accepted REP per ETH coordinator prices', () => {
+		const [originSeed] = projectionsFrom(log('RepEthPriceSet', { price: '0' }, vault))
+		expect(originSeed).toEqual({
+			type: 'repEthPrice',
+			coordinatorAddress: vault.toLowerCase(),
+			eventName: 'RepEthPriceSet',
+			repPerEth1e18: '0',
+		})
+		const [childSeed] = projectionsFrom(log('RepEthPriceSet', { price: '18000000000000000000' }, vault))
+		expect(childSeed).toEqual({
+			type: 'repEthPrice',
+			coordinatorAddress: vault.toLowerCase(),
+			eventName: 'RepEthPriceSet',
+			repPerEth1e18: '18000000000000000000',
+		})
+
+		const [reported] = projectionsFrom(log('PriceReported', { reportId: '42', price: '19500000000000000000', lastSettlementTimestamp: '2000' }, vault))
+		expect(reported).toMatchObject({
+			type: 'repEthPrice',
+			coordinatorAddress: vault.toLowerCase(),
+			eventName: 'PriceReported',
+			reportId: '42',
+			repPerEth1e18: '19500000000000000000',
+		})
+		if (reported?.type !== 'repEthPrice') throw new Error('REP/ETH price projection missing')
+		expect(reported.settlementTimestamp?.toISOString()).toBe('1970-01-01T00:33:20.000Z')
+	})
+
+	test('retains auditable Uniswap market identity and raw price evidence', () => {
+		const rep = getAddress('0x3333333333333333333333333333333333333333')
+		const weth = getAddress('0x4444444444444444444444444444444444444444')
+		const marketId = `0x${'ab'.repeat(32)}`
+		expect(projectionsFrom(log('PairCreated', { token0: rep, token1: weth, pair: pool, '3': '1' }))[0]).toMatchObject({
+			type: 'uniswapMarket',
+			venue: 'v2',
+			marketId: pool.toLowerCase(),
+			feeHundredthsBip: '3000',
+		})
+		expect(projectionsFrom(log('Sync', { reserve0: '900', reserve1: '50' }))[0]).toEqual({
+			type: 'uniswapPrice',
+			venue: 'v2',
+			marketId: pool.toLowerCase(),
+			eventName: 'Sync',
+			reserve0: '900',
+			reserve1: '50',
+		})
+		expect(projectionsFrom(log('PoolCreated', { token0: rep, token1: weth, fee: '500', tickSpacing: '10', pool }))[0]).toMatchObject({
+			type: 'uniswapMarket',
+			venue: 'v3',
+			feeHundredthsBip: '500',
+			tickSpacing: '10',
+		})
+		expect(projectionsFrom(log('Swap', { sqrtPriceX96: String(2n ** 96n) }))[0]).toMatchObject({
+			type: 'uniswapPrice',
+			venue: 'v3',
+			eventName: 'Swap',
+		})
+		expect(
+			projectionsFrom(
+				log('Initialize', {
+					id: marketId,
+					currency0: '0x0000000000000000000000000000000000000000',
+					currency1: rep,
+					fee: '3000',
+					tickSpacing: '60',
+					hooks: '0x0000000000000000000000000000000000000000',
+					sqrtPriceX96: String(2n ** 96n),
+				}),
+			),
+		).toEqual([
+			expect.objectContaining({ type: 'uniswapMarket', venue: 'v4', marketId }),
+			expect.objectContaining({ type: 'uniswapPrice', venue: 'v4', marketId, eventName: 'Initialize' }),
+		])
+	})
 })

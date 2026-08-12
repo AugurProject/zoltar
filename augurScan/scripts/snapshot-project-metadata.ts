@@ -8,18 +8,18 @@ const contractsRoot = path.join(projectRoot, 'solidity/contracts')
 const outputPath = path.resolve(import.meta.dir, '../config/abis.json')
 const manifestsRoot = path.resolve(import.meta.dir, '../config/manifests')
 
-const collectSources = async (directory: string): Promise<Record<string, { content: string }>> => {
+const collectSources = async (directory: string, relativeRoot = path.join(projectRoot, 'solidity')): Promise<Record<string, { content: string }>> => {
 	const sources: Record<string, { content: string }> = {}
 	const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))
 	for (const entry of entries) {
 		const absolute = path.join(directory, entry.name)
 		if (entry.isDirectory()) {
 			if (entry.name === 'test') continue
-			Object.assign(sources, await collectSources(absolute))
+			Object.assign(sources, await collectSources(absolute, relativeRoot))
 			continue
 		}
 		if (!entry.name.endsWith('.sol')) continue
-		const relative = path.relative(path.join(projectRoot, 'solidity'), absolute).replaceAll(path.sep, '/')
+		const relative = path.relative(relativeRoot, absolute).replaceAll(path.sep, '/')
 		const content = (await readFile(absolute, 'utf8')).replace('pragma solidity 0.8.28;', 'pragma solidity >=0.8.28;')
 		sources[relative] = { content }
 	}
@@ -67,10 +67,39 @@ for (const source of Object.keys(result.contracts).sort()) {
 	}
 }
 
+const tradingSources = {
+	...(await collectSources(contractsRoot, projectRoot)),
+	...(await collectSources(path.join(projectRoot, 'trading/contracts'), projectRoot)),
+}
+const tradingVendorPrefix = 'solidity/contracts/peripherals/openOracle/openzeppelin/contracts/'
+for (const [name, source] of Object.entries(tradingSources)) {
+	if (name.startsWith(tradingVendorPrefix)) tradingSources[`@openzeppelin/contracts/${name.slice(tradingVendorPrefix.length)}`] = source
+}
+const tradingResult = JSON.parse(
+	solc.compile(
+		JSON.stringify({
+			language: 'Solidity',
+			sources: tradingSources,
+			settings: { outputSelection: { '*': { '*': ['abi'] } } },
+		}),
+	),
+) as typeof result
+const tradingErrors = tradingResult.errors?.filter((error) => error.severity === 'error') ?? []
+if (tradingErrors.length > 0) throw new Error(tradingErrors.map((error) => error.formattedMessage).join('\n'))
+for (const [source, name] of [
+	['trading/contracts/TwoWayConstantProductFactory.sol', 'TwoWayConstantProductFactory'],
+	['trading/contracts/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair'],
+] as const) {
+	const artifact = tradingResult.contracts?.[source]?.[name]
+	if (artifact === undefined) throw new Error(`Solidity compiler returned no ${name} ABI`)
+	contracts[name] = { source, abi: artifact.abi }
+}
+
 const payload = {
 	sourceHash: createHash('sha256')
 		.update(
-			Object.entries(sources)
+			Object.entries(tradingSources)
+				.filter(([name]) => !name.startsWith('@openzeppelin/'))
 				.sort(([left], [right]) => left.localeCompare(right))
 				.map(([name, source]) => `${name}\0${source.content}`)
 				.join('\0'),
