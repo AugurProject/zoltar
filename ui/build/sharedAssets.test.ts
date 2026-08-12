@@ -345,6 +345,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
+	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/scalarOutcome.js')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)
