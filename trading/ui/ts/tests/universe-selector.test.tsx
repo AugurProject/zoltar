@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
-import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
+import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../features/LiveTrading.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -51,6 +51,15 @@ describe('universe selector', () => {
 			select.dispatchEvent(new Event('change', { bubbles: true }))
 		})
 		expect(selected).toBe('2')
+	})
+
+	test('renders an explicit not-found route and updates the document title', async () => {
+		window.history.replaceState(undefined, '', '/?demo=1&scenario=loading#/missing')
+		expect(currentRoute()).toBe('not-found')
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
+		expect(document.title).toBe(tradingDocumentTitle('not-found'))
 	})
 
 	test('keeps only markets minted in the selected universe', () => {

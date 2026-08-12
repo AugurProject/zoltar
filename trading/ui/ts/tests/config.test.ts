@@ -22,6 +22,13 @@ describe('trading UI deployment configuration', () => {
 		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://localhost', securityPoolFactory: core, factory, router, feeBps: 10_000 })).toThrow('feeBps must be below 10000')
 	})
 
+	test('rejects unsafe RPC URLs and nonpositive chain IDs', () => {
+		expect(() => parseDeploymentConfiguration({ chainId: 0, chainName: 'Zero', rpcUrl: 'https://example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('chainId must be positive')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('HTTPS or loopback HTTP')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://[::1]:8545', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('HTTPS or loopback HTTP')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'https://user:secret@example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('embedded credentials')
+	})
+
 	test('rejects an RPC chain that differs from the manifest', () => {
 		expect(() => validateRpcChainId(2, 1)).toThrow('RPC chain 2 does not match deployment chain 1')
 		expect(validateRpcChainId(1, 1)).toBeUndefined()
