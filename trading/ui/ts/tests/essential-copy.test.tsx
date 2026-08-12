@@ -103,6 +103,21 @@ describe('essential trading copy', () => {
 		expect(window.location.hash).toBe(currentHash)
 	})
 
+	test('puts the user-facing trade result and action before optional mechanics', async () => {
+		const rendered = await renderIntoDocument(<MarketDetail market={demoMarket('baseline')} scenario='baseline' />)
+		cleanupRendered = rendered.cleanup
+		const summary = rendered.container.querySelector('.trade-summary')
+		const action = rendered.container.querySelector('.trade-action')
+		const breakdown = rendered.container.querySelector('.trade-breakdown')
+		if (summary === null || action === null || breakdown === null) throw new Error('Trade hierarchy is incomplete')
+		expect(summary.textContent).toContain('You pay0.25 ETH')
+		expect(summary.textContent).toContain('You receive0.3613 YES+ 0.2531 INVALID')
+		expect(summary.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(action.compareDocumentPosition(breakdown) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(rendered.container.querySelector('.detail-aside')?.textContent).toContain('Your position')
+		expect(rendered.container.querySelector('.detail-aside')?.textContent).not.toContain('Conditional YES price')
+	})
+
 	test('does not preserve removed developer-route selector behavior', async () => {
 		window.history.replaceState(undefined, '', '/?demo=1#/developer')
 		const rendered = await renderIntoDocument(<App />)

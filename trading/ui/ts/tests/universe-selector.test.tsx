@@ -85,6 +85,8 @@ describe('universe selector', () => {
 		const repBalance = rendered.container.querySelector('[data-wallet-asset="REP"]')
 		expect(walletAddress?.textContent).toBe('0x8ba1f109551bD432803012645Ac136ddd64DBA72')
 		expect(walletAddress?.textContent).not.toContain('…')
+		expect(rendered.container.querySelector('.wallet-summary__address--compact')?.textContent).toBe('0x8ba1…BA72')
+		expect(rendered.container.querySelector('.wallet-summary__details')?.textContent).toContain('Connected account0x8ba1f109551bD432803012645Ac136ddd64DBA72')
 		expect(ethDisplay?.textContent).toBe('ETH64')
 		expect(repBalance?.textContent).toBe('REP12,500')
 		expect(main?.textContent).toContain(demoMarket('baseline').pool)
@@ -150,6 +152,7 @@ describe('universe selector', () => {
 		const rendered = await renderIntoDocument(<WalletSummary summary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.wallet-summary__address')?.textContent).toBe(account)
+		expect(rendered.container.querySelector('details.wallet-summary')?.hasAttribute('open')).toBeTrue()
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toBe('ETH—')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toBe('REP—')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toBe('Wallet balance read failed')
