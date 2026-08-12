@@ -31,6 +31,11 @@ body {
 	background: radial-gradient(circle at 20% -10%, #16231e 0, transparent 34rem), var(--bg);
 	color: var(--text);
 }
+.app-shell {
+	display: flex;
+	min-height: 100vh;
+	flex-direction: column;
+}
 button,
 input {
 	font: inherit;
@@ -325,7 +330,7 @@ nav a[aria-current="page"] {
 }
 .route {
 	width: min(1260px, calc(100% - 2rem));
-	min-height: calc(100vh - 170px);
+	flex: 1;
 	margin: 0 auto;
 	padding: 3.25rem 0 5rem;
 }

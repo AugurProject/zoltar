@@ -3,6 +3,7 @@ import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../artifacts/contractArtifact.ts'
 import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest.ts'
+import { parseRpcResponse } from './rpc.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
 const rpcUrl = process.env.TRADING_RPC_URL ?? 'http://127.0.0.1:8545'
@@ -10,12 +11,10 @@ const coreManifestPath = process.env.ZOLTAR_DEPLOYMENT_MANIFEST
 if (coreManifestPath === undefined) throw new Error('Set ZOLTAR_DEPLOYMENT_MANIFEST to an existing local Zoltar deployment manifest')
 
 async function rpc(method: string, params: readonly unknown[]) {
-	const response = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
+	const response = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), redirect: 'error', signal: AbortSignal.timeout(10_000) })
+	if (!response.ok) throw new Error(`${method} returned HTTP ${response.status.toString()}`)
 	const payload: unknown = await response.json()
-	if (!isRecord(payload)) throw new Error(`${method} returned malformed JSON-RPC data`)
-	const error = payload.error
-	if (isRecord(error)) throw new Error(`${method}: ${String(error.message ?? 'unknown JSON-RPC error')}`)
-	return payload.result
+	return parseRpcResponse(payload, method)
 }
 
 async function deploy(from: Address, data: Hex) {
