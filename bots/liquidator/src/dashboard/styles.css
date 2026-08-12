@@ -276,6 +276,10 @@ textarea {
 	line-height: 1.45;
 }
 
+#network-form textarea {
+	min-height: 7rem;
+}
+
 #market-configuration-form {
 	margin-top: 1rem;
 }

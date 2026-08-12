@@ -6,7 +6,16 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
-import { CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/ts/protocol/deployment.ts'
+import {
+	assertStaticDeploymentArtifactRuntimeCodeHashes,
+	CANONICAL_DEPLOYER_RAW_GAS_PRICE,
+	CANONICAL_DEPLOYER_RAW_TRANSACTION_COST,
+	EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	getDeploymentSteps,
+	getProxyDeployerActivity,
+	getProxyDeployerFundingShortfall,
+	PROXY_DEPLOYER_RUNTIME_CODE,
+} from '../ui/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../ui/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
@@ -575,6 +584,7 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 }
 
 export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
+	assertStaticDeploymentArtifactRuntimeCodeHashes()
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
 	const log = parameters.log ?? console.log
