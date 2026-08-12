@@ -2285,11 +2285,11 @@ describe('Peripherals: fork migration', () => {
 			approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorInvalidRedeemal + invalidChildCollateral, openInterestAmount * 1000n, 'did not gain eth after redeeming invalid shares')
 		})
 
-		test('preserves source share entitlements for independently timed scalar child migrations', async () => {
+		test('migrates INVALID, YES, and NO entitlements into many outcomes of an unrelated scalar fork', async () => {
 			const openInterestAmount = 5n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const scalarForkQuestion = {
-				title: 'scalar fork',
+				title: 'unrelated scalar fork',
 				description: '',
 				startTime: 0n,
 				endTime: await mockWindow.getTime(),
@@ -2299,6 +2299,7 @@ describe('Peripherals: fork migration', () => {
 				answerUnit: 'km',
 			}
 			const scalarQuestionId = getQuestionId(scalarForkQuestion, [])
+			assert.notEqual(scalarQuestionId, questionId, 'the universe fork question must be unrelated to the SecurityPool binary question')
 
 			await createQuestion(client, scalarForkQuestion, [])
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, repDeposit / 4n)
@@ -2306,95 +2307,63 @@ describe('Peripherals: fork migration', () => {
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 			await forkUniverse(client, genesisUniverse, scalarQuestionId)
 
-			const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
 			const middleScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
-			const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
-			const sortedScalarOutcomes = sortBigIntsAscending([lowScalarOutcome, highScalarOutcome])
+			const bulkScalarOutcomes = sortBigIntsAscending([0n, ...[0n, 1n, 2n, 3n, 4n, 6n, 7n, 8n, 9n, 10n].map(tick => getScalarOutcomeIndex(scalarForkQuestion, tick))])
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-			for (const outcome of [...sortedScalarOutcomes, middleScalarOutcome]) {
+			for (const outcome of [...bulkScalarOutcomes, middleScalarOutcome]) {
 				await createChildUniverse(client, securityPoolAddresses.securityPool, outcome)
 			}
 			const holderAddress = addressString(TEST_ADDRESSES[2])
 			const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
-			const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
-			const parentYesTokenId = await client.readContract({
-				address: securityPoolAddresses.shareToken,
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				functionName: 'getTokenId',
-				args: [genesisUniverse, QuestionOutcome.Yes],
-			})
-
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes)
-
-			const parentBalancesAfterMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
-			strictEqualTypeSafe(parentBalancesAfterMigration[1], parentYesBalance, 'parent yes shares should remain as persistent child-claim entitlements')
-
-			const lowScalarUniverse = getChildUniverseId(genesisUniverse, lowScalarOutcome)
-			const lowScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, lowScalarUniverse, holderAddress)
-			strictEqualTypeSafe(lowScalarBalances[0], 0n, 'invalid shares should stay at zero in the low scalar child universe')
-			strictEqualTypeSafe(lowScalarBalances[1], parentYesBalance, 'yes shares should migrate into the low scalar child universe')
-			strictEqualTypeSafe(lowScalarBalances[2], 0n, 'no shares should stay at zero in the low scalar child universe')
-			strictEqualTypeSafe(
-				await client.readContract({
-					address: securityPoolAddresses.shareToken,
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
-					functionName: 'getMigratedShareAmountAttoShares',
-					args: [parentYesTokenId, lowScalarUniverse, holderAddress],
-				}),
-				parentYesBalance,
-				'the low child materialization should equal its persistent source entitlement',
+			const sourceOutcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No] as const
+			const parentTokenIds = await Promise.all(
+				sourceOutcomes.map(
+					async outcome =>
+						await client.readContract({
+							address: securityPoolAddresses.shareToken,
+							abi: peripherals_tokens_ShareToken_ShareToken.abi,
+							functionName: 'getTokenId',
+							args: [genesisUniverse, outcome],
+						}),
+				),
 			)
+			for (const sourceOutcome of sourceOutcomes) {
+				await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, bulkScalarOutcomes)
+			}
 
-			const highScalarUniverse = getChildUniverseId(genesisUniverse, highScalarOutcome)
-			const highScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, highScalarUniverse, holderAddress)
-			strictEqualTypeSafe(highScalarBalances[0], 0n, 'invalid shares should stay at zero in the high scalar child universe')
-			strictEqualTypeSafe(highScalarBalances[1], parentYesBalance, 'yes shares should migrate into the high scalar child universe')
-			strictEqualTypeSafe(highScalarBalances[2], 0n, 'no shares should stay at zero in the high scalar child universe')
-			strictEqualTypeSafe(
-				await client.readContract({
-					address: securityPoolAddresses.shareToken,
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
-					functionName: 'getMigratedShareAmountAttoShares',
-					args: [parentYesTokenId, highScalarUniverse, holderAddress],
-				}),
-				parentYesBalance,
-				'the high child materialization should equal its persistent source entitlement',
-			)
+			const parentBalancesAfterBulkMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+			assert.deepStrictEqual(parentBalancesAfterBulkMigration, parentBalancesBeforeMigration, 'all parent shares should remain as persistent child-claim entitlements')
 
-			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome])
+			for (const scalarOutcome of bulkScalarOutcomes) {
+				const childUniverse = getChildUniverseId(genesisUniverse, scalarOutcome)
+				const childBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, childUniverse, holderAddress)
+				assert.deepStrictEqual(childBalances, parentBalancesBeforeMigration, 'each scalar child should receive the holder’s complete INVALID/YES/NO position')
+				for (let sourceIndex = 0; sourceIndex < sourceOutcomes.length; sourceIndex++) {
+					const parentTokenId = ensureDefined(parentTokenIds[sourceIndex], 'parent source token id is undefined')
+					const parentBalance = ensureDefined(parentBalancesBeforeMigration[sourceIndex], 'parent source balance is undefined')
+					strictEqualTypeSafe(
+						await client.readContract({
+							address: securityPoolAddresses.shareToken,
+							abi: peripherals_tokens_ShareToken_ShareToken.abi,
+							functionName: 'getMigratedShareAmountAttoShares',
+							args: [parentTokenId, childUniverse, holderAddress],
+						}),
+						parentBalance,
+						'each child migration record should preserve the corresponding source share entitlement',
+					)
+				}
+			}
+
+			for (const sourceOutcome of sourceOutcomes) {
+				await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, [middleScalarOutcome])
+			}
 			const middleScalarUniverse = getChildUniverseId(genesisUniverse, middleScalarOutcome)
 			const middleScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, middleScalarUniverse, holderAddress)
-			strictEqualTypeSafe(middleScalarBalances[1], parentYesBalance, 'a later child selection should materialize the source entitlement independently')
-			strictEqualTypeSafe(
-				await client.readContract({
-					address: securityPoolAddresses.shareToken,
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
-					functionName: 'getMigratedShareAmountAttoShares',
-					args: [parentYesTokenId, middleScalarUniverse, holderAddress],
-				}),
-				parentYesBalance,
-				'the later child materialization should equal its persistent source entitlement',
-			)
-			for (const childUniverse of [lowScalarUniverse, middleScalarUniverse, highScalarUniverse]) {
-				const childYesTokenId = await client.readContract({
-					address: securityPoolAddresses.shareToken,
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
-					functionName: 'getTokenId',
-					args: [childUniverse, QuestionOutcome.Yes],
-				})
-				strictEqualTypeSafe(
-					await client.readContract({
-						address: securityPoolAddresses.shareToken,
-						abi: peripherals_tokens_ShareToken_ShareToken.abi,
-						functionName: 'totalSupply',
-						args: [childYesTokenId],
-					}),
-					parentYesBalance,
-					'each selected child supply should equal the independently materialized source entitlement',
-				)
-			}
+			assert.deepStrictEqual(middleScalarBalances, parentBalancesBeforeMigration, 'a later scalar child selection should independently receive all three source entitlements')
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /ShareToken has no new shares to migrate/)
 
+			const parentYesTokenId = ensureDefined(parentTokenIds[1], 'parent yes token id is undefined')
+			const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
 			await assert.rejects(
 				openInterestHolder.writeContract({
 					address: securityPoolAddresses.shareToken,
