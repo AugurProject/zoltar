@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { enterPositionRequest, migrateSharesRequest, redeemCompleteSetRequest, redeemWinningSharesRequest, requireFreshSimulation, simulateAuthoritatively } from '../sdk/transactions.ts'
 
 const address = `0x${'12'.repeat(20)}` as const
+const securityPool = `0x${'34'.repeat(20)}` as const
+const recipient = `0x${'56'.repeat(20)}` as const
 
 describe('authoritative router simulation', () => {
 	test('rejects a quote after the block changes', async () => {
@@ -47,7 +49,7 @@ describe('authoritative router simulation', () => {
 	})
 
 	test('builds explicit settlement and single-source migration requests', () => {
-		expect(redeemCompleteSetRequest(address, 5n)).toEqual({ address, functionName: 'redeemCompleteSet', args: [5n] })
+		expect(redeemCompleteSetRequest(address, securityPool, 5n, 4n, recipient, 100n)).toEqual({ address, functionName: 'redeemCompleteSet', args: [securityPool, 5n, 4n, recipient, 100n] })
 		expect(redeemWinningSharesRequest(address)).toEqual({ address, functionName: 'redeemShares', args: [] })
 		expect(migrateSharesRequest(address, 17n, 'NO', [3n])).toEqual({ address, functionName: 'migrate', args: [(17n << 8n) | 2n, [3n]] })
 	})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined, shortAddress } from '../app/format.ts'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../app/latestRequest.ts'
@@ -138,6 +138,60 @@ function stateLabel(state: TransactionState) {
 	if (state === 'confirmed') return 'Transaction confirmed on-chain'
 	if (state === 'error') return 'Transaction workflow needs attention'
 	return 'Ready to simulate after wallet balances and inputs are valid'
+}
+
+const DEFAULT_SLIPPAGE_PERCENT = '0.5'
+const DEFAULT_TRANSACTION_VALIDITY_MINUTES = '20'
+
+export function parseSlippageBps(value: string) {
+	const parsed = parseUnitsOrUndefined(value, 2)
+	return parsed !== undefined && parsed >= 0n && parsed <= 500n ? parsed : undefined
+}
+
+export function parseTransactionValidityMinutes(value: string) {
+	if (!/^\d+$/.test(value)) return undefined
+	const parsed = BigInt(value)
+	return parsed >= 1n && parsed <= 1_440n ? parsed : undefined
+}
+
+export function ExecutionProtectionFields({ slippage, validityMinutes, disabled, onSlippageInput, onValidityInput }: { slippage: string; validityMinutes: string; disabled: boolean; onSlippageInput(value: string): void; onValidityInput(value: string): void }) {
+	const slippageBps = parseSlippageBps(slippage)
+	const parsedValidityMinutes = parseTransactionValidityMinutes(validityMinutes)
+	const fieldId = useId()
+	const slippageErrorId = `${fieldId}-slippage-error`
+	const validityErrorId = `${fieldId}-validity-error`
+	return (
+		<fieldset class='execution-settings'>
+			<legend>Transaction protection</legend>
+			<div class='execution-settings__fields'>
+				<label class='field'>
+					<span>Slippage tolerance</span>
+					<div class='amount-input'>
+						<input value={slippage} disabled={disabled} inputMode='decimal' aria-invalid={slippageBps === undefined} aria-describedby={slippageBps === undefined ? slippageErrorId : undefined} onInput={event => onSlippageInput(event.currentTarget.value)} />
+						<span>%</span>
+					</div>
+					{slippageBps === undefined ? (
+						<small class='error' id={slippageErrorId} role='alert'>
+							Enter 0% to 5%, with at most two decimal places.
+						</small>
+					) : null}
+				</label>
+				<label class='field'>
+					<span>Transaction valid for</span>
+					<div class='amount-input'>
+						<input value={validityMinutes} disabled={disabled} inputMode='numeric' aria-invalid={parsedValidityMinutes === undefined} aria-describedby={parsedValidityMinutes === undefined ? validityErrorId : undefined} onInput={event => onValidityInput(event.currentTarget.value)} />
+						<span>minutes</span>
+					</div>
+					{parsedValidityMinutes === undefined ? (
+						<small class='error' id={validityErrorId} role='alert'>
+							Enter a whole number from 1 to 1440 minutes.
+						</small>
+					) : null}
+				</label>
+			</div>
+			<small>Lower slippage allows less adverse movement from the simulated quote. A shorter validity window reduces stale-transaction exposure. Either setting can cause more reverts.</small>
+		</fieldset>
+	)
 }
 
 export function failedSubmissionTransition(caught: unknown, fallback: string) {
@@ -455,6 +509,8 @@ export function LiveTrading({
 	const [mode, setMode] = useState<'entry' | 'exit'>('entry')
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
 	const [amount, setAmount] = useState('0.01')
+	const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE_PERCENT)
+	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(DEFAULT_TRANSACTION_VALIDITY_MINUTES)
 	const [quote, setQuote] = useState<Quote>()
 	const [state, setState] = useState<TransactionState>('idle')
 	const [message, setMessage] = useState<string>()
@@ -1095,13 +1151,18 @@ export function LiveTrading({
 	}
 
 	async function simulate() {
-		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n) return
+		const slippageBps = parseSlippageBps(slippage)
+		const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
+		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n || slippageBps === undefined || validityMinutes === undefined) return
 		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
 			setMessage(undefined)
 			const context = { account, configuration, walletClient }
-			const nextQuote: Quote = mode === 'entry' ? { ...context, kind: 'entry', value: await simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value) } : { ...context, kind: 'exit', value: await simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value) }
+			const nextQuote: Quote =
+				mode === 'entry'
+					? { ...context, kind: 'entry', value: await simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
+					: { ...context, kind: 'exit', value: await simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
 			setState('ready')
@@ -1500,6 +1561,8 @@ export function LiveTrading({
 									mode={mode}
 									side={side}
 									amount={amount}
+									slippage={slippage}
+									transactionValidityMinutes={transactionValidityMinutes}
 									quote={quote}
 									state={state}
 									receiptWarning={positionReceiptWarning}
@@ -1523,6 +1586,20 @@ export function LiveTrading({
 										if (positionWorkflowLockedRef.current) return
 										simulationRequests.invalidate()
 										setAmount(value)
+										setQuote(undefined)
+										setState('idle')
+									}}
+									setSlippage={value => {
+										if (positionWorkflowLockedRef.current) return
+										simulationRequests.invalidate()
+										setSlippage(value)
+										setQuote(undefined)
+										setState('idle')
+									}}
+									setTransactionValidityMinutes={value => {
+										if (positionWorkflowLockedRef.current) return
+										simulationRequests.invalidate()
+										setTransactionValidityMinutes(value)
 										setQuote(undefined)
 										setState('idle')
 									}}
@@ -1591,6 +1668,8 @@ function LiveLiquidityControls({
 	const [operation, setOperation] = useState<LiquidityOperation>(defaultOperation)
 	const [amount, setAmount] = useState('0.01')
 	const [probability, setProbability] = useState('50')
+	const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE_PERCENT)
+	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(DEFAULT_TRANSACTION_VALIDITY_MINUTES)
 	const [quote, setQuote] = useState<LiquidityQuote>()
 	const [state, setState] = useState<TransactionState>('idle')
 	const [error, setError] = useState<string>()
@@ -1598,6 +1677,8 @@ function LiveLiquidityControls({
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const parsed = useMemo(() => parseUnitsOrUndefined(amount), [amount])
+	const slippageBps = useMemo(() => parseSlippageBps(slippage), [slippage])
+	const validityMinutes = useMemo(() => parseTransactionValidityMinutes(transactionValidityMinutes), [transactionValidityMinutes])
 	const conditionalBps = useMemo(() => {
 		const value = parseUnitsOrUndefined(probability, 2)
 		return value !== undefined && value > 0n && value < 10_000n ? value : undefined
@@ -1641,12 +1722,12 @@ function LiveLiquidityControls({
 	)
 
 	async function simulateCurrent() {
-		if (!operationAvailable || walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || (operation === 'initialize' && conditionalBps === undefined)) return
+		if (!operationAvailable || walletClient === undefined || account === undefined || parsed === undefined || parsed === 0n || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined)) return
 		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
 			setError(undefined)
-			const simulated = await simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n)
+			const simulated = await simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n, validityMinutes, slippageBps)
 			const nextQuote: LiquidityQuote = { ...simulated, account, configuration, walletClient }
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
@@ -1859,11 +1940,38 @@ function LiveLiquidityControls({
 					Enter a Conditional YES price above 0% and below 100%, with at most two decimal places.
 				</p>
 			) : null}
+			<ExecutionProtectionFields
+				slippage={slippage}
+				validityMinutes={transactionValidityMinutes}
+				disabled={workflowLocked}
+				onSlippageInput={value => {
+					if (workflow.isActive()) return
+					simulationRequests.invalidate()
+					setSlippage(value)
+					setQuote(undefined)
+					setState('idle')
+				}}
+				onValidityInput={value => {
+					if (workflow.isActive()) return
+					simulationRequests.invalidate()
+					setTransactionValidityMinutes(value)
+					setQuote(undefined)
+					setState('idle')
+				}}
+			/>
 			{operation === 'remove' ? <p>Removal returns raw YES and NO. It never consumes wallet INVALID.</p> : <p>All INVALID and unused directional shares return to the wallet; LP tokens do not include wallet INVALID.</p>}
 			{quote === undefined ? null : (
 				<>
 					<p class='quote'>Authoritative router simulation at block {quote.blockNumber.toString()}.</p>
 					<dl class='metrics'>
+						<div>
+							<dt>Slippage tolerance</dt>
+							<dd>{formatUnits(quote.slippageBps, 2, 2)}%</dd>
+						</div>
+						<div>
+							<dt>Deadline</dt>
+							<dd>{formatTimestamp(quote.deadline)}</dd>
+						</div>
 						{quote.operation === 'remove' ? (
 							<>
 								<div>
@@ -1929,7 +2037,11 @@ function LiveLiquidityControls({
 				</button>
 			) : null}
 			{!needsLpApproval && quote === undefined ? (
-				<button class='primary-action' disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || state === 'simulating' || workflowLocked} onClick={simulateCurrent}>
+				<button
+					class='primary-action'
+					disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || state === 'simulating' || workflowLocked}
+					onClick={simulateCurrent}
+				>
 					Simulate liquidity transaction
 				</button>
 			) : null}
@@ -2103,6 +2215,8 @@ function LiveSettlementControls({
 	else if (market.questionOutcome !== 3) initialOperation = 'redeem-winning-shares'
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
 	const [amount, setAmount] = useState('0.01')
+	const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE_PERCENT)
+	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(DEFAULT_TRANSACTION_VALIDITY_MINUTES)
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
 	const [targetOutcomeIndex, setTargetOutcomeIndex] = useState('')
 	const [quote, setQuote] = useState<SettlementQuote>()
@@ -2125,12 +2239,19 @@ function LiveSettlementControls({
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
 	const workflowLocked = externallyLocked || state === 'approval' || state === 'pending' || receiptWarning !== undefined
-	const inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, parsedTargetOutcome, sourceOutcome, sourceBalance)
+	const slippageBps = parseSlippageBps(slippage)
+	const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
+	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, parsedTargetOutcome, sourceOutcome, sourceBalance)
+	let protectionInputBlocker: string | undefined
+	if (operation === 'redeem-complete-set' && slippageBps === undefined) protectionInputBlocker = 'Enter a slippage tolerance from 0% to 5%'
+	else if (operation === 'redeem-complete-set' && validityMinutes === undefined) protectionInputBlocker = 'Enter a transaction validity from 1 to 1440 whole minutes'
+	if (protectionInputBlocker !== undefined) inputBlocker = protectionInputBlocker
 	const approvalRequired = operation === 'redeem-complete-set' && balances?.approved === false
 	const quoteMatchesInputs = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, parsedTargetOutcome, account, walletClient)
 	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, quoteMatchesInputs) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
 	submitContext.current = { balanceState, inputBlocker, actionableQuote }
+	const suppressRedundantProtectionStatus = protectionInputBlocker !== undefined && balanceState === 'ready' && state !== 'error'
 	let settlementStatus = 'Connect a wallet to load balances for settlement'
 	if (balanceState === 'loading') settlementStatus = 'Loading wallet balances for settlement…'
 	else if (balanceState === 'ready') {
@@ -2144,7 +2265,8 @@ function LiveSettlementControls({
 		else if (state === 'simulating') settlementStatus = 'Simulating the authoritative settlement call…'
 		else if (state === 'ready' && actionableQuote !== undefined) {
 			if (actionableQuote.operation === 'migrate-shares') settlementStatus = migrationSimulationSummary(actionableQuote.blockNumber, actionableQuote.sourceOutcome, actionableQuote.targetOutcomeIndex)
-			else if (actionableQuote.operation === 'redeem-complete-set') settlementStatus = `Authoritative redemption simulation at block ${actionableQuote.blockNumber.toString()}: ${formatUnits(actionableQuote.expectedAttoEth)} ETH expected, ${formatUnits(actionableQuote.minimumAttoEth)} ETH minimum`
+			else if (actionableQuote.operation === 'redeem-complete-set')
+				settlementStatus = `Authoritative redemption simulation at block ${actionableQuote.blockNumber.toString()}: ${formatUnits(actionableQuote.expectedAttoEth)} ETH expected, ${formatUnits(actionableQuote.minimumAttoEth)} ETH minimum at ${formatUnits(actionableQuote.slippageBps, 2, 2)}% slippage; valid until ${formatTimestamp(actionableQuote.deadline)}`
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
 		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
 	}
@@ -2188,8 +2310,8 @@ function LiveSettlementControls({
 		setState('simulating')
 		setError(undefined)
 		try {
-			let parameters: Readonly<{ amount?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
-			if (operation === 'redeem-complete-set' && parsedAmount !== undefined) parameters = { amount: parsedAmount }
+			let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
+			if (operation === 'redeem-complete-set' && parsedAmount !== undefined && slippageBps !== undefined && validityMinutes !== undefined) parameters = { amount: parsedAmount, validityMinutes, slippageBps }
 			else if (operation === 'migrate-shares' && parsedTargetOutcome !== undefined) parameters = { sourceOutcome, targetOutcomeIndex: parsedTargetOutcome }
 			const simulation = await simulateSettlement(walletClient, configuration, market, account, operation, parameters)
 			if (!simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
@@ -2405,6 +2527,21 @@ function LiveSettlementControls({
 					</>
 				)
 			})()}
+			{operation === 'redeem-complete-set' ? (
+				<ExecutionProtectionFields
+					slippage={slippage}
+					validityMinutes={transactionValidityMinutes}
+					disabled={workflowLocked}
+					onSlippageInput={value => {
+						invalidateSettlementInputs()
+						setSlippage(value)
+					}}
+					onValidityInput={value => {
+						invalidateSettlementInputs()
+						setTransactionValidityMinutes(value)
+					}}
+				/>
+			) : null}
 			{receiptWarning === undefined ? null : (
 				<p class='error broadcast-warning' role='alert'>
 					{receiptWarning}
@@ -2416,7 +2553,7 @@ function LiveSettlementControls({
 					{error}
 				</p>
 			) : null}
-			{!(state === 'error' && error !== undefined) && balanceState !== 'error' && receiptWarning === undefined ? (
+			{!(state === 'error' && error !== undefined) && balanceState !== 'error' && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
 				<p class={state === 'error' ? 'error' : undefined} role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'}>
 					{settlementStatus}
 				</p>
@@ -2451,6 +2588,8 @@ function LivePositionControls({
 	mode,
 	side,
 	amount,
+	slippage,
+	transactionValidityMinutes,
 	quote,
 	state,
 	receiptWarning,
@@ -2459,6 +2598,8 @@ function LivePositionControls({
 	setMode,
 	setSide,
 	setAmount,
+	setSlippage,
+	setTransactionValidityMinutes,
 	simulate,
 	approve,
 	submit,
@@ -2471,6 +2612,8 @@ function LivePositionControls({
 	mode: 'entry' | 'exit'
 	side: 'YES' | 'NO'
 	amount: string
+	slippage: string
+	transactionValidityMinutes: string
 	quote: Quote | undefined
 	state: TransactionState
 	receiptWarning: string | undefined
@@ -2479,6 +2622,8 @@ function LivePositionControls({
 	setMode(value: 'entry' | 'exit'): void
 	setSide(value: 'YES' | 'NO'): void
 	setAmount(value: string): void
+	setSlippage(value: string): void
+	setTransactionValidityMinutes(value: string): void
 	simulate(): Promise<void>
 	approve(): Promise<void>
 	submit(): Promise<void>
@@ -2490,6 +2635,8 @@ function LivePositionControls({
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const parsedInput = parseUnitsOrUndefined(amount)
+	const slippageBps = parseSlippageBps(slippage)
+	const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
 	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
 	const entryPriceImpactBps = quote?.kind === 'entry' ? quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore : undefined
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
@@ -2554,6 +2701,7 @@ function LivePositionControls({
 					<span>{mode === 'entry' ? 'ETH' : 'shares'}</span>
 				</div>
 			</label>
+			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={closed || workflowLocked} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
 			{mode !== 'exit' || maximumExit === undefined ? null : (
 				<p>
 					Maximum insured {side} exit: {formatOutcomeAmount(maximumExit, side)}.
@@ -2610,6 +2758,10 @@ function LivePositionControls({
 						<dt>Deadline</dt>
 						<dd>{formatTimestamp(quote.value.deadline)}</dd>
 					</div>
+					<div>
+						<dt>Slippage tolerance</dt>
+						<dd>{formatUnits(quote.value.slippageBps, 2, 2)}%</dd>
+					</div>
 					{quote.kind === 'entry' ? (
 						<>
 							<div>
@@ -2643,7 +2795,7 @@ function LivePositionControls({
 				</>
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote === undefined ? (
-				<button class='primary-action' disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || exceedsInsurance || state === 'simulating' || workflowLocked} onClick={simulate}>
+				<button class='primary-action' disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || state === 'simulating' || workflowLocked} onClick={simulate}>
 					Simulate authoritative router call
 				</button>
 			) : null}
