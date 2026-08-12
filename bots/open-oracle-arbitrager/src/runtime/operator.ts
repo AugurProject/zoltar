@@ -67,9 +67,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		)
 		if (observedChainIds.some(chainId => chainId !== config.network.chain.id)) throw new Error(`Read RPC quorum must use ${config.network.name} chain ${config.network.chain.id.toString()}`)
 	}
-	let coordinatorPolicies = await loadCoordinatorPolicies(client, config)
-	await authenticateConfiguredDeployments(readClients, config)
-	if (config.execute && config.executor !== undefined) {
+	let coordinatorPolicies = config.networkConfigured ? await loadCoordinatorPolicies(client, config) : []
+	if (config.networkConfigured) await authenticateConfiguredDeployments(readClients, config)
+	if (config.networkConfigured && config.execute && config.executor !== undefined) {
 		const executorCode = await client.getCode({ address: config.executor })
 		if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${config.executor} has no contract code on ${config.network.name}`)
 	}
@@ -87,7 +87,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		marketConsensus: undefined,
 		marketObservations: [],
 		executionHistory,
-		endpointChecks: [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))],
+		endpointChecks: config.networkConfigured ? [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))] : [],
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 		lastError: undefined,
 		lastPollAt: undefined,
@@ -95,7 +95,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		positions,
 		operationLog: [],
 		paused: config.paused,
-		status: 'syncing',
+		status: config.networkConfigured ? 'syncing' : 'paused',
 		tokenAddresses: config.tokenAddresses,
 		tokenMarkets: [],
 		priceHistory: await loadPriceHistory(config.priceHistoryFile),
@@ -109,6 +109,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		expectedChainId: number
 		explorerUrl: string
 		network: NetworkConfiguration['name']
+		networkConfigured: boolean
 		openOracle: Address
 		queuedWallet: Address | null | undefined
 		savedWallet: Address | undefined
@@ -134,6 +135,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		expectedChainId: config.network.chain.id,
 		explorerUrl: config.network.explorerUrl,
 		network: config.network.name,
+		networkConfigured: config.networkConfigured,
 		openOracle: config.openOracle,
 		queuedWallet: undefined,
 		savedWallet: config.persistedPrivateKey === undefined ? undefined : privateKeyToAccount(config.persistedPrivateKey).address,
@@ -177,11 +179,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		category: 'scan',
 		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
 		level: 'info',
-		message: 'Operator started',
-		reason: `${config.network.name} chain ${config.network.chain.id.toString()}`,
+		message: config.networkConfigured ? 'Operator started' : 'Operator waiting for network configuration',
+		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard, then restart',
 		reportId: undefined,
 	})
-	console.log(`network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`)
+	console.log(
+		config.networkConfigured
+			? `network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`
+			: 'network=unconfigured mode=paused configure the chain and RPC endpoints in the dashboard',
+	)
 	try {
 		await pollUntilStopped(
 			async () => {
@@ -202,6 +208,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						activeSignerLock = appliedSigner.activeSignerLock
 						wallet = appliedSigner.wallet
 					}
+					if (!config.networkConfigured) return false
 					let nextError: string | undefined
 					if (positions.some(position => position.historyOutbox !== undefined)) {
 						try {
