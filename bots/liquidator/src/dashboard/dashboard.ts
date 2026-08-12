@@ -126,9 +126,9 @@ type Configuration = {
 	approvedUniverses: string[]
 	childMarketConfigurations: unknown[]
 	centralizedMarkets: unknown
-	connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
 	desiredPools: unknown[]
-	network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
+	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -723,10 +723,16 @@ function populateConfiguration(configuration: Configuration) {
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
-	networkName.value = configuration.network.name
-	readRpcUrl.value = configuration.connectivity.readRpcUrl
-	publicRpcUrls.value = configuration.connectivity.publicRpcUrls.join('\n')
-	quorumRpcUrls.value = configuration.connectivity.quorumRpcUrls.join('\n')
+	if (configuration.network !== undefined && configuration.connectivity !== undefined) {
+		networkName.value = configuration.network.name
+		readRpcUrl.value = configuration.connectivity.readRpcUrl
+		publicRpcUrls.value = configuration.connectivity.publicRpcUrls.join('\n')
+		quorumRpcUrls.value = configuration.connectivity.quorumRpcUrls.join('\n')
+	} else {
+		readRpcUrl.value = ''
+		publicRpcUrls.value = ''
+		quorumRpcUrls.value = ''
+	}
 	networkFields.disabled = false
 	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
 	marketConfigurationFields.disabled = false

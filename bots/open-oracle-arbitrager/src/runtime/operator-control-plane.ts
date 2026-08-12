@@ -88,11 +88,13 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
-				if (next.network !== config.network.name && (config.execute || next.runtime.execute)) throw new Error('Disable live execution and restart before changing chains')
+				if (config.networkConfigured && next.networkConfigured && next.network !== config.network.name) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
 				const expectedChainId = next.network === 'mainnet' ? 1 : 11_155_111
-				await checkConnectivity(next.connectivity, expectedChainId)
-				await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
-				await checkSubmissionEndpoints(next.submission, expectedChainId)
+				if (next.networkConfigured) {
+					await checkConnectivity(next.connectivity, expectedChainId)
+					await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
+					await checkSubmissionEndpoints(next.submission, expectedChainId)
+				}
 				const savedRevision = await persistSettings(next, value.revision)
 				pending.connectivity = undefined
 				pending.deployment = undefined
@@ -107,6 +109,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			}),
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
+				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints, then restart before resuming')
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				state.paused = paused
 				state.status = operatorStatusAfterPause(paused, parameters.getCursor()?.initial === false, state.lastError !== undefined)
@@ -117,7 +120,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				const next = await updateOperatorConnectivity({
-					activeNetwork: config.network.name,
+					activeNetwork: config.networkConfigured ? config.network.name : undefined,
 					deployment: latest.settings.deployment,
 					endpointState: state,
 					execute: config.execute || latest.settings.runtime.execute,

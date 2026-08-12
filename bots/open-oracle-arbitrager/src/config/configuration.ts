@@ -27,6 +27,7 @@ export type Configuration = MutableStrategy & {
 	lookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
 	network: NetworkConfiguration
+	networkConfigured: boolean
 	once: boolean
 	openOracle: Address
 	operatorSettings: PersistedOperatorSettings
@@ -82,6 +83,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		lookbackBlocks: saved.runtime.lookbackBlocks,
 		maxHedgeSlippageBps: saved.runtime.maxHedgeSlippageBps,
 		network,
+		networkConfigured: saved.networkConfigured,
 		once: saved.runtime.once,
 		openOracle: deployment.openOracle,
 		operatorSettings: saved,

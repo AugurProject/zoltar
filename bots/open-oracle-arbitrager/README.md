@@ -250,9 +250,11 @@ execution opportunities, but no approvals or disputes are sent. Without an appro
 coordinator, dry-run still synchronizes a bounded sample for diagnostics but refuses
 to classify any report as an executable opportunity.
 
-Every startup and dashboard RPC change calls `eth_chainId`. The bot refuses to start
-or apply a change unless the read RPC and every public-submission RPC report the
-selected network. It also checks the chain before every scan.
+When network settings exist, every startup and dashboard RPC change calls
+`eth_chainId`. An initially unconfigured bot keeps its paused dashboard available
+without making RPC calls. It will not scan until a verified chain and endpoint set
+has been saved and the process restarted. The bot also checks the chain before every
+scan.
 
 Startup enters **Syncing** while the bot scans the configured historical lookback in
 100-block chunks. The deliberately bounded response size prevents permissionless
@@ -287,10 +289,11 @@ complete active-game context is operationally important.
 
 ## Run on Sepolia
 
-If live execution is enabled, stop the bot, set `runtime.execute` to `false`, and
-restart before saving a different chain; pausing alone is not sufficient.
-Then save `sepolia` and its RPC URLs in **RPC connectivity**, and reload the
-dashboard so **Complete bot configuration** contains the persisted network. Replace
+Use a separate operator configuration and separate history, price, and position
+paths for Sepolia; an existing configured operator file cannot be retargeted to
+another chain. Start the new file paused and unconfigured, then save `sepolia` and
+its RPC URLs in **RPC connectivity**. Reload the dashboard so **Complete bot
+configuration** contains the persisted network. Replace
 every deployment address with values from the same reviewed test environment, set
 `centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
 use separate history, price, and position paths before saving the complete
@@ -300,11 +303,10 @@ configuration and restarting:
 bun run run
 ```
 
-The selected network and every address can be changed in the complete JSON editor,
-but they apply only after restart so cached reports, transaction and contract
-identities cannot cross networks. Use different history, price, and position paths
-for every network because records do not contain a chain ID and a shared file would
-combine rows and profit totals.
+Deployment addresses can be changed in the complete JSON editor and apply only
+after restart. The selected chain cannot be changed after initial configuration,
+because durable records do not contain a chain ID. This prevents cached reports,
+transactions, positions, and profit totals from crossing networks.
 
 ## Execute disputes
 
@@ -672,14 +674,10 @@ install -m 600 config/operator.example.json .state/operator.json
 any value inside the document. This locator is useful for service managers and
 tests. Select the chain and enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
-saved. A chain change applies after restart; an RPC-only change on the active chain
-applies at the next scan boundary. Before restarting after a chain change, follow
-the [network-switch steps](#run-on-sepolia): update the reviewed deployment
-identities in **Complete bot configuration**, set the centralized-market REP
-address to match the deployment, and use network-specific history, price, and
-position paths. Reload the dashboard after saving the chain so the complete editor
-contains the persisted network. Configure independent quorum readers with the
-deployment controls before enabling execution.
+saved. Initial chain selection applies after restart; an RPC-only change on the
+active chain applies at the next scan boundary. To operate another chain, follow
+the [separate-configuration steps](#run-on-sepolia). Configure independent quorum
+readers with the deployment controls before enabling execution.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
@@ -1025,10 +1023,11 @@ conservative. Increasing that maximum permits larger Spot/TWAP deviations.
 Parameter changes do not disable contract-side deadline, ratio, state-hash,
 quote-refresh, simulation, or inventory guards.
 
-All other startup values are in `network`, `connectivity`, `deployment`,
-`submission`, `tokenAddresses`, and `runtime`. The example file documents their
-shape. The UI's complete JSON editor can change every field; network, deployment,
-path, execution-mode, UI-bind, and risk changes take effect after restart.
+All other startup values are in `deployment`, `submission`, `tokenAddresses`, and
+`runtime`; `network` and `connectivity` are absent until the focused dashboard form
+saves them. The UI's complete JSON editor can change the remaining fields;
+deployment, path, execution-mode, UI-bind, and risk changes take effect after
+restart.
 
 The position notional uses the refreshed required WETH plus required token funding
 valued at the higher of the executable hedge quote and signed hedge limit.

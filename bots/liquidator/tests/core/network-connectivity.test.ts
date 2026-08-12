@@ -21,7 +21,7 @@ function healthyChecks(chainId: number): [EndpointCheck] {
 }
 
 describe('network connectivity updates', () => {
-	test('checks, persists, and applies a chain switch with every market chain ID coupled', async () => {
+	test('checks, persists, and applies initial network configuration with every market chain ID coupled', async () => {
 		const settings = await exampleSettings()
 		settings.childMarketConfigurations = [{ ...settings.centralizedMarkets, assetAddress: '0x0000000000000000000000000000000000000001' }]
 		let checkedChainId: number | undefined
@@ -105,8 +105,10 @@ describe('network connectivity updates', () => {
 		expect(applied).toBe(false)
 	})
 
-	test('rejects a live chain switch before endpoint checks or persistence', async () => {
+	test('rejects a configured chain switch before endpoint checks or persistence', async () => {
 		const settings = await exampleSettings()
+		settings.networkConfigured = true
+		settings.network = { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
 		settings.runtime.execute = true
 		let checked = false
 		let persisted = false
@@ -127,7 +129,7 @@ describe('network connectivity updates', () => {
 				settings,
 				value: request('mainnet'),
 			}),
-		).rejects.toThrow('Disable live execution and restart before changing chains')
+		).rejects.toThrow('separate operator configuration and durable state file')
 		expect(checked).toBe(false)
 		expect(persisted).toBe(false)
 	})

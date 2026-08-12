@@ -93,7 +93,14 @@ function updateNetworkTargetStatus() {
 
 function synchronizePersistedConnectivity(configuration: unknown) {
 	const focused = persistedConnectivity(configuration)
-	if (focused === undefined) throw new Error('Bot returned configuration without valid network and RPC settings')
+	if (focused === undefined) {
+		element<HTMLInputElement>('read-rpc-url').value = ''
+		element<HTMLTextAreaElement>('public-rpc-urls').value = ''
+		persistedNetwork = undefined
+		connectivityLoaded = true
+		updateNetworkTargetStatus()
+		return
+	}
 	loadConnectivity(focused.connectivity)
 	element<HTMLSelectElement>('network-name').value = focused.network
 	persistedNetwork = focused.network

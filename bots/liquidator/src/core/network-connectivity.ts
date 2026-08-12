@@ -21,8 +21,8 @@ export async function updateNetworkConnectivity(parameters: { apply: (settings: 
 	if (!Array.isArray(rawQuorumRpcUrls) || rawQuorumRpcUrls.some(url => typeof url !== 'string')) throw new Error('Independent quorum RPC URLs must be an array of strings')
 	const quorumRpcUrls = validateIndependentReadRpcUrls(connectivity.readRpcUrl, rawQuorumRpcUrls.map(String))
 	if (settings.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Live execution requires at least one independent quorum RPC')
-	if (settings.runtime.execute && networkName !== settings.network.name) throw new Error('Disable live execution and restart before changing chains')
 	const network: OperatorSettings['network'] = networkName === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: networkName } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: networkName }
+	if (settings.networkConfigured && network.chainId !== settings.network.chainId) throw new Error('Use a separate operator configuration and durable state file to change chains')
 	const checks = parameters.checks ?? defaultChecks
 	await checks.checkConnectivity(connectivity, network.chainId)
 	for (const rpcUrl of quorumRpcUrls) {
@@ -36,6 +36,7 @@ export async function updateNetworkConnectivity(parameters: { apply: (settings: 
 		childMarketConfigurations: current.childMarketConfigurations.map(configuration => ({ ...configuration, assetChainId: network.chainId })),
 		connectivity: { ...connectivity, quorumRpcUrls },
 		network,
+		networkConfigured: true,
 	}))
 	parameters.apply(next)
 	return next

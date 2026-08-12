@@ -96,13 +96,13 @@ describe('operator connectivity updates', () => {
 				submission: settings.submission,
 				value: request('sepolia'),
 			}),
-		).rejects.toThrow('Disable live execution and restart before changing chains')
+		).rejects.toThrow('separate operator configuration and durable journal paths')
 		expect(checked).toBe(false)
 		expect(persisted).toBeUndefined()
 		expect(settings).toEqual(before)
 	})
 
-	test('rejects a chain switch when an independent quorum RPC is on another chain', async () => {
+	test('rejects a dry-run chain switch before checking independent RPCs', async () => {
 		const settings = await exampleSettings()
 		settings.deployment.quorumRpcUrls = ['https://quorum.example/']
 		let persisted = false
@@ -120,7 +120,7 @@ describe('operator connectivity updates', () => {
 				submission: settings.submission,
 				value: request('sepolia'),
 			}),
-		).rejects.toThrow('returned chain 1; expected chain 11155111')
+		).rejects.toThrow('separate operator configuration and durable journal paths')
 		expect(persisted).toBe(false)
 	})
 

@@ -76,16 +76,13 @@ command-line arguments. The dashboard defaults to
 
 The dashboard's **Chain and RPC connectivity** form is the source of network and
 endpoint selection. It chain-checks the read, public-submission, and independent
-quorum RPCs before saving them. Same-chain RPC changes apply at the next scan. To
-change chains after live execution has been enabled, stop the bot, set
-`runtime.execute` to `false` and choose a new chain-specific `runtime.stateFile` in
-the operator file, restart it, and then save the new chain and RPCs in the
-dashboard. Stop the bot again and replace the deployment addresses and market
-assets with reviewed settings for the destination chain. Restart in dry-run mode
-and review the complete saved configuration before restoring `runtime.execute`.
-Do not reuse or delete the old chain's recovery state unless its disposition has
-been reviewed. Pausing alone does not enable a chain change. Live execution
-requires at least one independent quorum RPC.
+quorum RPCs before saving them. An initially unconfigured process remains paused
+with its dashboard available and begins scanning only after a verified selection is
+saved. Same-chain RPC changes apply at the next scan. A configured operator file
+cannot be retargeted to another chain: create a separate paused configuration with
+a separate `runtime.stateFile`, then select its chain and endpoints in the
+dashboard. This boundary prevents transactions, staged operations, and scan state
+from crossing chains. Live execution requires at least one independent quorum RPC.
 
 Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The

@@ -63,6 +63,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			weth: address,
 		},
 		network: 'mainnet',
+		networkConfigured: true,
 		paused: false,
 		privateKey,
 		runtime: {
@@ -182,6 +183,48 @@ describe('file-only startup configuration', () => {
 		const result = await runToExit(path)
 		expect(result.exitCode).toBe(1)
 		expect(result.output).toContain('maxHedgeSlippageBps must be from 0 to 1000')
+	})
+
+	test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpc = Bun.serve({
+			async fetch(request) {
+				const body = (await request.json()) as { id: unknown }
+				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
+			},
+			hostname: '127.0.0.1',
+			port: 0,
+		})
+		servers.push(rpc)
+		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		const configuration = (await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json()) as Record<string, unknown>
+		const runtime = Reflect.get(configuration, 'runtime')
+		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
+		Reflect.set(runtime, 'historyFile', join(directory, 'history.jsonl'))
+		Reflect.set(runtime, 'positionFile', join(directory, 'positions.json'))
+		Reflect.set(runtime, 'priceHistoryFile', join(directory, 'prices.jsonl'))
+		Reflect.set(runtime, 'uiPort', dashboardPort)
+		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+		const path = join(directory, 'operator.json')
+		await writeFile(path, JSON.stringify(configuration), 'utf8')
+		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(child)
+		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
+		const initial = await waitForJson(origin, '/api/configuration')
+		const initialConfiguration = initial['configuration']
+		expect(Reflect.get(initialConfiguration as object, 'network')).toBeUndefined()
+		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
+		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
+		const response = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(response.status, await response.clone().text()).toBe(200)
+		expect(await response.json()).toMatchObject({ network: 'mainnet', restartRequired: true })
+		expect((await loadOperatorSettings(path))?.networkConfigured).toBe(true)
+		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 	})
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {
@@ -311,7 +354,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(liveSwitchResponse.status).toBe(400)
-		expect(await liveSwitchResponse.json()).toEqual({ error: 'Disable live execution and restart before changing chains' })
+		expect(await liveSwitchResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
 		expect(await Bun.file(path).text()).toBe(beforeWrongChainQuorum)
 
 		const executeEnvelope = structuredClone(currentEnvelope)
@@ -337,7 +380,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(persistedLiveSwitchResponse.status).toBe(400)
-		expect(await persistedLiveSwitchResponse.json()).toEqual({ error: 'Disable live execution and restart before changing chains' })
+		expect(await persistedLiveSwitchResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
 		expect(await Bun.file(path).text()).toBe(beforePersistedLiveSwitch)
 		const executeSavedConfiguration = executeSavedEnvelope['configuration']
 		if (typeof executeSavedConfiguration !== 'object' || executeSavedConfiguration === null || Array.isArray(executeSavedConfiguration)) throw new Error('Saved execute configuration document is missing')
@@ -416,24 +459,16 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(publicSubmissionResponse.status, await publicSubmissionResponse.clone().text()).toBe(200)
+		const beforeDryRunSwitch = await Bun.file(path).text()
 		const networkResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
-		expect(networkResponse.status, await networkResponse.clone().text()).toBe(200)
-		expect(await networkResponse.json()).toMatchObject({ network: 'sepolia', restartRequired: true })
-		const networkSettings = await loadOperatorSettings(path)
-		expect(networkSettings?.network).toBe('sepolia')
-		expect(networkSettings?.centralizedMarkets.assetChainId).toBe(11_155_111)
-		const beforeWrongTargetSubmission = await Bun.file(path).text()
-		const wrongTargetSubmission = await fetch(`${origin}/api/submission`, {
-			body: JSON.stringify({ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relayUrl] }),
-			headers: { 'content-type': 'application/json', origin },
-			method: 'PUT',
-		})
-		expect(wrongTargetSubmission.status).toBe(400)
-		expect(await Bun.file(path).text()).toBe(beforeWrongTargetSubmission)
+		expect(networkResponse.status).toBe(400)
+		expect(await networkResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
+		expect(await Bun.file(path).text()).toBe(beforeDryRunSwitch)
+		rpcChainId = '0x1'
 
 		const removalEnvelope = await waitForJson(origin, '/api/configuration')
 		const removalConfiguration = removalEnvelope['configuration']

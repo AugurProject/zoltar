@@ -110,6 +110,15 @@ describe('liquidator settings', () => {
 		).toThrow('Withdrawal health must exceed target health')
 	})
 
+	test('rejects contradictory network name and chain identity', () => {
+		expect(() =>
+			parseSettings({
+				...settings,
+				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'mainnet' },
+			}),
+		).toThrow('name and chainId must identify the same supported chain')
+	})
+
 	test('requires independent quorum reads for live execution', () => {
 		expect(() =>
 			parseSettings({

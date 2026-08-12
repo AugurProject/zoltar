@@ -176,6 +176,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}
 					const paused = Reflect.get(value, 'paused')
 					if (typeof paused !== 'boolean') throw new Error('paused must be a boolean')
+					if (!paused && !settings.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
 					if (paused) {
 						state.paused = true
 						await persistSettings(current => ({ ...current, paused: true }))
@@ -351,6 +352,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		console.log(`dashboard=${dashboard.url}`)
 	}
 	try {
+		if (!settings.networkConfigured) {
+			recordActivity(state, { details: 'Set the chain and RPC endpoints in the dashboard', kind: 'configuration', message: 'Liquidator waiting for network configuration', status: 'info' })
+		} else {
 		const actualChainId = await client.getChainId()
 		if (actualChainId !== settings.network.chainId) {
 			throw new Error(`Read RPC chain ${actualChainId.toString()} does not match configured chain ${settings.network.chainId.toString()}`)
@@ -363,6 +367,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			}
 		}
 		await checkSubmissionEndpoints(settings.submission, settings.network.chainId)
+		}
 	} catch (error) {
 		dashboard?.stop()
 		throw error
@@ -378,6 +383,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		async () => {
 			if (shutdown.isRequested()) return true
 			if (configurationMutationGate.isActive()) return false
+			if (!settings.networkConfigured) return false
 			state.scanning = true
 			state.error = undefined
 			try {

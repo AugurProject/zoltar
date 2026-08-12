@@ -12,7 +12,7 @@ export async function checkIndependentRpcChains(rpcUrls: readonly string[], expe
 }
 
 export async function updateOperatorConnectivity(parameters: {
-	activeNetwork: NetworkName
+	activeNetwork: NetworkName | undefined
 	check?: typeof checkConnectivity
 	deployment: DeploymentSettings
 	endpointState: { endpointChecks: EndpointCheck[] }
@@ -25,8 +25,8 @@ export async function updateOperatorConnectivity(parameters: {
 	const { value } = parameters
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('connectivity' in value) || !('network' in value) || typeof value.network !== 'string') throw new Error('Network and RPC settings are required')
 	const networkName = parseNetworkName(value.network)
-	const restartRequired = networkName !== parameters.activeNetwork
-	if (parameters.execute && restartRequired) throw new Error('Disable live execution and restart before changing chains')
+	const restartRequired = parameters.activeNetwork === undefined || networkName !== parameters.activeNetwork
+	if (parameters.activeNetwork !== undefined && restartRequired) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
 	const selectedNetwork = networkConfiguration(networkName, {
 		factory: parameters.deployment.uniswapFactory,
 		quoter: parameters.deployment.uniswapQuoter,
@@ -41,7 +41,7 @@ export async function updateOperatorConnectivity(parameters: {
 	await checkSubmissionEndpoints(parameters.submission, selectedNetwork.chain.id)
 	await parameters.persist(settings => {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
-		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName }
+		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true }
 	})
 	return { connectivity, network: networkName, restartRequired }
 }
