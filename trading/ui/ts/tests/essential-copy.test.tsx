@@ -3,6 +3,7 @@ import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvi
 import { App } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
+import { ExecutionProtectionFields } from '../features/LiveTrading.tsx'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
@@ -116,6 +117,24 @@ describe('essential trading copy', () => {
 		expect(action.compareDocumentPosition(breakdown) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(rendered.container.querySelector('.detail-aside')?.textContent).toContain('Your position')
 		expect(rendered.container.querySelector('.detail-aside')?.textContent).not.toContain('Conditional YES price')
+	})
+
+	test('shows configurable slippage and transaction-validity controls', async () => {
+		const rendered = await renderIntoDocument(<ExecutionProtectionFields slippage='0.5' validityMinutes='20' disabled={false} onSlippageInput={() => undefined} onValidityInput={() => undefined} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain('Slippage tolerance')
+		expect(rendered.container.textContent).toContain('Transaction valid for')
+		const inputs = rendered.container.querySelectorAll<HTMLInputElement>('input')
+		expect(inputs[0]?.value).toBe('0.5')
+		expect(inputs[1]?.value).toBe('20')
+		await rendered.cleanup()
+		const invalid = await renderIntoDocument(<ExecutionProtectionFields slippage='5.01' validityMinutes='0' disabled={false} onSlippageInput={() => undefined} onValidityInput={() => undefined} />)
+		cleanupRendered = invalid.cleanup
+		const invalidInputs = invalid.container.querySelectorAll<HTMLInputElement>('input')
+		const alerts = invalid.container.querySelectorAll<HTMLElement>('[role="alert"]')
+		expect(alerts).toHaveLength(2)
+		expect(invalidInputs[0]?.getAttribute('aria-describedby')).toBe(alerts[0]?.id)
+		expect(invalidInputs[1]?.getAttribute('aria-describedby')).toBe(alerts[1]?.id)
 	})
 
 	test('does not preserve removed developer-route selector behavior', async () => {

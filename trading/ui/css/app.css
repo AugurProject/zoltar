@@ -559,6 +559,33 @@ nav a[aria-current="page"] {
 .field small.error {
 	color: var(--bad);
 }
+.execution-settings {
+	margin: 1rem 0;
+	padding: 0.85rem;
+	border: 1px solid var(--line);
+}
+.execution-settings legend {
+	padding: 0 0.35rem;
+	color: var(--text);
+	font:
+		600 11px ui-monospace,
+		monospace;
+}
+.execution-settings__fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+}
+.execution-settings .field {
+	margin: 0;
+}
+.execution-settings > small {
+	display: block;
+	margin-top: 0.65rem;
+	color: var(--faint);
+	font-size: 11px;
+	line-height: 1.4;
+}
 .field > input,
 .field > select {
 	width: 100%;
@@ -1279,6 +1306,9 @@ footer {
 }
 
 @media (max-width: 520px) {
+	.execution-settings__fields {
+		grid-template-columns: 1fr;
+	}
 	.site-chrome {
 		position: relative;
 		isolation: isolate;
