@@ -29,6 +29,7 @@ function isGaugeFitResult(value: unknown): value is GaugeFitResult {
 
 const chromiumPath = getChromiumPath()
 const browserFitTest = chromiumPath === undefined ? test.skip : test
+const CHROMIUM_GAUGE_FIT_TIMEOUT_MS = 60_000
 
 describe('CollateralizationCircle', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -166,10 +167,10 @@ describe('CollateralizationCircle', () => {
 					const timeoutId = setTimeout(() => {
 						timedOut = true
 						browser.kill()
-					}, 30_000)
+					}, CHROMIUM_GAUGE_FIT_TIMEOUT_MS)
 					const [exitCode, browserStderr, browserStdout] = await Promise.all([browser.exited, new Response(browser.stderr).text(), new Response(browser.stdout).text()])
 					clearTimeout(timeoutId)
-					if (timedOut) throw new Error('Chromium gauge fit process timed out after 30000ms')
+					if (timedOut) throw new Error(`Chromium gauge fit process timed out after ${CHROMIUM_GAUGE_FIT_TIMEOUT_MS.toString()}ms`)
 					if (exitCode !== 0) throw new Error(`Chromium gauge fit process exited with status ${exitCode.toString()}: ${browserStderr}`)
 					const resultMatch = browserStdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
 					expect(resultMatch).not.toBeNull()

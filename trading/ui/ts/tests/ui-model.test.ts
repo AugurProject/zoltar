@@ -498,6 +498,10 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
+		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
 	})
 

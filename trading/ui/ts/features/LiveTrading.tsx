@@ -51,7 +51,7 @@ type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
 type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
 type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfiguration; walletClient: WalletClient }>
 type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>) & QuoteContext
-type TransactionState = 'idle' | 'simulating' | 'ready' | 'approval' | 'pending' | 'confirmed' | 'error'
+type TransactionState = 'idle' | 'simulating' | 'ready' | 'preparing' | 'approval' | 'approval-pending' | 'approval-confirmed' | 'submitting' | 'pending' | 'confirmed' | 'error'
 type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
 export type WalletSummaryState = Readonly<{
@@ -146,14 +146,54 @@ function formatTimestamp(timestamp: bigint) {
 	}
 }
 
-function stateLabel(state: TransactionState) {
+function stateLabel(state: TransactionState, action = 'Transaction') {
 	if (state === 'simulating') return 'Simulating router call…'
 	if (state === 'ready') return 'Fresh authoritative simulation ready'
-	if (state === 'approval') return 'Approval transaction pending…'
-	if (state === 'pending') return 'Transaction pending…'
-	if (state === 'confirmed') return 'Transaction confirmed on-chain'
+	if (state === 'preparing') return `Preparing ${action}…`
+	if (state === 'approval') return `${action} approval pending in wallet…`
+	if (state === 'approval-pending') return `${action} approval pending on-chain…`
+	if (state === 'approval-confirmed') return `${action} approval confirmed on-chain`
+	if (state === 'submitting') return `${action} pending in wallet…`
+	if (state === 'pending') return `${action} pending on-chain…`
+	if (state === 'confirmed') return `${action} confirmed on-chain`
 	if (state === 'error') return 'Transaction workflow needs attention'
 	return 'Ready to simulate after wallet balances and inputs are valid'
+}
+
+function renderLiveTradeSummary(quote: Quote, side: 'YES' | 'NO') {
+	if (quote.kind === 'entry')
+		return (
+			<div class='trade-summary' aria-label='Trade summary'>
+				<div>
+					<span>You pay</span>
+					<strong>{formatUnits(quote.value.amount)} ETH</strong>
+				</div>
+				<span class='trade-summary__arrow' aria-hidden='true'>
+					→
+				</span>
+				<div>
+					<span>You receive</span>
+					<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
+					<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
+				</div>
+			</div>
+		)
+	return (
+		<div class='trade-summary' aria-label='Trade summary'>
+			<div>
+				<span>You use</span>
+				<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
+				<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
+			</div>
+			<span class='trade-summary__arrow' aria-hidden='true'>
+				→
+			</span>
+			<div>
+				<span>You receive</span>
+				<strong>{formatUnits(quote.value.result.ethOut)} ETH</strong>
+			</div>
+		</div>
+	)
 }
 
 const DEFAULT_SLIPPAGE_PERCENT = '0.5'
@@ -224,7 +264,7 @@ export function approvalFailureTransition(label: string, broadcastHash: Hash | u
 }
 
 export function positionControlsWorkflowLocked(state: TransactionState, receiptWarning: string | undefined) {
-	return state === 'approval' || state === 'pending' || receiptWarning !== undefined
+	return state === 'preparing' || state === 'approval' || state === 'approval-pending' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
 }
 
 type WorkflowOwner = 'position' | 'liquidity'
@@ -534,6 +574,7 @@ export function LiveTrading({
 	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(DEFAULT_TRANSACTION_VALIDITY_MINUTES)
 	const [quote, setQuote] = useState<Quote>()
 	const [state, setState] = useState<TransactionState>('idle')
+	const [positionHash, setPositionHash] = useState<Hash>()
 	const [message, setMessage] = useState<string>()
 	const [positionReceiptWarning, setPositionReceiptWarning] = useState<string>()
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -591,6 +632,10 @@ export function LiveTrading({
 			setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			setWalletContextInvalidated(true)
 			setQuote(undefined)
+			if (!positionWorkflowLockedRef.current) {
+				setPositionHash(undefined)
+				setPositionReceiptWarning(undefined)
+			}
 			setMessage(detail)
 		},
 		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, selectedUniverseId, simulationRequests, walletSummaryRequests],
@@ -758,7 +803,13 @@ export function LiveTrading({
 		const request = discoveryRequests.begin()
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!positionWorkflowLockedRef.current) setState('idle')
+		if (!positionWorkflowLockedRef.current) {
+			setState('idle')
+			if (owner !== 'position') {
+				setPositionHash(undefined)
+				setPositionReceiptWarning(undefined)
+			}
+		}
 		if (accountRef.current !== undefined) {
 			setBalanceState('loading')
 			setBalanceError(undefined)
@@ -853,6 +904,8 @@ export function LiveTrading({
 		if (positionWorkflowLockedRef.current) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
+		setPositionHash(undefined)
+		setPositionReceiptWarning(undefined)
 		setState('idle')
 		if (previousRoute.current !== route) void refresh(configuration, 0n)
 		previousRoute.current = route
@@ -1178,6 +1231,7 @@ export function LiveTrading({
 		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
+			setPositionHash(undefined)
 			setMessage(undefined)
 			const context = { account, configuration, walletClient }
 			const nextQuote: Quote =
@@ -1200,43 +1254,55 @@ export function LiveTrading({
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
 		if (!positionWorkflow.begin()) return
 		updatePositionWorkflowLock(true)
-		setState('approval')
+		setState('preparing')
 		setMessage(undefined)
 		setPositionReceiptWarning(undefined)
+		setPositionHash(undefined)
 		const balanceRequest = balanceRequests.begin()
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; switch back before approving', 'Wallet account changed; reconnect before approving')(async () => await approveRouter(walletClient, selected, configuration, account))
+			broadcastHash = await createGuardedWalletWrite(
+				account,
+				'Wallet network changed; switch back before approving',
+				'Wallet account changed; reconnect before approving',
+			)(async () => {
+				setState('approval')
+				return await approveRouter(walletClient, selected, configuration, account)
+			})
+			setPositionHash(broadcastHash)
+			setState('approval-pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
 			receiptKnown = true
-			if (!balanceRequests.isCurrent(balanceRequest)) {
-				setState('error')
-				if (receipt.status === 'reverted') setMessage(current => `${current ?? 'Wallet context changed.'} Approval transaction reverted.`)
-				return
+			if (receipt.status === 'reverted') {
+				if (!balanceRequests.isCurrent(balanceRequest)) {
+					setState('error')
+					setMessage(current => `${current ?? 'Wallet context changed.'} Approval transaction reverted.`)
+					return
+				}
+				throw new Error('Approval transaction reverted')
 			}
-			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
+			setState('approval-confirmed')
+			if (!balanceRequests.isCurrent(balanceRequest)) return
 			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', selected, account, balanceRequest)
 			if (refreshResult !== 'ready') {
-				setState('error')
 				return
 			}
 			setPositionReceiptWarning(undefined)
 			setMessage(undefined)
-			setState('idle')
 		} catch (error) {
 			if (!balanceRequests.isCurrent(balanceRequest)) {
 				if (broadcastHash !== undefined && !receiptKnown) {
 					keepLocked = true
-					setState('pending')
+					setState('approval-pending')
 					setPositionReceiptWarning(broadcastUncertainMessage('Share-token approval', broadcastHash))
 				} else setState('error')
 				return
 			}
 			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, error, 'Approval failed')
 			keepLocked = failure.keepLocked
-			setState(failure.state)
+			setState(failure.state === 'pending' ? 'approval-pending' : failure.state)
 			setMessage(failure.message)
 			setPositionReceiptWarning(failure.warning)
 		} finally {
@@ -1252,7 +1318,7 @@ export function LiveTrading({
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
 		if (!positionWorkflow.begin()) return
 		updatePositionWorkflowLock(true)
-		setState('pending')
+		setState('preparing')
 		setPositionReceiptWarning(undefined)
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
@@ -1273,15 +1339,22 @@ export function LiveTrading({
 				throw new Error('Trade inputs changed; simulate the current selection again')
 			simulationRequests.invalidate()
 			await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and simulate again', async () => undefined)
-			const guardedWrite = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and simulate again', 'Wallet account changed during transaction revalidation; reconnect and simulate again')
+			const guardedPositionWrite = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and simulate again', 'Wallet account changed during transaction revalidation; reconnect and simulate again')
+			const guardedWrite: GuardedWalletWrite = async write =>
+				await guardedPositionWrite(async () => {
+					setState('submitting')
+					return await write()
+				})
 			broadcastHash = quote.kind === 'entry' ? await submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
+			setPositionHash(broadcastHash)
+			setState('pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Transaction reverted')
 			setQuote(undefined)
 			setPositionReceiptWarning(undefined)
-			await refresh(configuration, marketPage.start, 'position')
 			setState('confirmed')
+			await refresh(configuration, marketPage.start, 'position')
 		} catch (error) {
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
@@ -1353,6 +1426,8 @@ export function LiveTrading({
 					setSelectedPool(market.pool)
 					setQuote(undefined)
 					setState('idle')
+					setPositionHash(undefined)
+					setPositionReceiptWarning(undefined)
 					focusSection(marketDetailRef)
 				}}
 			>
@@ -1587,6 +1662,7 @@ export function LiveTrading({
 									quote={quote}
 									state={state}
 									receiptWarning={positionReceiptWarning}
+									transactionHash={positionHash}
 									externallyLocked={workflowLocked}
 									nowSeconds={nowSeconds}
 									setMode={value => {
@@ -1594,6 +1670,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setMode(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									setSide={value => {
@@ -1601,6 +1678,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setSide(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									setAmount={value => {
@@ -1608,6 +1686,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setAmount(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									setSlippage={value => {
@@ -1615,6 +1694,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setSlippage(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									setTransactionValidityMinutes={value => {
@@ -1622,6 +1702,7 @@ export function LiveTrading({
 										simulationRequests.invalidate()
 										setTransactionValidityMinutes(value)
 										setQuote(undefined)
+										setPositionHash(undefined)
 										setState('idle')
 									}}
 									simulate={simulate}
@@ -1693,6 +1774,7 @@ function LiveLiquidityControls({
 	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(DEFAULT_TRANSACTION_VALIDITY_MINUTES)
 	const [quote, setQuote] = useState<LiquidityQuote>()
 	const [state, setState] = useState<TransactionState>('idle')
+	const [transactionHash, setTransactionHash] = useState<Hash>()
 	const [error, setError] = useState<string>()
 	const [receiptWarning, setReceiptWarning] = useState<string>()
 	const simulationRequests = useRef(createLatestRequestGuard()).current
@@ -1707,15 +1789,17 @@ function LiveLiquidityControls({
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
 	const needsLpApproval = market.lpTotalSupply > 0n && liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
-	const workflowLocked = externallyLocked || state === 'approval' || state === 'pending' || receiptWarning !== undefined
-
+	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
 	useEffect(() => {
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!workflow.isActive()) setState('idle')
+		if (!workflow.isActive()) {
+			setTransactionHash(undefined)
+			setState('idle')
+		}
 		return () => simulationRequests.invalidate()
-	}, [account, configuration, market, receiptWarning, walletClient])
+	}, [account, configuration, market.pool, receiptWarning, walletClient])
 
 	useEffect(() => {
 		if (balanceState === 'ready' || receiptWarning !== undefined) return
@@ -1747,6 +1831,7 @@ function LiveLiquidityControls({
 		const request = simulationRequests.begin()
 		try {
 			setState('simulating')
+			setTransactionHash(undefined)
 			setError(undefined)
 			const simulated = await simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n, validityMinutes, slippageBps)
 			const nextQuote: LiquidityQuote = { ...simulated, account, configuration, walletClient }
@@ -1765,36 +1850,48 @@ function LiveLiquidityControls({
 		if (externallyLocked) return
 		if (!workflow.begin()) return
 		onWorkflowLockChange(true)
-		setState('approval')
+		setState('preparing')
 		setError(undefined)
 		setReceiptWarning(undefined)
+		setTransactionHash(undefined)
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; switch back before approving', 'Wallet account changed; reconnect before approving')(async () => await approveLpRouter(walletClient, configuration, market, account, parsed))
+			broadcastHash = await createGuardedWalletWrite(
+				account,
+				'Wallet network changed; switch back before approving',
+				'Wallet account changed; reconnect before approving',
+			)(async () => {
+				setState('approval')
+				return await approveLpRouter(walletClient, configuration, market, account, parsed)
+			})
+			setTransactionHash(broadcastHash)
+			setState('approval-pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
-			if (!walletContextIsCurrent(account)) {
-				setState('error')
-				setError(receipt.status === 'reverted' ? 'Wallet context changed while the LP-token approval was pending. Approval transaction reverted.' : 'Wallet context changed while the LP-token approval was pending. Reconnect to refresh balances and approvals.')
-				return
+			if (receipt.status === 'reverted') {
+				if (!walletContextIsCurrent(account)) {
+					setState('error')
+					setError('Wallet context changed while the LP-token approval was pending. Approval transaction reverted.')
+					return
+				}
+				throw new Error('Approval transaction reverted')
 			}
-			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
+			setState('approval-confirmed')
+			if (!walletContextIsCurrent(account)) return
 			const refreshResult = await refreshBalancesAfterApproval('LP-token approval', market, account)
 			if (refreshResult !== 'ready') {
-				setState('error')
 				if (refreshResult === 'context-changed') setError('Wallet context changed while approved balances were refreshing. Reconnect to continue.')
 				return
 			}
 			setReceiptWarning(undefined)
 			setError(undefined)
-			setState('idle')
 		} catch (caught) {
 			if (!walletContextIsCurrent(account)) {
 				if (broadcastHash !== undefined && !receiptKnown) {
 					keepLocked = true
-					setState('pending')
+					setState('approval-pending')
 					setError(undefined)
 					setReceiptWarning(broadcastUncertainMessage('LP-token approval', broadcastHash))
 				} else {
@@ -1805,7 +1902,7 @@ function LiveLiquidityControls({
 			}
 			const failure = approvalFailureTransition('LP-token approval', broadcastHash, receiptKnown, caught, 'LP approval failed')
 			keepLocked = failure.keepLocked
-			setState(failure.state)
+			setState(failure.state === 'pending' ? 'approval-pending' : failure.state)
 			setError(failure.message)
 			setReceiptWarning(failure.warning)
 		} finally {
@@ -1825,8 +1922,9 @@ function LiveLiquidityControls({
 		}
 		if (!workflow.begin()) return
 		onWorkflowLockChange(true)
-		setState('pending')
+		setState('preparing')
 		setReceiptWarning(undefined)
+		setTransactionHash(undefined)
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
@@ -1844,14 +1942,27 @@ function LiveLiquidityControls({
 				throw new Error('Liquidity inputs changed; simulate the current selection again')
 			simulationRequests.invalidate()
 			await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and simulate again', async () => undefined)
-			broadcastHash = await submitFreshLiquidity(walletClient, configuration, account, quote, createGuardedWalletWrite(account, 'Wallet network changed during liquidity revalidation; reconnect and simulate again', 'Wallet account changed during liquidity revalidation; reconnect and simulate again'))
+			const guardedLiquidityWrite = createGuardedWalletWrite(account, 'Wallet network changed during liquidity revalidation; reconnect and simulate again', 'Wallet account changed during liquidity revalidation; reconnect and simulate again')
+			broadcastHash = await submitFreshLiquidity(
+				walletClient,
+				configuration,
+				account,
+				quote,
+				async write =>
+					await guardedLiquidityWrite(async () => {
+						setState('submitting')
+						return await write()
+					}),
+			)
+			setTransactionHash(broadcastHash)
+			setState('pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Liquidity transaction reverted')
 			setQuote(undefined)
 			setReceiptWarning(undefined)
-			await refresh()
 			setState('confirmed')
+			await refresh()
 		} catch (caught) {
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
@@ -1886,6 +1997,7 @@ function LiveLiquidityControls({
 						simulationRequests.invalidate()
 						setOperation('initialize')
 						setQuote(undefined)
+						setTransactionHash(undefined)
 						setState('idle')
 					}}
 				>
@@ -1899,6 +2011,7 @@ function LiveLiquidityControls({
 						simulationRequests.invalidate()
 						setOperation('add')
 						setQuote(undefined)
+						setTransactionHash(undefined)
 						setState('idle')
 					}}
 				>
@@ -1912,6 +2025,7 @@ function LiveLiquidityControls({
 						simulationRequests.invalidate()
 						setOperation('remove')
 						setQuote(undefined)
+						setTransactionHash(undefined)
 						setState('idle')
 					}}
 				>
@@ -1930,6 +2044,7 @@ function LiveLiquidityControls({
 							simulationRequests.invalidate()
 							setAmount(event.currentTarget.value)
 							setQuote(undefined)
+							setTransactionHash(undefined)
 							setState('idle')
 						}}
 					/>
@@ -1949,6 +2064,7 @@ function LiveLiquidityControls({
 								simulationRequests.invalidate()
 								setProbability(event.currentTarget.value)
 								setQuote(undefined)
+								setTransactionHash(undefined)
 								setState('idle')
 							}}
 						/>
@@ -1970,6 +2086,7 @@ function LiveLiquidityControls({
 					simulationRequests.invalidate()
 					setSlippage(value)
 					setQuote(undefined)
+					setTransactionHash(undefined)
 					setState('idle')
 				}}
 				onValidityInput={value => {
@@ -1977,6 +2094,7 @@ function LiveLiquidityControls({
 					simulationRequests.invalidate()
 					setTransactionValidityMinutes(value)
 					setQuote(undefined)
+					setTransactionHash(undefined)
 					setState('idle')
 				}}
 			/>
@@ -2039,6 +2157,12 @@ function LiveLiquidityControls({
 					</dl>
 				</>
 			)}
+			{transactionHash === undefined ? null : (
+				<p class='transaction-hash'>
+					<span>Transaction</span>
+					<code title={transactionHash}>{transactionHash}</code>
+				</p>
+			)}
 			{receiptWarning === undefined ? null : (
 				<p class='error broadcast-warning' role='alert'>
 					{receiptWarning}
@@ -2050,10 +2174,10 @@ function LiveLiquidityControls({
 				</p>
 			)}
 			<p role='status' aria-live='polite'>
-				{stateLabel(state)}
+				{stateLabel(state, 'Liquidity transaction')}
 			</p>
 			{needsLpApproval ? (
-				<button class='primary-action' disabled={workflowLocked} onClick={approveLp}>
+				<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked} onClick={approveLp}>
 					Approve exact LP amount
 				</button>
 			) : null}
@@ -2067,7 +2191,7 @@ function LiveLiquidityControls({
 				</button>
 			) : null}
 			{!needsLpApproval && quote !== undefined ? (
-				<button class='primary-action' disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)} onClick={submit}>
+				<button class='primary-action' aria-busy={state === 'preparing' || state === 'submitting' || state === 'pending'} disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)} onClick={submit}>
 					Submit liquidity transaction
 				</button>
 			) : null}
@@ -2248,6 +2372,7 @@ export function LiveSettlementControls({
 	const [selectedForkTargets, setSelectedForkTargets] = useState<readonly ForkTarget[]>([])
 	const [quote, setQuote] = useState<SettlementQuote>()
 	const [state, setState] = useState<TransactionState>('idle')
+	const [transactionHash, setTransactionHash] = useState<Hash>()
 	const [error, setError] = useState<string>()
 	const [receiptWarning, setReceiptWarning] = useState<string>()
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
@@ -2266,7 +2391,7 @@ export function LiveSettlementControls({
 	let sourceBalance = balances?.no
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
-	const workflowLocked = externallyLocked || state === 'approval' || state === 'pending' || receiptWarning !== undefined
+	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
 	const slippageBps = parseSlippageBps(slippage)
 	const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
 	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance)
@@ -2286,12 +2411,16 @@ export function LiveSettlementControls({
 	submitContext.current = { balanceState, inputBlocker, actionableQuote }
 	const suppressRedundantProtectionStatus = protectionInputBlocker !== undefined && balanceState === 'ready' && state !== 'error'
 	let settlementStatus = 'Connect a wallet to load balances for settlement'
-	if (balanceState === 'loading') settlementStatus = 'Loading wallet balances for settlement…'
+	if (state === 'confirmed') settlementStatus = 'Settlement transaction confirmed on-chain'
+	else if (state === 'approval-confirmed') settlementStatus = 'Share-token approval confirmed on-chain'
+	else if (balanceState === 'loading') settlementStatus = 'Loading wallet balances for settlement…'
 	else if (balanceState === 'ready') {
-		if (state === 'confirmed') settlementStatus = 'Settlement transaction confirmed on-chain'
-		else if (account === undefined || walletClient === undefined) settlementStatus = 'Connect a wallet to load balances for settlement'
-		else if (state === 'approval') settlementStatus = 'Share-token approval pending…'
-		else if (state === 'pending') settlementStatus = error ?? 'Settlement transaction pending…'
+		if (account === undefined || walletClient === undefined) settlementStatus = 'Connect a wallet to load balances for settlement'
+		else if (state === 'preparing') settlementStatus = 'Preparing settlement transaction…'
+		else if (state === 'approval') settlementStatus = 'Share-token approval pending in wallet…'
+		else if (state === 'approval-pending') settlementStatus = 'Share-token approval pending on-chain…'
+		else if (state === 'submitting') settlementStatus = 'Settlement transaction pending in wallet…'
+		else if (state === 'pending') settlementStatus = error ?? 'Settlement transaction pending on-chain…'
 		else if (state === 'error') settlementStatus = error ?? 'Settlement workflow needs attention'
 		else if (approvalRequired) settlementStatus = 'Approve the router to pull the explicit complete set before simulation'
 		else if (inputBlocker !== undefined) settlementStatus = inputBlocker
@@ -2303,14 +2432,16 @@ export function LiveSettlementControls({
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
 		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
 	}
-
 	function invalidateSettlementInputs() {
 		if (receiptWarning !== undefined) return
 		inputRevision.current++
 		simulationRequests.invalidate()
 		setQuote(undefined)
 		setError(undefined)
-		if (!workflow.isActive()) setState('idle')
+		if (!workflow.isActive()) {
+			setTransactionHash(undefined)
+			setState('idle')
+		}
 	}
 
 	function updateForkTargets(targets: readonly ForkTarget[]) {
@@ -2352,7 +2483,10 @@ export function LiveSettlementControls({
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!workflow.isActive()) setState('idle')
+		if (!workflow.isActive()) {
+			setTransactionHash(undefined)
+			setState('idle')
+		}
 	}, [account, amount, market.pool, market.systemState, market.awaitingForkContinuation, market.universeForkTime, market.questionOutcome, operation, receiptWarning, slippage, sourceOutcome, transactionValidityMinutes, walletClient])
 
 	useEffect(() => {
@@ -2370,7 +2504,7 @@ export function LiveSettlementControls({
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!workflow.isActive()) setState('idle')
+		if (!workflow.isActive()) setState(current => (current === 'confirmed' || current === 'approval-confirmed' ? current : 'idle'))
 	}, [balances, balanceState, receiptWarning])
 
 	useEffect(
@@ -2387,6 +2521,7 @@ export function LiveSettlementControls({
 		const request = simulationRequests.begin()
 		const revision = inputRevision.current
 		setState('simulating')
+		setTransactionHash(undefined)
 		setError(undefined)
 		try {
 			let parameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
@@ -2409,9 +2544,10 @@ export function LiveSettlementControls({
 		if (externallyLocked) return
 		if (!workflow.begin()) return
 		onWorkflowLockChange(true)
-		setState('pending')
+		setState('preparing')
 		setError(undefined)
 		setReceiptWarning(undefined)
+		setTransactionHash(undefined)
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
@@ -2419,18 +2555,31 @@ export function LiveSettlementControls({
 			await executeWithCurrentWalletContext(account, 'Wallet network changed; reconnect and simulate again', 'Wallet account changed; reconnect and simulate again', async () => undefined)
 			const current = submitContext.current
 			if (current.balanceState !== 'ready' || current.inputBlocker !== undefined || current.actionableQuote !== selectedQuote) throw new Error('Settlement inputs or balances changed; simulate again')
-			broadcastHash = await services.submit(walletClient, configuration, account, selectedQuote, createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again'))
+			const guardedSettlementWrite = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again')
+			broadcastHash = await services.submit(
+				walletClient,
+				configuration,
+				account,
+				selectedQuote,
+				async write =>
+					await guardedSettlementWrite(async () => {
+						setState('submitting')
+						return await write()
+					}),
+			)
+			setTransactionHash(broadcastHash)
+			setState('pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
 			if (receipt.status === 'reverted') throw new Error('Settlement transaction reverted')
 			setQuote(undefined)
 			setReceiptWarning(undefined)
+			setState('confirmed')
 			await refresh()
 			if (selectedQuote.operation === 'migrate-shares') {
 				preserveConfirmedForkTargetReset.current = true
 				setForkContextNonce(current => current + 1)
 			}
-			setState('confirmed')
 		} catch (caught) {
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
@@ -2454,34 +2603,46 @@ export function LiveSettlementControls({
 		if (walletClient === undefined || account === undefined || !approvalRequired || externallyLocked) return
 		if (!workflow.begin()) return
 		onWorkflowLockChange(true)
-		setState('approval')
+		setState('preparing')
 		setError(undefined)
 		setReceiptWarning(undefined)
+		setTransactionHash(undefined)
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
 		try {
-			broadcastHash = await createGuardedWalletWrite(account, 'Wallet network changed; reconnect before approving', 'Wallet account changed; reconnect before approving')(async () => await approveRouter(walletClient, market, configuration, account))
+			broadcastHash = await createGuardedWalletWrite(
+				account,
+				'Wallet network changed; reconnect before approving',
+				'Wallet account changed; reconnect before approving',
+			)(async () => {
+				setState('approval')
+				return await approveRouter(walletClient, market, configuration, account)
+			})
+			setTransactionHash(broadcastHash)
+			setState('approval-pending')
 			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
 			receiptKnown = true
-			if (!walletContextIsCurrent(account)) {
-				setState('error')
-				setError(receipt.status === 'reverted' ? 'Wallet context changed while the share-token approval was pending. Approval transaction reverted.' : 'Wallet context changed while the share-token approval was pending. Reconnect to refresh balances and approvals.')
-				return
+			if (receipt.status === 'reverted') {
+				if (!walletContextIsCurrent(account)) {
+					setState('error')
+					setError('Wallet context changed while the share-token approval was pending. Approval transaction reverted.')
+					return
+				}
+				throw new Error('Approval transaction reverted')
 			}
-			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
+			setState('approval-confirmed')
+			if (!walletContextIsCurrent(account)) return
 			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', market, account)
 			if (refreshResult !== 'ready') {
-				setState('error')
 				if (refreshResult === 'context-changed') setError('Wallet context changed while approved balances were refreshing. Reconnect to continue.')
 				return
 			}
-			setState('idle')
 		} catch (caught) {
 			if (!walletContextIsCurrent(account)) {
 				if (broadcastHash !== undefined && !receiptKnown) {
 					keepLocked = true
-					setState('pending')
+					setState('approval-pending')
 					setError(undefined)
 					setReceiptWarning(broadcastUncertainMessage('Share-token approval', broadcastHash))
 				} else {
@@ -2492,7 +2653,7 @@ export function LiveSettlementControls({
 			}
 			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, caught, 'Approval failed')
 			keepLocked = failure.keepLocked
-			setState(failure.state)
+			setState(failure.state === 'pending' ? 'approval-pending' : failure.state)
 			setError(failure.message)
 			setReceiptWarning(failure.warning)
 		} finally {
@@ -2609,6 +2770,12 @@ export function LiveSettlementControls({
 					</>
 				)
 			})()}
+			{transactionHash === undefined ? null : (
+				<p class='transaction-hash'>
+					<span>Transaction</span>
+					<code title={transactionHash}>{transactionHash}</code>
+				</p>
+			)}
 			{operation === 'redeem-complete-set' ? (
 				<ExecutionProtectionFields
 					slippage={slippage}
@@ -2635,7 +2802,7 @@ export function LiveSettlementControls({
 					{error}
 				</p>
 			) : null}
-			{!(state === 'error' && error !== undefined) && balanceState !== 'error' && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
+			{!(state === 'error' && error !== undefined) && (balanceState !== 'error' || state === 'confirmed' || state === 'approval-confirmed') && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
 				<p class={state === 'error' ? 'error' : undefined} role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'}>
 					{settlementStatus}
 				</p>
@@ -2643,7 +2810,7 @@ export function LiveSettlementControls({
 			{approvalRequired ? (
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool's share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
-					<button class='primary-action' disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
+					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
 						Approve router for complete-set redemption
 					</button>
 				</>
@@ -2654,7 +2821,7 @@ export function LiveSettlementControls({
 				</button>
 			) : null}
 			{!approvalRequired && actionableQuote !== undefined ? (
-				<button class='primary-action' disabled={workflowLocked || state !== 'ready'} onClick={() => void submitCurrent()}>
+				<button class='primary-action' aria-busy={state === 'preparing' || state === 'submitting' || state === 'pending'} disabled={workflowLocked || state !== 'ready'} onClick={() => void submitCurrent()}>
 					{actionableQuote.operation === 'migrate-shares' ? `Submit migration to ${actionableQuote.targetOutcomeIndexes.length.toString()} child ${actionableQuote.targetOutcomeIndexes.length === 1 ? 'branch' : 'branches'}` : 'Submit settlement transaction'}
 				</button>
 			) : null}
@@ -2675,6 +2842,7 @@ function LivePositionControls({
 	quote,
 	state,
 	receiptWarning,
+	transactionHash,
 	externallyLocked,
 	nowSeconds,
 	setMode,
@@ -2699,6 +2867,7 @@ function LivePositionControls({
 	quote: Quote | undefined
 	state: TransactionState
 	receiptWarning: string | undefined
+	transactionHash: Hash | undefined
 	externallyLocked: boolean
 	nowSeconds: bigint
 	setMode(value: 'entry' | 'exit'): void
@@ -2722,6 +2891,7 @@ function LivePositionControls({
 	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
 	const entryPriceImpactBps = quote?.kind === 'entry' ? quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore : undefined
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
+	const submitLabel = mode === 'entry' ? `Enter ${side}` : `Exit insured ${side}`
 	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
 		if (value !== undefined) return formatOutcomeAmount(value, outcome)
 		if (balanceState === 'loading') return 'Loading…'
@@ -2731,20 +2901,7 @@ function LivePositionControls({
 	return (
 		<div class='operation-block' aria-busy={balanceState === 'loading'}>
 			<ProbabilityBar yesPercent={yesPercent} />
-			{mode === 'entry' ? (
-				<p class='pool-mint-note'>
-					Submitted ETH goes to Statoblast security pool <SecurityPoolAddressLink value={market.pool} disabled={workflowLocked} />. That exact pool reconciles collateral and mints complete-set shares at its live rate.
-				</p>
-			) : null}
 			<dl class='metrics'>
-				<div>
-					<dt>YES reserve</dt>
-					<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
-				</div>
-				<div>
-					<dt>NO reserve</dt>
-					<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
-				</div>
 				<div>
 					<dt>Wallet YES</dt>
 					<dd>{walletBalanceLabel(balances?.yes, 'YES')}</dd>
@@ -2794,98 +2951,131 @@ function LivePositionControls({
 					{insuredExitLimitMessage(parsedInput ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n)}
 				</p>
 			) : null}
-			{quote === undefined ? null : (
-				<dl class='metrics'>
-					<div>
-						<dt>Simulation block</dt>
-						<dd>{quote.value.blockNumber.toString()}</dd>
-					</div>
-					<div>
-						<dt>Complete-set shares</dt>
-						<dd>{formatShareAmount(quote.value.result.completeSetShares)}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? 'Opposite outcome swapped' : `${side} swapped`}</dt>
-						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? `Additional ${side} received` : `Total ${side} required`}</dt>
-						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? `Total ${side} delivered` : 'INVALID required'}</dt>
-						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? 'INVALID received' : 'Estimated ETH out'}</dt>
-						<dd>{quote.kind === 'entry' ? formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') : `${formatUnits(quote.value.result.ethOut)} ETH`}</dd>
-					</div>
-					<div>
-						<dt>AMM fee</dt>
-						<dd>{formatOutcomeAmount(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? `Minimum ${side} received` : `Maximum ${side} required`}</dt>
-						<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
-					</div>
-					<div>
-						<dt>{quote.kind === 'entry' ? 'Average ETH per long share' : 'Minimum ETH received'}</dt>
-						<dd>{quote.kind === 'entry' ? formatEthPerShare(quote.value.amount, quote.value.result.totalLongShares) : `${formatUnits(quote.value.minimumEth)} ETH`}</dd>
-					</div>
-					<div>
-						<dt>Simulated effective complete-set rate</dt>
-						<dd>{formatEthPerShare(quote.kind === 'entry' ? quote.value.amount : quote.value.result.ethOut, quote.value.result.completeSetShares)}</dd>
-					</div>
-					<div>
-						<dt>Deadline</dt>
-						<dd>{formatTimestamp(quote.value.deadline)}</dd>
-					</div>
-					<div>
-						<dt>Slippage tolerance</dt>
-						<dd>{formatUnits(quote.value.slippageBps, 2, 2)}%</dd>
-					</div>
-					{quote.kind === 'entry' ? (
-						<>
-							<div>
-								<dt>Conditional YES before / after</dt>
-								<dd>
-									{formatUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
-								</dd>
-							</div>
-							<div>
-								<dt>Conditional YES price impact</dt>
-								<dd>{entryPriceImpactBps === undefined ? '—' : `${entryPriceImpactBps > 0n ? '+' : ''}${formatUnits(entryPriceImpactBps, 2, 2)} percentage points`}</dd>
-							</div>
-						</>
-					) : null}
-				</dl>
-			)}
-			<p role='status' aria-live='polite'>
-				{stateLabel(state)}
-			</p>
-			{receiptWarning === undefined ? null : (
-				<p class='error broadcast-warning' role='alert'>
-					{receiptWarning}
-				</p>
-			)}
+			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
 			{mode === 'exit' && balances?.approved === false ? (
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool’s share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
-					<button class='primary-action' disabled={closed || balanceState !== 'ready' || workflowLocked} onClick={approve}>
+					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={closed || balanceState !== 'ready' || workflowLocked} onClick={approve}>
 						Approve router for all outcome tokens
 					</button>
 				</>
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote === undefined ? (
-				<button class='primary-action' disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || state === 'simulating' || workflowLocked} onClick={simulate}>
-					Simulate authoritative router call
+				<button
+					class='primary-action'
+					aria-busy={state === 'simulating'}
+					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || state === 'simulating' || workflowLocked}
+					onClick={simulate}
+				>
+					{state === 'simulating' ? `Simulating ${mode === 'entry' ? `Enter ${side}` : `insured ${side} exit`}…` : 'Preview trade'}
 				</button>
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? (
-				<button class='primary-action' disabled={workflowLocked || closed || state !== 'ready'} onClick={submit}>
-					Submit transaction
+				<button class='primary-action' aria-busy={state === 'submitting' || state === 'pending'} disabled={workflowLocked || closed || state !== 'ready'} onClick={submit}>
+					{submitLabel}
 				</button>
 			) : null}
+			<p role='status' aria-live='polite'>
+				{stateLabel(state, mode === 'entry' ? `Enter ${side}` : `Insured ${side} exit`)}
+			</p>
+			{transactionHash === undefined ? null : (
+				<p class='transaction-hash'>
+					<span>Transaction</span>
+					<code title={transactionHash}>{transactionHash}</code>
+				</p>
+			)}
+			{receiptWarning === undefined ? null : (
+				<p class='error broadcast-warning' role='alert'>
+					{receiptWarning}
+				</p>
+			)}
+			<details class='trade-breakdown pool-mechanics'>
+				<summary>Pool and reserve details</summary>
+				{mode === 'entry' ? (
+					<p class='pool-mint-note'>
+						Submitted ETH goes to Statoblast security pool <SecurityPoolAddressLink value={market.pool} disabled={workflowLocked} />. That exact pool reconciles collateral and mints complete-set shares at its live rate.
+					</p>
+				) : null}
+				<dl class='metrics quote'>
+					<div>
+						<dt>YES reserve</dt>
+						<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
+					</div>
+					<div>
+						<dt>NO reserve</dt>
+						<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
+					</div>
+				</dl>
+			</details>
+			{quote === undefined ? null : (
+				<details class='trade-breakdown'>
+					<summary>Full trade breakdown</summary>
+					<dl class='metrics quote'>
+						<div>
+							<dt>Simulation block</dt>
+							<dd>{quote.value.blockNumber.toString()}</dd>
+						</div>
+						<div>
+							<dt>Complete-set shares</dt>
+							<dd>{formatShareAmount(quote.value.result.completeSetShares)}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? 'Opposite outcome swapped' : `${side} swapped`}</dt>
+							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? `Additional ${side} received` : `Total ${side} required`}</dt>
+							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? `Total ${side} delivered` : 'INVALID required'}</dt>
+							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? 'INVALID received' : 'Estimated ETH out'}</dt>
+							<dd>{quote.kind === 'entry' ? formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') : `${formatUnits(quote.value.result.ethOut)} ETH`}</dd>
+						</div>
+						<div>
+							<dt>AMM fee</dt>
+							<dd>{formatOutcomeAmount(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? `Minimum ${side} received` : `Maximum ${side} required`}</dt>
+							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
+						</div>
+						<div>
+							<dt>{quote.kind === 'entry' ? 'Average ETH per long share' : 'Minimum ETH received'}</dt>
+							<dd>{quote.kind === 'entry' ? formatEthPerShare(quote.value.amount, quote.value.result.totalLongShares) : `${formatUnits(quote.value.minimumEth)} ETH`}</dd>
+						</div>
+						<div>
+							<dt>Simulated effective complete-set rate</dt>
+							<dd>{formatEthPerShare(quote.kind === 'entry' ? quote.value.amount : quote.value.result.ethOut, quote.value.result.completeSetShares)}</dd>
+						</div>
+						<div>
+							<dt>Deadline</dt>
+							<dd>{formatTimestamp(quote.value.deadline)}</dd>
+						</div>
+						<div>
+							<dt>Slippage tolerance</dt>
+							<dd>{formatUnits(quote.value.slippageBps, 2, 2)}%</dd>
+						</div>
+						{quote.kind === 'entry' ? (
+							<>
+								<div>
+									<dt>Conditional YES before / after</dt>
+									<dd>
+										{formatUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
+									</dd>
+								</div>
+								<div>
+									<dt>Conditional YES price impact</dt>
+									<dd>{entryPriceImpactBps === undefined ? '—' : `${entryPriceImpactBps > 0n ? '+' : ''}${formatUnits(entryPriceImpactBps, 2, 2)} percentage points`}</dd>
+								</div>
+							</>
+						) : null}
+					</dl>
+				</details>
+			)}
 		</div>
 	)
 }
