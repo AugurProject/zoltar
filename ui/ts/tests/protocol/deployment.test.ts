@@ -52,8 +52,8 @@ function hashReceipt(status: TransactionReceipt['status']): TransactionReceipt {
 
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' as const
 
-function createDeploymentSteps() {
-	return getDeploymentSteps()
+function createDeploymentSteps(wait?: (milliseconds: number) => Promise<void>) {
+	return getDeploymentSteps(undefined, wait)
 }
 
 function createMockReadClient({ getCode, readContract }: { getCode: MockReadClient['getCode']; readContract?: MockReadClient['readContract'] }) {
@@ -616,7 +616,7 @@ describe('contract deployment internals', () => {
 	})
 
 	test('proxy deployer retry refuses funding after its signer nonce was consumed without installing the proxy', async () => {
-		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
+		const proxyStep = createDeploymentSteps(async () => undefined).find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
 		let sendCalled = false
 		const client = asWriteClient({
@@ -632,6 +632,38 @@ describe('contract deployment internals', () => {
 
 		await expect(proxyStep.deploy(client)).rejects.toThrow('signer nonce has already been consumed')
 		expect(sendCalled).toBe(false)
+	})
+
+	test('proxy deployer accepts delayed code after its signer nonce was already confirmed', async () => {
+		const retryDelays: number[] = []
+		const proxyStep = createDeploymentSteps(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+		}).find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let codeReadCount = 0
+		let transactionSubmitted = false
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 4 ? undefined : PROXY_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async () => 1n,
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				transactionSubmitted = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				transactionSubmitted = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(retryDelays).toEqual([250])
+		expect(transactionSubmitted).toBe(false)
 	})
 
 	test('proxy deployer rejects an incompatible base fee without sending or funding', async () => {
@@ -787,6 +819,54 @@ describe('contract deployment internals', () => {
 		expect(accountedRawTransactions).toBe(1)
 	})
 
+	test('proxy deployer retries code verification when RPC state lags the confirmed receipt', async () => {
+		const retryDelays: number[] = []
+		const proxyStep = createDeploymentSteps(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+		}).find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let codeReadCount = 0
+		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => undefined,
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 3 ? undefined : PROXY_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(retryDelays).toEqual([250])
+	})
+
+	test('proxy deployer still rejects a confirmed transaction that never exposes code', async () => {
+		const retryDelays: number[] = []
+		const proxyStep = createDeploymentSteps(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+		}).find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => undefined,
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => undefined,
+			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		await expect(proxyStep.deploy(client)).rejects.toThrow('confirmed without installing code')
+		expect(retryDelays).toEqual([250, 500, 1_000, 2_000, 4_000])
+	})
+
 	test('proxy deployer retry accepts an already-known canonical broadcast race', async () => {
 		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
@@ -842,6 +922,38 @@ describe('contract deployment internals', () => {
 		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
 	})
 
+	test('proxy deployer retries stale code after a broadcast reports an already-confirmed nonce', async () => {
+		const retryDelays: number[] = []
+		const proxyStep = createDeploymentSteps(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+		}).find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		let confirmed = false
+		let codeReadCount = 0
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 5 ? undefined : PROXY_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async () => (confirmed ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				confirmed = true
+				throw new Error('nonce too low')
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				throw new Error('An already confirmed deployment should not be awaited')
+			},
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(retryDelays).toEqual([250])
+	})
+
 	test('proxy deployer retry rechecks canonical state after funding confirms', async () => {
 		const proxyStep = createDeploymentSteps().find(step => step.id === 'proxyDeployer')
 		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
@@ -867,6 +979,37 @@ describe('contract deployment internals', () => {
 
 		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
 		expect(rawBroadcastCalled).toBe(true)
+	})
+
+	test('proxy deployer retries delayed code when deployment confirms during signer funding', async () => {
+		let codeVisible = false
+		let funded = false
+		let rawBroadcastCount = 0
+		const retryDelays: number[] = []
+		const proxyStep = createDeploymentSteps(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+			codeVisible = true
+		}).find(step => step.id === 'proxyDeployer')
+		if (proxyStep === undefined) throw new Error('Expected proxyDeployer step')
+		const client = asWriteClient({
+			getBalance: async () => (funded ? 10_000_000_000_000_000n : 0n),
+			getCode: async () => (codeVisible ? PROXY_DEPLOYER_RUNTIME_CODE : undefined),
+			getTransactionCount: async () => (funded ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				rawBroadcastCount += 1
+				throw new Error('insufficient funds for gas')
+			},
+			sendTransaction: async () => {
+				funded = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		expect(await proxyStep.deploy(client)).not.toBe(ZERO_HASH)
+		expect(retryDelays).toEqual([250])
+		expect(rawBroadcastCount).toBe(1)
 	})
 
 	test('proxy deployer broadcast races reject unexpected installed code', async () => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
-import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment } from './uniswap-deployment.mts'
+import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight } from './uniswap-deployment.mts'
 
 const WETH = getAddress('0x65156FD21726b8efcB627fa38c506E3f3542F601')
 
@@ -18,6 +18,25 @@ function successReceipt(): TransactionReceipt {
 }
 
 describe('Uniswap testnet deployment', () => {
+	test('resolves confirmed CREATE2 code before fee and budget preflight', async () => {
+		let codeReadCount = 0
+		const retryDelays: number[] = []
+		const installed = await resolveCanonicalCreate2DeployerForPreflight(
+			asWriteClient({
+				getCode: async () => {
+					codeReadCount += 1
+					return codeReadCount < 3 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
+				},
+				getTransactionCount: async () => 1n,
+			}),
+			async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			},
+		)
+
+		expect(installed).toBe(true)
+		expect(retryDelays).toEqual([250])
+	})
 	test('accepts the pinned deployment artifact with Windows line endings', async () => {
 		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
 		expect(() => assertUniswapDeploymentArtifact(artifact.replaceAll('\n', '\r\n'))).not.toThrow()
@@ -114,6 +133,31 @@ describe('Uniswap testnet deployment', () => {
 		expect(accountedRawTransactions).toBe(1)
 	})
 
+	test('retries CREATE2 deployer code verification when RPC state lags the confirmed receipt', async () => {
+		const retryDelays: number[] = []
+		const step = (
+			await getUniswapDeployment(WETH, async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			})
+		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		let codeReadCount = 0
+		const client = asWriteClient({
+			assertCanonicalRawTransactionCost: () => undefined,
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 3 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			waitForTransactionReceipt: async () => successReceipt(),
+		})
+
+		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		expect(retryDelays).toEqual([250])
+	})
+
 	test('accepts an already-known canonical CREATE2 deployer broadcast race', async () => {
 		const step = (await getUniswapDeployment(WETH)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
 		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
@@ -168,6 +212,74 @@ describe('Uniswap testnet deployment', () => {
 		})
 
 		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+	})
+
+	test('retries stale CREATE2 code after a broadcast reports an already-confirmed nonce', async () => {
+		const retryDelays: number[] = []
+		const step = (
+			await getUniswapDeployment(WETH, async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			})
+		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		let confirmed = false
+		let codeReadCount = 0
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 6 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async () => (confirmed ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				confirmed = true
+				throw new Error('nonce too low')
+			},
+			sendTransaction: async () => {
+				throw new Error('Funding should not be sent')
+			},
+			waitForTransactionReceipt: async () => {
+				throw new Error('An already confirmed deployment should not be awaited')
+			},
+		})
+
+		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		expect(retryDelays).toEqual([250])
+	})
+
+	test('accepts delayed CREATE2 code after its signer nonce was already confirmed', async () => {
+		const retryDelays: number[] = []
+		const step = (
+			await getUniswapDeployment(WETH, async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+			})
+		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		let codeReadCount = 0
+		let transactionSubmitted = false
+		const client = asWriteClient({
+			getBalance: async () => 10_000_000_000_000_000n,
+			getCode: async () => {
+				codeReadCount += 1
+				return codeReadCount < 4 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
+			},
+			getTransactionCount: async () => 1n,
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				transactionSubmitted = true
+				return `0x${'1'.repeat(64)}` as Hash
+			},
+			sendTransaction: async () => {
+				transactionSubmitted = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => successReceipt(),
+		})
+
+		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		expect(retryDelays).toEqual([250])
+		expect(transactionSubmitted).toBe(false)
 	})
 
 	test('rejects unexpected code installed during a canonical CREATE2 deployer broadcast race', async () => {
@@ -235,6 +347,39 @@ describe('Uniswap testnet deployment', () => {
 
 		await expect(step.deploy(client)).rejects.toThrow('before signer funding')
 		expect(fundingCalled).toBe(false)
+	})
+
+	test('retries delayed CREATE2 code when deployment confirms during signer funding', async () => {
+		let codeVisible = false
+		let funded = false
+		let rawBroadcastCount = 0
+		const retryDelays: number[] = []
+		const step = (
+			await getUniswapDeployment(WETH, async delayMilliseconds => {
+				retryDelays.push(delayMilliseconds)
+				codeVisible = true
+			})
+		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const client = asWriteClient({
+			getBalance: async () => (funded ? 10_000_000_000_000_000n : 0n),
+			getCode: async () => (codeVisible ? ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE : undefined),
+			getTransactionCount: async () => (funded ? 1n : 0n),
+			recordCanonicalRawTransaction: () => undefined,
+			sendRawTransaction: async () => {
+				rawBroadcastCount += 1
+				throw new Error('insufficient funds for gas')
+			},
+			sendTransaction: async () => {
+				funded = true
+				return `0x${'2'.repeat(64)}` as Hash
+			},
+			waitForTransactionReceipt: async () => successReceipt(),
+		})
+
+		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		expect(retryDelays).toEqual([250])
+		expect(rawBroadcastCount).toBe(1)
 	})
 
 	test('enforces CREATE2 raw-transaction cost authorization before broadcast', async () => {
