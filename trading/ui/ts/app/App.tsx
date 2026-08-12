@@ -11,8 +11,29 @@ function currentRoute() {
 	return window.location.hash.replace(/^#\/?/, '') || 'markets'
 }
 
+function DemoSecurityPoolUnavailable() {
+	return (
+		<main class='route' id='main-content'>
+			<header class='route-header'>
+				<div>
+					<a class='eyebrow' href='#/markets'>
+						← Markets
+					</a>
+					<h1>Security pool</h1>
+				</div>
+			</header>
+			<section class='section'>
+				<p class='error' role='alert'>
+					This security pool is not available in the selected universe.
+				</p>
+			</section>
+		</main>
+	)
+}
+
 function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>, onWorkflowLockChange: (locked: boolean) => void) {
 	if (route.toLowerCase() === `security-pool/${market.pool}`.toLowerCase()) return <SecurityPoolDetails market={market} />
+	if (/^security-pool\/0x[0-9a-f]{40}$/i.test(route)) return <DemoSecurityPoolUnavailable />
 	if (route === 'market') return <MarketDetail market={market} scenario={scenario} onWorkflowLockChange={onWorkflowLockChange} />
 	if (route === 'liquidity') return <Liquidity market={market} />
 	if (route === 'portfolio') return <Portfolio market={market} />
