@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { handleApi } from '../src/api.ts'
 import {
 	assertBlockAppend,
+	assertContractDeploymentObservation,
 	assertLogScanCursorUpdate,
 	assertRewindTarget,
 	assertStartBlockCompatible,
@@ -95,6 +96,7 @@ const indexedBlock = (
 		contracts,
 		tokenMetadata,
 		addressActivity: [],
+		contractDeploymentObservations: [],
 		logScanCursors: [],
 		transactions:
 			summary === undefined
@@ -165,6 +167,17 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertLogScanCursorUpdate(25n, cursor)).not.toThrow()
 		expect(() => assertLogScanCursorUpdate(24n, cursor)).toThrow('must advance to committed block 24')
 		expect(() => assertLogScanCursorUpdate(25n, { ...cursor, startBlock: 26n })).toThrow('invalid retrieval boundary')
+	})
+
+	test('anchors deployment observations to their committing block', () => {
+		expect(() => assertContractDeploymentObservation(10n, { contractAddress: address, checkedBlock: 9n })).toThrow('must be anchored to committed block 10')
+		expect(() =>
+			assertContractDeploymentObservation(10n, {
+				contractAddress: address,
+				checkedBlock: 10n,
+				deployment: { block: 11n, timestamp: new Date(0), exact: true },
+			}),
+		).toThrow('invalid deployment boundary')
 	})
 
 	test('rejects changing the configured start boundary after indexing has begun', () => {
@@ -376,6 +389,13 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 				{ address: discoveredAddress, readError: 'ERC-20 metadata unavailable', readBlock: 2n },
 				{ address: rediscoveredAddress, name: 'Orphaned token', symbol: 'BAD', decimals: 6, readBlock: 2n },
 			]),
+			contractDeploymentObservations: [
+				{
+					contractAddress: address,
+					checkedBlock: 2n,
+					deployment: { block: 2n, timestamp: new Date('2026-01-02T00:00:00Z'), exact: true },
+				},
+			],
 			logScanCursors: [
 				{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },
 				{ contractAddress: discoveredAddress, startBlock: 2n, lastRetrievedBlock: 2n },
@@ -400,7 +420,6 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			kind: 'securityPool',
 			provenance: 'manifest',
 		})
-		await database.recordContractDeployment(chainId, address, 2n, { block: 2n, timestamp: new Date('2026-01-02T00:00:00Z'), exact: true }, writeLease)
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).toMatchObject({ deploymentBlock: 2n, deploymentCheckedBlock: 2n })
 		await database.rewind(chainId, 1n, first.hash, writeLease)
 		expect(await database.logScanCursors(chainId)).toEqual(

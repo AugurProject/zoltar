@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '#ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
-import { rpcConfigurationWithEnvironmentOverride, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
+import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
@@ -27,6 +27,7 @@ export type Configuration = MutableStrategy & {
 	lookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
 	network: NetworkConfiguration
+	networkConfigured: boolean
 	once: boolean
 	openOracle: Address
 	operatorSettings: PersistedOperatorSettings
@@ -63,8 +64,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		weth: deployment.weth,
 	})
 	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const rpcConfiguration = rpcConfigurationWithEnvironmentOverride(saved.connectivity, savedQuorumRpcUrls, process.env['ZOLTAR_BOT_RPC_URLS'])
-	const quorumRpcUrls = [...rpcConfiguration.quorumRpcUrls]
+	const quorumRpcUrls = [...savedQuorumRpcUrls]
 	if (saved.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Execution is enabled, but the effective RPC configuration has no independent quorum reader')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
@@ -74,7 +74,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,
-		connectivity: rpcConfiguration.connectivity,
+		connectivity: saved.connectivity,
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
 		deploymentManifest: deployment.deploymentManifest,
 		execute: saved.runtime.execute,
@@ -83,6 +83,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		lookbackBlocks: saved.runtime.lookbackBlocks,
 		maxHedgeSlippageBps: saved.runtime.maxHedgeSlippageBps,
 		network,
+		networkConfigured: saved.networkConfigured,
 		once: saved.runtime.once,
 		openOracle: deployment.openOracle,
 		operatorSettings: saved,

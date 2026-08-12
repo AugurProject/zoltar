@@ -3,6 +3,25 @@ import type { MarketPricePoint } from '#monitoring/market-monitor'
 
 const DECIMAL_SCALE = 18
 
+export function persistedConnectivity(value: unknown): { connectivity: { publicRpcUrls: string[]; readRpcUrl: string }; network: 'mainnet' | 'sepolia' } | undefined {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+	const network = Reflect.get(value, 'network')
+	const connectivity = Reflect.get(value, 'connectivity')
+	if ((network !== 'mainnet' && network !== 'sepolia') || typeof connectivity !== 'object' || connectivity === null || Array.isArray(connectivity)) return undefined
+	const readRpcUrl = Reflect.get(connectivity, 'readRpcUrl')
+	const publicRpcUrls = Reflect.get(connectivity, 'publicRpcUrls')
+	if (typeof readRpcUrl !== 'string' || !Array.isArray(publicRpcUrls) || publicRpcUrls.some(url => typeof url !== 'string')) return undefined
+	return { connectivity: { publicRpcUrls: publicRpcUrls.map(String), readRpcUrl }, network }
+}
+
+export function connectivityControlsDisabled(connected: boolean, requestPending: boolean) {
+	return !connected || requestPending
+}
+
+export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undefined, savedNetwork: 'mainnet' | 'sepolia' | undefined) {
+	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Saved for restart: ${savedNetwork}. The active process remains on ${activeNetwork}.`
+}
+
 export function singleFlight<T>(operation: () => Promise<T>) {
 	let inFlight: Promise<T> | undefined
 	let rerunRequested = false

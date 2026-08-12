@@ -53,15 +53,14 @@
 			</section>
 
 			<section id="quick-start">
-				<h2>Configuration-file quick start</h2>
-				<p>The bot accepts no command-line arguments. Copy the complete versioned configuration, edit every deployment and endpoint for the selected chain, then run the zero-argument command.</p>
+				<h2>Dashboard quick start</h2>
+				<p>The bot accepts no command-line arguments. Copy the paused, initially unconfigured example and run the zero-argument command.</p>
 				<pre><code>install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
-# Edit .state/operator.json
 bun run run</code></pre>
 				<p>Direct file editing is an offline workflow: stop the bot, edit the configuration, and restart it. While the bot is running, use the dashboard only; do not edit the file concurrently with a dashboard save.</p>
-				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Syncing</strong>; after the bounded historical scan reaches the head, the state becomes <strong>Running</strong>. The bot then queries every newly observed block and evaluates opportunities at the newest canonical head.</p>
-				<p>For Sepolia, set <code>network</code> to <code>sepolia</code>, replace the deployment addresses and RPC URLs, keep <code>runtime.execute</code> off for the first rehearsal, and save the complete JSON in the UI when you need to change a startup-only field.</p>
+				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Paused</strong>. In <strong>Chain and RPC connectivity</strong>, select the chain and save its read and public RPC endpoints. The bot verifies every endpoint against that chain and waits for a restart before scanning. Then review the deployment and network-specific durable paths in <strong>Complete bot configuration</strong>.</p>
+				<p>For Sepolia, copy the example to a separate operator file, start it with <code>OPEN_ORACLE_ARBITRAGER_CONFIG</code>, and use separate history, price-history, and position paths. A configured operator file cannot be retargeted to another chain because its journals are not chain-tagged. Keep <code>runtime.execute</code> off for the first rehearsal.</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
 					Execution also requires an authenticated manifest, at least two independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected.
@@ -79,7 +78,7 @@ bun run run</code></pre>
 							<tr>
 								<td><code>network</code></td>
 								<td>Selects <code>mainnet</code> or <code>sepolia</code>.</td>
-								<td>Fixes the expected chain ID and network defaults.</td>
+								<td>Saved through Chain and RPC connectivity on first setup and then locked. Use a separate operator file and durable paths for another chain.</td>
 							</tr>
 							<tr>
 								<td><code>connectivity</code> and <code>deployment.quorumRpcUrls</code></td>

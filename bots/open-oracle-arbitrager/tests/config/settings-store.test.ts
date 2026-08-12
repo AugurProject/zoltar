@@ -50,6 +50,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			weth: '0x0000000000000000000000000000000000000009' as const,
 		},
 		network: 'mainnet' as const,
+		networkConfigured: true,
 		paused: true,
 		privateKey: privateKeyValue,
 		runtime: {

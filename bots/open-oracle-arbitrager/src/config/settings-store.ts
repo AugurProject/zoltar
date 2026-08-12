@@ -32,6 +32,7 @@ export type PersistedOperatorSettings = {
 	connectivity: ConnectivitySettings
 	deployment: DeploymentSettings
 	network: NetworkName
+	networkConfigured: boolean
 	paused: boolean
 	privateKey: Hex | undefined
 	runtime: RuntimeSettings
@@ -96,9 +97,9 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 
 export type StoredOperatorSettings = {
 	centralizedMarkets: ReturnType<typeof serializeCentralizedMarketSettings>
-	connectivity: ConnectivitySettings
+	connectivity?: ConnectivitySettings | undefined
 	deployment: DeploymentSettings
-	network: NetworkName
+	network?: NetworkName | undefined
 	paused: boolean
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
 	runtime: StoredRuntimeSettings
@@ -118,7 +119,7 @@ function validatedKeys(record: Record<string, unknown>) {
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
-	for (const key of ['connectivity', 'deployment', 'network', 'paused', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version']) {
+	for (const key of ['deployment', 'paused', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version']) {
 		if (!(key in record)) throw new Error(`Operator configuration is missing ${key}`)
 	}
 }
@@ -188,7 +189,9 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const record = requiredRecord(value)
 	validatedKeys(record)
 	if (record['version'] !== 4) throw new Error('Operator configuration uses an unsupported version; expected version 4')
-	if (record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')
+	const networkConfigured = record['network'] !== undefined || record['connectivity'] !== undefined
+	if ((record['network'] === undefined) !== (record['connectivity'] === undefined)) throw new Error('Operator configuration must set network and connectivity together')
+	if (networkConfigured && record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')
 	if (typeof record['paused'] !== 'boolean') throw new Error('Operator pause setting must be a boolean')
 	const strategy: MutableStrategy = {
 		maxSpotTwapTicks: 0n,
@@ -204,20 +207,24 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const candidate = signerCandidate(privateKeyValue ?? null)
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const deployment = validateDeploymentSettings(record['deployment'])
-	const connectivity = validateConnectivitySettings(record['connectivity'])
+	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
 	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const chainId = record['network'] === 'mainnet' ? 1 : 11_155_111
+	const network = record['network'] === 'sepolia' ? 'sepolia' : 'mainnet'
+	const chainId = network === 'mainnet' ? 1 : 11_155_111
 	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
 	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
 	const submission = validateSubmissionSettings(record['submission'])
+	const runtime = validateRuntimeSettings(record['runtime'])
+	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	return {
 		centralizedMarkets,
 		connectivity,
 		deployment,
-		network: record['network'],
+		network,
+		networkConfigured,
 		paused: record['paused'],
 		privateKey: candidate.privateKey,
-		runtime: validateRuntimeSettings(record['runtime']),
+		runtime,
 		strategy,
 		submission,
 		tokenAddresses: record['tokenAddresses'].map(address => getAddress(String(address))),
@@ -227,9 +234,9 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
 	return {
 		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
-		connectivity: settings.connectivity,
+		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
 		deployment: settings.deployment,
-		network: settings.network,
+		network: settings.networkConfigured ? settings.network : undefined,
 		paused: settings.paused,
 		privateKey: redactPrivateKey && settings.privateKey !== undefined ? PRESERVE_PRIVATE_KEY : settings.privateKey,
 		runtime: {

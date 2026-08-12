@@ -26,6 +26,7 @@ import {
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
+	planDeploymentAwareLogScan,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
 	readTokenMetadata,
@@ -34,6 +35,7 @@ import {
 	retryDelayMs,
 	rpcFailureLogMessage,
 	rpcLogAddressGroups,
+	rpcLogQueryGroups,
 	rpcProviderLabel,
 	runIndexerOwnershipLifecycle,
 	runIndexerTask,
@@ -366,7 +368,54 @@ describe('network indexer lifecycle', () => {
 	test('finds the first block containing contract code and distinguishes a bounded result', async () => {
 		expect(await findContractDeploymentBlock(0n, 100n, async (block) => (block >= 42n ? '0x01' : undefined))).toEqual({ block: 42n, exact: true })
 		expect(await findContractDeploymentBlock(50n, 100n, async () => '0x01')).toEqual({ block: 50n, exact: false })
+		expect(await findContractDeploymentBlock(50n, 100n, async (block) => (block >= 51n ? '0x01' : undefined), true)).toEqual({ block: 51n, exact: true })
 		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
+	})
+
+	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
+		const deployed = { address, label: 'Deployed', kind: 'openOracle', provenance: 'manifest', deploymentCheckedBlock: 49n } satisfies ContractMetadata
+		const absent = {
+			address: '0x2000000000000000000000000000000000000002',
+			label: 'Absent',
+			kind: 'zoltar',
+			provenance: 'manifest',
+		} satisfies ContractMetadata
+		const checkedBlocks: bigint[] = []
+		const plan = await planDeploymentAwareLogScan(
+			[deployed, absent],
+			50n,
+			100n,
+			0n,
+			async (candidate, block) => {
+				checkedBlocks.push(block)
+				return candidate === address && block >= 75n ? '0x01' : undefined
+			},
+			async (block) => new Date(Number(block) * 1_000),
+		)
+		expect(plan.inputs).toEqual([{ address, fromBlock: 75n, startBlock: 75n }])
+		expect(plan.observations).toEqual([
+			{ contractAddress: address, checkedBlock: 100n, deployment: { block: 75n, exact: true, timestamp: new Date(75_000) } },
+			{ contractAddress: absent.address, checkedBlock: 100n },
+		])
+		expect(checkedBlocks).not.toContain(49n)
+	})
+
+	test('falls back to complete scanning when deployment detection fails', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const failures: unknown[] = []
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			50n,
+			100n,
+			0n,
+			async () => {
+				throw new Error('archive unavailable')
+			},
+			async () => new Date(0),
+			(_contract, error) => failures.push(error),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
+		expect(failures).toHaveLength(1)
 	})
 
 	test('bounds a stalled optional contract deployment history read', async () => {
@@ -477,6 +526,15 @@ describe('network indexer lifecycle', () => {
 			[0, 1, 2, 3, 4],
 			[5, 6, 7, 8, 9],
 			[10, 11],
+		])
+		expect(
+			rpcLogQueryGroups([
+				{ address, fromBlock: 10n, startBlock: 10n },
+				{ address: '0x2000000000000000000000000000000000000002', fromBlock: 20n, startBlock: 20n },
+			]),
+		).toEqual([
+			{ addresses: [address], fromBlock: 10n },
+			{ addresses: ['0x2000000000000000000000000000000000000002'], fromBlock: 20n },
 		])
 	})
 

@@ -419,6 +419,7 @@ const snapshot = {
 	lastPollAt: sampledAt(0),
 	mode: 'execute' as const,
 	network: 'mainnet' as const,
+	networkConfigured: true,
 	openOracle,
 	operationLog: [
 		{ category: 'decision' as const, details: 'net 0.0158 ETH · 992 bps', level: 'info' as const, message: 'Selected profitable sell-REP dispute', reason: 'quote, TWAP, inventory, and risk checks passed', reportId: '816', timestamp: sampledAt(1) },

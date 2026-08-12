@@ -86,20 +86,6 @@ export function validateConnectivitySettings(value: unknown): ConnectivitySettin
 	return { publicRpcUrls, readRpcUrl }
 }
 
-export function rpcConfigurationWithEnvironmentOverride(connectivity: ConnectivitySettings, quorumRpcUrls: readonly string[], environmentValue: string | undefined) {
-	if (environmentValue === undefined || environmentValue.trim() === '') return { connectivity, quorumRpcUrls }
-	const entries = environmentValue.split(',').map(value => value.trim())
-	if (entries.some(value => value === '')) throw new Error('ZOLTAR_BOT_RPC_URLS must not contain empty entries')
-	if (entries.length > 8) throw new Error('At most 8 RPC URLs are supported in ZOLTAR_BOT_RPC_URLS')
-	const urls = entries.map(endpointUrl)
-	const readRpcUrl = urls[0]
-	if (readRpcUrl === undefined) throw new Error('ZOLTAR_BOT_RPC_URLS must contain at least one RPC URL')
-	return {
-		connectivity: validateConnectivitySettings({ publicRpcUrls: urls, readRpcUrl }),
-		quorumRpcUrls: validateIndependentReadRpcUrls(readRpcUrl, urls.slice(1)),
-	}
-}
-
 async function rpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {
 	const response = await fetch(url, {
 		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }),
