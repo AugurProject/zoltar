@@ -182,7 +182,12 @@ describe('testnet deployment inputs', () => {
 
 		expect(DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS).toBe(60 * 60 * 1_000)
 		expect(requests.map(request => request.timeout)).toEqual([DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS, 12_345])
-		expect(logs).toEqual([`receipt wait hash=${FIRST_HASH} timeout=3600s`, `receipt confirmed hash=${FIRST_HASH} status=success block=99 gas_used=123456`, `receipt wait hash=${SECOND_HASH} timeout=12.345s`, `receipt confirmed hash=${SECOND_HASH} status=success block=99 gas_used=123456`])
+		expect(logs).toEqual([
+			`  ├─ Wait for receipt\n  │  ├─ Transaction: ${FIRST_HASH}\n  │  └─ Timeout: 3600s`,
+			`  ├─ Receipt confirmed\n  │  ├─ Transaction: ${FIRST_HASH}\n  │  ├─ Status: success\n  │  ├─ Block: 99\n  │  └─ Gas used: 123456`,
+			`  ├─ Wait for receipt\n  │  ├─ Transaction: ${SECOND_HASH}\n  │  └─ Timeout: 12.345s`,
+			`  ├─ Receipt confirmed\n  │  ├─ Transaction: ${SECOND_HASH}\n  │  ├─ Status: success\n  │  ├─ Block: 99\n  │  └─ Gas used: 123456`,
+		])
 	})
 
 	test('enforces chain and RPC safety at the transaction-capable entry point', async () => {
@@ -224,10 +229,10 @@ describe('testnet deployment transaction authorization', () => {
 		expect(await send({ to: FIRST_ADDRESS, value: 1n })).toBe(FIRST_HASH)
 		expect(submitted).toMatchObject({ gas: 130_000n, gasPrice: undefined, maxFeePerGas: 30n, maxPriorityFeePerGas: 10n, nonce: 7n, to: FIRST_ADDRESS, value: 1n })
 		expect(logs).toEqual([
-			`transaction prepare account=${account.address} fetching_nonce_and_fees`,
-			'transaction estimate nonce=7 base_fee=0.00000001 gwei priority_fee=0.00000001 gwei max_fee=0.00000003 gwei',
-			`transaction submit nonce=7 to=${FIRST_ADDRESS} gas=130000 value=0.000000000000000001 ETH worst_case_cost=0.000000000003900001 ETH`,
-			`transaction submitted nonce=7 hash=${FIRST_HASH}`,
+			`  ├─ Prepare transaction\n  │  └─ Account: ${account.address}`,
+			'  ├─ Estimate transaction\n  │  ├─ Nonce: 7\n  │  ├─ Base fee: 0.00000001 gwei\n  │  ├─ Priority fee: 0.00000001 gwei\n  │  └─ Maximum fee: 0.00000003 gwei',
+			`  ├─ Submit transaction\n  │  ├─ Nonce: 7\n  │  ├─ To: ${FIRST_ADDRESS}\n  │  ├─ Gas limit: 130000\n  │  ├─ Value: 0.000000000000000001 ETH\n  │  └─ Maximum cost: 0.000000000003900001 ETH`,
+			`  ├─ Transaction submitted\n  │  ├─ Nonce: 7\n  │  └─ Transaction: ${FIRST_HASH}`,
 		])
 	})
 
@@ -445,6 +450,7 @@ describe('testnet deployment plan', () => {
 	test('skips existing code and deploys missing dependent steps in order', async () => {
 		const code = new Map<Address, Hex>([[FIRST_ADDRESS, '0x01']])
 		const deployed: string[] = []
+		const logs: string[] = []
 		const client = {
 			getCode: async ({ address }: { address: Address }) => code.get(address),
 		}
@@ -472,7 +478,7 @@ describe('testnet deployment plan', () => {
 				},
 			],
 			client,
-			() => undefined,
+			message => logs.push(message),
 		)
 
 		expect(deployed).toEqual(['second'])
@@ -480,6 +486,7 @@ describe('testnet deployment plan', () => {
 			{ address: FIRST_ADDRESS, id: 'first', label: 'First', status: 'skipped', transactionHash: undefined },
 			{ address: SECOND_ADDRESS, id: 'second', label: 'Second', status: 'deployed', transactionHash: SECOND_HASH },
 		])
+		expect(logs).toEqual([`First (first)\n  ├─ Address: ${FIRST_ADDRESS}\n  └─ Status: already deployed`, `Second (second)\n  ├─ Address: ${SECOND_ADDRESS}`, `  ├─ Transaction: ${SECOND_HASH}\n  └─ Status: deployed`])
 	})
 
 	test('reports code installed without a submitted transaction as skipped', async () => {
@@ -504,7 +511,7 @@ describe('testnet deployment plan', () => {
 		)
 
 		expect(results).toEqual([{ address: FIRST_ADDRESS, id: 'proxyDeployer', label: 'Proxy Deployer', status: 'skipped', transactionHash: undefined }])
-		expect(logs).toEqual([`deploy proxyDeployer ${FIRST_ADDRESS}`, `skip proxyDeployer ${FIRST_ADDRESS} installed without a submitted transaction`])
+		expect(logs).toEqual([`Proxy Deployer (proxyDeployer)\n  ├─ Address: ${FIRST_ADDRESS}`, '  └─ Status: ready (installed without a submitted transaction)'])
 		expect(logs.join('\n')).not.toContain(ZERO_HASH)
 	})
 
@@ -512,6 +519,7 @@ describe('testnet deployment plan', () => {
 		const client = {
 			getCode: async () => undefined,
 		}
+		const logs: string[] = []
 		await expect(
 			runDeploymentPlan(
 				[
@@ -542,9 +550,33 @@ describe('testnet deployment plan', () => {
 					},
 				],
 				client,
-				() => undefined,
+				message => logs.push(message),
 			),
 		).rejects.toThrow('succeeded without installing code')
+		expect(logs).toEqual([`First (first)\n  ├─ Address: ${FIRST_ADDRESS}`, '  └─ Status: failed'])
+	})
+
+	test('closes the contract log when deployment fails', async () => {
+		const logs: string[] = []
+		await expect(
+			runDeploymentPlan(
+				[
+					{
+						address: FIRST_ADDRESS,
+						dependencies: [],
+						deploy: async () => {
+							throw new Error('RPC unavailable')
+						},
+						expectedRuntimeCodeHash: keccak256('0x01'),
+						id: 'first',
+						label: 'First',
+					},
+				],
+				{ getCode: async () => undefined },
+				message => logs.push(message),
+			),
+		).rejects.toThrow('RPC unavailable')
+		expect(logs).toEqual([`First (first)\n  ├─ Address: ${FIRST_ADDRESS}`, '  └─ Status: failed'])
 	})
 
 	test('rejects incorrect code at direct deployment and descendant addresses', async () => {
