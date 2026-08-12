@@ -5,6 +5,9 @@ const originalNetworks = process.env['NETWORKS']
 const originalMainnetRpc = process.env['MAINNET_RPC_URL']
 const originalStart = process.env['SEPOLIA_START_BLOCK']
 const originalRpc = process.env['SEPOLIA_RPC_URL']
+const originalAmmFactory = process.env['SEPOLIA_AMM_FACTORY_ADDRESS']
+const originalV2Factory = process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS']
+const originalV4Manager = process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS']
 
 afterEach(() => {
 	if (originalNetworks === undefined) delete process.env['NETWORKS']
@@ -15,6 +18,12 @@ afterEach(() => {
 	else process.env['SEPOLIA_START_BLOCK'] = originalStart
 	if (originalRpc === undefined) delete process.env['SEPOLIA_RPC_URL']
 	else process.env['SEPOLIA_RPC_URL'] = originalRpc
+	if (originalAmmFactory === undefined) delete process.env['SEPOLIA_AMM_FACTORY_ADDRESS']
+	else process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = originalAmmFactory
+	if (originalV2Factory === undefined) delete process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS']
+	else process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS'] = originalV2Factory
+	if (originalV4Manager === undefined) delete process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS']
+	else process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = originalV4Manager
 })
 
 describe('network configuration', () => {
@@ -25,6 +34,27 @@ describe('network configuration', () => {
 		const networks = await loadNetworks()
 
 		expect(networks.map(({ rpcUrls }) => rpcUrls)).toEqual([['https://mainnet.gateway.tenderly.co'], ['https://sepolia.gateway.tenderly.co']])
+	})
+
+	test('registers canonical Uniswap activity sources and allows a default venue to be disabled', async () => {
+		process.env['NETWORKS'] = 'mainnet'
+		process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS'] = ''
+		const [network] = await loadNetworks()
+		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV2Factory')).toBeFalse()
+		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV3Factory')).toBeTrue()
+		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV4PoolManager')).toBeTrue()
+	})
+
+	test('accepts a configured testnet V4 PoolManager and rejects malformed values', async () => {
+		process.env['NETWORKS'] = 'sepolia'
+		process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = '0x1000000000000000000000000000000000000004'
+		expect((await loadNetworks())[0]?.contracts).toContainEqual([
+			'0x1000000000000000000000000000000000000004',
+			'Uniswap V4 PoolManager',
+			'uniswapV4PoolManager',
+		])
+		process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = '0x1234'
+		expect(loadNetworks()).rejects.toThrow('SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS must be a complete 20-byte EVM address')
 	})
 
 	test('selects networks and preserves an exact bigint start block', async () => {
@@ -51,9 +81,27 @@ describe('network configuration', () => {
 		expect(networks[0]?.rpcUrls).toEqual(['https://primary.example', 'https://fallback.example/rpc'])
 	})
 
+	test('optionally registers the deployed Augur AMM factory as an activity source', async () => {
+		process.env['NETWORKS'] = 'sepolia'
+		process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = '0x1000000000000000000000000000000000000001'
+		const networks = await loadNetworks()
+		expect(networks[0]?.contracts).toContainEqual(['0x1000000000000000000000000000000000000001', 'Augur AMM Factory', 'ammFactory'])
+	})
+
+	test('rejects a malformed Augur AMM factory address', async () => {
+		process.env['NETWORKS'] = 'sepolia'
+		process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = '0x1234'
+		expect(loadNetworks()).rejects.toThrow('SEPOLIA_AMM_FACTORY_ADDRESS must be a complete 20-byte EVM address')
+	})
+
 	test('rejects non-HTTP RPC transports', async () => {
 		process.env['NETWORKS'] = 'sepolia'
 		process.env['SEPOLIA_RPC_URL'] = 'wss://provider.example'
 		expect(loadNetworks()).rejects.toThrow('must contain HTTP(S) URLs')
+	})
+
+	test('rejects unknown network selections instead of silently ignoring them', async () => {
+		process.env['NETWORKS'] = 'sepolia,sepollia'
+		expect(loadNetworks()).rejects.toThrow('NETWORKS contains unknown network: sepollia')
 	})
 })

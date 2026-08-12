@@ -105,6 +105,8 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 		securityVaultResult: undefined,
 		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
+		walletRepBalanceError: overrides.walletRepBalanceError,
+		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
 	}
 }
 

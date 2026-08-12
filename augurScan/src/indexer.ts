@@ -19,6 +19,7 @@ import {
 	type Log,
 	type PublicClient,
 	parseAbi,
+	parseAbiItem,
 	type Transaction,
 	type TransactionReceipt,
 	zeroAddress,
@@ -26,6 +27,7 @@ import {
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+import { uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
 
 type RpcBlockHeader = {
 	readonly hash: Hash
@@ -40,6 +42,20 @@ const erc20MetadataAbi = parseAbi([
 ])
 const erc20BalanceAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 const priceCoordinatorDependenciesAbi = parseAbi(['function liquidationApprovalRegistry() view returns (address)'])
+const uniswapV4InitializeEvent = parseAbiItem(
+	'event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)',
+)
+const uniswapV2PairCreatedEvent = parseAbiItem('event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)')
+const uniswapV3PoolCreatedEvent = parseAbiItem(
+	'event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)',
+)
+const uniswapV4SwapEvent = parseAbiItem(
+	'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
+)
+export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata>): readonly Hex[] =>
+	[...contracts.values()]
+		.filter(({ kind }) => kind === 'reputationToken')
+		.flatMap(({ address }) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing)))
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
 	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)
@@ -1055,11 +1071,20 @@ class NetworkIndexer {
 			const newlyDiscoveredActivityAddresses = [...indexed.contracts]
 				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
 				.map(([, contract]) => contract.address)
-			if (newlyDiscoveredActivityAddresses.length > 0 && nextBlock < end) {
+			const discoveredRep = [...indexed.contracts].some(([address, contract]) => !contractsBeforeBlock.has(address) && contract.kind === 'reputationToken')
+			const additionalAddresses = [
+				...newlyDiscoveredActivityAddresses,
+				...(discoveredRep
+					? [...indexed.contracts.values()]
+							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
+							.map(({ address }) => address)
+					: []),
+			]
+			if (additionalAddresses.length > 0 && nextBlock < end) {
 				try {
 					this.#mergeLogs(
 						logsByBlock,
-						await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses, (blockNumber) => {
+						await this.#getAllLogs(nextBlock + 1n, end, additionalAddresses, indexed.contracts, (blockNumber) => {
 							const expected = headers[Number(blockNumber - batchStart)]
 							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
 							return expected.hash
@@ -1106,11 +1131,38 @@ class NetworkIndexer {
 		return end >= observedHead
 	}
 
-	async #queryLogs(toBlock: bigint, inputs: readonly LogScanInput[]): Promise<readonly Log[]> {
-		const groups = rpcLogQueryGroups(inputs)
-		const pages = await mapLimit(groups, 3, (group) => this.#client.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
+	async #queryLogs(toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<readonly Log[]> {
+		const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
+		const inputsOfKind = (kind: string): readonly LogScanInput[] => inputs.filter(({ address }) => contracts.get(address.toLowerCase())?.kind === kind)
+		const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
+		const groups = rpcLogQueryGroups(ordinaryInputs)
+		const ordinaryPages = await mapLimit(groups, 3, (group) => this.#client.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
+		const repTokens = [...contracts.values()].filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
+		const wethTokens = [...contracts.values()].filter(({ kind }) => kind === 'weth').map(({ address }) => address)
+		const tokenPairs = repTokens.flatMap((rep) =>
+			wethTokens.flatMap((weth) => [
+				{ token0: rep, token1: weth },
+				{ token0: weth, token1: rep },
+			]),
+		)
+		const v2Queries = inputsOfKind('uniswapV2Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
+		const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const v3Queries = inputsOfKind('uniswapV3Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
+		const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
+		const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap((input) => poolIdGroups.map((ids) => ({ input, ids })))
+		const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+		)
+		const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
+			this.#client.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+		)
 		const unique = new Map<string, Log>()
-		for (const log of pages.flat()) {
+		for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
 			const position = requireLogPosition(log)
 			const input = inputs.find(({ address }) => address.toLowerCase() === log.address.toLowerCase())
 			if (input === undefined || position.blockNumber < input.fromBlock || position.blockNumber > toBlock)
@@ -1124,19 +1176,29 @@ class NetworkIndexer {
 		})
 	}
 
-	async #getLogsForInputs(toBlock: bigint, inputs: readonly LogScanInput[]): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+	async #getLogsForInputs(
+		toBlock: bigint,
+		inputs: readonly LogScanInput[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
+	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
 		const range = await queryCanonicalLogRange(
 			toBlock,
 			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
-			() => this.#queryLogs(toBlock, inputs),
+			() => this.#queryLogs(toBlock, inputs, contracts),
 		)
 		return { logs: range.items, endBlockHash: range.endBlockHash }
 	}
 
-	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+	async #getLogs(
+		fromBlock: bigint,
+		toBlock: bigint,
+		addresses: readonly Address[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
+	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
 		return await this.#getLogsForInputs(
 			toBlock,
 			addresses.map((address) => ({ address, fromBlock, startBlock: fromBlock })),
+			contracts,
 		)
 	}
 
@@ -1163,6 +1225,7 @@ class NetworkIndexer {
 			runtimeConfig.logScanRangeSize,
 			async (rangeStart, rangeEnd) => {
 				let plan: DeploymentAwareLogPlan | undefined
+				const contractMap = new Map(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
 				const range = await queryCanonicalLogRange(
 					rangeEnd,
 					async () => (await this.#client.getBlock({ blockNumber: rangeEnd })).hash,
@@ -1179,7 +1242,7 @@ class NetworkIndexer {
 									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${safeIndexerFailureReason(error)}`,
 								),
 						)
-						return await this.#queryLogs(rangeEnd, plan.inputs)
+						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
 					},
 				)
 				endBlockHash = range.endBlockHash
@@ -1208,6 +1271,7 @@ class NetworkIndexer {
 		fromBlock: bigint,
 		toBlock: bigint,
 		addresses: readonly Address[],
+		contracts: ReadonlyMap<string, ContractMetadata>,
 		expectedBlockHash: (blockNumber: bigint) => Hash,
 	): Promise<readonly Log[]> {
 		const logs: Log[] = []
@@ -1218,7 +1282,7 @@ class NetworkIndexer {
 				toBlock,
 				runtimeConfig.logScanRangeSize,
 				async (rangeStart, rangeEnd) => {
-					const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+					const range = await this.#getLogs(rangeStart, rangeEnd, addresses, contracts)
 					if (range.endBlockHash !== expectedBlockHash(rangeEnd))
 						throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
 					return range.logs
@@ -1256,8 +1320,8 @@ class NetworkIndexer {
 		}
 	}
 
-	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
-		const range = await this.#getLogs(blockNumber, blockNumber, addresses)
+	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]> {
+		const range = await this.#getLogs(blockNumber, blockNumber, addresses, contracts)
 		if (range.endBlockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
 		for (const log of range.logs) {
 			if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
@@ -1315,7 +1379,7 @@ class NetworkIndexer {
 					const contract = contracts.get(emitter)
 					if (contract === undefined) continue
 					const decoded = decodeLogRecord(contract.kind, log.topics, log.data, labels)
-					for (const candidate of discoveriesFrom(decoded)) {
+					for (const candidate of discoveriesFrom(decoded, contracts)) {
 						const key = candidate.address.toLowerCase()
 						if (contracts.has(key)) continue
 						const metadata: ContractMetadata = {
@@ -1354,7 +1418,16 @@ class NetworkIndexer {
 			}
 			if (discoveredAddresses.length === 0) break
 			const activityAddresses = discoveredAddresses.filter((address) => isProtocolActivitySource(contracts.get(address.toLowerCase())))
-			for (const log of activityAddresses.length === 0 ? [] : await this.#getKnownLogs(number, activityAddresses, block.hash)) {
+			const discoveredRep = discoveredAddresses.some((address) => contracts.get(address.toLowerCase())?.kind === 'reputationToken')
+			const queryAddresses = [
+				...activityAddresses,
+				...(discoveredRep
+					? [...contracts.values()]
+							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
+							.map(({ address }) => address)
+					: []),
+			]
+			for (const log of queryAddresses.length === 0 ? [] : await this.#getKnownLogs(number, queryAddresses, contracts, block.hash)) {
 				relevantHashes.add(requireLogPosition(log).transactionHash)
 			}
 			await fetchMissingEvidence()

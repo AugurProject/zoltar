@@ -148,6 +148,9 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('70.25', 2)).toBe(7_025n)
 		expect(parseUnitsOrUndefined('70.251', 2)).toBeUndefined()
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
+		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
+		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
+		expect(() => formatEthPerShare(1n, 2n, 0)).toThrow('Maximum significant digits must be a positive safe integer')
 	})
 
 	test('converts to a number only after proving the bigint is safe', () => {
@@ -486,6 +489,10 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
+		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
 	})
 

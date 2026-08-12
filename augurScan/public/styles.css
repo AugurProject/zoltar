@@ -543,6 +543,15 @@ main {
 		650 0.83rem / 1.2 ui-monospace,
 		monospace;
 }
+.metric-card small {
+	display: block;
+	margin-top: 0.3rem;
+	color: var(--muted);
+	font:
+		0.56rem / 1.35 ui-monospace,
+		monospace;
+	overflow-wrap: anywhere;
+}
 .chart-card,
 .lineage-card,
 .static-card {
@@ -573,17 +582,109 @@ main {
 }
 .chart-legend i {
 	display: inline-block;
-	width: 16px;
+	width: 22px;
 	height: 2px;
 	margin-right: 0.3rem;
 	vertical-align: middle;
 	background: var(--cyan);
 }
-.chart-legend span:nth-child(2) i {
+.chart-legend i.chart-secondary {
 	background: var(--amber);
 }
-.chart-legend span:nth-child(3) i {
+.chart-legend i.chart-tertiary {
 	background: #a78bfa;
+}
+.chart-legend i.chart-initialization {
+	width: 7px;
+	height: 7px;
+	margin-inline: 4px 8px;
+	border: 1.5px solid currentColor;
+	background: var(--panel);
+	transform: rotate(45deg);
+}
+.chart-legend i.chart-series-1,
+.chart-line.series-1,
+.chart-point.series-1 {
+	stroke: var(--amber);
+	background: var(--amber);
+}
+.chart-legend i.chart-series-2,
+.chart-line.series-2,
+.chart-point.series-2 {
+	stroke: #a78bfa;
+	background: #a78bfa;
+}
+.chart-legend i.chart-series-3,
+.chart-line.series-3,
+.chart-point.series-3 {
+	stroke: #34d399;
+	background: #34d399;
+}
+.chart-legend i.chart-series-4,
+.chart-line.series-4,
+.chart-point.series-4 {
+	stroke: #fb7185;
+	background: #fb7185;
+}
+.chart-legend i.chart-series-5,
+.chart-line.series-5,
+.chart-point.series-5 {
+	stroke: #60a5fa;
+	background: #60a5fa;
+}
+.chart-legend i.chart-series-6,
+.chart-line.series-6,
+.chart-point.series-6 {
+	stroke: #facc15;
+	background: #facc15;
+}
+.chart-legend i.chart-series-7,
+.chart-line.series-7,
+.chart-point.series-7 {
+	stroke: #f472b6;
+	background: #f472b6;
+}
+.chart-line.series-1 {
+	stroke-dasharray: 9 4;
+}
+.chart-line.series-2 {
+	stroke-dasharray: 2 3;
+}
+.chart-line.series-3 {
+	stroke-dasharray: 10 3 2 3;
+}
+.chart-line.series-4 {
+	stroke-dasharray: 15 4;
+}
+.chart-line.series-5 {
+	stroke-dasharray: 5 3;
+}
+.chart-line.series-6 {
+	stroke-dasharray: 12 3 2 3 2 3;
+}
+.chart-line.series-7 {
+	stroke-dasharray: 1 3;
+}
+.chart-legend i.chart-series-1 {
+	background: repeating-linear-gradient(to right, var(--amber) 0 7px, transparent 7px 10px);
+}
+.chart-legend i.chart-series-2 {
+	background: repeating-linear-gradient(to right, #a78bfa 0 2px, transparent 2px 5px);
+}
+.chart-legend i.chart-series-3 {
+	background: repeating-linear-gradient(to right, #34d399 0 8px, transparent 8px 11px);
+}
+.chart-legend i.chart-series-4 {
+	background: repeating-linear-gradient(to right, #fb7185 0 12px, transparent 12px 16px);
+}
+.chart-legend i.chart-series-5 {
+	background: repeating-linear-gradient(to right, #60a5fa 0 4px, transparent 4px 7px);
+}
+.chart-legend i.chart-series-6 {
+	background: repeating-linear-gradient(to right, #facc15 0 9px, transparent 9px 12px);
+}
+.chart-legend i.chart-series-7 {
+	background: repeating-linear-gradient(to right, #f472b6 0 1px, transparent 1px 4px);
 }
 .time-chart {
 	width: 100%;
@@ -653,6 +754,15 @@ main {
 .static-field code,
 .static-field strong {
 	display: block;
+	margin-top: 0.25rem;
+	overflow-wrap: anywhere;
+	font:
+		0.68rem / 1.45 ui-monospace,
+		monospace;
+}
+.static-field .address-link {
+	display: block;
+	min-width: 0;
 	margin-top: 0.25rem;
 	overflow-wrap: anywhere;
 	font:

@@ -388,6 +388,8 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultMissing: boolean
 	securityVaultRepApproval: TokenApprovalState
 	walletRepBalanceAttoRep: bigint | undefined
+	walletRepBalanceError: string | undefined
+	walletRepBalanceLoading: boolean
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined

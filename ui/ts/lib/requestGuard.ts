@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useRef } from 'preact/hooks'
 
 /**
  * Returns a function that, when called, marks a new request as current
@@ -14,6 +14,12 @@ import { useCallback, useRef } from 'preact/hooks'
  */
 export function useRequestGuard() {
 	const requestId = useRef(0)
+	useEffect(
+		() => () => {
+			requestId.current += 1
+		},
+		[],
+	)
 	return useCallback(() => {
 		const id = requestId.current + 1
 		requestId.current = id

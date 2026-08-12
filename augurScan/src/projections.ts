@@ -82,7 +82,67 @@ type UniverseProjection = {
 	theoreticalSupplyAttoRep?: AtomicValue
 }
 
-export type Projection = QuestionProjection | PoolProjection | PoolSnapshotProjection | VaultSnapshotProjection | PoolStateProjection | UniverseProjection
+type AmmMarketProjection = {
+	type: 'ammMarket'
+	pairAddress: string
+	poolAddress: string
+	shareTokenAddress: string
+	universeId: string
+	feeBps: string
+}
+
+type AmmPriceProjection = {
+	type: 'ammPrice'
+	pairAddress: string
+	yesReserveAttoShares: AtomicValue
+	noReserveAttoShares: AtomicValue
+	conditionalYesBps: string
+	conditionalNoBps: string
+}
+
+type RepEthPriceProjection = {
+	type: 'repEthPrice'
+	coordinatorAddress: string
+	eventName: 'RepEthPriceSet' | 'PriceReported'
+	reportId?: string
+	repPerEth1e18: string
+	settlementTimestamp?: Date
+}
+
+type UniswapMarketProjection = {
+	type: 'uniswapMarket'
+	venue: 'v2' | 'v3' | 'v4'
+	marketId: string
+	contractAddress: string
+	token0Address: string
+	token1Address: string
+	feeHundredthsBip: string
+	tickSpacing?: string
+	hooksAddress?: string
+}
+
+type UniswapPriceProjection = {
+	type: 'uniswapPrice'
+	venue: 'v2' | 'v3' | 'v4'
+	marketId: string
+	eventName: 'Initialize' | 'Swap' | 'Sync'
+	reserve0?: string
+	reserve1?: string
+	sqrtPriceX96?: string
+}
+
+export type Projection =
+	| QuestionProjection
+	| PoolProjection
+	| PoolSnapshotProjection
+	| VaultSnapshotProjection
+	| PoolStateProjection
+	| UniverseProjection
+	| AmmMarketProjection
+	| AmmPriceProjection
+	| RepEthPriceProjection
+	| UniswapMarketProjection
+	| UniswapPriceProjection
 
 const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
@@ -104,6 +164,12 @@ const address = (value: unknown, name: string): string => {
 	const result = string(value, name)
 	if (!isAddress(result)) throw new Error(`${name} must be an address`)
 	return getAddress(result).toLowerCase()
+}
+
+const bytes32 = (value: unknown, name: string): string => {
+	const result = string(value, name).toLowerCase()
+	if (!/^0x[0-9a-f]{64}$/.test(result)) throw new Error(`${name} must be a bytes32 value`)
+	return result
 }
 
 const timestamp = (value: unknown, name: string): Date => {
@@ -167,6 +233,137 @@ export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
 				initialPriorityFeeAttoEthPerGas: integerString(args['initialReportPriorityFeeAttoEthPerGas'], 'initialReportPriorityFeeAttoEthPerGas'),
 				initialRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 				initialSettlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
+			},
+		]
+	if (name === 'PairCreated')
+		if (args['token0'] !== undefined)
+			return [
+				{
+					type: 'uniswapMarket',
+					venue: 'v2',
+					marketId: address(args['pair'], 'pair'),
+					contractAddress: address(args['pair'], 'pair'),
+					token0Address: address(args['token0'], 'token0'),
+					token1Address: address(args['token1'], 'token1'),
+					feeHundredthsBip: '3000',
+				},
+			]
+		else
+			return [
+				{
+					type: 'ammMarket',
+					pairAddress: address(args['pair'], 'pair'),
+					poolAddress: address(args['securityPool'], 'securityPool'),
+					shareTokenAddress: address(args['shareToken'], 'shareToken'),
+					universeId: integerString(args['universeId'], 'universeId'),
+					feeBps: integerString(args['feeBps'], 'feeBps'),
+				},
+			]
+	if (name === 'PoolCreated')
+		return [
+			{
+				type: 'uniswapMarket',
+				venue: 'v3',
+				marketId: address(args['pool'], 'pool'),
+				contractAddress: address(args['pool'], 'pool'),
+				token0Address: address(args['token0'], 'token0'),
+				token1Address: address(args['token1'], 'token1'),
+				feeHundredthsBip: integerString(args['fee'], 'fee'),
+				tickSpacing: integerString(args['tickSpacing'], 'tickSpacing'),
+			},
+		]
+	if (name === 'Sync') {
+		if (args['reserve0'] !== undefined)
+			return [
+				{
+					type: 'uniswapPrice',
+					venue: 'v2',
+					marketId: log.address.toLowerCase(),
+					eventName: 'Sync',
+					reserve0: integerString(args['reserve0'], 'reserve0'),
+					reserve1: integerString(args['reserve1'], 'reserve1'),
+				},
+			]
+		const yesReserveAttoShares = integerString(args['yesReserve'], 'yesReserve')
+		const noReserveAttoShares = integerString(args['noReserve'], 'noReserve')
+		const yes = BigInt(yesReserveAttoShares)
+		const no = BigInt(noReserveAttoShares)
+		const total = yes + no
+		if (total <= 0n) return []
+		const conditionalYesBps = (no * 10_000n) / total
+		return [
+			{
+				type: 'ammPrice',
+				pairAddress: log.address.toLowerCase(),
+				yesReserveAttoShares,
+				noReserveAttoShares,
+				conditionalYesBps: conditionalYesBps.toString(),
+				conditionalNoBps: (10_000n - conditionalYesBps).toString(),
+			},
+		]
+	}
+	if (name === 'Initialize' && args['id'] !== undefined) {
+		const marketId = bytes32(args['id'], 'id')
+		return [
+			{
+				type: 'uniswapMarket',
+				venue: 'v4',
+				marketId,
+				contractAddress: log.address.toLowerCase(),
+				token0Address: address(args['currency0'], 'currency0'),
+				token1Address: address(args['currency1'], 'currency1'),
+				feeHundredthsBip: integerString(args['fee'], 'fee'),
+				tickSpacing: integerString(args['tickSpacing'], 'tickSpacing'),
+				hooksAddress: address(args['hooks'], 'hooks'),
+			},
+			{
+				type: 'uniswapPrice',
+				venue: 'v4',
+				marketId,
+				eventName: 'Initialize',
+				sqrtPriceX96: integerString(args['sqrtPriceX96'], 'sqrtPriceX96'),
+			},
+		]
+	}
+	if (name === 'Initialize')
+		return [
+			{
+				type: 'uniswapPrice',
+				venue: 'v3',
+				marketId: log.address.toLowerCase(),
+				eventName: 'Initialize',
+				sqrtPriceX96: integerString(args['sqrtPriceX96'], 'sqrtPriceX96'),
+			},
+		]
+	if (name === 'Swap' && args['sqrtPriceX96'] !== undefined)
+		return [
+			{
+				type: 'uniswapPrice',
+				venue: args['id'] === undefined ? 'v3' : 'v4',
+				marketId: args['id'] === undefined ? log.address.toLowerCase() : bytes32(args['id'], 'id'),
+				eventName: 'Swap',
+				sqrtPriceX96: integerString(args['sqrtPriceX96'], 'sqrtPriceX96'),
+			},
+		]
+	if (name === 'Swap') return []
+	if (name === 'RepEthPriceSet')
+		return [
+			{
+				type: 'repEthPrice',
+				coordinatorAddress: log.address.toLowerCase(),
+				eventName: name,
+				repPerEth1e18: integerString(args['price'], 'price'),
+			},
+		]
+	if (name === 'PriceReported')
+		return [
+			{
+				type: 'repEthPrice',
+				coordinatorAddress: log.address.toLowerCase(),
+				eventName: name,
+				reportId: integerString(args['reportId'], 'reportId'),
+				repPerEth1e18: integerString(args['price'], 'price'),
+				settlementTimestamp: timestamp(args['lastSettlementTimestamp'], 'lastSettlementTimestamp'),
 			},
 		]
 	if (name === 'PoolAccountingCheckpoint')

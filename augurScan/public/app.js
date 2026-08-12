@@ -1,3 +1,5 @@
+import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.js'
+import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.js'
 import {
 	classifyLiveRecords,
 	contractDeploymentStatus,
@@ -28,6 +30,7 @@ const isDemo = pageUrl.searchParams.get('demo') === '1'
 const connectionDemo = pageUrl.searchParams.get('connectionDemo')
 const usesDemoConnectionLabel = isDemo && connectionDemo !== 'indexer' && connectionDemo !== 'reconnecting'
 const demoState = pageUrl.searchParams.get('state')
+const priceDemo = pageUrl.searchParams.get('priceDemo')
 const detailState = pageUrl.searchParams.get('detailState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
@@ -677,6 +680,17 @@ const demoHistory = (path) => {
 		const poolItem = demoPools.find((item) => item.pool_address === parts[6]) ?? demoPools[0]
 		const collateral = demoSeries(poolItem.settlement_collateral_atto_eth)
 		const capacity = demoSeries(poolItem.total_capacity_ownership_atto_rep, 12, 0.4)
+		const hasAmm = poolItem.question_id === demoQuestions[0].question_id
+		const hasRepEthPrices = poolItem !== demoPools[2]
+		const repEthPrices = demoRepEthPriceHistory()
+		const displayedRepEthPrices =
+			priceDemo === 'constant-zero'
+				? [{ ...repEthPrices[0], rep_per_eth_1e18: '0' }]
+				: priceDemo === 'constant-nonzero'
+					? [repEthPrices[0]]
+					: priceDemo === 'constant-repeated'
+						? repEthPrices.slice(0, 3).map((price) => ({ ...price, rep_per_eth_1e18: repEthPrices[0].rep_per_eth_1e18 }))
+						: repEthPrices
 		return {
 			snapshots: collateral.map((value, index) => ({
 				timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
@@ -687,6 +701,18 @@ const demoHistory = (path) => {
 				current_retention_rate: poolItem.current_retention_rate,
 			})),
 			events: [],
+			market: hasAmm
+				? {
+						pair_address: demoAddress('fa'),
+						pool_address: poolItem.pool_address,
+						share_token_address: poolItem.share_token_address,
+						universe_id: poolItem.universe_id,
+						fee_bps: '30',
+					}
+				: undefined,
+			ammPrices: hasAmm ? demoAmmPriceHistory() : [],
+			repEthPrices: hasRepEthPrices ? displayedRepEthPrices : [],
+			uniswapRepEthPrices: hasRepEthPrices ? (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory()) : [],
 		}
 	}
 	if (type === 'vaults') {
@@ -2064,13 +2090,14 @@ const staticAddressField = (label, address, chainId) => {
 	return field
 }
 
-const metricCard = (label, value) => {
+const metricCard = (label, value, detail) => {
 	const card = element('div', 'metric-card')
 	card.append(element('span', '', label), element('strong', '', value))
+	if (detail !== undefined) card.append(element('small', '', detail))
 	return card
 }
 
-const lineChart = (rows, definitions) => {
+const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 	const width = 760
 	const height = 190
 	const margin = { left: 48, right: 14, top: 12, bottom: 28 }
@@ -2078,18 +2105,18 @@ const lineChart = (rows, definitions) => {
 	svg.setAttribute('class', 'time-chart')
 	svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
 	svg.setAttribute('role', 'img')
-	const normalized = definitions.length > 1
+	const normalized = definitions.length > 1 && sharedRange === undefined
 	svg.setAttribute('aria-label', `${definitions.map(({ label }) => label).join(', ')} ${normalized ? 'independently scaled trend' : 'value'} over indexed time`)
 	const series = definitions.map(({ key, decimals = 18 }) => {
-		const raw = rows.map((row) => compactValue(row[key], decimals))
-		const seriesMinimum = Math.min(...raw)
-		const seriesRange = Math.max(...raw) - seriesMinimum
-		return normalized ? raw.map((value) => (seriesRange === 0 ? 50 : ((value - seriesMinimum) / seriesRange) * 100)) : raw
+		const raw = rows.map((row) => (row[key] === undefined ? Number.NaN : compactValue(row[key], decimals)))
+		const finite = raw.filter(Number.isFinite)
+		const seriesMinimum = Math.min(...finite)
+		const seriesRange = Math.max(...finite) - seriesMinimum
+		return normalized ? raw.map((value) => (Number.isFinite(value) ? (seriesRange === 0 ? 50 : ((value - seriesMinimum) / seriesRange) * 100) : value)) : raw
 	})
 	const values = series.flat().filter(Number.isFinite)
-	const minimum = values.length === 0 ? 0 : Math.min(...values)
-	const maximum = values.length === 0 ? 1 : Math.max(...values)
-	const range = maximum === minimum ? Math.max(1, maximum) : maximum - minimum
+	const { minimum, maximum } = chartValueBounds(values, sharedRange)
+	const range = maximum - minimum
 	const chartWidth = width - margin.left - margin.right
 	const chartHeight = height - margin.top - margin.bottom
 	for (let index = 0; index <= 3; index++) {
@@ -2108,29 +2135,41 @@ const lineChart = (rows, definitions) => {
 		const axisValue = maximum - (range * index) / 3
 		label.textContent = normalized
 			? ['High', '⅔', '⅓', 'Low'][index]
-			: new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(axisValue)
+			: `${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(axisValue)}${axisUnit}`
 		svg.append(label)
 	}
-	definitions.forEach(({ key, label, decimals = 18, unit = '', className = '' }, definitionIndex) => {
-		const points = rows.map((_row, index) => {
+	definitions.forEach(({ key, label, decimals = 18, unit = '', className = '', pointShape, pointLabel }, definitionIndex) => {
+		const points = rows.flatMap((row, index) => {
 			const value = series[definitionIndex][index]
+			if (!Number.isFinite(value)) return []
 			const x = margin.left + (chartWidth * index) / Math.max(1, rows.length - 1)
 			const y = margin.top + chartHeight - ((value - minimum) / range) * chartHeight
-			return [x, y]
+			return [{ x, y, row }]
 		})
 		const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
 		path.setAttribute('class', `chart-line ${className}`)
-		path.setAttribute('d', points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${x} ${y}`).join(' '))
+		path.setAttribute('d', points.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'} ${x} ${y}`).join(' '))
 		svg.append(path)
-		for (const [[x, y], row] of points.map((point, index) => [point, rows[index]])) {
-			const point = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
-			point.setAttribute('class', `chart-point ${className}`)
-			point.setAttribute('cx', String(x))
-			point.setAttribute('cy', String(y))
-			point.setAttribute('r', '2.8')
+		for (const { x, y, row } of points) {
+			const shape = pointShape?.(row) ?? 'circle'
+			const point = document.createElementNS('http://www.w3.org/2000/svg', shape === 'diamond' ? 'rect' : 'circle')
+			point.setAttribute('class', `chart-point ${className}${shape === 'diamond' ? ' initialization' : ''}`)
+			if (shape === 'diamond') {
+				point.setAttribute('x', String(x - 3))
+				point.setAttribute('y', String(y - 3))
+				point.setAttribute('width', '6')
+				point.setAttribute('height', '6')
+				point.setAttribute('transform', `rotate(45 ${x} ${y})`)
+			} else {
+				point.setAttribute('cx', String(x))
+				point.setAttribute('cy', String(y))
+				point.setAttribute('r', '2.8')
+			}
 			point.setAttribute('tabindex', '0')
 			const title = document.createElementNS('http://www.w3.org/2000/svg', 'title')
-			title.textContent = `${label}: ${exactUnit(row[key], decimals, unit, decimals)} · ${new Date(row.timestamp).toLocaleString()}`
+			const observationType = pointLabel?.(row)
+			title.textContent = `${label}: ${exactUnit(row[key], decimals, unit, decimals)} · ${new Date(row.timestamp).toLocaleString()}${observationType ? ` · ${observationType}` : ''}`
+			point.setAttribute('aria-label', title.textContent)
 			point.append(title)
 			svg.append(point)
 		}
@@ -2151,28 +2190,34 @@ const lineChart = (rows, definitions) => {
 	return svg
 }
 
-const chartCard = (title, rows, definitions, note) => {
+const chartCard = (
+	title,
+	rows,
+	definitions,
+	note,
+	{ sharedRange, axisUnit, legendItems = [], emptyMessage = 'No checkpoints have been indexed for this entity yet.' } = {},
+) => {
 	const card = element('section', 'chart-card')
 	const heading = element('div', 'chart-heading')
 	heading.append(element('h4', '', title))
 	const legend = element('div', 'chart-legend')
-	for (const { label } of definitions) {
+	for (const { label, className = '' } of [...definitions, ...legendItems]) {
 		const item = element('span')
-		item.append(element('i'), document.createTextNode(label))
+		item.append(element('i', className === '' ? '' : `chart-${className}`), document.createTextNode(label))
 		legend.append(item)
 	}
-	heading.append(legend)
+	if (rows.length > 0) heading.append(legend)
 	card.append(heading)
-	if (rows.length === 0) card.append(element('p', 'data-note', 'No checkpoints have been indexed for this entity yet.'))
+	if (rows.length === 0) card.append(element('p', 'data-note', emptyMessage))
 	else {
 		const viewport = element('div', 'chart-scroll')
-		viewport.append(lineChart(rows, definitions))
+		viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
 		card.append(
 			viewport,
 			element(
 				'p',
 				'data-note',
-				`${note}${definitions.length > 1 ? ' Each line is independently scaled to its observed range so every trend remains visible; exact current values are shown above.' : ''}`,
+				`${note}${definitions.length > 1 && sharedRange === undefined ? ' Each line is independently scaled to its observed range so every trend remains visible; exact current values are shown above.' : ''}`,
 			),
 		)
 	}
@@ -2780,6 +2825,13 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 	const history = await api(`/api/v1/state/pools/${poolItem.chain_id}/${poolItem.pool_address}`)
 	if (requestVersion !== stateDetailRequestVersion) return
 	const poolNativeSymbol = nativeSymbol(poolItem.chain_id)
+	const ammPrices = history.ammPrices ?? []
+	const repEthPrices = history.repEthPrices ?? []
+	const uniswapRepEthPrices = history.uniswapRepEthPrices ?? []
+	const uniswapChart = uniswapPriceChartModel(uniswapRepEthPrices)
+	const latestAmmPrice = ammPrices.at(-1)
+	const latestRepEthPrice = repEthPrices.at(-1)
+	const latestUniswapPrice = uniswapChart.latestObservation
 	const fragment = document.createDocumentFragment()
 	fragment.append(
 		stateHeader(
@@ -2798,6 +2850,15 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 		metricCard('Capacity ownership', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'REP', 2)),
 		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, poolNativeSymbol, 3)),
 		metricCard('Indexed vaults', number(poolItem.vault_count)),
+		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%', 2)),
+		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%', 2)),
+		metricCard('REP / ETH', latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, 18, 'REP/ETH', 4)),
+		metricCard(
+			'Latest Uniswap spot',
+			latestUniswapPrice === undefined ? 'No Uniswap price' : exactUnit(latestUniswapPrice.rep_per_eth_1e18, 18, `REP/${latestUniswapPrice.quote_symbol}`, 4),
+			latestUniswapPrice === undefined ? undefined : uniswapPriceProvenance(latestUniswapPrice),
+		),
+		metricCard('AMM market', history.market === undefined ? 'Not indexed' : `${number(ammPrices.length)} observations`),
 	)
 	fragment.append(metrics)
 	fragment.append(
@@ -2810,6 +2871,46 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, className: 'tertiary' },
 			],
 			'Authoritative PoolAccountingCheckpoint results. Collateral and fees use attoETH; capacity ownership uses attoREP.',
+		),
+		chartCard(
+			'Uniswap REP / ETH spot price history',
+			uniswapChart.rows,
+			uniswapChart.definitions,
+			'Event-time marginal prices derived from V2 Sync reserves and V3/V4 Initialize or Swap sqrt prices. V2/V3 quote REP per WETH; V4 quotes REP per native ETH. These values can be manipulated within a block and are not a TWAP or protocol oracle.',
+			{
+				sharedRange: uniswapChart.sharedRange,
+				emptyMessage: 'No Uniswap REP / ETH pool observations have been indexed for this universe.',
+			},
+		),
+	)
+	fragment.append(
+		chartCard(
+			'Conditional YES / NO spot price history',
+			ammPrices,
+			[
+				{ key: 'conditional_yes_bps', label: 'Conditional YES', decimals: 2, unit: '%' },
+				{ key: 'conditional_no_bps', label: 'Conditional NO', decimals: 2, unit: '%', className: 'secondary' },
+			],
+			'Each point is derived from the exact YES/NO reserves emitted by an Augur AMM Sync event. Prices are conditional on a valid resolution and are manipulable spot values, not a TWAP or protocol oracle.',
+			{ sharedRange: [0, 100], axisUnit: '%', emptyMessage: 'No Augur AMM reserve observations have been indexed for this pool.' },
+		),
+		chartCard(
+			'REP / ETH coordinator price history',
+			repEthPrices,
+			[
+				{
+					key: 'rep_per_eth_1e18',
+					label: 'REP per ETH',
+					unit: 'REP/ETH',
+					pointShape: (row) => (row.event_name === 'RepEthPriceSet' ? 'diamond' : 'circle'),
+					pointLabel: (row) => (row.event_name === 'RepEthPriceSet' ? 'Initialization seed' : 'Accepted settlement'),
+				},
+			],
+			'Coordinator price state. RepEthPriceSet records initialization and does not establish timestamp-based oracle validity; PriceReported points are accepted settlements.',
+			{
+				legendItems: [{ label: 'Initialization', className: 'initialization' }],
+				emptyMessage: 'No REP / ETH coordinator price observations have been indexed for this pool.',
+			},
 		),
 	)
 	const currentCard = element('section', 'static-card')
@@ -2853,6 +2954,10 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 		staticAddressField('Parent pool', poolItem.parent_address, poolItem.chain_id),
 		staticAddressField('Share token', poolItem.share_token_address, poolItem.chain_id),
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
+		history.market === undefined
+			? staticField('Augur AMM pair', 'Not indexed')
+			: staticAddressField('Augur AMM pair', history.market.pair_address, poolItem.chain_id),
+		staticField('Augur AMM fee', history.market === undefined ? '—' : `${Number(history.market.fee_bps) / 100}%`),
 		staticAddressField('Truth auction', poolItem.truth_auction_address, poolItem.chain_id),
 		staticField('Security multiplier', `${Number(poolItem.security_multiplier_bps) / 100}%`),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'gwei', 2)),
