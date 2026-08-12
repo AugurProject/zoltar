@@ -24,6 +24,21 @@ function requiredNumber(value: unknown, label: string) {
 	return value
 }
 
+function requiredRpcUrl(value: unknown) {
+	const rpcUrl = requiredString(value, 'rpcUrl')
+	let parsed: URL
+	try {
+		parsed = new URL(rpcUrl)
+	} catch (error) {
+		if (error instanceof TypeError) throw new Error('rpcUrl must be a valid URL')
+		throw error
+	}
+	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('rpcUrl must use HTTPS or loopback HTTP')
+	if (parsed.username !== '' || parsed.password !== '') throw new Error('rpcUrl must not contain embedded credentials')
+	return parsed.toString()
+}
+
 function requiredAddress(value: unknown, label: string) {
 	const address = requiredString(value, label)
 	if (!isAddress(address)) throw new Error(`${label} must be a valid address`)
@@ -37,10 +52,12 @@ export function parseDeploymentConfiguration(candidate: unknown): DeploymentConf
 	const trading = isRecord(candidate.trading) ? candidate.trading : candidate
 	const feeBps = requiredNumber(trading.feeBps, 'feeBps')
 	if (feeBps >= 10_000) throw new Error('feeBps must be below 10000')
+	const chainId = requiredNumber(network.chainId, 'chainId')
+	if (chainId === 0) throw new Error('chainId must be positive')
 	return {
-		chainId: requiredNumber(network.chainId, 'chainId'),
-		chainName: typeof network.chainName === 'string' && network.chainName.length > 0 ? network.chainName : `Chain ${requiredNumber(network.chainId, 'chainId')}`,
-		rpcUrl: requiredString(network.rpcUrl, 'rpcUrl'),
+		chainId,
+		chainName: typeof network.chainName === 'string' && network.chainName.length > 0 ? network.chainName : `Chain ${chainId}`,
+		rpcUrl: requiredRpcUrl(network.rpcUrl),
 		securityPoolFactory: requiredAddress(core.securityPoolFactory, 'securityPoolFactory'),
 		factory: requiredAddress(trading.factory, 'factory'),
 		router: requiredAddress(trading.router, 'router'),

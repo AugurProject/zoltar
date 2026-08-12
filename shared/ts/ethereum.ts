@@ -346,6 +346,10 @@ type TransportRetryOptions = {
 	retryDelay?: number | undefined
 }
 
+type HttpTransportOptions = TransportRetryOptions & {
+	requestTimeout?: number | undefined
+}
+
 type TypedTransport =
 	| {
 			kind: 'custom'
@@ -355,6 +359,7 @@ type TypedTransport =
 	  }
 	| {
 			kind: 'http'
+			requestTimeout: number
 			retryCount: number
 			retryDelay: number
 			url: string
@@ -1059,6 +1064,8 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 			'content-type': 'application/json',
 		},
 		method: 'POST',
+		redirect: 'error',
+		signal: AbortSignal.timeout(transport.requestTimeout),
 	})
 	if (!response.ok) {
 		throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
@@ -1067,22 +1074,26 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 		})
 	}
 
-	const payload = (await response.json()) as {
-		error?: {
-			code?: number | string | undefined
-			data?: unknown
-			message?: string | undefined
-		}
-		result?: TValue
-	}
-	if (payload.error !== undefined) {
-		throw new RpcError(payload.error.message ?? `${parameters.method} failed`, {
-			cause: payload.error.data,
-			code: payload.error.code,
-			shortMessage: payload.error.message,
+	const payload: unknown = await response.json()
+	if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
+	const envelope = payload as Record<string, unknown>
+	const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
+	const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error')
+	if (envelope['jsonrpc'] !== '2.0' || envelope['id'] !== 1 || hasResult === hasError) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
+	if (hasError) {
+		const error = envelope['error']
+		if (typeof error !== 'object' || error === null || Array.isArray(error)) throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
+		const errorRecord = error as Record<string, unknown>
+		const code = errorRecord['code']
+		const message = errorRecord['message']
+		if (typeof code !== 'number' || !Number.isInteger(code) || typeof message !== 'string') throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
+		throw new RpcError(message, {
+			cause: errorRecord['data'],
+			code,
+			shortMessage: message,
 		})
 	}
-	return payload.result as TValue
+	return envelope['result'] as TValue
 }
 
 async function retryRateLimited<TValue>(operation: () => Promise<TValue>, options: { retryCount?: number | undefined; retryDelay: number; startTime?: number | undefined; timeout?: number | undefined }) {
@@ -1782,10 +1793,16 @@ function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
 	return { retryCount, retryDelay }
 }
 
-export function http(url: string, options?: TransportRetryOptions) {
+function normalizeHttpTransportOptions(options: HttpTransportOptions = {}) {
+	const requestTimeout = options.requestTimeout ?? 30_000
+	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
+	return { ...normalizeTransportRetryOptions(options), requestTimeout }
+}
+
+export function http(url: string, options?: HttpTransportOptions) {
 	return {
 		kind: 'http',
-		...normalizeTransportRetryOptions(options),
+		...normalizeHttpTransportOptions(options),
 		url,
 	} satisfies Transport
 }
