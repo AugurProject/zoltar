@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { rpcConfigurationWithEnvironmentOverride, validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
@@ -85,6 +85,7 @@ export type OperatorSettings = {
 		explorerUrl: string
 		name: NetworkName
 	}
+	networkConfigured: boolean
 	paused: boolean
 	privateKey: Hex | undefined
 	runtime: {
@@ -254,14 +255,15 @@ function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
 	return { ...parsed, quorumRpcUrls }
 }
 
-export function parseSettings(value: unknown, rpcEnvironmentValue?: string): OperatorSettings {
+export function parseSettings(value: unknown): OperatorSettings {
 	const root = record(value, 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const deployment = record(root['deployment'], 'deployment')
-	const network = record(root['network'], 'network')
+	const networkConfigured = root['network'] !== undefined || root['connectivity'] !== undefined
+	if ((root['network'] === undefined) !== (root['connectivity'] === undefined)) throw new Error('network and connectivity must be configured together')
+	const network = networkConfigured ? record(root['network'], 'network') : { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }
 	const runtime = record(root['runtime'], 'runtime')
-	const persistedConnectivity = parseConnectivity(root['connectivity'])
-	const rpcConfiguration = rpcConfigurationWithEnvironmentOverride(persistedConnectivity, persistedConnectivity.quorumRpcUrls, rpcEnvironmentValue)
+	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
 	const approvedUniverses = root['approvedUniverses']
@@ -285,10 +287,7 @@ export function parseSettings(value: unknown, rpcEnvironmentValue?: string): Ope
 			return values.map(parseCentralizedMarketSettings)
 		})(),
 		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
-		connectivity: {
-			...rpcConfiguration.connectivity,
-			quorumRpcUrls: [...rpcConfiguration.quorumRpcUrls],
-		},
+		connectivity,
 		deployment: {
 			securityPoolFactory: getAddress(string(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
 			weth: getAddress(string(deployment['weth'], 'deployment.weth')),
@@ -301,6 +300,7 @@ export function parseSettings(value: unknown, rpcEnvironmentValue?: string): Ope
 			name: parseNetworkName(network['name']),
 		},
 		paused: boolean(root['paused'], 'paused'),
+		networkConfigured,
 		privateKey,
 		runtime: {
 			execute: boolean(runtime['execute'], 'runtime.execute'),
@@ -324,8 +324,10 @@ export function parseSettings(value: unknown, rpcEnvironmentValue?: string): Ope
 		submission: validateSubmissionSettings(root['submission']),
 		version: 1,
 	}
-	if (settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
-	if (settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
+	const canonicalChainId = settings.network.name === 'mainnet' ? 1 : 11_155_111
+	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
+	if (settings.networkConfigured && settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
+	if (settings.networkConfigured && settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
@@ -333,6 +335,7 @@ export function parseSettings(value: unknown, rpcEnvironmentValue?: string): Ope
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
 	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
+	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	return settings
 }
 
@@ -341,9 +344,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
 		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
-		connectivity: {
-			...settings.connectivity,
-		},
+		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
 		deployment: settings.deployment,
 		desiredPools: settings.desiredPools.map(pool => ({
 			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
@@ -351,7 +352,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
 			universeId: pool.universeId.toString(),
 		})),
-		network: settings.network,
+		network: settings.networkConfigured ? settings.network : undefined,
 		paused: settings.paused,
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
@@ -388,24 +389,13 @@ function revision(contents: string) {
 	return createHash('sha256').update(contents).digest('hex')
 }
 
-export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR_CONFIG'] ?? defaultSettingsPath), rpcEnvironmentValue = process.env['ZOLTAR_BOT_RPC_URLS']) {
+export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR_CONFIG'] ?? defaultSettingsPath)) {
 	const contents = await readFile(path, 'utf8').catch(error => {
 		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
 		throw error
 	})
 	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Copy config/operator.example.json there and edit it.`)
-	const document: unknown = JSON.parse(contents)
-	const persistedConnectivity = parseConnectivity(record(document, 'operator settings')['connectivity'])
-	return {
-		path,
-		persistedConnectivity,
-		revision: revision(contents),
-		settings: parseSettings(document, rpcEnvironmentValue),
-	}
-}
-
-export function settingsForPersistence(settings: OperatorSettings, persistedConnectivity: OperatorSettings['connectivity']): OperatorSettings {
-	return { ...settings, connectivity: persistedConnectivity }
+	return { path, revision: revision(contents), settings: parseSettings(JSON.parse(contents)) }
 }
 
 export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision: string, filesystem: SettingsFilesystem = settingsFilesystem) {

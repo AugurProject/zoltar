@@ -147,10 +147,13 @@ describe('live settlement contract encoding', () => {
 			}),
 		})
 		const amount = 5n * 10n ** 18n
-		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount })
+		const slippageBps = 500n
+		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount, validityMinutes: 7n, slippageBps })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(1_000n)
-		expect(quote.minimumAttoEth).toBe(995n)
+		expect(quote.minimumAttoEth).toBe(950n)
+		expect(quote.deadline).toBe(421n)
+		expect(quote.slippageBps).toBe(slippageBps)
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionTargets).toEqual([configuration.router, configuration.router, configuration.router])
 		expect(transactionData).toHaveLength(3)
@@ -158,6 +161,9 @@ describe('live settlement contract encoding', () => {
 		expect(calls[0]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
 		expect(calls[1]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
 		expect(calls[2]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, quote.minimumAttoEth, account, quote.deadline] })
+		const callsBeforeRejectedSlippage = transactionData.length
+		await expect(simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount, validityMinutes: 7n, slippageBps: 501n })).rejects.toThrow('between 0% and 5%')
+		expect(transactionData).toHaveLength(callsBeforeRejectedSlippage)
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {

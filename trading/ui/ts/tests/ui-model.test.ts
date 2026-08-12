@@ -15,6 +15,8 @@ import {
 	livePairInitialized,
 	marketSelectionAfterDiscovery,
 	migrationSimulationSummary,
+	parseSlippageBps,
+	parseTransactionValidityMinutes,
 	positionControlsWorkflowLocked,
 	securityPoolAddressFromRoute,
 	settlementBalanceLabel,
@@ -37,6 +39,8 @@ import {
 	retainApprovedMaximum,
 	retainApprovedMinimum,
 	refreshSecurityPoolDeploymentIndex,
+	requireTransactionSlippageBps,
+	requireTransactionValidityMinutes,
 	selectUniverseDeployments,
 	settlementAvailability,
 	shareBalanceScope,
@@ -191,6 +195,30 @@ describe('standalone trading UI model', () => {
 	test('derives displayed transaction bounds with LP-favoring rounding', () => {
 		expect(minimumAfterSlippage(10_001n)).toBe(9_950n)
 		expect(maximumAfterSlippage(10_001n)).toBe(10_052n)
+		expect(minimumAfterSlippage(1_001n, 250n)).toBe(975n)
+		expect(maximumAfterSlippage(1_001n, 250n)).toBe(1_027n)
+		expect(minimumAfterSlippage(1_000n, 0n)).toBe(1_000n)
+		expect(minimumAfterSlippage(1_000n, 500n)).toBe(950n)
+		expect(() => minimumAfterSlippage(1_000n, 501n)).toThrow('between 0% and 5%')
+		expect(requireTransactionSlippageBps(0n)).toBeUndefined()
+		expect(requireTransactionSlippageBps(500n)).toBeUndefined()
+		expect(() => requireTransactionSlippageBps(501n)).toThrow('between 0% and 5%')
+		expect(requireTransactionValidityMinutes(1n)).toBeUndefined()
+		expect(requireTransactionValidityMinutes(1_440n)).toBeUndefined()
+		expect(() => requireTransactionValidityMinutes(0n)).toThrow('between 1 and 1440 minutes')
+		expect(() => requireTransactionValidityMinutes(1_441n)).toThrow('between 1 and 1440 minutes')
+	})
+
+	test('validates user-configurable transaction protection settings', () => {
+		expect(parseSlippageBps('0.75')).toBe(75n)
+		expect(parseSlippageBps('5')).toBe(500n)
+		expect(parseSlippageBps('5.01')).toBeUndefined()
+		expect(parseSlippageBps('-1')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1')).toBe(1n)
+		expect(parseTransactionValidityMinutes('1440')).toBe(1_440n)
+		expect(parseTransactionValidityMinutes('0')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1441')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1.5')).toBeUndefined()
 	})
 
 	test('never replaces user-approved bounds with refreshed quote bounds', () => {

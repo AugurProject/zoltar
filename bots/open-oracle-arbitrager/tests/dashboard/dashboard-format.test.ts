@@ -5,11 +5,14 @@ import {
 	botStatusLabels,
 	chartPointX,
 	chartTimeTickIndexes,
+	connectivityControlsDisabled,
 	countLabel,
 	exactAmount,
 	marketPoolStrategyUse,
 	marketPriceChartDescription,
+	networkTargetStatus,
 	opportunityDecisionReason,
+	persistedConnectivity,
 	requiredSignerPrivateKey,
 	selectedTokenPriceHistory,
 	signerControlState,
@@ -55,6 +58,22 @@ describe('dashboard exact ETH formatting', () => {
 			inputDisabled: true,
 			setDisabled: true,
 		})
+	})
+
+	test('loads focused chain and RPC fields from persisted restart settings', () => {
+		expect(persistedConnectivity({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia' })).toEqual({
+			connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' },
+			network: 'sepolia',
+		})
+		expect(persistedConnectivity({ connectivity: { publicRpcUrls: [42], readRpcUrl: 'https://rpc.example/' }, network: 'mainnet' })).toBeUndefined()
+	})
+
+	test('keeps connectivity controls locked through refreshes and labels a saved restart target', () => {
+		expect(connectivityControlsDisabled(true, true)).toBe(true)
+		expect(connectivityControlsDisabled(true, false)).toBe(false)
+		expect(connectivityControlsDisabled(false, false)).toBe(true)
+		expect(networkTargetStatus('mainnet', 'sepolia')).toBe('Saved for restart: sepolia. The active process remains on mainnet.')
+		expect(networkTargetStatus('sepolia', 'sepolia')).toBeUndefined()
 	})
 
 	test('serializes overlapping dashboard refreshes and preserves one trailing request', async () => {

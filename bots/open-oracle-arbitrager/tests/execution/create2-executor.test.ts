@@ -3,7 +3,17 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentReceipt, d
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { deployExecutorFromConnectivity } from '../../src/runtime/operator-control-plane.ts'
+import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+
+test('rejects executor deployment while a different network is saved for restart', () => {
+	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Restart to apply the saved network')
+	expect(() => requireActivePersistedNetwork('mainnet', 'mainnet')).not.toThrow()
+})
+
+test('rechecks execution pause immediately before executor deployment', () => {
+	expect(() => requirePausedExecutorDeployment(true, false)).toThrow('Pause execution before deploying')
+	expect(() => requirePausedExecutorDeployment(true, true)).not.toThrow()
+})
 
 test('derives a stable executor address and canonical proxy calldata from a bytes32 salt', () => {
 	const salt = `0x${'00'.repeat(32)}` as Hex

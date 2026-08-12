@@ -31,20 +31,10 @@
 			"minimumTotalSourceCount": 3
 		}
 	},
-	"network": {
-		"name": "sepolia",
-		"chainId": 11155111,
-		"explorerUrl": "https://sepolia.etherscan.io"
-	},
 	"deployment": {
 		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
 		"weth": "0x0000000000000000000000000000000000000000",
 		"zoltar": "0x0000000000000000000000000000000000000000"
-	},
-	"connectivity": {
-		"readRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
-		"publicRpcUrls": ["https://ethereum-sepolia-rpc.publicnode.com"],
-		"quorumRpcUrls": []
 	},
 	"submission": {
 		"mode": "public",
@@ -85,6 +75,6 @@
 		"vaultWithdrawHealthBps": 15000,
 		"walletReserveRep": "100"
 	},
-	"paused": false,
+	"paused": true,
 	"privateKey": null
 }

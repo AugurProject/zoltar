@@ -9,7 +9,7 @@ All chain quantities are `bigint`.
 - `maximumInsuredExit` binary-searches the greatest complete-set amount allowed by INVALID, long balance, opposite reserve, and an optional long-input ceiling.
 - `minimumAfterSlippage` and `maximumAfterSlippage` build conservative bounds.
 - `inputOutcomeConditionalPriceImpact` returns the before/after conditional price of the explicitly named swap-input outcome. For YES input it reports conditional YES; for NO input it reports conditional NO.
-- Request builders cover entry, exit, initialization, add, remove, complete-set redemption, winning-share redemption, and explicit share migration.
+- Request builders cover entry, exit, initialization, add, remove, complete-set redemption, winning-share redemption, and explicit share migration. `redeemCompleteSetRequest` targets the router and requires an explicit minimum ETH output, recipient, and deadline; it does not build an unbounded direct SecurityPool redemption.
 - `simulateAuthoritatively` executes the call against a specific canonical block hash and records the complete block identity: number and hash. `requireFreshSimulation` rejects the result when either value changes, including a same-height block replacement.
 - `extractEventResult` locates a typed decoded event and rejects incomplete receipts.
 
