@@ -12,12 +12,10 @@ import {
 import {
 	type Address,
 	createPublicClient,
-	encodeAbiParameters,
 	getAddress,
 	type Hash,
 	type Hex,
 	http,
-	keccak256,
 	type Log,
 	type PublicClient,
 	parseAbi,
@@ -29,6 +27,7 @@ import {
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+import { uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
 
 type RpcBlockHeader = {
 	readonly hash: Hash
@@ -53,26 +52,10 @@ const uniswapV3PoolCreatedEvent = parseAbiItem(
 const uniswapV4SwapEvent = parseAbiItem(
 	'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
 )
-const uniswapV4PoolConfigurations = [
-	{ fee: 100, tickSpacing: 1 },
-	{ fee: 500, tickSpacing: 10 },
-	{ fee: 3_000, tickSpacing: 60 },
-	{ fee: 10_000, tickSpacing: 200 },
-] as const
-
 export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata>): readonly Hex[] =>
 	[...contracts.values()]
 		.filter(({ kind }) => kind === 'reputationToken')
-		.flatMap(({ address }) =>
-			uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) =>
-				keccak256(
-					encodeAbiParameters(
-						[{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }],
-						[zeroAddress, address, fee, tickSpacing, zeroAddress],
-					),
-				),
-			),
-		)
+		.flatMap(({ address }) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing)))
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
 	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)

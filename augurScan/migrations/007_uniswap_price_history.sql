@@ -17,7 +17,14 @@ CREATE TABLE IF NOT EXISTS uniswap_rep_eth_markets (
 	FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES logs(chain_id, block_hash, tx_hash, log_index),
 	CHECK (token0_address <> token1_address),
 	CHECK ((venue = 'v2' AND tick_spacing IS NULL AND hooks_address IS NULL) OR venue <> 'v2'),
-	CHECK ((venue = 'v4' AND hooks_address IS NOT NULL) OR (venue <> 'v4' AND hooks_address IS NULL))
+	CHECK ((venue = 'v4' AND hooks_address IS NOT NULL) OR (venue <> 'v4' AND hooks_address IS NULL)),
+	CHECK (
+		venue <> 'v4'
+		OR (fee_hundredths_bip = 100 AND tick_spacing = 1)
+		OR (fee_hundredths_bip = 500 AND tick_spacing = 10)
+		OR (fee_hundredths_bip = 3000 AND tick_spacing = 60)
+		OR (fee_hundredths_bip = 10000 AND tick_spacing = 200)
+	)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uniswap_rep_eth_markets_canonical_id
 	ON uniswap_rep_eth_markets(chain_id, venue, market_id) WHERE canonical;

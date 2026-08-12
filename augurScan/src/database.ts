@@ -2,6 +2,7 @@ import { type ReservedSQL, SQL } from 'bun'
 import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
 import type { ContractMetadata, DecodedRecord, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+import { isSupportedUniswapV4Market } from './uniswap.ts'
 
 export type StoredTransaction = {
 	readonly hash: Hash
@@ -808,6 +809,7 @@ export class ScannerDatabase {
 						continue
 					}
 					if (projection.type === 'uniswapMarket') {
+						const supportedV4Market = projection.venue === 'v4' && isSupportedUniswapV4Market(projection)
 						await transaction`
 							INSERT INTO uniswap_rep_eth_markets (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, contract_address, token0_address, token1_address, fee_hundredths_bip, tick_spacing, hooks_address, canonical)
 							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.contractAddress}, ${projection.token0Address}, ${projection.token1Address}, ${projection.feeHundredthsBip}, ${projection.tickSpacing ?? null}, ${projection.hooksAddress ?? null}, true
@@ -820,8 +822,8 @@ export class ScannerDatabase {
 								)
 							) OR (
 								${projection.venue} = 'v4'
-								AND ${projection.token0Address} = '0x0000000000000000000000000000000000000000'
-								AND ${projection.hooksAddress ?? null} = '0x0000000000000000000000000000000000000000'
+								AND ${supportedV4Market}
+								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.contractAddress} AND kind = 'uniswapV4PoolManager' AND canonical)
 								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
 							)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_id) DO UPDATE SET canonical = true

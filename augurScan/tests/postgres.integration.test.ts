@@ -17,6 +17,7 @@ import {
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
 import { migrate } from '../src/migrate.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
+import { uniswapV4PoolId } from '../src/uniswap.ts'
 
 const postgresUrl = process.env['POSTGRES_TEST_URL']
 const postgresTest = postgresUrl === undefined ? test.skip : test
@@ -32,6 +33,7 @@ const referencedOnlyAddress = getAddress('0x700000000000000000000000000000000000
 const pairAddress = getAddress('0x8000000000000000000000000000000000000009')
 const uniswapPairAddress = getAddress('0x9000000000000000000000000000000000000009')
 const inverseUniswapPairAddress = getAddress('0xa000000000000000000000000000000000000009')
+const uniswapV4PoolManagerAddress = getAddress('0xb000000000000000000000000000000000000009')
 const transactionHash = keccak256(stringToHex('augurScan integration transaction'))
 const blockHash = (name: string) => keccak256(stringToHex(name))
 
@@ -692,11 +694,34 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === orphan.hash)?.['canonical']).toBe(false)
 		expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === replacement.hash)).toMatchObject({ canonical: true, decimals: 18 })
 
+		const standardV4MarketId = uniswapV4PoolId(rediscoveredAddress, 3_000, 60)
+		const nonstandardV4MarketId = uniswapV4PoolId(rediscoveredAddress, 250, 5)
+		const uniswapV4PoolManagerDiscovery: ContractMetadata = {
+			address: uniswapV4PoolManagerAddress,
+			label: 'Uniswap V4 PoolManager',
+			kind: 'uniswapV4PoolManager',
+			provenance: 'test',
+			discoveryBlock: 3n,
+			discoveryTxHash: transactionHash,
+		}
+		const v4Initialize = (logIndex: number, marketId: string, fee: string, tickSpacing: string): StoredLog => ({
+			...decodedLog(blockHash('block-three'), logIndex, uniswapV4PoolManagerAddress, 'Initialize', {
+				id: marketId,
+				currency0: '0x0000000000000000000000000000000000000000',
+				currency1: rediscoveredAddress,
+				fee,
+				tickSpacing,
+				hooks: '0x0000000000000000000000000000000000000000',
+				sqrtPriceX96: (2n ** 96n).toString(),
+			}),
+			blockNumber: 3n,
+		})
 		const third: IndexedBlock = {
-			...indexedBlock('block-three', replacement.hash),
+			...indexedBlock('block-three', replacement.hash, [uniswapV4PoolManagerDiscovery], 'batched V4 initializations'),
 			number: 3n,
 			timestamp: new Date('2026-01-03T00:00:00Z'),
 			observedHead: 3n,
+			logs: [v4Initialize(1, standardV4MarketId, '3000', '60'), v4Initialize(2, nonstandardV4MarketId, '250', '5')],
 		}
 		const failover = new ScannerDatabase(postgresUrl)
 		try {
@@ -717,6 +742,12 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		} finally {
 			await failover.close()
 		}
+		const storedV4Markets =
+			await database.sql`SELECT market_id FROM uniswap_rep_eth_markets WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
+		expect(storedV4Markets).toEqual([{ market_id: standardV4MarketId }])
+		const storedV4Observations =
+			await database.sql`SELECT market_id FROM uniswap_rep_eth_price_observations WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
+		expect(storedV4Observations).toEqual([{ market_id: standardV4MarketId }])
 		const readIsolation = await database.read(async (sql) => {
 			const rows = await sql`SELECT current_setting('transaction_isolation') AS isolation, current_setting('transaction_read_only') AS read_only`
 			return rows[0]
