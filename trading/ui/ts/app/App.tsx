@@ -5,7 +5,7 @@ import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
 import { createTradingPublicClient, publicErrorMessage, validateLiveDeployment } from '../protocol/live.ts'
-import { formatUnits } from './format.ts'
+import { formatUnits, shortAddress } from './format.ts'
 
 const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'help'] as const
 type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
@@ -144,36 +144,56 @@ export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryStat
 		if (summary.repAttoRep !== undefined) repBalance = formatUnits(summary.repAttoRep, 18, 18)
 	}
 	return (
-		<div class='wallet-summary' aria-label='Connected wallet balances' aria-busy={summary.status === 'loading'}>
-			<code class='wallet-summary__address'>{summary.account}</code>
-			<div class='wallet-summary__balances'>
-				<span data-wallet-asset='ETH'>
-					<small>ETH</small>
-					<strong>{ethDisplay}</strong>
-				</span>
-				<span data-wallet-asset='REP'>
-					<small>REP</small>
-					<strong>{repBalance}</strong>
-				</span>
+		<details class={`wallet-summary wallet-summary--${summary.status}`} aria-label='Connected wallet balances' aria-busy={summary.status === 'loading'} open={summary.status === 'error'}>
+			<summary class='wallet-summary__trigger'>
+				<code class='wallet-summary__address wallet-summary__address--full'>{summary.account}</code>
+				<code class='wallet-summary__address wallet-summary__address--compact'>{shortAddress(summary.account)}</code>
+				<span class='wallet-summary__compact-loading'>Loading balances…</span>
+				<div class='wallet-summary__balances'>
+					<span data-wallet-asset='ETH'>
+						<small>ETH</small>
+						<strong>{ethDisplay}</strong>
+					</span>
+					<span data-wallet-asset='REP'>
+						<small>REP</small>
+						<strong>{repBalance}</strong>
+					</span>
+				</div>
+			</summary>
+			<div class='wallet-summary__details'>
+				<div class='wallet-summary__identity'>
+					<span>Connected account</span>
+					<code>{summary.account}</code>
+				</div>
+				<div class='wallet-summary__detail-balances' aria-label='Wallet balances'>
+					<span>
+						<small>ETH</small>
+						<strong>{ethDisplay}</strong>
+					</span>
+					<span>
+						<small>REP</small>
+						<strong>{repBalance}</strong>
+					</span>
+				</div>
+				{summary.status === 'error' ? (
+					<span class='wallet-summary__failure'>
+						<span class='wallet-summary__error' role='alert' title={summary.error} aria-label={`${summary.errorLabel ?? 'Balances unavailable'}: ${summary.error ?? 'wallet balance read failed'}`}>
+							{summary.errorLabel ?? 'Balances unavailable'}
+						</span>
+						{onRetry === undefined ? null : (
+							<button class='wallet-summary__retry' type='button' onClick={onRetry}>
+								Retry
+							</button>
+						)}
+					</span>
+				) : null}
 			</div>
 			{summary.status === 'loading' ? (
 				<span class='visually-hidden' role='status'>
 					Loading wallet ETH and current-universe REP balances
 				</span>
 			) : null}
-			{summary.status === 'error' ? (
-				<span class='wallet-summary__failure'>
-					<span class='wallet-summary__error' role='alert' title={summary.error} aria-label={`${summary.errorLabel ?? 'Balances unavailable'}: ${summary.error ?? 'wallet balance read failed'}`}>
-						{summary.errorLabel ?? 'Balances unavailable'}
-					</span>
-					{onRetry === undefined ? null : (
-						<button class='wallet-summary__retry' type='button' onClick={onRetry}>
-							Retry
-						</button>
-					)}
-				</span>
-			) : null}
-		</div>
+		</details>
 	)
 }
 
