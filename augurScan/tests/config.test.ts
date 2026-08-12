@@ -56,4 +56,9 @@ describe('network configuration', () => {
 		process.env['SEPOLIA_RPC_URL'] = 'wss://provider.example'
 		expect(loadNetworks()).rejects.toThrow('must contain HTTP(S) URLs')
 	})
+
+	test('rejects unknown network selections instead of silently ignoring them', async () => {
+		process.env['NETWORKS'] = 'sepolia,sepollia'
+		expect(loadNetworks()).rejects.toThrow('NETWORKS contains unknown network: sepollia')
+	})
 })

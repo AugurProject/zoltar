@@ -79,6 +79,8 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 		showHeader: false,
 		...overrides,
+		walletRepBalanceError: overrides.walletRepBalanceError,
+		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
 	}
 }
 
@@ -140,6 +142,31 @@ describe('SecurityVaultSection', () => {
 		expect(selectedVaultQueries.getByText('Vault REP backing')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
 		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
+	})
+
+	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('alert').textContent).toContain('Wallet REP balance RPC failed')
+	})
+
+	test('shows wallet REP loading while the deposit balance read is pending', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, walletRepBalanceLoading: true })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expect(within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })).getByText('Loading')).not.toBeNull()
+	})
+
+	test('keeps a wallet REP balance failure accessible inside the deposit dialog', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expect(within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })).getByRole('alert').textContent).toContain('Wallet REP balance RPC failed')
 	})
 
 	test('keeps nonzero dispute-staked REP visible in the embedded selected-vault action summary', async () => {

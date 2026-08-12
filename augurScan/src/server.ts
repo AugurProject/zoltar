@@ -2,7 +2,7 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { loadNetworks, runtimeConfig } from './config.ts'
 import { ScannerDatabase } from './database.ts'
-import { liveStreamResponse } from './http.ts'
+import { liveStreamResponse, staticAssetResponse } from './http.ts'
 import { startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
@@ -132,13 +132,10 @@ const server = Bun.serve({
 		if (requested.includes('..')) return new Response('Not found', { status: 404 })
 		const file = Bun.file(path.join(publicRoot, requested))
 		if (!(await file.exists())) {
-			if (!requested.includes('.'))
-				return new Response(Bun.file(path.join(publicRoot, 'index.html')), { headers: { ...securityHeaders, 'content-type': 'text/html; charset=utf-8' } })
+			if (!requested.includes('.')) return staticAssetResponse(Bun.file(path.join(publicRoot, 'index.html')), securityHeaders, 'text/html; charset=utf-8')
 			return new Response('Not found', { status: 404, headers: securityHeaders })
 		}
-		return new Response(file, {
-			headers: { ...securityHeaders, 'cache-control': requested === 'index.html' ? 'no-cache' : 'public, max-age=300', 'content-type': contentType(requested) },
-		})
+		return staticAssetResponse(file, securityHeaders, contentType(requested))
 	},
 })
 

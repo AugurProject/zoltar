@@ -2,6 +2,11 @@ type RequestTimeoutServer = {
 	readonly timeout: (request: Request, seconds: number) => void
 }
 
+export const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
+
+export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) =>
+	new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
+
 export const liveStreamResponse = (
 	stream: ReadableStream<Uint8Array>,
 	request: Request,

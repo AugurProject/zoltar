@@ -46,6 +46,9 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	const definitions = (await Bun.file(path.join(configRoot, 'networks.json')).json()) as readonly NetworkFile[]
 	if (!Array.isArray(definitions) || definitions.length === 0) throw new Error('At least one network must be configured')
 	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map((value) => value.trim()))
+	const configuredIds = new Set(definitions.map(({ id }) => id))
+	const unknownIds = [...enabled].filter((id) => !configuredIds.has(id))
+	if (unknownIds.length > 0) throw new Error(`NETWORKS contains unknown network${unknownIds.length === 1 ? '' : 's'}: ${unknownIds.join(', ')}`)
 	const networks = await Promise.all(
 		definitions
 			.filter(({ id }) => enabled.has(id))
