@@ -116,6 +116,11 @@ describe('testnet deployment inputs', () => {
 		}
 	})
 
+	test('refreshes contract artifacts before loading the deployment script', async () => {
+		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
+		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun run ensure-contract-artifacts &&')
+	})
+
 	test('refuses to start a deployment while its account has a pending transaction', async () => {
 		await expect(
 			assertNoPendingDeployerTransactions(
