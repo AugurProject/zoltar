@@ -4,6 +4,7 @@ type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<strin
 
 const outputDirectory = process.env.TRADING_QA_OUTPUT ?? '/tmp/zoltar-trading-qa'
 const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:12346'
+const scenarioNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const debuggingPort = 9227
 await fs.mkdir(outputDirectory, { recursive: true })
 const userDataDirectory = await fs.mkdtemp('/tmp/zoltar-trading-qa-browser-')
@@ -78,10 +79,13 @@ const poolDetailsAssertion = `(${capacityFactsAssertion}) && document.body.textC
 const removedCopyAssertion = `(() => { const text = (document.body.textContent ?? '').toLowerCase(); const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.toLowerCase() ?? ''; return !['binary shares for', 'invalid is insurance', 'invalid is not traded or priced by this amm', 'canonical securitypools', 'in a live transaction', 'illustrative', 'market signal', 'exact identity', 'preview ready', 'gwei', 'positions grouped by securitypool', 'securitypool used by this amm'].some(phrase => text.includes(phrase)) && !/\\b(?:yes|no|invalid) shares?\\b/.test(description); })()`
 const universeSelectorAssertion = `document.querySelector('.universe-selector select')?.getAttribute('aria-label') === 'Select universe' && document.querySelector('.universe-selector > span') === null && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe'`
 const genesisWalletSummaryAssertion = `(() => { const summary = document.querySelector('.wallet-summary'); const address = summary?.querySelector('.wallet-summary__address')?.textContent ?? ''; const eth = summary?.querySelector('[data-wallet-asset="ETH"] strong')?.textContent; const rep = summary?.querySelector('[data-wallet-asset="REP"] strong')?.textContent; return /^0x[0-9a-f]{40}$/i.test(address) && !address.includes('…') && eth === '64' && rep === '12,500' && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
-const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()); return wallet !== undefined && values.length === 2 && values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const values = [...document.querySelectorAll('.wallet-summary__balances strong')].map(value => value.getBoundingClientRect()).filter(value => value.width > 0 && value.height > 0); const compact = document.querySelector('.wallet-summary__address--compact')?.getBoundingClientRect(); const visibleContentFits = values.length === 2 ? values.every(value => value.left >= wallet.left && value.right <= wallet.right && value.top >= wallet.top && value.bottom <= wallet.bottom) : compact !== undefined && compact.width > 0 && compact.left >= wallet.left && compact.right <= wallet.right; return wallet !== undefined && visibleContentFits && document.documentElement.scrollWidth <= innerWidth })()`
 const maximumWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true)`
 const smallWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '0.000000000000000001')`
-const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
+const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= innerWidth })()`
+const visibleHeaderContextAssertion = `(() => { const selectors = ['.demo-banner', '.brand', '.network-pill', '.universe-selector select']; const bounds = selectors.map(selector => document.querySelector(selector)?.getBoundingClientRect()); return bounds.every(value => value !== undefined && value.width > 0 && value.height > 0 && value.left >= 0 && value.right <= innerWidth && value.top >= 0 && value.bottom <= innerHeight) && document.querySelector('.demo-banner')?.textContent?.includes('SIMULATED DATA') === true && document.querySelector('.brand')?.textContent?.includes('Zoltar') === true && document.querySelector('.network-pill')?.textContent?.includes('Anvil 31337') === true && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe' })()`
+const expandedWalletInFlowAssertion = `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return panel !== undefined && nav !== undefined && main !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.bottom <= nav.top && panel.bottom <= main.top })()`
+const transactionStateLayoutAssertion = `(() => { const panel = document.querySelector('.trade-panel')?.getBoundingClientRect(); const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const status = document.querySelector('.transaction-message')?.getBoundingClientRect(); const hash = document.querySelector('.transaction-hash'); const hashBounds = hash?.getBoundingClientRect(); const hashCode = hash?.querySelector('code'); const hashFits = hash === null || (hashBounds !== undefined && hashBounds.left >= panel.left && hashBounds.right <= panel.right && hashCode?.textContent?.length === 66); return panel !== undefined && action !== undefined && status !== undefined && action.bottom <= status.top && hashFits && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
 		name: 'disconnected-market-list',
@@ -110,6 +114,15 @@ const scenarios = [
 	{ name: 'market-list-1501', width: 1501, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
 	{ name: 'market-list-1600', width: 1600, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
 	{
+		name: 'wallet-ready-desktop-expanded',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=baseline#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === true && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1' && document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0 && document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= innerWidth`,
+	},
+	{
 		name: 'wallet-balance-loading',
 		width: 1440,
 		height: 900,
@@ -121,21 +134,32 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-balance-loading#/markets',
-		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'true' && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '…') && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'true' && document.querySelector('.wallet-summary__compact-loading')?.getBoundingClientRect().width > 0 && [...document.querySelectorAll('.wallet-summary__detail-balances strong')].every(value => value.textContent === '…' && value.getBoundingClientRect().width > 0) && (${expandedWalletInFlowAssertion}) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{
 		name: 'wallet-balance-error',
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=wallet-balance-error#/markets',
-		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__retry') !== null && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const label = document.querySelector('.wallet-summary__identity span')?.getBoundingClientRect(); const account = document.querySelector('.wallet-summary__identity code')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__retry') !== null && panel !== undefined && label !== undefined && account !== undefined && account.top > label.bottom && nav !== undefined && main !== undefined && panel.bottom <= nav.top && panel.bottom <= main.top && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
 		name: 'wallet-balance-error-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-balance-error#/markets',
-		assertExpression: `document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__retry')?.getBoundingClientRect().height === 44 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__identity code')?.textContent === '${'0x8ba1f109551bD432803012645Ac136ddd64DBA72'}' && document.querySelector('.wallet-summary__retry')?.getBoundingClientRect().height === 44 && panel !== undefined && nav !== undefined && main !== undefined && panel.bottom <= nav.top && panel.bottom <= main.top && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
+		name: 'wallet-balance-error-collapsed',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === false && document.querySelector('.wallet-summary__details')?.getBoundingClientRect().height === 0 && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1'`,
 	},
 	{ name: 'wallet-ready-900', width: 900, height: 844, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{
@@ -143,21 +167,21 @@ const scenarios = [
 		width: 800,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-balance-error#/markets',
-		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); const intersectsUniverse = panel !== undefined && universe !== undefined && panel.left < universe.right && panel.right > universe.left && panel.top < universe.bottom && panel.bottom > universe.top; return panel !== undefined && nav !== undefined && main !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.bottom <= nav.top && panel.bottom <= main.top && !intersectsUniverse && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
 		name: 'wallet-discovery-error-761',
 		width: 761,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-discovery-error#/markets',
-		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'No SecurityPool in this universe' && wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = panel !== undefined && universe !== undefined && panel.left < universe.right && panel.right > universe.left && panel.top < universe.bottom && panel.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'No SecurityPool in this universe' && panel !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.top >= 0 && panel.bottom <= innerHeight && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
 		name: 'wallet-pool-error-900',
 		width: 900,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-pool-error#/markets',
-		assertExpression: `(() => { const wallet = document.querySelector('.wallet-summary')?.getBoundingClientRect(); const failure = document.querySelector('.wallet-summary__failure')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = failure !== undefined && universe !== undefined && failure.left < universe.right && failure.right > universe.left && failure.top < universe.bottom && failure.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'SecurityPool unavailable' && wallet !== undefined && failure !== undefined && failure.right <= wallet.right && failure.left >= wallet.left && failure.bottom <= wallet.bottom && failure.top >= wallet.top && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const universe = document.querySelector('.universe-selector')?.getBoundingClientRect(); const intersects = panel !== undefined && universe !== undefined && panel.left < universe.right && panel.right > universe.left && panel.top < universe.bottom && panel.bottom > universe.top; return document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'SecurityPool unavailable' && panel !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.top >= 0 && panel.bottom <= innerHeight && !intersects && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
 		name: 'wallet-max-balances-desktop',
@@ -171,20 +195,38 @@ const scenarios = [
 		width: 900,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-max-balances#/markets',
-		assertExpression: maximumWalletBalancesAssertion,
+		assertExpression: `(${maximumWalletBalancesAssertion}) && (${visibleHeaderContextAssertion})`,
 	},
 	{
 		name: 'wallet-max-balances-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=wallet-max-balances#/markets',
-		assertExpression: maximumWalletBalancesAssertion,
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `(${maximumWalletBalancesAssertion}) && [...document.querySelectorAll('.wallet-summary__detail-balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true && value.getBoundingClientRect().width > 0) && (${expandedWalletInFlowAssertion})`,
 	},
-	{ name: 'wallet-max-balances-1501', width: 1501, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
+	{
+		name: 'wallet-max-balances-1501',
+		width: 1501,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-max-balances#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === false && (${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})`,
+	},
 	{ name: 'wallet-max-balances-1600', width: 1600, height: 900, path: '/?demo=1&scenario=wallet-max-balances#/markets', assertExpression: `(${maximumWalletBalancesAssertion}) && (${headerRowsAssertion})` },
 	{ name: 'wallet-small-balances-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
 	{ name: 'wallet-small-balances-900', width: 900, height: 844, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
-	{ name: 'wallet-small-balances-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wallet-small-balances#/markets', assertExpression: smallWalletBalancesAssertion },
+	{
+		name: 'wallet-small-balances-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=wallet-small-balances#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `(${smallWalletBalancesAssertion}) && [...document.querySelectorAll('.wallet-summary__detail-balances strong')].every(value => value.textContent === '0.000000000000000001' && value.getBoundingClientRect().width > 0) && (${expandedWalletInFlowAssertion})`,
+	},
 	{
 		name: 'wallet-balance-retry',
 		width: 1440,
@@ -208,18 +250,82 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'Security pool' && fact.querySelector('.security-pool-link')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const poolLinkHeights = [...document.querySelectorAll('.security-pool-link')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const poolInternalsHidden = ${poolInternalsHiddenAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !poolInternalsHidden || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 210 || rowActionHeights.some(height => height < 44) || poolLinkHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, poolInternalsHidden, walletSummaryVisible, selectorBounds, rowActionHeights, poolLinkHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
+		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'Security pool' && fact.querySelector('.security-pool-link')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const poolLinkHeights = [...document.querySelectorAll('.security-pool-link')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const poolInternalsHidden = ${poolInternalsHiddenAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !poolInternalsHidden || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 180 || rowActionHeights.some(height => height < 44) || poolLinkHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, poolInternalsHidden, walletSummaryVisible, selectorBounds, rowActionHeights, poolLinkHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
 	{ name: 'loading', width: 1440, height: 900, path: '/?demo=1&scenario=loading#/markets', assertExpression: removedCopyAssertion },
-	{ name: 'market-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', assertExpression: `(${poolInternalsHiddenAssertion}) && (${removedCopyAssertion})` },
+	{
+		name: 'market-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=baseline#/market',
+		assertExpression: `(() => { const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const reserves = document.querySelector('.pool-mechanics'); const reserveBounds = reserves?.getBoundingClientRect(); return (${poolInternalsHiddenAssertion}) && (${removedCopyAssertion}) && document.querySelector('.trade-summary')?.textContent?.includes('You pay') === true && action !== undefined && action.bottom <= innerHeight && reserveBounds !== undefined && action.bottom <= reserveBounds.top && reserves?.textContent?.includes('YES reserve428.571 YES') === true && reserves.textContent?.includes('NO reserve1,000 NO') === true && document.querySelector('.detail-aside')?.textContent?.includes('Conditional YES price') === false })()`,
+	},
+	{
+		name: 'scalar-fork-migration-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		scrollY: 620,
+		assertExpression: `document.body.textContent?.includes('Migrate shares to scalar branches') === true && document.body.textContent?.includes('Scalar fork question') === true && document.body.textContent?.includes('2 targets selected') === true && document.body.textContent?.includes('permanently locks parent-universe transfers') === true && document.body.textContent?.includes('still migrate later into other children') === true && document.querySelector('.fork-source-step select')?.textContent?.includes('INVALID') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'scalar-fork-migration-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		scrollY: 1_650,
+		assertExpression: `document.body.textContent?.includes('Migrate shares to scalar branches') === true && [...document.querySelectorAll('.fork-migration-targets button, .fork-invalid-option')].every(control => control.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'scalar-fork-migration-ready-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=forked-scalar&qa=ready-desktop#/market',
+		clickSelector: '.demo-fork-migration > .primary-action',
+		clickWaitMs: 1_500,
+		assertExpression: `(() => { const action = document.querySelector('.demo-fork-migration > .primary-action'); return action?.textContent?.trim() === 'Submit migration to 2 child branches' && action.disabled === false && document.body.textContent?.includes('Authoritative migration simulation') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		scrollY: 1_650,
+	},
+	{
+		name: 'scalar-fork-migration-ready-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar&qa=ready-mobile#/market',
+		clickSelector: '.demo-fork-migration > .primary-action',
+		clickWaitMs: 1_500,
+		assertExpression: `(() => { const action = document.querySelector('.demo-fork-migration > .primary-action'); const bounds = action?.getBoundingClientRect(); const checks = { label: action?.textContent?.trim(), enabled: action?.disabled === false, height: bounds?.height, simulationReady: document.body.textContent?.includes('Authoritative migration simulation') === true, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (checks.label !== 'Submit migration to 2 child branches' || !checks.enabled || checks.height === undefined || checks.height < 44 || !checks.simulationReady || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollY: 2_100,
+	},
+	{
+		name: 'scalar-fork-migration-add-target-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		evaluate: `(() => { const input = document.querySelector('.scalar-fork-picker input[type="range"]'); if (!(input instanceof HTMLInputElement)) return false; input.value = '75'; input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		clickSelector: '.scalar-fork-picker .secondary-action',
+		clickWaitMs: 100,
+		assertExpression: `document.body.textContent?.includes('3 targets selected') === true && document.body.textContent?.includes('2.5 °C') === true && document.body.textContent?.includes('Child pool missing') === true && document.body.textContent?.includes('do not select that same source-child pair again') === true && document.body.textContent?.includes('A different source share may batch those children') === true && document.querySelector('.demo-fork-migration > .primary-action')?.hasAttribute('disabled') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		scrollY: 2_300,
+		postScrollAssertExpression: `(() => { const warning = document.querySelector('.demo-fork-migration .warning')?.getBoundingClientRect(); const action = document.querySelector('.demo-fork-migration > .primary-action')?.getBoundingClientRect(); return warning !== undefined && action !== undefined && warning.bottom <= action.top && warning.left >= 0 && warning.right <= document.documentElement.clientWidth && action.left >= 0 && action.right <= document.documentElement.clientWidth && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
 	{
 		name: 'market-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/market',
-		assertExpression: `(${poolInternalsHiddenAssertion}) && [...document.querySelectorAll('.segmented button, .brand, .eyebrow[href], details summary, .security-pool-link')].every(control => control.getBoundingClientRect().height >= 44)`,
+		assertExpression: `(${poolInternalsHiddenAssertion}) && document.querySelector('.wallet-summary__address--compact')?.getBoundingClientRect().width > 0 && document.querySelector('.trade-summary')?.textContent?.includes('You receive') === true && document.querySelector('.pool-mechanics')?.textContent?.includes('Conditional YES price70.0%') === true && getComputedStyle(document.querySelector('.pool-mechanics summary'), '::after').content.includes('▾') && [...document.querySelectorAll('.segmented button, .brand, .eyebrow[href], details summary, .security-pool-link')].every(control => control.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'market-mobile-reserves-expanded',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=baseline#/market',
+		clickSelector: '.pool-mechanics summary',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.pool-mechanics')?.hasAttribute('open') === true && getComputedStyle(document.querySelector('.pool-mechanics summary'), '::after').content.includes('▴') && document.querySelector('.pool-mechanics .metrics')?.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		scrollY: 900,
 	},
 	{ name: 'security-pool-desktop', width: 1440, height: 900, path: `/?demo=1&scenario=baseline#/security-pool/0x${'3a'.repeat(20)}`, assertExpression: poolDetailsAssertion },
 	{ name: 'security-pool-mobile', width: 390, height: 844, path: `/?demo=1&scenario=baseline#/security-pool/0x${'3a'.repeat(20)}`, assertExpression: `(${poolDetailsAssertion}) && document.documentElement.scrollWidth <= document.documentElement.clientWidth` },
@@ -257,14 +363,14 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=uninitialized-pair#/market',
-		assertExpression: `(() => { const action = [...document.querySelectorAll('a')].find(link => link.textContent?.includes('Initialize this pair in Liquidity')); const bounds = action?.getBoundingClientRect(); return document.querySelector('.trade-panel') === null && document.body.textContent?.includes('Conditional price available after pair initialization') === true && document.body.textContent?.includes('Conditional YES price 0.0%') !== true && bounds !== undefined && bounds.top >= 0 && bounds.bottom <= innerHeight })()`,
+		assertExpression: `(() => { const action = [...document.querySelectorAll('a')].find(link => link.textContent?.includes('Initialize this pair in Liquidity')); const bounds = action?.getBoundingClientRect(); return document.querySelector('.trade-panel') === null && document.body.textContent?.includes('Conditional price unavailable') === true && document.body.textContent?.includes('Conditional YES price 0.0%') !== true && bounds !== undefined && bounds.top >= 0 && bounds.bottom <= innerHeight })()`,
 	},
 	{
 		name: 'pair-uninitialized-market-mobile',
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=uninitialized-pair#/market',
-		assertExpression: `(() => { const action = [...document.querySelectorAll('a')].find(link => link.textContent?.includes('Initialize this pair in Liquidity')); const bounds = action?.getBoundingClientRect(); return document.querySelector('.trade-panel') === null && document.body.textContent?.includes('Conditional price available after pair initialization') === true && bounds !== undefined && bounds.top >= 0 && bounds.bottom <= innerHeight })()`,
+		assertExpression: `(() => { const action = [...document.querySelectorAll('a')].find(link => link.textContent?.includes('Initialize this pair in Liquidity')); const bounds = action?.getBoundingClientRect(); return document.querySelector('.trade-panel') === null && document.body.textContent?.includes('Conditional price unavailable') === true && bounds !== undefined && bounds.top >= 0 && bounds.bottom <= innerHeight })()`,
 	},
 	{ name: 'ended-pair-missing-market', width: 1440, height: 900, path: '/?demo=1&scenario=ended-missing-pair#/market', scrollY: 500 },
 	{ name: 'ended-pair-missing-liquidity', width: 1440, height: 900, path: '/?demo=1&scenario=ended-missing-pair#/liquidity' },
@@ -336,16 +442,25 @@ const scenarios = [
 	},
 	{ name: 'forked-mobile', width: 390, height: 844, path: '/?demo=1&scenario=forked#/market' },
 	{ name: 'resolved-invalid', width: 1440, height: 900, path: '/?demo=1&scenario=resolved-invalid#/market' },
+	{ name: 'preparing', width: 1440, height: 900, path: '/?demo=1&scenario=preparing#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('Preparing Enter YES') === true`, scrollY: 900 },
+	{ name: 'preparing-mobile', width: 390, height: 844, path: '/?demo=1&scenario=preparing#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('Preparing Enter YES') === true`, scrollY: 900 },
+	{ name: 'approval', width: 1440, height: 900, path: '/?demo=1&scenario=approval&mode=exit#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('approval is pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'approval-mobile', width: 390, height: 844, path: '/?demo=1&scenario=approval&mode=exit#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('approval is pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'submitting', width: 1440, height: 900, path: '/?demo=1&scenario=submitting#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending in the wallet') === true`, scrollY: 900 },
+	{ name: 'submitting-mobile', width: 390, height: 844, path: '/?demo=1&scenario=submitting#/market', assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending in the wallet') === true`, scrollY: 900 },
 	{
 		name: 'pending',
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=pending#/market',
-		assertExpression: `document.querySelector('.transaction-message')?.textContent?.includes('pending confirmation') === true`,
+		assertExpression: `(${transactionStateLayoutAssertion}) && document.querySelector('.transaction-message')?.textContent?.includes('pending confirmation') === true && document.querySelector('.transaction-hash code')?.textContent?.length === 66`,
 		scrollY: 900,
 	},
-	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', scrollY: 900 },
-	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', scrollY: 900 },
+	{ name: 'pending-mobile', width: 390, height: 844, path: '/?demo=1&scenario=pending#/market', assertExpression: transactionStateLayoutAssertion, scrollY: 900 },
+	{ name: 'success', width: 1440, height: 900, path: '/?demo=1&scenario=success#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'success-mobile', width: 390, height: 844, path: '/?demo=1&scenario=success#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'failure', width: 1440, height: 900, path: '/?demo=1&scenario=failure#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
+	{ name: 'failure-mobile', width: 390, height: 844, path: '/?demo=1&scenario=failure#/market', assertExpression: `document.querySelector('.transaction-hash code')?.textContent?.length === 66 && document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 900 },
 	{
 		name: 'clicked-pending',
 		width: 1440,
@@ -364,7 +479,7 @@ const scenarios = [
 		path: '/?demo=1&scenario=baseline&mode=exit#/market',
 		clickSelector: '.primary-action',
 		clickWaitMs: 150,
-		assertExpression: `document.querySelector('.transaction-message')?.textContent?.toLowerCase().includes('share approval is pending') === true && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled)`,
+		assertExpression: `document.querySelector('.transaction-message')?.textContent?.includes('Insured YES exit approval is pending') === true && document.querySelector('.primary-action')?.getAttribute('aria-busy') === 'true' && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled)`,
 		scrollY: 900,
 	},
 	{ name: 'clicked-confirmed', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/market', clickSelector: '.primary-action', clickWaitMs: 1_500, scrollY: 900 },
@@ -378,8 +493,11 @@ const scenarios = [
 	},
 ] as const
 
+const selectedScenarios = scenarioNames.size === 0 ? scenarios : scenarios.filter(scenario => scenarioNames.has(scenario.name))
+if (selectedScenarios.length === 0) throw new Error('TRADING_QA_SCENARIOS did not match a browser scenario')
+
 try {
-	for (const scenario of scenarios) {
+	for (const scenario of selectedScenarios) {
 		await command('Emulation.setDeviceMetricsOverride', { width: scenario.width, height: scenario.height, deviceScaleFactor: 1, mobile: false })
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)

@@ -57,7 +57,7 @@ Without Docker, build with a reviewed deployment manifest and open the same rout
 TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
 ```
 
-The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
+The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
 
 For a local deployment, first deploy Zoltar core to Anvil, then:
 

@@ -7,13 +7,16 @@ import {
 	broadcastUncertainMessage,
 	discoveryCommitAllowed,
 	failedSubmissionTransition,
+	forkMigrationBatchBlocker,
+	forkMigrationBatchWarning,
 	insuredExitLimitMessage,
 	liquidityApprovalRequired,
 	liquidityOperationAvailable,
 	livePairInitialized,
 	marketSelectionAfterDiscovery,
 	migrationSimulationSummary,
-	parseForkOutcomeIndex,
+	parseSlippageBps,
+	parseTransactionValidityMinutes,
 	positionControlsWorkflowLocked,
 	securityPoolAddressFromRoute,
 	settlementBalanceLabel,
@@ -36,6 +39,8 @@ import {
 	retainApprovedMaximum,
 	retainApprovedMinimum,
 	refreshSecurityPoolDeploymentIndex,
+	requireTransactionSlippageBps,
+	requireTransactionValidityMinutes,
 	selectUniverseDeployments,
 	settlementAvailability,
 	shareBalanceScope,
@@ -144,6 +149,9 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('70.25', 2)).toBe(7_025n)
 		expect(parseUnitsOrUndefined('70.251', 2)).toBeUndefined()
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
+		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
+		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
+		expect(() => formatEthPerShare(1n, 2n, 0)).toThrow('Maximum significant digits must be a positive safe integer')
 	})
 
 	test('converts to a number only after proving the bigint is safe', () => {
@@ -190,6 +198,30 @@ describe('standalone trading UI model', () => {
 	test('derives displayed transaction bounds with LP-favoring rounding', () => {
 		expect(minimumAfterSlippage(10_001n)).toBe(9_950n)
 		expect(maximumAfterSlippage(10_001n)).toBe(10_052n)
+		expect(minimumAfterSlippage(1_001n, 250n)).toBe(975n)
+		expect(maximumAfterSlippage(1_001n, 250n)).toBe(1_027n)
+		expect(minimumAfterSlippage(1_000n, 0n)).toBe(1_000n)
+		expect(minimumAfterSlippage(1_000n, 500n)).toBe(950n)
+		expect(() => minimumAfterSlippage(1_000n, 501n)).toThrow('between 0% and 5%')
+		expect(requireTransactionSlippageBps(0n)).toBeUndefined()
+		expect(requireTransactionSlippageBps(500n)).toBeUndefined()
+		expect(() => requireTransactionSlippageBps(501n)).toThrow('between 0% and 5%')
+		expect(requireTransactionValidityMinutes(1n)).toBeUndefined()
+		expect(requireTransactionValidityMinutes(1_440n)).toBeUndefined()
+		expect(() => requireTransactionValidityMinutes(0n)).toThrow('between 1 and 1440 minutes')
+		expect(() => requireTransactionValidityMinutes(1_441n)).toThrow('between 1 and 1440 minutes')
+	})
+
+	test('validates user-configurable transaction protection settings', () => {
+		expect(parseSlippageBps('0.75')).toBe(75n)
+		expect(parseSlippageBps('5')).toBe(500n)
+		expect(parseSlippageBps('5.01')).toBeUndefined()
+		expect(parseSlippageBps('-1')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1')).toBe(1n)
+		expect(parseTransactionValidityMinutes('1440')).toBe(1_440n)
+		expect(parseTransactionValidityMinutes('0')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1441')).toBeUndefined()
+		expect(parseTransactionValidityMinutes('1.5')).toBeUndefined()
 	})
 
 	test('never replaces user-approved bounds with refreshed quote bounds', () => {
@@ -415,10 +447,18 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('requires an explicit fork branch and names the irreversible consequence', () => {
-		expect(parseForkOutcomeIndex('')).toBeUndefined()
-		expect(parseForkOutcomeIndex('-1')).toBeUndefined()
-		expect(parseForkOutcomeIndex('12')).toBe(12n)
-		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied to child outcome index 12 and locked in the parent universe.')
+		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied into 12 selected child branches and locked in the parent universe.')
+	})
+
+	test('allows many ready fork children while requiring missing children to be created singly', () => {
+		const ready = { outcomeIndex: 1n, universeId: 11n, label: 'Ready', canonicalPool: `0x${'11'.repeat(20)}` as const }
+		const missing = { outcomeIndex: 2n, universeId: 12n, label: 'Missing', canonicalPool: undefined }
+		expect(forkMigrationBatchBlocker([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
+		expect(forkMigrationBatchBlocker([missing])).toBeUndefined()
+		expect(forkMigrationBatchBlocker([ready, missing])).toContain('separately for the current source share')
+		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).toContain('do not select that same source-child pair again')
+		expect(forkMigrationBatchWarning([ready, missing])).toContain('A different source share may batch those children once their pools are ready')
+		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
 	test('preserves same-page market context but selects the first pool after navigation', () => {
@@ -431,11 +471,11 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('explains every settlement input that keeps simulation disabled', () => {
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, undefined, 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, undefined, 'YES', 1n)).toContain('complete-set balance of 5 shares')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, undefined, 'YES', 1n)).toContain('explicit non-negative outcome index')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, 0n, 'YES', 0n)).toBe('The selected YES balance is zero')
-		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, undefined, 'NO', 0n)).toContain('unavailable')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n)).toContain('complete-set balance of 5 shares')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n)).toContain('at least one child branch')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n)).toBe('The selected YES balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n)).toContain('unavailable')
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {
@@ -458,6 +498,10 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
+		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
+		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
 	})
 

@@ -43,10 +43,12 @@ import {
 	safeIndexerFailure,
 	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
+	uniswapV4PoolIds,
 	waitForIndexerDelay,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
+import { isSupportedUniswapV4Market, uniswapV4PoolId } from '../src/uniswap.ts'
 
 const tokenMetadata: TokenMetadata = {
 	address: '0x1000000000000000000000000000000000000001',
@@ -74,6 +76,47 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
+		const contracts = new Map<string, ContractMetadata>([
+			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
+			[
+				'0x2000000000000000000000000000000000000002',
+				{
+					address: '0x2000000000000000000000000000000000000002',
+					kind: 'weth',
+					label: 'WETH',
+					provenance: 'manifest',
+				},
+			],
+		])
+		const ids = uniswapV4PoolIds(contracts)
+		expect(ids).toHaveLength(4)
+		expect(new Set(ids).size).toBe(4)
+		expect(ids.every((id) => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
+	})
+
+	test('accepts only canonical supported V4 native ETH and REP market identities', () => {
+		const standard = {
+			marketId: uniswapV4PoolId(address, 3_000, 60),
+			token0Address: '0x0000000000000000000000000000000000000000',
+			token1Address: address,
+			feeHundredthsBip: '3000',
+			tickSpacing: '60',
+			hooksAddress: '0x0000000000000000000000000000000000000000',
+		}
+		expect(isSupportedUniswapV4Market(standard)).toBeTrue()
+		expect(
+			isSupportedUniswapV4Market({
+				...standard,
+				marketId: uniswapV4PoolId(address, 250, 5),
+				feeHundredthsBip: '250',
+				tickSpacing: '5',
+			}),
+		).toBeFalse()
+		expect(isSupportedUniswapV4Market({ ...standard, marketId: `0x${'ab'.repeat(32)}` })).toBeFalse()
+		expect(isSupportedUniswapV4Market({ ...standard, hooksAddress: '0x2000000000000000000000000000000000000002' })).toBeFalse()
+	})
+
 	test('splits oversized inclusive log ranges without gaps or duplicate boundary blocks', async () => {
 		const attempts: Array<readonly [bigint, bigint]> = []
 		const query = async (fromBlock: bigint, toBlock: bigint): Promise<readonly bigint[]> => {

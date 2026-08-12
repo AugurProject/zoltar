@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.ts'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../features/LiveTrading.tsx'
-import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../protocol/live.ts'
+import { normalizeForkOutcomeIndexes, simulateSettlement, submitFreshSettlement, type LiveMarket } from '../protocol/live.ts'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -76,6 +76,11 @@ function isHexValue(value: unknown): value is Hex {
 }
 
 describe('live settlement contract encoding', () => {
+	test('sorts fork targets into the strict contract order and rejects duplicates', () => {
+		expect(normalizeForkOutcomeIndexes([99n, 12n, 42n])).toEqual([12n, 42n, 99n])
+		expect(() => normalizeForkOutcomeIndexes([12n, 12n])).toThrow('only once')
+	})
+
 	test('encodes and submits ShareToken migration with the ShareToken ABI', async () => {
 		const transactionData: Hex[] = []
 		const client = createWalletClient({
@@ -99,18 +104,21 @@ describe('live settlement contract encoding', () => {
 			}),
 		})
 
-		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndex: 12n })
+		const selectedScalarTargets = [99n, 42n, 12n]
+		const normalizedScalarTargets = [12n, 42n, 99n]
+		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: selectedScalarTargets })
 		const uiQuote = { ...quote, account, walletClient: client, inputRevision: 0 }
-		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', 12n, account, client)).toBeTrue()
-		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', 12n, account, client)).toBeFalse()
-		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', 13n, account, client)).toBeFalse()
+		expect(quote.targetOutcomeIndexes).toEqual(normalizedScalarTargets)
+		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeTrue()
+		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeFalse()
+		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', [12n, 43n, 99n], account, client)).toBeFalse()
 		expect(settlementQuoteCanSubmit('ready', undefined, true)).toBeTrue()
 		expect(settlementQuoteCanSubmit('loading', undefined, true)).toBeFalse()
 		expect(settlementQuoteCanSubmit('error', undefined, true)).toBeFalse()
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n]] })
+			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
 		}
 	})
 
@@ -141,10 +149,13 @@ describe('live settlement contract encoding', () => {
 			}),
 		})
 		const amount = 5n * 10n ** 18n
-		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount })
+		const slippageBps = 500n
+		const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount, validityMinutes: 7n, slippageBps })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(1_000n)
-		expect(quote.minimumAttoEth).toBe(995n)
+		expect(quote.minimumAttoEth).toBe(950n)
+		expect(quote.deadline).toBe(421n)
+		expect(quote.slippageBps).toBe(slippageBps)
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionTargets).toEqual([configuration.router, configuration.router, configuration.router])
 		expect(transactionData).toHaveLength(3)
@@ -152,6 +163,9 @@ describe('live settlement contract encoding', () => {
 		expect(calls[0]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
 		expect(calls[1]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, 0n, account, quote.deadline] })
 		expect(calls[2]).toEqual({ functionName: 'redeemCompleteSet', args: [pool, amount, quote.minimumAttoEth, account, quote.deadline] })
+		const callsBeforeRejectedSlippage = transactionData.length
+		await expect(simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount, validityMinutes: 7n, slippageBps: 501n })).rejects.toThrow('between 0% and 5%')
+		expect(transactionData).toHaveLength(callsBeforeRejectedSlippage)
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
@@ -204,7 +218,7 @@ describe('live settlement contract encoding', () => {
 				},
 			}),
 		})
-		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndex: 12n })
+		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: [12n] })
 		await expect(
 			submitFreshSettlement(client, configuration, account, quote, async () => {
 				guards++

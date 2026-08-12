@@ -170,6 +170,10 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
+function normalizeSoliditySourceLineEndings(source: string): string {
+	return source.replace(/\r\n?/g, '\n')
+}
+
 function isCompileError(value: unknown): value is { severity: string; formattedMessage: string } {
 	return isObjectRecord(value) && typeof value['severity'] === 'string' && typeof value['formattedMessage'] === 'string'
 }
@@ -334,16 +338,16 @@ export function createOpenOracleCompilerSources(sourceFiles: Map<string, string>
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
 	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
 	if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`)
-	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, openOracleSource]])
+	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, normalizeSoliditySourceLineEndings(openOracleSource)]])
 	for (const [sourcePath, content] of sourceFiles) {
 		if (sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) {
 			const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`
-			openOracleSources.set(remappedPath, content)
+			openOracleSources.set(remappedPath, normalizeSoliditySourceLineEndings(content))
 			continue
 		}
 		if (sourcePath === OPEN_ORACLE_LOCAL_PATH || !sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX)) continue
 		const remappedPath = `${OPEN_ORACLE_UPSTREAM_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_PREFIX.length)}`
-		openOracleSources.set(remappedPath, content)
+		openOracleSources.set(remappedPath, normalizeSoliditySourceLineEndings(content))
 	}
 	return openOracleSources
 }
@@ -488,7 +492,7 @@ const compileContracts = async () => {
 	const sources = new Map<string, string>()
 	for (const file of files) {
 		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
-		sources.set(relativePath, await fs.readFile(file, 'utf8'))
+		sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')))
 	}
 
 	const openOracleCompiler = await loadOpenOracleCompiler()

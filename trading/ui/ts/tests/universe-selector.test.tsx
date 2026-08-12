@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
-import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
+import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../features/LiveTrading.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -53,6 +53,15 @@ describe('universe selector', () => {
 		expect(selected).toBe('2')
 	})
 
+	test('renders an explicit not-found route and updates the document title', async () => {
+		window.history.replaceState(undefined, '', '/?demo=1&scenario=loading#/missing')
+		expect(currentRoute()).toBe('not-found')
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
+		expect(document.title).toBe(tradingDocumentTitle('not-found'))
+	})
+
 	test('keeps only markets minted in the selected universe', () => {
 		const first = { universeId: 1n } as LiveMarket
 		const second = { universeId: 2n } as LiveMarket
@@ -85,6 +94,8 @@ describe('universe selector', () => {
 		const repBalance = rendered.container.querySelector('[data-wallet-asset="REP"]')
 		expect(walletAddress?.textContent).toBe('0x8ba1f109551bD432803012645Ac136ddd64DBA72')
 		expect(walletAddress?.textContent).not.toContain('…')
+		expect(rendered.container.querySelector('.wallet-summary__address--compact')?.textContent).toBe('0x8ba1…BA72')
+		expect(rendered.container.querySelector('.wallet-summary__details')?.textContent).toContain('Connected account0x8ba1f109551bD432803012645Ac136ddd64DBA72')
 		expect(ethDisplay?.textContent).toBe('ETH64')
 		expect(repBalance?.textContent).toBe('REP12,500')
 		expect(main?.textContent).toContain(demoMarket('baseline').pool)
@@ -150,6 +161,7 @@ describe('universe selector', () => {
 		const rendered = await renderIntoDocument(<WalletSummary summary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.wallet-summary__address')?.textContent).toBe(account)
+		expect(rendered.container.querySelector('details.wallet-summary')?.hasAttribute('open')).toBeTrue()
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toBe('ETH—')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toBe('REP—')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toBe('Wallet balance read failed')

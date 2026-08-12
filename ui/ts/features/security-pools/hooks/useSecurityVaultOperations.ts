@@ -162,7 +162,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	}
 	const clearRepLoaders = () => {
 		repBalanceLoader.invalidate()
-		repBalanceLoader.signal.value = undefined
+		repBalanceLoader.signal.value = { error: undefined, loading: false, value: undefined }
 		repAllowanceLoader.invalidate()
 		repAllowanceLoader.signal.value = {
 			error: undefined,
@@ -408,7 +408,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (details === undefined) return undefined
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
-				repBalanceLoader.signal.value = currentRepBalanceAttoRep
+				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalanceAttoRep)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
 				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
@@ -559,7 +559,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		securityVaultError: securityVaultError.value,
 		securityVaultForm: securityVaultForm.value,
 		securityVaultMissing: securityVaultMissing.value,
-		walletRepBalanceAttoRep: repBalanceLoader.signal.value,
+		walletRepBalanceAttoRep: repBalanceLoader.signal.value.value,
+		walletRepBalanceError: repBalanceLoader.signal.value.error,
+		walletRepBalanceLoading: repBalanceLoader.signal.value.loading,
 		securityVaultResult: securityVaultResult.value,
 		setSecurityVaultForm: (updater: (current: SecurityVaultFormState) => SecurityVaultFormState) => {
 			updateSecurityVaultForm(updater)
