@@ -79,5 +79,5 @@ export function updateDiagramControl(button: DiagramAction, cue: DiagramCue, isE
 	button.textContent = isExpanded ? 'Close full screen' : 'View full screen'
 	button.removeAttribute('aria-pressed')
 	button.setAttribute('aria-expanded', String(isExpanded))
-	cue.textContent = isExpanded ? 'Scroll horizontally for detailed labels. Press Escape to close.' : 'Scroll horizontally or use full screen for detailed labels.'
+	cue.textContent = isExpanded ? 'Scroll to inspect detailed labels. Press Escape to close.' : 'Use full screen to inspect detailed labels.'
 }

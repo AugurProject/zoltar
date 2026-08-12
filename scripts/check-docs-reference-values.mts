@@ -1,6 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { diagramGraphSpecs } from '../docs/charts/diagramModels'
+import type { DiagramGraphNode } from '../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
@@ -12,7 +14,7 @@ const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liq
 const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanation/open-oracle.html', 'utf8'))
 const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/explanation/zoltar.html', 'utf8'))
 const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanation/statoblast.html', 'utf8'))
-const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
+const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
@@ -203,7 +205,7 @@ function assertLazyClaimCommitmentDocs(): void {
 		/retainedCumulativeAmountAttoRep = IEscalationClaimCheckpointSource\(sourceGame\)[\s\S]*\.applyInheritedClaimRetention\(cumulativeAmountAttoRep, parentDepositIndex\);[\s\S]*retainedPreviousAmountAttoRep = IEscalationClaimCheckpointSource\(sourceGame\)[\s\S]*\.applyInheritedClaimRetention\(cumulativeAmountAttoRep - amountAttoRep, parentDepositIndex\);[\s\S]*return retainedCumulativeAmountAttoRep - retainedPreviousAmountAttoRep/,
 	)
 	for (const staleOwnershipPhrase of ['current liquidation owners', 'liquidation moved half the claim', 'current-owner shares', 'payout ownership copied', '64-key global cap', 'eight batches']) {
-		for (const document of [invariantsHtml, whitepaperStatoblast, operatorReference, diagramSpecs]) assert.ok(!document.includes(staleOwnershipPhrase), `obsolete claim ownership/import text remains: ${staleOwnershipPhrase}`)
+		for (const document of [invariantsHtml, whitepaperStatoblast, operatorReference, diagramModelsSource]) assert.ok(!document.includes(staleOwnershipPhrase), `obsolete claim ownership/import text remains: ${staleOwnershipPhrase}`)
 	}
 	assert.doesNotMatch(operatorReference, /leaves owner import to permissionless/)
 	assert.match(invariantsHtml, /Bob may relay Alice's valid winning proof[\s\S]*payout still goes entirely to Alice as the committed depositor/)
@@ -476,20 +478,34 @@ function assertLifecycleReferences(): void {
 		assert.match(securityPoolInterface, new RegExp(`\\b${systemState}\\b`))
 	}
 	assert.match(startHere, /explanation\/escalation-game\.html/)
-	for (const transition of ['Operational->PoolForked', 'PoolForked->ForkMigration', 'ForkMigration->ForkTruthAuction', 'ForkTruthAuction->Operational']) {
-		assert.match(diagramSpecs, new RegExp(`"data-transition": "${transition}"`), `Statoblast lifecycle must include ${transition}`)
+	const lifecycle = diagramGraphSpecs['fig-statoblast-fork-state-machine']
+	assert.ok(lifecycle, 'Statoblast lifecycle diagram model must exist')
+	const lifecycleSection = lifecycle.sections[0]
+	assert.ok(lifecycleSection, 'Statoblast lifecycle diagram must have a graph section')
+	const lifecycleStates: ReadonlyArray<readonly [string, string, string]> = [
+		['parent', 'Operational', 'parent pool'],
+		['forked', 'PoolForked', 'parent halted'],
+		['migration', 'ForkMigration', 'child pool'],
+		['auction', 'ForkTruthAuction', 'repair phase'],
+		['child', 'Operational', 'child activated'],
+	]
+	for (const [id, state, role] of lifecycleStates) {
+		const lifecycleNode: DiagramGraphNode | undefined = lifecycleSection.nodes.find(candidate => candidate.id === id)
+		assert.equal(lifecycleNode?.title, state, `Statoblast lifecycle must label ${role} ${state}`)
+		assert.ok(lifecycleNode?.details?.includes(role), `Statoblast lifecycle ${state} must identify ${role}`)
 	}
-	for (const [state, role] of [
-		['Operational', 'parent'],
-		['PoolForked', 'parent'],
-		['ForkMigration', 'child'],
-		['ForkTruthAuction', 'child'],
-		['Operational', 'child'],
+	for (const [source, target] of [
+		['parent', 'forked'],
+		['forked', 'migration'],
+		['migration', 'auction'],
+		['auction', 'child'],
 	]) {
-		assert.match(diagramSpecs, new RegExp(`"data-state": "${state}",\\s+"data-pool-role": "${role}"`), `Statoblast lifecycle must label ${role} ${state}`)
+		assert.ok(
+			lifecycleSection.edges.some(candidate => candidate.source === source && candidate.target === target),
+			`Statoblast lifecycle must include ${source} -> ${target}`,
+		)
 	}
-	assert.match(diagramSpecs, /"data-transition": "PoolForked->ForkMigration",\s+"data-boundary": "parent-to-child"/)
-	assert.doesNotMatch(diagramSpecs, /"data-transition": "ForkMigration->Operational"/)
+	assert.ok(!lifecycleSection.edges.some(candidate => candidate.source === 'migration' && candidate.target === 'child'), 'Statoblast lifecycle must pass through ForkTruthAuction before child operation')
 }
 
 function assertContractInteractionDistinctions(): void {
@@ -626,8 +642,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /redeemShares\(\)[\s\S]*caller accepts the resulting ETH call, including zero value[\s\S]*rejection of that ETH call reverts the transaction/)
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting claimable fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /withdrawRepFromVault\(vault, attoRepAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
-	assert.match(diagramSpecs, /withdraw REP or liquidation/)
-	assert.doesNotMatch(diagramSpecs, /withdraw, capacity ownership/)
+	assert.match(diagramModelsSource, /withdraw REP or liquidation/)
+	assert.doesNotMatch(diagramModelsSource, /withdraw, capacity ownership/)
 	assert.match(securityPoolUtils, /capacityOwnershipToMoveAttoRep =[\s\S]*Math\.mulDiv\(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth\)/)
 	assert.match(securityPoolLiquidationDelegate, /receiverVault != targetVault[\s\S]*receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*revert\('Receiver debt below minimum'\)/)
 	assert.match(securityPoolLiquidationDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps[\s\S]*'Receiver bad'/)

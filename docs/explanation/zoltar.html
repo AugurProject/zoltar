@@ -139,7 +139,7 @@
 
 				<figure class="diagram" id="fig-zoltar-fork-branch-set" aria-labelledby="universe-diagram-title">
 					<p class="diagram-title" id="universe-diagram-title">Universe Tree</p>
-					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-branch-set" data-plot-width="920" data-plot-height="430" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome."><span class="plot-chart-fallback">Universe tree. A fork creates the full valid branch set; no branch is privileged by the contract.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-fork-branch-set" data-plot-width="920" data-plot-height="390" role="img" aria-label="A parent universe forks into children for Invalid and each valid outcome."><span class="plot-chart-fallback">Universe tree. A fork creates the full valid branch set; no branch is privileged by the contract.</span></div>
 					<div class="legend" aria-label="Universe diagram legend">
 						<span class="legend-item"><span class="legend-swatch gold"></span>Forking parent</span>
 						<span class="legend-item"><span class="legend-swatch teal"></span>Invalid branch</span>
@@ -219,7 +219,7 @@
 
 				<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 					<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
-					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="360" data-rounding="integer-flooring" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance."><span class="plot-chart-fallback">Threshold Deposit Split. The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="348" data-rounding="integer-flooring" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance."><span class="plot-chart-fallback">Threshold Deposit Split. The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</span></div>
 				</figure>
 
 				<p>Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a> under Zoltar’s control.</p>
@@ -289,7 +289,7 @@
 
 				<figure class="diagram" id="fig-zoltar-packed-scalar-answer" aria-labelledby="packed-diagram-title">
 					<p class="diagram-title" id="packed-diagram-title">Packed Scalar Answer</p>
-					<div class="plot-chart" data-plot-chart="fig-zoltar-packed-scalar-answer" data-plot-width="920" data-plot-height="520" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators."><span class="plot-chart-fallback">Packed Scalar Answer. A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits 254...240 must be zero, 0 in bit 255 is the invalid namespace, and 1 means the payout fields must sum to numTicks.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-packed-scalar-answer" data-plot-width="920" data-plot-height="640" role="img" aria-label="A uint256 scalar answer uses the highest bit as a namespace flag, then packs first and second 120-bit payout numerators."><span class="plot-chart-fallback">Packed Scalar Answer. A scalar answer is easier to read as reserved bits, a namespace flag, and two payout fields: bits 254...240 must be zero, 0 in bit 255 is the invalid namespace, and 1 means the payout fields must sum to numTicks.</span></div>
 					<div class="legend" aria-label="Scalar encoding diagram legend">
 						<span class="legend-item"><span class="legend-swatch teal"></span>Namespace bit</span>
 						<span class="legend-item"><span class="legend-swatch gold"></span>First payout</span>

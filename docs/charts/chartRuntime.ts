@@ -7,7 +7,6 @@ import {
 	calculateCollateralRepairModel,
 	calculateAuctionModel,
 	calculateForkThresholdSeries,
-	contractInteractionEdges,
 	ESCALATION_ACTIVATION_DELAY_DAYS,
 	ESCALATION_TIME_LENGTH_DAYS,
 	quantitativeChartAxisLabels,
@@ -15,10 +14,7 @@ import {
 } from './chartModels'
 import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
-
-declare function require(path: './diagramSpecs.json'): unknown
-
-const diagramSpecsSource = require('./diagramSpecs.json')
+import chartSpecsSource from 'virtual:diagram-layouts'
 
 type ChartNode = {
 	attributes?: Record<string, string>
@@ -104,10 +100,10 @@ function parseChartSpec(value: unknown, chartId: string): ChartSpec {
 	return { ariaDescription, ariaLabel, height, nodes: nodes.map(parseChartNode), width }
 }
 
-if (!isRecord(diagramSpecsSource)) {
+if (!isRecord(chartSpecsSource)) {
 	throw new Error('Plot diagram specifications must be an object')
 }
-const specs = Object.fromEntries(Object.entries(diagramSpecsSource).map(([chartId, value]) => [chartId, parseChartSpec(value, chartId)]))
+const specs = Object.fromEntries(Object.entries(chartSpecsSource).map(([chartId, value]) => [chartId, parseChartSpec(value, chartId)]))
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 
 type DiagramRect = {
@@ -161,6 +157,8 @@ function textContent(node: ChartNode): string {
 
 function textStyle(className: string | undefined): { fontSize: number; fontWeight: number } {
 	if (className === 'svg-label') return { fontSize: 17, fontWeight: 800 }
+	if (className === 'elk-edge-label') return { fontSize: 11, fontWeight: 700 }
+	if (className === 'elk-panel-description') return { fontSize: 11, fontWeight: 500 }
 	if (className === 'svg-micro') return { fontSize: 11, fontWeight: 650 }
 	return { fontSize: 13, fontWeight: className === 'svg-small' ? 650 : 500 }
 }
@@ -425,6 +423,7 @@ function readInput(container: Element | null, name: string, fallback = 0): numbe
 
 function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-statoblast-escalation-cost-curve']
+	const compact = spec.width < 480
 	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
 	const startBond = readInput(simulator, 'startBond', 1)
 	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
@@ -491,7 +490,7 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
+		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: compact ? [0, 52] : [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
 		y: { domain: [0, Math.max(nonDecisionThreshold * 1.08, 1)], grid: true, label: axes.y, tickFormat: (value: number) => `${value.toFixed(1)} REP` },
 	}) as SVGSVGElement
 }
@@ -564,362 +563,9 @@ function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
 	}) as SVGSVGElement
 }
 
-function contractInteractionChart(spec: ChartSpec): SVGSVGElement {
-	const panels = [
-		{ id: 'deploy', subtitle: 'Construction-time validation and deployment', title: '1. Deploy & wire', x1: 0.1, x2: 11.9, y1: 0.1, y2: 3.2 },
-		{ id: 'runtime', subtitle: 'Claims, dispute escrow, and guarded price execution', title: '2. Operate & resolve', x1: 0.1, x2: 11.9, y1: 3.45, y2: 6.55 },
-		{ id: 'fork', subtitle: 'Child creation, REP migration, state migration, and backing repair', title: '3. Fork & repair', x1: 0.1, x2: 11.9, y1: 6.8, y2: 11.15 },
-	]
-	const nodes = [
-		{ fill: 'registry', id: 'deploy-question', label: 'Question Data', x1: 0.4, x2: 2.2, y1: 0.65, y2: 1.25 },
-		{ fill: 'registry', id: 'deploy-zoltar', label: 'Zoltar', x1: 0.4, x2: 2.2, y1: 1.5, y2: 2.1 },
-		{ fill: 'registry', id: 'deploy-rep', label: 'Reputation Token', x1: 0.4, x2: 2.2, y1: 2.35, y2: 2.95 },
-		{ fill: 'factory', id: 'deploy-factory', label: 'Pool Factory', x1: 4, x2: 6.1, y1: 1.5, y2: 2.1 },
-		{ fill: 'market', id: 'deploy-pool', label: 'Security Pool', x1: 7.4, x2: 9.3, y1: 0.65, y2: 1.25 },
-		{ fill: 'market', id: 'deploy-share', label: 'Share Token', x1: 9.7, x2: 11.5, y1: 1.5, y2: 2.1 },
-		{ fill: 'oracle', id: 'deploy-coordinator', label: 'Price Coordinator', x1: 7.4, x2: 9.3, y1: 2.35, y2: 2.95 },
-		{ fill: 'market', id: 'runtime-pool', label: 'Security Pool', x1: 0.4, x2: 2.3, y1: 4.75, y2: 5.35 },
-		{ fill: 'market', id: 'runtime-share', label: 'Share Token', x1: 3, x2: 4.9, y1: 3.95, y2: 4.55 },
-		{ fill: 'resolution', id: 'runtime-escalation', label: 'Escalation Game', x1: 3, x2: 4.9, y1: 5.55, y2: 6.15 },
-		{ fill: 'oracle', id: 'runtime-coordinator', label: 'Price Coordinator', x1: 5.3, x2: 7.5, y1: 4.75, y2: 5.35 },
-		{ fill: 'oracle', id: 'runtime-oracle', label: 'OpenOracle', x1: 9.1, x2: 11.2, y1: 4.75, y2: 5.35 },
-		{ fill: 'market', id: 'fork-share', label: 'Share Token', x1: 0.4, x2: 2.3, y1: 7.35, y2: 7.95 },
-		{ fill: 'resolution', id: 'fork-escalation', label: 'Escalation Game', x1: 0.4, x2: 2.3, y1: 8.3, y2: 8.9 },
-		{ fill: 'fork', id: 'fork-proxy', label: 'Migration Proxy', x1: 0.4, x2: 2.3, y1: 9.25, y2: 9.85 },
-		{ fill: 'registry', id: 'fork-zoltar', label: 'Zoltar', x1: 0.4, x2: 2.3, y1: 10.2, y2: 10.8 },
-		{ fill: 'fork', id: 'fork-forker', label: 'Pool Forker', x1: 4.5, x2: 6.7, y1: 8.65, y2: 9.35 },
-		{ fill: 'factory', id: 'fork-factory', label: 'Pool Factory', x1: 9.1, x2: 11.2, y1: 7.35, y2: 7.95 },
-		{ fill: 'market', id: 'fork-pool', label: 'Security Pool', x1: 9.1, x2: 11.2, y1: 8.3, y2: 8.9 },
-		{ fill: 'fork', id: 'fork-auction', label: 'Truth Auction', x1: 9.1, x2: 11.2, y1: 9.25, y2: 9.85 },
-	]
-	const routedEdgeIds = new Set(contractInteractionEdges.map(edge => edge.id))
-	const routedEdges = [
-		{
-			id: 'factory-question-validation',
-			labelX: 3.05,
-			labelY: 1.28,
-			receiverNodeId: 'deploy-question',
-			sourceNodeId: 'deploy-factory',
-			points: [
-				{ x: 4, y: 1.63 },
-				{ x: 3.1, y: 1.63 },
-				{ x: 3.1, y: 0.95 },
-				{ x: 2.2, y: 0.95 },
-			],
-		},
-		{
-			id: 'factory-universe-lookup',
-			labelX: 3.1,
-			labelY: 1.68,
-			receiverNodeId: 'deploy-zoltar',
-			sourceNodeId: 'deploy-factory',
-			points: [
-				{ x: 4, y: 1.8 },
-				{ x: 2.2, y: 1.8 },
-			],
-		},
-		{
-			id: 'factory-pool-deployment',
-			labelX: 6.78,
-			labelY: 1.28,
-			receiverNodeId: 'deploy-pool',
-			sourceNodeId: 'deploy-factory',
-			points: [
-				{ x: 6.1, y: 1.63 },
-				{ x: 6.75, y: 1.63 },
-				{ x: 6.75, y: 0.95 },
-				{ x: 7.4, y: 0.95 },
-			],
-		},
-		{
-			id: 'factory-share-token-deployment',
-			labelX: 7.9,
-			labelY: 1.68,
-			receiverNodeId: 'deploy-share',
-			sourceNodeId: 'deploy-factory',
-			points: [
-				{ x: 6.1, y: 1.8 },
-				{ x: 9.7, y: 1.8 },
-			],
-		},
-		{
-			id: 'factory-price-coordinator-deployment',
-			labelX: 6.78,
-			labelY: 2.32,
-			receiverNodeId: 'deploy-coordinator',
-			sourceNodeId: 'deploy-factory',
-			points: [
-				{ x: 6.1, y: 1.97 },
-				{ x: 6.75, y: 1.97 },
-				{ x: 6.75, y: 2.65 },
-				{ x: 7.4, y: 2.65 },
-			],
-		},
-		{
-			id: 'zoltar-reputation-token-lifecycle',
-			labelX: 2.28,
-			labelY: 2.23,
-			receiverNodeId: 'deploy-rep',
-			sourceNodeId: 'deploy-zoltar',
-			points: [
-				{ x: 1.3, y: 2.1 },
-				{ x: 1.3, y: 2.35 },
-			],
-		},
-		{
-			id: 'pool-share-token-claims',
-			labelX: 3.08,
-			labelY: 4.62,
-			receiverNodeId: 'runtime-share',
-			sourceNodeId: 'runtime-pool',
-			points: [
-				{ x: 2.3, y: 4.92 },
-				{ x: 2.65, y: 4.92 },
-				{ x: 2.65, y: 4.25 },
-				{ x: 3, y: 4.25 },
-			],
-		},
-		{
-			id: 'pool-escalation-game-resolution',
-			labelX: 2.3,
-			labelY: 5.73,
-			receiverNodeId: 'runtime-escalation',
-			sourceNodeId: 'runtime-pool',
-			points: [
-				{ x: 1.35, y: 5.35 },
-				{ x: 1.35, y: 5.85 },
-				{ x: 3, y: 5.85 },
-			],
-		},
-		{
-			id: 'pool-price-read',
-			labelX: 3.8,
-			labelY: 4.88,
-			receiverNodeId: 'runtime-coordinator',
-			sourceNodeId: 'runtime-pool',
-			points: [
-				{ x: 2.3, y: 4.95 },
-				{ x: 5.3, y: 4.95 },
-			],
-		},
-		{
-			id: 'coordinator-pool-execute',
-			labelX: 3.8,
-			labelY: 5.28,
-			receiverNodeId: 'runtime-pool',
-			sourceNodeId: 'runtime-coordinator',
-			points: [
-				{ x: 5.3, y: 5.2 },
-				{ x: 2.3, y: 5.2 },
-			],
-		},
-		{
-			id: 'coordinator-oracle-report',
-			labelX: 8.3,
-			labelY: 4.88,
-			receiverNodeId: 'runtime-oracle',
-			sourceNodeId: 'runtime-coordinator',
-			points: [
-				{ x: 7.5, y: 4.95 },
-				{ x: 9.1, y: 4.95 },
-			],
-		},
-		{
-			id: 'oracle-coordinator-callback',
-			labelX: 8.3,
-			labelY: 5.28,
-			receiverNodeId: 'runtime-coordinator',
-			sourceNodeId: 'runtime-oracle',
-			points: [
-				{ x: 9.1, y: 5.2 },
-				{ x: 7.5, y: 5.2 },
-			],
-		},
-		{
-			id: 'share-token-forker-migration',
-			labelX: 3.9,
-			labelY: 8.2,
-			receiverNodeId: 'fork-forker',
-			sourceNodeId: 'fork-share',
-			points: [
-				{ x: 2.3, y: 7.65 },
-				{ x: 3.9, y: 7.65 },
-				{ x: 3.9, y: 8.75 },
-				{ x: 4.5, y: 8.75 },
-			],
-		},
-		{
-			id: 'forker-escalation-snapshot',
-			labelX: 3.43,
-			labelY: 8.75,
-			receiverNodeId: 'fork-escalation',
-			sourceNodeId: 'fork-forker',
-			points: [
-				{ x: 4.5, y: 8.83 },
-				{ x: 3.45, y: 8.83 },
-				{ x: 3.45, y: 8.6 },
-				{ x: 2.3, y: 8.6 },
-			],
-		},
-		{
-			id: 'forker-migration-proxy',
-			labelX: 3.4,
-			labelY: 9.5,
-			receiverNodeId: 'fork-proxy',
-			sourceNodeId: 'fork-forker',
-			points: [
-				{ x: 4.5, y: 9.17 },
-				{ x: 3.45, y: 9.17 },
-				{ x: 3.45, y: 9.55 },
-				{ x: 2.3, y: 9.55 },
-			],
-		},
-		{
-			id: 'migration-proxy-zoltar',
-			labelX: 2.3,
-			labelY: 10.02,
-			receiverNodeId: 'fork-zoltar',
-			sourceNodeId: 'fork-proxy',
-			points: [
-				{ x: 1.35, y: 9.85 },
-				{ x: 1.35, y: 10.2 },
-			],
-		},
-		{
-			id: 'forker-child-deployment',
-			labelX: 7.95,
-			labelY: 7.78,
-			receiverNodeId: 'fork-factory',
-			sourceNodeId: 'fork-forker',
-			points: [
-				{ x: 6.7, y: 8.78 },
-				{ x: 6.95, y: 8.78 },
-				{ x: 6.95, y: 7.65 },
-				{ x: 9.1, y: 7.65 },
-			],
-		},
-		{
-			id: 'forker-pool-migration',
-			labelX: 7.92,
-			labelY: 8.68,
-			receiverNodeId: 'fork-pool',
-			sourceNodeId: 'fork-forker',
-			points: [
-				{ x: 6.7, y: 9 },
-				{ x: 9.1, y: 8.6 },
-			],
-		},
-		{
-			id: 'forker-truth-auction',
-			labelX: 8.02,
-			labelY: 9.48,
-			receiverNodeId: 'fork-auction',
-			sourceNodeId: 'fork-forker',
-			points: [
-				{ x: 6.7, y: 9.17 },
-				{ x: 8, y: 9.17 },
-				{ x: 8, y: 9.55 },
-				{ x: 9.1, y: 9.55 },
-			],
-		},
-	]
-	const edgeById = new Map(contractInteractionEdges.map(edge => [edge.id, edge]))
-	const nodeById = new Map(nodes.map(node => [node.id, node]))
-	const panelById = new Map(panels.map(panel => [panel.id, panel]))
-	const routedEdgeIdSet = new Set(routedEdges.map(edge => edge.id))
-	if (routedEdgeIdSet.size !== routedEdgeIds.size || [...routedEdgeIds].some(edgeId => !routedEdgeIdSet.has(edgeId))) {
-		throw new Error('Contract interaction chart routed edges do not match the shared interaction registry')
-	}
-	function panelForPhase(phase: string): string {
-		switch (phase) {
-			case 'Deployment':
-			case 'Universe lifecycle':
-				return 'deploy'
-			case 'Market runtime':
-			case 'Price discovery':
-			case 'Price settlement':
-			case 'Resolution':
-			case 'Risk execution':
-			case 'Risk operations':
-				return 'runtime'
-			case 'Backing repair':
-			case 'Fork migration':
-			case 'Fork snapshot':
-			case 'Share migration':
-				return 'fork'
-			default:
-				throw new Error(`Contract interaction chart has no panel for phase ${phase}`)
-		}
-	}
-	function pointTouchesNodeBoundary(point: { x: number; y: number }, node: (typeof nodes)[number]): boolean {
-		const tolerance = 0.000_001
-		const withinX = point.x >= node.x1 - tolerance && point.x <= node.x2 + tolerance
-		const withinY = point.y >= node.y1 - tolerance && point.y <= node.y2 + tolerance
-		const touchesHorizontal = Math.abs(point.y - node.y1) <= tolerance || Math.abs(point.y - node.y2) <= tolerance
-		const touchesVertical = Math.abs(point.x - node.x1) <= tolerance || Math.abs(point.x - node.x2) <= tolerance
-		return (withinX && touchesHorizontal) || (withinY && touchesVertical)
-	}
-	for (const route of routedEdges) {
-		const registryEdge = edgeById.get(route.id)
-		const sourceNode = nodeById.get(route.sourceNodeId)
-		const receiverNode = nodeById.get(route.receiverNodeId)
-		const firstPoint = route.points[0]
-		const lastPoint = route.points[route.points.length - 1]
-		if (registryEdge === undefined || sourceNode === undefined || receiverNode === undefined || firstPoint === undefined || lastPoint === undefined) {
-			throw new Error(`Contract interaction chart route ${route.id} is incomplete`)
-		}
-		const panel = panelForPhase(registryEdge.phase)
-		const panelBounds = panelById.get(panel)
-		if (sourceNode.label !== registryEdge.source || receiverNode.label !== registryEdge.receiver) {
-			throw new Error(`Contract interaction chart route ${route.id} does not match registry direction ${registryEdge.source} to ${registryEdge.receiver}`)
-		}
-		if (panelBounds === undefined || !sourceNode.id.startsWith(`${panel}-`) || !receiverNode.id.startsWith(`${panel}-`)) {
-			throw new Error(`Contract interaction chart route ${route.id} is not in its ${panel} phase panel`)
-		}
-		const sourceInsidePanel = sourceNode.x1 >= panelBounds.x1 && sourceNode.x2 <= panelBounds.x2 && sourceNode.y1 >= panelBounds.y1 && sourceNode.y2 <= panelBounds.y2
-		const receiverInsidePanel = receiverNode.x1 >= panelBounds.x1 && receiverNode.x2 <= panelBounds.x2 && receiverNode.y1 >= panelBounds.y1 && receiverNode.y2 <= panelBounds.y2
-		const routeInsidePanel = route.points.every(point => point.x >= panelBounds.x1 && point.x <= panelBounds.x2 && point.y >= panelBounds.y1 && point.y <= panelBounds.y2)
-		if (!sourceInsidePanel || !receiverInsidePanel || !routeInsidePanel) {
-			throw new Error(`Contract interaction chart route ${route.id} leaves its ${panel} phase panel bounds`)
-		}
-		if (!pointTouchesNodeBoundary(firstPoint, sourceNode) || !pointTouchesNodeBoundary(lastPoint, receiverNode)) {
-			throw new Error(`Contract interaction chart route ${route.id} does not touch its source and receiver boundaries`)
-		}
-	}
-	const panelTitles = panels.map(panel => ({ label: panel.title, x: panel.x1 + 0.22, y: panel.y1 + 0.27 }))
-	const panelSubtitles = panels.map(panel => ({ label: panel.subtitle, x: panel.x1 + 2.2, y: panel.y1 + 0.27 }))
-	const routeLabels = routedEdges.map(route => {
-		const registryEdge = edgeById.get(route.id)
-		if (registryEdge === undefined) throw new Error(`Contract interaction chart route ${route.id} has no registry edge`)
-		return { label: registryEdge.action, x: route.labelX, y: route.labelY }
-	})
-	return plot({
-		ariaDescription: spec.ariaDescription,
-		ariaLabel: spec.ariaLabel,
-		color: {
-			domain: ['registry', 'factory', 'market', 'resolution', 'oracle', 'fork'],
-			range: ['var(--blue-soft, #dceaf8)', 'var(--gold-soft, #f3e4c6)', 'var(--green-soft, #dcefe8)', 'var(--red-soft, #f2d9d6)', 'var(--blue-soft, #dceaf8)', 'var(--gold-soft, #f3e4c6)'],
-		},
-		height: spec.height,
-		margin: 18,
-		marks: [
-			rect(panels, { fill: 'var(--paper, #fff)', rx: 14, stroke: 'var(--line, #d8e0e4)', strokeWidth: 1.4, x1: 'x1', x2: 'x2', y1: 'y1', y2: 'y2' }),
-			text(panelTitles, { fill: 'var(--ink, #1f2529)', fontSize: 15, fontWeight: 750, text: 'label', textAnchor: 'start', x: 'x', y: 'y' }),
-			text(panelSubtitles, { fill: 'var(--muted, #465760)', fontSize: 11, text: 'label', textAnchor: 'start', x: 'x', y: 'y' }),
-			...routedEdges.map(edge => line(edge.points, { markerEnd: 'arrow', stroke: 'var(--muted, #465760)', strokeWidth: 2.2, x: 'x', y: 'y' })),
-			text(routeLabels, { fill: 'var(--muted, #465760)', fontSize: 10, fontWeight: 650, stroke: 'var(--paper, #fff)', strokeWidth: 4, text: 'label', x: 'x', y: 'y' }),
-			rect(nodes, { fill: 'fill', rx: 10, stroke: 'var(--ink, #1f2529)', strokeWidth: 1.5, x1: 'x1', x2: 'x2', y1: 'y1', y2: 'y2' }),
-			text(nodes, { fill: 'var(--ink, #1f2529)', fontSize: 12, fontWeight: 700, text: 'label', x: node => (node.x1 + node.x2) / 2, y: node => (node.y1 + node.y2) / 2 }),
-		],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { axis: null, domain: [0, 12] },
-		y: { axis: null, domain: [11.3, 0] },
-	}) as SVGSVGElement
-}
-
 function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']
+	const compact = spec.width < 480
 	const example = document.querySelector('#simple-auction-example')
 	const repInventory = Math.max(readInput(example, 'repInventory', 4), 1)
 	const ethRaiseCap = Math.max(readInput(example, 'ethRaiseCap', 10), 0)
@@ -936,6 +582,18 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 	const maxRep = Math.max(repInventory, ...bids.map(bid => bid.cumulativeRep), ...model.demandPoints.map(point => point.cumulativeRep), 1)
 	const yMax = Math.max(5.8, clearingPrice * 1.16, ...rawBids.map(bid => bid.price * 1.16))
 	const priceDescription = model.mode === 'uniform' ? `uniform clearing at ${clearingPrice.toFixed(2)} ETH per REP` : `underfunded allocation at an effective ${model.effectivePrice.toFixed(2)} ETH per REP, with a ${model.qualificationPrice.toFixed(2)} ETH per REP qualification boundary`
+	const priceLabel = compact ? `${model.mode === 'uniform' ? 'clear' : 'qualify'} ${clearingPrice.toFixed(2)}` : `${model.mode === 'uniform' ? 'clearing' : 'qualification'} ${clearingPrice.toFixed(2)} ETH/REP`
+	const legendItems = compact
+		? [
+				{ label: '● won', status: 'Accepted', x: maxRep * 0.12 },
+				{ label: '● partial', status: 'Partially filled', x: maxRep * 0.5 },
+				{ label: '● refund', status: 'Rejected', x: maxRep * 0.86 },
+			]
+		: [
+				{ label: '● accepted', status: 'Accepted', x: maxRep * 0.12 },
+				{ label: '● partially filled', status: 'Partially filled', x: maxRep * 0.42 },
+				{ label: '● rejected', status: 'Rejected', x: maxRep * 0.74 },
+			]
 
 	const chart = plot({
 		ariaDescription: `${spec.ariaDescription} The current result is ${priceDescription}, with ${model.ethRaised.toFixed(2)} ETH retained for ${repInventory.toFixed(2)} REP of inventory.`,
@@ -994,36 +652,30 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 			text(
 				[
 					{
-						label: `${model.mode === 'uniform' ? 'clearing' : 'qualification'} ${clearingPrice.toFixed(2)} ETH/REP`,
-						x: maxRep * 0.72,
+						label: priceLabel,
+						x: maxRep * (compact ? 0.96 : 0.72),
 						y: clearingPrice,
 					},
 				],
 				{
-					dx: 6,
+					dx: compact ? -4 : 6,
 					dy: -7,
 					fill: 'var(--ink, currentColor)',
 					fontSize: 12,
 					text: 'label',
-					textAnchor: 'start',
+					textAnchor: compact ? 'end' : 'start',
 					x: 'x',
 					y: 'y',
 				},
 			),
-			text(
-				[
-					{ label: '● accepted', status: 'Accepted', x: maxRep * 0.12 },
-					{ label: '● partially filled', status: 'Partially filled', x: maxRep * 0.42 },
-					{ label: '● rejected', status: 'Rejected', x: maxRep * 0.74 },
-				],
-				{
-					fill: 'status',
-					fontSize: 12,
-					text: 'label',
-					x: 'x',
-					y: yMax * 0.97,
-				},
-			),
+			text(legendItems, {
+				fill: 'status',
+				fontSize: compact ? 10 : 12,
+				text: 'label',
+				textAnchor: 'middle',
+				x: 'x',
+				y: yMax * 0.97,
+			}),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
@@ -1091,9 +743,6 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'fig-statoblast-retention-utilization') {
 		return retentionUtilizationChart(spec)
 	}
-	if (chartId === 'fig-contract-interaction-map') {
-		return contractInteractionChart(spec)
-	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
 	}
@@ -1160,7 +809,7 @@ function setDiagramExpanded(overflowEnvelope: HTMLElement, button: HTMLButtonEle
 			scrollSurface.tabIndex = 0
 			scrollSurface.setAttribute('role', 'region')
 			const diagramLabel = overflowEnvelope.getAttribute('aria-label') ?? 'diagram'
-			scrollSurface.setAttribute('aria-label', `Scrollable ${diagramLabel}. Use Left and Right Arrow keys to inspect.`)
+			scrollSurface.setAttribute('aria-label', `Scrollable ${diagramLabel}. Use the Arrow keys to inspect.`)
 		} else {
 			scrollSurface.removeAttribute('tabindex')
 			scrollSurface.removeAttribute('role')

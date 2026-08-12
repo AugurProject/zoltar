@@ -20,6 +20,48 @@
 	height: auto;
 }
 
+.plot-chart .elk-panel {
+	fill: var(--paper, #fff);
+	stroke: var(--line, #d8e0e4);
+	stroke-width: 1.4;
+}
+
+.plot-chart .elk-panel-description,
+.plot-chart .elk-edge-label {
+	fill: var(--muted, #5f6d75);
+}
+
+.plot-chart .elk-edge-label {
+	paint-order: stroke;
+	stroke: var(--paper, #fff);
+	stroke-linejoin: round;
+	stroke-width: 4px;
+}
+
+.plot-chart .svg-slate {
+	fill: var(--paper, #fff);
+	stroke: var(--muted, #5f6d75);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-teal {
+	fill: var(--teal-soft, #d8eef1);
+	stroke: var(--teal, #0b7285);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-amber {
+	fill: var(--gold-soft, #f3e4c6);
+	stroke: var(--gold, #8a5d18);
+	stroke-width: 2;
+}
+
+.plot-chart .svg-rose {
+	fill: var(--red-soft, #f2d9d6);
+	stroke: var(--red, #99453f);
+	stroke-width: 2;
+}
+
 .plot-figure-diagram:not(.plot-figure-fit) > .plot-chart {
 	width: max-content;
 	max-width: none;
@@ -122,10 +164,10 @@ body.docs-diagram-expanded {
 .plot-figure-expanded > .plot-chart {
 	display: flex;
 	min-height: 0;
-	align-items: center;
-	justify-content: center;
-	overflow-x: auto;
-	overscroll-behavior-x: contain;
+	align-items: flex-start;
+	justify-content: flex-start;
+	overflow: auto;
+	overscroll-behavior: contain;
 	scrollbar-width: thin;
 }
 
@@ -135,10 +177,12 @@ body.docs-diagram-expanded {
 }
 
 .plot-figure-expanded > .plot-chart > svg {
-	width: 100% !important;
+	width: var(--diagram-expanded-width, 70rem) !important;
 	height: auto !important;
-	max-width: 100% !important;
-	max-height: 100% !important;
+	min-width: var(--diagram-expanded-width, 70rem) !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin-inline: auto;
 }
 
 #fig-statoblast-oracle-flow.plot-figure-expanded > .plot-chart {
@@ -203,6 +247,8 @@ body.doc-openoracle {
 	--blue-soft: #dceaf8;
 	--green: #1d735d;
 	--green-soft: #dcefe8;
+	--teal: #0b7285;
+	--teal-soft: #d8eef1;
 	--gold: #8a5d18;
 	--gold-soft: #f3e4c6;
 	--red: #99453f;
@@ -223,6 +269,8 @@ body.doc-openoracle {
 		--blue-soft: #172a41;
 		--green: #75cdae;
 		--green-soft: #153a30;
+		--teal: #65c7d4;
+		--teal-soft: #12363c;
 		--gold: #e6bf70;
 		--gold-soft: #3b2f18;
 		--red: #ee968f;
@@ -1085,6 +1133,8 @@ body.paper-statoblast {
 	--table-head: #eef5f2;
 	--green: #1c7659;
 	--green-soft: #d9eee7;
+	--teal: #0b7285;
+	--teal-soft: #d8eef1;
 	--blue: #285f9f;
 	--blue-soft: #dce9f8;
 	--gold: #8a5c14;
@@ -1136,6 +1186,8 @@ body.paper-zoltar {
 		--table-head: #232b29;
 		--green: #72cba9;
 		--green-soft: #14372c;
+		--teal: #65c7d4;
+		--teal-soft: #12363c;
 		--blue: #8bb9f0;
 		--blue-soft: #15283f;
 		--gold: #e6b65d;
@@ -2015,10 +2067,13 @@ body.paper-statoblast .legend-swatch {
 	border: 1px solid currentColor;
 	border-radius: 0.2rem;
 }
-body.paper-statoblast .legend-swatch.teal,
 body.paper-statoblast .legend-swatch.green {
 	background: var(--green-soft);
 	color: var(--green);
+}
+body.paper-statoblast .legend-swatch.teal {
+	background: var(--teal-soft);
+	color: var(--teal);
 }
 body.paper-statoblast .legend-swatch.gold {
 	background: var(--gold-soft);
@@ -2037,10 +2092,14 @@ body.paper-statoblast .svg-box {
 	stroke: var(--line);
 	stroke-width: 2;
 }
-body.paper-statoblast .svg-green,
-body.paper-statoblast .svg-teal {
+body.paper-statoblast .svg-green {
 	fill: var(--green-soft);
 	stroke: var(--green);
+	stroke-width: 2;
+}
+body.paper-statoblast .svg-teal {
+	fill: var(--teal-soft);
+	stroke: var(--teal);
 	stroke-width: 2;
 }
 body.paper-statoblast .svg-blue {
@@ -2386,8 +2445,8 @@ body.paper-zoltar {
 	--green-soft: #d9eee7;
 	--gold: #8a5c14;
 	--gold-soft: #f3dfb8;
-	--teal: #1c7659;
-	--teal-soft: #d9eee7;
+	--teal: #0b7285;
+	--teal-soft: #d8eef1;
 	--red: #9f463d;
 	--red-soft: #f2d2cb;
 	--blue: #285f9f;
@@ -2439,8 +2498,8 @@ body.paper-zoltar {
 		--green-soft: #14372c;
 		--gold: #e6b65d;
 		--gold-soft: #3a2d15;
-		--teal: #72cba9;
-		--teal-soft: #14372c;
+		--teal: #65c7d4;
+		--teal-soft: #12363c;
 		--red: #ef8e82;
 		--red-soft: #3d201d;
 		--blue: #8bb9f0;
@@ -3038,10 +3097,13 @@ body.paper-zoltar .legend-swatch {
 	border: 1px solid currentColor;
 	border-radius: 0.2rem;
 }
-body.paper-zoltar .legend-swatch.teal,
 body.paper-zoltar .legend-swatch.green {
 	background: var(--green-soft);
 	color: var(--green);
+}
+body.paper-zoltar .legend-swatch.teal {
+	background: var(--teal-soft);
+	color: var(--teal);
 }
 body.paper-zoltar .legend-swatch.gold {
 	background: var(--gold-soft);
@@ -3109,10 +3171,14 @@ body.paper-zoltar .svg-box {
 	stroke: var(--line);
 	stroke-width: 2;
 }
-body.paper-zoltar .svg-green,
-body.paper-zoltar .svg-teal {
+body.paper-zoltar .svg-green {
 	fill: var(--green-soft);
 	stroke: var(--green);
+	stroke-width: 2;
+}
+body.paper-zoltar .svg-teal {
+	fill: var(--teal-soft);
+	stroke: var(--teal);
 	stroke-width: 2;
 }
 body.paper-zoltar .svg-gold {
@@ -3363,12 +3429,12 @@ body.paper-zoltar .footer-note {
 		--table-head: #eeeae1;
 		--green: #176653;
 		--green-soft: #dcece5;
-		--blue: #176653;
-		--blue-soft: #dcece5;
+		--blue: #245f9f;
+		--blue-soft: #dceaf8;
 		--gold: #9b4f2d;
 		--gold-soft: #f2dfd4;
-		--teal: #176653;
-		--teal-soft: #dcece5;
+		--teal: #0b7285;
+		--teal-soft: #d8eef1;
 		--red: #98483b;
 		--red-soft: #f2d9d3;
 		--accent: #176653;
@@ -3637,7 +3703,7 @@ body.paper-zoltar .footer-note {
 	}
 
 	.plot-figure-expanded {
-		grid-template-rows: auto auto minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr) auto;
 	}
 
 	.plot-figure-expanded > .plot-chart {
@@ -3645,7 +3711,8 @@ body.paper-zoltar .footer-note {
 	}
 
 	.plot-figure-expanded > .diagram-caption {
-		max-height: none;
+		max-height: min(28vh, 12rem);
+		overflow-y: auto;
 	}
 
 	body.paper-statoblast #fig-statoblast-proportional-migration > .plot-chart {
