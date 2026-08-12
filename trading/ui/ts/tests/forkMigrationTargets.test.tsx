@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils'
 import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../features/ForkMigrationTargets.tsx'
+import { DemoScalarForkMigration } from '../features/MarketDetail.tsx'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
 let cleanup: (() => Promise<void>) | undefined
@@ -66,6 +67,18 @@ async function click(element: HTMLElement) {
 }
 
 describe('fork migration target selection', () => {
+	test('keeps display-ordered scalar targets eligible for the simulated submit state', async () => {
+		const rendered = await renderIntoDocument(<DemoScalarForkMigration />)
+		cleanup = rendered.cleanup
+
+		await click(buttonByText(rendered.container, 'Simulate migration to 2 branches'))
+
+		const submit = buttonByText(rendered.container, 'Submit migration to 2 child branches')
+		expect(submit.disabled).toBeFalse()
+		expect(rendered.container.textContent).toContain('Authoritative migration simulation ready')
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection strong')).map(target => target.textContent)).toEqual(['-2.5 °C', '0 °C'])
+	})
+
 	test('adds many arbitrary scalar outcomes and the invalid branch without raw packed input', async () => {
 		const context = scalarContext()
 		const rendered = await renderIntoDocument(<Harness context={context} />)
@@ -84,6 +97,7 @@ describe('fork migration target selection', () => {
 		expect(rendered.container.textContent).toContain('-50 °C')
 		expect(rendered.container.textContent).toContain('50 °C')
 		expect(rendered.container.textContent).not.toContain(getScalarOutcomeIndex(context, 50n).toString())
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection strong')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
 	})
 
 	test('rejects a scalar tick beyond the fork question range instead of silently changing it', async () => {

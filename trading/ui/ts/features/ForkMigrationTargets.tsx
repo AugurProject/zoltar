@@ -8,14 +8,8 @@ function sameTarget(left: ForkTarget, right: ForkTarget) {
 	return left.outcomeIndex === right.outcomeIndex
 }
 
-function compareTargets(left: ForkTarget, right: ForkTarget) {
-	if (left.outcomeIndex < right.outcomeIndex) return -1
-	if (left.outcomeIndex > right.outcomeIndex) return 1
-	return 0
-}
-
 function toggleTarget(selectedTargets: readonly ForkTarget[], target: ForkTarget) {
-	return selectedTargets.some(selected => sameTarget(selected, target)) ? selectedTargets.filter(selected => !sameTarget(selected, target)) : [...selectedTargets, target].sort(compareTargets)
+	return selectedTargets.some(selected => sameTarget(selected, target)) ? selectedTargets.filter(selected => !sameTarget(selected, target)) : [...selectedTargets, target]
 }
 
 function TargetStatus({ target }: { target: ForkTarget }) {

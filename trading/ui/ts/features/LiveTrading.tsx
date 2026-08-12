@@ -2312,7 +2312,7 @@ export function settlementQuoteMatchesInputs(
 ) {
 	if (quote === undefined || quote.inputRevision !== inputRevision || quote.market.pool !== market.pool || quote.operation !== operation || quote.account !== account || quote.walletClient !== walletClient) return false
 	if (quote.operation === 'redeem-complete-set') return quote.amount === parsedAmount
-	if (quote.operation === 'migrate-shares') return quote.sourceOutcome === sourceOutcome && quote.targetOutcomeIndexes.length === targetOutcomeIndexes.length && quote.targetOutcomeIndexes.every((target, index) => target === targetOutcomeIndexes[index])
+	if (quote.operation === 'migrate-shares') return quote.sourceOutcome === sourceOutcome && quote.targetOutcomeIndexes.length === targetOutcomeIndexes.length && quote.targetOutcomeIndexes.every(target => targetOutcomeIndexes.includes(target))
 	return true
 }
 

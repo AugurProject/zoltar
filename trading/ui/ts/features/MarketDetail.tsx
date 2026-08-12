@@ -179,9 +179,10 @@ function sourceOutcomeFromValue(value: string) {
 	throw new Error('Unknown demo source outcome')
 }
 
-function DemoScalarForkMigration() {
+export function DemoScalarForkMigration() {
 	const [sourceOutcome, setSourceOutcome] = useState<'INVALID' | 'YES' | 'NO'>('YES')
 	const [selectedTargets, setSelectedTargets] = useState<readonly ForkTarget[]>(demoScalarForkContext.availableTargets)
+	const [settlementState, setSettlementState] = useState<'idle' | 'ready' | 'confirmed'>('idle')
 	const batchBlocker = forkMigrationBatchBlocker(selectedTargets)
 	const batchWarning = forkMigrationBatchWarning(selectedTargets)
 	return (
@@ -195,7 +196,13 @@ function DemoScalarForkMigration() {
 			<div class='fork-source-step'>
 				<label class='field'>
 					<span>Source share</span>
-					<select value={sourceOutcome} onChange={event => setSourceOutcome(sourceOutcomeFromValue(event.currentTarget.value))}>
+					<select
+						value={sourceOutcome}
+						onChange={event => {
+							setSourceOutcome(sourceOutcomeFromValue(event.currentTarget.value))
+							setSettlementState('idle')
+						}}
+					>
 						<option value='INVALID'>INVALID</option>
 						<option value='YES'>YES</option>
 						<option value='NO'>NO</option>
@@ -203,11 +210,23 @@ function DemoScalarForkMigration() {
 				</label>
 				<p>Migration permanently locks parent-universe transfers for {sourceOutcome}. The same source can still migrate later into other children.</p>
 			</div>
-			<ForkMigrationTargets context={demoScalarForkContext} selectedTargets={selectedTargets} disabled={false} onChange={setSelectedTargets} />
+			<ForkMigrationTargets
+				context={demoScalarForkContext}
+				selectedTargets={selectedTargets}
+				disabled={settlementState === 'confirmed'}
+				onChange={targets => {
+					setSelectedTargets(targets)
+					setSettlementState('idle')
+				}}
+			/>
 			{batchWarning === undefined ? null : <p class='warning'>{batchWarning}</p>}
-			<button class='primary-action' disabled={selectedTargets.length === 0 || batchBlocker !== undefined}>
-				Simulate migration to {selectedTargets.length.toString()} {selectedTargets.length === 1 ? 'branch' : 'branches'}
-			</button>
+			{settlementState === 'ready' ? <p role='status'>Authoritative migration simulation ready for the selected source and child branches.</p> : null}
+			{settlementState === 'confirmed' ? <p role='status'>Simulated migration confirmed.</p> : null}
+			{settlementState === 'confirmed' ? null : (
+				<button class='primary-action' disabled={selectedTargets.length === 0 || batchBlocker !== undefined} onClick={() => setSettlementState(settlementState === 'ready' ? 'confirmed' : 'ready')}>
+					{settlementState === 'ready' ? `Submit migration to ${selectedTargets.length.toString()} child ${selectedTargets.length === 1 ? 'branch' : 'branches'}` : `Simulate migration to ${selectedTargets.length.toString()} ${selectedTargets.length === 1 ? 'branch' : 'branches'}`}
+				</button>
+			)}
 		</section>
 	)
 }

@@ -104,11 +104,13 @@ describe('live settlement contract encoding', () => {
 			}),
 		})
 
-		const scalarTargets = [12n, 42n, 99n]
-		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: scalarTargets })
+		const selectedScalarTargets = [99n, 42n, 12n]
+		const normalizedScalarTargets = [12n, 42n, 99n]
+		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: selectedScalarTargets })
 		const uiQuote = { ...quote, account, walletClient: client, inputRevision: 0 }
-		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', scalarTargets, account, client)).toBeTrue()
-		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', scalarTargets, account, client)).toBeFalse()
+		expect(quote.targetOutcomeIndexes).toEqual(normalizedScalarTargets)
+		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeTrue()
+		expect(settlementQuoteMatchesInputs(uiQuote, 1, market, 'migrate-shares', undefined, 'YES', selectedScalarTargets, account, client)).toBeFalse()
 		expect(settlementQuoteMatchesInputs(uiQuote, 0, market, 'migrate-shares', undefined, 'YES', [12n, 43n, 99n], account, client)).toBeFalse()
 		expect(settlementQuoteCanSubmit('ready', undefined, true)).toBeTrue()
 		expect(settlementQuoteCanSubmit('loading', undefined, true)).toBeFalse()
@@ -116,7 +118,7 @@ describe('live settlement contract encoding', () => {
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, scalarTargets] })
+			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
 		}
 	})
 
