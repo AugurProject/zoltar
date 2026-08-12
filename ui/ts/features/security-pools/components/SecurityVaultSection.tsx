@@ -296,6 +296,8 @@ export function SecurityVaultSection({
 	securityVaultActiveAction,
 	securityVaultRepApproval,
 	walletRepBalanceAttoRep,
+	walletRepBalanceError,
+	walletRepBalanceLoading = false,
 	securityVaultResult,
 	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
@@ -568,6 +570,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
+			<ErrorNotice message={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError} />
 			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRepToVault}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
@@ -617,10 +620,9 @@ export function SecurityVaultSection({
 							</small>
 						</label>
 						<MetricGrid>
-							<MetricField label={securityPoolCopy.walletRep}>
-								<CurrencyValue value={walletRepBalanceAttoRep} suffix={commonCopy.rep} />
-							</MetricField>
+							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={commonCopy.rep} />}</MetricField>
 						</MetricGrid>
+						<ErrorNotice message={walletRepBalanceError} />
 						<TokenApprovalControl
 							actionLabel={securityPoolCopy.depositingRep}
 							allowanceError={securityVaultRepApproval.error}
@@ -912,6 +914,7 @@ export function SecurityVaultSection({
 			</SectionBlock>
 
 			<ErrorNotice message={securityVaultError} />
+			<ErrorNotice message={walletRepBalanceError} />
 		</>
 	)
 	const sections = (

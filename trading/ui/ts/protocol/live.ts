@@ -135,26 +135,44 @@ const pair = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol']
 const router = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 export const UI_SLIPPAGE_BPS = 50n
 
-export function minimumAfterSlippage(amount: bigint) {
-	return (amount * (10_000n - UI_SLIPPAGE_BPS)) / 10_000n
+export function requireTransactionSlippageBps(slippageBps: bigint) {
+	if (slippageBps < 0n || slippageBps > 500n) throw new Error('Slippage must be between 0% and 5%')
 }
 
-export function maximumAfterSlippage(amount: bigint) {
-	return (amount * (10_000n + UI_SLIPPAGE_BPS) + 9_999n) / 10_000n
+export function minimumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
+	requireTransactionSlippageBps(slippageBps)
+	return (amount * (10_000n - slippageBps)) / 10_000n
+}
+
+export function maximumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
+	requireTransactionSlippageBps(slippageBps)
+	return (amount * (10_000n + slippageBps) + 9_999n) / 10_000n
 }
 
 async function latestBlockIdentity(client: Pick<WalletClient, 'getBlock'>) {
 	const block = await client.getBlock()
 	if (block.number === null || block.number === undefined || block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
-	return { blockNumber: block.number, blockHash: block.hash }
+	return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
 }
 
-async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash }>) => Promise<T>) {
+async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>) => Promise<T>) {
 	const before = await latestBlockIdentity(client)
 	const result = await simulate(before)
 	const after = await latestBlockIdentity(client)
 	if (after.blockNumber !== before.blockNumber || after.blockHash !== before.blockHash) throw new Error('Block changed during simulation; simulate again')
 	return { ...before, result }
+}
+
+type TransactionExpiry = bigint | Readonly<{ validityMinutes: bigint }>
+
+export function requireTransactionValidityMinutes(validityMinutes: bigint) {
+	if (validityMinutes < 1n || validityMinutes > 1_440n) throw new Error('Transaction validity must be between 1 and 1440 minutes')
+}
+
+function deadlineAtBlock(expiry: TransactionExpiry, blockTimestamp: bigint) {
+	if (typeof expiry === 'bigint') return expiry
+	requireTransactionValidityMinutes(expiry.validityMinutes)
+	return blockTimestamp + expiry.validityMinutes * 60n
 }
 
 async function requireQuoteBlock(client: Pick<WalletClient, 'getBlock'>, quote: Readonly<{ blockNumber: bigint; blockHash: Hash }>) {
@@ -266,6 +284,21 @@ export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
 function outcomeValue(outcome: ShareOutcome) {
 	if (outcome === 'INVALID') return 0n
 	return outcome === 'YES' ? 1n : 2n
+}
+
+export function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
+	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one fork target')
+	const normalized = [...targetOutcomeIndexes].sort((left, right) => {
+		if (left < right) return -1
+		if (left > right) return 1
+		return 0
+	})
+	for (let index = 0; index < normalized.length; index++) {
+		const outcomeIndex = normalized[index]
+		if (outcomeIndex === undefined || outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork target is outside uint256')
+		if (index > 0 && outcomeIndex === normalized[index - 1]) throw new Error('Select each fork target only once')
+	}
+	return normalized
 }
 
 export function settlementAvailability(market: MarketLifecycle, balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined) {
@@ -667,22 +700,32 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 	return { scope, invalid, yes, no, approved, lp, lpAllowance }
 }
 
-export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
+async function simulateEntryWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
+	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Create and initialize the pair before trading')
 	const {
 		blockNumber,
 		blockHash,
-		result: simulation,
-	} = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash }))
-	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares) }
+		result: { simulation, deadline },
+	} = await stableSimulation(client, async block => {
+		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+		return { simulation, deadline }
+	})
+	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
+}
+
+export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
+	requireTransactionValidityMinutes(validityMinutes)
+	return await simulateEntryWithExpiry(client, configuration, market, account, side, amount, { validityMinutes }, slippageBps)
 }
 
 type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 
 export async function submitFreshEntry(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateEntry>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
-	const refreshed = await simulateEntry(client, configuration, quote.market, account, quote.side, quote.amount, quote.deadline)
+	const refreshed = await simulateEntryWithExpiry(client, configuration, quote.market, account, quote.side, quote.amount, quote.deadline, quote.slippageBps)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Quote changed blocks during revalidation')
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
@@ -690,14 +733,19 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount }))
 }
 
-export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)) {
+async function simulateExitWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
+	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Pair is unavailable')
 	const {
 		blockNumber,
 		blockHash,
-		result: simulation,
-	} = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline], blockHash: block.blockHash }))
+		result: { simulation, deadline },
+	} = await stableSimulation(client, async block => {
+		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'exitPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, completeSets, (1n << 256n) - 1n, 0n, account, deadline], blockHash: block.blockHash })
+		return { simulation, deadline }
+	})
 	return {
 		blockNumber,
 		blockHash,
@@ -706,14 +754,20 @@ export async function simulateExit(client: WalletClient, configuration: Deployme
 		side,
 		market,
 		deadline,
-		maximumLongShares: maximumAfterSlippage(simulation.result.totalLongShares),
-		minimumEth: minimumAfterSlippage(simulation.result.ethOut),
+		slippageBps,
+		maximumLongShares: maximumAfterSlippage(simulation.result.totalLongShares, slippageBps),
+		minimumEth: minimumAfterSlippage(simulation.result.ethOut, slippageBps),
 	}
+}
+
+export async function simulateExit(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
+	requireTransactionValidityMinutes(validityMinutes)
+	return await simulateExitWithExpiry(client, configuration, market, account, side, completeSets, { validityMinutes }, slippageBps)
 }
 
 export async function submitFreshExit(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateExit>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
-	const refreshed = await simulateExit(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline)
+	const refreshed = await simulateExitWithExpiry(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline, quote.slippageBps)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Quote changed blocks during revalidation')
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
@@ -732,51 +786,74 @@ export async function approveRouter(client: WalletClient, market: LiveMarket, co
 
 export type LiquidityOperation = 'initialize' | 'add' | 'remove'
 
-export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n) {
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
+async function simulateLiquidityWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
+	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
 	if (operation === 'initialize') {
 		const {
 			blockNumber,
 			blockHash,
-			result: simulation,
-		} = await stableSimulation(client, async block =>
-			pairAddress === undefined
-				? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash }),
-		)
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
+			result: { simulation, deadline },
+		} = await stableSimulation(client, async block => {
+			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+			const simulation =
+				pairAddress === undefined
+					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+			return { simulation, deadline }
+		})
+		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
 	}
 	if (pairAddress === undefined) throw new Error('Pair is unavailable')
 	if (operation === 'add') {
-		const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, 0n, account, deadline], value: amount, blockHash: block.blockHash }))
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
+		const {
+			blockNumber,
+			blockHash,
+			result: { simulation, deadline },
+		} = await stableSimulation(client, async block => {
+			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+			return { simulation, deadline }
+		})
+		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
 	}
-	const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, amount, 0n, 0n, account, deadline], blockHash: block.blockHash }))
-	return { blockNumber, blockHash, operation, amount, conditionalYesBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
+	const {
+		blockNumber,
+		blockHash,
+		result: { simulation, deadline },
+	} = await stableSimulation(client, async block => {
+		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, amount, 0n, 0n, account, deadline], blockHash: block.blockHash })
+		return { simulation, deadline }
+	})
+	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
+}
+
+export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
+	requireTransactionValidityMinutes(validityMinutes)
+	return await simulateLiquidityWithExpiry(client, configuration, market, account, operation, amount, conditionalYesBps, { validityMinutes }, slippageBps)
 }
 
 export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateLiquidity>>, guardedWrite: GuardedWalletWrite) {
 	await requireQuoteBlock(client, quote)
-	const refreshed = await simulateLiquidity(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps)
+	const refreshed = await simulateLiquidityWithExpiry(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, quote.deadline, quote.slippageBps)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Quote changed blocks during revalidation')
-	const deadline = BigInt(Math.floor(Date.now() / 1_000) + 1_200)
 	if (quote.operation === 'initialize') {
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity), refreshed.expectedLiquidity, 'LP tokens')
+		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
 		const initializedPairAddress = quote.market.pair
 		return initializedPairAddress === undefined
-			? await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, deadline], value: quote.amount }))
-			: await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, deadline], value: quote.amount }))
+			? await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount }))
+			: await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount }))
 	}
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
 	if (quote.operation === 'add') {
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity), refreshed.expectedLiquidity, 'LP tokens')
-		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, minimumLiquidity, account, deadline], value: quote.amount }))
+		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
+		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, minimumLiquidity, account, quote.deadline], value: quote.amount }))
 	}
-	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes), refreshed.expectedYes, 'YES')
-	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo), refreshed.expectedNo, 'NO')
-	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, quote.amount, minimumYes, minimumNo, account, deadline] }))
+	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')
+	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo, quote.slippageBps), refreshed.expectedNo, 'NO')
+	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
 }
 
 export async function approveLpRouter(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, amount: bigint) {
@@ -784,33 +861,73 @@ export async function approveLpRouter(client: WalletClient, configuration: Deplo
 	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
 }
 
-export async function simulateSettlement(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: SettlementOperation, parameters: Readonly<{ amount?: bigint; deadline?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}) {
+async function simulateSettlementWithExpiryParameters(
+	client: WalletClient,
+	configuration: DeploymentConfiguration,
+	market: LiveMarket,
+	account: Address,
+	operation: SettlementOperation,
+	parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
+) {
 	if (operation === 'redeem-complete-set') {
+		requireTransactionSlippageBps(parameters.slippageBps ?? UI_SLIPPAGE_BPS)
 		const amount = parameters.amount
 		if (amount === undefined || amount <= 0n) throw new Error('Enter a positive complete-set share amount')
-		const deadline = parameters.deadline ?? BigInt(Math.floor(Date.now() / 1_000) + 1_200)
-		const { blockNumber, blockHash, result: simulation } = await stableSimulation(client, async block => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash }))
+		const expiry: TransactionExpiry = parameters.deadline ?? { validityMinutes: parameters.validityMinutes ?? 20n }
+		const slippageBps = parameters.slippageBps ?? UI_SLIPPAGE_BPS
+		const {
+			blockNumber,
+			blockHash,
+			result: { simulation, deadline },
+		} = await stableSimulation(client, async block => {
+			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash })
+			return { simulation, deadline }
+		})
 		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
-		return { blockNumber, blockHash, operation, market, amount, deadline, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result) }
+		return { blockNumber, blockHash, operation, market, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
 	}
 	if (operation === 'redeem-winning-shares') {
 		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockHash: block.blockHash }))
 		return { blockNumber, blockHash, operation, market }
 	}
-	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndex === undefined || parameters.targetOutcomeIndex < 0n) throw new Error('Select a source share and non-negative fork outcome index')
+	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a source share and at least one fork target')
 	const sourceOutcome = parameters.sourceOutcome
-	const targetOutcomeIndex = parameters.targetOutcomeIndex
+	const targetOutcomeIndexes = normalizeForkOutcomeIndexes(parameters.targetOutcomeIndexes)
 	const sourceTokenId = (market.universeId << 8n) | outcomeValue(sourceOutcome)
-	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, [targetOutcomeIndex]], blockHash: block.blockHash }))
-	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndex }
+	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, targetOutcomeIndexes], blockHash: block.blockHash }))
+	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndexes }
+}
+
+export async function simulateSettlement(
+	client: WalletClient,
+	configuration: DeploymentConfiguration,
+	market: LiveMarket,
+	account: Address,
+	operation: SettlementOperation,
+	parameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
+) {
+	if (operation === 'redeem-complete-set') {
+		const validityMinutes = parameters.validityMinutes ?? 20n
+		requireTransactionValidityMinutes(validityMinutes)
+		const amount = parameters.amount
+		const slippageBps = parameters.slippageBps
+		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(amount === undefined ? {} : { amount }), validityMinutes, ...(slippageBps === undefined ? {} : { slippageBps }) })
+	}
+	if (operation === 'migrate-shares') {
+		const sourceOutcome = parameters.sourceOutcome
+		const targetOutcomeIndexes = parameters.targetOutcomeIndexes
+		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(sourceOutcome === undefined ? {} : { sourceOutcome }), ...(targetOutcomeIndexes === undefined ? {} : { targetOutcomeIndexes }) })
+	}
+	return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation)
 }
 
 export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
-	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
-	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline }
-	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndex: quote.targetOutcomeIndex }
-	const refreshed = await simulateSettlement(client, configuration, quote.market, account, quote.operation, parameters)
+	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
+	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline, slippageBps: quote.slippageBps }
+	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndexes: quote.targetOutcomeIndexes }
+	const refreshed = await simulateSettlementWithExpiryParameters(client, configuration, quote.market, account, quote.operation, parameters)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
 	if (quote.operation === 'redeem-complete-set') {
 		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
@@ -821,5 +938,5 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 		return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
 	}
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(quote.sourceOutcome)
-	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, [quote.targetOutcomeIndex]] }))
+	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, quote.targetOutcomeIndexes] }))
 }

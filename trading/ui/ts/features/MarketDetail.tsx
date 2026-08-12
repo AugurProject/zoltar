@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
+import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { bigintToSafeNumber, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
-import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
 import { SecurityPoolAddressLink, Status } from '../components/Status.tsx'
-import { insuredExitLimitMessage } from './LiveTrading.tsx'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage } from './LiveTrading.tsx'
+import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from './ForkMigrationTargets.tsx'
 import { createExclusiveWorkflowGuard } from '../app/latestRequest.ts'
 
-type TransactionState = 'idle' | 'approval' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
+type TransactionState = 'idle' | 'preparing' | 'approval' | 'submitting' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
+
+const demoTransactionHash = `0x${'88'.repeat(32)}`
 
 function initialTransactionState(scenario: string): TransactionState {
+	if (scenario === 'preparing') return 'preparing'
 	if (scenario === 'pending') return 'pending'
 	if (scenario === 'failure') return 'reverted'
 	if (scenario === 'success') return 'confirmed'
 	if (scenario === 'approval') return 'approval'
+	if (scenario === 'submitting') return 'submitting'
 	return 'idle'
 }
 
@@ -34,20 +39,67 @@ export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closed
 	return { tone: 'warn', label: 'Preview unavailable', message: 'The current inputs cannot be quoted.' }
 }
 
-function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
+function actionLabel(pairExists: boolean, closedReason: string | undefined, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
 	if (!pairExists) return 'Create pair before trading'
 	if (closedReason !== undefined) return closedReason
-	if (transactionState === 'approval') return 'Share approval…'
-	if (transactionState === 'pending') return 'Workflow pending…'
 	return mode === 'enter' ? `Enter ${side}` : `Exit insured ${side}`
 }
 
-export function transactionMessage(transactionState: TransactionState) {
-	if (transactionState === 'approval') return 'Share approval is pending in the wallet.'
-	if (transactionState === 'pending') return 'Transaction is pending confirmation.'
-	if (transactionState === 'confirmed') return 'Confirmation shown. Balances and reserves remain unchanged.'
+export function transactionMessage(transactionState: TransactionState, mode: 'enter' | 'exit' = 'enter', side: 'YES' | 'NO' = 'YES') {
+	const action = mode === 'enter' ? `Enter ${side}` : `Insured ${side} exit`
+	if (transactionState === 'preparing') return `Preparing ${action}.`
+	if (transactionState === 'approval') return `${action} approval is pending in the wallet.`
+	if (transactionState === 'submitting') return `${action} is pending in the wallet.`
+	if (transactionState === 'pending') return `${action} is pending confirmation.`
+	if (transactionState === 'confirmed') return `${action} confirmed. Demo balances and reserves remain unchanged.`
 	if (transactionState === 'reverted') return 'Failure shown. Change the amount or outcome and try again.'
 	return undefined
+}
+
+function renderTradeSummary(quote: EnterPositionQuote | ExitPositionQuote | undefined, amountAtto: bigint | undefined, side: 'YES' | 'NO', unavailableMessage: string | undefined, estimatedExitAttoEth: bigint | undefined) {
+	if (quote === undefined || amountAtto === undefined)
+		return (
+			<div class='trade-summary trade-summary--unavailable'>
+				<div>
+					<span>Preview</span>
+					<strong>Unavailable</strong>
+				</div>
+				<p>{unavailableMessage ?? 'The current inputs cannot be quoted.'}</p>
+			</div>
+		)
+	if ('oppositeSharesSwapped' in quote)
+		return (
+			<div class='trade-summary' aria-label='Trade summary'>
+				<div>
+					<span>You pay</span>
+					<strong>{formatUnits(amountAtto, 18, 8)} ETH</strong>
+				</div>
+				<span class='trade-summary__arrow' aria-hidden='true'>
+					→
+				</span>
+				<div>
+					<span>You receive</span>
+					<strong>{formatOutcomeAmount(quote.totalLongShares, side)}</strong>
+					<small>+ {formatOutcomeAmount(quote.invalidInsurance, 'INVALID')}</small>
+				</div>
+			</div>
+		)
+	return (
+		<div class='trade-summary' aria-label='Trade summary'>
+			<div>
+				<span>You use</span>
+				<strong>{formatOutcomeAmount(quote.totalLongShares, side)}</strong>
+				<small>+ {formatOutcomeAmount(quote.invalidRequired, 'INVALID')}</small>
+			</div>
+			<span class='trade-summary__arrow' aria-hidden='true'>
+				→
+			</span>
+			<div>
+				<span>You receive</span>
+				<strong>{formatUnits(estimatedExitAttoEth ?? 0n, 18, 8)} ETH</strong>
+			</div>
+		</div>
+	)
 }
 
 function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, side: 'YES' | 'NO', unavailableMessage: string | undefined, estimatedExitAttoEth?: bigint) {
@@ -103,6 +155,82 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 	)
 }
 
+const demoScalarQuestion = {
+	answerUnit: '°C',
+	displayValueMax: 5n * 10n ** 18n,
+	displayValueMin: -5n * 10n ** 18n,
+	numTicks: 100n,
+} as const
+
+const demoScalarForkContext: Extract<ForkMigrationContext, { kind: 'scalar' }> = {
+	...demoScalarQuestion,
+	kind: 'scalar',
+	parentUniverseId: 1n,
+	questionId: 9_901n,
+	title: 'Average global temperature anomaly in 2030?',
+	availableTargets: [
+		{ outcomeIndex: getScalarOutcomeIndex(demoScalarQuestion, 25n), universeId: 21n, label: '-2.5 °C', canonicalPool: `0x${'61'.repeat(20)}` },
+		{ outcomeIndex: getScalarOutcomeIndex(demoScalarQuestion, 50n), universeId: 22n, label: '0 °C', canonicalPool: `0x${'62'.repeat(20)}` },
+	],
+}
+
+function sourceOutcomeFromValue(value: string) {
+	if (value === 'INVALID' || value === 'YES' || value === 'NO') return value
+	throw new Error('Unknown demo source outcome')
+}
+
+export function DemoScalarForkMigration() {
+	const [sourceOutcome, setSourceOutcome] = useState<'INVALID' | 'YES' | 'NO'>('YES')
+	const [selectedTargets, setSelectedTargets] = useState<readonly ForkTarget[]>(demoScalarForkContext.availableTargets)
+	const [settlementState, setSettlementState] = useState<'idle' | 'ready' | 'confirmed'>('idle')
+	const batchBlocker = forkMigrationBatchBlocker(selectedTargets)
+	const batchWarning = forkMigrationBatchWarning(selectedTargets)
+	return (
+		<section class='section demo-fork-migration' aria-labelledby='demo-fork-migration-heading'>
+			<div class='section-heading'>
+				<div>
+					<span class='section-kicker'>Fork settlement</span>
+					<h2 id='demo-fork-migration-heading'>Migrate shares to scalar branches</h2>
+				</div>
+			</div>
+			<div class='fork-source-step'>
+				<label class='field'>
+					<span>Source share</span>
+					<select
+						value={sourceOutcome}
+						onChange={event => {
+							setSourceOutcome(sourceOutcomeFromValue(event.currentTarget.value))
+							setSettlementState('idle')
+						}}
+					>
+						<option value='INVALID'>INVALID</option>
+						<option value='YES'>YES</option>
+						<option value='NO'>NO</option>
+					</select>
+				</label>
+				<p>Migration permanently locks parent-universe transfers for {sourceOutcome}. The same source can still migrate later into other children.</p>
+			</div>
+			<ForkMigrationTargets
+				context={demoScalarForkContext}
+				selectedTargets={selectedTargets}
+				disabled={settlementState === 'confirmed'}
+				onChange={targets => {
+					setSelectedTargets(targets)
+					setSettlementState('idle')
+				}}
+			/>
+			{batchWarning === undefined ? null : <p class='warning'>{batchWarning}</p>}
+			{settlementState === 'ready' ? <p role='status'>Authoritative migration simulation ready for the selected source and child branches.</p> : null}
+			{settlementState === 'confirmed' ? <p role='status'>Simulated migration confirmed.</p> : null}
+			{settlementState === 'confirmed' ? null : (
+				<button class='primary-action' disabled={selectedTargets.length === 0 || batchBlocker !== undefined} onClick={() => setSettlementState(settlementState === 'ready' ? 'confirmed' : 'ready')}>
+					{settlementState === 'ready' ? `Submit migration to ${selectedTargets.length.toString()} child ${selectedTargets.length === 1 ? 'branch' : 'branches'}` : `Simulate migration to ${selectedTargets.length.toString()} ${selectedTargets.length === 1 ? 'branch' : 'branches'}`}
+				</button>
+			)}
+		</section>
+	)
+}
+
 export function quoteDemoEnterPosition(market: DemoMarket, side: 'YES' | 'NO', amountAttoEth: bigint) {
 	return quoteEnterPosition(side, demoAttoEthToAttoShares(amountAttoEth, market), market.yesReserve, market.noReserve, market.feeBps)
 }
@@ -143,7 +271,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const oppositeReserve = side === 'YES' ? market.noReserve : market.yesReserve
 	const capacityAvailable = mode !== 'exit' || parsed.value === undefined || parsed.value < oppositeReserve
 	const displayedQuoteStatus = demoPreviewPresentation({ scenario, hasQuote: quote !== undefined, pairExists: initialized, closedReason, inputValid, capacityAvailable })
-	const workflowLocked = transactionState === 'approval' || transactionState === 'pending'
+	const workflowLocked = transactionState === 'preparing' || transactionState === 'approval' || transactionState === 'submitting' || transactionState === 'pending'
 	useEffect(() => {
 		if (workflowLocked) onWorkflowLockChange(true)
 		return () => {
@@ -170,8 +298,8 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	}
 	const quoteContent = renderQuote(quote, side, displayedQuoteStatus.message, estimatedExitAttoEth)
 	let primaryAction = (
-		<button class='primary-action' disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || workflowLocked} onClick={submit}>
-			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
+		<button class='primary-action' aria-busy={workflowLocked} disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || workflowLocked} onClick={submit}>
+			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, mode, side)}
 		</button>
 	)
 	if (!initialized && closedReason === undefined)
@@ -312,17 +440,43 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								) : null}
 							</div>
 						) : null}
-						<div class='quote' aria-live='polite'>
-							<div class='quote__title'>
-								<span>{quote === undefined ? 'Preview unavailable' : 'Trade breakdown'}</span>
-								{displayedQuoteStatus.label === undefined ? null : <Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>}
-							</div>
-							{quoteContent}
+						<div aria-live='polite'>
+							{renderTradeSummary(quote, parsed.value, side, displayedQuoteStatus.message, estimatedExitAttoEth)}
+							{displayedQuoteStatus.label === undefined ? null : <Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>}
 						</div>
-						{primaryAction}
+						<div class='trade-action'>{primaryAction}</div>
 						<div class={`transaction-message transaction-message--${transactionState}`} role='status' aria-live='polite'>
-							{transactionMessage(transactionState)}
+							{transactionMessage(transactionState, mode, side)}
 						</div>
+						{transactionState === 'pending' || transactionState === 'confirmed' || transactionState === 'reverted' ? (
+							<p class='transaction-hash'>
+								<span>Transaction</span>
+								<code title={demoTransactionHash}>{demoTransactionHash}</code>
+							</p>
+						) : null}
+						<details class='trade-breakdown pool-mechanics'>
+							<summary>Pool and reserve details</summary>
+							<dl class='metrics quote'>
+								<div>
+									<dt>Conditional YES price</dt>
+									<dd>{yesPercent === undefined ? 'Unavailable' : `${yesPercent.toFixed(1)}%`}</dd>
+								</div>
+								<div>
+									<dt>YES reserve</dt>
+									<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
+								</div>
+								<div>
+									<dt>NO reserve</dt>
+									<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
+								</div>
+							</dl>
+						</details>
+						{quote === undefined ? null : (
+							<details class='trade-breakdown'>
+								<summary>Full trade breakdown</summary>
+								<div class='quote'>{quoteContent}</div>
+							</details>
+						)}
 						<details>
 							<summary>Advanced · Raw share swap</summary>
 							<p>An uninsured share swap does not create matching INVALID. Use only when you intend to manage raw YES and NO balances.</p>
@@ -334,22 +488,21 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 					<section class='section'>
 						<div class='section-heading'>
 							<div>
-								<h2>Conditional YES price</h2>
+								<h2>Your position</h2>
 							</div>
 						</div>
-						{yesPercent === undefined ? <p class='muted'>Conditional price available after pair initialization.</p> : <ProbabilityBar yesPercent={yesPercent} />}
 						<dl class='fact-list'>
 							<div>
-								<dt>YES reserve</dt>
-								<dd>{formatOutcomeAmount(market.yesReserve, 'YES')}</dd>
+								<dt>YES</dt>
+								<dd>{formatOutcomeAmount(demoWalletBalances.yes, 'YES')}</dd>
 							</div>
 							<div>
-								<dt>NO reserve</dt>
-								<dd>{formatOutcomeAmount(market.noReserve, 'NO')}</dd>
+								<dt>NO</dt>
+								<dd>{formatOutcomeAmount(demoWalletBalances.no, 'NO')}</dd>
 							</div>
 							<div>
-								<dt>Trading fee</dt>
-								<dd>{formatUnits(market.feeBps, 2, 2)}%</dd>
+								<dt>INVALID</dt>
+								<dd>{formatOutcomeAmount(demoWalletBalances.invalid, 'INVALID')}</dd>
 							</div>
 						</dl>
 					</section>
@@ -374,10 +527,15 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 								<dt>Pair</dt>
 								<dd>{market.pair === undefined ? 'Not created' : <span title={market.pair}>{shortAddress(market.pair)}</span>}</dd>
 							</div>
+							<div>
+								<dt>Trading fee</dt>
+								<dd>{formatUnits(market.feeBps, 2, 2)}%</dd>
+							</div>
 						</dl>
 					</section>
 				</aside>
 			</div>
+			{scenario === 'forked-scalar' ? <DemoScalarForkMigration /> : null}
 		</main>
 	)
 }

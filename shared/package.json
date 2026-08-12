@@ -55,6 +55,10 @@
 			"types": "./ts/sortStringArrayByKeccak.ts",
 			"default": "./js/sortStringArrayByKeccak.js"
 		},
+		"./scalarOutcome": {
+			"types": "./ts/scalarOutcome.ts",
+			"default": "./js/scalarOutcome.js"
+		},
 		"./testing/scalarOutcomeParityFixtures": {
 			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
 			"default": "./js/testing/scalarOutcomeParityFixtures.js"

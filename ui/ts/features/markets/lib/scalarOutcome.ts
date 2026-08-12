@@ -1,12 +1,8 @@
 import { parseDecimalInput } from '../../../lib/decimal.js'
 import { getVisualRatio } from '../../../lib/visualMetrics.js'
+import { MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'
 
-type ScalarQuestionDetails = {
-	answerUnit: string
-	displayValueMax: bigint
-	displayValueMin: bigint
-	numTicks: bigint
-}
+export { clampScalarTickIndex, formatScalarDisplayValue, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, isValidScalarOutcomeIndex, MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'
 
 type ScalarFormInputs = {
 	scalarIncrement: string
@@ -15,56 +11,10 @@ type ScalarFormInputs = {
 }
 
 const SCALAR_DECIMAL_PLACES = 18
-const SCALAR_DECIMALS = BigInt(SCALAR_DECIMAL_PLACES)
-const SCALAR_DECIMAL_BASE = 10n ** SCALAR_DECIMALS
 const SCALAR_PART_BIT_LENGTH = 120n
-const SCALAR_TOTAL_BITS = 256n
 const SCALAR_PART_MASK = (1n << SCALAR_PART_BIT_LENGTH) - 1n
-const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
 const SCALAR_SIGNED_MIN = -(1n << 255n)
 const SCALAR_SIGNED_MAX = (1n << 255n) - 1n
-export const MAX_PRECISE_SCALAR_TICK_COUNT = BigInt(Number.MAX_SAFE_INTEGER)
-
-type ScalarOutcomeIndexDescriptor =
-	| {
-			kind: 'invalid'
-	  }
-	| {
-			kind: 'malformed'
-	  }
-	| {
-			kind: 'tick'
-			tickIndex: bigint
-	  }
-
-function combineUint256FromTwoWithInvalid(invalid: boolean, firstPart: bigint, secondPart: bigint): bigint {
-	const normalizedFirstPart = firstPart & SCALAR_PART_MASK
-	const normalizedSecondPart = secondPart & SCALAR_PART_MASK
-	const highestBit = invalid ? 0n : 1n
-	return (highestBit << (SCALAR_TOTAL_BITS - 1n)) | (normalizedFirstPart << SCALAR_PART_BIT_LENGTH) | normalizedSecondPart
-}
-
-export function formatScalarDisplayValue(value: bigint) {
-	const isNegative = value < 0n
-	const absoluteValue = isNegative ? -value : value
-	const integerPart = absoluteValue / SCALAR_DECIMAL_BASE
-	const fractionalPart = absoluteValue % SCALAR_DECIMAL_BASE
-	if (fractionalPart === 0n) return `${isNegative ? '-' : ''}${integerPart.toString()}`
-	const fractionalString = fractionalPart.toString().padStart(SCALAR_DECIMAL_PLACES, '0').replace(/0+$/, '')
-	return `${isNegative ? '-' : ''}${integerPart.toString()}.${fractionalString}`
-}
-
-function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
-	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
-	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
-}
-
-function splitScalarOutcomeIndex(outcomeIndex: bigint) {
-	const invalid = outcomeIndex >> (SCALAR_TOTAL_BITS - 1n) === 0n
-	const firstPart = (outcomeIndex >> SCALAR_PART_BIT_LENGTH) & SCALAR_PART_MASK
-	const secondPart = outcomeIndex & SCALAR_PART_MASK
-	return { invalid, firstPart, secondPart }
-}
 
 export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
 	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
@@ -75,13 +25,6 @@ export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
 export function getScalarSliderFillWidth(tickIndex: bigint, numTicks: bigint) {
 	const fraction = getVisualRatio({ value: tickIndex, maxValue: numTicks }) ?? 0
 	return `calc(${fraction * 100}% - ${fraction}rem + 0.5rem)`
-}
-
-export function clampScalarTickIndex(tickIndex: bigint, numTicks: bigint) {
-	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
-	if (tickIndex < 0n) return 0n
-	if (tickIndex > numTicks) return numTicks
-	return tickIndex
 }
 
 export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }: ScalarFormInputs) {
@@ -107,41 +50,4 @@ export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }:
 		displayValueMin,
 		numTicks,
 	}
-}
-
-export function getScalarOutcomeIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
-	validateTickIndex(question, tickIndex)
-	return combineUint256FromTwoWithInvalid(false, question.numTicks - tickIndex, tickIndex)
-}
-
-export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIndex: bigint) {
-	validateTickIndex(question, tickIndex)
-	const scalarRange = question.displayValueMax - question.displayValueMin
-	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
-	const formattedValue = formatScalarDisplayValue(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
-}
-
-export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {
-	if (question.numTicks <= 0n) return { kind: 'malformed' }
-	if ((outcomeIndex & SCALAR_RESERVED_BITS_MASK) !== 0n) return { kind: 'malformed' }
-
-	const { invalid, firstPart, secondPart } = splitScalarOutcomeIndex(outcomeIndex)
-	if (invalid) return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }
-
-	const tickIndex = secondPart
-	if (firstPart + secondPart !== question.numTicks) return { kind: 'malformed' }
-	if (tickIndex < 0n || tickIndex > question.numTicks) return { kind: 'malformed' }
-	return { kind: 'tick', tickIndex }
-}
-
-export function isValidScalarOutcomeIndex(question: ScalarQuestionDetails, outcomeIndex: bigint) {
-	return getScalarOutcomeIndexDescriptor(question, outcomeIndex).kind !== 'malformed'
-}
-
-export function formatScalarOutcomeIndexLabel(question: ScalarQuestionDetails, outcomeIndex: bigint) {
-	const descriptor = getScalarOutcomeIndexDescriptor(question, outcomeIndex)
-	if (descriptor.kind === 'invalid') return 'Invalid'
-	if (descriptor.kind === 'malformed') throw new Error('Scalar outcome index is malformed')
-	return formatScalarOutcomeLabel(question, descriptor.tickIndex)
 }

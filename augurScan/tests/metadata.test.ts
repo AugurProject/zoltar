@@ -297,6 +297,62 @@ describe('ABI metadata', () => {
 		expect(discoveriesFrom(decoded)).toEqual([{ address: childToken, kind: 'reputationToken', label: 'Child REP' }])
 	})
 
+	test('decodes Augur AMM pair creation and discovers the pair activity source', () => {
+		const abi = abiForKind('ammFactory')
+		if (abi === undefined) throw new Error('Augur AMM factory ABI missing')
+		const pair = getAddress('0x3333333333333333333333333333333333333333')
+		const topics = requireTopics(
+			encodeEventTopics({
+				abi,
+				eventName: 'PairCreated',
+				args: { securityPool: account, shareToken: childToken, universeId: 7n },
+			}),
+		)
+		const data = encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 30n])
+		const decoded = decodeLogRecord('ammFactory', topics, data, new Map())
+		expect(decoded).toMatchObject({
+			name: 'PairCreated',
+			status: 'decoded',
+			arguments: { securityPool: account, shareToken: childToken, universeId: '7', pair, feeBps: '30' },
+		})
+		expect(discoveriesFrom(decoded)).toEqual([{ address: pair, kind: 'ammPair', label: 'Augur AMM Pair' }])
+	})
+
+	test('discovers only known REP/WETH Uniswap V2 and V3 markets', () => {
+		const pair = getAddress('0x3333333333333333333333333333333333333333')
+		const unrelated = getAddress('0x4444444444444444444444444444444444444444')
+		const contracts = new Map([
+			[account.toLowerCase(), { address: account, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
+			[childToken.toLowerCase(), { address: childToken, kind: 'weth', label: 'WETH', provenance: 'manifest' }],
+		])
+		const v2Abi = abiForKind('uniswapV2Factory')
+		const v3Abi = abiForKind('uniswapV3Factory')
+		if (v2Abi === undefined || v3Abi === undefined) throw new Error('Uniswap factory ABI missing')
+		const v2 = decodeLogRecord(
+			'uniswapV2Factory',
+			requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: childToken } })),
+			encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]),
+			new Map(),
+		)
+		expect(discoveriesFrom(v2, contracts)).toEqual([{ address: pair, kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / WETH Pair' }])
+
+		const unrelatedV2 = decodeLogRecord(
+			'uniswapV2Factory',
+			requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: unrelated } })),
+			encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]),
+			new Map(),
+		)
+		expect(discoveriesFrom(unrelatedV2, contracts)).toEqual([])
+
+		const v3 = decodeLogRecord(
+			'uniswapV3Factory',
+			requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: childToken, fee: 500 } })),
+			encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [10, pair]),
+			new Map(),
+		)
+		expect(discoveriesFrom(v3, contracts)).toEqual([{ address: pair, kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / WETH Pool' }])
+	})
+
 	test('retains unknown event evidence without throwing', () => {
 		const decoded = decodeLogRecord('zoltar', [`0x${'ab'.repeat(32)}` as Hex], '0x', new Map())
 		expect(decoded.status).toBe('unknown')
@@ -374,6 +430,8 @@ describe('ABI metadata', () => {
 
 	test('maps all supported manifest contract kinds to ABIs', () => {
 		for (const kind of [
+			'ammFactory',
+			'ammPair',
 			'proxyDeployer',
 			'multicall3',
 			'priceCoordinatorFactory',
