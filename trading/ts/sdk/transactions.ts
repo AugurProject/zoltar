@@ -46,8 +46,8 @@ export function removeLiquidityRequest(router: Address, pair: Address, liquidity
 	return { address: router, functionName: 'removeLiquidity', args: [pair, liquidity, minimumYes, minimumNo, recipient, deadline] }
 }
 
-export function redeemCompleteSetRequest(securityPool: Address, amountAttoShares: bigint): ContractRequest {
-	return { address: securityPool, functionName: 'redeemCompleteSet', args: [amountAttoShares] }
+export function redeemCompleteSetRequest(router: Address, securityPool: Address, amountAttoShares: bigint, minimumAttoEth: bigint, recipient: Address, deadline: bigint): ContractRequest {
+	return { address: router, functionName: 'redeemCompleteSet', args: [securityPool, amountAttoShares, minimumAttoEth, recipient, deadline] }
 }
 
 export function redeemWinningSharesRequest(securityPool: Address): ContractRequest {

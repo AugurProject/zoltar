@@ -2,8 +2,8 @@
 
 Build and open the standalone UI with a valid deployment manifest as described in [Configure the standalone UI](../how-to/configure-ui.md). Connect a wallet on the manifest chain, select an initialized open pair, and choose YES or NO. Use `?demo=1` only to inspect clearly labeled simulated states; demo mode cannot submit transactions.
 
-1. Enter an ETH amount and select **Simulate authoritative router call**. Do not treat demo fixtures or pure preview math as a transaction quote.
-2. Review complete-set shares, opposite shares swapped, additional and total long shares, INVALID insurance, fee, average execution price, conditional price impact, deadline, and minimum received.
+1. Enter an ETH amount. Set the slippage tolerance (0% to 5%) and how many whole minutes the transaction should remain valid (1 to 1440), then select **Simulate authoritative router call**. Lower slippage allows less adverse movement from the simulated quote. A shorter validity window reduces stale-transaction exposure. Either setting can cause more reverts. Do not treat demo fixtures or pure preview math as a transaction quote.
+2. Review complete-set shares, opposite shares swapped, additional and total long shares, INVALID insurance, fee, average execution price, conditional price impact, chosen slippage tolerance, deadline, and minimum received.
 3. Re-simulate if the block changes. Submit one `enterPosition` transaction.
 4. Check the wallet: a YES entry delivers the complete-set YES plus additional YES from the swap. Its INVALID insurance equals the complete-set quantity, not the larger total YES delivery, and the router leaves no NO from the operation.
 
