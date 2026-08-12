@@ -1767,10 +1767,6 @@ function LiveLiquidityControls({
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
 	const needsLpApproval = market.lpTotalSupply > 0n && liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
-	let liquidityApprovalLabel = 'Approve exact LP amount'
-	if (state === 'approval') liquidityApprovalLabel = 'Approve LP amount in wallet…'
-	if (state === 'approval-pending') liquidityApprovalLabel = 'LP approval pending…'
-
 	useEffect(() => {
 		if (receiptWarning !== undefined) return
 		simulationRequests.invalidate()
@@ -2155,7 +2151,7 @@ function LiveLiquidityControls({
 			</p>
 			{needsLpApproval ? (
 				<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked} onClick={approveLp}>
-					{liquidityApprovalLabel}
+					Approve exact LP amount
 				</button>
 			) : null}
 			{!needsLpApproval && quote === undefined ? (
@@ -2397,10 +2393,6 @@ function LiveSettlementControls({
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
 		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
 	}
-	let settlementApprovalLabel = 'Approve router for complete-set redemption'
-	if (state === 'approval') settlementApprovalLabel = 'Approve complete-set redemption in wallet…'
-	if (state === 'approval-pending') settlementApprovalLabel = 'Complete-set approval pending…'
-
 	function invalidateSettlementInputs() {
 		if (receiptWarning !== undefined) return
 		inputRevision.current++
@@ -2731,7 +2723,7 @@ function LiveSettlementControls({
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool's share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
 					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
-						{settlementApprovalLabel}
+						Approve router for complete-set redemption
 					</button>
 				</>
 			) : null}
@@ -2812,15 +2804,6 @@ function LivePositionControls({
 	const entryPriceImpactBps = quote?.kind === 'entry' ? quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore : undefined
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
 	const submitLabel = mode === 'entry' ? `Enter ${side}` : `Exit insured ${side}`
-	const pendingSubmitLabel = mode === 'entry' ? `Entering ${side}…` : `Exiting insured ${side}…`
-	let submitButtonLabel = submitLabel
-	if (state === 'preparing') submitButtonLabel = `Preparing ${submitLabel}…`
-	if (state === 'submitting') submitButtonLabel = `${submitLabel} in wallet…`
-	if (state === 'pending') submitButtonLabel = pendingSubmitLabel
-	let approvalButtonLabel = 'Approve router for all outcome tokens'
-	if (state === 'preparing') approvalButtonLabel = `Preparing insured ${side} exit approval…`
-	if (state === 'approval') approvalButtonLabel = `Approving insured ${side} exit in wallet…`
-	if (state === 'approval-pending') approvalButtonLabel = `Insured ${side} exit approval pending…`
 	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
 		if (value !== undefined) return formatOutcomeAmount(value, outcome)
 		if (balanceState === 'loading') return 'Loading…'
@@ -2885,7 +2868,7 @@ function LivePositionControls({
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool’s share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
 					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={closed || balanceState !== 'ready' || workflowLocked} onClick={approve}>
-						{approvalButtonLabel}
+						Approve router for all outcome tokens
 					</button>
 				</>
 			) : null}
@@ -2901,7 +2884,7 @@ function LivePositionControls({
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? (
 				<button class='primary-action' aria-busy={state === 'submitting' || state === 'pending'} disabled={workflowLocked || closed || state !== 'ready'} onClick={submit}>
-					{submitButtonLabel}
+					{submitLabel}
 				</button>
 			) : null}
 			<p role='status' aria-live='polite'>

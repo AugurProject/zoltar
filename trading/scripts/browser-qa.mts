@@ -151,6 +151,15 @@ const scenarios = [
 		path: '/?demo=1&scenario=wallet-balance-error#/markets',
 		assertExpression: `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return document.querySelector('.wallet-summary')?.getAttribute('aria-busy') === 'false' && document.querySelector('.wallet-summary [role="alert"]')?.textContent === 'Wallet balance read failed' && document.querySelector('.wallet-summary__identity code')?.textContent === '${'0x8ba1f109551bD432803012645Ac136ddd64DBA72'}' && document.querySelector('.wallet-summary__retry')?.getBoundingClientRect().height === 44 && panel !== undefined && nav !== undefined && main !== undefined && panel.bottom <= nav.top && panel.bottom <= main.top && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
+	{
+		name: 'wallet-balance-error-collapsed',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=wallet-balance-error#/markets',
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === false && document.querySelector('.wallet-summary__details')?.getBoundingClientRect().height === 0 && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1'`,
+	},
 	{ name: 'wallet-ready-900', width: 900, height: 844, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{
 		name: 'wallet-balance-error-800',

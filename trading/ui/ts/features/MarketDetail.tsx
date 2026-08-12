@@ -37,13 +37,9 @@ export function demoPreviewPresentation({ scenario, hasQuote, pairExists, closed
 	return { tone: 'warn', label: 'Preview unavailable', message: 'The current inputs cannot be quoted.' }
 }
 
-function actionLabel(pairExists: boolean, closedReason: string | undefined, transactionState: TransactionState, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
+function actionLabel(pairExists: boolean, closedReason: string | undefined, mode: 'enter' | 'exit', side: 'YES' | 'NO') {
 	if (!pairExists) return 'Create pair before trading'
 	if (closedReason !== undefined) return closedReason
-	if (transactionState === 'preparing') return `Preparing ${mode === 'enter' ? `Enter ${side}` : `insured ${side} exit`}…`
-	if (transactionState === 'approval') return `Approving insured ${side} exit…`
-	if (transactionState === 'submitting') return `${mode === 'enter' ? `Enter ${side}` : `Insured ${side} exit`} in wallet…`
-	if (transactionState === 'pending') return mode === 'enter' ? `Entering ${side}…` : `Exiting insured ${side}…`
 	return mode === 'enter' ? `Enter ${side}` : `Exit insured ${side}`
 }
 
@@ -225,7 +221,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	const quoteContent = renderQuote(quote, side, displayedQuoteStatus.message, estimatedExitAttoEth)
 	let primaryAction = (
 		<button class='primary-action' aria-busy={workflowLocked} disabled={actionBlocker !== undefined || exitExceedsInsurance || quote === undefined || workflowLocked} onClick={submit}>
-			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, transactionState, mode, side)}
+			{exitExceedsInsurance ? 'Exit exceeds insured capacity' : actionLabel(true, actionBlocker, mode, side)}
 		</button>
 	)
 	if (!initialized && closedReason === undefined)

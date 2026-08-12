@@ -337,8 +337,12 @@ nav a[aria-current="page"] {
 	font-size: 12px;
 }
 .wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__details,
-.wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__identity {
+.wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__identity,
+.wallet-summary--error:not([open]) .wallet-summary__details {
 	display: none;
+}
+.wallet-summary__identity {
+	gap: 0.3rem;
 }
 .wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__identity,
 .wallet-summary:not(.wallet-summary--error)[open] .wallet-summary__detail-balances {

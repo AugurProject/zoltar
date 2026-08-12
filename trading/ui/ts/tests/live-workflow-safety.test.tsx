@@ -517,7 +517,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Insured YES exit approval pending on-chain')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(button('Insured YES exit approval pending…').getAttribute('aria-busy')).toBe('true')
+		expect(button('Approve router for all outcome tokens').getAttribute('aria-busy')).toBe('true')
 		contextApprovalReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Insured YES exit approval confirmed on-chain')
