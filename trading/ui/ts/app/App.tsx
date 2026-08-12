@@ -357,7 +357,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 					onDeploymentRetry={retryDeployment}
 				/>
 			)
-	} else if (scenario === 'loading')
+	} else if (route !== 'not-found' && scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
 				<header class='route-header'>

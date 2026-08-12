@@ -54,7 +54,7 @@ describe('universe selector', () => {
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
-		window.history.replaceState(undefined, '', '/?demo=1#/missing')
+		window.history.replaceState(undefined, '', '/?demo=1&scenario=loading#/missing')
 		expect(currentRoute()).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
