@@ -242,15 +242,16 @@ describe('testnet deployment inputs', () => {
 describe('testnet deployment transaction authorization', () => {
 	const account = privateKeyToAccount('0x1212121212121212121212121212121212121212121212121212121212121212')
 
-	function wallet(overrides: Partial<Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}) {
+	function wallet(overrides: Partial<Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}) {
 		return {
+			call: async () => ({ data: undefined }),
 			estimateGas: async () => 100_000n,
 			getBlock: async () => ({ baseFeePerGas: 10n }) as never,
 			getGasPrice: async () => 20n,
 			getTransactionCount: async () => 7n,
 			sendTransaction: async () => FIRST_HASH,
 			...overrides,
-		} as Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>
+		} as Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>
 	}
 
 	test('sends EIP-1559 transactions bounded by the authorized fee', async () => {
@@ -294,6 +295,68 @@ describe('testnet deployment transaction authorization', () => {
 
 		expect(await send({ to: FIRST_ADDRESS })).toBe(FIRST_HASH)
 		expect(submitted?.gas).toBe(30_000_000n)
+	})
+
+	test('uses the signer gas limit when estimation falsely reverts but a capped simulation succeeds', async () => {
+		let simulated: Parameters<WriteClient['call']>[0] | undefined
+		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
+		const logs: string[] = []
+		const estimateError = new Error('execution reverted')
+		const send = createBudgetedTransactionSender(
+			wallet({
+				call: async request => {
+					simulated = request
+					return { data: undefined }
+				},
+				estimateGas: async () => {
+					throw estimateError
+				},
+				sendTransaction: async request => {
+					submitted = request
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
+			message => logs.push(message),
+		)
+
+		expect(await send({ data: '0x1234', to: FIRST_ADDRESS })).toBe(FIRST_HASH)
+		expect(simulated).toEqual({
+			account: account.address,
+			data: '0x1234',
+			gas: 30_000_000n,
+			maxFeePerGas: 30n,
+			maxPriorityFeePerGas: 10n,
+			to: FIRST_ADDRESS,
+			value: undefined,
+		})
+		expect(submitted?.gas).toBe(30_000_000n)
+		expect(logs).toContain('  ├─ Gas estimate unavailable\n  │  ├─ Fallback gas limit: 30000000\n  │  └─ Validation: capped simulation succeeded')
+	})
+
+	test('preserves an estimation failure when the capped simulation also reverts', async () => {
+		let sendCalled = false
+		const estimateError = new Error('estimate reverted')
+		const send = createBudgetedTransactionSender(
+			wallet({
+				call: async () => {
+					throw new Error('simulation reverted')
+				},
+				estimateGas: async () => {
+					throw estimateError
+				},
+				sendTransaction: async () => {
+					sendCalled = true
+					return FIRST_HASH
+				},
+			}),
+			account,
+			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
+		)
+
+		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toBe(estimateError)
+		expect(sendCalled).toBe(false)
 	})
 
 	test('rejects an RPC gas-price suggestion above the authorized maximum before signing', async () => {
