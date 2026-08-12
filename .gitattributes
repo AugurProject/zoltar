@@ -12,6 +12,9 @@
 # Bundled UI dependencies are build outputs, not source.
 /ui/vendor/** linguist-vendored=true
 
+# This vendored deployment input has a pinned canonical-text digest.
+/scripts/artifacts/uniswap-deployment.json text eol=lf
+
 # Third-party Solidity sources are intentionally vendored for compilation.
 /solidity/contracts/peripherals/openOracle/openzeppelin/** linguist-vendored=true
 

@@ -36,6 +36,14 @@ test('rejects malformed address filters before querying', async () => {
 	expect(await response?.json()).toEqual({ error: 'chainId is required when filtering by address' })
 })
 
+test('requires a network for the contract registry', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	const response = await handleApi(new Request('http://localhost/api/v1/contracts'), database)
+	expect(response?.status).toBe(400)
+	expect(await response?.json()).toEqual({ error: 'chainId is required' })
+	await database.close()
+})
+
 test('rejects unsupported decoded filters before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)

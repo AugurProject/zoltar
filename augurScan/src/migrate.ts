@@ -21,7 +21,7 @@ export const migrate = async (sql: SQL): Promise<void> => {
 		try {
 			await connection`SELECT pg_advisory_unlock(92138471)`
 		} finally {
-			connection.release()
+			await connection.release()
 		}
 	}
 }

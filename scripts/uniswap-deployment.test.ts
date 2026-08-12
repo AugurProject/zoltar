@@ -18,6 +18,11 @@ function successReceipt(): TransactionReceipt {
 }
 
 describe('Uniswap testnet deployment', () => {
+	test('accepts the pinned deployment artifact with Windows line endings', async () => {
+		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
+		expect(() => assertUniswapDeploymentArtifact(artifact.replaceAll('\n', '\r\n'))).not.toThrow()
+	})
+
 	test('rejects a changed deployment artifact before constructing a plan', async () => {
 		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
 		const changedArtifact = artifact.replace('"uniswapV3Factory": "0x60', '"uniswapV3Factory": "0x61')

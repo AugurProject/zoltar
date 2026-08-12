@@ -2,6 +2,7 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { loadNetworks, runtimeConfig } from './config.ts'
 import { ScannerDatabase } from './database.ts'
+import { liveStreamResponse } from './http.ts'
 import { startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
@@ -60,7 +61,7 @@ const healthCheck = createConcurrencyGate(HEALTH_CONCURRENCY_LIMIT, () =>
 
 const server = Bun.serve({
 	port: runtimeConfig.port,
-	async fetch(request) {
+	async fetch(request, server) {
 		const url = new URL(request.url)
 		if (url.pathname === '/health/live') return Response.json({ status: 'ok' })
 		if (url.pathname === '/health/ready') {
@@ -109,9 +110,7 @@ const server = Bun.serve({
 			const stream = bus.stream(lastEventId)
 			if (stream === undefined)
 				return Response.json({ error: 'Live stream capacity reached; retry shortly' }, { status: 503, headers: { ...securityHeaders, 'retry-after': '2' } })
-			return new Response(stream, {
-				headers: { ...securityHeaders, 'cache-control': 'no-cache', connection: 'keep-alive', 'content-type': 'text/event-stream' },
-			})
+			return liveStreamResponse(stream, request, server, securityHeaders)
 		}
 		if (url.pathname.startsWith('/api/')) {
 			return await apiRequest(async () => {
@@ -152,7 +151,7 @@ const shutdown = (): Promise<void> => {
 		clearInterval(pruneTimer)
 		await prunePromise
 		await bus.close()
-		await server.stop(true)
+		await server.stop()
 		await Promise.allSettled(indexers)
 		await liveDatabase.close()
 		await apiDatabase.close()
