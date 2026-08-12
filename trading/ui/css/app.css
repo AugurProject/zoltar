@@ -1251,6 +1251,15 @@ footer {
 	.security-pool-link {
 		height: 44px;
 	}
+	details:not(.wallet-summary) > summary::after {
+		margin-left: 0.45rem;
+		content: "▾";
+		color: var(--muted);
+		font-size: 10px;
+	}
+	details:not(.wallet-summary)[open] > summary::after {
+		content: "▴";
+	}
 	.site-header nav {
 		gap: 0;
 	}
