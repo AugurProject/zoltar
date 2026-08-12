@@ -1,33 +1,55 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoRep } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
-import { Developer, Help, Liquidity, MarketList, Portfolio } from '../features/Routes.tsx'
+import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
-import { createTradingPublicClient, validateLiveDeployment } from '../protocol/live.ts'
+import { createTradingPublicClient, publicErrorMessage, validateLiveDeployment } from '../protocol/live.ts'
 import { formatUnits } from './format.ts'
 
-const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'help', 'developer'] as const
-type TradingRoute = (typeof tradingRoutes)[number] | 'not-found'
+const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'help'] as const
+type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
 
 export function currentRoute(): TradingRoute {
 	const route = window.location.hash.replace(/^#\/?/, '') || 'markets'
-	return tradingRoutes.find(candidate => candidate === route) ?? 'not-found'
+	return tradingRoutes.find(candidate => candidate === route) ?? (/^security-pool\/0x[0-9a-f]{40}$/i.test(route) ? `security-pool/${route.slice('security-pool/'.length)}` : 'not-found')
 }
 
 export function tradingDocumentTitle(route: TradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = 'Not found'
 	if (route === 'market') label = 'Market'
+	if (route.startsWith('security-pool/')) label = 'Security pool'
 	return `${label} · Zoltar Trading`
 }
 
+function DemoSecurityPoolUnavailable() {
+	return (
+		<main class='route' id='main-content'>
+			<header class='route-header'>
+				<div>
+					<a class='eyebrow' href='#/markets'>
+						← Markets
+					</a>
+					<h1>Security pool</h1>
+				</div>
+			</header>
+			<section class='section'>
+				<p class='error' role='alert'>
+					This security pool is not available in the selected universe.
+				</p>
+			</section>
+		</main>
+	)
+}
+
 function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>, onWorkflowLockChange: (locked: boolean) => void) {
+	if (route.toLowerCase() === `security-pool/${market.pool}`.toLowerCase()) return <SecurityPoolDetails market={market} />
+	if (/^security-pool\/0x[0-9a-f]{40}$/i.test(route)) return <DemoSecurityPoolUnavailable />
 	if (route === 'market') return <MarketDetail market={market} scenario={scenario} onWorkflowLockChange={onWorkflowLockChange} />
 	if (route === 'liquidity') return <Liquidity market={market} />
 	if (route === 'portfolio') return <Portfolio market={market} />
 	if (route === 'help') return <Help />
-	if (route === 'developer') return <Developer />
 	if (route === 'markets') return <MarketList market={market} />
 	return (
 		<main class='route' id='main-content'>
@@ -176,7 +198,7 @@ export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUn
 }
 
 function routeOwnsLiveWallet(route: string) {
-	return route !== 'help' && route !== 'developer'
+	return route !== 'help'
 }
 
 export function walletSummaryAfterRouteChange(summary: WalletSummaryState, previousRoute: string, nextRoute: string, selectedUniverseId: string | undefined): WalletSummaryState {
@@ -260,7 +282,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	})
 	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
 	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
-	const showUniverseSelector = route !== 'help' && route !== 'developer'
+	const showUniverseSelector = route !== 'help'
 	const walletSummary = demo ? demoWalletSummary(scenario, market.universeId, demoWalletRetrySucceeded) : walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		if (demo) setDemoWalletRetrySucceeded(true)
@@ -307,7 +329,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 			} catch (error) {
 				if (!active) return
 				setLiveConfiguration(undefined)
-				setLiveConfigurationError(error instanceof Error ? error.message : 'Unable to load the trading deployment')
+				setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading deployment'))
 				setLiveDeploymentStatus('unavailable')
 			}
 		})()
@@ -320,7 +342,6 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	if (!demo) {
 		if (route === 'not-found') content = resolvedContent
 		else if (route === 'help') content = <Help />
-		else if (route === 'developer') content = <Developer demo={false} deploymentStatus={liveDeploymentStatus} />
 		else
 			content = (
 				<LiveTrading
@@ -388,15 +409,12 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 						<a aria-current={route === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Help
 						</a>
-						<a aria-current={route === 'developer' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/developer' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Developer
-						</a>
 					</nav>
 					<div class='header-actions'>
-						<a class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`} href='#/developer' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+						<span class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`}>
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
-						</a>
+						</span>
 						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
 					</div>

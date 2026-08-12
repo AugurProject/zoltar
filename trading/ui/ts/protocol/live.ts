@@ -420,9 +420,17 @@ export type SecurityPoolDeployment = Readonly<{
 	initialReportPriorityFeeAttoEthPerGas: bigint
 }>
 
+export function publicErrorMessage(error: unknown, fallback: string) {
+	if (!(error instanceof Error)) return fallback
+	const detail = error.message.trim()
+	if (detail.length === 0) return fallback
+	if (/(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|share[ -]?token|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i.test(detail)) return fallback
+	return detail
+}
+
 function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
 	return {
-		loadError: error instanceof Error ? error.message : 'Market reads failed',
+		loadError: publicErrorMessage(error, 'Market reads failed'),
 		pool: getAddress(deployment.securityPool),
 		pair: undefined,
 		shareToken: getAddress(deployment.shareToken),
@@ -773,8 +781,8 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity), refreshed.expectedLiquidity, 'LP tokens')
 		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, minimumLiquidity, account, deadline], value: quote.amount }))
 	}
-	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes), refreshed.expectedYes, 'YES shares')
-	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo), refreshed.expectedNo, 'NO shares')
+	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes), refreshed.expectedYes, 'YES')
+	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo), refreshed.expectedNo, 'NO')
 	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'removeLiquidity', account, args: [pairAddress, quote.amount, minimumYes, minimumNo, account, deadline] }))
 }
 

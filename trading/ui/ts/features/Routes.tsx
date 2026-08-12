@@ -2,9 +2,9 @@ import { useState } from 'preact/hooks'
 import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '../../../ts/sdk/math.ts'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.ts'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../app/format.ts'
 import { ProbabilityBar } from '../components/ProbabilityBar.tsx'
-import { AddressValue, Status } from '../components/Status.tsx'
+import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.tsx'
 import { maximumInsuredExit } from '../../../ts/sdk/positions.ts'
 import { shareBalanceScope } from '../protocol/live.ts'
 
@@ -65,30 +65,10 @@ export function MarketList({ market }: { market: DemoMarket }) {
 					<div class='market-row__pool'>
 						<dl>
 							<div class='market-row__pool-address'>
-								<dt>SecurityPool</dt>
+								<dt>Security pool</dt>
 								<dd>
-									<AddressValue value={market.pool} />
+									<SecurityPoolAddressLink value={market.pool} />
 								</dd>
-							</div>
-							<div>
-								<dt>System state</dt>
-								<dd>{market.securityPool.systemState}</dd>
-							</div>
-							<div>
-								<dt>Outcome</dt>
-								<dd>{market.securityPool.questionOutcome}</dd>
-							</div>
-							<div>
-								<dt>Security multiplier</dt>
-								<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
-							</div>
-							<div>
-								<dt>Total / fee-eligible capacity ownership</dt>
-								<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
-							</div>
-							<div>
-								<dt>Minting capacity</dt>
-								<dd>{formatMintingCapacity(market.securityPool.settlementCollateralAttoEth, market.securityPool.mintingCapacityCeilingAttoEth)}</dd>
 							</div>
 						</dl>
 					</div>
@@ -199,19 +179,19 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 							<dl class='metrics'>
 								<div>
 									<dt>YES reserve</dt>
-									<dd>{formatShareAmount(liquidityQuote.initial.yesUsed)}</dd>
+									<dd>{formatOutcomeAmount(liquidityQuote.initial.yesUsed, 'YES')}</dd>
 								</div>
 								<div>
 									<dt>NO reserve</dt>
-									<dd>{formatShareAmount(liquidityQuote.initial.noUsed)}</dd>
+									<dd>{formatOutcomeAmount(liquidityQuote.initial.noUsed, 'NO')}</dd>
 								</div>
 								<div>
 									<dt>Unused YES returned</dt>
-									<dd>{formatShareAmount(liquidityQuote.initial.yesReturned)}</dd>
+									<dd>{formatOutcomeAmount(liquidityQuote.initial.yesReturned, 'YES')}</dd>
 								</div>
 								<div>
 									<dt>INVALID retained</dt>
-									<dd>{formatShareAmount(liquidityQuote.initial.invalidReturned)}</dd>
+									<dd>{formatOutcomeAmount(liquidityQuote.initial.invalidReturned, 'INVALID')}</dd>
 								</div>
 							</dl>
 						)}
@@ -237,19 +217,19 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 								<dl class='metrics'>
 									<div>
 										<dt>YES used</dt>
-										<dd>{formatShareAmount(liquidityQuote.added.yesUsed)}</dd>
+										<dd>{formatOutcomeAmount(liquidityQuote.added.yesUsed, 'YES')}</dd>
 									</div>
 									<div>
 										<dt>NO used</dt>
-										<dd>{formatShareAmount(liquidityQuote.added.noUsed)}</dd>
+										<dd>{formatOutcomeAmount(liquidityQuote.added.noUsed, 'NO')}</dd>
 									</div>
 									<div>
 										<dt>INVALID retained</dt>
-										<dd>{formatShareAmount(liquidityQuote.addedCompleteSetShares)}</dd>
+										<dd>{formatOutcomeAmount(liquidityQuote.addedCompleteSetShares, 'INVALID')}</dd>
 									</div>
 									<div>
 										<dt>Unused NO returned</dt>
-										<dd>{formatShareAmount(liquidityQuote.added.noReturned)}</dd>
+										<dd>{formatOutcomeAmount(liquidityQuote.added.noReturned, 'NO')}</dd>
 									</div>
 								</dl>
 								<button class='secondary-action' disabled>
@@ -263,11 +243,11 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 								<dl class='metrics'>
 									<div>
 										<dt>Raw YES returned</dt>
-										<dd>{formatShareAmount(removed.yesOut)}</dd>
+										<dd>{formatOutcomeAmount(removed.yesOut, 'YES')}</dd>
 									</div>
 									<div>
 										<dt>Raw NO returned</dt>
-										<dd>{formatShareAmount(removed.noOut)}</dd>
+										<dd>{formatOutcomeAmount(removed.noOut, 'NO')}</dd>
 									</div>
 								</dl>
 								<p>No INVALID is consumed and no complete set is redeemed.</p>
@@ -286,7 +266,6 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 type DemoPortfolioBalances = Readonly<{ yes: bigint; no: bigint; invalid: bigint; lp: bigint }>
 
 function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances: DemoPortfolioBalances }) {
-	const scope = shareBalanceScope(market)
 	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: balances.yes, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
@@ -304,36 +283,24 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 			</div>
 			<dl class='fact-list'>
 				<div>
-					<dt>SecurityPool</dt>
+					<dt>Security pool</dt>
 					<dd>
-						<AddressValue value={market.pool} />
-					</dd>
-				</div>
-				<div>
-					<dt>ShareToken</dt>
-					<dd>
-						<AddressValue value={market.shareToken} />
-					</dd>
-				</div>
-				<div>
-					<dt>Outcome token IDs</dt>
-					<dd>
-						INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
+						<SecurityPoolAddressLink value={market.pool} />
 					</dd>
 				</div>
 			</dl>
 			<section class='balance-strip'>
 				<div>
 					<span>YES</span>
-					<strong>{formatShareAmount(balances.yes)}</strong>
+					<strong>{formatOutcomeAmount(balances.yes, 'YES')}</strong>
 				</div>
 				<div>
 					<span>NO</span>
-					<strong>{formatShareAmount(balances.no)}</strong>
+					<strong>{formatOutcomeAmount(balances.no, 'NO')}</strong>
 				</div>
 				<div>
 					<span>INVALID</span>
-					<strong>{formatShareAmount(balances.invalid)}</strong>
+					<strong>{formatOutcomeAmount(balances.invalid, 'INVALID')}</strong>
 				</div>
 				<div>
 					<span>LP tokens</span>
@@ -344,16 +311,16 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 				<dl class='fact-list'>
 					<div>
 						<dt>Maximum insured YES exit</dt>
-						<dd>{formatShareAmount(maximumYesExit)}</dd>
+						<dd>{formatOutcomeAmount(maximumYesExit, 'YES')}</dd>
 					</div>
 					<div>
 						<dt>Maximum insured NO exit</dt>
-						<dd>{formatShareAmount(maximumNoExit)}</dd>
+						<dd>{formatOutcomeAmount(maximumNoExit, 'NO')}</dd>
 					</div>
 					<div>
 						<dt>LP YES / NO claim</dt>
 						<dd>
-							{formatShareAmount(yesClaim)} / {formatShareAmount(noClaim)}
+							{formatOutcomeAmount(yesClaim, 'YES')} / {formatOutcomeAmount(noClaim, 'NO')}
 						</dd>
 					</div>
 					<div>
@@ -363,6 +330,79 @@ function DemoPortfolioGroup({ market, balances }: { market: DemoMarket; balances
 				</dl>
 			</div>
 		</section>
+	)
+}
+
+export function SecurityPoolDetails({ market }: { market: DemoMarket }) {
+	const scope = shareBalanceScope(market)
+	return (
+		<main class='route' id='main-content'>
+			<header class='route-header'>
+				<div>
+					<a class='eyebrow' href='#/markets'>
+						← Markets
+					</a>
+					<h1>Security pool</h1>
+					<p>{market.question}</p>
+				</div>
+			</header>
+			<section class='section'>
+				<dl class='fact-list'>
+					<div>
+						<dt>Security pool address</dt>
+						<dd>
+							<AddressValue value={market.pool} />
+						</dd>
+					</div>
+					<div>
+						<dt>Share token address</dt>
+						<dd>
+							<AddressValue value={market.shareToken} />
+						</dd>
+					</div>
+					<div>
+						<dt>Outcome token IDs</dt>
+						<dd>
+							INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
+						</dd>
+					</div>
+					<div>
+						<dt>System state</dt>
+						<dd>{market.securityPool.systemState}</dd>
+					</div>
+					{market.securityPool.questionOutcome === 'Unresolved' ? null : (
+						<div>
+							<dt>Outcome</dt>
+							<dd>{market.securityPool.questionOutcome}</dd>
+						</div>
+					)}
+					<div>
+						<dt>Security multiplier</dt>
+						<dd>{formatBpsMultiplier(market.securityPool.statoblastSecurityMultiplierBps)}</dd>
+					</div>
+					<div>
+						<dt>Initial report priority fee</dt>
+						<dd>{formatUnits(market.securityPool.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
+					</div>
+					<div>
+						<dt>Registered vaults</dt>
+						<dd>{market.securityPool.vaultCount.toString()}</dd>
+					</div>
+					<div>
+						<dt>Total / fee-eligible capacity ownership</dt>
+						<dd>{formatCapacityOwnership(market.securityPool.totalCapacityOwnershipAttoRep, market.securityPool.feeEligibleCapacityOwnershipAttoRep)}</dd>
+					</div>
+					<div>
+						<dt>Minting capacity</dt>
+						<dd>{formatMintingCapacity(market.securityPool.settlementCollateralAttoEth, market.securityPool.mintingCapacityCeilingAttoEth)}</dd>
+					</div>
+					<div>
+						<dt>Checkpointed collateral / share ratio</dt>
+						<dd>{formatEthPerShare(market.securityPool.settlementCollateralAttoEth, market.securityPool.shareTokenSupplyAttoShares)}</dd>
+					</div>
+				</dl>
+			</section>
+		</main>
 	)
 }
 
@@ -394,7 +434,7 @@ export function Help() {
 				<article>
 					<span>01</span>
 					<h2>Create a complete set</h2>
-					<p>Your ETH is sent to the selected Statoblast SecurityPool, which creates equal INVALID, YES, and NO shares at its current exchange rate.</p>
+					<p>Your ETH is sent to the selected Statoblast security pool, which creates equal amounts of INVALID, YES, and NO at its current exchange rate.</p>
 				</article>
 				<article>
 					<span>02</span>
@@ -423,60 +463,6 @@ export function Help() {
 				<p>
 					The complete developer and protocol documentation is included in <code>trading/docs/</code>.
 				</p>
-			</section>
-		</main>
-	)
-}
-
-export function Developer({ demo = true, deploymentStatus = 'loading' }: { demo?: boolean; deploymentStatus?: 'loading' | 'verified' | 'unavailable' }) {
-	let liveStatus = 'Checking deployment'
-	let liveChain = 'Validating deployment.json against RPC'
-	let liveTone: 'good' | 'warn' | 'neutral' = 'neutral'
-	let liveNotice = 'Live deployment details remain unavailable until deployment.json and its RPC contracts validate successfully.'
-	if (deploymentStatus === 'verified') {
-		liveStatus = 'Verified runtime manifest'
-		liveChain = 'Read from deployment.json and verified against RPC'
-		liveTone = 'good'
-		liveNotice = 'The live client validated the RPC chain ID, factory, router, fee, and core SecurityPoolFactory against deployment.json before discovering markets.'
-	} else if (deploymentStatus === 'unavailable') {
-		liveStatus = 'Deployment unavailable'
-		liveChain = 'Unavailable — inspect deployment.json and RPC configuration'
-		liveTone = 'warn'
-	}
-	return (
-		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<span class='eyebrow'>Runtime configuration</span>
-					<h1>Deployment</h1>
-					<p>Addresses are loaded from a project-local manifest. This build never invents public-network deployments.</p>
-				</div>
-				<Status tone={demo ? 'neutral' : liveTone}>{demo ? 'Local runtime' : liveStatus}</Status>
-			</header>
-			<section class='section'>
-				<dl class='fact-list'>
-					<div>
-						<dt>Chain</dt>
-						<dd>{demo ? 'Anvil · 31337' : liveChain}</dd>
-					</div>
-					<div>
-						<dt>SecurityPoolFactory</dt>
-						<dd>Read from core deployment manifest</dd>
-					</div>
-					<div>
-						<dt>Trading factory</dt>
-						<dd>Deployed immutably with one fee</dd>
-					</div>
-					<div>
-						<dt>Router</dt>
-						<dd>Stateless operation coordinator</dd>
-					</div>
-					<div>
-						<dt>Pair discovery</dt>
-						<dd>Factory mapping by exact SecurityPool</dd>
-					</div>
-				</dl>
-				{demo ? null : <div class='warning'>{liveNotice}</div>}
 			</section>
 		</main>
 	)

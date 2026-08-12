@@ -728,6 +728,19 @@ summary {
 	text-overflow: ellipsis;
 	color: #c7d2dc;
 }
+.security-pool-link {
+	display: inline-block;
+	max-width: 100%;
+	text-decoration-color: var(--muted);
+	text-underline-offset: 0.2em;
+}
+.security-pool-link:hover .address {
+	color: var(--accent);
+}
+.security-pool-link[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
 .market-list {
 	border-top: 1px solid var(--line);
 }
@@ -1039,10 +1052,14 @@ footer {
 	.eyebrow[href],
 	details summary,
 	.market-row h2 a,
-	.table-row a {
+	.table-row a,
+	.security-pool-link {
 		display: inline-flex;
 		align-items: center;
 		min-height: 44px;
+	}
+	.security-pool-link {
+		height: 44px;
 	}
 	.site-header nav {
 		gap: 0;

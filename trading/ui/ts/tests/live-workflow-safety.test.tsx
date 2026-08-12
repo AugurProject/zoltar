@@ -230,7 +230,7 @@ describe('live workflow safety boundary', () => {
 		cleanupRendered = rendered.cleanup
 		await flush()
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
-		expect(document.body.textContent).toContain('2 nETH / gas')
+		expect(document.body.textContent).not.toContain('2 nETH / gas')
 		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
 		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
 		discoveredLoadError = 'market RPC unavailable'
@@ -238,9 +238,9 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		expect(document.body.textContent).toContain('Market data unavailable')
 		expect(document.body.textContent).toContain(pool)
-		expect(document.body.textContent).toContain(shareToken)
-		expect(document.body.textContent).toContain('Question ID2')
-		expect(document.body.textContent).toContain('INVALID 256 · YES 257 · NO 258')
+		expect(document.body.textContent).not.toContain(shareToken)
+		expect(document.body.textContent).not.toContain('Question ID2')
+		expect(document.body.textContent).not.toContain('INVALID 256 · YES 257 · NO 258')
 		discoveredLoadError = undefined
 		await act(async () => button('Refresh').click())
 		await flush()
@@ -287,12 +287,12 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).toContain(secondPool)
 		const firstPortfolioCard = document.querySelector(`[data-portfolio-pool="${pool}"]`)
 		const secondPortfolioCard = document.querySelector(`[data-portfolio-pool="${secondPool}"]`)
-		expect(firstPortfolioCard?.textContent).toContain('1 shares')
-		expect(secondPortfolioCard?.textContent).not.toContain('4 shares')
+		expect(firstPortfolioCard?.textContent).toContain('1 YES')
+		expect(secondPortfolioCard?.textContent).not.toContain('4 YES')
 		secondPortfolioBalance.resolve(undefined)
 		await Bun.sleep(10)
 		await flush()
-		expect(secondPortfolioCard?.textContent).toContain('4 shares')
+		expect(secondPortfolioCard?.textContent).toContain('4 YES')
 		childBalanceStarted = deferred<undefined>()
 		deferChildDiscovery = true
 		render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container)
@@ -353,7 +353,7 @@ describe('live workflow safety boundary', () => {
 		connectedAccount = `0x${'99'.repeat(20)}` as Address
 		const summariesBeforeSilentChange = walletSummaries.length
 		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
 		const silentChangeSummaries = walletSummaries.slice(summariesBeforeSilentChange)
 		expect(silentChangeSummaries.length).toBeGreaterThan(0)
@@ -385,7 +385,7 @@ describe('live workflow safety boundary', () => {
 		const callsBeforeProviderReplacement = approveRouterCalls
 		Reflect.set(window, 'ethereum', { ...injectedProvider })
 		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
 		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
 		expect(walletSummaries.at(-1)?.account).toBeUndefined()
@@ -427,7 +427,7 @@ describe('live workflow safety boundary', () => {
 		const callsBeforeMidPreflightReplacement = approveRouterCalls
 		await act(async () => {
 			button('Exit').click()
-			button('Approve router for all ShareToken shares').click()
+			button('Approve router for all outcome tokens').click()
 			await walletChainReadStarted?.promise
 		})
 		Reflect.set(window, 'ethereum', { ...injectedProvider })
@@ -445,7 +445,7 @@ describe('live workflow safety boundary', () => {
 
 		rejectWalletChainRead = true
 		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
 		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
 		expect(walletSummaries.at(-1)?.account).toBeUndefined()
@@ -456,7 +456,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		rejectWalletAccountRead = true
 		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
 		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
 		expect(walletSummaries.at(-1)?.account).toBeUndefined()
@@ -468,7 +468,7 @@ describe('live workflow safety boundary', () => {
 
 		await act(async () => button('Exit').click())
 		rejectBalanceRefresh = true
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
 		expect(document.body.textContent).toContain('Retry balances')
@@ -484,7 +484,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('balance RPC unavailable')
 		waitForContextApprovalReceipt = true
-		await act(async () => button('Approve router for all ShareToken shares').click())
+		await act(async () => button('Approve router for all outcome tokens').click())
 		await act(async () => {
 			walletListeners.get('accountsChanged')?.([`0x${'99'.repeat(20)}`])
 			contextApprovalReceipt.resolve({ status: 'success' })
@@ -533,6 +533,8 @@ describe('live workflow safety boundary', () => {
 		waitForContextApprovalReceipt = false
 		await act(() => render(<LiveTrading key='settlement-refresh' route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
 		await flush()
+		expect(document.body.textContent).not.toContain('Winning shares')
+		expect(document.body.textContent).not.toContain('None (unresolved)')
 		await act(async () => button('Connect wallet').click())
 		await flush()
 		rejectBalanceRefresh = true

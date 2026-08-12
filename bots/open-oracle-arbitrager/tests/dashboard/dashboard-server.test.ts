@@ -53,9 +53,22 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			state.paused = paused
 		},
 		updateConnectivity: value => {
-			if (typeof value !== 'object' || value === null || !('readRpcUrl' in value) || !('publicRpcUrls' in value) || typeof value.readRpcUrl !== 'string' || !Array.isArray(value.publicRpcUrls)) throw new Error('Invalid test connectivity')
-			connectivity = { publicRpcUrls: value.publicRpcUrls.map(String), readRpcUrl: value.readRpcUrl }
-			return connectivity
+			if (
+				typeof value !== 'object' ||
+				value === null ||
+				!('connectivity' in value) ||
+				typeof value.connectivity !== 'object' ||
+				value.connectivity === null ||
+				!('readRpcUrl' in value.connectivity) ||
+				!('publicRpcUrls' in value.connectivity) ||
+				typeof value.connectivity.readRpcUrl !== 'string' ||
+				!Array.isArray(value.connectivity.publicRpcUrls) ||
+				!('network' in value) ||
+				value.network !== 'mainnet'
+			)
+				throw new Error('Invalid test connectivity')
+			connectivity = { publicRpcUrls: value.connectivity.publicRpcUrls.map(String), readRpcUrl: value.connectivity.readRpcUrl }
+			return { connectivity, network: value.network, restartRequired: false }
 		},
 		updateDeployment: value => {
 			if (typeof value !== 'object' || value === null || !('executor' in value)) throw new Error('Invalid test deployment')
@@ -231,11 +244,12 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(submission.mode).toBe('private')
 	expect(submission.relayUrls).toHaveLength(2)
 	const connectivityUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }),
+		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
 		headers: { 'content-type': 'application/json', origin },
 		method: 'PUT',
 	})
 	expect(connectivityUpdate.status).toBe(200)
+	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet', restartRequired: false })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
 	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
 		body: JSON.stringify([address]),
