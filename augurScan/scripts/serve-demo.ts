@@ -3,9 +3,10 @@ import path from 'node:path'
 const root = path.resolve(import.meta.dir, '../public')
 const server = Bun.serve({
 	port: Number(process.env['PORT'] ?? '3001'),
-	async fetch(request) {
+	async fetch(request, server) {
 		const url = new URL(request.url)
 		if (url.pathname === '/api/v1/stream') {
+			server.timeout(request, 0)
 			const emitReorg = url.searchParams.get('reorg') === '1'
 			const emitBurst = url.searchParams.get('burst') === '1'
 			let timer: ReturnType<typeof setTimeout> | undefined
@@ -38,7 +39,9 @@ const server = Bun.serve({
 			})
 		}
 		const name =
-			url.pathname === '/' || url.pathname === '/system' || url.pathname === '/richlist' || url.pathname === '/address' ? 'index.html' : url.pathname.slice(1)
+			url.pathname === '/' || url.pathname === '/system' || url.pathname === '/contracts' || url.pathname === '/richlist' || url.pathname === '/address'
+				? 'index.html'
+				: url.pathname.slice(1)
 		const file = Bun.file(path.join(root, name))
 		if (!(await file.exists())) return new Response('Not found', { status: 404 })
 		const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'

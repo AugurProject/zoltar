@@ -1,20 +1,47 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
+import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
-import { BaseError, ContractFunctionExecutionError, decodeFunctionResult, parseAbi, toHex } from '../src/ethereum.ts'
+import {
+	BaseError,
+	ContractFunctionExecutionError,
+	decodeFunctionResult,
+	HttpRequestError,
+	parseAbi,
+	RpcRequestError,
+	TimeoutError,
+	toHex,
+} from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
+	boundedDeploymentRead,
 	commitCanonicalRead,
+	compactIndexerDuration,
 	confirmCanonicalBlock,
+	contractDeploymentScanDue,
+	deploymentReadBudget,
+	findContractDeploymentBlock,
+	indexerProgressMessage,
+	indexerWaitingMessage,
+	indexingCompletion,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
+	isSplittableLogRangeError,
+	queryAdaptiveLogRange,
+	queryCanonicalLogRange,
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
 	retryDelayMs,
+	rpcFailureLogMessage,
+	rpcLogAddressGroups,
+	rpcProviderLabel,
 	runIndexerOwnershipLifecycle,
+	runIndexerTask,
 	runNetworkLifecycle,
 	safeIndexerFailure,
+	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
+	waitForIndexerDelay,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -45,6 +72,224 @@ const malformedDecimalsResult = (): number => {
 }
 
 describe('network indexer lifecycle', () => {
+	test('splits oversized inclusive log ranges without gaps or duplicate boundary blocks', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		const query = async (fromBlock: bigint, toBlock: bigint): Promise<readonly bigint[]> => {
+			attempts.push([fromBlock, toBlock])
+			if (toBlock - fromBlock + 1n > 26n) throw new Error('query returned more than 10000 results')
+			return [fromBlock, toBlock]
+		}
+
+		const first = await queryAdaptiveLogRange(0n, 200n, 101, query)
+		expect(first).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
+		expect(attempts).toEqual([
+			[0n, 100n],
+			[0n, 50n],
+			[0n, 25n],
+		])
+
+		const second = await queryAdaptiveLogRange(first.toBlock + 1n, 200n, 101, query)
+		expect(second.fromBlock).toBe(26n)
+		expect(second.toBlock).toBe(51n)
+		expect(attempts.slice(3)).toEqual([
+			[26n, 126n],
+			[26n, 76n],
+			[26n, 51n],
+		])
+	})
+
+	test('does not hide an RPC failure when even one block cannot be queried', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		await expect(
+			queryAdaptiveLogRange(9n, 9n, 100, async (fromBlock, toBlock) => {
+				attempts.push([fromBlock, toBlock])
+				throw new Error('RPC unavailable')
+			}),
+		).rejects.toThrow('RPC unavailable')
+		expect(attempts).toEqual([[9n, 9n]])
+	})
+
+	test('splits provider result-limit failures but preserves unrelated failures for failover', () => {
+		expect(isSplittableLogRangeError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
+		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
+		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('does not split viem HTTP rate-limit failures', async () => {
+		for (const details of ['rate limit exceeded', 'Too Many Requests']) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new HttpRequestError({ details, status: 429, url: 'https://rpc.example' })
+			await expect(
+				queryAdaptiveLogRange(
+					0n,
+					100n,
+					101,
+					async (fromBlock, toBlock) => {
+						attempts.push([fromBlock, toBlock])
+						throw failure
+					},
+					undefined,
+					isSplittableLogRangeError,
+				),
+			).rejects.toBe(failure)
+			expect(attempts).toEqual([[0n, 100n]])
+		}
+	})
+
+	test('uses the same provider category for range splitting and diagnostics', async () => {
+		const plainTimeout = new Error('query timed out')
+		expect(isSplittableLogRangeError(plainTimeout)).toBe(true)
+		expect(safeIndexerFailureReason(plainTimeout)).toBe('Error; message: provider request timed out')
+		const httpRateLimit = new HttpRequestError({ details: 'request quota exceeded', status: 429, url: 'https://rpc.example' })
+		expect(isSplittableLogRangeError(httpRateLimit)).toBe(false)
+		expect(safeIndexerFailureReason(httpRateLimit)).toBe('HttpRequestError; HTTP 429; message: provider rate limit exceeded')
+
+		const structuredRangeFailure = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: ['response-size'] },
+			error: { code: -32600, message: 'block range is too wide' },
+			url: 'https://rpc.example/rate-limit/',
+		})
+		expect(isSplittableLogRangeError(structuredRangeFailure)).toBe(true)
+		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+		const unrelatedStructuredFailure = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: ['request timed out'] },
+			error: { code: -32600, message: 'upstream rejected query' },
+			url: 'https://rpc.example/response-size/',
+		})
+		expect(isSplittableLogRangeError(unrelatedStructuredFailure)).toBe(false)
+		expect(safeIndexerFailureReason(unrelatedStructuredFailure)).toBe('RpcRequestError; code -32600')
+		const conflictingCause = new Error('request rate exceeded', { cause: structuredRangeFailure })
+		expect(isSplittableLogRangeError(conflictingCause)).toBe(false)
+		expect(safeIndexerFailureReason(conflictingCause)).toBe('Error caused by RpcRequestError; code -32600; message: provider rate limit exceeded')
+
+		for (const details of ['more than 10 requests per second', 'request limit exceeded', 'please reduce your request rate']) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new RpcRequestError({ body: { method: 'eth_getLogs' }, error: { code: -32600, message: details }, url: 'https://rpc.example' })
+			await expect(
+				queryAdaptiveLogRange(
+					0n,
+					100n,
+					101,
+					async (fromBlock, toBlock) => {
+						attempts.push([fromBlock, toBlock])
+						throw failure
+					},
+					undefined,
+					isSplittableLogRangeError,
+				),
+			).rejects.toBe(failure)
+			expect(attempts).toEqual([[0n, 100n]])
+			expect(safeIndexerFailureReason(failure)).toBe('RpcRequestError; code -32600; message: provider rate limit exceeded')
+		}
+
+		for (const [details, expectedMessage] of [
+			['response too large', 'provider response size limit exceeded'],
+			['request timed out', 'provider request timed out'],
+		] as const) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const failure = new RpcRequestError({ body: { method: 'eth_getLogs' }, error: { code: -32600, message: details }, url: 'https://rpc.example' })
+			await queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					if (toBlock - fromBlock + 1n > 26n) throw failure
+					return []
+				},
+				undefined,
+				isSplittableLogRangeError,
+			)
+			expect(attempts).toEqual([
+				[0n, 100n],
+				[0n, 50n],
+				[0n, 25n],
+			])
+			expect(safeIndexerFailureReason(failure)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+		}
+	})
+
+	test('rejects an empty log range when its canonical endpoint changes before commit', async () => {
+		const oldHash = `0x${'1'.repeat(64)}` as const
+		const replacementHash = `0x${'2'.repeat(64)}` as const
+		const hashes = [oldHash, replacementHash]
+		let commits = 0
+		let failure: unknown
+		try {
+			await queryCanonicalLogRange(
+				100n,
+				async () => {
+					const hash = hashes.shift()
+					if (hash === undefined) throw new Error('Unexpected endpoint hash read')
+					return hash
+				},
+				async () => [],
+			)
+			commits++
+		} catch (error) {
+			failure = error
+		}
+		expect(String(failure)).toContain('changed while querying logs through block 100')
+		expect(commits).toBe(0)
+	})
+
+	test('splits viem timeout and oversized-response failures at exact inclusive boundaries', async () => {
+		const oversizedFailure = new BaseError('HTTP response body exceeded the size limit and contained provider-key-sentinel.', {
+			name: 'ResponseBodyTooLargeError',
+		})
+		const failures = [new TimeoutError({ body: { method: 'eth_getLogs' }, url: 'https://rpc.example' }), oversizedFailure]
+		for (const failure of failures) {
+			const attempts: Array<readonly [bigint, bigint]> = []
+			const warnings: string[] = []
+			const result = await queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					if (toBlock - fromBlock + 1n > 26n) throw failure
+					return [fromBlock, toBlock]
+				},
+				(failedFrom, failedTo, retryTo, error) =>
+					warnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+				isSplittableLogRangeError,
+			)
+			expect(result).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
+			expect(attempts).toEqual([
+				[0n, 100n],
+				[0n, 50n],
+				[0n, 25n],
+			])
+			if (failure === oversizedFailure) {
+				expect(safeIndexerFailureReason(failure)).toBe('ResponseBodyTooLargeError; message: provider response size limit exceeded')
+				expect(warnings).toEqual([
+					'RPC log range #0-#100 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#50',
+					'RPC log range #0-#50 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#25',
+				])
+				expect(warnings.join(' ')).not.toContain('provider-key-sentinel')
+			}
+		}
+	})
+
+	test('does not bisect an unrelated provider failure', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		await expect(
+			queryAdaptiveLogRange(
+				0n,
+				100n,
+				101,
+				async (fromBlock, toBlock) => {
+					attempts.push([fromBlock, toBlock])
+					throw new Error('401 Unauthorized')
+				},
+				undefined,
+				isSplittableLogRangeError,
+			),
+		).rejects.toThrow('401 Unauthorized')
+		expect(attempts).toEqual([[0n, 100n]])
+	})
+
 	test('attributes senders and referenced vaults to every security pool touched by a transaction', () => {
 		const sender = '0x2000000000000000000000000000000000000002'
 		const pool = '0x3000000000000000000000000000000000000003'
@@ -97,6 +342,67 @@ describe('network indexer lifecycle', () => {
 		expect(retryDelayMs(1, 12_000, () => 1)).toBe(14_400)
 	})
 
+	test('reports bounded backfill progress and live block completion clearly', () => {
+		expect(indexingCompletion(100n, 549n, 999n)).toEqual({ completedBlocks: 450n, percentage: '50.00', remainingBlocks: 450n, totalBlocks: 900n })
+		expect(indexingCompletion(100n, 1_005n, 1_000n)).toEqual({ completedBlocks: 901n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 901n })
+		expect(indexingCompletion(100n, 99n, 100n)).toEqual({ completedBlocks: 0n, percentage: '0.00', remainingBlocks: 1n, totalBlocks: 1n })
+		expect(indexingCompletion(100n, 99n, 99n)).toEqual({ completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n })
+		expect(indexerWaitingMessage('mainnet', 100n, 99n)).toBe(
+			'[mainnet] indexer state: live; observed head #99; 100.00% complete; caught up; waiting for configured start block #100',
+		)
+		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
+		expect(compactIndexerDuration(3_600)).toBe('1h')
+		expect(compactIndexerDuration(86_400)).toBe('1d')
+		expect(compactIndexerDuration(172_800)).toBe('2d')
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe(
+			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s',
+		)
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n)).toEndWith('11.99% complete; 881 blocks behind; estimating ETA')
+		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe(
+			'[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up',
+		)
+	})
+
+	test('finds the first block containing contract code and distinguishes a bounded result', async () => {
+		expect(await findContractDeploymentBlock(0n, 100n, async (block) => (block >= 42n ? '0x01' : undefined))).toEqual({ block: 42n, exact: true })
+		expect(await findContractDeploymentBlock(50n, 100n, async () => '0x01')).toEqual({ block: 50n, exact: false })
+		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
+	})
+
+	test('bounds a stalled optional contract deployment history read', async () => {
+		let deploymentTimeout: unknown
+		try {
+			await boundedDeploymentRead(() => new Promise(() => {}), 1)
+		} catch (error) {
+			deploymentTimeout = error
+		}
+		expect(deploymentTimeout).toMatchObject({ name: 'TimeoutError' })
+		expect(safeIndexerFailureReason(deploymentTimeout)).toBe('TimeoutError; message: provider request timed out')
+		let now = 0
+		const readWithinBudget = deploymentReadBudget(10, () => now)
+		expect(
+			await readWithinBudget(async () => {
+				now += 6
+				return 'first'
+			}),
+		).toBe('first')
+		await expect(
+			readWithinBudget(async () => {
+				now += 5
+				return 'second'
+			}),
+		).rejects.toMatchObject({ name: 'TimeoutError' })
+		expect(contractDeploymentScanDue(undefined, 1_000)).toBe(true)
+		expect(contractDeploymentScanDue(1_000, 60_999)).toBe(false)
+		expect(contractDeploymentScanDue(1_000, 61_000)).toBe(true)
+	})
+
+	test('removes completed delay listeners from the shared shutdown signal', async () => {
+		const controller = new AbortController()
+		for (let index = 0; index < 20; index++) await waitForIndexerDelay(0, controller.signal)
+		expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+	})
+
 	test('never runs an indexing operation against a mismatched fallback provider', async () => {
 		const operations: string[] = []
 		const providers = [
@@ -120,6 +426,60 @@ describe('network indexer lifecycle', () => {
 		expect(await withVerifiedProvider(providers, 1, (provider) => provider.read())).toBe('canonical data')
 	})
 
+	test('caches only successful provider chain verification', async () => {
+		let chainIdReads = 0
+		let verificationAvailable = false
+		const provider = {
+			getChainId: async () => {
+				chainIdReads++
+				if (!verificationAvailable) throw new Error('verification unavailable')
+				return 1
+			},
+			read: async () => 'canonical data',
+		}
+		const verifiedProviders = new WeakSet<typeof provider>()
+		await expect(
+			withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).rejects.toThrow('verification unavailable')
+		verificationAvailable = true
+		expect(
+			await withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).toBe('canonical data')
+		expect(
+			await withVerifiedProvider(
+				[provider],
+				1,
+				(candidate) => candidate.read(),
+				() => false,
+				() => {},
+				verifiedProviders,
+			),
+		).toBe('canonical data')
+		expect(chainIdReads).toBe(2)
+	})
+
+	test('keeps RPC log address filters within public-provider limits', () => {
+		expect(rpcLogAddressGroups(Array.from({ length: 12 }, (_, index) => index))).toEqual([
+			[0, 1, 2, 3, 4],
+			[5, 6, 7, 8, 9],
+			[10, 11],
+		])
+	})
+
 	test('redacts arbitrary transport failures to a stable public message', () => {
 		const secret = 'provider-key-sentinel'
 		const message = safeIndexerFailure(new Error(`HTTP request failed at https://rpc.example/${secret}?token=${secret}`))
@@ -127,6 +487,222 @@ describe('network indexer lifecycle', () => {
 		expect(message).toBe('RPC request failed; retrying')
 		expect(message).not.toContain(secret)
 		expect(message).not.toContain('rpc.example')
+	})
+
+	test('reports safe transport diagnostics without exposing raw error messages', () => {
+		const secret = 'provider-key-sentinel'
+		const transportError = Object.assign(new Error(`HTTP request failed at https://rpc.example/${secret}?token=${secret}`), {
+			code: 'HTTP_429',
+			name: 'HttpRequestError',
+			status: 429,
+		})
+		const error = new Error(`wrapped ${secret}`, { cause: transportError })
+		error.name = 'ContractFunctionExecutionError'
+		const reason = safeIndexerFailureReason(error)
+
+		expect(reason).toBe('ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded')
+		expect(rpcFailureLogMessage('RPC request failed; retrying', '#1 https://rpc.example', reason)).toBe(
+			'RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded)',
+		)
+		expect(reason).not.toContain(secret)
+		expect(reason).not.toContain('rpc.example')
+		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
+	})
+
+	test('reports a sanitized JSON-RPC provider message without request or endpoint secrets', async () => {
+		const secret = 'provider-key-sentinel'
+		const rangeError = new RpcRequestError({
+			body: { method: 'eth_getLogs', params: [secret] },
+			error: { code: -32600, message: 'block range limit is 10 blocks' },
+			url: `https://rpc.example/${secret}?token=${secret}`,
+		})
+		expect(safeIndexerFailureReason(rangeError)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+
+		const numericCredential = '123456'
+		const numericRangeError = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: Number(numericCredential), message: `Bearer ${numericCredential}; block range limit is ${numericCredential} blocks` },
+			url: 'https://rpc.example',
+		})
+		const numericWarnings: string[] = []
+		await queryAdaptiveLogRange(
+			0n,
+			1n,
+			2,
+			async (fromBlock, toBlock) => {
+				if (fromBlock !== toBlock) throw numericRangeError
+				return []
+			},
+			(failedFrom, failedTo, retryTo, error) =>
+				numericWarnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+			isSplittableLogRangeError,
+		)
+		expect(numericWarnings).toEqual(['RPC log range #0-#1 failed (RpcRequestError; message: provider rejected the requested block range); retrying #0-#0'])
+		expect(numericWarnings.join(' ')).not.toContain(numericCredential)
+
+		const unsafeMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: `invalid token=${secret} at https://rpc.example/${secret}` },
+			url: 'https://rpc.example',
+		})
+		const reason = safeIndexerFailureReason(unsafeMessage)
+		expect(reason).toBe('RpcRequestError; code -32600')
+		expect(reason).not.toContain(secret)
+		expect(reason).not.toContain('rpc.example')
+
+		for (const [details, expectedMessage, splittable] of [
+			['query returned more than 10000 results', 'provider returned too many results', true],
+			['query timed out', 'provider request timed out', true],
+			['response size exceeded', 'provider response size limit exceeded', true],
+			['rate limit exceeded', 'provider rate limit exceeded', false],
+			['rate-limit exceeded', 'provider rate limit exceeded', false],
+			['rate_limit.exceeded', 'provider rate limit exceeded', false],
+			['rate\tlimit\u001bexceeded', 'provider rate limit exceeded', false],
+			['rate\u200blimit exceeded', 'provider rate limit exceeded', false],
+		] as const) {
+			const diagnosticError = new RpcRequestError({
+				body: { method: 'eth_getLogs' },
+				error: { code: -32600, message: details },
+				url: 'https://rpc.example',
+			})
+			expect(safeIndexerFailureReason(diagnosticError)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+			expect(isSplittableLogRangeError(diagnosticError)).toBe(splittable)
+		}
+
+		const quotedSecrets = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `credentials {"token":"${secret}", "client_secret":"${secret}"}; password = "provider key ${secret}"; endpoint wss://rpc.example/${secret}`,
+			},
+			url: 'https://rpc.example',
+		})
+		const quotedReason = safeIndexerFailureReason(quotedSecrets)
+		expect(quotedReason).toBe('RpcRequestError; code -32600')
+		expect(quotedReason).not.toContain(secret)
+		expect(quotedReason).not.toContain('rpc.example')
+		expect(quotedReason).not.toContain('\n')
+		expect(quotedReason.length).toBeLessThanOrEqual(360)
+
+		const escapedQuotedPassword = `{"password":"safe${String.fromCodePoint(92)}"${secret}"}`
+		const adversarialMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `password=first ${secret}; ${escapedQuotedPassword}; endpoint wss://[2001:db8::1]/${secret}`,
+			},
+			url: 'https://rpc.example',
+		})
+		const adversarialReason = safeIndexerFailureReason(adversarialMessage)
+		expect(adversarialReason).not.toContain(secret)
+		expect(adversarialReason).not.toContain('2001:db8::1')
+		expect(adversarialReason).not.toContain('wss://')
+
+		const apostropheUrl = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: `endpoint https://rpc.example/key'${secret} rejected the range` },
+			url: 'https://rpc.example',
+		})
+		const apostropheReason = safeIndexerFailureReason(apostropheUrl)
+		expect(apostropheReason).not.toContain(secret)
+		expect(apostropheReason).not.toContain('rpc.example')
+
+		const escapedBearer = `Bearer "safe${String.fromCodePoint(92)}"${secret}"`
+		const bearerMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: {
+				code: -32600,
+				message: `${escapedBearer}; Bearer first\u001b ${secret}; block range limit is 10 blocks`,
+			},
+			url: 'https://rpc.example',
+		})
+		const bearerReason = safeIndexerFailureReason(bearerMessage)
+		expect(bearerReason).not.toContain(secret)
+		expect(bearerReason).toContain('provider rejected the requested block range')
+
+		for (const unsafeDetails of [
+			String.raw`{\"token\":\"${secret}\"}`,
+			String.raw`\`token\`=\`${secret}\``,
+			String.raw`request https:\/\/rpc.example\/${secret} failed`,
+			String.raw`echoed body {\"params\":[\"${secret}\"]}`,
+		]) {
+			const escapedReason = safeIndexerFailureReason(
+				new RpcRequestError({
+					body: { method: 'eth_getLogs' },
+					error: { code: -32600, message: unsafeDetails },
+					url: 'https://rpc.example',
+				}),
+			)
+			expect(escapedReason).toBe('RpcRequestError; code -32600')
+			expect(escapedReason).not.toContain(secret)
+			expect(escapedReason).not.toContain('rpc.example')
+		}
+
+		const controlMessage = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32600, message: 'range too wide\u001bEfor logs\u0085retry on a smaller range' },
+			url: 'https://rpc.example',
+		})
+		const controlReason = safeIndexerFailureReason(controlMessage)
+		expect(
+			[...controlReason].some((character) => {
+				const codePoint = character.codePointAt(0)
+				return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
+			}),
+		).toBe(false)
+		expect(controlReason).toContain('message: provider rejected the requested block range')
+	})
+
+	test('reports one stopped transition after graceful lifecycle shutdown', async () => {
+		const controller = new AbortController()
+		const info = spyOn(console, 'info').mockImplementation(() => {})
+		try {
+			await runIndexerTask('sepolia', () =>
+				runNetworkLifecycle({
+					verify: async () => {},
+					poll: async () => {
+						controller.abort()
+						return true
+					},
+					failure: async () => {},
+					intervalMs: 1,
+					signal: controller.signal,
+				}),
+			)
+			expect(info.mock.calls.filter(([message]) => message === '[sepolia] indexer state: stopped')).toHaveLength(1)
+		} finally {
+			info.mockRestore()
+		}
+	})
+
+	test('identifies RPC providers during failover without exposing credentials, paths, or credential subdomains', async () => {
+		const secret = 'provider-key-sentinel'
+		const providers = [
+			`https://rpc-user:${secret}@rpc.example/first`,
+			`https://rpc.example/${secret}?token=${secret}`,
+			`https://${secret}.rpc.example/third`,
+		].map((rpcUrl, index) => ({
+			endpoint: rpcProviderLabel(rpcUrl, index),
+			getChainId: async () => 1,
+			read: async () => Promise.reject(new Error('offline')),
+		}))
+		let attemptedEndpoint = ''
+		await expect(
+			withVerifiedProvider(
+				providers,
+				1,
+				(provider) => provider.read(),
+				() => false,
+				(provider) => {
+					attemptedEndpoint = provider.endpoint
+				},
+			),
+		).rejects.toThrow('offline')
+		const message = rpcFailureLogMessage('RPC request failed; retrying', attemptedEndpoint)
+
+		expect(message).toBe('RPC request failed; retrying (RPC: #3 https://*.rpc.example)')
+		expect(message).not.toContain(secret)
+		expect(message).not.toContain('rpc-user')
 	})
 
 	test('reports database failures separately without leaking details', () => {
@@ -347,6 +923,33 @@ describe('network indexer lifecycle', () => {
 		expect(ownedRuns).toBe(1)
 		expect(unownedFailures).toBe(1)
 		expect(failures).toEqual(['Database request failed; retrying'])
+	})
+
+	test('logs an actionable configured-boundary failure during ownership seeding', async () => {
+		const controller = new AbortController()
+		const error = new Error(
+			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
+		)
+		error.name = 'DatabaseConsistencyError'
+		let seeds = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				acquire: async () => ({ assertHeld: async () => {}, release: async () => {} }),
+				seed: async () => {
+					seeds++
+					if (seeds === 1) throw error
+				},
+				runOwned: async () => controller.abort(),
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 1,
+				signal: controller.signal,
+			})
+			expect(logged).toHaveBeenCalledWith(`Indexer ownership operation failed (DatabaseConsistencyError): ${error.message}`)
+		} finally {
+			logged.mockRestore()
+		}
 	})
 
 	test('does not select shared tokens as standalone activity sources', () => {

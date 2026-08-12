@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { liveStreamResponse } from '../src/http.ts'
 import { LiveBus } from '../src/live.ts'
 
 const decoder = new TextDecoder()
@@ -7,6 +8,36 @@ const streamFrom = (bus: LiveBus, lastEventId?: number): ReadableStream<Uint8Arr
 	if (stream === undefined) throw new Error('Expected live stream capacity')
 	return stream
 }
+
+test('keeps a quiet SSE response open beyond Bun server idle timeout', async () => {
+	const encoder = new TextEncoder()
+	const server = Bun.serve({
+		port: 0,
+		idleTimeout: 1,
+		fetch(request, activeServer) {
+			return liveStreamResponse(
+				new ReadableStream({
+					start(controller) {
+						controller.enqueue(encoder.encode(': connected\n\n'))
+						setTimeout(() => {
+							controller.enqueue(encoder.encode(': heartbeat\n\n'))
+							controller.close()
+						}, 1_250)
+					},
+				}),
+				request,
+				activeServer,
+			)
+		},
+	})
+	try {
+		const response = await fetch(`http://127.0.0.1:${server.port}`)
+		expect(response.status).toBe(200)
+		expect(await response.text()).toBe(': connected\n\n: heartbeat\n\n')
+	} finally {
+		await server.stop(true)
+	}
+})
 
 test('replays durable events after the browser Last-Event-ID and closes cleanly', async () => {
 	const events = [

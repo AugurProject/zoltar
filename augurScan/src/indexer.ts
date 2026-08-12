@@ -1,10 +1,19 @@
 import { runtimeConfig } from './config.ts'
-import type { AddressActivity, IndexedBlock, IndexerLease, RichListBalance, ScannerDatabase, StoredTransaction } from './database.ts'
+import {
+	type AddressActivity,
+	DatabaseConsistencyError,
+	type IndexedBlock,
+	type IndexerLease,
+	type RichListBalance,
+	type ScannerDatabase,
+	type StoredTransaction,
+} from './database.ts'
 import {
 	type Address,
 	createPublicClient,
 	getAddress,
 	type Hash,
+	type Hex,
 	http,
 	type Log,
 	type PublicClient,
@@ -16,6 +25,12 @@ import {
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+
+type RpcBlockHeader = {
+	readonly hash: Hash
+	readonly parentHash: Hash
+	readonly timestamp: bigint
+}
 
 const erc20MetadataAbi = parseAbi([
 	'function decimals() view returns (uint8)',
@@ -88,24 +103,46 @@ export const readTokenMetadata = async (address: Address, blockNumber: bigint, c
 	return { address, decimals, ...(name === undefined ? {} : { name }), ...(symbol === undefined ? {} : { symbol }), readBlock: blockNumber }
 }
 
-const wait = (milliseconds: number, signal: AbortSignal): Promise<void> =>
+export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve) => {
-		const timeout = setTimeout(resolve, milliseconds)
-		signal.addEventListener(
-			'abort',
-			() => {
-				clearTimeout(timeout)
-				resolve()
-			},
-			{ once: true },
-		)
+		const finish = (): void => {
+			clearTimeout(timeout)
+			signal.removeEventListener('abort', finish)
+			resolve()
+		}
+		const timeout = setTimeout(finish, milliseconds)
+		if (signal.aborted) finish()
+		else signal.addEventListener('abort', finish, { once: true })
 	})
+
+export const findContractDeploymentBlock = async (
+	startBlock: bigint,
+	observedHead: bigint,
+	codeAt: (block: bigint) => Promise<Hex | undefined>,
+): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+	const hasCode = async (block: bigint): Promise<boolean> => {
+		const code = await codeAt(block)
+		return code !== undefined && code !== '0x'
+	}
+	if (!(await hasCode(observedHead))) return undefined
+	if (await hasCode(startBlock)) return { block: startBlock, exact: false }
+	let lower = startBlock
+	let upper = observedHead
+	while (lower + 1n < upper) {
+		const middle = lower + (upper - lower) / 2n
+		if (await hasCode(middle)) upper = middle
+		else lower = middle
+	}
+	return { block: upper, exact: true }
+}
 
 const chunks = <T>(items: readonly T[], size: number): T[][] => {
 	const result: T[][] = []
 	for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
 	return result
 }
+
+export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
 const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
 	const result = new Array<R>(items.length)
@@ -119,6 +156,110 @@ const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (it
 	})
 	await Promise.all(workers)
 	return result
+}
+
+export const queryAdaptiveLogRange = async <T>(
+	fromBlock: bigint,
+	maximumToBlock: bigint,
+	maximumBlockCount: number,
+	query: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>,
+	onSplit?: (failedFromBlock: bigint, failedToBlock: bigint, retryToBlock: bigint, error: unknown) => void,
+	shouldSplit: (error: unknown) => boolean = () => true,
+): Promise<{ readonly fromBlock: bigint; readonly toBlock: bigint; readonly items: readonly T[] }> => {
+	if (!Number.isSafeInteger(maximumBlockCount) || maximumBlockCount <= 0) throw new Error('The maximum log range must be a positive safe integer')
+	if (fromBlock > maximumToBlock) throw new Error('The log range start must not exceed its end')
+	const remaining = maximumToBlock - fromBlock + 1n
+	let blockCount = remaining < BigInt(maximumBlockCount) ? Number(remaining) : maximumBlockCount
+	while (true) {
+		const toBlock = fromBlock + BigInt(blockCount - 1)
+		try {
+			return { fromBlock, toBlock, items: await query(fromBlock, toBlock) }
+		} catch (error) {
+			if (blockCount === 1 || !shouldSplit(error)) throw error
+			blockCount = Math.ceil(blockCount / 2)
+			onSplit?.(fromBlock, toBlock, fromBlock + BigInt(blockCount - 1), error)
+		}
+	}
+}
+
+const normalizedRpcDescription = (value: string): string =>
+	[...value]
+		.map((character) => {
+			const codePoint = character.codePointAt(0)
+			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
+		})
+		.join('')
+		.replace(/\p{Cf}/gu, ' ')
+		.replace(/\s+/gu, ' ')
+		.trim()
+		.toLowerCase()
+
+const classifiedRpcDescription = (value: string): string =>
+	normalizedRpcDescription(value)
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim()
+
+type RpcDescriptionCategory = 'block-range' | 'rate-limit' | 'response-size' | 'result-limit' | 'timeout' | 'too-many-logs' | 'too-many-results'
+
+const rpcDescriptionCategory = (value: string): RpcDescriptionCategory | undefined => {
+	const description = classifiedRpcDescription(value)
+	if (
+		description.includes('rate limit') ||
+		description.includes('too many requests') ||
+		description.includes('request limit') ||
+		description.includes('request rate') ||
+		description.includes('request quota') ||
+		description.includes('quota exceeded') ||
+		/\bmore than\b.*\brequests?\b/u.test(description) ||
+		/\brequests? per (?:second|minute|hour)\b/u.test(description)
+	)
+		return 'rate-limit'
+	if (description.includes('too many logs') || /\bmore than\b.*\blogs\b/u.test(description)) return 'too-many-logs'
+	if (description.includes('too many results') || /\bmore than\b.*\bresults\b/u.test(description)) return 'too-many-results'
+	if (description.includes('response size') || description.includes('response too large') || description.includes('response body too large'))
+		return 'response-size'
+	if (
+		description.includes('query timeout') ||
+		description.includes('query timed out') ||
+		description.includes('request timeout') ||
+		description.includes('request timed out')
+	)
+		return 'timeout'
+	if (description.includes('block range') || description.includes('too wide') || description.includes('please reduce')) return 'block-range'
+	if (description.includes('limit exceeded') || /\bexceeds? (?:the )?maximum\b/u.test(description) || description.includes('more than')) return 'result-limit'
+	return undefined
+}
+
+const preferredRpcDescriptions = (value: object): readonly string[] => {
+	if ('details' in value && typeof value.details === 'string') return [value.details]
+	if ('name' in value && (value.name === 'ResponseBodyTooLargeError' || value.name === 'TimeoutError')) return []
+	if ('shortMessage' in value && typeof value.shortMessage === 'string') return [value.shortMessage]
+	return 'message' in value && typeof value.message === 'string' ? [value.message] : []
+}
+
+const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined => {
+	const seen = new Set<unknown>()
+	let firstCategory: RpcDescriptionCategory | undefined
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if ('status' in current && current.status === 429) return 'rate-limit'
+		for (const description of preferredRpcDescriptions(current)) {
+			const category = rpcDescriptionCategory(description)
+			if (category === 'rate-limit') return category
+			firstCategory ??= category
+		}
+		if ('name' in current && current.name === 'ResponseBodyTooLargeError') firstCategory ??= 'response-size'
+		if ('name' in current && current.name === 'TimeoutError') firstCategory ??= 'timeout'
+		if ('code' in current && current.code === -32005) firstCategory ??= 'result-limit'
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return firstCategory
+}
+
+export const isSplittableLogRangeError = (error: unknown): boolean => {
+	const category = rpcErrorCategory(error)
+	return category !== undefined && category !== 'rate-limit'
 }
 
 const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
@@ -184,19 +325,51 @@ class ChainContinuityError extends Error {}
 class ChainConfigurationError extends Error {}
 class LeaseLostError extends Error {}
 
+export const queryCanonicalLogRange = async <T>(
+	throughBlock: bigint,
+	readEndBlockHash: () => Promise<Hash>,
+	query: () => Promise<readonly T[]>,
+): Promise<{ readonly items: readonly T[]; readonly endBlockHash: Hash }> => {
+	const before = await readEndBlockHash()
+	const items = await query()
+	const after = await readEndBlockHash()
+	if (before !== after) throw new ChainContinuityError(`Canonical chain changed while querying logs through block ${throughBlock}`)
+	return { items, endBlockHash: after }
+}
+
 type ChainProvider = { readonly getChainId: () => Promise<number> }
+type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string }
+
+export const rpcEndpointLabel = (rpcUrl: string): string => {
+	const url = new URL(rpcUrl)
+	const hostnameParts = url.hostname.split('.')
+	const isLocalOrIp = url.hostname === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname) || url.hostname.includes(':')
+	const hostname = !isLocalOrIp && hostnameParts.length > 2 ? `*.${hostnameParts.slice(-2).join('.')}` : url.hostname
+	return `${url.protocol}//${hostname}${url.port === '' ? '' : `:${url.port}`}`
+}
+
+export const rpcProviderLabel = (rpcUrl: string, index: number): string => `#${index + 1} ${rpcEndpointLabel(rpcUrl)}`
+
+export const rpcFailureLogMessage = (message: string, endpoint: string, reason?: string): string =>
+	`${message} (RPC: ${endpoint}${reason === undefined ? '' : `; reason: ${reason}`})`
 
 export const withVerifiedProvider = async <TProvider extends ChainProvider, TResult>(
 	providers: readonly TProvider[],
 	chainId: number,
 	operation: (provider: TProvider) => Promise<TResult>,
 	stopFailover = (_error: unknown): boolean => false,
+	onAttempt = (_provider: TProvider): void => {},
+	verifiedProviders?: WeakSet<TProvider>,
 ): Promise<TResult> => {
 	let lastFailure: unknown
 	for (const provider of providers) {
+		onAttempt(provider)
 		try {
-			const remoteChainId = await provider.getChainId()
-			if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
+			if (verifiedProviders?.has(provider) !== true) {
+				const remoteChainId = await provider.getChainId()
+				if (remoteChainId !== chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${chainId}, received ${remoteChainId}`)
+				verifiedProviders?.add(provider)
+			}
 			return await operation(provider)
 		} catch (error) {
 			if (stopFailover(error)) throw error
@@ -226,6 +399,58 @@ export const commitCanonicalRead = async <T>(
 const databaseFailureMessage = 'Database request failed; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 
+export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
+	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
+	const boundedHead = observedHead
+	const totalBlocks = boundedHead - configuredStartBlock + 1n
+	const boundedIndexed = indexedBlock < configuredStartBlock ? configuredStartBlock - 1n : indexedBlock > boundedHead ? boundedHead : indexedBlock
+	const completedBlocks = boundedIndexed - configuredStartBlock + 1n
+	const remainingBlocks = totalBlocks - completedBlocks
+	const roundedHundredths = (completedBlocks * 10_000n + totalBlocks / 2n) / totalBlocks
+	const hundredths = remainingBlocks > 0n && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
+	return {
+		completedBlocks,
+		percentage: `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`,
+		remainingBlocks,
+		totalBlocks,
+	}
+}
+
+export const compactIndexerDuration = (seconds: number): string => {
+	const rounded = Math.max(1, Math.ceil(seconds))
+	if (rounded < 60) return `${rounded}s`
+	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
+	const totalHours = Math.ceil(rounded / 3_600)
+	if (totalHours < 24) {
+		const totalMinutes = Math.ceil(rounded / 60)
+		const minutes = totalMinutes % 60
+		return `${Math.floor(totalMinutes / 60)}h${minutes === 0 ? '' : ` ${minutes}m`}`
+	}
+	const hours = totalHours % 24
+	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
+}
+
+export const indexerWaitingMessage = (networkId: string, configuredStartBlock: bigint, observedHead: bigint): string =>
+	`[${networkId}] indexer state: live; observed head #${observedHead}; 100.00% complete; caught up; waiting for configured start block #${configuredStartBlock}`
+
+export const indexerProgressMessage = (
+	networkId: string,
+	startBlock: bigint,
+	endBlock: bigint,
+	observedHead: bigint,
+	configuredStartBlock: bigint,
+	blocksPerSecond?: number,
+): string => {
+	const state = endBlock >= observedHead ? 'live' : 'backfilling'
+	const indexed = startBlock === endBlock ? `indexed block #${endBlock}` : `indexed blocks #${startBlock}–#${endBlock}`
+	const completion = indexingCompletion(configuredStartBlock, endBlock, observedHead)
+	const progress =
+		state === 'live'
+			? 'caught up'
+			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(Number(completion.remainingBlocks) / blocksPerSecond)}`}`
+	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
+}
+
 export const safeIndexerFailure = (error: unknown): string => {
 	if (error instanceof ChainConfigurationError) return error.message
 	if (error instanceof ChainContinuityError) return 'The remote canonical chain changed while indexing; retrying'
@@ -233,10 +458,134 @@ export const safeIndexerFailure = (error: unknown): string => {
 	return 'RPC request failed; retrying'
 }
 
+const safeErrorNames = new Set([
+	'AbortError',
+	'ChainConfigurationError',
+	'ChainContinuityError',
+	'ConnectTimeoutError',
+	'ContractFunctionExecutionError',
+	'ContractFunctionRevertedError',
+	'DatabaseConsistencyError',
+	'Error',
+	'HeadersTimeoutError',
+	'HttpRequestError',
+	'LeaseLostError',
+	'LimitExceededRpcError',
+	'PostgresError',
+	'ResponseBodyTooLargeError',
+	'ResourceUnavailableRpcError',
+	'RpcRequestError',
+	'SocketError',
+	'TimeoutError',
+	'TypeError',
+	'UnknownRpcError',
+])
+
+const safeErrorIdentifier = (value: unknown): string | undefined => (typeof value === 'string' && safeErrorNames.has(value) ? value : undefined)
+
+const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
+
+const safeErrorCode = (value: unknown): string | undefined => {
+	if (
+		typeof value === 'number' &&
+		Number.isSafeInteger(value) &&
+		(value === -32700 || (value >= -32603 && value <= -32600) || (value >= -32099 && value <= -32000))
+	)
+		return value.toString()
+	return typeof value === 'string' && (/^HTTP_[1-5][0-9]{2}$/.test(value) || safeNamedErrorCodes.has(value)) ? value : undefined
+}
+
+const safeStandardRpcMessages = new Map([
+	['parse error', 'Parse error'],
+	['invalid request', 'Invalid Request'],
+	['method not found', 'Method not found'],
+	['invalid params', 'Invalid params'],
+	['internal error', 'Internal error'],
+])
+
+const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, string>> = {
+	'block-range': 'provider rejected the requested block range',
+	'rate-limit': 'provider rate limit exceeded',
+	'response-size': 'provider response size limit exceeded',
+	'result-limit': 'provider result limit exceeded',
+	timeout: 'provider request timed out',
+	'too-many-logs': 'provider returned too many logs',
+	'too-many-results': 'provider returned too many results',
+}
+
+const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined
+	const normalized = normalizedRpcDescription(value)
+	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, ''))
+}
+
+export const safeIndexerFailureReason = (error: unknown): string => {
+	const names: string[] = []
+	let status: number | undefined
+	let code: string | undefined
+	let standardMessage: string | undefined
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		const name = 'name' in current ? safeErrorIdentifier(current.name) : undefined
+		if (name !== undefined && names.at(-1) !== name) names.push(name)
+		if (
+			status === undefined &&
+			'status' in current &&
+			typeof current.status === 'number' &&
+			Number.isInteger(current.status) &&
+			current.status >= 100 &&
+			current.status <= 599
+		)
+			status = current.status
+		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
+		if (standardMessage === undefined && name === 'RpcRequestError' && 'details' in current) standardMessage = safeStandardRpcProviderMessage(current.details)
+		current = 'cause' in current ? current.cause : undefined
+	}
+	const category = rpcErrorCategory(error)
+	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
+	const details = [names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
+	if (status !== undefined) details.push(`HTTP ${status}`)
+	if (code !== undefined) details.push(`code ${code}`)
+	if (message !== undefined) details.push(`message: ${message}`)
+	return details.join('; ')
+}
+
+const deploymentReadTimeoutError = (): Error => {
+	const error = new Error('Contract deployment history read timed out')
+	error.name = 'TimeoutError'
+	return error
+}
+
+export const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs: number): Promise<T> =>
+	await new Promise<T>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			reject(deploymentReadTimeoutError())
+		}, timeoutMs)
+		void read()
+			.then(resolve, reject)
+			.finally(() => clearTimeout(timeout))
+	})
+
+export const deploymentReadBudget = (timeoutMs = 5_000, now = Date.now): (<T>(read: () => Promise<T>) => Promise<T>) => {
+	const deadline = now() + timeoutMs
+	return async <T>(read: () => Promise<T>): Promise<T> => {
+		const remaining = deadline - now()
+		if (remaining <= 0) throw deploymentReadTimeoutError()
+		const value = await boundedDeploymentRead(read, remaining)
+		if (now() > deadline) throw deploymentReadTimeoutError()
+		return value
+	}
+}
+
+export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean =>
+	lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
+
 type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
-	readonly failure: (message: string, nextRetryAt: Date) => Promise<void>
+	readonly failure: (message: string, nextRetryAt: Date, reason: string) => Promise<void>
 	readonly intervalMs: number
 	readonly signal: AbortSignal
 	readonly random?: () => number
@@ -266,9 +615,9 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			if (error instanceof LeaseLostError) throw error
 			consecutiveFailures++
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
-			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure))
+			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure), safeIndexerFailureReason(error))
 		}
-		await wait(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
+		await waitForIndexerDelay(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
 	}
 }
 
@@ -310,7 +659,8 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				await runOwned(lease)
 			}
 		} catch (error) {
-			console.error(`Indexer ownership operation failed (${error instanceof Error ? error.name : typeof error})`)
+			const actionableDetail = error instanceof Error && error.name === 'DatabaseConsistencyError' ? `: ${error.message}` : ''
+			console.error(`Indexer ownership operation failed (${error instanceof Error ? error.name : typeof error})${actionableDetail}`)
 			try {
 				await failure(databaseFailureMessage, lease)
 			} catch (error) {
@@ -325,7 +675,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				// PostgreSQL already releases advisory locks when their session is lost.
 			}
 		}
-		if (!signal.aborted) await wait(intervalMs, signal)
+		if (!signal.aborted) await waitForIndexerDelay(intervalMs, signal)
 	}
 }
 
@@ -353,8 +703,15 @@ const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, bl
 class NetworkIndexer {
 	readonly #network: NetworkConfig
 	readonly #database: ScannerDatabase
-	readonly #clients: readonly PublicClient[]
+	readonly #providers: readonly RpcProvider[]
+	readonly #verifiedProviders = new WeakSet<RpcProvider>()
 	#client: PublicClient
+	#activeRpcEndpoint: string
+	#indexingStartReported = false
+	#lastProgressLogAt: number | undefined
+	#progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
+	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
+	#lastDeploymentScanAt: number | undefined
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
@@ -362,13 +719,19 @@ class NetworkIndexer {
 		this.#network = network
 		this.#database = database
 		this.#signal = signal
-		this.#clients = network.rpcUrls.map((rpcUrl) => createPublicClient({ transport: http(rpcUrl, { timeout: 20_000, retryCount: 2 }) }))
-		const firstClient = this.#clients[0]
-		if (firstClient === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
-		this.#client = firstClient
+		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
+			const client = createPublicClient({ transport: http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 }) })
+			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId() }
+		})
+		const firstProvider = this.#providers[0]
+		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
+		this.#client = firstProvider.client
+		this.#activeRpcEndpoint = firstProvider.endpoint
 	}
 
 	async run(): Promise<void> {
+		console.info(`[${this.#network.id}] indexer state: starting`)
+		console.info(`[${this.#network.id}] RPC providers: ${this.#providers.map(({ endpoint }) => endpoint).join(', ')}`)
 		await runIndexerOwnershipLifecycle({
 			acquire: () => this.#database.tryAcquireIndexerLock(this.#network.chainId),
 			seed: (lease) => this.#database.seedNetwork(this.#network, lease),
@@ -378,7 +741,7 @@ class NetworkIndexer {
 					await runNetworkLifecycle({
 						verify: () => this.#withProviderFailover(async () => undefined),
 						poll: () => this.#withProviderFailover(() => this.#poll()),
-						failure: (message, nextRetryAt) => this.#recordFailure(message, nextRetryAt, this.#requireLease()),
+						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,
 					})
@@ -388,12 +751,12 @@ class NetworkIndexer {
 			},
 			failure: async (message, lease) => {
 				if (lease === undefined) {
-					console.error(`[${this.#network.id}] ownership unavailable: ${message}`)
+					console.error(`[${this.#network.id}] indexer state: degraded; ownership unavailable: ${message}`)
 					return
 				}
 				await this.#recordFailure(message, new Date(Date.now() + runtimeConfig.pollIntervalMs), lease)
 			},
-			standby: () => console.info(`[${this.#network.id}] standby: another replica owns the network indexer lock`),
+			standby: () => console.info(`[${this.#network.id}] indexer state: standby; another replica owns the network indexer lock`),
 			intervalMs: runtimeConfig.pollIntervalMs,
 			signal: this.#signal,
 		})
@@ -401,26 +764,53 @@ class NetworkIndexer {
 
 	async #withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
 		return await withVerifiedProvider(
-			this.#clients,
+			this.#providers,
 			this.#network.chainId,
-			async (client) => {
+			async ({ client }) => {
 				this.#client = client
 				return await operation()
 			},
 			(error) => error instanceof LeaseLostError || errorChainIncludes(error, databaseFailureNames),
+			(provider) => {
+				this.#activeRpcEndpoint = provider.endpoint
+			},
+			this.#verifiedProviders,
 		)
 	}
 
-	async #verifyRemoteChain(): Promise<void> {
-		const remoteChainId = await this.#client.getChainId()
-		if (remoteChainId !== this.#network.chainId) {
-			throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.#network.chainId}, received ${remoteChainId}`)
-		}
+	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
+		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
+		const logMessage =
+			message === databaseFailureMessage
+				? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
+				: rpcFailureLogMessage(message, this.#activeRpcEndpoint, reason)
+		this.#lastReportedPhase = 'degraded'
+		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
 	}
 
-	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
-		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
-		console.error(`[${this.#network.id}] ${message}`)
+	#reportProgress(startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
+		const phase = endBlock >= observedHead ? 'live' : 'backfilling'
+		const now = Date.now()
+		const previousSample = this.#progressSample
+		let blocksPerSecond = previousSample?.blocksPerSecond
+		if (previousSample !== undefined && endBlock > previousSample.block && now - previousSample.sampledAt >= 1_000) {
+			const observedRate = Number(endBlock - previousSample.block) / ((now - previousSample.sampledAt) / 1_000)
+			blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
+			this.#progressSample = { block: endBlock, sampledAt: now, blocksPerSecond }
+		} else if (previousSample === undefined || endBlock < previousSample.block) {
+			this.#progressSample = { block: endBlock, sampledAt: now }
+		}
+		if (phase === 'backfilling' && this.#lastReportedPhase === phase && this.#lastProgressLogAt !== undefined && now - this.#lastProgressLogAt < 30_000) return
+		this.#lastReportedPhase = phase
+		this.#lastProgressLogAt = now
+		console.info(indexerProgressMessage(this.#network.id, startBlock, endBlock, observedHead, this.#network.startBlock, blocksPerSecond))
+	}
+
+	#reportWaitingForStart(observedHead: bigint): void {
+		if (this.#lastReportedPhase === 'live') return
+		this.#lastReportedPhase = 'live'
+		this.#lastProgressLogAt = Date.now()
+		console.info(indexerWaitingMessage(this.#network.id, this.#network.startBlock, observedHead))
 	}
 
 	async #assertLease(): Promise<void> {
@@ -458,32 +848,95 @@ class NetworkIndexer {
 		await this.#database.rewind(this.#network.chainId, -1n, undefined, this.#requireLease())
 	}
 
+	async #refreshContractDeployment(indexedBoundary: bigint): Promise<void> {
+		const now = Date.now()
+		if (!contractDeploymentScanDue(this.#lastDeploymentScanAt, now)) return
+		try {
+			const candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
+			if (candidate === undefined) return
+			const readWithinBudget = deploymentReadBudget()
+			const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
+				readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+			)
+			const resolved =
+				deployment === undefined
+					? undefined
+					: {
+							...deployment,
+							timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
+						}
+			await this.#assertLease()
+			await this.#database.recordContractDeployment(this.#network.chainId, candidate.address, indexedBoundary, resolved, this.#requireLease())
+		} catch (error) {
+			console.warn(`[${this.#network.id}] contract deployment check skipped: ${safeIndexerFailureReason(error)}`)
+		} finally {
+			this.#lastDeploymentScanAt = Date.now()
+		}
+	}
+
 	async #poll(): Promise<boolean> {
 		await this.#assertLease()
-		await this.#verifyRemoteChain()
 		await this.#reconcileReorg()
 		const observedHead = await this.#client.getBlockNumber()
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId)
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
 			if (checkpoint !== undefined) await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
-			await this.#verifyRemoteChain()
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
+			if (checkpoint === undefined) this.#reportWaitingForStart(observedHead)
+			else if (this.#lastReportedPhase !== 'live') this.#reportProgress(observedHead, observedHead, observedHead)
+			if (checkpoint !== undefined) await this.#refreshContractDeployment(checkpoint.number)
 			return true
 		}
 
-		const end = nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) < observedHead ? nextBlock + BigInt(runtimeConfig.blockBatchSize - 1) : observedHead
+		if (!this.#indexingStartReported) {
+			const completion = indexingCompletion(this.#network.startBlock, nextBlock - 1n, observedHead)
+			console.info(
+				`[${this.#network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}; ${completion.percentage}% complete; ${completion.remainingBlocks} blocks behind; estimating ETA`,
+			)
+			this.#progressSample = { block: nextBlock - 1n, sampledAt: Date.now() }
+			this.#indexingStartReported = true
+		}
+		const batchStart = nextBlock
 		let contracts = await this.#database.contracts(this.#network.chainId)
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId)
+		const storedCursors = await this.#database.logScanCursors(this.#network.chainId)
+		const initialAddresses = [...contracts.values()].filter(isProtocolActivitySource).map(({ address }) => address)
+		for (const address of initialAddresses) {
+			const cursor = storedCursors.get(address.toLowerCase())
+			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock)
+				throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
+		}
+		let segment: { readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }
+		let headers: readonly RpcBlockHeader[]
+		try {
+			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialAddresses)
+			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
+			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
+			const endHeader = headers.at(-1)
+			if (endHeader === undefined) throw new Error(`RPC did not return block ${segment.toBlock}`)
+			if (segment.endBlockHash !== undefined && endHeader.hash !== segment.endBlockHash)
+				throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
+		} catch (error) {
+			if (error instanceof ChainContinuityError) return false
+			throw error
+		}
+		const end = segment.toBlock
+		console.info(`[${this.#network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
+		const logsByBlock = new Map<bigint, Log[]>()
+		this.#mergeLogs(logsByBlock, segment.logs)
 		let expectedParentHash = checkpoint?.hash
 		if (expectedParentHash === undefined && requiresParentLookup(nextBlock, this.#network.startBlock)) {
 			expectedParentHash = (await this.#client.getBlock({ blockNumber: nextBlock - 1n })).hash
 		}
 		while (nextBlock <= end && !this.#signal.aborted) {
+			const header = headers[Number(nextBlock - batchStart)]
+			if (header === undefined) throw new Error(`RPC did not return block ${nextBlock}`)
+			const contractsBeforeBlock = new Set(contracts.keys())
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 			try {
-				indexed = await this.#indexBlock(nextBlock, observedHead, contracts, tokenMetadata, expectedParentHash)
+				indexed = await this.#indexBlock(nextBlock, observedHead, contracts, tokenMetadata, expectedParentHash, header, logsByBlock.get(nextBlock) ?? [])
 			} catch (error) {
 				if (error instanceof ChainContinuityError) {
 					await this.#reconcileReorg()
@@ -491,33 +944,162 @@ class NetworkIndexer {
 				}
 				throw error
 			}
-			await this.#verifyRemoteChain()
+			const newlyDiscoveredActivityAddresses = [...indexed.contracts]
+				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
+				.map(([, contract]) => contract.address)
+			if (newlyDiscoveredActivityAddresses.length > 0 && nextBlock < end) {
+				try {
+					this.#mergeLogs(
+						logsByBlock,
+						await this.#getAllLogs(nextBlock + 1n, end, newlyDiscoveredActivityAddresses, (blockNumber) => {
+							const expected = headers[Number(blockNumber - batchStart)]
+							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
+							return expected.hash
+						}),
+					)
+				} catch (error) {
+					if (error instanceof ChainContinuityError) return false
+					throw error
+				}
+			}
+			const isSegmentEnd = nextBlock === end
+			const block = isSegmentEnd
+				? {
+						...indexed.block,
+						logScanCursors: [...indexed.contracts.values()].filter(isProtocolActivitySource).map((contract) => ({
+							contractAddress: contract.address,
+							startBlock: contract.discoveryBlock ?? this.#network.startBlock,
+							lastRetrievedBlock: end,
+						})),
+					}
+				: indexed.block
 			await this.#assertLease()
-			await this.#database.storeBlock(this.#network.chainId, indexed.block, this.#requireLease())
+			await this.#database.storeBlock(this.#network.chainId, block, this.#requireLease())
 			contracts = indexed.contracts
 			tokenMetadata = indexed.tokenMetadata
 			expectedParentHash = indexed.block.hash
 			nextBlock++
 		}
+		if (nextBlock > batchStart) {
+			const indexedThrough = nextBlock - 1n
+			this.#reportProgress(batchStart, indexedThrough, observedHead)
+			await this.#refreshContractDeployment(indexedThrough)
+		}
 		return end >= observedHead
 	}
 
-	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
-		const groups = chunks(addresses, 75)
-		const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock: blockNumber, toBlock: blockNumber }))
-		const unique = new Map<string, Log>()
-		for (const log of pages.flat()) {
-			const position = requireLogPosition(log)
-			if (position.blockHash !== blockHash || position.blockNumber !== blockNumber) {
-				throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
-			}
-			unique.set(`${position.transactionHash}:${position.logIndex}`, log)
+	async #getLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+		const range = await queryCanonicalLogRange(
+			toBlock,
+			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
+			async () => {
+				const groups = rpcLogAddressGroups(addresses)
+				const pages = await mapLimit(groups, 3, (address) => this.#client.getLogs({ address, fromBlock, toBlock }))
+				const unique = new Map<string, Log>()
+				for (const log of pages.flat()) {
+					const position = requireLogPosition(log)
+					if (position.blockNumber < fromBlock || position.blockNumber > toBlock)
+						throw new ChainContinuityError(`RPC returned a log outside requested range ${fromBlock}-${toBlock}`)
+					unique.set(`${position.transactionHash}:${position.logIndex}`, log)
+				}
+				return [...unique.values()].sort((left, right) => {
+					const a = requireLogPosition(left)
+					const b = requireLogPosition(right)
+					return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
+				})
+			},
+		)
+		return { logs: range.items, endBlockHash: range.endBlockHash }
+	}
+
+	async #getNextLogSegment(
+		fromBlock: bigint,
+		maximumToBlock: bigint,
+		addresses: readonly Address[],
+	): Promise<{ readonly toBlock: bigint; readonly logs: readonly Log[]; readonly endBlockHash?: Hash }> {
+		if (addresses.length === 0) {
+			const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
+			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [] }
 		}
-		return [...unique.values()].sort((left, right) => {
-			const a = requireLogPosition(left)
-			const b = requireLogPosition(right)
-			return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
-		})
+		let endBlockHash: Hash | undefined
+		const segment = await queryAdaptiveLogRange(
+			fromBlock,
+			maximumToBlock,
+			runtimeConfig.logScanRangeSize,
+			async (rangeStart, rangeEnd) => {
+				const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+				endBlockHash = range.endBlockHash
+				return range.logs
+			},
+			(failedFrom, failedTo, retryTo, error) =>
+				console.warn(
+					`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+				),
+			isSplittableLogRangeError,
+		)
+		if (endBlockHash === undefined) throw new Error(`RPC did not anchor log range through block ${segment.toBlock}`)
+		return { toBlock: segment.toBlock, logs: segment.items, endBlockHash }
+	}
+
+	async #getAllLogs(
+		fromBlock: bigint,
+		toBlock: bigint,
+		addresses: readonly Address[],
+		expectedBlockHash: (blockNumber: bigint) => Hash,
+	): Promise<readonly Log[]> {
+		const logs: Log[] = []
+		let cursor = fromBlock
+		while (cursor <= toBlock) {
+			const segment = await queryAdaptiveLogRange(
+				cursor,
+				toBlock,
+				runtimeConfig.logScanRangeSize,
+				async (rangeStart, rangeEnd) => {
+					const range = await this.#getLogs(rangeStart, rangeEnd, addresses)
+					if (range.endBlockHash !== expectedBlockHash(rangeEnd))
+						throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
+					return range.logs
+				},
+				(failedFrom, failedTo, retryTo, error) =>
+					console.warn(
+						`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+					),
+				isSplittableLogRangeError,
+			)
+			logs.push(...segment.items)
+			cursor = segment.toBlock + 1n
+		}
+		return logs
+	}
+
+	#mergeLogs(target: Map<bigint, Log[]>, logs: readonly Log[]): void {
+		for (const log of logs) {
+			const position = requireLogPosition(log)
+			const existing = target.get(position.blockNumber) ?? []
+			if (
+				!existing.some((candidate) => {
+					const candidatePosition = requireLogPosition(candidate)
+					return candidatePosition.transactionHash === position.transactionHash && candidatePosition.logIndex === position.logIndex
+				})
+			) {
+				existing.push(log)
+				existing.sort((left, right) => {
+					const a = requireLogPosition(left)
+					const b = requireLogPosition(right)
+					return a.transactionIndex - b.transactionIndex || a.logIndex - b.logIndex
+				})
+				target.set(position.blockNumber, existing)
+			}
+		}
+	}
+
+	async #getKnownLogs(blockNumber: bigint, addresses: readonly Address[], blockHash: Hash): Promise<Log[]> {
+		const range = await this.#getLogs(blockNumber, blockNumber, addresses)
+		if (range.endBlockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
+		for (const log of range.logs) {
+			if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
+		}
+		return [...range.logs]
 	}
 
 	async #indexBlock(
@@ -526,33 +1108,40 @@ class NetworkIndexer {
 		currentContracts: ReadonlyMap<string, ContractMetadata>,
 		currentTokenMetadata: ReadonlyMap<string, TokenMetadata>,
 		expectedParentHash: Hash | undefined,
+		block: RpcBlockHeader,
+		prefetchedLogs: readonly Log[],
 	): Promise<{ block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }> {
-		const block = await this.#client.getBlock({ blockNumber: number, includeTransactions: true })
 		if (expectedParentHash !== undefined && block.parentHash !== expectedParentHash) {
 			throw new ChainContinuityError(`Block ${number} does not extend the indexed canonical chain`)
 		}
 		const contracts = new Map(currentContracts)
-		const knownAddresses = [...contracts.values()].filter(isProtocolActivitySource).map(({ address }) => address)
-		const knownLogs = knownAddresses.length === 0 ? [] : await this.#getKnownLogs(number, knownAddresses, block.hash)
+		const knownLogs = [...prefetchedLogs]
+		for (const log of knownLogs) {
+			const position = requireLogPosition(log)
+			if (position.blockHash !== block.hash || position.blockNumber !== number)
+				throw new ChainContinuityError(`RPC log response changed while indexing block ${number}`)
+		}
 		const relevantHashes = new Set<Hash>(knownLogs.map((log) => requireLogPosition(log).transactionHash))
 		const transactionByHash = new Map<Hash, { transaction: Transaction; index: number }>()
-		block.transactions.forEach((transaction, index) => {
-			if (typeof transaction === 'string') return
-			transactionByHash.set(transaction.hash, { transaction, index })
-			if (transaction.to !== null && isProtocolActivitySource(contracts.get(transaction.to.toLowerCase()))) relevantHashes.add(transaction.hash)
-		})
 
 		const receipts: TransactionReceipt[] = []
 		const receiptByHash = new Map<Hash, TransactionReceipt>()
-		const fetchMissingReceipts = async (): Promise<void> => {
+		const fetchMissingEvidence = async (): Promise<void> => {
 			const missing = [...relevantHashes].filter((hash) => !receiptByHash.has(hash))
-			for (const receipt of await mapLimit(missing, 8, (hash) => this.#client.getTransactionReceipt({ hash }))) {
+			for (const { receipt, transaction } of await mapLimit(missing, 8, async (hash) => {
+				const [receipt, transaction] = await Promise.all([this.#client.getTransactionReceipt({ hash }), this.#client.getTransaction({ hash })])
+				return { receipt, transaction }
+			})) {
 				requireReceiptPosition(receipt, block.hash, number)
+				if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
+				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === null)
+					throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
 				receipts.push(receipt)
 				receiptByHash.set(receipt.transactionHash, receipt)
+				transactionByHash.set(transaction.hash, { transaction, index: transaction.transactionIndex })
 			}
 		}
-		await fetchMissingReceipts()
+		await fetchMissingEvidence()
 		const discovered: ContractMetadata[] = []
 		while (true) {
 			const discoveredAddresses: Address[] = []
@@ -605,10 +1194,7 @@ class NetworkIndexer {
 			for (const log of activityAddresses.length === 0 ? [] : await this.#getKnownLogs(number, activityAddresses, block.hash)) {
 				relevantHashes.add(requireLogPosition(log).transactionHash)
 			}
-			for (const { transaction } of transactionByHash.values()) {
-				if (transaction.to !== null && isProtocolActivitySource(contracts.get(transaction.to.toLowerCase()))) relevantHashes.add(transaction.hash)
-			}
-			await fetchMissingReceipts()
+			await fetchMissingEvidence()
 		}
 
 		const labels = labelsFrom(contracts)
@@ -668,6 +1254,7 @@ class NetworkIndexer {
 			const pair = transactionByHash.get(hash)
 			const receipt = receiptByHash.get(hash)
 			if (pair === undefined || receipt === undefined) throw new Error(`Block ${number} did not contain relevant transaction ${hash}`)
+			if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${hash} did not succeed`)
 			const to = pair.transaction.to === null ? null : getAddress(pair.transaction.to)
 			storedTransactions.push({
 				hash,
@@ -707,6 +1294,7 @@ class NetworkIndexer {
 				transactions: storedTransactions,
 				logs: storedLogs,
 				addressActivity: addressActivityFrom(storedTransactions, storedLogs, contracts),
+				logScanCursors: [],
 			},
 		}
 	}
@@ -761,11 +1349,14 @@ class NetworkIndexer {
 }
 
 export const startIndexers = (networks: readonly NetworkConfig[], database: ScannerDatabase, signal: AbortSignal): readonly Promise<void>[] =>
-	networks.map(async (network) => {
-		try {
-			await new NetworkIndexer(network, database, signal).run()
-		} catch (error) {
-			const message = safeIndexerFailure(error)
-			console.error(`[${network.id}] indexer stopped: ${message}`)
-		}
-	})
+	networks.map((network) => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal).run()))
+
+export const runIndexerTask = async (networkId: string, run: () => Promise<void>): Promise<void> => {
+	try {
+		await run()
+		console.info(`[${networkId}] indexer state: stopped`)
+	} catch (error) {
+		const message = safeIndexerFailure(error)
+		console.error(`[${networkId}] indexer state: stopped; ${message}`)
+	}
+}
