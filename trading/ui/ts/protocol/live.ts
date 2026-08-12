@@ -286,6 +286,21 @@ function outcomeValue(outcome: ShareOutcome) {
 	return outcome === 'YES' ? 1n : 2n
 }
 
+export function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
+	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one fork target')
+	const normalized = [...targetOutcomeIndexes].sort((left, right) => {
+		if (left < right) return -1
+		if (left > right) return 1
+		return 0
+	})
+	for (let index = 0; index < normalized.length; index++) {
+		const outcomeIndex = normalized[index]
+		if (outcomeIndex === undefined || outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork target is outside uint256')
+		if (index > 0 && outcomeIndex === normalized[index - 1]) throw new Error('Select each fork target only once')
+	}
+	return normalized
+}
+
 export function settlementAvailability(market: MarketLifecycle, balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined) {
 	const completeSets = balances === undefined ? 0n : [balances.invalid, balances.yes, balances.no].reduce((minimum, balance) => (balance < minimum ? balance : minimum))
 	let winningBalance = 0n
@@ -852,7 +867,7 @@ async function simulateSettlementWithExpiryParameters(
 	market: LiveMarket,
 	account: Address,
 	operation: SettlementOperation,
-	parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {},
+	parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
 ) {
 	if (operation === 'redeem-complete-set') {
 		requireTransactionSlippageBps(parameters.slippageBps ?? UI_SLIPPAGE_BPS)
@@ -876,12 +891,12 @@ async function simulateSettlementWithExpiryParameters(
 		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockHash: block.blockHash }))
 		return { blockNumber, blockHash, operation, market }
 	}
-	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndex === undefined || parameters.targetOutcomeIndex < 0n) throw new Error('Select a source share and non-negative fork outcome index')
+	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a source share and at least one fork target')
 	const sourceOutcome = parameters.sourceOutcome
-	const targetOutcomeIndex = parameters.targetOutcomeIndex
+	const targetOutcomeIndexes = normalizeForkOutcomeIndexes(parameters.targetOutcomeIndexes)
 	const sourceTokenId = (market.universeId << 8n) | outcomeValue(sourceOutcome)
-	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, [targetOutcomeIndex]], blockHash: block.blockHash }))
-	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndex }
+	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, targetOutcomeIndexes], blockHash: block.blockHash }))
+	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndexes }
 }
 
 export async function simulateSettlement(
@@ -890,7 +905,7 @@ export async function simulateSettlement(
 	market: LiveMarket,
 	account: Address,
 	operation: SettlementOperation,
-	parameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {},
+	parameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
 ) {
 	if (operation === 'redeem-complete-set') {
 		const validityMinutes = parameters.validityMinutes ?? 20n
@@ -901,17 +916,17 @@ export async function simulateSettlement(
 	}
 	if (operation === 'migrate-shares') {
 		const sourceOutcome = parameters.sourceOutcome
-		const targetOutcomeIndex = parameters.targetOutcomeIndex
-		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(sourceOutcome === undefined ? {} : { sourceOutcome }), ...(targetOutcomeIndex === undefined ? {} : { targetOutcomeIndex }) })
+		const targetOutcomeIndexes = parameters.targetOutcomeIndexes
+		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(sourceOutcome === undefined ? {} : { sourceOutcome }), ...(targetOutcomeIndexes === undefined ? {} : { targetOutcomeIndexes }) })
 	}
 	return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation)
 }
 
 export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	await requireQuoteBlock(client, quote)
-	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndex?: bigint }> = {}
+	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
 	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline, slippageBps: quote.slippageBps }
-	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndex: quote.targetOutcomeIndex }
+	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndexes: quote.targetOutcomeIndexes }
 	const refreshed = await simulateSettlementWithExpiryParameters(client, configuration, quote.market, account, quote.operation, parameters)
 	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
 	if (quote.operation === 'redeem-complete-set') {
@@ -923,5 +938,5 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 		return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
 	}
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(quote.sourceOutcome)
-	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, [quote.targetOutcomeIndex]] }))
+	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, quote.targetOutcomeIndexes] }))
 }

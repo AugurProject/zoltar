@@ -4,6 +4,7 @@ type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<strin
 
 const outputDirectory = process.env.TRADING_QA_OUTPUT ?? '/tmp/zoltar-trading-qa'
 const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:12346'
+const scenarioNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const debuggingPort = 9227
 await fs.mkdir(outputDirectory, { recursive: true })
 const userDataDirectory = await fs.mkdtemp('/tmp/zoltar-trading-qa-browser-')
@@ -262,6 +263,54 @@ const scenarios = [
 		assertExpression: `(() => { const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const reserves = document.querySelector('.pool-mechanics'); const reserveBounds = reserves?.getBoundingClientRect(); return (${poolInternalsHiddenAssertion}) && (${removedCopyAssertion}) && document.querySelector('.trade-summary')?.textContent?.includes('You pay') === true && action !== undefined && action.bottom <= innerHeight && reserveBounds !== undefined && action.bottom <= reserveBounds.top && reserves?.textContent?.includes('YES reserve428.571 YES') === true && reserves.textContent?.includes('NO reserve1,000 NO') === true && document.querySelector('.detail-aside')?.textContent?.includes('Conditional YES price') === false })()`,
 	},
 	{
+		name: 'scalar-fork-migration-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		scrollY: 620,
+		assertExpression: `document.body.textContent?.includes('Migrate shares to scalar branches') === true && document.body.textContent?.includes('Scalar fork question') === true && document.body.textContent?.includes('2 targets selected') === true && document.body.textContent?.includes('permanently locks parent-universe transfers') === true && document.body.textContent?.includes('still migrate later into other children') === true && document.querySelector('.fork-source-step select')?.textContent?.includes('INVALID') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'scalar-fork-migration-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		scrollY: 1_650,
+		assertExpression: `document.body.textContent?.includes('Migrate shares to scalar branches') === true && [...document.querySelectorAll('.fork-migration-targets button, .fork-invalid-option')].every(control => control.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'scalar-fork-migration-ready-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?demo=1&scenario=forked-scalar&qa=ready-desktop#/market',
+		clickSelector: '.demo-fork-migration > .primary-action',
+		clickWaitMs: 1_500,
+		assertExpression: `(() => { const action = document.querySelector('.demo-fork-migration > .primary-action'); return action?.textContent?.trim() === 'Submit migration to 2 child branches' && action.disabled === false && document.body.textContent?.includes('Authoritative migration simulation') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+		scrollY: 1_650,
+	},
+	{
+		name: 'scalar-fork-migration-ready-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar&qa=ready-mobile#/market',
+		clickSelector: '.demo-fork-migration > .primary-action',
+		clickWaitMs: 1_500,
+		assertExpression: `(() => { const action = document.querySelector('.demo-fork-migration > .primary-action'); const bounds = action?.getBoundingClientRect(); const checks = { label: action?.textContent?.trim(), enabled: action?.disabled === false, height: bounds?.height, simulationReady: document.body.textContent?.includes('Authoritative migration simulation') === true, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (checks.label !== 'Submit migration to 2 child branches' || !checks.enabled || checks.height === undefined || checks.height < 44 || !checks.simulationReady || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollY: 2_100,
+	},
+	{
+		name: 'scalar-fork-migration-add-target-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=forked-scalar#/market',
+		evaluate: `(() => { const input = document.querySelector('.scalar-fork-picker input[type="range"]'); if (!(input instanceof HTMLInputElement)) return false; input.value = '75'; input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		clickSelector: '.scalar-fork-picker .secondary-action',
+		clickWaitMs: 100,
+		assertExpression: `document.body.textContent?.includes('3 targets selected') === true && document.body.textContent?.includes('2.5 °C') === true && document.body.textContent?.includes('Child pool missing') === true && document.body.textContent?.includes('do not select that same source-child pair again') === true && document.body.textContent?.includes('A different source share may batch those children') === true && document.querySelector('.demo-fork-migration > .primary-action')?.hasAttribute('disabled') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		scrollY: 2_300,
+		postScrollAssertExpression: `(() => { const warning = document.querySelector('.demo-fork-migration .warning')?.getBoundingClientRect(); const action = document.querySelector('.demo-fork-migration > .primary-action')?.getBoundingClientRect(); return warning !== undefined && action !== undefined && warning.bottom <= action.top && warning.left >= 0 && warning.right <= document.documentElement.clientWidth && action.left >= 0 && action.right <= document.documentElement.clientWidth && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
 		name: 'market-mobile',
 		width: 390,
 		height: 844,
@@ -444,8 +493,11 @@ const scenarios = [
 	},
 ] as const
 
+const selectedScenarios = scenarioNames.size === 0 ? scenarios : scenarios.filter(scenario => scenarioNames.has(scenario.name))
+if (selectedScenarios.length === 0) throw new Error('TRADING_QA_SCENARIOS did not match a browser scenario')
+
 try {
-	for (const scenario of scenarios) {
+	for (const scenario of selectedScenarios) {
 		await command('Emulation.setDeviceMetricsOverride', { width: scenario.width, height: scenario.height, deviceScaleFactor: 1, mobile: false })
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)
