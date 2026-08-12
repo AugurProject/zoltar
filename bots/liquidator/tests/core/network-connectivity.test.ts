@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseSettings, type OperatorSettings } from '#config/settings'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
-import type { EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 
 async function exampleSettings() {
 	return parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -16,7 +15,9 @@ const request = (network: 'mainnet' | 'sepolia', quorumRpcUrls = ['https://quoru
 	network,
 })
 
-function healthyChecks(chainId: number): [EndpointCheck] {
+type NetworkConnectivityChecks = NonNullable<Parameters<typeof updateNetworkConnectivity>[0]['checks']>
+
+function healthyChecks(chainId: number): Awaited<ReturnType<NetworkConnectivityChecks['checkConnectivity']>> {
 	return [{ chainId, checkedAt: '2026-08-12T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'read.example' }]
 }
 

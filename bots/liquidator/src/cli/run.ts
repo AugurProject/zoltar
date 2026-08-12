@@ -355,18 +355,18 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		if (!settings.networkConfigured) {
 			recordActivity(state, { details: 'Set the chain and RPC endpoints in the dashboard', kind: 'configuration', message: 'Liquidator waiting for network configuration', status: 'info' })
 		} else {
-		const actualChainId = await client.getChainId()
-		if (actualChainId !== settings.network.chainId) {
-			throw new Error(`Read RPC chain ${actualChainId.toString()} does not match configured chain ${settings.network.chainId.toString()}`)
-		}
-		await checkConnectivity(settings.connectivity, settings.network.chainId)
-		for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
-			const chainId = await readRpcChainId(rpcUrl)
-			if (chainId !== settings.network.chainId) {
-				throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+			const actualChainId = await client.getChainId()
+			if (actualChainId !== settings.network.chainId) {
+				throw new Error(`Read RPC chain ${actualChainId.toString()} does not match configured chain ${settings.network.chainId.toString()}`)
 			}
-		}
-		await checkSubmissionEndpoints(settings.submission, settings.network.chainId)
+			await checkConnectivity(settings.connectivity, settings.network.chainId)
+			for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
+				const chainId = await readRpcChainId(rpcUrl)
+				if (chainId !== settings.network.chainId) {
+					throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+				}
+			}
+			await checkSubmissionEndpoints(settings.submission, settings.network.chainId)
 		}
 	} catch (error) {
 		dashboard?.stop()
