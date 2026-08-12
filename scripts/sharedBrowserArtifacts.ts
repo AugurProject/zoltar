@@ -8,6 +8,7 @@ export const sharedBrowserArtifactRelativePaths = [
 	'shared/js/openOracle.js',
 	'shared/js/oracleInitialReport.js',
 	'shared/js/protocolConfig.js',
+	'shared/js/scalarOutcome.js',
 	'shared/js/sepoliaRepAllocations.js',
 	'shared/js/truthAuctionTickMath.js',
 ] as const

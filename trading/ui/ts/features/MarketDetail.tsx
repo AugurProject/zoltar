@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '../../../ts/sdk/positions.ts'
 import { conditionalYesProbability } from '../../../ts/sdk/math.ts'
+import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import type { DemoMarket } from '../demo/markets.ts'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.ts'
 import { bigintToSafeNumber, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, shortAddress } from '../app/format.ts'
 import { SecurityPoolAddressLink, Status } from '../components/Status.tsx'
-import { insuredExitLimitMessage } from './LiveTrading.tsx'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage } from './LiveTrading.tsx'
+import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from './ForkMigrationTargets.tsx'
 import { createExclusiveWorkflowGuard } from '../app/latestRequest.ts'
 
 type TransactionState = 'idle' | 'preparing' | 'approval' | 'submitting' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
@@ -150,6 +152,82 @@ function renderQuote(quote: EnterPositionQuote | ExitPositionQuote | undefined, 
 				<dd>{formatUnits(estimatedExitAttoEth ?? 0n, 18, 8)} ETH</dd>
 			</div>
 		</dl>
+	)
+}
+
+const demoScalarQuestion = {
+	answerUnit: '°C',
+	displayValueMax: 5n * 10n ** 18n,
+	displayValueMin: -5n * 10n ** 18n,
+	numTicks: 100n,
+} as const
+
+const demoScalarForkContext: Extract<ForkMigrationContext, { kind: 'scalar' }> = {
+	...demoScalarQuestion,
+	kind: 'scalar',
+	parentUniverseId: 1n,
+	questionId: 9_901n,
+	title: 'Average global temperature anomaly in 2030?',
+	availableTargets: [
+		{ outcomeIndex: getScalarOutcomeIndex(demoScalarQuestion, 25n), universeId: 21n, label: '-2.5 °C', canonicalPool: `0x${'61'.repeat(20)}` },
+		{ outcomeIndex: getScalarOutcomeIndex(demoScalarQuestion, 50n), universeId: 22n, label: '0 °C', canonicalPool: `0x${'62'.repeat(20)}` },
+	],
+}
+
+function sourceOutcomeFromValue(value: string) {
+	if (value === 'INVALID' || value === 'YES' || value === 'NO') return value
+	throw new Error('Unknown demo source outcome')
+}
+
+export function DemoScalarForkMigration() {
+	const [sourceOutcome, setSourceOutcome] = useState<'INVALID' | 'YES' | 'NO'>('YES')
+	const [selectedTargets, setSelectedTargets] = useState<readonly ForkTarget[]>(demoScalarForkContext.availableTargets)
+	const [settlementState, setSettlementState] = useState<'idle' | 'ready' | 'confirmed'>('idle')
+	const batchBlocker = forkMigrationBatchBlocker(selectedTargets)
+	const batchWarning = forkMigrationBatchWarning(selectedTargets)
+	return (
+		<section class='section demo-fork-migration' aria-labelledby='demo-fork-migration-heading'>
+			<div class='section-heading'>
+				<div>
+					<span class='section-kicker'>Fork settlement</span>
+					<h2 id='demo-fork-migration-heading'>Migrate shares to scalar branches</h2>
+				</div>
+			</div>
+			<div class='fork-source-step'>
+				<label class='field'>
+					<span>Source share</span>
+					<select
+						value={sourceOutcome}
+						onChange={event => {
+							setSourceOutcome(sourceOutcomeFromValue(event.currentTarget.value))
+							setSettlementState('idle')
+						}}
+					>
+						<option value='INVALID'>INVALID</option>
+						<option value='YES'>YES</option>
+						<option value='NO'>NO</option>
+					</select>
+				</label>
+				<p>Migration permanently locks parent-universe transfers for {sourceOutcome}. The same source can still migrate later into other children.</p>
+			</div>
+			<ForkMigrationTargets
+				context={demoScalarForkContext}
+				selectedTargets={selectedTargets}
+				disabled={settlementState === 'confirmed'}
+				onChange={targets => {
+					setSelectedTargets(targets)
+					setSettlementState('idle')
+				}}
+			/>
+			{batchWarning === undefined ? null : <p class='warning'>{batchWarning}</p>}
+			{settlementState === 'ready' ? <p role='status'>Authoritative migration simulation ready for the selected source and child branches.</p> : null}
+			{settlementState === 'confirmed' ? <p role='status'>Simulated migration confirmed.</p> : null}
+			{settlementState === 'confirmed' ? null : (
+				<button class='primary-action' disabled={selectedTargets.length === 0 || batchBlocker !== undefined} onClick={() => setSettlementState(settlementState === 'ready' ? 'confirmed' : 'ready')}>
+					{settlementState === 'ready' ? `Submit migration to ${selectedTargets.length.toString()} child ${selectedTargets.length === 1 ? 'branch' : 'branches'}` : `Simulate migration to ${selectedTargets.length.toString()} ${selectedTargets.length === 1 ? 'branch' : 'branches'}`}
+				</button>
+			)}
+		</section>
 	)
 }
 
@@ -457,6 +535,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 					</section>
 				</aside>
 			</div>
+			{scenario === 'forked-scalar' ? <DemoScalarForkMigration /> : null}
 		</main>
 	)
 }

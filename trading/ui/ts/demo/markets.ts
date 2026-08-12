@@ -67,7 +67,7 @@ export function demoMarket(scenario: string): DemoMarket {
 	let systemState: DemoMarket['securityPool']['systemState'] = 'Operational'
 	let universe = 'Genesis universe'
 	if (scenario === 'ended' || scenario === 'ended-missing-pair') lifecycle = 'ended'
-	if (scenario === 'forked') {
+	if (scenario === 'forked' || scenario === 'forked-scalar') {
 		lifecycle = 'forked'
 		systemState = 'Pool forked'
 		universe = 'Parent universe · forked'

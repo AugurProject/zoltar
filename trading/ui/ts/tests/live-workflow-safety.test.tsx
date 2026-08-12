@@ -46,6 +46,14 @@ async function settleAsyncWorkflow() {
 	await flush()
 }
 
+async function waitForDom(predicate: () => boolean, description: string) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		await settleAsyncWorkflow()
+		if (predicate()) return
+	}
+	throw new Error(`Timed out waiting for ${description}. Rendered text: ${document.body.textContent}`)
+}
+
 function button(label: string) {
 	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
 	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
@@ -294,8 +302,7 @@ describe('live workflow safety boundary', () => {
 		walletChainReadStarted = undefined
 		deferSecondPortfolioBalance = true
 		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
-		await Bun.sleep(10)
-		await flush()
+		await waitForDom(() => document.querySelectorAll('[data-portfolio-pool]').length === 2, 'both portfolio pools')
 		expect(document.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(document.body.textContent).toContain(secondPool)
 		const firstPortfolioCard = document.querySelector(`[data-portfolio-pool="${pool}"]`)
