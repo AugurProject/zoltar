@@ -13,7 +13,7 @@ The shipped stack is Bun and TypeScript, `viem` for JSON-RPC and ABI primitives,
 Configuration is checked in under `config/`:
 
 - `networks.json` supplies network identity, chain ID, native currency symbol, RPC/start-block environment variable names, manifest, explorer, and reorg depth.
-- `manifests/*.json` supplies initial `[address, label, kind]` contract entries.
+- `manifests/*.json` supplies initial `[address, label, kind]` contract entries with an optional decimal-string deployment block for deterministic historical replay.
 - `abis.json` is the self-contained contract-kind ABI snapshot used for event and calldata decoding.
 
 At runtime one connection-scoped advisory lock elects an indexer for each chain. The winner seeds configuration, verifies `eth_chainId`, resumes at the stored checkpoint, catches up every missing block, and polls again every 12 seconds. Other replicas remain non-writing standbys for that chain while continuing to serve the API and UI.
