@@ -3,7 +3,7 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, as
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { acquireScanSignerOperation, deployExecutorFromConnectivity, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -133,6 +133,25 @@ test('blocks every scan signer path until deployment recovery clears its durable
 	deploymentRecovery.pending = false
 	expect(acquireScanSignerOperation(gate, deploymentRecovery)).toBe(true)
 	gate.release('scan')
+})
+
+test('activates the signer blocker as soon as a fresh deployment intent is durable', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-persist-block-'))
+	try {
+		const privateKey = `0x${'11'.repeat(32)}` as Hex
+		const account = privateKeyToAccount(privateKey)
+		const salt = `0x${'22'.repeat(32)}` as Hex
+		const plan = executorDeploymentPlan(salt)
+		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		const deploymentRecovery = { pending: false }
+		const intentPath = join(directory, 'deployment.json')
+		await persistExecutorDeploymentIntentForRecovery(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)
+		expect(deploymentRecovery.pending).toBe(true)
+		expect(acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery)).toBe(false)
+		expect(await loadExecutorDeploymentIntent(intentPath)).toBeDefined()
+	} finally {
+		await rm(directory, { force: true, recursive: true })
+	}
 })
 
 test('rejects a mismatched pending intent before externally deployed runtime recovery', async () => {

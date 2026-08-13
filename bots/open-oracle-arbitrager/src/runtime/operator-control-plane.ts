@@ -66,6 +66,11 @@ export function acquireScanSignerOperation(signerOperationGate: SignerOperationG
 	return signerOperationGate.acquire('scan')
 }
 
+export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
+	await saveExecutorDeploymentIntent(path, intent)
+	deploymentRecovery.pending = true
+}
+
 export function startOperatorControlPlane(parameters: {
 	config: Configuration
 	deploymentRecovery: DeploymentRecoveryState
@@ -229,7 +234,7 @@ export function startOperatorControlPlane(parameters: {
 						chain: config.network.chain,
 						connectivity: latest.settings.connectivity,
 						existingIntent,
-						persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
+						persistIntent: intent => persistExecutorDeploymentIntentForRecovery(intentPath, intent, parameters.deploymentRecovery),
 						privateKey,
 						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
 						salt: plan.salt,
