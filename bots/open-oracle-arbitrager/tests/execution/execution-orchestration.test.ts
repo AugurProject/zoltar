@@ -527,7 +527,7 @@ describe('funded execution orchestration', () => {
 		expect(persisted).toBe(false)
 	})
 
-	test('preserves the durable lifecycle attempt when canonical post-state recovery fails', async () => {
+	test('keeps the durable lifecycle pending when canonical post-state recovery cannot be established', async () => {
 		const submitted = lifecyclePosition()
 		let persisted: PositionRecord | undefined
 		await expect(
@@ -540,12 +540,9 @@ describe('funded execution orchestration', () => {
 				},
 			),
 		).rejects.toThrow('reduced a tracked wallet balance')
-		expect(persisted?.status).toBe('recovery-required')
-		expect(persisted?.lifecycleTransactionHashes).toEqual([replacementHash])
-		expect(persisted?.lifecycleTargetBlockNumber).toBe('101')
-		expect(persisted?.lifecycleWalletTokenBefore).toBe('10')
-		expect(persisted?.lifecycleWalletWethBefore).toBe('20')
-		expect(persisted === undefined ? false : lifecycleAttemptNeedsRecovery(persisted)).toBe(true)
+		expect(persisted).toBeUndefined()
+		expect(submitted.status).toBe('withdrawing')
+		expect(lifecycleAttemptNeedsRecovery(submitted)).toBe(true)
 	})
 
 	test('keeps a private lifecycle pending when receipt quorum loses connectivity and resumes later', async () => {

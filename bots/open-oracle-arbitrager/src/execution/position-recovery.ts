@@ -476,12 +476,10 @@ export async function discoverPublicReplacementWithQuorum(readClients: readonly 
 					...position,
 					entryTransactionHash: discoveredHash,
 					entryTransactionHashes: [discoveredHash],
-					status: 'recovery-required' as const,
 				}
 			: {
 					...position,
 					lifecycleTransactionHashes: [discoveredHash],
-					status: 'recovery-required' as const,
 				}
 	await persistPosition(updated)
 	return updated

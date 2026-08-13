@@ -1,5 +1,6 @@
 import { RpcError } from '../ethereum.ts'
 import { RpcEndpointPoolFailure } from '../ethereum/rpc-resilience.ts'
+import { EndpointCheckFailure } from './connectivity.ts'
 
 export type OperationalFailureDisposition = 'connectivity-degraded' | 'safety-paused'
 
@@ -12,6 +13,11 @@ export class ConnectivityDegradedError extends Error {
 
 export function operationalFailureDisposition(error: unknown): OperationalFailureDisposition {
 	if (error instanceof ConnectivityDegradedError || error instanceof RpcEndpointPoolFailure) return 'connectivity-degraded'
+	if (error instanceof EndpointCheckFailure) {
+		const failedChecks = error.checks.filter(check => check.status === 'failed')
+		if (failedChecks.length !== 0 && failedChecks.every(check => operationalFailureDisposition(new Error(check.error ?? 'endpoint check failed')) === 'connectivity-degraded')) return 'connectivity-degraded'
+		return 'safety-paused'
+	}
 	if (error instanceof RpcError) {
 		if (error.code !== undefined) return 'safety-paused'
 		const message = error.message.toLowerCase()

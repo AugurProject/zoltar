@@ -27,7 +27,7 @@ type JsonRpcResponse = {
 	result?: unknown
 }
 
-class EndpointCheckFailure extends Error {
+export class EndpointCheckFailure extends Error {
 	readonly checks: readonly EndpointCheck[]
 
 	constructor(message: string, checks: readonly EndpointCheck[]) {

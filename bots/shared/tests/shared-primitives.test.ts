@@ -13,6 +13,7 @@ import { createRpcEndpointPool, RpcEndpointPoolFailure } from '../src/ethereum/r
 import { operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum/codec.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
+import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -54,6 +55,17 @@ describe('shared bot primitives', () => {
 		const result = settledQuorumValue('head', [Promise.resolve({ endpoint: 'one', value: 1n }), Promise.reject(unavailable), Promise.reject(unavailable)])
 		await expect(result).rejects.toThrow('at least two available')
 		await result.catch(error => expect(operationalFailureDisposition(error)).toBe('connectivity-degraded'))
+	})
+
+	test('gives endpoint safety failures precedence over simultaneous transport failures', () => {
+		const checkedAt = new Date(0).toISOString()
+		const mixedFailure = new EndpointCheckFailure('wrong chain; fetch failed', [
+			{ chainId: 1, checkedAt, error: 'Expected chain 11155111, received 1', kind: 'public-rpc', status: 'failed', target: 'https://wrong.example' },
+			{ chainId: undefined, checkedAt, error: 'fetch failed', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' },
+		])
+		const offlineFailure = new EndpointCheckFailure('fetch failed', [{ chainId: undefined, checkedAt, error: 'fetch failed', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' }])
+		expect(operationalFailureDisposition(mixedFailure)).toBe('safety-paused')
+		expect(operationalFailureDisposition(offlineFailure)).toBe('connectivity-degraded')
 	})
 
 	test('requires canonical receipt ancestry and confirmation depth across the RPC quorum', async () => {

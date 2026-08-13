@@ -1,6 +1,5 @@
 import { bigintToSafeNumber, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
-import { operationalFailureDisposition } from '#monitoring/resilience'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
@@ -328,14 +327,7 @@ export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
 }
 
 export async function finalizeSubmittedLifecycleAttempt(lifecyclePosition: PositionRecord, recover: (position: PositionRecord) => Promise<PositionRecord>, persist: (position: PositionRecord) => Promise<unknown>) {
-	let recovered: PositionRecord
-	try {
-		recovered = await recover(lifecyclePosition)
-	} catch (error) {
-		if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-		await persist({ ...lifecyclePosition, status: 'recovery-required' })
-		throw error
-	}
+	const recovered = await recover(lifecyclePosition)
 	await persist(recovered)
 	if (recovered.status !== 'closed-pending-finality') throw new Error(`Position ${lifecyclePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
 	return recovered

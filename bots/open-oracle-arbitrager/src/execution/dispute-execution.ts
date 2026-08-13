@@ -326,14 +326,12 @@ export async function executeDispute(
 				...stagedPosition,
 				entryTransactionHash: replacement.transaction.hash,
 				entryTransactionHashes: [replacement.transaction.hash],
-				status: 'recovery-required',
 			}),
 		)
 		const receiptPosition = {
 			...stagedPosition,
 			entryTransactionHash: observedReceipt.transactionHash,
 			entryTransactionHashes: [observedReceipt.transactionHash],
-			status: 'recovery-required' as const,
 		}
 		await persistPosition(receiptPosition)
 		const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `public entry ${reportId}`, [observedReceipt.transactionHash])
