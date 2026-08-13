@@ -26,6 +26,8 @@ let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
 let fixtureStateUnavailable = false
 let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
+let fixtureNetworkConfigured = true
+const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
 	const profile = await mkdtemp(join(tmpdir(), 'zoltar-open-oracle-docs-'))
@@ -298,6 +300,43 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			}
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_RESUME'] === '1') {
+			fixtureNetworkConfigured = false
+			paused = true
+			const unconfiguredPauseRequestCount = fixturePauseRequests.length
+			await replacePage(`${origin}/?resume=network-unconfigured`, 1440, 900)
+			await Bun.sleep(750)
+			const unconfiguredResume = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const pause = document.querySelector('#pause-button')
+						const confirm = document.querySelector('#confirm-resume')
+						pause?.click()
+						confirm?.click()
+						return { confirmDisabled: confirm?.disabled, pauseDisabled: pause?.disabled, resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open') }
+					})()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			await Bun.sleep(100)
+			const unconfiguredResumeValue = typeof unconfiguredResume === 'object' && unconfiguredResume !== null && 'result' in unconfiguredResume && typeof unconfiguredResume.result === 'object' && unconfiguredResume.result !== null && 'value' in unconfiguredResume.result ? unconfiguredResume.result.value : undefined
+			if (
+				typeof unconfiguredResumeValue !== 'object' ||
+				unconfiguredResumeValue === null ||
+				!('pauseDisabled' in unconfiguredResumeValue) ||
+				unconfiguredResumeValue.pauseDisabled !== true ||
+				!('confirmDisabled' in unconfiguredResumeValue) ||
+				unconfiguredResumeValue.confirmDisabled !== true ||
+				!('resumeOpen' in unconfiguredResumeValue) ||
+				unconfiguredResumeValue.resumeOpen !== false ||
+				fixturePauseRequests.length !== unconfiguredPauseRequestCount
+			) {
+				throw new Error(`Unconfigured network exposed Resume: ${JSON.stringify({ requests: fixturePauseRequests.length - unconfiguredPauseRequestCount, state: unconfiguredResumeValue })}`)
+			}
+			await capturePng('resume-network-unconfigured.png')
+			fixtureNetworkConfigured = true
+			paused = false
 			await replacePage(`${origin}/`, 1440, 900)
 			await Bun.sleep(750)
 			await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
@@ -476,7 +515,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('noticeCopy' in postSuccessFailure) ||
 					postSuccessFailure.noticeCopy !== 'State polling failed. Automatic retry remains active; use Refresh to retry now.' ||
 					!('pauseDisabled' in postSuccessFailure) ||
-					postSuccessFailure.pauseDisabled !== true ||
+					postSuccessFailure.pauseDisabled !== false ||
 					!('runStatus' in postSuccessFailure) ||
 					postSuccessFailure.runStatus !== 'Disconnected' ||
 					!('safetyVisible' in postSuccessFailure) ||
@@ -490,6 +529,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					throw new Error(`Post-success state-request failure is unsafe: ${JSON.stringify(postSuccessFailure)}`)
 				}
 				await capturePng(`connection-post-success-failure-${mobile ? 'mobile' : 'desktop'}.png`)
+				const pauseRequestCount = fixturePauseRequests.length
+				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				if (fixturePauseRequests.length !== pauseRequestCount + 1 || fixturePauseRequests.at(-1) !== true) throw new Error('Emergency Pause did not reach the bot while state polling was unavailable')
+				paused = false
 				fixtureStateUnavailable = false
 				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
 				await Bun.sleep(250)
@@ -509,8 +553,10 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					throw new Error(`State-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
 				}
 				if (!mobile) {
-					fixtureStateHanging = true
 					await replacePage(`${origin}/?connection=hung-desktop`, width, height)
+					await Bun.sleep(750)
+					fixtureStateHanging = true
+					await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
 					await Bun.sleep(1_250)
 					const hungRequest = await readConnectionState()
 					if (
@@ -521,7 +567,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						!('confirmDisabled' in hungRequest) ||
 						hungRequest.confirmDisabled !== true ||
 						!('pauseDisabled' in hungRequest) ||
-						hungRequest.pauseDisabled !== true ||
+						hungRequest.pauseDisabled !== false ||
 						!('resumeOpen' in hungRequest) ||
 						hungRequest.resumeOpen !== false ||
 						!('runStatus' in hungRequest) ||
@@ -1056,6 +1102,7 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 	})
 	return {
 		...snapshot,
+		networkConfigured: fixtureNetworkConfigured,
 		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
 		lastError: fixtureAttention === 'error' ? rawRpcFailure : undefined,
 		operationLog: fixtureAttention === 'error' ? [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '816', timestamp: sampledAt(0) }, ...snapshot.operationLog] : snapshot.operationLog,
@@ -1078,6 +1125,7 @@ const server = startDashboardServer(0, {
 	},
 	setPaused: value => {
 		paused = value
+		fixturePauseRequests.push(value)
 	},
 	updateConnectivity: () => {
 		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)

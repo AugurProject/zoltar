@@ -12,6 +12,7 @@ import {
 	marketPriceChartDescription,
 	networkTargetStatus,
 	opportunityDecisionReason,
+	pauseControlState,
 	persistedConnectivity,
 	requiredSignerPrivateKey,
 	requestWithTimeout,
@@ -59,6 +60,14 @@ describe('dashboard exact ETH formatting', () => {
 			inputDisabled: true,
 			setDisabled: true,
 		})
+	})
+
+	test('keeps emergency pause available while locking resume without current network identity', () => {
+		expect(pauseControlState({ connected: false, networkConfigured: true, paused: false, snapshotAvailable: true })).toEqual({ confirmDisabled: true, pauseDisabled: false })
+		expect(pauseControlState({ connected: false, networkConfigured: true, paused: true, snapshotAvailable: true })).toEqual({ confirmDisabled: true, pauseDisabled: true })
+		expect(pauseControlState({ connected: true, networkConfigured: false, paused: true, snapshotAvailable: true })).toEqual({ confirmDisabled: true, pauseDisabled: true })
+		expect(pauseControlState({ connected: true, networkConfigured: true, paused: true, snapshotAvailable: true })).toEqual({ confirmDisabled: false, pauseDisabled: false })
+		expect(pauseControlState({ connected: false, networkConfigured: false, paused: false, snapshotAvailable: false })).toEqual({ confirmDisabled: true, pauseDisabled: true })
 	})
 
 	test('loads focused chain and RPC fields from persisted restart settings', () => {

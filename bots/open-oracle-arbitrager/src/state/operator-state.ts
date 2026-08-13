@@ -250,8 +250,40 @@ export function publicOperatorFailure(error: string, fallback = GENERIC_PUBLIC_F
 	return fallback
 }
 
-function transactionActivityOperation(entry: OperationEntry) {
-	return entry.category === 'transaction' && /^(?:approval-token|approval-weth|canonical-head|dispute|settle|withdraw-replacement|withdraw-token|withdraw-weth) (?:confirmation-unknown|confirmed|pending|reverted|submission-failed|submitting)$/.test(entry.message)
+function publicInformationalOperationValue(value: string | undefined) {
+	if (value === undefined) return undefined
+	if (/^(?:[A-Za-z]:[\\/]|[/~.]\/)/.test(value) || /(?:api[_-]?key|authorization|bearer|password|secret|token)\s*[=:]\s*\S+/i.test(value)) return undefined
+	const urlMatches = [...value.matchAll(/https?:\/\/[^\s,;)]+/gi)]
+	for (const match of urlMatches) {
+		try {
+			const url = new URL(match[0])
+			if (url.username !== '' || url.password !== '' || (url.pathname !== '' && url.pathname !== '/') || url.search !== '' || url.hash !== '') return undefined
+		} catch (error) {
+			void error
+			return undefined
+		}
+	}
+	const nonUrlValue = urlMatches.reduce((remaining, match) => remaining.replace(match[0], ''), value)
+	if (/[\\/]/.test(nonUrlValue)) return undefined
+	return value
+}
+
+function publicOperationEntry(entry: OperationEntry): OperationEntry {
+	const publicEntry: OperationEntry = {
+		category: entry.category,
+		level: entry.level,
+		message: entry.message,
+		reportId: entry.reportId,
+		timestamp: entry.timestamp,
+	}
+	if (entry.level !== 'info') {
+		publicEntry.details = entry.details === undefined ? undefined : publicOperatorFailure(entry.details)
+		publicEntry.reason = entry.reason === undefined ? undefined : publicOperatorFailure(entry.reason)
+		return publicEntry
+	}
+	publicEntry.details = entry.category === 'configuration' && entry.message === 'Complete operator configuration saved' ? undefined : publicInformationalOperationValue(entry.details)
+	publicEntry.reason = publicInformationalOperationValue(entry.reason)
+	return publicEntry
 }
 
 export function publicOperatorSnapshot(snapshot: OperatorSnapshot): OperatorSnapshot {
@@ -259,15 +291,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): OperatorSnap
 		...snapshot,
 		endpointChecks: snapshot.endpointChecks.map(check => ({ ...check, error: check.error === undefined ? undefined : publicOperatorFailure(check.error) })),
 		lastError: snapshot.lastError === undefined ? undefined : publicOperatorFailure(snapshot.lastError),
-		operationLog: snapshot.operationLog.map(entry => {
-			const errorBearingEntry = entry.level !== 'info'
-			if (!errorBearingEntry && !transactionActivityOperation(entry)) return entry
-			return {
-				...entry,
-				details: entry.details === undefined ? undefined : publicOperatorFailure(entry.details),
-				reason: errorBearingEntry && entry.reason !== undefined ? publicOperatorFailure(entry.reason) : entry.reason,
-			}
-		}),
+		operationLog: snapshot.operationLog.map(publicOperationEntry),
 		transactionActivity: snapshot.transactionActivity.map(activity => ({
 			...activity,
 			failedTargets: activity.failedTargets.map(target => ({ ...target, error: target.error === undefined ? undefined : publicOperatorFailure(target.error) })),

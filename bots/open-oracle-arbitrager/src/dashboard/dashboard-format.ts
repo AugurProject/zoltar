@@ -18,6 +18,14 @@ export function connectivityControlsDisabled(connected: boolean, requestPending:
 	return !connected || requestPending
 }
 
+export function pauseControlState(state: { connected: boolean; networkConfigured: boolean; paused: boolean; snapshotAvailable: boolean }) {
+	const resumeAvailable = state.connected && state.networkConfigured
+	return {
+		confirmDisabled: !resumeAvailable,
+		pauseDisabled: !state.snapshotAvailable || (state.paused && !resumeAvailable),
+	}
+}
+
 export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undefined, savedNetwork: 'mainnet' | 'sepolia' | undefined) {
 	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Saved for restart: ${savedNetwork}. The active process remains on ${activeNetwork}.`
 }

@@ -306,10 +306,15 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const credentialMarker = 'operator-secret'
 	const rawRpcFailure = `Read RPC https://operator:${credentialMarker}@rpc.example failed at block 100`
 	const rawRelayFailure = `Private relay https://operator:${credentialMarker}@relay.example rejected the transaction`
+	const protectedSettingsFile = '/var/lib/zoltar/operator/mainnet/operator.json'
 	const transactionHash: Hex = `0x${'12'.repeat(32)}`
 	state.lastError = rawRpcFailure
 	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' }]
-	state.operationLog = [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '1', timestamp: new Date(0).toISOString() }]
+	state.operationLog = [
+		{ category: 'configuration', details: protectedSettingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined, timestamp: new Date(0).toISOString() },
+		{ category: 'decision', details: 'net 0.0158 ETH · 992 bps', level: 'info', message: 'Selected profitable sell-REP dispute', reason: 'quote, TWAP, inventory, and risk checks passed', reportId: '1', timestamp: new Date(0).toISOString() },
+		{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '1', timestamp: new Date(0).toISOString() },
+	]
 	state.transactionActivity = [
 		{
 			acceptedTargets: [],
@@ -333,15 +338,20 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(reloadedState).toMatchObject({ queuedWallet: address })
 	expect(reloadedState).toMatchObject({ savedWallet: address })
 	expect(JSON.stringify(reloadedState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(reloadedState)).not.toContain(protectedSettingsFile)
+	const publicOperations = Reflect.get(reloadedState, 'operationLog')
+	expect(Array.isArray(publicOperations)).toBe(true)
+	if (!Array.isArray(publicOperations)) throw new Error('Expected public operation log')
+	expect(publicOperations[0]).toMatchObject({ message: 'Complete operator configuration saved' })
+	expect(typeof publicOperations[0] === 'object' && publicOperations[0] !== null && Reflect.has(publicOperations[0], 'details')).toBe(false)
+	expect(publicOperations[1]).toMatchObject({ details: 'net 0.0158 ETH · 992 bps', reason: 'quote, TWAP, inventory, and risk checks passed' })
+	expect(publicOperations[2]).toMatchObject({
+		details: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.',
+		reason: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
+	})
 	expect(reloadedState).toMatchObject({
 		endpointChecks: [{ error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' }],
 		lastError: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
-		operationLog: [
-			{
-				details: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.',
-				reason: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
-			},
-		],
 		transactionActivity: [{ failedTargets: [{ error: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.' }] }],
 	})
 	const forgetSigner = await fetch(`${origin}/api/signer`, {

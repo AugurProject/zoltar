@@ -13,6 +13,7 @@ import {
 	marketPriceChartDescription,
 	networkTargetStatus,
 	opportunityDecisionReason,
+	pauseControlState,
 	persistedConnectivity,
 	requiredSignerPrivateKey,
 	requestWithTimeout,
@@ -74,8 +75,14 @@ function prettyJson(value: unknown) {
 
 function setControlsEnabled(enabled: boolean) {
 	connected = enabled
-	element<HTMLButtonElement>('pause-button').disabled = !enabled
-	element<HTMLButtonElement>('confirm-resume').disabled = !enabled
+	const pauseControls = pauseControlState({
+		connected: enabled,
+		networkConfigured: latestSnapshot?.networkConfigured === true,
+		paused: latestSnapshot?.paused === true,
+		snapshotAvailable: latestSnapshot !== undefined,
+	})
+	element<HTMLButtonElement>('pause-button').disabled = pauseControls.pauseDisabled
+	element<HTMLButtonElement>('confirm-resume').disabled = pauseControls.confirmDisabled
 	if (!enabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
@@ -1047,7 +1054,8 @@ function closeResumePreflight() {
 }
 
 async function changePaused(paused: boolean) {
-	if (!connected) {
+	const emergencyPauseAvailable = paused && latestSnapshot?.paused === false
+	if ((!connected && !emergencyPauseAvailable) || (!paused && latestSnapshot?.networkConfigured !== true)) {
 		closeResumePreflight()
 		return
 	}
@@ -1068,12 +1076,13 @@ async function changePaused(paused: boolean) {
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'
 	} finally {
-		element<HTMLButtonElement>('confirm-resume').disabled = !connected
+		setControlsEnabled(connected)
 	}
 }
 
 element('pause-button').addEventListener('click', () => {
 	if (latestSnapshot === undefined) return
+	if (latestSnapshot.paused && (!connected || !latestSnapshot.networkConfigured)) return
 	if (latestSnapshot.paused && latestSnapshot.execute) {
 		openResumePreflight(latestSnapshot)
 		return
@@ -1082,7 +1091,10 @@ element('pause-button').addEventListener('click', () => {
 })
 
 element('cancel-resume').addEventListener('click', closeResumePreflight)
-element('confirm-resume').addEventListener('click', () => void changePaused(false))
+element('confirm-resume').addEventListener('click', () => {
+	if (!connected || latestSnapshot?.networkConfigured !== true) return
+	void changePaused(false)
+})
 
 const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
 const fragmentSections: Readonly<Record<string, string>> = {

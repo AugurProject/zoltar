@@ -217,7 +217,7 @@ const STATE_REQUEST_TIMEOUT_MS = 1_000
 function setMutationControlsEnabled(enabled: boolean) {
 	const configurationAvailable = enabled && currentConfiguration !== undefined
 	const resumeAvailable = configurationAvailable && configurationConnected && currentConfiguration?.network !== undefined
-	pauseButton.disabled = !enabled || (currentSnapshot?.paused === true && !resumeAvailable)
+	pauseButton.disabled = currentSnapshot === undefined || (currentSnapshot.paused && !resumeAvailable)
 	confirmResume.disabled = !resumeAvailable
 	networkFields.disabled = !configurationAvailable
 	marketConfigurationFields.disabled = !configurationAvailable
@@ -1204,6 +1204,7 @@ function closeResumePreflight() {
 }
 
 async function changePaused(paused: boolean) {
+	if (currentSnapshot === undefined || (!paused && (!stateConnected || !configurationConnected || currentConfiguration?.network === undefined))) return
 	pauseButton.disabled = true
 	confirmResume.disabled = true
 	actionStatus(pauseStatus, paused ? 'Pausing…' : 'Resuming…')

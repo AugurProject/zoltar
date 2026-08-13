@@ -316,7 +316,12 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · last known')
 		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
 		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
-		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
+		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
+		const stalePause = recovered.window.document.getElementById('pause-button')
+		if (!(stalePause instanceof recovered.window.HTMLButtonElement)) throw new Error('Expected stale-state pause control')
+		stalePause.click()
+		await recovered.waitUntilComplete()
+		expect(recovered.pauseRequests).toContainEqual({ paused: true })
 		recovered.setStateRequestFailure(false)
 		await recovered.refresh()
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run')
@@ -327,7 +332,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
 	})
 
-	test('keeps every execution-affecting control disabled when a pause mutation cannot refresh state', async () => {
+	test('keeps emergency Pause available while identity-dependent controls fail closed', async () => {
 		const page = await dashboard(configuration(), state())
 		page.setStateRequestFailure(true)
 		const pauseButton = page.window.document.getElementById('pause-button')
@@ -335,7 +340,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		pauseButton.click()
 		await page.waitUntilComplete()
 		await Bun.sleep(1)
-		for (const id of ['pause-button', 'network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer']) {
+		expect(pauseButton.disabled).toBe(false)
+		for (const id of ['network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer']) {
 			const control = page.window.document.getElementById(id)
 			expect(control?.hasAttribute('disabled')).toBe(true)
 		}
@@ -519,7 +525,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 		expect(outcome).toBe('completed')
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
-		expect(page.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
+		expect(page.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
 	})
 

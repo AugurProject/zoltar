@@ -285,7 +285,7 @@ try {
 			!postSuccessFailure.noticeCopy.includes('Automatic retry is active') ||
 			postSuccessFailure.noticeCopy.includes('fixture state endpoint unavailable') ||
 			!('pauseDisabled' in postSuccessFailure) ||
-			postSuccessFailure.pauseDisabled !== true ||
+			postSuccessFailure.pauseDisabled !== false ||
 			!('runStatus' in postSuccessFailure) ||
 			postSuccessFailure.runStatus !== 'Disconnected' ||
 			!('settingsDisabled' in postSuccessFailure) ||
@@ -303,6 +303,8 @@ try {
 			throw new Error(`Post-success Liquidator state-request failure is unsafe: ${JSON.stringify(postSuccessFailure)}`)
 		}
 		connectionFailures[`post-success-${mobile ? 'mobile' : 'desktop'}`] = { screenshot: await capture(`liquidator-connection-post-success-failure-${mobile ? 'mobile' : 'desktop'}`, width, height), state: postSuccessFailure }
+		await evaluate(`document.querySelector('#pause-button')?.click()`)
+		await Bun.sleep(250)
 		await evaluate(`history.replaceState(null, '', '/')`)
 		await Bun.sleep(3_200)
 		const recovery = await readConnectionState()
@@ -318,10 +320,14 @@ try {
 			!('pauseDisabled' in recovery) ||
 			recovery.pauseDisabled !== false ||
 			!('runStatus' in recovery) ||
-			recovery.runStatus !== 'Running'
+			recovery.runStatus !== 'Paused'
 		) {
-			throw new Error(`Liquidator state-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
+			throw new Error(`Liquidator emergency Pause was not applied while state polling was unavailable: ${JSON.stringify(recovery)}`)
 		}
+		await evaluate(`document.querySelector('#pause-button')?.click()`)
+		await Bun.sleep(500)
+		const resumed = await readConnectionState()
+		if (typeof resumed !== 'object' || resumed === null || !('runStatus' in resumed) || resumed.runStatus !== 'Running') throw new Error(`Liquidator did not resume after emergency Pause QA: ${JSON.stringify(resumed)}`)
 	}
 	await evaluate(`(() => {
 		window.__qaErrorOriginalFetch = window.fetch
