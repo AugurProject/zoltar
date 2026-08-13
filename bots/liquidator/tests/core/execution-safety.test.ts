@@ -20,7 +20,6 @@ import {
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
-import { RpcEndpointPoolFailure } from '@zoltar/bot-shared/ethereum'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
@@ -128,7 +127,7 @@ describe('liquidator execution safety', () => {
 	})
 
 	test('classifies insufficient transport-only scan observations as degraded connectivity', () => {
-		const unavailable = new RpcEndpointPoolFailure([{ error: 'cooling down', target: 'https://offline.example' }])
+		const unavailable = new TypeError('fetch failed')
 		const settled: PromiseSettledResult<{ endpoint: string; value: bigint }>[] = [
 			{ status: 'fulfilled', value: { endpoint: 'rpc-a', value: 1n } },
 			{ reason: unavailable, status: 'rejected' },
