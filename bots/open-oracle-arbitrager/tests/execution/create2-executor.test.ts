@@ -340,7 +340,17 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 	expect(receivedRpcUrls).toEqual(publicRpcUrls)
 })
 
-async function runDeploymentScenario(options: { alreadyDeployed?: boolean; differingRecoveryHeads?: boolean; existingIntent?: boolean; gasPrices?: Partial<Record<'primary' | 'secondary' | 'tertiary', bigint>>; lifecycleEvents?: string[]; primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
+async function runDeploymentScenario(options: {
+	alreadyDeployed?: boolean
+	differingRecoveryHeads?: boolean
+	existingIntent?: boolean
+	gasPrices?: Partial<Record<'primary' | 'secondary' | 'tertiary', bigint>>
+	lifecycleEvents?: string[]
+	matchingExistingReceipt?: boolean
+	primaryPreparationFails: boolean
+	primaryReceiptFails: boolean
+	storedReceiptMissing?: boolean
+}) {
 	const privateKey = `0x${'11'.repeat(32)}` as Hex
 	const account = privateKeyToAccount(privateKey)
 	const salt = `0x${'22'.repeat(32)}` as Hex
@@ -409,6 +419,7 @@ async function runDeploymentScenario(options: { alreadyDeployed?: boolean; diffe
 		}
 		if (body.method === 'eth_getTransactionReceipt') {
 			if (name === 'primary' && options.primaryReceiptFails) return new Response('primary receipt unavailable', { status: 503 })
+			if (options.storedReceiptMissing) return rpcResponse(null)
 			return rpcResponse({
 				blockHash: `0x${'aa'.repeat(32)}`,
 				blockNumber: '0x64',
@@ -453,6 +464,7 @@ async function runDeploymentScenario(options: { alreadyDeployed?: boolean; diffe
 					version: 1,
 				} satisfies ExecutorDeploymentIntent)
 			: undefined
+		if (options.matchingExistingReceipt && existingIntent !== undefined) transactionHash = existingIntent.transactionHash
 		const result = await deployExecutorCreate2({
 			chain: mainnet,
 			existingIntent,
@@ -502,9 +514,13 @@ test('confirms through the secondary when the primary fails receipt polling afte
 	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
 })
 
-test('recovers a matching executor deployed by another account after this intent was persisted', async () => {
-	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, differingRecoveryHeads: true, existingIntent: true, primaryPreparationFails: false, primaryReceiptFails: false })
+test('recovers only when the stored executor deployment transaction itself is finalized', async () => {
+	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, differingRecoveryHeads: true, existingIntent: true, matchingExistingReceipt: true, primaryPreparationFails: false, primaryReceiptFails: false })
 	expect(result.alreadyDeployed).toBe(true)
 	expect(result.transactionHash).toBeDefined()
 	expect(broadcastRequests).toEqual([])
+})
+
+test('keeps recovery pending when matching executor code came from another transaction', async () => {
+	await expect(runDeploymentScenario({ alreadyDeployed: true, existingIntent: true, primaryPreparationFails: false, primaryReceiptFails: false, storedReceiptMissing: true })).rejects.toThrow('no quorum-visible receipt')
 })

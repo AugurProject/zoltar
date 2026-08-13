@@ -4,7 +4,7 @@ import { submitSignedTransaction, validateSubmissionSettings } from '#execution/
 import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
-import { availableSettledValues, settledQuorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError } from '#monitoring/resilience'
 import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 
@@ -74,7 +74,7 @@ export async function submitExecutorDeploymentTransaction(parameters: { account:
 }
 
 function receiptNotFound(error: unknown) {
-	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || (error.message.toLowerCase().includes('transaction receipt') && error.message.toLowerCase().includes('not found')))
+	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || (error.message.toLowerCase().includes('transaction receipt') && (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('could not be found'))))
 }
 
 async function executorDeploymentReceipt(parameters: { clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; transactionHash: Hash }) {
@@ -142,16 +142,19 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 	if (intent !== undefined) await assertExecutorDeploymentIntent(intent, account.address, parameters.chain.id, plan)
 	if (environment.code === 'verified' && parameters.existingIntent === undefined) return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
 	if (environment.code === 'verified' && parameters.existingIntent !== undefined) {
-		const settledHeads = await Promise.allSettled(clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: await client.getBlockNumber() })))
-		const heads = availableSettledValues(settledHeads)
-		if (heads.length < 2) throw new ConnectivityDegradedError('Executor deployment recovery requires at least two available independent RPC endpoints')
-		const head = heads.reduce((minimum, observation) => (observation.value < minimum ? observation.value : minimum), heads[0]?.value ?? 0n)
-		if (head < 12n) throw new ConnectivityDegradedError('Executor deployment recovery requires twelve canonical descendant blocks')
-		const finalizedCodeStatus = await settledQuorumValue(
-			'executor deployment finalized runtime',
-			clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: executorCodeStatus(await client.getCode({ address: plan.address, blockNumber: head - 12n }), expectedRuntimeCodeHash) })),
+		const receipt = await executorDeploymentReceipt({ clients, transactionHash: parameters.existingIntent.transactionHash as Hash })
+		if (receipt === undefined) throw new ConnectivityDegradedError('Stored executor deployment transaction has no quorum-visible receipt; recovery remains pending')
+		if (receipt.transactionHash.toLowerCase() !== parameters.existingIntent.transactionHash.toLowerCase()) throw new Error('Executor deployment receipt does not match the stored signed transaction')
+		assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
+		const finalized = await confirmCanonicalReceiptFinality(
+			clients.map(({ client }) => client),
+			clients.map(({ rpcUrl }) => endpointLabel(rpcUrl)),
+			'executor deployment recovery',
+			{ blockHash: receipt.blockHash, blockNumber: receipt.blockNumber },
+			12n,
 		)
-		if (finalizedCodeStatus === 'verified') return { address: plan.address, alreadyDeployed: true, transactionHash: parameters.existingIntent.transactionHash as Hash }
+		if (!finalized) throw new ConnectivityDegradedError('Stored executor deployment transaction has not reached canonical finality; recovery remains pending')
+		return { address: plan.address, alreadyDeployed: true, transactionHash: parameters.existingIntent.transactionHash as Hash }
 	}
 	if (intent === undefined) {
 		const nonce = await settledQuorumValue(

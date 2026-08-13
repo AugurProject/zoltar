@@ -1,5 +1,5 @@
 import type { Hex } from '../ethereum.ts'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '../monitoring/read-quorum.ts'
+import { availableSettledValues, settledQuorumValue } from '../monitoring/read-quorum.ts'
 import { ConnectivityDegradedError } from '../monitoring/resilience.ts'
 
 export type CanonicalBlockReader = {
@@ -19,25 +19,16 @@ export async function confirmCanonicalReceiptFinality(readers: readonly Canonica
 		if (heads.some(head => head < finalityBlockNumber)) return false
 	} else if (knownMinimumHead < finalityBlockNumber) return false
 
-	const descendants = await Promise.allSettled(
+	const ancestry = await settledQuorumValue(
+		`${label} finality ancestry`,
 		readers.map(async (reader, index) => {
-			const block = await reader.getBlock({ blockNumber: finalityBlockNumber })
-			if (block.hash == null) throw new Error(`${label} finality descendant is unavailable`)
-			return { endpoint: endpoints[index] ?? '', value: block.hash }
+			const descendant = await reader.getBlock({ blockNumber: finalityBlockNumber })
+			if (descendant.hash == null) throw new Error(`${label} finality descendant is unavailable`)
+			const receiptBlock = await reader.getBlock({ blockNumber: receipt.blockNumber })
+			if (receiptBlock.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
+			return { endpoint: endpoints[index] ?? '', value: { descendantHash: descendant.hash, receiptBlockHash: receiptBlock.hash } }
 		}),
 	)
-	const availableDescendants = availableSettledValues(descendants)
-	if (availableDescendants.length < 2) throw new ConnectivityDegradedError(`${label} finality descendant requires at least two available independent RPC endpoints`)
-	quorumValue(`${label} finality descendant`, availableDescendants)
-
-	const canonicalReceiptBlockHash = await settledQuorumValue(
-		`${label} receipt block`,
-		readers.map(async (reader, index) => {
-			const block = await reader.getBlock({ blockNumber: receipt.blockNumber })
-			if (block.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
-			return { endpoint: endpoints[index] ?? '', value: block.hash }
-		}),
-	)
-	if (canonicalReceiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
+	if (ancestry.receiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
 	return true
 }

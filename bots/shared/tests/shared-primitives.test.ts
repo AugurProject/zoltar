@@ -10,7 +10,7 @@ import { createSignerOperationGate } from '../src/execution/signer-operation-gat
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
-import { operationalFailureDisposition } from '../src/monitoring/resilience.ts'
+import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum/codec.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
 import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
@@ -98,6 +98,19 @@ describe('shared bot primitives', () => {
 			}
 		}
 		await expect(confirmCanonicalReceiptFinality([switchingReader(), switchingReader()], ['one', 'two'], 'switching receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('receipt is no longer canonical')
+	})
+
+	test('requires the same endpoint quorum to attest descendant and receipt ancestry', async () => {
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const descendantHash = `0x${'22'.repeat(32)}` as const
+		const reader = (failsAt: 100n | 112n) => ({
+			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+				if (blockNumber === failsAt) throw new ConnectivityDegradedError(`unavailable at ${blockNumber.toString()}`)
+				return { hash: blockNumber === 100n ? receiptHash : descendantHash }
+			},
+			getBlockNumber: async () => 112n,
+		})
+		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n), reader(112n), reader(112n)], ['one', 'two', 'three', 'four'], 'disjoint receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('requires at least two available independent RPC endpoints')
 	})
 
 	test('never omits semantic failures from canonical finality evidence', async () => {
