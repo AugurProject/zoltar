@@ -473,6 +473,33 @@ const normalizedRpcDescription = (value: string): string =>
 		.trim()
 		.toLowerCase()
 
+const withoutAnsiControlSequences = (value: string): string => {
+	const characters: string[] = []
+	for (let index = 0; index < value.length; index++) {
+		if (value.codePointAt(index) === 0x1b && value[index + 1] === '[') {
+			index += 2
+			while (index < value.length) {
+				const codePoint = value.codePointAt(index)
+				if (codePoint !== undefined && codePoint >= 0x40 && codePoint <= 0x7e) break
+				index++
+			}
+			characters.push(' ')
+		} else characters.push(value[index] ?? '')
+	}
+	return characters.join('')
+}
+
+const singleLineErrorDescription = (value: string): string =>
+	[...withoutAnsiControlSequences(value)]
+		.map((character) => {
+			const codePoint = character.codePointAt(0)
+			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
+		})
+		.join('')
+		.replace(/\p{Cf}/gu, ' ')
+		.replace(/\s+/gu, ' ')
+		.trim()
+
 const classifiedRpcDescription = (value: string): string =>
 	normalizedRpcDescription(value)
 		.replace(/[^\p{L}\p{N}]+/gu, ' ')
@@ -822,20 +849,44 @@ const rpcRequestMethodFrom = (error: unknown): string | undefined => {
 	return undefined
 }
 
-export const safeIndexerFailureReason = (error: unknown): string => {
+const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean): string => {
 	const saturation = rpcQueueSaturationFrom(error)
 	if (saturation !== undefined)
 		return `RpcQueueSaturatedError; active ${saturation.active}; queued ${saturation.pending}; maximum queued ${saturation.maximumPending}; high-water mark ${saturation.highWaterMark}; saturation count ${saturation.saturationCount}`
 	const names: string[] = []
+	const descriptions: string[] = []
 	let status: number | undefined
 	let code: string | undefined
 	let standardMessage: string | undefined
+	let previousDescriptionName: string | undefined
+	let previousDescriptionMessage: string | undefined
 	const seen = new Set<unknown>()
 	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+	while (current !== undefined && !seen.has(current)) {
 		seen.add(current)
-		const name = 'name' in current ? safeErrorIdentifier(current.name) : undefined
+		if (typeof current !== 'object' || current === null) {
+			descriptions.push(`UnknownError: ${singleLineErrorDescription(String(current))}`)
+			break
+		}
+		const actualName = 'name' in current && typeof current.name === 'string' ? singleLineErrorDescription(current.name) || undefined : undefined
+		const name = safeErrorIdentifier(actualName)
 		if (name !== undefined && names.at(-1) !== name) names.push(name)
+		const actualMessage =
+			singleLineErrorDescription(
+				preferredRpcDescriptions(current)
+					.find((value) => value.trim() !== '')
+					?.trim() ?? '',
+			) || undefined
+		if (actualName !== undefined || actualMessage !== undefined) {
+			if (actualMessage !== undefined && actualMessage === previousDescriptionMessage) {
+				if (actualName !== undefined && actualName !== previousDescriptionName) descriptions.push(actualName)
+			} else {
+				const descriptionName = actualName ?? 'UnknownError'
+				descriptions.push(actualMessage === undefined ? descriptionName : `${descriptionName}: ${actualMessage}`)
+			}
+			previousDescriptionName = actualName
+			previousDescriptionMessage = actualMessage
+		}
 		if (
 			status === undefined &&
 			'status' in current &&
@@ -851,7 +902,10 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	}
 	const category = rpcErrorCategory(error)
 	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
-	const details = [names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
+	const fallbackDescription = descriptions.length === 0 ? 'UnknownError' : descriptions.slice(0, 4).join(' caused by ')
+	const details = [
+		includeErrorDescriptions && message === undefined ? fallbackDescription : names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by '),
+	]
 	const method = rpcRequestMethodFrom(error)
 	if (method !== undefined) details.push(`method ${method}`)
 	if (status !== undefined) details.push(`HTTP ${status}`)
@@ -860,7 +914,11 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	return details.join('; ')
 }
 
-const rpcFailureReason = (error: unknown, rpcNumber: number): string => `RPC #${rpcNumber}: ${safeIndexerFailureReason(error)}`
+export const safeIndexerFailureReason = (error: unknown): string => indexerFailureReason(error, false)
+
+export const rpcIndexerFailureReason = (error: unknown): string => indexerFailureReason(error, true)
+
+const rpcFailureReason = (error: unknown, rpcNumber: number): string => `RPC #${rpcNumber}: ${rpcIndexerFailureReason(error)}`
 
 type RpcDiagnosticProvider = Pick<RpcProvider, 'endpoint' | 'number'>
 
@@ -955,7 +1013,9 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			consecutiveFailures++
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
 			try {
-				await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure), safeIndexerFailureReason(error))
+				const failureMessage = safeIndexerFailure(error)
+				const failureReason = failureMessage === 'RPC request failed; retrying' ? rpcIndexerFailureReason(error) : safeIndexerFailureReason(error)
+				await failure(failureMessage, new Date(Date.now() + delayAfterFailure), failureReason)
 			} catch (failureError) {
 				throw new IndexerOwnershipStageError('record-failure', failureError)
 			}
