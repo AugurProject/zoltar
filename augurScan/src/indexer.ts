@@ -910,9 +910,8 @@ class NetworkIndexer {
 			runOwned: async (lease) => {
 				this.#lease = lease
 				try {
-					await this.#withProviderFailover(() => this.#reconcileManifestBackfill())
 					await runNetworkLifecycle({
-						verify: () => this.#withProviderFailover(async () => undefined),
+						verify: () => this.#withProviderFailover(() => this.#reconcileManifestBackfill()),
 						poll: () => this.#withProviderFailover(() => this.#poll()),
 						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
 						intervalMs: runtimeConfig.pollIntervalMs,

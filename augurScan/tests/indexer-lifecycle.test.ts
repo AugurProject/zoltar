@@ -957,33 +957,36 @@ describe('network indexer lifecycle', () => {
 		expect(safeIndexerFailure(error)).toBe('Database request failed; retrying')
 	})
 
-	test('retries initial chain verification and begins polling after recovery', async () => {
+	test('reports and retries failed startup deployment reconciliation before polling', async () => {
 		const controller = new AbortController()
 		const failures: string[] = []
-		let verificationAttempts = 0
+		const reasons: string[] = []
+		let reconciliationAttempts = 0
 		let polls = 0
 
 		await runNetworkLifecycle({
 			verify: async () => {
-				verificationAttempts++
-				if (verificationAttempts === 1) throw new Error('temporary timeout with secret=provider-key-sentinel')
+				reconciliationAttempts++
+				if (reconciliationAttempts === 1) throw new Error('temporary deployment lookup timeout with secret=provider-key-sentinel')
 			},
 			poll: async () => {
 				polls++
 				controller.abort()
 				return true
 			},
-			failure: async (message) => {
+			failure: async (message, _nextRetryAt, reason) => {
 				failures.push(message)
+				reasons.push(reason)
 			},
 			intervalMs: 1,
 			signal: controller.signal,
 			random: () => 0.5,
 		})
 
-		expect(verificationAttempts).toBe(2)
+		expect(reconciliationAttempts).toBe(2)
 		expect(polls).toBe(1)
 		expect(failures).toEqual(['RPC request failed; retrying'])
+		expect(reasons).toEqual(['Error'])
 	})
 
 	test('keeps retrying an RPC outage until the network recovers', async () => {
