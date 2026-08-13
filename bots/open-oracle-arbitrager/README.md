@@ -1026,9 +1026,11 @@ that late gas once, updates the UTC-day gas budget and realized P&amp;L where
 applicable, and then removes the archived attempt. An absent hash is also retired
 once independent RPCs prove at the finalized height that a later canonical
 transaction consumed its nonce, because the retained signature can no longer be
-mined. Unexpected successful evidence fails closed. A successful receipt without
-the expected executor event or exact durable transaction intent, RPC disagreement,
-or ambiguous evidence remains `recovery-required`. Active transaction-tracker rows
+mined. Unexpected successful evidence fails closed. Inter-reader disagreement rejects
+the quorum read, leaves the journal in its current state, and blocks execution until
+the readers agree. Once the quorum agrees, a successful receipt without the expected
+executor event, exact durable transaction intent, or attributable assets remains
+`recovery-required`. Active transaction-tracker rows
 are kept in process memory and reset on restart; confirmed dispute history and its
 ETH profit totals are persisted in the configured history file.
 
@@ -1120,8 +1122,10 @@ current canonical hash. Every receipt must include its mined effective gas price
 The bot then decodes the executor event and reconstructs actual entry gas and hedge
 economics before leaving `pending-entry`. A current atomic public or private attempt
 proven absent after the 12-block window becomes `expired-not-included`; a
-quorum-confirmed atomic revert closes after gas accounting. Missing or ambiguous
-evidence remains `recovery-required` and never produces trading profit. Legacy
+quorum-confirmed atomic revert closes after gas accounting. Inter-reader disagreement
+keeps the current journal state pending and blocks execution. Quorum-agreed evidence
+that is missing required executor events or conflicts with the durable journal moves
+the position to `recovery-required` and never produces trading profit. Legacy
 multi-transaction private records are never auto-expired because their prerequisite
 signatures lack the executor's on-chain parent binding.
 
@@ -1170,9 +1174,11 @@ delete or hand-edit a record to bypass the one-position guard.
    inspect every hash and never treat the record as expired merely because its target
    passed. If evidence is temporarily unavailable, restore independent RPC service
    and restart; the bot retries quorum recovery. For a successful mismatched receipt,
-   reorganization, disagreement, or legacy multi-transaction record, keep the bot
-   paused and reconcile allowances, wallet balances, OpenOracle holder balances, and
-   the current reporter manually.
+   reorganization, or legacy multi-transaction record, keep the bot paused and
+   reconcile allowances, wallet balances, OpenOracle holder balances, and the current
+   reporter manually. For inter-reader disagreement, preserve the contradictory
+   evidence and restore a trustworthy agreeing quorum before deciding whether manual
+   reconciliation is required.
 3. For **lifecycle receipt could not be recovered**, inspect the single
    `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. A successful
    call must be in that target block and emit the exact matching lifecycle event.
