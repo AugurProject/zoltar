@@ -12,7 +12,7 @@ import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core
 import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>

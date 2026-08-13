@@ -1,5 +1,5 @@
 import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { scanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'

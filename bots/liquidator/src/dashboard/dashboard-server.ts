@@ -146,7 +146,8 @@ function publicEndpointTarget(value: unknown) {
 	try {
 		const parsed = new URL(value)
 		return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : 'Protected endpoint'
-	} catch {
+	} catch (error) {
+		void error
 		return 'Protected endpoint'
 	}
 }

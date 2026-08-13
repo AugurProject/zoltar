@@ -8,7 +8,7 @@ import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
 export type PoolObservation = {
 	knownVaultCount: bigint

@@ -2,7 +2,7 @@ import { concatHex, createPublicClient, getCreate2Address, keccak256, parseTrans
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { availableSettledValues, settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError } from '#monitoring/resilience'

@@ -9,7 +9,7 @@ import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservati
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
-import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 
 export { requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '#execution/receipt-validation'
 

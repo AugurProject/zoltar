@@ -20,7 +20,7 @@ import {
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
-import { RpcEndpointPoolFailure } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { RpcEndpointPoolFailure } from '@zoltar/bot-shared/ethereum'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')

@@ -23,6 +23,7 @@ export type {
 	Transport,
 } from './ethereum/types'
 export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
+export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
 export {
 	createPublicClient,
 	createWalletClient,
@@ -36,6 +37,7 @@ export {
 	readContractAtBlock,
 	RpcError,
 } from './ethereum/client'
+export { createRpcEndpointPool, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
 export {
 	bytesToHex,
 	bigintToSafeNumber,

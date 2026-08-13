@@ -1,6 +1,6 @@
 import { createPublicClient, defineChain, getAddress, http } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { securityPoolFactoryAbi } from '#contracts/abi'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 

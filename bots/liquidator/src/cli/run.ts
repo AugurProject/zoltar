@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'

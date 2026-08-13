@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
