@@ -25,28 +25,26 @@ bun run ui:build
 bun run ui:serve
 ```
 
-Open `http://localhost:12346/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
+Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
 
 ### Docker
 
-Build and serve the standalone UI from the repository root:
+Build and serve the standalone demo UI from this directory:
 
 ```bash
-docker build --file trading/Dockerfile --tag zoltar-trading .
-docker run --rm --publish 12346:12346 zoltar-trading
+docker compose up --build --force-recreate
 ```
 
-Then open `http://localhost:12346/?demo=1#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`.
+On Windows, run `start.bat` from this directory to start the same Compose command.
+
+Then open `http://localhost:4163/?demo=1#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`.
 
 Without a deployment build argument, the image contains `deployment.json` set to `null` and supports demo mode only. Live use requires a build with a reviewed manifest.
 
 For live use, include a reviewed project-local deployment manifest at build time. The path is relative to `trading/` inside the build context:
 
 ```bash
-docker build \
-  --file trading/Dockerfile \
-  --build-arg TRADING_UI_DEPLOYMENT=deployments/local.json \
-  --tag zoltar-trading .
+TRADING_UI_DEPLOYMENT=deployments/local.json docker compose up --build --force-recreate
 ```
 
 ### Live deployment

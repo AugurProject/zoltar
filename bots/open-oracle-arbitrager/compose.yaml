@@ -7,7 +7,7 @@ services:
       dockerfile: bots/open-oracle-arbitrager/Dockerfile
     image: zoltar-open-oracle-arbitrager
     environment:
-      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
+      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:-zoltar-local-dashboard}
     ports:
       - 127.0.0.1:4173:4173
     volumes:

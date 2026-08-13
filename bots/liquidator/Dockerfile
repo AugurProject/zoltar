@@ -16,8 +16,10 @@ RUN cd bots/shared \
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/
 COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/check-market-sources.mts
+COPY bots/liquidator/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
 COPY bots/liquidator/src/ ./bots/liquidator/src/
-RUN install -d -m 0700 -o bun -g bun bots/liquidator/.state
+RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
+	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state
 
 USER bun
 WORKDIR /app/bots/liquidator
@@ -25,4 +27,5 @@ WORKDIR /app/bots/liquidator
 EXPOSE 4183
 VOLUME ["/app/bots/liquidator/.state"]
 
-ENTRYPOINT ["bun", "run", "run"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+CMD ["bun", "run", "run"]
