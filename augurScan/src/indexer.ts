@@ -39,6 +39,7 @@ type RpcBlockHeader = {
 }
 
 const RPC_CONCURRENCY = 5
+const RPC_MAX_PENDING = 100
 
 const erc20MetadataAbi = parseAbi([
 	'function decimals() view returns (uint8)',
@@ -169,9 +170,38 @@ type RpcRequestQueue = {
 	readonly run: <T>(operation: () => Promise<T>) => Promise<T>
 }
 
-export const createRpcRequestQueue = (concurrency: number): RpcRequestQueue => {
+type RpcQueueSaturation = {
+	readonly active: number
+	readonly pending: number
+	readonly maximumPending: number
+	readonly highWaterMark: number
+	readonly saturationCount: number
+}
+
+export class RpcQueueSaturatedError extends Error {
+	readonly active: number
+	readonly pending: number
+	readonly maximumPending: number
+	readonly highWaterMark: number
+	readonly saturationCount: number
+
+	constructor(status: RpcQueueSaturation) {
+		super('RPC queue reached its pending capacity')
+		this.name = 'RpcQueueSaturatedError'
+		this.active = status.active
+		this.pending = status.pending
+		this.maximumPending = status.maximumPending
+		this.highWaterMark = status.highWaterMark
+		this.saturationCount = status.saturationCount
+	}
+}
+
+export const createRpcRequestQueue = (concurrency: number, maximumPending = RPC_MAX_PENDING): RpcRequestQueue => {
 	if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('RPC concurrency must be a positive safe integer')
+	if (!Number.isSafeInteger(maximumPending) || maximumPending < 0) throw new Error('RPC maximum pending count must be a non-negative safe integer')
 	let active = 0
+	let highWaterMark = 0
+	let saturationCount = 0
 	const pending: Array<() => void> = []
 	const drain = (): void => {
 		while (active < concurrency) {
@@ -182,8 +212,12 @@ export const createRpcRequestQueue = (concurrency: number): RpcRequestQueue => {
 		}
 	}
 	return {
-		run: <T>(operation: () => Promise<T>) =>
-			new Promise<T>((resolve, reject) => {
+		run: <T>(operation: () => Promise<T>) => {
+			if (active >= concurrency && pending.length >= maximumPending) {
+				saturationCount++
+				return Promise.reject(new RpcQueueSaturatedError({ active, pending: pending.length, maximumPending, highWaterMark, saturationCount }))
+			}
+			return new Promise<T>((resolve, reject) => {
 				pending.push(() => {
 					void Promise.resolve()
 						.then(operation)
@@ -194,7 +228,9 @@ export const createRpcRequestQueue = (concurrency: number): RpcRequestQueue => {
 						})
 				})
 				drain()
-			}),
+				highWaterMark = Math.max(highWaterMark, pending.length)
+			})
+		},
 	}
 }
 
@@ -208,7 +244,7 @@ export const withRpcRequestQueue =
 		}
 	}
 
-const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY)
+const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY, RPC_MAX_PENDING)
 
 export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
@@ -611,8 +647,12 @@ export const commitCanonicalRead = async <T>(
 }
 
 const databaseFailureMessage = 'Database request failed; retrying'
+const rpcQueueSaturatedMessage = 'RPC queue saturated; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 const leaseFailureNames = new Set([...databaseFailureNames, 'LeaseLostError'])
+
+export const isLocalIndexerFailure = (error: unknown): boolean =>
+	error instanceof LeaseLostError || error instanceof RpcQueueSaturatedError || errorChainIncludes(error, databaseFailureNames)
 
 export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
 	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
@@ -669,6 +709,7 @@ export const indexerProgressMessage = (
 export const safeIndexerFailure = (error: unknown): string => {
 	if (error instanceof ChainConfigurationError) return error.message
 	if (error instanceof ChainContinuityError) return 'The remote canonical chain changed while indexing; retrying'
+	if (error instanceof RpcQueueSaturatedError) return rpcQueueSaturatedMessage
 	if (errorChainIncludes(error, databaseFailureNames)) return databaseFailureMessage
 	return 'RPC request failed; retrying'
 }
@@ -690,6 +731,7 @@ const safeErrorNames = new Set([
 	'PostgresError',
 	'ResponseBodyTooLargeError',
 	'ResourceUnavailableRpcError',
+	'RpcQueueSaturatedError',
 	'RpcRequestError',
 	'SocketError',
 	'TimeoutError',
@@ -736,6 +778,8 @@ const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 }
 
 export const safeIndexerFailureReason = (error: unknown): string => {
+	if (error instanceof RpcQueueSaturatedError)
+		return `RpcQueueSaturatedError; active ${error.active}; queued ${error.pending}; maximum queued ${error.maximumPending}; high-water mark ${error.highWaterMark}; saturation count ${error.saturationCount}`
 	const names: string[] = []
 	let status: number | undefined
 	let code: string | undefined
@@ -1203,7 +1247,7 @@ class NetworkIndexer {
 				this.#client = client
 				return await operation()
 			},
-			(error) => error instanceof LeaseLostError || errorChainIncludes(error, databaseFailureNames),
+			isLocalIndexerFailure,
 			(provider) => this.#rpcDiagnostics.select(provider),
 			this.#verifiedProviders,
 		)
@@ -1215,10 +1259,10 @@ class NetworkIndexer {
 
 	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
 		await this.#database.recordFailure(this.#network.chainId, message, nextRetryAt, lease)
-		const logMessage =
-			message === databaseFailureMessage
-				? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
-				: rpcFailureLogMessage(message, this.#rpcDiagnostics.activeEndpoint(), reason)
+		const localFailure = message === databaseFailureMessage || message === rpcQueueSaturatedMessage
+		const logMessage = localFailure
+			? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
+			: rpcFailureLogMessage(message, this.#rpcDiagnostics.activeEndpoint(), reason)
 		this.#lastReportedPhase = 'degraded'
 		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
 	}

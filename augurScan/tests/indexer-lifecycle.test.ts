@@ -35,6 +35,7 @@ import {
 	indexerProgressMessage,
 	indexerWaitingMessage,
 	indexingCompletion,
+	isLocalIndexerFailure,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
@@ -45,6 +46,7 @@ import {
 	planManifestBackfill,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
+	RpcQueueSaturatedError,
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
@@ -137,6 +139,59 @@ describe('network indexer lifecycle', () => {
 
 		expect(await Promise.all(operations)).toEqual(Array.from({ length: 12 }, (_, index) => index))
 		expect(maximumActive).toBe(5)
+	})
+
+	test('rejects RPC work above the bounded pending capacity and preserves queued FIFO work', async () => {
+		const queue = createRpcRequestQueue(1, 2)
+		const started: number[] = []
+		let releaseActive: (() => void) | undefined
+		const active = queue.run(
+			() =>
+				new Promise<number>((resolve) => {
+					started.push(0)
+					releaseActive = () => resolve(0)
+				}),
+		)
+		const firstQueued = queue.run(async () => {
+			started.push(1)
+			return 1
+		})
+		const secondQueued = queue.run(async () => {
+			started.push(2)
+			return 2
+		})
+
+		await expect(queue.run(async () => 3)).rejects.toBeInstanceOf(RpcQueueSaturatedError)
+		expect(started).toEqual([0])
+		releaseActive?.()
+		expect(await Promise.all([active, firstQueued, secondQueued])).toEqual([0, 1, 2])
+		expect(started).toEqual([0, 1, 2])
+	})
+
+	test('treats RPC queue saturation as local backpressure without provider failover', async () => {
+		const providers = [
+			{ getChainId: async () => 1, id: 'first' },
+			{ getChainId: async () => 1, id: 'second' },
+		]
+		const attempts: string[] = []
+		const saturation = new RpcQueueSaturatedError({ active: 5, highWaterMark: 100, maximumPending: 100, pending: 100, saturationCount: 1 })
+
+		await expect(
+			withVerifiedProvider(
+				providers,
+				1,
+				async (provider) => {
+					attempts.push(provider.id)
+					throw saturation
+				},
+				isLocalIndexerFailure,
+			),
+		).rejects.toBe(saturation)
+		expect(attempts).toEqual(['first'])
+		expect(safeIndexerFailure(saturation)).toBe('RPC queue saturated; retrying')
+		expect(safeIndexerFailureReason(saturation)).toBe(
+			'RpcQueueSaturatedError; active 5; queued 100; maximum queued 100; high-water mark 100; saturation count 1',
+		)
 	})
 
 	test('starts transport timeouts after dequeue and releases rejected operations', async () => {
