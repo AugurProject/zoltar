@@ -1,7 +1,8 @@
-import { describe, expect, spyOn, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
 import type { StoredTransaction } from '../src/database.ts'
 import {
+	type Address,
 	BaseError,
 	ContractFunctionExecutionError,
 	decodeFunctionResult,
@@ -28,7 +29,9 @@ import {
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
+	logScanCursorUpdates,
 	planDeploymentAwareLogScan,
+	planManifestBackfill,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
 	readTokenMetadata,
@@ -461,6 +464,89 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('plans a manifest backfill from a newly added contract deployment', async () => {
+		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const contracts = new Map([[address.toLowerCase(), contract]])
+		const detected: bigint[] = []
+		expect(
+			await planManifestBackfill([[address, contract.label, contract.kind]], contracts, new Map(), 100n, 0n, async (_address, startBlock, checkpoint) => {
+				detected.push(startBlock, checkpoint)
+				return { block: 75n, exact: true }
+			}),
+		).toBe(75n)
+		expect(detected).toEqual([0n, 100n])
+	})
+
+	test('uses explicit manifest deployment blocks and resumes partial contract coverage', async () => {
+		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const contracts = new Map([[address.toLowerCase(), contract]])
+		const detection = mock(async () => ({ block: 90n, exact: true }))
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind, 75n]],
+				contracts,
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]),
+				100n,
+				0n,
+				detection,
+			),
+		).toBe(81n)
+		expect(detection).not.toHaveBeenCalled()
+	})
+
+	test('backfills a newly configured token because it changes historical market filters', async () => {
+		const tokenAddress = '0x3000000000000000000000000000000000000003'
+		const contract = { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' } satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[tokenAddress, contract.label, contract.kind, 70n]],
+				new Map([[tokenAddress, contract]]),
+				new Map(),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(70n)
+	})
+
+	test('tracks token filter coverage without querying token logs', () => {
+		const tokenAddress = '0x3000000000000000000000000000000000000003'
+		const helperAddress = '0x4000000000000000000000000000000000000004'
+		const contracts = new Map<string, ContractMetadata>([
+			[tokenAddress, { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest', deploymentBlock: 70n }],
+			[helperAddress, { address: helperAddress, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' }],
+		])
+		expect(logScanCursorUpdates(contracts, [], 100n, 0n)).toEqual([{ contractAddress: tokenAddress, startBlock: 70n, lastRetrievedBlock: 100n }])
+	})
+
+	test('does not rewind for covered, future, absent, or non-activity manifest contracts', async () => {
+		const absentAddress = '0x2000000000000000000000000000000000000002'
+		const helperAddress = '0x3000000000000000000000000000000000000003'
+		const contracts = new Map<string, ContractMetadata>([
+			[address.toLowerCase(), { address, label: 'Covered', kind: 'openOracle', provenance: 'manifest' }],
+			[absentAddress, { address: absentAddress, label: 'Absent', kind: 'zoltar', provenance: 'manifest' }],
+			[helperAddress, { address: helperAddress, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' }],
+		])
+		const cursors = new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]])
+		const detection = mock(async (candidate: Address) => (candidate.toLowerCase() === absentAddress ? undefined : { block: 75n, exact: true }))
+		expect(
+			await planManifestBackfill(
+				[
+					[address, 'Covered', 'openOracle'],
+					[absentAddress, 'Absent', 'zoltar'],
+					[helperAddress, 'Multicall3', 'multicall3'],
+					['0x4000000000000000000000000000000000000004', 'Future', 'zoltar', 101n],
+				],
+				contracts,
+				cursors,
+				100n,
+				0n,
+				detection,
+			),
+		).toBeUndefined()
+		expect(detection).toHaveBeenCalledTimes(1)
 	})
 
 	test('bounds a stalled optional contract deployment history read', async () => {

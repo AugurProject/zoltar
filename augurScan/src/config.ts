@@ -31,23 +31,28 @@ const requirePositiveInteger = (value: string, name: string, allowZero = false):
 	return parsed
 }
 
-const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> => {
-	const value = (await Bun.file(path.join(configRoot, 'manifests', filename)).json()) as { contracts?: unknown }
+export const parseManifestValue = (value: { contracts?: unknown }, filename: string): readonly ManifestContract[] => {
 	if (!Array.isArray(value.contracts)) throw new Error(`${filename} must contain a contracts array`)
 	return value.contracts.map((entry, index) => {
 		if (
 			!Array.isArray(entry) ||
-			entry.length !== 3 ||
+			(entry.length !== 3 && entry.length !== 4) ||
 			typeof entry[0] !== 'string' ||
 			!isAddress(entry[0]) ||
 			typeof entry[1] !== 'string' ||
-			typeof entry[2] !== 'string'
+			typeof entry[2] !== 'string' ||
+			(entry[3] !== undefined && (typeof entry[3] !== 'string' || !/^\d+$/.test(entry[3])))
 		) {
 			throw new Error(`${filename} contract ${index} is invalid`)
 		}
-		return [getAddress(entry[0]), entry[1], entry[2]] as const
+		return entry[3] === undefined
+			? ([getAddress(entry[0]), entry[1], entry[2]] as const)
+			: ([getAddress(entry[0]), entry[1], entry[2], BigInt(entry[3])] as const)
 	})
 }
+
+const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> =>
+	parseManifestValue((await Bun.file(path.join(configRoot, 'manifests', filename)).json()) as { contracts?: unknown }, filename)
 
 export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	const definitions = (await Bun.file(path.join(configRoot, 'networks.json')).json()) as readonly NetworkFile[]
@@ -72,6 +77,10 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 				const startBlock = BigInt(process.env[definition.startBlockEnv] ?? '0')
 				if (startBlock < 0n) throw new Error(`${definition.startBlockEnv} must not be negative`)
 				const contracts = [...(await parseManifest(definition.manifest))]
+				for (const [, label, , deploymentBlock] of contracts) {
+					if (deploymentBlock !== undefined && deploymentBlock < startBlock)
+						throw new Error(`${definition.manifest} deployment block for ${label} must not precede ${definition.startBlockEnv}`)
+				}
 				const ammFactoryAddress = process.env[definition.ammFactoryAddressEnv]?.trim()
 				if (ammFactoryAddress !== undefined && ammFactoryAddress !== '') {
 					if (!isAddress(ammFactoryAddress)) throw new Error(`${definition.ammFactoryAddressEnv} must be a complete 20-byte EVM address`)

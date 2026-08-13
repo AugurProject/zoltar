@@ -1,6 +1,6 @@
 import type { Abi, Address, Hash, Hex } from './ethereum.ts'
 
-export type ManifestContract = readonly [address: Address, label: string, kind: string]
+export type ManifestContract = readonly [address: Address, label: string, kind: string, deploymentBlock?: bigint]
 
 export type NetworkConfig = {
 	readonly id: string
