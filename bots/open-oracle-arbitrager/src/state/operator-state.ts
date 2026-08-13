@@ -12,6 +12,7 @@ import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core
 import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
+import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum/rpc-resilience'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
@@ -162,6 +163,7 @@ export type OperatorSnapshot = {
 	expectedChainId: number
 	explorerUrl: string
 	endpointChecks: readonly EndpointCheck[]
+	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
@@ -176,7 +178,7 @@ export type OperatorSnapshot = {
 	queuedWallet: Address | null | undefined
 	savedWallet: Address | undefined
 	settings: StrategySettings
-	status: 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
+	status: 'connectivity-degraded' | 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
 	tokenMarkets: readonly TokenMarketSnapshot[]
@@ -223,6 +225,7 @@ export type OperatorState = {
 	marketObservations?: MarketConsensusObservation[] | undefined
 	executionHistory: ExecutionRecord[]
 	endpointChecks: EndpointCheck[]
+	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
@@ -564,6 +567,7 @@ export function operatorSnapshot(
 		expectedChainId: fixed.expectedChainId,
 		explorerUrl: fixed.explorerUrl,
 		endpointChecks: state.endpointChecks,
+		rpcEndpointHealth: state.rpcEndpointHealth ?? [],
 		gameCapital: state.gameCapital,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,

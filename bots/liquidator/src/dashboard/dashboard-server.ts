@@ -51,6 +51,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.headers.get('host') !== authority) {
 				return json({ error: 'Request authority is not accepted' }, 403)
 			}
+			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: headers('text/plain; charset=utf-8') })
 			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}

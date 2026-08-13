@@ -1,7 +1,12 @@
-import { concatHex, createPublicClient, getCreate2Address, http, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '#ethereum'
+import { concatHex, createPublicClient, getCreate2Address, keccak256, parseTransaction, privateKeyToAccount, recoverTransactionAddress, type Address, type Chain, type Hash, type Hex } from '#ethereum'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
+import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
+import { availableSettledValues, settledQuorumValue } from '#monitoring/read-quorum'
+import { ConnectivityDegradedError } from '#monitoring/resilience'
+import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 
 export const deterministicDeploymentProxy = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as Address
 export const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as Hex
@@ -40,6 +45,17 @@ export function assertExecutorDeploymentReceipt(status: 'reverted' | 'success', 
 	if (status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${transactionHash}`)
 }
 
+export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, account: Address, chainId: number, plan: ExecutorDeploymentPlan) {
+	if (intent.account.toLowerCase() !== account.toLowerCase() || intent.address.toLowerCase() !== plan.address.toLowerCase() || intent.chainId !== chainId || intent.salt.toLowerCase() !== plan.salt.toLowerCase()) {
+		throw new Error('Pending executor deployment intent does not match the active signer, chain, address, and salt')
+	}
+	if (keccak256(intent.serializedTransaction).toLowerCase() !== intent.transactionHash.toLowerCase()) throw new Error('Pending executor deployment intent transaction hash does not match its signed bytes')
+	if ((await recoverTransactionAddress({ serializedTransaction: intent.serializedTransaction })).toLowerCase() !== account.toLowerCase()) throw new Error('Pending executor deployment intent signed transaction uses a different account')
+	const transaction = parseTransaction(intent.serializedTransaction)
+	if (transaction.chainId !== BigInt(chainId)) throw new Error('Pending executor deployment intent signed transaction uses a different chain')
+	if (transaction.to?.toLowerCase() !== deterministicDeploymentProxy.toLowerCase() || transaction.data?.toLowerCase() !== plan.calldata.toLowerCase()) throw new Error('Pending executor deployment intent does not contain the expected CREATE2 call')
+}
+
 const executorPublicSubmissionSettings = validateSubmissionSettings({ minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 
 export async function submitExecutorDeploymentTransaction(parameters: { account: Address; publicRpcUrls: readonly string[]; publicSubmit: (rpcUrl: string, serializedTransaction: Hex) => Promise<Hex>; serializedTransaction: Hex; transactionHash: Hex }) {
@@ -57,76 +73,125 @@ export async function submitExecutorDeploymentTransaction(parameters: { account:
 	})
 }
 
+function receiptNotFound(error: unknown) {
+	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || error.message.toLowerCase().includes('transaction receipt') && error.message.toLowerCase().includes('not found'))
+}
+
+async function executorDeploymentReceipt(parameters: { clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; transactionHash: Hash }) {
+	return settledQuorumValue(
+		'executor deployment receipt',
+		parameters.clients.map(async ({ client, rpcUrl }) => {
+			try {
+				const receipt = await client.getTransactionReceipt({ hash: parameters.transactionHash })
+				return {
+					endpoint: endpointLabel(rpcUrl),
+					value: { blockHash: receipt.blockHash, blockNumber: receipt.blockNumber, status: receipt.status, transactionHash: receipt.transactionHash },
+				}
+			} catch (error) {
+				if (receiptNotFound(error)) return { endpoint: endpointLabel(rpcUrl), value: undefined }
+				throw error
+			}
+		}),
+	)
+}
+
 async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
 	const deadline = Date.now() + timeoutMilliseconds
-	let failures: string[] = []
 	while (true) {
-		const settled = await Promise.allSettled(
-			parameters.clients.map(async ({ client, rpcUrl }) => {
-				const receipt = await client.getTransactionReceipt({ hash: parameters.transactionHash })
-				assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
-				const deployedCode = await client.getCode({ address: parameters.address })
-				if (executorCodeStatus(deployedCode, parameters.expectedRuntimeCodeHash) !== 'verified') throw new Error('CREATE2 deployment did not produce executor runtime bytecode')
-				return { receipt, rpcUrl }
-			}),
-		)
-		const confirmed = settled.find(result => result.status === 'fulfilled')
-		if (confirmed?.status === 'fulfilled') return confirmed.value.receipt
-		failures = settled.map((result, index) => {
-			const endpoint = parameters.clients[index]
-			if (endpoint === undefined) return 'Unknown RPC: missing deployment confirmation result'
-			return `${endpointLabel(endpoint.rpcUrl)}: ${result.status === 'rejected' ? (result.reason instanceof Error ? result.reason.message : String(result.reason)) : 'unknown confirmation failure'}`
-		})
-		if (Date.now() >= deadline) throw new Error(`Every public RPC failed executor deployment confirmation: ${failures.join('; ')}`)
+		const receipt = await executorDeploymentReceipt(parameters)
+		if (receipt !== undefined) {
+			assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
+			const codeStatus = await settledQuorumValue(
+				'executor deployment runtime',
+				parameters.clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: executorCodeStatus(await client.getCode({ address: parameters.address }), parameters.expectedRuntimeCodeHash) })),
+			)
+			if (codeStatus !== 'verified') throw new Error('CREATE2 deployment did not produce executor runtime bytecode')
+			const finalized = await confirmCanonicalReceiptFinality(
+				parameters.clients.map(({ client }) => client),
+				parameters.clients.map(({ rpcUrl }) => endpointLabel(rpcUrl)),
+				'executor deployment',
+				{ blockHash: receipt.blockHash, blockNumber: receipt.blockNumber },
+				12n,
+			)
+			if (finalized) return receipt
+		}
+		if (Date.now() >= deadline) throw new Error('Executor deployment did not reach canonical finality before the confirmation deadline')
 		await new Promise(resolve => {
 			setTimeout(resolve, 1_000)
 		})
 	}
 }
 
-export async function deployExecutorCreate2(parameters: { chain: Chain; privateKey: Hex; rpcUrls: readonly string[]; salt: unknown }) {
+export async function deployExecutorCreate2(parameters: {
+	chain: Chain
+	existingIntent?: ExecutorDeploymentIntent | undefined
+	persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined
+	privateKey: Hex
+	readRpcUrls?: readonly string[] | undefined
+	rpcUrls: readonly string[]
+	salt: unknown
+}) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)
-	const clients: { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[] = []
-	let prepared: { gas: bigint; gasPrice: bigint; nonce: bigint } | undefined
-	const preflightFailures: string[] = []
-	for (const rpcUrl of parameters.rpcUrls) {
-		try {
-			const candidate = createPublicClient({ chain: parameters.chain, transport: http(rpcUrl) })
-			const chainId = await candidate.getChainId()
-			const proxyCode = await candidate.getCode({ address: deterministicDeploymentProxy })
+	const readRpcUrls = parameters.readRpcUrls ?? parameters.rpcUrls
+	if (readRpcUrls.length < 3 || new Set(readRpcUrls.map(url => new URL(url).origin)).size !== readRpcUrls.length) throw new Error('Executor deployment requires three independent read RPC origins')
+	const readPool = createRpcEndpointPool(readRpcUrls)
+	const clients = readRpcUrls.map(rpcUrl => ({ client: createPublicClient({ chain: parameters.chain, transport: readPool.transportFor(rpcUrl) }), rpcUrl }))
+	const environment = await settledQuorumValue(
+		'executor deployment environment',
+		clients.map(async ({ client, rpcUrl }) => {
+			const [chainId, proxyCode, existingCode] = await Promise.all([client.getChainId(), client.getCode({ address: deterministicDeploymentProxy }), client.getCode({ address: plan.address })])
 			assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
-			const existingCode = await candidate.getCode({ address: plan.address })
-			if (executorCodeStatus(existingCode, expectedRuntimeCodeHash) === 'verified') return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
-			clients.push({ client: candidate, rpcUrl })
-			if (prepared === undefined) {
-				const [nonce, gas, gasPrice] = await Promise.all([readRpcPendingNonce(rpcUrl, account.address), estimateRpcTransactionGas(rpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }), readRpcGasPrice(rpcUrl)])
-				prepared = { gas, gasPrice, nonce }
-			}
-		} catch (error) {
-			preflightFailures.push(`${endpointLabel(rpcUrl)}: ${error instanceof Error ? error.message : String(error)}`)
-		}
+			return { endpoint: endpointLabel(rpcUrl), value: { chainId, code: executorCodeStatus(existingCode, expectedRuntimeCodeHash), proxyCode: proxyCode?.toLowerCase() } }
+		}),
+	)
+	let intent = parameters.existingIntent
+	if (intent !== undefined) await assertExecutorDeploymentIntent(intent, account.address, parameters.chain.id, plan)
+	if (environment.code === 'verified' && parameters.existingIntent === undefined) return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
+	if (environment.code === 'verified' && parameters.existingIntent !== undefined) {
+		const head = await settledQuorumValue(
+			'executor deployment recovery head',
+			clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: await client.getBlockNumber() })),
+		)
+		if (head < 12n) throw new ConnectivityDegradedError('Executor deployment recovery requires twelve canonical descendant blocks')
+		const finalizedCodeStatus = await settledQuorumValue(
+			'executor deployment finalized runtime',
+			clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: executorCodeStatus(await client.getCode({ address: plan.address, blockNumber: head - 12n }), expectedRuntimeCodeHash) })),
+		)
+		if (finalizedCodeStatus === 'verified') return { address: plan.address, alreadyDeployed: true, transactionHash: parameters.existingIntent.transactionHash as Hash }
 	}
-	if (prepared === undefined) throw new Error(`Every public RPC failed executor deployment preflight or transaction preparation: ${preflightFailures.join('; ')}`)
-	const signTransaction = account.signTransaction
-	if (signTransaction === undefined) throw new Error('Executor deployment requires a local transaction signer')
-	const serializedTransaction = await signTransaction({
-		chainId: parameters.chain.id,
-		data: plan.calldata,
-		gas: prepared.gas,
-		gasPrice: prepared.gasPrice,
-		nonce: prepared.nonce,
-		to: deterministicDeploymentProxy,
-	})
-	const transactionHash = keccak256(serializedTransaction)
-	await submitExecutorDeploymentTransaction({
-		account: account.address,
-		publicRpcUrls: parameters.rpcUrls,
-		publicSubmit: sendRawTransactionToRpc,
-		serializedTransaction,
-		transactionHash,
-	})
-	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash })
-	return { address: plan.address, alreadyDeployed: false, transactionHash: transactionHash as Hash }
+	if (intent === undefined) {
+		const nonce = await settledQuorumValue(
+			'executor deployment pending nonce',
+			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcPendingNonce(rpcUrl, account.address) })),
+		)
+		const gas = await settledQuorumValue(
+			'executor deployment gas estimate',
+			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await estimateRpcTransactionGas(rpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }) })),
+		)
+		const settledGasPrices = await Promise.allSettled(readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcGasPrice(rpcUrl) })))
+		const gasPrices = availableSettledValues(settledGasPrices)
+		if (gasPrices.length < 2) throw new ConnectivityDegradedError('Executor deployment gas price requires at least two available independent RPC endpoints')
+		const gasPrice = gasPrices.reduce((maximum, observation) => (observation.value > maximum ? observation.value : maximum), 0n)
+		const signTransaction = account.signTransaction
+		if (signTransaction === undefined) throw new Error('Executor deployment requires a local transaction signer')
+		const serializedTransaction = await signTransaction({ chainId: parameters.chain.id, data: plan.calldata, gas, gasPrice, nonce, to: deterministicDeploymentProxy })
+		intent = {
+			account: account.address,
+			address: plan.address,
+			chainId: parameters.chain.id,
+			salt: plan.salt,
+			serializedTransaction,
+			transactionHash: keccak256(serializedTransaction),
+			version: 1,
+		}
+		if (parameters.persistIntent === undefined) throw new Error('Executor deployment requires durable intent persistence before submission')
+		await parameters.persistIntent(intent)
+	}
+	if (environment.code !== 'verified') {
+		await submitExecutorDeploymentTransaction({ account: account.address, publicRpcUrls: parameters.rpcUrls, publicSubmit: sendRawTransactionToRpc, serializedTransaction: intent.serializedTransaction, transactionHash: intent.transactionHash })
+	}
+	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: intent.transactionHash })
+	return { address: plan.address, alreadyDeployed: false, transactionHash: intent.transactionHash as Hash }
 }

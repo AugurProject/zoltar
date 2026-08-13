@@ -192,6 +192,10 @@ const server = startDashboardServer(4183, {
 			walletRep: '2508.19',
 		},
 		paused,
+		rpcEndpointHealth: [
+			{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://rpc-primary.example' },
+			{ consecutiveFailures: 2, error: 'HTTP 503 while calling eth_blockNumber', nextRetryAt: '2026-08-13T12:01:00.000Z', status: 'offline', target: 'https://rpc-secondary.example' },
+		],
 		pendingTransactions: [
 			{
 				hash: `0x${'12'.repeat(32)}`,

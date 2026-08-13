@@ -69,6 +69,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		await command('Page.enable', {}, sessionId)
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
+			['dashboard-network.png', 'network-connectivity'],
+			['dashboard-network-mobile.png', 'network-connectivity'],
 			['dashboard-markets.png', 'markets'],
 			['dashboard-markets-mobile.png', 'markets'],
 			['dashboard-opportunities.png', 'operations'],
@@ -87,7 +89,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					] as const)
 				: []),
 		] as const) {
-			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
+			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
 			await command('Page.navigate', { url: `${origin}/` }, sessionId)
 			await Bun.sleep(1_500)
@@ -407,6 +409,10 @@ const snapshot = {
 		{ chainId: 1, checkedAt, error: undefined, kind: 'read-rpc' as const, status: 'healthy' as const, target: 'https://read.example' },
 		{ chainId: 1, checkedAt, error: undefined, kind: 'public-rpc' as const, status: 'healthy' as const, target: 'https://rpc.example' },
 		{ chainId: 1, checkedAt, error: undefined, kind: 'private-relay' as const, status: 'healthy' as const, target: 'https://relay.flashbots.net' },
+	],
+	rpcEndpointHealth: [
+		{ consecutiveFailures: 0, error: undefined, lastFailureAt: undefined, lastSuccessAt: sampledAt(0), latencyMilliseconds: 76, nextRetryAt: undefined, status: 'healthy', target: 'https://rpc.example' },
+		{ consecutiveFailures: 1, error: 'HTTP 503 while calling eth_blockNumber', lastFailureAt: sampledAt(0), lastSuccessAt: undefined, latencyMilliseconds: 112, nextRetryAt: sampledAt(60), status: 'degraded', target: 'https://quorum.example' },
 	],
 	execute: true,
 	executionHistory: history,

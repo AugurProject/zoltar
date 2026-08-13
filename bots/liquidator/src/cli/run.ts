@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
-import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
+import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { availableExecutionObservations } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -42,17 +44,16 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	let activePrivateKey = settings.privateKey
 	const queueSettingsUpdate = createSettingsUpdateQueue()
 	let chain = chainFor(settings)
-	let client = createPublicClient({
-		chain,
-		transport: http(settings.connectivity.readRpcUrl),
-	})
+	let readPool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])
+	const createPrimaryClient = () => createPublicClient({ chain, transport: readPool.transport })
+	let client = createPrimaryClient()
 	let wallet =
 		activePrivateKey === undefined
 			? undefined
 			: createWalletClient({
 					account: privateKeyToAccount(activePrivateKey),
 					chain,
-					transport: http(settings.connectivity.readRpcUrl),
+						transport: readPool.transport,
 				})
 	const state = initialRuntimeState(settings.paused, wallet?.account.address)
 	const durable = await loadDurableState(settings.runtime.stateFile)
@@ -82,7 +83,10 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
-				getState: () => operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)),
+				getState: () => {
+					state.rpcEndpointHealth = readPool.snapshot()
+					return operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings))
+				},
 				hostname: settings.runtime.uiHost,
 				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 				reconcileTransaction: value =>
@@ -93,9 +97,10 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						if (intent === undefined) throw new Error('Pending transaction intent was not found')
 						validateReconciliationIntentChain(intent.serializedTransaction, settings.network.chainId)
 						const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-						const observations = await Promise.all(
+						const replacementEvidence = await settledQuorumValue(
+							`replacement transaction ${request.replacementHash}`,
 							endpoints.map(async endpoint => {
-								const rpc = createPublicClient({ chain, transport: http(endpoint) })
+								const rpc = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
 								try {
 									const [receipt, transaction] = await Promise.all([rpc.getTransactionReceipt({ hash: request.replacementHash }), rpc.getTransaction({ hash: request.replacementHash })])
 									if (receipt.blockHash === null) throw new Error('Replacement receipt is missing its block hash')
@@ -118,9 +123,14 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							}),
 						)
 						const replacement = await verifyFinalizedReplacement(intent, request.replacementHash, PRIVATE_INTENT_FINALITY_BLOCKS, {
-							canonicalBlockHash: async blockNumber => await canonicalBlockHash(settings, blockNumber),
-							currentHeads: async () => await Promise.all(endpoints.map(async endpoint => await createPublicClient({ chain, transport: http(endpoint) }).getBlockNumber())),
-							replacement: async () => quorumValue(`replacement transaction ${request.replacementHash}`, observations),
+							canonicalBlockHash: async blockNumber => await canonicalBlockHash(settings, blockNumber, readPool),
+							currentHeads: async () => {
+								const settled = await Promise.allSettled(endpoints.map(async endpoint => await createPublicClient({ chain, transport: readPool.transportFor(endpoint) }).getBlockNumber()))
+								const heads = availableSettledValues(settled)
+								if (heads.length < 2) throw new ConnectivityDegradedError('Replacement reconciliation requires at least two available independent RPC endpoints')
+								return heads
+							},
+							replacement: async () => replacementEvidence,
 						})
 						await commitReconciledIntent(settings.runtime.stateFile, state, intent.hash, {
 							details: `original=${intent.hash} replacement=${replacement.hash} nonce=${intent.nonce.toString()} replacementStatus=${replacement.status}`,
@@ -252,8 +262,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						const next = await updateNetworkConnectivity({
 							apply: applied => {
 								chain = chainFor(applied)
-								client = createPublicClient({ chain, transport: http(applied.connectivity.readRpcUrl) })
-								wallet = activePrivateKey === undefined ? undefined : createWalletClient({ account: privateKeyToAccount(activePrivateKey), chain, transport: http(applied.connectivity.readRpcUrl) })
+								readPool = createRpcEndpointPool([applied.connectivity.readRpcUrl, ...applied.connectivity.quorumRpcUrls])
+								client = createPrimaryClient()
+								wallet = activePrivateKey === undefined ? undefined : createWalletClient({ account: privateKeyToAccount(activePrivateKey), chain, transport: readPool.transport })
 								clearMarketEvidenceForConfigurationChange(state)
 							},
 							persist: persistSettings,
@@ -313,7 +324,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 											: createWalletClient({
 													account: privateKeyToAccount(activePrivateKey),
 													chain,
-													transport: http(settings.connectivity.readRpcUrl),
+											transport: readPool.transport,
 												})
 									state.wallet = wallet?.account.address
 								},
@@ -369,8 +380,13 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			await checkSubmissionEndpoints(settings.submission, settings.network.chainId)
 		}
 	} catch (error) {
-		dashboard?.stop()
-		throw error
+		if (operationalFailureDisposition(error) === 'safety-paused') {
+			dashboard?.stop()
+			throw error
+		}
+		state.error = errorMessage(error)
+		state.status = 'connectivity-degraded'
+		recordActivity(state, { details: state.error, kind: 'error', message: 'Startup connectivity is degraded; retrying in the background', status: 'failed' })
 	}
 	recordActivity(state, {
 		details: `chain=${settings.network.chainId.toString()} factory=${settings.deployment.securityPoolFactory}`,
@@ -388,36 +404,37 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			state.error = undefined
 			try {
 				const currentChain = chainFor(settings)
-				client = createPublicClient({
-					chain: currentChain,
-					transport: http(settings.connectivity.readRpcUrl),
-				})
-				const primary = await scanPools(client, settings, state.wallet)
+				chain = currentChain
+				client = createPrimaryClient()
+				let primary
 				if (settings.runtime.execute) {
-					const observations = [
-						{
-							endpoint: settings.connectivity.readRpcUrl,
-							value: { pools: primary.pools, universes: primary.universes },
-						},
-					]
-					for (const rpcUrl of settings.connectivity.quorumRpcUrls) {
-						const quorumClient = createPublicClient({
-							chain: currentChain,
-							transport: http(rpcUrl),
-						})
-						const observation = await scanPools(quorumClient, settings, state.wallet)
-						observations.push({
-							endpoint: rpcUrl,
-							value: { pools: observation.pools, universes: observation.universes },
-						})
-					}
-					quorumValue('liquidation execution snapshot', observations)
+					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
+					const settled = await Promise.allSettled(
+						endpoints.map(async endpoint => {
+							const endpointClient = createPublicClient({ chain: currentChain, transport: readPool.transportFor(endpoint) })
+							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet) }
+						}),
+					)
+						const available = availableExecutionObservations('liquidation execution snapshot', settled, observation => ({
+							endpoint: observation.endpoint,
+							value: {
+								pools: observation.scan.pools,
+								universes: observation.scan.universes,
+								walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
+							},
+						}))
+					const selected = available[0]
+					if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
+					client = selected.client
+					primary = selected.scan
+				} else {
+					primary = await scanPools(client, settings, state.wallet)
 				}
 				const scannedBlock = await client.getBlock()
 				if (scannedBlock.hash === undefined || scannedBlock.number === undefined) throw new Error('Latest block is missing canonical identity')
 				const scannedBlockHash = scannedBlock.hash
 				const scannedBlockNumber = scannedBlock.number
-				const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlockHash, number: scannedBlockNumber }, state, previousBlockNumber => canonicalBlockHash(settings, previousBlockNumber))
+				const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlockHash, number: scannedBlockNumber }, state, previousBlockNumber => canonicalBlockHash(settings, previousBlockNumber, readPool))
 				state.lastScannedBlock = scannedBlockNumber
 				state.lastScannedBlockHash = scannedBlockHash
 				state.lastScannedTimestamp = scannedBlock.timestamp
@@ -470,7 +487,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.centralizedMarket = state.centralizedMarketsByAsset.get(rootUniverse.repToken.toLowerCase())
 				state.marketConsensus = state.marketConsensusByAsset.get(rootUniverse.repToken.toLowerCase())
 				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
-				const desiredPoolStatuses = await Promise.all(settings.desiredPools.map(desired => desiredPoolStatus(settings, desired)))
+				const desiredPoolStatuses = await Promise.all(settings.desiredPools.map(desired => desiredPoolStatus(settings, desired, readPool)))
 				const deployedDesiredPools = desiredPoolStatuses.filter(status => status.address !== getAddress('0x0000000000000000000000000000000000000000'))
 				const desiredSelections = deployedDesiredPools.filter(status => !settings.selectedPools.some(pool => pool.toLowerCase() === status.address.toLowerCase()))
 				if (desiredSelections.length > 0) {
@@ -494,14 +511,14 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
-					await reconcilePendingStagedOperations(settings, wallet, state)
-					if (await recoverPendingTransactions(settings, wallet, state)) {
+					await reconcilePendingStagedOperations(settings, wallet, state, readPool)
+					if (await recoverPendingTransactions(settings, wallet, state, readPool)) {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					const missingDesiredPool = desiredPoolStatuses.find(status => status.address === getAddress('0x0000000000000000000000000000000000000000') && settings.approvedUniverses.includes(status.desired.universeId))
 					if (missingDesiredPool !== undefined && settings.strategy.allowAutomaticPoolCreation) {
-						await executeOriginPoolDeployment(wallet, settings, state, missingDesiredPool.desired)
+						await executeOriginPoolDeployment(wallet, settings, state, missingDesiredPool.desired, readPool)
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
@@ -514,12 +531,12 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 								selectedPools: [...current.selectedPools, childPool.address],
 							}))
 						}
-						await executeVaultMigration(wallet, settings, state, migration)
+						await executeVaultMigration(wallet, settings, state, migration, readPool)
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					for (const pool of state.pools) {
-						if (await maintainVault(wallet, settings, state, pool, () => canonicalMarketPriceAllowsExecution(pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))) {
+						if (await maintainVault(wallet, settings, state, readPool, pool, () => canonicalMarketPriceAllowsExecution(pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool)))) {
 							await saveDurableState(settings.runtime.stateFile, state)
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
@@ -528,7 +545,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					if (selected !== undefined) {
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						await executeLiquidation(wallet, settings, state, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber)))
+						await executeLiquidation(wallet, settings, state, readPool, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool)))
 					}
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))
@@ -549,8 +566,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 				}
 				state.error = errorMessage(error)
-				state.status = 'error'
-				if (settings.runtime.execute) {
+				const disposition = operationalFailureDisposition(error)
+				state.status = disposition === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
+				if (settings.runtime.execute && disposition === 'safety-paused') {
 					state.paused = true
 					await persistSettings(current => ({ ...current, paused: true })).catch(settingsError => {
 						state.error = `${state.error}; failed to persist safety pause: ${errorMessage(settingsError)}`
@@ -559,7 +577,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				recordActivity(state, {
 					details: state.error,
 					kind: 'error',
-					message: settings.runtime.execute ? 'Live execution paused after a failed cycle' : 'Scan cycle failed',
+					message: disposition === 'connectivity-degraded' ? 'RPC connectivity degraded; execution remains blocked until recovery' : settings.runtime.execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed',
 					status: 'failed',
 				})
 				await saveDurableState(settings.runtime.stateFile, state).catch(() => undefined)
@@ -568,7 +586,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.scanning = false
 			}
 		},
-		() => shutdown.wait(settings.runtime.pollMilliseconds),
+		consecutiveFailures => shutdown.wait(retryDelayMilliseconds(settings.runtime.pollMilliseconds, consecutiveFailures)),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
 	)

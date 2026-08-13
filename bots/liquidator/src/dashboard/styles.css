@@ -716,3 +716,42 @@ td small {
 		transition: none !important;
 	}
 }
+.rpc-health-grid {
+	display: grid;
+	gap: 0.6rem;
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	margin-top: 1rem;
+}
+
+.rpc-health-item {
+	background: var(--surface-raised);
+	border: 1px solid var(--line);
+	border-radius: 0.65rem;
+	display: grid;
+	gap: 0.25rem;
+	padding: 0.75rem;
+}
+
+.rpc-health-item strong {
+	text-transform: capitalize;
+}
+
+.rpc-health-item[data-status="healthy"] strong {
+	color: var(--accent);
+}
+
+.rpc-health-item[data-status="degraded"] strong {
+	color: var(--warning);
+}
+
+.rpc-health-item[data-status="offline"] strong {
+	color: var(--error);
+}
+
+.rpc-health-item[data-status="unknown"] strong {
+	color: var(--muted);
+}
+
+.rpc-health-item small {
+	color: var(--muted);
+}

@@ -37,7 +37,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
-	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
+	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
@@ -230,10 +230,11 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
 		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode: async parameters => {
+			if (parameters.blockNumber !== undefined && parameters.blockTag !== undefined) throw new Error('getCode accepts either blockNumber or blockTag, not both')
 			const result = normalizeRpcHex(
 				await requestTransport<string>(transport, {
 					method: 'eth_getCode',
-					params: [parameters.address, parameters.blockTag ?? 'latest'],
+					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)],
 				}),
 			)
 			return result === '0x' ? undefined : result

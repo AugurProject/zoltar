@@ -2,6 +2,7 @@ name: zoltar-open-oracle-arbitrager
 
 services:
   arbitrager:
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: bots/open-oracle-arbitrager/Dockerfile
@@ -10,6 +11,12 @@ services:
       ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
     ports:
       - 127.0.0.1:4173:4173
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:4173/healthz'); if (!response.ok) process.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     volumes:
       - arbitrager-state:/app/bots/open-oracle-arbitrager/.state
 

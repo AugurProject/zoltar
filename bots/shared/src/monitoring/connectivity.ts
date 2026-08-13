@@ -1,5 +1,5 @@
 import type { Address, Hex } from '../ethereum.ts'
-import { bigintToSafeNumber } from '../ethereum/codec.ts'
+import { bigintToSafeNumber, keccak256 } from '../ethereum/codec.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
@@ -115,7 +115,14 @@ export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
 }
 
 export async function sendRawTransactionToRpc(url: string, serializedTransaction: Hex, timeoutMilliseconds = 10_000) {
-	const result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+	let result: unknown
+	try {
+		result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+	} catch (error) {
+		const message = error instanceof Error ? error.message.toLowerCase() : ''
+		if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
+		throw error
+	}
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
 	return result as Hex
 }

@@ -12,6 +12,7 @@ import {
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
 	executionSnapshotWithQuorum,
+	settledExecutionSnapshotWithQuorum,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
@@ -206,6 +207,11 @@ describe('funded execution orchestration', () => {
 				{ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } },
 			]),
 		).toThrow('RPC disagreement')
+	})
+
+	test('uses two agreeing execution snapshots when a third reader is offline', async () => {
+		const shared = { blockHash: `0x${'12'.repeat(32)}` as Hex, buyHedgeQuote: 13n, sellHedgeQuote: 11n }
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared }), Promise.reject(new TypeError('fetch failed'))])).resolves.toEqual(shared)
 	})
 
 	test('does not promote permissionlessly observed report tokens into the execution allowlist', () => {

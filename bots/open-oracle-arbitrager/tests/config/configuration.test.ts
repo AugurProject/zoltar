@@ -185,6 +185,28 @@ describe('file-only startup configuration', () => {
 		expect(result.output).toContain('maxHedgeSlippageBps must be from 0 to 1000')
 	})
 
+	test('keeps the dashboard running when the configured RPC is offline at startup', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpcPort = unusedPort()
+		const value = settings(`http://127.0.0.1:${rpcPort.toString()}/`, dashboardPort)
+		value.runtime.historyFile = join(directory, 'history.jsonl')
+		value.runtime.positionFile = join(directory, 'positions.json')
+		value.runtime.priceHistoryFile = join(directory, 'prices.jsonl')
+		const path = join(directory, 'operator.json')
+		await saveOperatorSettings(path, value)
+		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(child)
+		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
+		let snapshot = await waitForJson(origin, '/api/state')
+		for (let attempt = 0; attempt < 100 && snapshot['status'] !== 'connectivity-degraded'; attempt++) {
+			await Bun.sleep(20)
+			snapshot = await waitForJson(origin, '/api/state')
+		}
+		expect(snapshot['status'], JSON.stringify(snapshot)).toBe('connectivity-degraded')
+		expect(child.exitCode).toBeNull()
+	})
+
 	test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
 		const directory = await temporaryDirectory()
 		const dashboardPort = unusedPort()
@@ -273,6 +295,16 @@ describe('file-only startup configuration', () => {
 		})
 		servers.push(quorumRpc)
 		if (quorumRpc.port === undefined) throw new Error('Mock quorum RPC did not expose a port')
+		const secondQuorumRpc = Bun.serve({
+			hostname: '127.0.0.1',
+			port: 0,
+			async fetch(request) {
+				const requestValue = (await request.json()) as { id: unknown; method: string }
+				return requestValue.method === 'eth_chainId' ? Response.json({ id: requestValue.id, jsonrpc: '2.0', result: quorumChainId }) : Response.json({ error: { code: -32602, message: 'invalid params' }, id: requestValue.id, jsonrpc: '2.0' })
+			},
+		})
+		servers.push(secondQuorumRpc)
+		if (secondQuorumRpc.port === undefined) throw new Error('Second mock quorum RPC did not expose a port')
 		const savedPrivateKey = `0x${'11'.repeat(32)}` as Hex
 		const ignoredEnvironmentKey = `0x${'22'.repeat(32)}` as Hex
 		const path = join(directory, 'operator.json')
@@ -365,9 +397,22 @@ describe('file-only startup configuration', () => {
 		Reflect.set(liveSwitchConfiguration, 'network', 'sepolia')
 		const liveSwitchMarkets = Reflect.get(liveSwitchConfiguration, 'centralizedMarkets')
 		const liveSwitchRuntime = Reflect.get(liveSwitchConfiguration, 'runtime')
-		if (typeof liveSwitchMarkets !== 'object' || liveSwitchMarkets === null || Array.isArray(liveSwitchMarkets) || typeof liveSwitchRuntime !== 'object' || liveSwitchRuntime === null || Array.isArray(liveSwitchRuntime)) throw new Error('Live-switch dependent configuration is missing')
+		const liveSwitchDeployment = Reflect.get(liveSwitchConfiguration, 'deployment')
+		if (
+			typeof liveSwitchMarkets !== 'object' ||
+			liveSwitchMarkets === null ||
+			Array.isArray(liveSwitchMarkets) ||
+			typeof liveSwitchRuntime !== 'object' ||
+			liveSwitchRuntime === null ||
+			Array.isArray(liveSwitchRuntime) ||
+			typeof liveSwitchDeployment !== 'object' ||
+			liveSwitchDeployment === null ||
+			Array.isArray(liveSwitchDeployment)
+		)
+			throw new Error('Live-switch dependent configuration is missing')
 		Reflect.set(liveSwitchMarkets, 'assetChainId', 11_155_111)
 		Reflect.set(liveSwitchRuntime, 'execute', true)
+		Reflect.set(liveSwitchDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
 		const liveSwitchResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(liveSwitchEnvelope),
 			headers: { 'content-type': 'application/json', origin },
@@ -385,7 +430,7 @@ describe('file-only startup configuration', () => {
 		const executeDeployment = Reflect.get(executeConfiguration, 'deployment')
 		if (typeof executeRuntime !== 'object' || executeRuntime === null || Array.isArray(executeRuntime) || typeof executeDeployment !== 'object' || executeDeployment === null || Array.isArray(executeDeployment)) throw new Error('Execute runtime or deployment configuration is missing')
 		Reflect.set(executeRuntime, 'execute', true)
-		Reflect.set(executeDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`])
+		Reflect.set(executeDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
 		const executeResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(executeEnvelope),
 			headers: { 'content-type': 'application/json', origin },

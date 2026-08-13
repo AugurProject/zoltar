@@ -132,6 +132,7 @@ export function botStatusLabels(state: Pick<OperatorSnapshot, 'mode' | 'paused' 
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
 	if (state.paused) return { mode: state.mode, status: 'Paused' }
 	const statuses: Record<OperatorSnapshot['status'], string> = {
+		'connectivity-degraded': 'Connectivity degraded',
 		error: 'Error',
 		paused: 'Paused',
 		running: 'Running',

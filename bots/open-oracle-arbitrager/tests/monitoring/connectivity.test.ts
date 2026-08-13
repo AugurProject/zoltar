@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { Hex } from '#ethereum'
+import { keccak256, type Hex } from '#ethereum'
 import {
 	checkConnectivity,
 	checkSubmissionEndpoints,
@@ -42,6 +42,29 @@ function rpc(handler: (method: string, params: readonly unknown[]) => unknown | 
 }
 
 describe('operator connectivity', () => {
+	test('treats an already-known exact signed transaction as accepted', async () => {
+		const server = Bun.serve({
+			port: 0,
+			fetch: () => Response.json({ error: { code: -32_000, message: 'already known' }, id: 1, jsonrpc: '2.0' }),
+		})
+		servers.push(server)
+		if (server.port === undefined) throw new Error('RPC test server did not expose a port')
+		const serialized = '0x1234' as const
+		await expect(sendRawTransactionToRpc(`http://127.0.0.1:${server.port.toString()}`, serialized)).resolves.toBe(keccak256(serialized))
+	})
+
+	test('does not mistake an unknown transaction type for an accepted transaction', async () => {
+		const server = Bun.serve({
+			port: 0,
+			fetch: () => Response.json({ error: { code: -32_000, message: 'unknown transaction type' }, id: 1, jsonrpc: '2.0' }),
+		})
+		try {
+			if (server.port === undefined) throw new Error('Transaction rejection test server did not expose a port')
+			await expect(sendRawTransactionToRpc(`http://127.0.0.1:${server.port.toString()}`, '0x1234')).rejects.toThrow('unknown transaction type')
+		} finally {
+			server.stop(true)
+		}
+	})
 	test('rejects a quorum that only varies paths on the same RPC origin', () => {
 		expect(() => validateIndependentReadRpcUrls('https://rpc.example', ['https://rpc.example'])).toThrow('independent origins')
 		expect(() => validateIndependentReadRpcUrls('https://rpc.example/read', ['https://rpc.example/quorum'])).toThrow('independent origins')

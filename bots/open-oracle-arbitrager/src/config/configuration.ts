@@ -65,7 +65,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	})
 	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
 	const quorumRpcUrls = [...savedQuorumRpcUrls]
-	if (saved.runtime.execute && quorumRpcUrls.length === 0) throw new Error('Execution is enabled, but the effective RPC configuration has no independent quorum reader')
+	if (saved.runtime.execute && quorumRpcUrls.length < 2) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
 	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')

@@ -113,6 +113,7 @@ type Snapshot = {
 		walletRep: string
 	}
 	paused: boolean
+	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
 	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
 	pools: Pool[]
 	scanning: boolean
@@ -692,16 +693,40 @@ function renderActivities(activities: Activity[]) {
 	)
 }
 
+function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
+	const container = element('rpc-endpoint-health', HTMLDivElement)
+	container.replaceChildren(
+		...(health ?? []).map(endpoint => {
+			const item = document.createElement('div')
+			item.className = 'rpc-health-item'
+			item.dataset['status'] = endpoint.status
+			const status = document.createElement('strong')
+			status.textContent = endpoint.status
+			const target = document.createElement('span')
+			target.className = 'mono'
+			target.textContent = endpoint.target
+			const detail = document.createElement('small')
+			const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
+				value => value !== undefined,
+			)
+			const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
+			detail.textContent = [primaryDetail, ...metadata].join(' · ')
+			item.append(status, target, detail)
+			return item
+		}),
+	)
+}
+
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
+	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
 	pauseButton.textContent = snapshot.paused ? 'Resume' : 'Pause'
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(snapshot.error === undefined ? undefined : 'The bot scan failed. Check the bot logs; the dashboard will retry automatically.')
+	setGlobalError(snapshot.error === undefined ? undefined : snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : 'The bot scan failed. Check the bot logs; the dashboard will retry automatically.')
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
@@ -710,6 +735,7 @@ function render(snapshot: Snapshot) {
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
+	renderRpcEndpointHealth(snapshot.rpcEndpointHealth)
 }
 
 function setFormValue(name: string, value: string | number | boolean) {

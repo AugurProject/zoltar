@@ -102,6 +102,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	servers.push(server)
 	const origin = `http://${server.hostname}:${server.port}`
+	const health = await fetch(`${origin}/healthz`)
+	expect(health.status).toBe(200)
+	expect(await health.text()).toBe('ok')
 	const page = await fetch(origin)
 	expect(page.status).toBe(200)
 	expect(page.headers.get('content-security-policy')).toContain("default-src 'self'")

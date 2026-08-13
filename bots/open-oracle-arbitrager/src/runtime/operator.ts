@@ -1,4 +1,5 @@
-import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, http, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum/rpc-resilience'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
@@ -14,8 +15,8 @@ import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsens
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
-import { quorumValue } from '#monitoring/read-quorum'
-import { pollUntilStopped, replaceOverlap } from '#monitoring/resilience'
+import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
+import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
 import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
@@ -25,7 +26,7 @@ import { candidateRiskMismatch, poolsForToken } from '#monitoring/opportunity-ev
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import { reconcileExpiredAttemptsWithQuorum, processPositionLifecycle } from '#execution/position-lifecycle'
 import type { ExecutionLockManager } from '#execution/execution-locks'
-import { loadCoordinatorPolicies, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
+import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
 import { startOperatorControlPlane } from './operator-control-plane.ts'
@@ -43,10 +44,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
 	let positions = await loadPositionJournal(config.positionFile)
 	if (config.execute) await savePositionJournal(config.positionFile, positions)
-	const createClient = (rpcUrl = config.connectivity.readRpcUrl) =>
+	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+	const createClient = (rpcUrl?: string) =>
 		createPublicClient({
 			chain: config.network.chain,
-			transport: http(rpcUrl),
+			transport: config.execute && rpcUrl !== undefined ? readPool.transportFor(rpcUrl) : readPool.transport,
 		})
 	const createWallet = () =>
 		config.privateKey === undefined
@@ -54,25 +56,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			: createWalletClient({
 					account: privateKeyToAccount(config.privateKey),
 					chain: config.network.chain,
-					transport: http(config.connectivity.readRpcUrl),
+						transport: readPool.transport,
 				})
 	let client = createClient()
-	let readClients = [client, ...config.quorumRpcUrls.map(url => createClient(url))]
+	let readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
 	let wallet = createWallet()
-	if (config.execute) {
-		const observedChainIds = await Promise.all(readClients.map(readClient => readClient.getChainId()))
-		quorumValue(
-			'configured chain id',
-			observedChainIds.map((value, index) => ({ endpoint: index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? ''), value })),
-		)
-		if (observedChainIds.some(chainId => chainId !== config.network.chain.id)) throw new Error(`Read RPC quorum must use ${config.network.name} chain ${config.network.chain.id.toString()}`)
-	}
-	let coordinatorPolicies = config.networkConfigured ? await loadCoordinatorPolicies(client, config) : []
-	if (config.networkConfigured) await authenticateConfiguredDeployments(readClients, config)
-	if (config.networkConfigured && config.execute && config.executor !== undefined) {
-		const executorCode = await client.getCode({ address: config.executor })
-		if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${config.executor} has no contract code on ${config.network.name}`)
-	}
+	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
+	let startupValidated = !config.networkConfigured
 	const executionHistory = await loadExecutionHistory(config.historyFile)
 	for (const position of positions) {
 		const record = position.historyOutbox
@@ -87,7 +77,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		marketConsensus: undefined,
 		marketObservations: [],
 		executionHistory,
-		endpointChecks: config.networkConfigured ? [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))] : [],
+		endpointChecks: [],
+		rpcEndpointHealth: readPool.snapshot(),
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 		lastError: undefined,
 		lastPollAt: undefined,
@@ -193,15 +184,16 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			async () => {
 				if (!signerOperationGate.acquire('scan')) return false
 				try {
+					state.rpcEndpointHealth = readPool.snapshot()
 					applyQueuedExecutionSettings(config, state, pending)
 					if (pending.connectivity !== undefined) {
 						config.connectivity = pending.connectivity
 						pending.connectivity = undefined
+						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 						client = createClient()
-						readClients = [client, ...config.quorumRpcUrls.map(url => createClient(url))]
+						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
 						wallet = createWallet()
-						coordinatorPolicies = await loadCoordinatorPolicies(client, config)
-						await authenticateConfiguredDeployments(readClients, config)
+						startupValidated = false
 					}
 					if (pending.signerUpdate) {
 						const appliedSigner = await applyQueuedSigner({ activeSignerLock, config, createWallet, fixedState, lockManager, pending, state, walletAddress: current => current?.account.address })
@@ -209,6 +201,27 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						wallet = appliedSigner.wallet
 					}
 					if (!config.networkConfigured) return false
+					if (!startupValidated) {
+						if (config.execute) {
+							const chainReads = readClients.map(async (readClient, index) => ({ endpoint: index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? ''), index, value: await readClient.getChainId() }))
+							const observedChainId = await settledQuorumValue('configured chain id', chainReads)
+							if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC quorum must use ${config.network.name} chain ${config.network.chain.id.toString()}`)
+							const availableChainRead = (await Promise.allSettled(chainReads)).find(result => result.status === 'fulfilled')
+							const availableClient = availableChainRead === undefined ? undefined : readClients[availableChainRead.value.index]
+							if (availableClient === undefined) throw new Error('Configured chain validation requires an available read RPC endpoint')
+							client = availableClient
+						}
+						coordinatorPolicies = config.execute
+							? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config)
+							: await loadCoordinatorPolicies(client, config)
+						await authenticateConfiguredDeployments(readClients, config)
+						if (config.execute && config.executor !== undefined) {
+							const executorCode = await client.getCode({ address: config.executor })
+							if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${config.executor} has no contract code on ${config.network.name}`)
+						}
+						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
+						startupValidated = true
+					}
 					let nextError: string | undefined
 					if (positions.some(position => position.historyOutbox !== undefined)) {
 						try {
@@ -218,6 +231,38 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							nextError = message
 							console.error(`historyPersistenceFailed=${message}`)
 						}
+					}
+					if (config.execute) {
+						const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+						const settledHeads = await Promise.allSettled(readClients.map(async (readClient, index) => ({ endpoint: endpointLabel(endpoints[index] ?? ''), head: await readClient.getBlockNumber(), index })))
+						const availableHeads = availableSettledValues(settledHeads)
+						if (availableHeads.length < 2) {
+							const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
+								throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+						}
+						const sharedHead = availableHeads.reduce((minimum, observation) => (observation.head < minimum ? observation.head : minimum), availableHeads[0]?.head ?? 0n)
+						const settledBlocks = await Promise.allSettled(
+							availableHeads.map(async observation => {
+								const readClient = readClients[observation.index]
+								if (readClient === undefined) throw new Error('Canonical head reader is unavailable')
+								const fixedBlock = await readClient.getBlock({ blockNumber: sharedHead })
+								if (fixedBlock.hash === undefined) throw new Error('Canonical head block is missing its hash')
+								return { block: fixedBlock, endpoint: observation.endpoint, index: observation.index }
+							}),
+						)
+						const availableBlocks = availableSettledValues(settledBlocks)
+						if (availableBlocks.length < 2) {
+							const failures = settledBlocks.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
+								throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+						}
+						quorumValue(
+							`canonical head ${sharedHead.toString()}`,
+							availableBlocks.map(observation => ({ endpoint: observation.endpoint, value: observation.block.hash })),
+						)
+						const selected = availableBlocks[0]
+						const selectedClient = selected === undefined ? undefined : readClients[selected.index]
+						if (selectedClient === undefined) throw new Error('Canonical head requires at least two available independent RPC endpoints')
+						client = selectedClient
 					}
 					const observedChainId = await client.getChainId()
 					if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
@@ -247,8 +292,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										reportId: position.reportId,
 									})
 								}
-							} catch (error) {
-								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
+								} catch (error) {
+									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+									const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
 								nextError = message
 								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
 							}
@@ -279,8 +325,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										reportId: position.reportId,
 									})
 								}
-							} catch (error) {
-								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
+								} catch (error) {
+									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+									const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
 								nextError = message
 								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Position lifecycle failed closed', reason: message, reportId: position.reportId })
 							}
@@ -545,7 +592,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber))
 											return true
 										} catch (error) {
-											void error
+											if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 											state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
 											state.marketConsensus = undefined
 											selected.marketConsensus = undefined
@@ -561,12 +608,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								try {
 									await flushHistoryOutboxes()
 								} catch (error) {
+									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 									const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
 									nextError = message
 									console.error(`historyPersistenceFailed=${message}`)
 								}
-							} catch (error) {
-								const message = errorMessage(error)
+								} catch (error) {
+									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+									const message = errorMessage(error)
 								selected.opportunity.decision = executionFailureDecision(error)
 								if (selected.opportunity.decision === 'execution-failed') {
 									nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
@@ -601,12 +651,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					signerOperationGate.release('scan')
 				}
 			},
-			() => Bun.sleep(config.pollMilliseconds),
+			consecutiveFailures => Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)),
 			config.once,
 			error => {
 				const message = errorMessage(error)
+				state.rpcEndpointHealth = readPool.snapshot()
 				state.lastError = message
-				state.status = 'error'
+				state.status = operationalFailureDisposition(error) === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
 				recordOperation(state, { category: 'scan', details: undefined, level: 'error', message: 'Scan failed', reason: message, reportId: undefined })
 				console.error(`pollFailed=${message}`)
 			},

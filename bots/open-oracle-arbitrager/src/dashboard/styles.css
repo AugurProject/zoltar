@@ -517,6 +517,18 @@ textarea {
 	margin-top: 18px;
 }
 
+.endpoint-check-heading {
+	margin: 8px 0 0;
+	color: var(--muted);
+	font-size: 0.72rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.endpoint-check-heading:first-child {
+	margin-top: 0;
+}
+
 .endpoint-check {
 	display: grid;
 	grid-template-columns: 70px minmax(170px, 0.8fr) minmax(0, 1.2fr);
@@ -536,8 +548,17 @@ textarea {
 }
 
 .endpoint-check[data-status="failed"] strong,
+.endpoint-check[data-status="offline"] strong,
 .log-level[data-level="error"] {
 	color: var(--danger);
+}
+
+.endpoint-check[data-status="degraded"] strong {
+	color: var(--warning);
+}
+
+.endpoint-check[data-status="unknown"] strong {
+	color: var(--muted);
 }
 
 .endpoint-check small {

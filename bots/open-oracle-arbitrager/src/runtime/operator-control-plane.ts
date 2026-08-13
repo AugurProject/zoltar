@@ -5,6 +5,7 @@ import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseO
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
@@ -28,9 +29,19 @@ export type PendingOperatorUpdates = {
 	tokenAddresses: Address[] | undefined
 }
 
-export async function deployExecutorFromConnectivity(parameters: { chain: Configuration['network']['chain']; connectivity: ConnectivitySettings; privateKey: Hex; salt: unknown }, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
+export async function deployExecutorFromConnectivity(parameters: {
+	chain: Configuration['network']['chain']
+	connectivity: ConnectivitySettings
+	existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
+	persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
+	privateKey: Hex
+	quorumRpcUrls: readonly string[]
+	salt: unknown
+}, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
-	return await deploy({ chain: parameters.chain, privateKey: parameters.privateKey, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
+	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
+	if (readRpcUrls.length < 3) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
+	return await deploy({ chain: parameters.chain, existingIntent: parameters.existingIntent, persistIntent: parameters.persistIntent, privateKey: parameters.privateKey, readRpcUrls, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
 }
 
 export function requireActivePersistedNetwork(activeNetwork: Configuration['network']['name'], persistedNetwork: PersistedOperatorSettings['network']) {
@@ -117,6 +128,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			}),
 		updateConnectivity: async value => {
 			return queueSettingsUpdate(async () => {
+				if (pending.deployment !== undefined) throw new Error('Restart to apply the saved deployment and quorum RPC changes before updating active connectivity')
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				if (latest.settings.networkConfigured) {
@@ -152,6 +164,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
+				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
 				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
@@ -185,14 +198,25 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				requireActivePersistedNetwork(config.network.name, latest.settings.network)
 				requirePausedExecutorDeployment(config.execute, state.paused)
 				if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+				const intentPath = executorDeploymentIntentPath(config.settingsFile)
 				let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
 				try {
-					deployed = await deployExecutorFromConnectivity({ chain: config.network.chain, connectivity: latest.settings.connectivity, privateKey, salt: plan.salt })
+					const existingIntent = await loadExecutorDeploymentIntent(intentPath)
+					deployed = await deployExecutorFromConnectivity({
+						chain: config.network.chain,
+						connectivity: latest.settings.connectivity,
+						existingIntent,
+						persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
+						privateKey,
+						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
+						salt: plan.salt,
+					})
 				} finally {
 					signerOperationGate.release('deployment')
 				}
 				const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
 				await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
+				await clearExecutorDeploymentIntent(intentPath)
 				pending.deployment = next
 				fixedState.deployment = next
 				recordOperation(state, {

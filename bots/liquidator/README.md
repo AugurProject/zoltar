@@ -55,6 +55,11 @@ the saved settings. Run `docker compose down` to stop the bot and
 `docker compose up --detach` to start it again. The bind-mounted `.state` directory
 preserves its configuration, history, and recovery state.
 
+Compose restarts the container only while Docker and the host remain available; a
+direct Bun process needs an external supervisor. If the host or state storage is
+lost, restore the complete `.state` directory before resuming live execution with
+the same signer. Do not reuse that signer from incomplete recovery state.
+
 Do not publish the dashboard on a public interface. Loopback RPC URLs refer to
 the container itself, so use a container-reachable RPC address when the node runs
 elsewhere.
@@ -82,7 +87,16 @@ saved. Same-chain RPC changes apply at the next scan. A configured operator file
 cannot be retargeted to another chain: create a separate paused configuration with
 a separate `runtime.stateFile`, then select its chain and endpoints in the
 dashboard. This boundary prevents transactions, staged operations, and scan state
-from crossing chains. Live execution requires at least one independent quorum RPC.
+from crossing chains. Live execution requires two independent quorum RPCs in addition
+to the primary read RPC.
+
+A configured bot keeps its dashboard available when retryable RPC transport
+unavailability prevents startup validation. It reports `connectivity-degraded`, shows
+per-endpoint health in the dashboard, and retries with bounded backoff. `/healthz`
+provides process-liveness checks without dashboard authentication. The supplied
+Compose service checks that endpoint and uses `restart: unless-stopped` if the bot
+process exits unexpectedly. Contradictory chain, malformed response, or other safety
+validation failures stop startup instead of being treated as an outage.
 
 Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The
@@ -97,9 +111,13 @@ endpoints, gas limits, and REP limits have been reviewed. When execution is
 enabled:
 
 - `connectivity.readRpcUrl` supplies the local operational view.
-- `connectivity.quorumRpcUrls` must contain at least one independent read RPC.
-- The critical pool, price, vault, and candidate snapshot must agree across every
-  read endpoint before a transaction is sent.
+- `connectivity.quorumRpcUrls` must contain at least two independent read RPCs.
+- For a critical pool, price, vault, or candidate snapshot, only a retryable
+  transport failure makes a reader unavailable. At least two readers must respond,
+  and every responding reader must agree exactly before a transaction is sent. One
+  transport-unavailable endpoint degrades health without stopping a healthy
+  two-reader quorum; a malformed or contradictory response is a safety fault and
+  fails closed.
 - `submission.mode` may be `public` or `private`. ETH-funded stale-price requests
   use the same signed-transaction delivery policy as other actions.
 - `privateKey` is stored in the local operator file only when explicitly saved.
@@ -339,8 +357,10 @@ Public intents remain blocked until the original receipt appears or a finalized
 replacement or cancellation proves that the same signer nonce was consumed.
 Private intents expire only after their relay validity ceiling plus twelve
 canonical confirmation blocks. Non-price-dependent intents can resubmit the
-exact durable signed transaction while it remains viable. A failed live cycle
-pauses automatic execution and remains visible until the operator reviews it.
+exact durable signed transaction while it remains viable. Transport failures enter
+`connectivity-degraded`, remain visible, and retry with bounded backoff. Safety
+failures such as contradictory chain state or execution evidence still pause
+automatic execution until operator review.
 
 For a replaced or canceled public intent, pause the bot and use **Transaction
 recovery** to enter the finalized replacement hash. The replacement must have

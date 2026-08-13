@@ -5,8 +5,10 @@ import { type Configuration } from '#config/configuration'
 import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
-import { compactFinalityWindow } from '#monitoring/resilience'
+import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
 import type { ReadClient } from '#core/operator-types'
+import { errorMessage } from '#core/rpc-validation'
+import { settledQuorumValue } from '#monitoring/read-quorum'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 const REORG_OVERLAP_BLOCKS = 12n
@@ -52,6 +54,14 @@ export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<C
 	)
 }
 
+export async function loadCoordinatorPoliciesWithQuorum(clients: readonly ReadClient[], endpoints: readonly string[], config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
+	if (clients.length !== endpoints.length) throw new Error('Coordinator policy readers and endpoints differ')
+	return settledQuorumValue(
+		'coordinator policies',
+		clients.map(async (client, index) => ({ endpoint: endpoints[index] ?? '', value: await loadCoordinatorPolicies(client, config) })),
+	)
+}
+
 export function requiredDeploymentIdentities(config: Configuration) {
 	const identities: { address: Address; role: DeploymentRole }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
@@ -74,12 +84,20 @@ export function authenticatedExecutionToken(config: Configuration, token: Addres
 	return config.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
 }
 
+export async function requireManifestAuthenticationQuorum(attempts: readonly Promise<void>[]) {
+	const settled = await Promise.allSettled(attempts)
+	const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason] : []))
+	const safetyFailure = failures.find(error => operationalFailureDisposition(error) === 'safety-paused')
+	if (safetyFailure !== undefined) throw safetyFailure
+	if (settled.filter(result => result.status === 'fulfilled').length < 2) throw new ConnectivityDegradedError(`Deployment authentication requires at least two available independent RPC endpoints: ${failures.map(errorMessage).join('; ')}`)
+}
+
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {
 	if (!config.execute) return
 	const manifest = config.deploymentManifest
 	if (manifest === undefined) throw new Error('Execution requires an authenticated deployment manifest')
 	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
-	await Promise.all(
+	await requireManifestAuthenticationQuorum(
 		clients.map(client =>
 			authenticateDeploymentManifest(manifest, {
 				chainId: config.network.chain.id,

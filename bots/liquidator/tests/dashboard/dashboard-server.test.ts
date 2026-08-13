@@ -40,6 +40,9 @@ describe('liquidator dashboard server', () => {
 			testMarketSources: () => ({ assets: [], blockNumber: '1' }),
 		})
 		servers.push(server)
+		const health = await fetch(new URL('/healthz', server.url))
+		expect(health.status).toBe(200)
+		expect(await health.text()).toBe('ok')
 		const page = await fetch(server.url)
 		expect(page.status).toBe(200)
 		const pageSource = await page.text()
