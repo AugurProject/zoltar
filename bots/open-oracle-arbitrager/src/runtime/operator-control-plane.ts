@@ -59,7 +59,22 @@ export async function requireNoPendingExecutorDeployment(settingsFile: string) {
 	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
 }
 
-export function startOperatorControlPlane(parameters: { config: Configuration; fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }; getCursor: () => SyncCursor | undefined; lockManager: ExecutionLockManager | undefined; signerOperationGate: SignerOperationGate; state: OperatorState }) {
+export type DeploymentRecoveryState = { pending: boolean }
+
+export function acquireScanSignerOperation(signerOperationGate: SignerOperationGate, deploymentRecovery: DeploymentRecoveryState) {
+	if (deploymentRecovery.pending) return false
+	return signerOperationGate.acquire('scan')
+}
+
+export function startOperatorControlPlane(parameters: {
+	config: Configuration
+	deploymentRecovery: DeploymentRecoveryState
+	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
+	getCursor: () => SyncCursor | undefined
+	lockManager: ExecutionLockManager | undefined
+	signerOperationGate: SignerOperationGate
+	state: OperatorState
+}) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const pending: PendingOperatorUpdates = {
 		connectivity: undefined,
@@ -225,6 +240,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
 				await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
 				await clearExecutorDeploymentIntent(intentPath)
+				parameters.deploymentRecovery.pending = false
 				pending.deployment = next
 				fixedState.deployment = next
 				recordOperation(state, {

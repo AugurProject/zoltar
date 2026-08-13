@@ -29,7 +29,7 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
-import { startOperatorControlPlane } from './operator-control-plane.ts'
+import { acquireScanSignerOperation, startOperatorControlPlane } from './operator-control-plane.ts'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-execution-state.ts'
 
@@ -137,6 +137,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
 	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorDeploymentIntentPath(config.settingsFile))
+	const deploymentRecovery = { pending: pendingExecutorDeployment !== undefined }
 	if (pendingExecutorDeployment !== undefined) {
 		state.paused = true
 		state.status = 'paused'
@@ -160,7 +161,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			reportId: activity.reportId,
 		})
 	}
-	const controlPlane = startOperatorControlPlane({ config, fixedState, getCursor: () => cursor, lockManager, signerOperationGate, state })
+	const controlPlane = startOperatorControlPlane({ config, deploymentRecovery, fixedState, getCursor: () => cursor, lockManager, signerOperationGate, state })
 	const { dashboard, pending } = controlPlane
 	const reports = new Map<bigint, ActiveReport>()
 	const persistPosition = async (position: PositionRecord) => {
@@ -196,7 +197,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	try {
 		await pollUntilStopped(
 			async () => {
-				if (!signerOperationGate.acquire('scan')) return false
+				if (!acquireScanSignerOperation(signerOperationGate, deploymentRecovery)) return false
 				try {
 					state.rpcEndpointHealth = readPool.snapshot()
 					applyQueuedExecutionSettings(config, state, pending)

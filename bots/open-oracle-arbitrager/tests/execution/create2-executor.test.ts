@@ -3,7 +3,8 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, as
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { acquireScanSignerOperation, deployExecutorFromConnectivity, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -123,6 +124,15 @@ test('blocks resume while a durable executor deployment intent remains unresolve
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}
+})
+
+test('blocks every scan signer path until deployment recovery clears its durable intent', () => {
+	const gate = createSignerOperationGate()
+	const deploymentRecovery = { pending: true }
+	expect(acquireScanSignerOperation(gate, deploymentRecovery)).toBe(false)
+	deploymentRecovery.pending = false
+	expect(acquireScanSignerOperation(gate, deploymentRecovery)).toBe(true)
+	gate.release('scan')
 })
 
 test('rejects a mismatched pending intent before externally deployed runtime recovery', async () => {
