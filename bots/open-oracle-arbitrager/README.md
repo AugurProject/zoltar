@@ -198,24 +198,24 @@ bun run reconcile -- [reconciliation options]
 ## Docker
 
 Docker Compose builds the image, keeps bot state in a named volume, publishes the
-dashboard only on host loopback, and starts the bot. From the monorepo root, create
-the local environment file:
+dashboard only on host loopback, and starts the bot. From this directory, run:
 
 ```bash
-cd bots/open-oracle-arbitrager
-install -m 600 .env.example .env
+docker compose up --build --force-recreate
 ```
 
-Edit `.env` and set a unique dashboard password of at least 16 characters. Then
-build and start the container:
-
-```bash
-docker compose up --build --detach
-```
+On Windows, run `start.bat` from this directory to start the same Compose command.
 
 On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
-password from `.env`.
+local-only default password `zoltar-local-dashboard`.
+
+For anything beyond local evaluation, create `.env` from `.env.example` and set a
+unique dashboard password of at least 16 characters before starting Compose:
+
+```bash
+install -m 600 .env.example .env
+```
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then

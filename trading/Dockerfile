@@ -24,6 +24,6 @@ COPY --from=builder --chown=bun:bun /source/trading/ui/dist ./dist
 COPY --from=builder --chown=bun:bun /source/trading/ui/build/serve.mts ./build/serve.mts
 
 USER bun
-EXPOSE 12346
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["bun", "-e", "const response = await fetch('http://127.0.0.1:12346/'); process.exit(response.ok ? 0 : 1)"]
+EXPOSE 4163
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["bun", "-e", "const response = await fetch('http://127.0.0.1:4163/'); process.exit(response.ok ? 0 : 1)"]
 CMD ["bun", "./build/serve.mts"]

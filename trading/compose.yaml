@@ -1,0 +1,12 @@
+name: zoltar-trading
+
+services:
+  trading:
+    build:
+      context: ..
+      dockerfile: trading/Dockerfile
+      args:
+        TRADING_UI_DEPLOYMENT: ${TRADING_UI_DEPLOYMENT:-}
+    image: zoltar-trading
+    ports:
+      - 127.0.0.1:4163:4163

@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown>; error?: unknown }>
 
 const outputDirectory = process.env.TRADING_QA_OUTPUT ?? '/tmp/zoltar-trading-qa'
-const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:12346'
+const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:4163'
 const scenarioNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const debuggingPort = 9227
 await fs.mkdir(outputDirectory, { recursive: true })
