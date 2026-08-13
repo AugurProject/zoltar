@@ -102,7 +102,7 @@ function assertDisputeStakedReplayIdentityDocs(): void {
 function assertTruthAuctionCombinedRepCapDocs(): void {
 	assert.match(
 		securityPoolForker,
-		/uint256 combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep \+ disputeStakedAttoRep;[\s\S]*if \(migratedRepHaircutAttoRep >= combinedAuctionableAttoRep\) return 0;[\s\S]*uint256 cap = combinedAuctionableAttoRep - migratedRepHaircutAttoRep;[\s\S]*if \(cap == combinedAuctionableAttoRep && address\(securityPool\.escalationGame\(\)\) != address\(0x0\)\) cap -= 1;/,
+		/uint256 combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep \+ disputeStakedAttoRep;[\s\S]*uint256 migratedPoolRepRetentionAttoRep = Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\);[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\);[\s\S]*if \(combinedRepRetentionAttoRep >= combinedAuctionableAttoRep\) return 0;[\s\S]*uint256 cap = combinedAuctionableAttoRep - combinedRepRetentionAttoRep;/,
 	)
 }
 
@@ -309,7 +309,7 @@ function assertAuditFindingRemediations(): void {
 	assert.doesNotMatch(normalizedRefundGasDocs, /(?:at most|forwards at most|limited to) 30,000 gas/i, 'Refund documentation must not confuse the explicit CALL gas argument with the larger stipend-inclusive callback maximum')
 	assert.match(
 		securityPoolForker,
-		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 incumbentRepAfterAttoRep =[\s\S]*Math\.mulDiv\(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep\)[\s\S]*if \(incumbentRepAfterAttoRep == 0\)[\s\S]*auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils\.PRICE_PRECISION;[\s\S]*Math\.ceilDiv\(poolRepAfterAttoRep, incumbentRepAfterAttoRep\)/,
+		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 incumbentRepAfterAttoRep =[\s\S]*Math\.mulDiv\(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep\)[\s\S]*if \(incumbentRepAfterAttoRep == 0\)[\s\S]*auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils\.PRICE_PRECISION;[\s\S]*Math\.ceilDiv\(poolRepAfterAttoRep, incumbentRepAfterAttoRep\)/,
 		'Truth-auction REP backing units must reserve positive migrated claims and use bounded child-local scaling',
 	)
 	assert.doesNotMatch(normalizedAuctionDesign, /(?:all the REP in the vaults have been auctioned off|old REP vault holders have been wiped)/i, 'Truth Auction must not claim that every underfunded auction sells all REP or wipes prior vault holders')

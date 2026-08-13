@@ -334,14 +334,19 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'the OI shortfall should require a truth auction')
 			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
 			const combinedAuctionableRep = parentForkData.auctionableAttoRepAtFork + childEscalationBalance
-			const expectedAuctionCap = combinedAuctionableRep - (migratedAttoRep + 1_000_000n - 1n) / 1_000_000n
+			const migratedPoolRepRetention = (migratedAttoRep + 1_000_000n - 1n) / 1_000_000n
+			const combinedRepRetention = (migratedPoolRepRetention * combinedAuctionableRep + parentForkData.auctionableAttoRepAtFork - 1n) / parentForkData.auctionableAttoRepAtFork
+			const expectedAuctionCap = combinedAuctionableRep - combinedRepRetention
 			strictEqualTypeSafe(await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction), expectedAuctionCap, 'the auction cap should include external-fork escalation backing before resume')
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, expectedAuctionCap / 2n, await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction))
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
-			assert.ok((await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)) > 0n, 'the regression requires a nonzero repair purchase')
+			const purchasedAttoRep = await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction)
+			assert.ok(purchasedAttoRep > 0n, 'the regression requires a nonzero repair purchase')
+			const poolIncumbentRepAfterAuction = (parentForkData.auctionableAttoRepAtFork * (combinedAuctionableRep - purchasedAttoRep)) / combinedAuctionableRep
+			assert.ok(poolIncumbentRepAfterAuction >= migratedPoolRepRetention, 'combined pool-and-escalation retention must leave the complete migrated pool residue')
 			const repBeforeHaircut = await client.readContract({
 				address: childEscalationGame,
 				abi: peripherals_EscalationGame_EscalationGame.abi,

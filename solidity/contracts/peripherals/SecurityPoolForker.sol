@@ -470,12 +470,17 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
 		uint256 disputeStakedAttoRep = _getEscalationAuctionableRep(securityPool, parentData);
 		uint256 combinedAuctionableAttoRep = poolAuctionableRepAtForkAttoRep + disputeStakedAttoRep;
-		// Reserve at least one atomic REP unit for every positive migrated claim.
-		// Flooring to zero lets retained backing units acquire the auction's final
-		// rounding unit after the winner removes its backing units.
-		uint256 migratedRepHaircutAttoRep = Math.ceilDiv(data.migratedAttoRep, SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
-		if (migratedRepHaircutAttoRep >= combinedAuctionableAttoRep) return 0;
-		uint256 cap = combinedAuctionableAttoRep - migratedRepHaircutAttoRep;
+		// Reserve enough combined pool and escalation inventory for the pool's
+		// proportional residue to retain every positive migrated claim. Reserving
+		// the pool target directly from the combined inventory can leave only game
+		// REP unsold and let the pool residue round back to zero.
+		uint256 migratedPoolRepRetentionAttoRep = Math.ceilDiv(data.migratedAttoRep, SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
+		uint256 combinedRepRetentionAttoRep =
+			migratedPoolRepRetentionAttoRep == 0
+				? 0
+				: Math.mulDiv(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math.Rounding.Ceil);
+		if (combinedRepRetentionAttoRep >= combinedAuctionableAttoRep) return 0;
+		uint256 cap = combinedAuctionableAttoRep - combinedRepRetentionAttoRep;
 		if (cap == combinedAuctionableAttoRep && address(securityPool.escalationGame()) != address(0x0)) cap -= 1;
 		return cap;
 	}
