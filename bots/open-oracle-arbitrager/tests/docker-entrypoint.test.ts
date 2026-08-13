@@ -31,10 +31,9 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 
 describe('Docker entrypoint', () => {
 	test('provides a location-independent Windows launcher', async () => {
-		const source = await readFile(windowsLauncher, 'utf8')
+		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
 		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate')
-		expect(source).toContain('exit /b %exit_code%')
+		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
 	})
 
 	test('provides a local-only dashboard password when .env is absent', async () => {
