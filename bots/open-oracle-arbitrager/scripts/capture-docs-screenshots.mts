@@ -27,6 +27,7 @@ let fixtureStateUnavailable = false
 let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
 let fixtureNetworkConfigured = true
+let fixturePauseHanging = false
 const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
@@ -303,39 +304,141 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			fixtureNetworkConfigured = false
 			paused = true
 			const unconfiguredPauseRequestCount = fixturePauseRequests.length
-			await replacePage(`${origin}/?resume=network-unconfigured`, 1440, 900)
-			await Bun.sleep(750)
-			const unconfiguredResume = await command(
-				'Runtime.evaluate',
-				{
-					expression: `(() => {
-						const pause = document.querySelector('#pause-button')
-						const confirm = document.querySelector('#confirm-resume')
-						pause?.click()
-						confirm?.click()
-						return { confirmDisabled: confirm?.disabled, pauseDisabled: pause?.disabled, resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open') }
-					})()`,
-					returnByValue: true,
-				},
-				sessionId,
-			)
-			await Bun.sleep(100)
-			const unconfiguredResumeValue = typeof unconfiguredResume === 'object' && unconfiguredResume !== null && 'result' in unconfiguredResume && typeof unconfiguredResume.result === 'object' && unconfiguredResume.result !== null && 'value' in unconfiguredResume.result ? unconfiguredResume.result.value : undefined
-			if (
-				typeof unconfiguredResumeValue !== 'object' ||
-				unconfiguredResumeValue === null ||
-				!('pauseDisabled' in unconfiguredResumeValue) ||
-				unconfiguredResumeValue.pauseDisabled !== true ||
-				!('confirmDisabled' in unconfiguredResumeValue) ||
-				unconfiguredResumeValue.confirmDisabled !== true ||
-				!('resumeOpen' in unconfiguredResumeValue) ||
-				unconfiguredResumeValue.resumeOpen !== false ||
-				fixturePauseRequests.length !== unconfiguredPauseRequestCount
-			) {
-				throw new Error(`Unconfigured network exposed Resume: ${JSON.stringify({ requests: fixturePauseRequests.length - unconfiguredPauseRequestCount, state: unconfiguredResumeValue })}`)
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?resume=network-unconfigured-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				const unconfiguredResume = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const pause = document.querySelector('#pause-button')
+							const confirm = document.querySelector('#confirm-resume')
+							pause?.click()
+							confirm?.click()
+							return {
+								confirmDisabled: confirm?.disabled,
+								pauseBusy: pause?.getAttribute('aria-busy'),
+								pauseCursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
+								pauseDisabled: pause?.disabled,
+								resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open')
+							}
+						})()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				await Bun.sleep(100)
+				const unconfiguredResumeValue = typeof unconfiguredResume === 'object' && unconfiguredResume !== null && 'result' in unconfiguredResume && typeof unconfiguredResume.result === 'object' && unconfiguredResume.result !== null && 'value' in unconfiguredResume.result ? unconfiguredResume.result.value : undefined
+				if (
+					typeof unconfiguredResumeValue !== 'object' ||
+					unconfiguredResumeValue === null ||
+					!('pauseDisabled' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseDisabled !== true ||
+					!('pauseBusy' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseBusy !== null ||
+					!('pauseCursor' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseCursor !== 'not-allowed' ||
+					!('confirmDisabled' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.confirmDisabled !== true ||
+					!('resumeOpen' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.resumeOpen !== false ||
+					fixturePauseRequests.length !== unconfiguredPauseRequestCount
+				) {
+					throw new Error(`Unconfigured network exposed Resume: ${JSON.stringify({ requests: fixturePauseRequests.length - unconfiguredPauseRequestCount, state: unconfiguredResumeValue })}`)
+				}
+				await capturePng(`resume-network-unconfigured-${mobile ? 'mobile' : 'desktop'}.png`)
 			}
-			await capturePng('resume-network-unconfigured.png')
 			fixtureNetworkConfigured = true
+			paused = false
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?pause=pending-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				fixturePauseHanging = true
+				let pendingPauseValue: unknown
+				try {
+					await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+					await Bun.sleep(100)
+					const pendingPause = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const pause = document.querySelector('#pause-button')
+								return {
+									busy: pause?.getAttribute('aria-busy'),
+									cursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
+									disabled: pause?.disabled
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					pendingPauseValue = typeof pendingPause === 'object' && pendingPause !== null && 'result' in pendingPause && typeof pendingPause.result === 'object' && pendingPause.result !== null && 'value' in pendingPause.result ? pendingPause.result.value : undefined
+					await capturePng(`pause-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				} finally {
+					fixturePauseHanging = false
+				}
+				await Bun.sleep(350)
+				if (typeof pendingPauseValue !== 'object' || pendingPauseValue === null || !('busy' in pendingPauseValue) || pendingPauseValue.busy !== 'true' || !('cursor' in pendingPauseValue) || pendingPauseValue.cursor !== 'wait' || !('disabled' in pendingPauseValue) || pendingPauseValue.disabled !== true) {
+					throw new Error(`Pending Pause did not expose a busy control: ${JSON.stringify(pendingPauseValue)}`)
+				}
+				paused = false
+			}
+			paused = true
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?resume=pending-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+				await Bun.sleep(100)
+				fixturePauseHanging = true
+				let pendingResumeValue: unknown
+				try {
+					await command('Runtime.evaluate', { expression: `document.querySelector('#confirm-resume')?.click()` }, sessionId)
+					await Bun.sleep(100)
+					const pendingResume = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const confirm = document.querySelector('#confirm-resume')
+								return {
+									busy: confirm?.getAttribute('aria-busy'),
+									cursor: confirm instanceof HTMLElement ? getComputedStyle(confirm).cursor : undefined,
+									disabled: confirm?.disabled,
+									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open')
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					pendingResumeValue = typeof pendingResume === 'object' && pendingResume !== null && 'result' in pendingResume && typeof pendingResume.result === 'object' && pendingResume.result !== null && 'value' in pendingResume.result ? pendingResume.result.value : undefined
+					await capturePng(`resume-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				} finally {
+					fixturePauseHanging = false
+				}
+				await Bun.sleep(350)
+				if (
+					typeof pendingResumeValue !== 'object' ||
+					pendingResumeValue === null ||
+					!('busy' in pendingResumeValue) ||
+					pendingResumeValue.busy !== 'true' ||
+					!('cursor' in pendingResumeValue) ||
+					pendingResumeValue.cursor !== 'wait' ||
+					!('disabled' in pendingResumeValue) ||
+					pendingResumeValue.disabled !== true ||
+					!('resumeOpen' in pendingResumeValue) ||
+					pendingResumeValue.resumeOpen !== true
+				) {
+					throw new Error(`Pending Resume did not expose a busy control: ${JSON.stringify(pendingResumeValue)}`)
+				}
+				paused = true
+			}
 			paused = false
 			await replacePage(`${origin}/`, 1440, 900)
 			await Bun.sleep(750)
@@ -1123,9 +1226,10 @@ const server = startDashboardServer(0, {
 		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')
 		return currentFixtureSnapshot()
 	},
-	setPaused: value => {
-		paused = value
+	setPaused: async value => {
 		fixturePauseRequests.push(value)
+		while (fixturePauseHanging) await Bun.sleep(10)
+		paused = value
 	},
 	updateConnectivity: () => {
 		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)

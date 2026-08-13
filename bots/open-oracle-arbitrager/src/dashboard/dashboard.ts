@@ -44,6 +44,7 @@ let initialFragmentApplied = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
+let pauseRequestPending: 'pause' | 'resume' | undefined
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
 
@@ -81,8 +82,14 @@ function setControlsEnabled(enabled: boolean) {
 		paused: latestSnapshot?.paused === true,
 		snapshotAvailable: latestSnapshot !== undefined,
 	})
-	element<HTMLButtonElement>('pause-button').disabled = pauseControls.pauseDisabled
-	element<HTMLButtonElement>('confirm-resume').disabled = pauseControls.confirmDisabled
+	const pauseButton = element<HTMLButtonElement>('pause-button')
+	pauseButton.disabled = pauseRequestPending !== undefined || pauseControls.pauseDisabled
+	if (pauseRequestPending === 'pause') pauseButton.setAttribute('aria-busy', 'true')
+	else pauseButton.removeAttribute('aria-busy')
+	const confirmResume = element<HTMLButtonElement>('confirm-resume')
+	confirmResume.disabled = pauseRequestPending !== undefined || pauseControls.confirmDisabled
+	if (pauseRequestPending === 'resume') confirmResume.setAttribute('aria-busy', 'true')
+	else confirmResume.removeAttribute('aria-busy')
 	if (!enabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
@@ -1059,9 +1066,8 @@ async function changePaused(paused: boolean) {
 		closeResumePreflight()
 		return
 	}
-	const button = element<HTMLButtonElement>('pause-button')
-	button.disabled = true
-	element<HTMLButtonElement>('confirm-resume').disabled = true
+	pauseRequestPending = paused ? 'pause' : 'resume'
+	setControlsEnabled(connected)
 	try {
 		await api('/api/paused', {
 			body: JSON.stringify({ paused }),
@@ -1076,6 +1082,7 @@ async function changePaused(paused: boolean) {
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'
 	} finally {
+		pauseRequestPending = undefined
 		setControlsEnabled(connected)
 	}
 }
