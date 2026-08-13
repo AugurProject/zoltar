@@ -3765,7 +3765,7 @@ body.paper-zoltar .footer-note {
 	}
 }
 
-@media screen and (max-width: 420px) {
+@media screen and (max-width: 640px) {
 	.docs-responsive-table > tbody > tr > td {
 		display: block;
 	}
