@@ -370,7 +370,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 								return {
 									busy: pause?.getAttribute('aria-busy'),
 									cursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
-									disabled: pause?.disabled
+									disabled: pause?.disabled,
+									text: pause?.textContent
 								}
 							})()`,
 							returnByValue: true,
@@ -383,7 +384,18 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					fixturePauseHanging = false
 				}
 				await Bun.sleep(350)
-				if (typeof pendingPauseValue !== 'object' || pendingPauseValue === null || !('busy' in pendingPauseValue) || pendingPauseValue.busy !== 'true' || !('cursor' in pendingPauseValue) || pendingPauseValue.cursor !== 'wait' || !('disabled' in pendingPauseValue) || pendingPauseValue.disabled !== true) {
+				if (
+					typeof pendingPauseValue !== 'object' ||
+					pendingPauseValue === null ||
+					!('busy' in pendingPauseValue) ||
+					pendingPauseValue.busy !== 'true' ||
+					!('cursor' in pendingPauseValue) ||
+					pendingPauseValue.cursor !== 'wait' ||
+					!('disabled' in pendingPauseValue) ||
+					pendingPauseValue.disabled !== true ||
+					!('text' in pendingPauseValue) ||
+					pendingPauseValue.text !== 'Pausing…'
+				) {
 					throw new Error(`Pending Pause did not expose a busy control: ${JSON.stringify(pendingPauseValue)}`)
 				}
 				paused = false
@@ -410,7 +422,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									busy: confirm?.getAttribute('aria-busy'),
 									cursor: confirm instanceof HTMLElement ? getComputedStyle(confirm).cursor : undefined,
 									disabled: confirm?.disabled,
-									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open')
+									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
+									text: confirm?.textContent
 								}
 							})()`,
 							returnByValue: true,
@@ -433,7 +446,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('disabled' in pendingResumeValue) ||
 					pendingResumeValue.disabled !== true ||
 					!('resumeOpen' in pendingResumeValue) ||
-					pendingResumeValue.resumeOpen !== true
+					pendingResumeValue.resumeOpen !== true ||
+					!('text' in pendingResumeValue) ||
+					pendingResumeValue.text !== 'Resuming…'
 				) {
 					throw new Error(`Pending Resume did not expose a busy control: ${JSON.stringify(pendingResumeValue)}`)
 				}

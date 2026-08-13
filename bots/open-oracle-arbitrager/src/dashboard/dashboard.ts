@@ -84,10 +84,12 @@ function setControlsEnabled(enabled: boolean) {
 	})
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.disabled = pauseRequestPending !== undefined || pauseControls.pauseDisabled
+	pauseButton.textContent = pauseRequestPending === 'pause' ? 'Pausing…' : latestSnapshot?.paused === true ? 'Resume bot' : 'Pause bot'
 	if (pauseRequestPending === 'pause') pauseButton.setAttribute('aria-busy', 'true')
 	else pauseButton.removeAttribute('aria-busy')
 	const confirmResume = element<HTMLButtonElement>('confirm-resume')
 	confirmResume.disabled = pauseRequestPending !== undefined || pauseControls.confirmDisabled
+	confirmResume.textContent = pauseRequestPending === 'resume' ? 'Resuming…' : 'Resume bot'
 	if (pauseRequestPending === 'resume') confirmResume.setAttribute('aria-busy', 'true')
 	else confirmResume.removeAttribute('aria-busy')
 	if (!enabled) closeResumePreflight()
@@ -875,8 +877,6 @@ function render(snapshot: OperatorSnapshot) {
 	updateNetworkTargetStatus()
 	setText('chain-safety', snapshot.networkConfigured ? `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.` : 'Set the chain and RPC endpoints in RPC connectivity, then restart before scanning.')
 	renderSignerStatus(snapshot)
-	const pauseButton = element<HTMLButtonElement>('pause-button')
-	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
 		launchNotice.hidden = false
