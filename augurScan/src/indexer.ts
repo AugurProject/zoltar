@@ -758,6 +758,7 @@ type NetworkLifecycle = {
 	readonly intervalMs: number
 	readonly signal: AbortSignal
 	readonly random?: () => number
+	readonly shouldRethrow?: (error: unknown) => boolean
 }
 
 export const retryDelayMs = (consecutiveFailures: number, intervalMs: number, random = Math.random): number => {
@@ -766,7 +767,7 @@ export const retryDelayMs = (consecutiveFailures: number, intervalMs: number, ra
 	return Math.min(Math.round(base * (0.8 + random() * 0.4)), 300_000)
 }
 
-export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random }: NetworkLifecycle): Promise<void> => {
+export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random, shouldRethrow }: NetworkLifecycle): Promise<void> => {
 	let verified = false
 	let consecutiveFailures = 0
 	while (!signal.aborted) {
@@ -781,7 +782,7 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			caughtUp = await poll()
 			consecutiveFailures = 0
 		} catch (error) {
-			if (error instanceof LeaseLostError) throw error
+			if (error instanceof LeaseLostError || shouldRethrow?.(error) === true) throw error
 			consecutiveFailures++
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
 			await failure(safeIndexerFailure(error), new Date(Date.now() + delayAfterFailure), safeIndexerFailureReason(error))
@@ -801,6 +802,7 @@ export const runOwnedNetworkLifecycle = async ({ reconcile, poll, runWithProvide
 		...lifecycle,
 		verify: () => runWithProvider(reconcile),
 		poll: () => runWithProvider(poll),
+		shouldRethrow: (error) => error instanceof DatabaseConsistencyError || lifecycle.shouldRethrow?.(error) === true,
 	})
 
 type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'>

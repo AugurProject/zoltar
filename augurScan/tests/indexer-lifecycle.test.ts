@@ -1,6 +1,6 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
-import type { StoredTransaction } from '../src/database.ts'
+import { DatabaseConsistencyError, type StoredTransaction } from '../src/database.ts'
 import {
 	type Address,
 	BaseError,
@@ -989,6 +989,33 @@ describe('network indexer lifecycle', () => {
 		expect(polls).toBe(1)
 		expect(failures).toEqual(['RPC request failed; retrying'])
 		expect(reasons).toEqual(['Error'])
+	})
+
+	test('preserves actionable reconciliation consistency failures without polling', async () => {
+		const controller = new AbortController()
+		let polls = 0
+		let failures = 0
+		const error = new DatabaseConsistencyError('Manifest backfill cannot find canonical block 49; rebuild the augurScan database')
+
+		await expect(
+			runOwnedNetworkLifecycle({
+				reconcile: async () => {
+					throw error
+				},
+				poll: async () => {
+					polls++
+					return true
+				},
+				failure: async () => {
+					failures++
+				},
+				runWithProvider: async (operation) => await operation(),
+				intervalMs: 1,
+				signal: controller.signal,
+			}),
+		).rejects.toBe(error)
+		expect(polls).toBe(0)
+		expect(failures).toBe(0)
 	})
 
 	test('keeps retrying an RPC outage until the network recovers', async () => {
