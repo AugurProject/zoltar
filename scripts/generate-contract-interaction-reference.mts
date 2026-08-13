@@ -1099,7 +1099,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for their non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
 				effect:
-					"Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
+					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
 				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
 				signals: '`VaultBadDebtMigrated` and `VaultMigrationCheckpoint`',
 			},
