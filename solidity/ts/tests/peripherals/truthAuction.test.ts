@@ -334,7 +334,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'the OI shortfall should require a truth auction')
 			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
 			const combinedAuctionableRep = parentForkData.auctionableAttoRepAtFork + childEscalationBalance
-			const expectedAuctionCap = combinedAuctionableRep - migratedAttoRep / 1_000_000n
+			const expectedAuctionCap = combinedAuctionableRep - (migratedAttoRep + 1_000_000n - 1n) / 1_000_000n
 			strictEqualTypeSafe(await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction), expectedAuctionCap, 'the auction cap should include external-fork escalation backing before resume')
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, expectedAuctionCap / 2n, await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction))

@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
-import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { addRepToMigrationBalance, getZoltarForkThreshold, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './peripherals/fixture'
 
@@ -23,11 +23,16 @@ describe('Recursive truth-auction ownership regression', () => {
 		createQuestion,
 		createWriteClient,
 		finalizeTruthAuction,
+		formatStorageSlot,
 		forkUniverse,
 		genesisUniverse,
 		getChildUniverseId,
 		getERC20Balance,
+		getInfraContractAddresses,
+		getMappingStorageSlot,
 		getMigrationRepBalanceAttoRep,
+		getQuestionEndDate,
+		getRepToken,
 		getTotalRepBackingUnits,
 		getQuestionId,
 		getRepTokenAddress,
@@ -38,11 +43,14 @@ describe('Recursive truth-auction ownership regression', () => {
 		getZoltarAddress,
 		initiateSecurityPoolFork,
 		manipulatePriceOracleAndPerformOperation,
+		manipulatePriceOracle,
 		migrateRepToZoltar,
 		migrateVault,
 		outcomes,
 		participateAuction,
 		backingUnitsToAttoRep,
+		depositToEscalationGame,
+		reportBond,
 		repDeposit,
 		startTruthAuction,
 		statoblastSecurityMultiplierBps,
@@ -125,10 +133,10 @@ describe('Recursive truth-auction ownership regression', () => {
 			const childMigratedRep = (await fixture.getSecurityPoolForkerForkData(client, childPool.securityPool)).migratedAttoRep
 			strictEqualTypeSafe(childMigratedRep, expectedMigratedRep, `round ${roundIndex + 1}: migrated REP should follow the production flooring path`)
 			strictEqualTypeSafe(childAttackerVault.repBackingUnits, childMigratedRep, `round ${roundIndex + 1}: migration should normalize ownership into child-local REP units`)
-			const migratedRepHaircut = childMigratedRep / maxAuctionVaultHaircutDivisor
+			const migratedRepHaircut = (childMigratedRep + maxAuctionVaultHaircutDivisor - 1n) / maxAuctionVaultHaircutDivisor
 			if (roundIndex === 2) {
 				assert.ok(childMigratedRep > 0n, 'the third child should retain a positive migrated REP claim')
-				strictEqualTypeSafe(migratedRepHaircut, 0n, 'the positive third-round migrated REP should floor to a zero auction haircut')
+				strictEqualTypeSafe(migratedRepHaircut, 1n, 'the positive third-round migrated REP should reserve one atomic REP unit')
 			}
 
 			strictEqualTypeSafe(await getTotalRepBackingUnits(client, childPool.securityPool), poolRep, `round ${roundIndex + 1}: the child should use a bounded REP-denominated ownership scale before auction finalization`)
@@ -139,7 +147,7 @@ describe('Recursive truth-auction ownership regression', () => {
 			strictEqualTypeSafe(await getSystemState(client, childPool.securityPool), SystemState.ForkTruthAuction, `round ${roundIndex + 1}: the child should enter its real truth auction`)
 
 			const auctionCap = await getMaxRepBeingSoldAttoRep(client, childPool.truthAuction)
-			strictEqualTypeSafe(auctionCap, poolRep - migratedRepHaircut, `round ${roundIndex + 1}: the auction cap should subtract only the floored migrated-REP haircut`)
+			strictEqualTypeSafe(auctionCap, poolRep - migratedRepHaircut, `round ${roundIndex + 1}: the auction cap should subtract the rounded-up migrated-REP haircut`)
 			const minimumBid = await getMinBidSizeAttoEth(client, childPool.truthAuction)
 			const winningTick = await participateAuction(auctionWinner, childPool.truthAuction, 1n, minimumBid)
 
@@ -157,7 +165,7 @@ describe('Recursive truth-auction ownership regression', () => {
 
 		if (thirdWinningTick === undefined) throw new Error('Third-round winning tick was not recorded')
 		const dilutedAttackerVault = await getSecurityVault(client, currentPool.securityPool, attacker.account.address)
-		strictEqualTypeSafe(await getTotalRepBackingUnits(client, currentPool.securityPool), poolRep * PRICE_PRECISION + dilutedAttackerVault.repBackingUnits, 'the full-cap third auction should use the bounded fixed scale plus the remaining migrated units')
+		strictEqualTypeSafe(await getTotalRepBackingUnits(client, currentPool.securityPool), poolRep * poolRep, 'the third auction should preserve its one-attoREP incumbent residue through the positive-residual scale')
 		const dilutedAttackerClaim = await backingUnitsToAttoRep(client, currentPool.securityPool, dilutedAttackerVault.repBackingUnits)
 		strictEqualTypeSafe(dilutedAttackerClaim, 0n, 'the sub-haircut migrated claim should not resurrect after a full-cap auction')
 
@@ -167,5 +175,26 @@ describe('Recursive truth-auction ownership regression', () => {
 		strictEqualTypeSafe(winnerClaim, poolRep - 1n, 'the third auction winner should receive all REP except the one atomic unit reserved by integer ownership rounding')
 		assert.ok(dilutedAttackerVault.repBackingUnits + winnerVault.repBackingUnits <= (await getTotalRepBackingUnits(client, currentPool.securityPool)), 'aggregate configured ownership must not exceed the denominator')
 		assert.ok(dilutedAttackerClaim + winnerClaim <= (await getTotalPoolHeldAttoRep(client, currentPool.securityPool)), 'aggregate immediately redeemable claims must not exceed pool-held REP')
+
+		const childRepToken = await getRepToken(client, currentPool.securityPool)
+		const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		await mockWindow.addStateOverrides({
+			[childRepToken]: {
+				stateDiff: {
+					[reporterBalanceSlot]: repDeposit,
+				},
+			},
+		})
+		await approveToken(client, childRepToken, getInfraContractAddresses().openOracle)
+		const questionEndTime = await getQuestionEndDate(client, questionId)
+		if ((await mockWindow.getTime()) <= questionEndTime) await mockWindow.setTime(questionEndTime + 1n)
+		await manipulatePriceOracle(client, mockWindow, currentPool.priceOracleManagerAndOperatorQueuer)
+		await depositToEscalationGame(auctionWinner, currentPool.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+		await withdrawFromEscalationGame(auctionWinner, currentPool.securityPool, QuestionOutcome.Yes, [0n])
+
+		await redeemRepFromVault(auctionWinner, currentPool.securityPool, auctionWinner.account.address)
+		strictEqualTypeSafe(await backingUnitsToAttoRep(client, currentPool.securityPool, dilutedAttackerVault.repBackingUnits), 0n, 'the sub-haircut migrated claim should remain zero after the auction winner redeems')
+		await assert.rejects(redeemRepFromVault(attacker, currentPool.securityPool, attacker.account.address), /No redeemable REP/)
 	})
 })
