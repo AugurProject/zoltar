@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
-import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
+import { publicOperatorFailure, publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
@@ -41,6 +41,27 @@ function securityHeaders(contentType: string) {
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
+}
+
+function publicError(error: unknown, status: number, operation: string, fallback: string, categorize = false) {
+	const message = errorMessage(error)
+	console.error(`dashboardOperation=${operation} failed=${message}`)
+	return json({ error: categorize ? publicOperatorFailure(message, fallback) : fallback }, status)
+}
+
+function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
+	if (conflict) return 'Configuration changed since it was loaded. Reload the current configuration before saving.'
+	const message = errorMessage(error)
+	if (message === 'Operator settings and runtime persistence files must use distinct paths') return message
+	if (/^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)? returned chain \d+; expected chain \d+$/.test(message)) return message
+	if (message === 'Use a separate operator configuration and durable journal paths to change chains') return message
+	return 'Configuration could not be saved. Review the submitted values and protected bot logs.'
+}
+
+function publicConnectivityUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (message === 'Use a separate operator configuration and durable journal paths to change chains') return message
+	return 'RPC connectivity checks failed. Review the submitted endpoints and retry.'
 }
 
 function markdownHeadingId(value: string) {
@@ -133,6 +154,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/operator-console.css') {
+				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			}
 			if (request.method === 'GET' && url.pathname === '/operator-guide.css') return new Response(Bun.file(join(documentationDirectory, 'operator-guide.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/shared.css') {
 				return new Response(Bun.file(join(documentationDirectory, 'shared.css')), { headers: securityHeaders('text/css; charset=utf-8') })
@@ -160,9 +184,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			}
 			if (request.method === 'GET' && url.pathname === '/api/state') {
 				try {
-					return json(await controller.getSnapshot())
+					return json(publicOperatorSnapshot(await controller.getSnapshot()))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 503)
+					return publicError(error, 503, 'state-read', 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.', true)
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/configuration') {
@@ -170,7 +194,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.getConfiguration === undefined) throw new Error('Complete configuration is unavailable')
 					return json(await controller.getConfiguration())
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 503)
+					return publicError(error, 503, 'configuration-read', 'Complete configuration is unavailable. Retry or check protected bot logs for details.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/configuration') {
@@ -179,7 +203,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateConfiguration === undefined) throw new Error('Complete configuration is unavailable')
 					return json(await controller.updateConfiguration(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT ? 409 : 400)
+					const conflict = error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT
+					return publicError(error, conflict ? 409 : 400, 'configuration-update', publicConfigurationUpdateError(error, conflict))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {
@@ -187,7 +212,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {
@@ -195,7 +220,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'submission-update', 'Submission settings could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
@@ -203,7 +228,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(await controller.updateConnectivity(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'connectivity-update', publicConnectivityUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/deployment') {
@@ -212,7 +237,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateDeployment === undefined) throw new Error('Deployment configuration is unavailable')
 					return json({ deployment: await controller.updateDeployment(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'deployment-update', 'Deployment settings could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'POST' && url.pathname === '/api/executor-deployment') {
@@ -221,7 +246,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
 					return json(await controller.deployExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'executor-deployment', 'Executor deployment could not be completed. Review chain state and protected bot logs.')
 				}
 			}
 			if (request.method === 'POST' && url.pathname === '/api/executor-prediction') {
@@ -230,7 +255,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.predictExecutor === undefined) throw new Error('Executor prediction is unavailable')
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {
@@ -239,7 +264,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateTokens === undefined) throw new Error('Token configuration is unavailable')
 					return json({ tokenAddresses: await controller.updateTokens(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'token-update', 'Token settings could not be saved. Review the submitted addresses and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/signer') {
@@ -247,7 +272,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(await controller.updateSigner(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'signer-update', 'Signer settings could not be changed. Review the submitted action and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/paused') {
@@ -258,7 +283,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, 'pause-update', 'The bot run state could not be changed. Refresh current state and check protected bot logs.')
 				}
 			}
 			return new Response('Not found', { status: 404 })

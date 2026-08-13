@@ -6,6 +6,8 @@ let configurationRequests = 0
 const longUniverseId = '452312848583266388373324160190187140051835877600158453279131187530910662655'
 let approvedUniverses = ['101', longUniverseId]
 let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
+let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
+let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
 const centralizedMarkets = {
 	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 	assetChainId: 1,
@@ -144,12 +146,16 @@ const activities = [
 	},
 ]
 
+function currentConfiguration() {
+	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, selectedPools, strategy }
+}
+
 const server = startDashboardServer(4183, {
 	getConfiguration: async () => {
 		await Bun.sleep(400)
 		configurationRequests += 1
 		if (configurationRequests === 1) throw new Error('Fixture configuration temporarily unavailable')
-		return { approvedUniverses, centralizedMarkets, childMarketConfigurations, desiredPools, selectedPools, strategy }
+		return currentConfiguration()
 	},
 	getState: () => ({
 		activities,
@@ -241,23 +247,28 @@ const server = startDashboardServer(4183, {
 	setSelectedPools: value => {
 		if (!Array.isArray(value)) throw new Error('Expected selected-pool array')
 		selectedPools = value.map(String)
-		return { approvedUniverses, selectedPools, strategy }
+		return currentConfiguration()
 	},
 	setApprovedUniverses: value => {
 		if (!Array.isArray(value)) throw new Error('Expected approved-universe array')
 		approvedUniverses = value.map(String)
-		return { approvedUniverses, selectedPools, strategy }
+		return currentConfiguration()
+	},
+	setNetworkConnectivity: value => {
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected network-connectivity object')
+		const requestedNetwork = Reflect.get(value, 'network')
+		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
+		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
+		connectivity = {
+			publicRpcUrls: ['https://rpc.example'],
+			quorumRpcUrls: ['https://quorum.example'],
+			readRpcUrl: 'https://read.example',
+		}
+		return currentConfiguration()
 	},
 	setMarketConfiguration: value => {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected market configuration object')
-		return {
-			approvedUniverses,
-			centralizedMarkets: Reflect.get(value, 'root'),
-			childMarketConfigurations: Reflect.get(value, 'children'),
-			desiredPools: Reflect.get(value, 'desiredPools'),
-			selectedPools,
-			strategy,
-		}
+		return { ...currentConfiguration(), centralizedMarkets: Reflect.get(value, 'root'), childMarketConfigurations: Reflect.get(value, 'children'), desiredPools: Reflect.get(value, 'desiredPools') }
 	},
 	setSigner: value => ({
 		wallet: Reflect.get(value as object, 'privateKey') === '' ? undefined : '0x9999999999999999999999999999999999999999',
@@ -268,7 +279,7 @@ const server = startDashboardServer(4183, {
 		}
 		parseStrategy(value)
 		strategy = { ...strategy, ...value }
-		return { approvedUniverses, selectedPools, strategy }
+		return currentConfiguration()
 	},
 	testMarketSources: () => ({
 		assets: [
