@@ -123,6 +123,7 @@ type DatabaseConsistencyDiagnostic =
 	| { readonly code: 'lease-not-held'; readonly expectedBackendPid: number }
 	| { readonly code: 'lease-release-failed'; readonly expectedBackendPid: number }
 	| { readonly code: 'checkpoint-before-start'; readonly indexedBlock: bigint; readonly storedStartBlock: bigint }
+	| { readonly code: 'manifest-backfill-ancestor-missing'; readonly ancestor: bigint }
 	| {
 			readonly code: 'start-block-mismatch'
 			readonly configuredStartBlock: bigint
@@ -158,6 +159,10 @@ export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyE
 	if (diagnostic?.code === 'checkpoint-before-start') {
 		if (typeof diagnostic.indexedBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint') return undefined
 		return `Stored checkpoint ${diagnostic.indexedBlock} is below configured start block ${diagnostic.storedStartBlock}; rebuild the augurScan database from the configured start block`
+	}
+	if (diagnostic?.code === 'manifest-backfill-ancestor-missing') {
+		if (typeof diagnostic.ancestor !== 'bigint' || diagnostic.ancestor < 0n) return undefined
+		return `Manifest backfill cannot find canonical block ${diagnostic.ancestor}; rebuild the augurScan database from the configured start block`
 	}
 	if (diagnostic?.code === 'start-block-mismatch') {
 		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint')

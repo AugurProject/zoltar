@@ -1245,7 +1245,10 @@ class NetworkIndexer {
 		const ancestor = replayStart <= this.#network.startBlock ? -1n : replayStart - 1n
 		const ancestorHash = ancestor < 0n ? undefined : await this.#database.canonicalHash(this.#network.chainId, ancestor, this.#requireLease())
 		if (ancestor >= 0n && ancestorHash === undefined)
-			throw new DatabaseConsistencyError(`Manifest backfill cannot find canonical block ${ancestor}; rebuild the augurScan database`)
+			throw new DatabaseConsistencyError('Manifest backfill ancestor is unavailable', {
+				code: 'manifest-backfill-ancestor-missing',
+				ancestor,
+			})
 		await this.#assertLease()
 		await this.#database.rewind(this.#network.chainId, ancestor, ancestorHash, this.#requireLease())
 		this.#indexingStartReported = false

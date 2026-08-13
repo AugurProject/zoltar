@@ -1030,7 +1030,10 @@ describe('network indexer lifecycle', () => {
 		const controller = new AbortController()
 		let polls = 0
 		let failures = 0
-		const error = new DatabaseConsistencyError('Manifest backfill cannot find canonical block 49; rebuild the augurScan database')
+		const error = new DatabaseConsistencyError('unsafe internal ancestor detail', {
+			code: 'manifest-backfill-ancestor-missing',
+			ancestor: 49n,
+		})
 
 		await expect(
 			runOwnedNetworkLifecycle({
@@ -1051,6 +1054,9 @@ describe('network indexer lifecycle', () => {
 		).rejects.toBe(error)
 		expect(polls).toBe(0)
 		expect(failures).toBe(0)
+		const log = ownershipFailureLogMessage('sepolia', 'owned-run', error, 1, 10)
+		expect(log).toContain('Manifest backfill cannot find canonical block 49; rebuild the augurScan database from the configured start block')
+		expect(log).not.toContain('unsafe internal ancestor detail')
 	})
 
 	test('keeps retrying an RPC outage until the network recovers', async () => {
