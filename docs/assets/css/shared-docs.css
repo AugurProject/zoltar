@@ -82,22 +82,16 @@
 	max-width: 100% !important;
 }
 
+.plot-figure-diagram {
+	position: relative;
+}
+
 .plot-chart-toolbar {
-	position: sticky;
-	z-index: 2;
-	left: 0.5rem;
-	display: flex;
-	width: fit-content;
-	max-width: calc(100% - 1rem);
-	gap: 0.55rem;
-	align-items: center;
-	margin: 0 0 0.55rem;
-	padding: 0.35rem;
-	border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
-	border-radius: 0.5rem;
-	background: color-mix(in srgb, var(--paper, #fff) 94%, transparent);
-	box-shadow: 0 0.35rem 1rem rgba(15, 23, 31, 0.08);
-	backdrop-filter: blur(10px);
+	position: absolute;
+	z-index: 3;
+	top: 0.65rem;
+	right: 0.65rem;
+	margin: 0;
 }
 
 .plot-chart-toolbar[hidden] {
@@ -105,16 +99,18 @@
 }
 
 .plot-chart-toolbar button {
-	flex: 0 0 auto;
-	padding: 0.42rem 0.62rem;
+	padding: 0.3rem 0.48rem;
 	border: 1px solid var(--blue, var(--accent, #176653));
-	border-radius: 0.38rem;
-	background: var(--paper, #fff);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--paper, #fff) 90%, transparent);
+	box-shadow: 0 0.2rem 0.65rem rgba(15, 23, 31, 0.12);
 	color: var(--blue, var(--accent, #176653));
 	font: inherit;
-	font-size: 0.78rem;
+	font-size: 0.7rem;
 	font-weight: 800;
+	line-height: 1.2;
 	cursor: pointer;
+	backdrop-filter: blur(8px);
 }
 
 .plot-chart-toolbar button:hover {
@@ -127,11 +123,15 @@
 }
 
 .plot-chart-pan-cue {
-	min-width: 0;
-	color: var(--muted, #5f6d75);
-	font-size: 0.73rem;
-	line-height: 1.25;
-	overflow-wrap: anywhere;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
 }
 
 body.docs-diagram-expanded {
@@ -143,7 +143,7 @@ body.docs-diagram-expanded {
 	z-index: 1000;
 	inset: 0.75rem;
 	display: grid;
-	grid-template-rows: auto minmax(0, 1fr) auto;
+	grid-template-rows: minmax(0, 1fr) auto;
 	width: auto !important;
 	max-width: none !important;
 	height: auto;
@@ -157,8 +157,8 @@ body.docs-diagram-expanded {
 }
 
 .plot-figure-expanded > .plot-chart-toolbar {
-	position: static;
-	margin-bottom: 0.5rem;
+	top: 0.75rem;
+	right: 0.75rem;
 }
 
 .plot-figure-expanded > .plot-chart {
@@ -3703,7 +3703,7 @@ body.paper-zoltar .footer-note {
 	}
 
 	.plot-figure-expanded {
-		grid-template-rows: auto minmax(0, 1fr) auto;
+		grid-template-rows: minmax(0, 1fr) auto;
 	}
 
 	.plot-figure-expanded > .plot-chart {

@@ -12,7 +12,7 @@ import {
 	quantitativeChartAxisLabels,
 	quantitativeChartIds,
 } from './chartModels'
-import { type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
+import { centeredDiagramScrollLeft, type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 import chartSpecsSource from 'virtual:diagram-layouts'
 
@@ -810,6 +810,7 @@ function setDiagramExpanded(overflowEnvelope: HTMLElement, button: HTMLButtonEle
 			scrollSurface.setAttribute('role', 'region')
 			const diagramLabel = overflowEnvelope.getAttribute('aria-label') ?? 'diagram'
 			scrollSurface.setAttribute('aria-label', `Scrollable ${diagramLabel}. Use the Arrow keys to inspect.`)
+			scrollSurface.scrollLeft = centeredDiagramScrollLeft(scrollSurface.clientWidth, scrollSurface.scrollWidth)
 		} else {
 			scrollSurface.removeAttribute('tabindex')
 			scrollSurface.removeAttribute('role')
@@ -885,6 +886,8 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 		button.setAttribute('aria-controls', overflowEnvelope.id)
 		const cue = document.createElement('span')
 		cue.className = 'plot-chart-pan-cue'
+		cue.id = `${overflowEnvelope.id}-display-cue`
+		button.setAttribute('aria-describedby', cue.id)
 		toolbar.append(button, cue)
 		overflowEnvelope.prepend(toolbar)
 		overflowEnvelope.classList.add('plot-figure-fit')

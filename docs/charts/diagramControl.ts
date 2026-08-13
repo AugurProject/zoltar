@@ -28,6 +28,10 @@ export function hasDiagramOverflow(clientWidth: number, scrollWidth: number): bo
 	return scrollWidth > clientWidth + 1
 }
 
+export function centeredDiagramScrollLeft(clientWidth: number, scrollWidth: number): number {
+	return Math.max(0, (scrollWidth - clientWidth) / 2)
+}
+
 export function diagramBackgroundElements(dialog: Element): HTMLElement[] {
 	const background: HTMLElement[] = []
 	const document = dialog.ownerDocument
@@ -76,8 +80,11 @@ export function restoreDiagramAttributes(diagram: Element, attributes: DiagramAt
 }
 
 export function updateDiagramControl(button: DiagramAction, cue: DiagramCue, isExpanded: boolean): void {
-	button.textContent = isExpanded ? 'Close full screen' : 'View full screen'
+	const actionLabel = isExpanded ? 'Exit full-screen diagram' : 'View diagram full screen'
+	button.textContent = isExpanded ? 'Exit full screen' : 'Full screen'
 	button.removeAttribute('aria-pressed')
 	button.setAttribute('aria-expanded', String(isExpanded))
+	button.setAttribute('aria-label', actionLabel)
+	button.setAttribute('title', actionLabel)
 	cue.textContent = isExpanded ? 'Scroll to inspect detailed labels. Press Escape to close.' : 'Use full screen to inspect detailed labels.'
 }
