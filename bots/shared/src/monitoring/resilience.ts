@@ -15,7 +15,7 @@ export function operationalFailureDisposition(error: unknown): OperationalFailur
 	if (error instanceof ConnectivityDegradedError || error instanceof RpcEndpointPoolFailure) return 'connectivity-degraded'
 	if (error instanceof EndpointCheckFailure) {
 		const failedChecks = error.checks.filter(check => check.status === 'failed')
-		if (failedChecks.length !== 0 && failedChecks.every(check => operationalFailureDisposition(new Error(check.error ?? 'endpoint check failed')) === 'connectivity-degraded')) return 'connectivity-degraded'
+		if (failedChecks.length !== 0 && failedChecks.every(check => check.failureDisposition === 'connectivity-degraded')) return 'connectivity-degraded'
 		return 'safety-paused'
 	}
 	if (error instanceof RpcError) {

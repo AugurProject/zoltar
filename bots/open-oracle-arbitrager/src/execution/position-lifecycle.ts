@@ -59,6 +59,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			await persistPosition(activePosition)
 			if (activePosition.status === 'recovery-required') throw new Error('Successful public entry receipt does not match the durable execution intent and executor event')
 		} catch (error) {
+			if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 			const targetBlockNumber = activePosition.entrySubmissionBlockNumber === undefined ? undefined : BigInt(activePosition.entrySubmissionBlockNumber) + 1n
 			if (activePosition.entrySubmissionMode !== undefined && targetBlockNumber !== undefined && attemptHasFinality(blockNumber, targetBlockNumber)) {
 				try {
@@ -83,6 +84,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		try {
 			recovered = await recoverPendingLifecycleWithQuorum(readClients, config, activePosition, blockNumber)
 		} catch (error) {
+			if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 			throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 		}
 		await persistPosition(recovered)
@@ -241,6 +243,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			await persistPosition(recovered)
 			return recovered.status === 'closed' ? ('processed' as const) : ('progressed' as const)
 		} catch (error) {
+			if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 			throw new Error(`Pending position ${activePosition.reportId} public lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 		}
 	}

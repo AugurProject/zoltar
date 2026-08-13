@@ -60,10 +60,10 @@ describe('shared bot primitives', () => {
 	test('gives endpoint safety failures precedence over simultaneous transport failures', () => {
 		const checkedAt = new Date(0).toISOString()
 		const mixedFailure = new EndpointCheckFailure('wrong chain; fetch failed', [
-			{ chainId: 1, checkedAt, error: 'Expected chain 11155111, received 1', kind: 'public-rpc', status: 'failed', target: 'https://wrong.example' },
-			{ chainId: undefined, checkedAt, error: 'fetch failed', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' },
+			{ chainId: 1, checkedAt, error: 'Expected chain 11155111, received 1', failureDisposition: 'safety-paused', kind: 'public-rpc', status: 'failed', target: 'https://wrong.example' },
+			{ chainId: undefined, checkedAt, error: 'fetch failed', failureDisposition: 'connectivity-degraded', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' },
 		])
-		const offlineFailure = new EndpointCheckFailure('fetch failed', [{ chainId: undefined, checkedAt, error: 'fetch failed', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' }])
+		const offlineFailure = new EndpointCheckFailure('fetch failed', [{ chainId: undefined, checkedAt, error: 'fetch failed', failureDisposition: 'connectivity-degraded', kind: 'public-rpc', status: 'failed', target: 'https://offline.example' }])
 		expect(operationalFailureDisposition(mixedFailure)).toBe('safety-paused')
 		expect(operationalFailureDisposition(offlineFailure)).toBe('connectivity-degraded')
 	})

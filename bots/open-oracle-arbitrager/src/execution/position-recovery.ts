@@ -79,7 +79,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
 	} catch (error) {
 		if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
-		if (!publicEntry && !(atomicPrivateEntry && executorReceipt.status === 'reverted')) throw new Error('Executor hedge event is missing from the durable entry receipt')
+		if (!publicEntry && !atomicPrivateEntry) throw new Error('Executor hedge event is missing from the durable entry receipt')
 	}
 	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
 		if ((publicEntry || atomicPrivateEntry) && executorReceipt.status === 'reverted') {
@@ -102,7 +102,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 				receipts,
 			}
 		}
-		if (publicEntry) {
+		if (publicEntry || atomicPrivateEntry) {
 			return {
 				position: {
 					...position,
@@ -353,11 +353,11 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		}
 		const expectedAmount = BigInt(position.replacementCreditAmount)
 		if (execution.account.toLowerCase() !== position.account.toLowerCase() || execution.reportId.toString() !== position.reportId || execution.token.toLowerCase() !== position.replacementCreditToken.toLowerCase() || execution.amount !== expectedAmount) {
-			throw new Error('Replacement-credit executor event does not match the durable position')
+			return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		}
 		const creditIsWeth = execution.token.toLowerCase() === config.network.weth.toLowerCase()
 		const creditIsPositionToken = execution.token.toLowerCase() === position.token.toLowerCase()
-		if (!creditIsWeth && !creditIsPositionToken) throw new Error('Replacement credit uses an unexpected token')
+		if (!creditIsWeth && !creditIsPositionToken) return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		return {
 			...accountedPosition,
 			closedAt: undefined,
@@ -382,7 +382,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		execution.amount1 !== expectedAttoWeth ||
 		execution.amount2 !== expectedToken
 	) {
-		throw new Error('Lifecycle executor event does not match the durable position')
+		return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 	}
 	return {
 		...accountedPosition,

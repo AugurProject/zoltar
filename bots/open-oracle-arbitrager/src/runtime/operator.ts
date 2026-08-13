@@ -613,7 +613,6 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								}
 							} catch (error) {
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = errorMessage(error)
 								selected.opportunity.decision = executionFailureDecision(error)
 								if (selected.opportunity.decision === 'execution-failed') {

@@ -205,8 +205,7 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 	})
 }
 
-function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerRewardAttoEth = 0n, offlineFinalityIndexes: readonly number[] = []) {
-	const account = getAddress('0x0000000000000000000000000000000000000002')
+function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerRewardAttoEth = 0n, offlineFinalityIndexes: readonly number[] = [], account = getAddress('0x0000000000000000000000000000000000000002')) {
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
 		eventName: 'LifecycleExecuted',
@@ -554,6 +553,19 @@ describe('entry crash recovery', () => {
 		expect(recovered.position.realizedNetProfitEth).toBe('-0.000021')
 	})
 
+	test('requires manual recovery for quorum-confirmed private entry receipts without executor evidence', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			entrySubmissionMode: 'private' as const,
+			gasExpenditures: [],
+			status: 'pending-entry' as const,
+		}
+		const recovered = await recoverPendingEntryWithQuorum(successfulMismatchedIntentClients(), recoveryConfiguration, position, 18)
+		expect(recovered.position.status).toBe('recovery-required')
+		expect(recovered.position.actualEntryGasCostEth).toBe('0.000021')
+	})
+
 	test('keeps a successful public replacement with different calldata in recovery after accounting gas', async () => {
 		const position = {
 			...confirmedPosition(),
@@ -809,5 +821,22 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(recovered.status).toBe('recovery-required')
 		expect(recovered.lifecycleReceiptRecovered).toBe(true)
 		expect(recovered.lifecycleTransactionHashes).toEqual([lifecycleTransactionHash])
+	})
+
+	test('requires manual recovery for a quorum-confirmed lifecycle event that contradicts the journal', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			status: 'withdrawing' as const,
+		}
+		const wrongAccount = getAddress('0x0000000000000000000000000000000000000003')
+		const recovered = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [], wrongAccount), recoveryConfiguration, position, 100n)
+		expect(recovered.status).toBe('recovery-required')
+		expect(recovered.lifecycleReceiptRecovered).toBe(true)
 	})
 })

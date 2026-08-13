@@ -134,6 +134,7 @@ describe('operator connectivity', () => {
 
 	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {
 		for (const error of [
+			{ code: -32_601, message: 'fetch failed with HTTP 500' },
 			{ code: -32_601, message: 'method not found' },
 			{ code: -32_004, message: 'Method not supported' },
 			{ code: -32_004, message: 'invalid params' },
@@ -150,7 +151,16 @@ describe('operator connectivity', () => {
 			await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_callBundle support')
 			expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
 			expect(state.endpointChecks[0]?.error).toContain(error.message)
+			expect(state.endpointChecks[0]?.failureDisposition).toBe('safety-paused')
 		}
+	})
+
+	test('keeps coded JSON-RPC failures safety-classified even when their message resembles transport loss', async () => {
+		const endpoint = rpc(() => Response.json({ error: { code: -32_000, message: 'fetch failed with HTTP 500' }, id: 1, jsonrpc: '2.0' }))
+		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+		await expect(updateConnectivityEndpointChecks(state, () => checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [endpoint], readRpcUrl: endpoint }), 1))).rejects.toThrow('fetch failed with HTTP 500')
+		expect(state.endpointChecks).toHaveLength(2)
+		expect(state.endpointChecks.every(check => check.failureDisposition === 'safety-paused')).toBe(true)
 	})
 
 	test('accepts structured signature and invalid-parameter errors as positive relay capability evidence', async () => {
