@@ -324,21 +324,21 @@ export class ScannerDatabase {
 	async eventsAfter(id: number, limit = 250): Promise<readonly LiveEvent[]> {
 		return await this.read(async (sql) => {
 			const rows = await sql`
-				WITH window AS (
+				WITH event_window AS (
 					SELECT state.pruned_through_id,
 						GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS latest_id
 					FROM live_event_state state WHERE singleton
 				), requested AS (
 					SELECT event.id, event.event, event.payload
-					FROM live_events event, window
-					WHERE ${id} >= window.pruned_through_id AND event.id > ${id}
+					FROM live_events event, event_window
+					WHERE ${id} >= event_window.pruned_through_id AND event.id > ${id}
 					ORDER BY event.id LIMIT ${limit}
 				)
 				SELECT id, event, payload FROM requested
 				UNION ALL
 				SELECT latest_id AS id, 'reset' AS event,
 					jsonb_build_object('reason', 'replay-window-expired', 'refreshRequired', true) AS payload
-				FROM window WHERE ${id} < pruned_through_id
+				FROM event_window WHERE ${id} < pruned_through_id
 				ORDER BY id
 			`
 			return rows.map((row: Record<string, unknown>) => ({ id: Number(row['id']), event: String(row['event']), payload: row['payload'] }))
