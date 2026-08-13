@@ -687,8 +687,8 @@
 							<td><code>sweepResidualRepToSecurityPool()</code></td>
 							<td>Anyone</td>
 							<td>Final outcome; no unresolved principal; no vault escrow; positive residual balance.</td>
-							<td>Returns otherwise stranded residual REP to the owning pool.</td>
-							<td><code>ResidualRepSweptToSecurityPool</code></td>
+							<td>Returns ordinary-game residual REP to the owning pool. Burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.</td>
+							<td><code>ResidualRepSweptToSecurityPool</code> for an ordinary game; <code>ForkContinuationResidualRepBurned</code> for a fork continuation</td>
 						</tr>
 					</tbody>
 				</table>

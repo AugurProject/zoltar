@@ -118,6 +118,7 @@ const eventSourceByName: Record<string, string> = {
 	RepBurned: 'solidity/contracts/Zoltar.sol',
 	RepEthPriceSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	ForkContinuationResidualRepBurned: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SecurityPoolForkSnapshot: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	SecurityPoolRegistered: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
@@ -336,7 +337,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'f73cedceb07d7243fbd91f9e0bdd7c5f19a886ba391f5e8bcd115408d9489206'
+const referencedEventAbiFingerprint = 'c209c24aef4071e13c7598ed7b8a6dc733f3946e8646307befa3c9a60387ff72'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -1376,10 +1377,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`sweepResidualRepToSecurityPool()`',
 				caller: 'Anyone',
-				effect: 'Returns otherwise stranded residual REP to the owning pool.',
+				effect: 'Returns ordinary-game residual REP to the owning pool. Burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.',
 				declarations: [{ name: 'sweepResidualRepToSecurityPool', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				preconditions: 'Final outcome; no unresolved principal; no vault escrow; positive residual balance.',
-				signals: '`ResidualRepSweptToSecurityPool`',
+				signals: '`ResidualRepSweptToSecurityPool` for an ordinary game; `ForkContinuationResidualRepBurned` for a fork continuation',
 			},
 		],
 	},
