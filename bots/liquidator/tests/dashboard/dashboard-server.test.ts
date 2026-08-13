@@ -130,7 +130,6 @@ describe('liquidator dashboard server', () => {
 				totalCapacityOwnershipRep: '12',
 				totalPoolHeldRep: '13',
 				truncatedVaults: false,
-				universeId: '14',
 			},
 		])
 	})

@@ -31,7 +31,6 @@ type Pool = {
 	totalCapacityOwnershipRep: string
 	totalPoolHeldRep: string
 	truncatedVaults: boolean
-	universeId: string
 }
 
 type Universe = {
@@ -68,7 +67,6 @@ type MarketConsensus = {
 	priceRepPerEth?: string
 	reasons: string[]
 	reliable: boolean
-	sourceCount: number
 }
 
 type MarketSourceRow = {

@@ -120,7 +120,7 @@ function publicCentralizedMarket(value: unknown) {
 }
 
 function publicMarketConsensus(value: unknown) {
-	const consensus = publicFields(value, ['priceRepPerEth', 'reasons', 'reliable', 'sourceCount'])
+	const consensus = publicFields(value, ['priceRepPerEth', 'reasons', 'reliable'])
 	const source = record(value)
 	if (source === undefined) return consensus
 	for (const group of ['cex', 'dex'] as const) {
@@ -130,7 +130,7 @@ function publicMarketConsensus(value: unknown) {
 }
 
 function publicPool(value: unknown) {
-	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep', 'truncatedVaults', 'universeId'])
+	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep', 'truncatedVaults'])
 	const source = record(value)
 	if (source === undefined) return pool
 	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipRep', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
