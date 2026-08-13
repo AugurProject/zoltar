@@ -222,22 +222,33 @@ type BootstrapDescendantAddresses = {
 	escalationGameProofVerifier: Address
 	liquidationApprovalRegistryDeployer: Address
 	liquidationApprovalRegistryImplementation: Address
+	priceCoordinatorCreationCodeFirstChunk: Address
+	priceCoordinatorCreationCodeSecondChunk: Address
 	priceCoordinatorDeploymentWorker: Address
+	securityPoolCreationCodeFirstChunk: Address
+	securityPoolCreationCodeSecondChunk: Address
+	securityPoolDeploymentWorker: Address
 }
 
 export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
 	const infrastructure = getInfraContractAddresses(profile)
 	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
+	const priceCoordinatorDeploymentWorker = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n })
 	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
+	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 2n })
 	return {
 		liquidationApprovalRegistryDeployer,
 		liquidationApprovalRegistryImplementation: getCreateAddress({ from: liquidationApprovalRegistryDeployer, nonce: 1n }),
-		priceCoordinatorDeploymentWorker: getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }),
+		priceCoordinatorDeploymentWorker,
+		priceCoordinatorCreationCodeFirstChunk: getCreateAddress({ from: priceCoordinatorDeploymentWorker, nonce: 1n }),
+		priceCoordinatorCreationCodeSecondChunk: getCreateAddress({ from: priceCoordinatorDeploymentWorker, nonce: 2n }),
 		escalationGameCreationCodePartOne: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 2n }),
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
 		securityPoolDeployer,
-		securityPoolDeploymentWorker: getCreateAddress({ from: securityPoolDeployer, nonce: 2n }),
+		securityPoolDeploymentWorker,
+		securityPoolCreationCodeFirstChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 1n }),
+		securityPoolCreationCodeSecondChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 2n }),
 		securityPoolEventEmitter: getCreateAddress({ from: securityPoolDeployer, nonce: 1n }),
 		securityPoolForkerEscalationGameForkerDelegate: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 2n }),
 		securityPoolForkerEventEmitter: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 3n }),
