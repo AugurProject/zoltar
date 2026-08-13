@@ -3774,6 +3774,12 @@ body.paper-zoltar .footer-note {
 		display: block;
 		margin-bottom: 0.2rem;
 	}
+
+	body.doc-openoracle .docs-responsive-table td > code:only-child {
+		max-width: 100%;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
 }
 
 .docs-overflow-cue {
