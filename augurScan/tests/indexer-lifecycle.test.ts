@@ -257,7 +257,7 @@ describe('network indexer lifecycle', () => {
 				fetchFn: async (_input, init) => {
 					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
 					requestedMethods.push(body.method)
-					if (body.method === 'fail') throw new Error('expected transport failure')
+					if (body.method === 'eth_getLogs') throw new Error('expected transport failure')
 					return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method })
 				},
 				retryCount: 0,
@@ -280,11 +280,41 @@ describe('network indexer lifecycle', () => {
 		await blocker
 		expect(await delayed).toBe('delayed')
 
-		const failed = transport.request({ method: 'fail' })
+		const failed = transport.request({ method: 'eth_getLogs' })
 		const afterFailure = transport.request({ method: 'after-failure' })
-		await expect(failed).rejects.toThrow()
+		let transportFailure: unknown
+		try {
+			await failed
+		} catch (error) {
+			transportFailure = error
+		}
+		expect(safeIndexerFailureReason(transportFailure)).toContain('method eth_getLogs')
 		expect(await afterFailure).toBe('after-failure')
-		expect(requestedMethods).toEqual(['delayed', 'fail', 'after-failure'])
+		expect(requestedMethods).toEqual(['delayed', 'eth_getLogs', 'after-failure'])
+	})
+
+	test('attributes a failed RPC batch to each request method independently', async () => {
+		let fetches = 0
+		const transport = withRpcRequestQueue(
+			http('https://rpc.example', {
+				batch: { batchSize: 50, wait: 0 },
+				fetchFn: async () => {
+					fetches++
+					throw new Error('shared batch failure')
+				},
+				retryCount: 0,
+			}),
+			createRpcRequestQueue(5),
+		)({})
+		const results = await Promise.allSettled([transport.request({ method: 'eth_getLogs' }), transport.request({ method: 'eth_chainId' })])
+		const reasonFrom = (result: PromiseSettledResult<unknown>): string => {
+			if (result.status !== 'rejected') throw new Error('Expected the RPC batch request to fail')
+			return safeIndexerFailureReason(result.reason)
+		}
+
+		expect(fetches).toBe(1)
+		expect(reasonFrom(results[0])).toContain('method eth_getLogs')
+		expect(reasonFrom(results[1])).toContain('method eth_chainId')
 	})
 
 	test('forwards viem request options through the RPC queue', async () => {
@@ -1008,6 +1038,19 @@ describe('network indexer lifecycle', () => {
 		expect(reason).not.toContain(secret)
 		expect(reason).not.toContain('rpc.example')
 		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
+	})
+
+	test('retains viem unknown-node diagnostics for provider RPC failures', () => {
+		const secret = 'provider-key-sentinel'
+		const error = Object.assign(new Error(`request failed at https://rpc.example/${secret}`), {
+			name: 'UnknownNodeError',
+			shortMessage: 'request rate exceeded',
+		})
+
+		const reason = safeIndexerFailureReason(error)
+		expect(reason).toBe('UnknownNodeError; message: provider rate limit exceeded')
+		expect(reason).not.toContain(secret)
+		expect(reason).not.toContain('rpc.example')
 	})
 
 	test('identifies the active RPC number after provider failover', async () => {

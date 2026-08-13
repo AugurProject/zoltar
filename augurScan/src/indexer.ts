@@ -170,6 +170,17 @@ type RpcRequestQueue = {
 	readonly run: <T>(operation: () => Promise<T>) => Promise<T>
 }
 
+class RpcRequestMethodError extends Error {
+	override name = 'RpcRequestMethodError'
+
+	constructor(
+		readonly method: string,
+		cause: unknown,
+	) {
+		super('RPC method failed', { cause })
+	}
+}
+
 type RpcQueueSaturation = {
 	readonly active: number
 	readonly pending: number
@@ -251,7 +262,13 @@ export const withRpcRequestQueue =
 		const configured = transport(parameters)
 		return {
 			...configured,
-			request: async (request, options) => await queue.run(() => configured.request(request, options)),
+			request: async (request, options) => {
+				try {
+					return await queue.run(() => configured.request(request, options))
+				} catch (error) {
+					throw new RpcRequestMethodError(request.method, error)
+				}
+			},
 		}
 	}
 
@@ -748,6 +765,7 @@ const safeErrorNames = new Set([
 	'SocketError',
 	'TimeoutError',
 	'TypeError',
+	'UnknownNodeError',
 	'UnknownRpcError',
 ])
 
@@ -789,6 +807,21 @@ const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, ''))
 }
 
+const safeRpcRequestMethod = (value: unknown): string | undefined =>
+	typeof value === 'string' && /^(?:eth|net|web3)_[A-Za-z0-9_]+$/u.test(value) ? value : undefined
+
+const rpcRequestMethodFrom = (error: unknown): string | undefined => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		const method = current instanceof RpcRequestMethodError ? safeRpcRequestMethod(current.method) : undefined
+		if (method !== undefined) return method
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return undefined
+}
+
 export const safeIndexerFailureReason = (error: unknown): string => {
 	const saturation = rpcQueueSaturationFrom(error)
 	if (saturation !== undefined)
@@ -819,6 +852,8 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	const category = rpcErrorCategory(error)
 	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
 	const details = [names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
+	const method = rpcRequestMethodFrom(error)
+	if (method !== undefined) details.push(`method ${method}`)
 	if (status !== undefined) details.push(`HTTP ${status}`)
 	if (code !== undefined) details.push(`code ${code}`)
 	if (message !== undefined) details.push(`message: ${message}`)
