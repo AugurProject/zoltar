@@ -1675,7 +1675,7 @@
 						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be settled until effective unresolved principal is zero for every outcome and <code>totalDisputeStakedAttoRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition. Ordinary-game residual returns to the pool, while fork-continuation residual is burned and cannot accrue to child-local backing units.</div>
+							<div class="invariant-property">Residual REP cannot be settled until effective unresolved principal is zero for every outcome. For a continuation, the sweep first retires its inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>; after that retirement, no local dispute stake or vault escrow may remain in <code>totalDisputeStakedAttoRep</code>. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition. Ordinary-game residual returns to the pool, while fork-continuation residual is burned and cannot accrue to child-local backing units.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
 							<dl class="invariant-metadata">
 								<div>

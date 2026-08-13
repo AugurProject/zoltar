@@ -403,7 +403,7 @@
 						</tr>
 						<tr>
 							<td>Residual sweep</td>
-							<td>Once a game is final, unresolved principal is cleared, and no escrow remains, its residual can be settled. An ordinary game's residual returns to the security pool. A fork continuation burns its entire residual, which can include inherited capital that must not accrue to child-local owners. This rule prevents capture by a late depositor and stranding in an ownerless fixed child.</td>
+							<td>Once a game is final and unresolved principal is cleared, its residual can be settled. A continuation sweep first retires its inherited aggregate carry; after that, no local dispute stake or vault escrow may remain. An ordinary game's residual returns to the security pool. A fork continuation burns its entire residual, which can include inherited capital that must not accrue to child-local owners. This rule prevents capture by a late depositor and stranding in an ownerless fixed child.</td>
 							<td>
 								<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a>
 							</td>
