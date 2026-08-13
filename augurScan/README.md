@@ -44,6 +44,8 @@ bun run dev
 
 Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving. Migration 005 introduces range-index dataset cursors and rejects an older database if it has an indexed network checkpoint or any block row. No legacy checkpoint or activity compatibility is retained. For the Compose setup, run `docker compose down --volumes` to delete the old database, then `docker compose up --build` to rebuild it from each network's verified start block. A database without a checkpoint or block row migrates in place.
 
+`POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
+
 The standalone package centralizes its `viem` runtime dependency in `src/viem-runtime.js`; application and test code import Ethereum primitives through `src/ethereum.ts`. `bun run check:ethereum-imports` enforces that boundary across TypeScript and JavaScript sources without requiring parent-repository files in the Docker build context.
 
 The default test suite runs without infrastructure. To exercise migration, checkpoint restart, dynamic discovery persistence, reorg/orphan retention, and current-chain API results, start a separate disposable PostgreSQL container and run the integration test against it:
@@ -111,6 +113,12 @@ Version 0.1 indexes transactions selected by protocol-emitter logs and every kno
 - Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`
 - Question usage: `GET /api/v1/state/questions/:chainId/:questionId`
 - Universe history: `GET /api/v1/state/universes/:chainId/:universeId`
+
+`GET /health/indexers` includes process-local `ownership` diagnostics for every indexer that has attempted ownership. `failuresTotal` and `reacquisitionsTotal` are counters since process start; `consecutiveFailures`, `lastFailureAt`, and `lastFailureStage` identify an active recovery loop; `active` and `backendPid` identify the session currently used by this replica. These fields are operational diagnostics, not durable protocol data, and reset when the app restarts.
+
+Ownership failures identify the network, lifecycle stage (`acquire`, `verify`, `seed`, `owned-run`, `record-failure`, or `release`), consecutive failure count, retry delay, backend PID when known, and a sanitized reason. Rapid failures use jittered exponential backoff capped at five minutes. A successful takeover or reconnection emits an `indexer ownership reacquired` log before indexing resumes. `standby` remains the expected state when another replica owns the chain's lease and is not reported as a failure.
+
+For `acquire` or `owned-run` connection errors, restore PostgreSQL connectivity and allow the loop to reacquire from its last committed checkpoint; incomplete block transactions roll back and do not require a rebuild. A repeated `verify` error that says the backend moved requires a direct endpoint or session-mode pooler. A repeated `seed` `DatabaseConsistencyError` about the configured start block requires restoring the prior start-block setting or deliberately rebuilding the derived database from the new boundary. Do not delete the database merely for a transient lease loss.
 
 The pool-history response adds these price members. Their exact JSON shapes are:
 
