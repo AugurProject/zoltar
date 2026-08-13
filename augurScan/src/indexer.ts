@@ -196,6 +196,17 @@ export class RpcQueueSaturatedError extends Error {
 	}
 }
 
+const rpcQueueSaturationFrom = (error: unknown): RpcQueueSaturatedError | undefined => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if (current instanceof RpcQueueSaturatedError) return current
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return undefined
+}
+
 export const createRpcRequestQueue = (concurrency: number, maximumPending = RPC_MAX_PENDING): RpcRequestQueue => {
 	if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('RPC concurrency must be a positive safe integer')
 	if (!Number.isSafeInteger(maximumPending) || maximumPending < 0) throw new Error('RPC maximum pending count must be a non-negative safe integer')
@@ -397,6 +408,7 @@ export const planDeploymentAwareLogScan = async (
 				observations: [observation],
 			}
 		} catch (error) {
+			if (rpcQueueSaturationFrom(error) !== undefined) throw error
 			onDetectionFailure(contract, error)
 			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
 			return {
@@ -652,7 +664,7 @@ const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError
 const leaseFailureNames = new Set([...databaseFailureNames, 'LeaseLostError'])
 
 export const isLocalIndexerFailure = (error: unknown): boolean =>
-	error instanceof LeaseLostError || error instanceof RpcQueueSaturatedError || errorChainIncludes(error, databaseFailureNames)
+	error instanceof LeaseLostError || rpcQueueSaturationFrom(error) !== undefined || errorChainIncludes(error, databaseFailureNames)
 
 export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
 	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
@@ -709,7 +721,7 @@ export const indexerProgressMessage = (
 export const safeIndexerFailure = (error: unknown): string => {
 	if (error instanceof ChainConfigurationError) return error.message
 	if (error instanceof ChainContinuityError) return 'The remote canonical chain changed while indexing; retrying'
-	if (error instanceof RpcQueueSaturatedError) return rpcQueueSaturatedMessage
+	if (rpcQueueSaturationFrom(error) !== undefined) return rpcQueueSaturatedMessage
 	if (errorChainIncludes(error, databaseFailureNames)) return databaseFailureMessage
 	return 'RPC request failed; retrying'
 }
@@ -778,8 +790,9 @@ const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 }
 
 export const safeIndexerFailureReason = (error: unknown): string => {
-	if (error instanceof RpcQueueSaturatedError)
-		return `RpcQueueSaturatedError; active ${error.active}; queued ${error.pending}; maximum queued ${error.maximumPending}; high-water mark ${error.highWaterMark}; saturation count ${error.saturationCount}`
+	const saturation = rpcQueueSaturationFrom(error)
+	if (saturation !== undefined)
+		return `RpcQueueSaturatedError; active ${saturation.active}; queued ${saturation.pending}; maximum queued ${saturation.maximumPending}; high-water mark ${saturation.highWaterMark}; saturation count ${saturation.saturationCount}`
 	const names: string[] = []
 	let status: number | undefined
 	let code: string | undefined
@@ -1402,6 +1415,7 @@ class NetworkIndexer {
 								timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
 							}
 			} catch (error) {
+				if (rpcQueueSaturationFrom(error) !== undefined) throw error
 				console.warn(
 					`[${this.#network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.#rpcDiagnostics.activeNumber(), 'rpc')}`,
 				)

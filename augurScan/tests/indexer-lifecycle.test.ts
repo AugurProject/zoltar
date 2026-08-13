@@ -11,6 +11,7 @@ import {
 	type Address,
 	BaseError,
 	ContractFunctionExecutionError,
+	createPublicClient,
 	decodeFunctionResult,
 	HttpRequestError,
 	http,
@@ -192,6 +193,60 @@ describe('network indexer lifecycle', () => {
 		expect(safeIndexerFailureReason(saturation)).toBe(
 			'RpcQueueSaturatedError; active 5; queued 100; maximum queued 100; high-water mark 100; saturation count 1',
 		)
+	})
+
+	test('recognizes viem-wrapped queue saturation from a contract read without provider failover', async () => {
+		const queue = createRpcRequestQueue(1, 0)
+		let releaseActive: (() => void) | undefined
+		const active = queue.run(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseActive = resolve
+				}),
+		)
+		let fetches = 0
+		const client = createPublicClient({
+			transport: withRpcRequestQueue(
+				http('https://rpc.example', {
+					fetchFn: async () => {
+						fetches++
+						return Response.json({ id: 1, jsonrpc: '2.0', result: '0x' })
+					},
+					retryCount: 0,
+				}),
+				queue,
+			),
+		})
+		const providers = [
+			{ getChainId: async () => 1, id: 'first' },
+			{ getChainId: async () => 1, id: 'second' },
+		]
+		const verified = new WeakSet(providers)
+		const attempts: string[] = []
+		let wrapped: unknown
+
+		try {
+			await withVerifiedProvider(
+				providers,
+				1,
+				async (provider) => {
+					attempts.push(provider.id)
+					return await client.readContract({ address, abi: metadataAbi, functionName: 'decimals' })
+				},
+				isLocalIndexerFailure,
+				() => {},
+				verified,
+			)
+		} catch (error) {
+			wrapped = error
+		}
+		expect(wrapped).toBeDefined()
+		expect(attempts).toEqual(['first'])
+		expect(fetches).toBe(0)
+		expect(safeIndexerFailure(wrapped)).toBe('RPC queue saturated; retrying')
+		expect(safeIndexerFailureReason(wrapped)).toContain('RpcQueueSaturatedError; active 1; queued 0; maximum queued 0')
+		releaseActive?.()
+		await active
 	})
 
 	test('starts transport timeouts after dequeue and releases rejected operations', async () => {
@@ -643,6 +698,44 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('propagates wrapped queue saturation instead of falling back during deployment detection', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const saturation = new RpcQueueSaturatedError({ active: 5, highWaterMark: 100, maximumPending: 100, pending: 100, saturationCount: 1 })
+		const wrapped = new Error('contract read failed', { cause: saturation })
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => {
+					throw wrapped
+				},
+				async () => new Date(0),
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(wrapped)
+		expect(failures).toEqual([])
+
+		const controller = new AbortController()
+		const messages: string[] = []
+		await runNetworkLifecycle({
+			verify: async () => {},
+			poll: async () => {
+				throw wrapped
+			},
+			failure: async (message) => {
+				messages.push(message)
+				controller.abort()
+			},
+			intervalMs: 1,
+			signal: controller.signal,
+		})
+		expect(messages).toEqual(['RPC queue saturated; retrying'])
 	})
 
 	test('plans a manifest backfill from a newly added contract deployment', async () => {
