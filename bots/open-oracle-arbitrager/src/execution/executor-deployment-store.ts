@@ -47,12 +47,35 @@ export async function parseExecutorDeploymentIntent(value: unknown): Promise<Exe
 	}
 }
 
-export async function loadExecutorDeploymentIntent(path: string) {
+type DeploymentIntentReadFilesystem = {
+	open(path: string, flags: 'r'): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
+	readFile(path: string, encoding: 'utf8'): Promise<string>
+}
+
+async function syncExistingParentDirectory(path: string, filesystem: DeploymentIntentReadFilesystem) {
+	let directory
+	try {
+		directory = await filesystem.open(dirname(path), 'r')
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
+		throw error
+	}
+	try {
+		await directory.sync()
+	} finally {
+		await directory.close()
+	}
+}
+
+export async function loadExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentReadFilesystem = { open, readFile }) {
 	let contents: string
 	try {
-		contents = await readFile(path, 'utf8')
+		contents = await filesystem.readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return undefined
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+			await syncExistingParentDirectory(path, filesystem)
+			return undefined
+		}
 		throw error
 	}
 	return parseExecutorDeploymentIntent(JSON.parse(contents))
@@ -83,36 +106,20 @@ export async function saveExecutorDeploymentIntent(path: string, intent: Executo
 	}
 }
 
-type DeploymentIntentFilesystem = {
-	open(path: string, flags: 'r'): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
-	readFile(path: string, encoding: 'utf8'): Promise<string>
+type DeploymentIntentFilesystem = DeploymentIntentReadFilesystem & {
 	rm(path: string, options: { force: true }): Promise<void>
 }
 
 export async function clearExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentFilesystem = { open, readFile, rm }) {
-	const syncParentDirectory = async () => {
-		let directory
-		try {
-			directory = await filesystem.open(dirname(path), 'r')
-		} catch (error) {
-			if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
-			throw error
-		}
-		try {
-			await directory.sync()
-		} finally {
-			await directory.close()
-		}
-	}
 	try {
 		await filesystem.readFile(path, 'utf8')
 	} catch (error) {
 		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-			await syncParentDirectory()
+			await syncExistingParentDirectory(path, filesystem)
 			return
 		}
 		throw error
 	}
 	await filesystem.rm(path, { force: true })
-	await syncParentDirectory()
+	await syncExistingParentDirectory(path, filesystem)
 }

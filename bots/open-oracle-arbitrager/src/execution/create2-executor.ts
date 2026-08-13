@@ -162,10 +162,10 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 			'executor deployment gas estimate',
 			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await estimateRpcTransactionGas(rpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }) })),
 		)
-		const settledGasPrices = await Promise.allSettled(readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcGasPrice(rpcUrl) })))
-		const gasPrices = availableSettledValues(settledGasPrices)
-		if (gasPrices.length < 2) throw new ConnectivityDegradedError('Executor deployment gas price requires at least two available independent RPC endpoints')
-		const gasPrice = gasPrices.reduce((maximum, observation) => (observation.value > maximum ? observation.value : maximum), 0n)
+		const gasPrice = await settledQuorumValue(
+			'executor deployment gas price',
+			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcGasPrice(rpcUrl) })),
+		)
 		const signTransaction = account.signTransaction
 		if (signTransaction === undefined) throw new Error('Executor deployment requires a local transaction signer')
 		const serializedTransaction = await signTransaction({ chainId: parameters.chain.id, data: plan.calldata, gas, gasPrice, nonce, to: deterministicDeploymentProxy })

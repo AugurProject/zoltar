@@ -9,7 +9,7 @@ import { loadOperatorSettings, type PersistedOperatorSettings } from '#config/se
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
-const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
+export const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
 export function assertDistinctPersistentPaths(settingsFile: string, runtime: Pick<PersistedOperatorSettings['runtime'], 'historyFile' | 'positionFile' | 'priceHistoryFile'>) {
 	const persistentPaths = [settingsFile, runtime.historyFile, runtime.positionFile, runtime.priceHistoryFile].map(path => resolve(path))

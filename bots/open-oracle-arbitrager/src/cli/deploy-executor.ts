@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
 import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
+import { defaultConfigurationFile } from '#config/configuration'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
 
 function option(name: string) {
@@ -24,7 +26,6 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
   --network=mainnet|sepolia
   --rpc-url=https://...
   --quorum-rpc-url=https://... Repeat twice with independent origins
-  --intent-file=path           Durable deployment recovery journal
   --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
 The command predicts and deploys the stateless executor through the canonical
@@ -42,16 +43,22 @@ if (quorumRpcUrls.length !== 2) throw new Error('Executor deployment requires ex
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)
-const intentPath = resolve(option('intent-file') ?? '.state/executor-deployment.json')
+const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
+const intentPath = executorDeploymentIntentPath(settingsFile)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
-const deployment = await deployExecutorCreate2({
-	chain: network.chain,
-	existingIntent: await loadExecutorDeploymentIntent(intentPath),
-	persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
-	privateKey: privateKeyValue as Hex,
-	readRpcUrls: [rpcUrl, ...quorumRpcUrls],
-	rpcUrls: [rpcUrl],
-	salt,
-})
-await clearExecutorDeploymentIntent(intentPath)
-console.log(`executor=${deployment.address} transaction=${deployment.transactionHash ?? 'already-deployed'}`)
+const signerLock = await acquireExecutionSignerLock(network.chain.id, account.address)
+try {
+	const deployment = await deployExecutorCreate2({
+		chain: network.chain,
+		existingIntent: await loadExecutorDeploymentIntent(intentPath),
+		persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
+		privateKey: privateKeyValue as Hex,
+		readRpcUrls: [rpcUrl, ...quorumRpcUrls],
+		rpcUrls: [rpcUrl],
+		salt,
+	})
+	await clearExecutorDeploymentIntent(intentPath)
+	console.log(`executor=${deployment.address} transaction=${deployment.transactionHash ?? 'already-deployed'}`)
+} finally {
+	await signerLock.release()
+}

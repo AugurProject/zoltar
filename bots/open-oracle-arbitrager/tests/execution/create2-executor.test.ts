@@ -5,7 +5,8 @@ import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
 import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
-import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutionSignerLock } from '#state/position-store'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -210,6 +211,42 @@ test('syncs the parent directory when retrying an intent clear after unlink alre
 	expect(closed).toBe(1)
 })
 
+test('syncs the parent directory before startup treats an absent intent as durably cleared', async () => {
+	let synced = 0
+	let closed = 0
+	await expect(
+		loadExecutorDeploymentIntent('/operator/deployment.json', {
+			open: () => Promise.resolve({ close: () => Promise.resolve(void (closed += 1)), sync: () => Promise.resolve(void (synced += 1)) }),
+			readFile: () => Promise.reject(Object.assign(new Error('missing after unlink'), { code: 'ENOENT' })),
+		}),
+	).resolves.toBeUndefined()
+	expect(synced).toBe(1)
+	expect(closed).toBe(1)
+})
+
+test('standalone deployment shares the operator signer lock and durable recovery path', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-cli-recovery-'))
+	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
+	const settingsFile = join(directory, 'operator.json')
+	const intentPath = executorDeploymentIntentPath(settingsFile)
+	const lock = await acquireExecutionSignerLock(1, account.address)
+	try {
+		await expect(acquireExecutionSignerLock(1, account.address)).rejects.toThrow('already locked')
+		const salt = `0x${'22'.repeat(32)}` as Hex
+		const plan = executorDeploymentPlan(salt)
+		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
+	} finally {
+		await lock.release()
+	}
+	try {
+		await expect(requireNoPendingExecutorDeployment(settingsFile)).rejects.toThrow('Recover the pending executor deployment')
+	} finally {
+		await clearExecutorDeploymentIntent(intentPath)
+		await rm(directory, { force: true, recursive: true })
+	}
+})
+
 test('requires three distinct read RPC origins inside the deployment primitive', async () => {
 	const common = {
 		chain: mainnet,
@@ -243,14 +280,14 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 	expect(receivedRpcUrls).toEqual(publicRpcUrls)
 })
 
-async function runDeploymentScenario(options: { alreadyDeployed?: boolean; differingRecoveryHeads?: boolean; existingIntent?: boolean; primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
+async function runDeploymentScenario(options: { alreadyDeployed?: boolean; differingRecoveryHeads?: boolean; existingIntent?: boolean; gasPrices?: Partial<Record<'primary' | 'secondary' | 'tertiary', bigint>>; lifecycleEvents?: string[]; primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
 	const privateKey = `0x${'11'.repeat(32)}` as Hex
 	const account = privateKeyToAccount(privateKey)
 	const salt = `0x${'22'.repeat(32)}` as Hex
 	const plan = executorDeploymentPlan(salt)
 	const runtimeCode = `0x${executorArtifact.evm.deployedBytecode.object}` as Hex
 	const broadcastRequests: { transaction: Hex; url: string }[] = []
-	const lifecycleEvents: string[] = []
+	const lifecycleEvents = options.lifecycleEvents ?? []
 	let deployed = options.alreadyDeployed === true
 	let transactionHash = `0x${'00'.repeat(32)}` as Hex
 
@@ -291,7 +328,7 @@ async function runDeploymentScenario(options: { alreadyDeployed?: boolean; diffe
 		if (body.method === 'eth_getBlockByNumber') return rpcResponse(block(BigInt(String(body.params[0]))))
 		if (body.method === 'eth_getTransactionCount') return rpcResponse('0x0')
 		if (body.method === 'eth_estimateGas') return rpcResponse('0x300000')
-		if (body.method === 'eth_gasPrice') return name === 'primary' && options.primaryPreparationFails ? new Response('primary preparation unavailable', { status: 503 }) : rpcResponse('0x3b9aca00')
+		if (body.method === 'eth_gasPrice') return name === 'primary' && options.primaryPreparationFails ? new Response('primary preparation unavailable', { status: 503 }) : rpcResponse(`0x${(options.gasPrices?.[name] ?? 1_000_000_000n).toString(16)}`)
 		if (body.method === 'eth_getCode') {
 			const address = body.params[0]
 			if (typeof address !== 'string') return new Response('invalid address', { status: 400 })
@@ -383,6 +420,19 @@ test('persists before broadcasting and tolerates one unavailable preparation rea
 	expect(lifecycleEvents[0]).toBe('persist')
 	expect(broadcastRequests.map(request => request.url)).toEqual(['primary', 'secondary'])
 	expect(broadcastRequests[0]?.transaction).toBe(broadcastRequests[1]?.transaction)
+})
+
+test('rejects a divergent extreme deployment gas price before persistence or submission', async () => {
+	const lifecycleEvents: string[] = []
+	await expect(
+		runDeploymentScenario({
+			gasPrices: { tertiary: 10n ** 30n },
+			lifecycleEvents,
+			primaryPreparationFails: false,
+			primaryReceiptFails: false,
+		}),
+	).rejects.toThrow('RPC disagreement for executor deployment gas price')
+	expect(lifecycleEvents).toEqual([])
 })
 
 test('confirms through the secondary when the primary fails receipt polling after broadcast', async () => {

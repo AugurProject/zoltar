@@ -342,11 +342,13 @@ PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run
 
 The three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
-and gas estimate, then syncs the signed intent to
-`.state/executor-deployment.json`. Repeating the command with the same signer, chain,
-and salt recovers or rebroadcasts those exact bytes after a disconnect or crash; the
-journal is removed only after quorum-backed canonical finality. Use `--intent-file`
-when that default is not on durable storage.
+gas estimate, and gas price, then syncs the signed intent beside the active operator
+configuration as `<operator-config>.executor-deployment.json`. It also holds the same
+chain-and-signer process lock as the operator. Repeating the command with the same
+signer, chain, and salt recovers or rebroadcasts those exact bytes after a disconnect
+or crash; the journal is removed only after quorum-backed canonical finality. Set
+`OPEN_ORACLE_ARBITRAGER_CONFIG` when the operator configuration is not at its default
+path; both commands must use the same value.
 
 ### Executor ABI source
 
