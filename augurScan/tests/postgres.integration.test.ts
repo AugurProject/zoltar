@@ -13,6 +13,7 @@ import {
 	rewindDepth,
 	ScannerDatabase,
 	type StoredTransaction,
+	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
 import { migrate } from '../src/migrate.ts'
@@ -196,6 +197,15 @@ const indexedBlock = (
 }
 
 describe('database checkpoint fencing', () => {
+	test('keeps reserved advisory-lock sessions alive between RPC operations', () => {
+		expect(scannerDatabaseOptions(10, 5)).toEqual({
+			max: 10,
+			idleTimeout: 0,
+			maxLifetime: 0,
+			connectionTimeout: 5,
+		})
+	})
+
 	test('waits for asynchronous reserved connection release', async () => {
 		let finishRelease: (() => void) | undefined
 		let settled = false
