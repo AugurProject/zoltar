@@ -439,7 +439,7 @@ export const queryCanonicalLogRange = async <T>(
 }
 
 type ChainProvider = { readonly getChainId: () => Promise<number> }
-type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string }
+type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string; readonly number: number }
 
 export const rpcEndpointLabel = (rpcUrl: string): string => {
 	const url = new URL(rpcUrl)
@@ -653,6 +653,25 @@ export const safeIndexerFailureReason = (error: unknown): string => {
 	return details.join('; ')
 }
 
+const rpcFailureReason = (error: unknown, rpcNumber: number): string => `RPC #${rpcNumber}: ${safeIndexerFailureReason(error)}`
+
+type RpcDiagnosticProvider = Pick<RpcProvider, 'endpoint' | 'number'>
+
+export const createRpcDiagnosticContext = (initialProvider: RpcDiagnosticProvider) => {
+	let activeProvider = initialProvider
+	return {
+		activeEndpoint: (): string => activeProvider.endpoint,
+		activeNumber: (): number => activeProvider.number,
+		failureReason: (error: unknown): string => rpcFailureReason(error, activeProvider.number),
+		select: (provider: RpcDiagnosticProvider): void => {
+			activeProvider = provider
+		},
+	}
+}
+
+export const indexerOperationFailureReason = (error: unknown, rpcNumber: number, source: 'rpc' | 'storage'): string =>
+	source === 'rpc' ? rpcFailureReason(error, rpcNumber) : safeIndexerFailureReason(error)
+
 const deploymentReadTimeoutError = (): Error => {
 	const error = new Error('Contract deployment history read timed out')
 	error.name = 'TimeoutError'
@@ -807,7 +826,7 @@ class NetworkIndexer {
 	readonly #providers: readonly RpcProvider[]
 	readonly #verifiedProviders = new WeakSet<RpcProvider>()
 	#client: PublicClient
-	#activeRpcEndpoint: string
+	readonly #rpcDiagnostics: ReturnType<typeof createRpcDiagnosticContext>
 	#indexingStartReported = false
 	#lastProgressLogAt: number | undefined
 	#progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
@@ -822,12 +841,12 @@ class NetworkIndexer {
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
 			const client = createPublicClient({ transport: http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 }) })
-			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId() }
+			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId(), number: index + 1 }
 		})
 		const firstProvider = this.#providers[0]
 		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
 		this.#client = firstProvider.client
-		this.#activeRpcEndpoint = firstProvider.endpoint
+		this.#rpcDiagnostics = createRpcDiagnosticContext(firstProvider)
 	}
 
 	async run(): Promise<void> {
@@ -872,11 +891,13 @@ class NetworkIndexer {
 				return await operation()
 			},
 			(error) => error instanceof LeaseLostError || errorChainIncludes(error, databaseFailureNames),
-			(provider) => {
-				this.#activeRpcEndpoint = provider.endpoint
-			},
+			(provider) => this.#rpcDiagnostics.select(provider),
 			this.#verifiedProviders,
 		)
+	}
+
+	#rpcFailureReason(error: unknown): string {
+		return this.#rpcDiagnostics.failureReason(error)
 	}
 
 	async #recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
@@ -884,7 +905,7 @@ class NetworkIndexer {
 		const logMessage =
 			message === databaseFailureMessage
 				? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
-				: rpcFailureLogMessage(message, this.#activeRpcEndpoint, reason)
+				: rpcFailureLogMessage(message, this.#rpcDiagnostics.activeEndpoint(), reason)
 		this.#lastReportedPhase = 'degraded'
 		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
 	}
@@ -953,23 +974,43 @@ class NetworkIndexer {
 		const now = Date.now()
 		if (!contractDeploymentScanDue(this.#lastDeploymentScanAt, now)) return
 		try {
-			const candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
+			let candidate: ContractMetadata | undefined
+			try {
+				candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
+			} catch (error) {
+				console.warn(
+					`[${this.#network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.#rpcDiagnostics.activeNumber(), 'storage')}`,
+				)
+				return
+			}
 			if (candidate === undefined) return
-			const readWithinBudget = deploymentReadBudget()
-			const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
-				readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
-			)
-			const resolved =
-				deployment === undefined
-					? undefined
-					: {
-							...deployment,
-							timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
-						}
-			await this.#assertLease()
-			await this.#database.recordContractDeployment(this.#network.chainId, candidate.address, indexedBoundary, resolved, this.#requireLease())
-		} catch (error) {
-			console.warn(`[${this.#network.id}] contract deployment check skipped: ${safeIndexerFailureReason(error)}`)
+			let resolved: ContractDeploymentObservation['deployment']
+			try {
+				const readWithinBudget = deploymentReadBudget()
+				const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
+					readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+				)
+				resolved =
+					deployment === undefined
+						? undefined
+						: {
+								...deployment,
+								timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
+							}
+			} catch (error) {
+				console.warn(
+					`[${this.#network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.#rpcDiagnostics.activeNumber(), 'rpc')}`,
+				)
+				return
+			}
+			try {
+				await this.#assertLease()
+				await this.#database.recordContractDeployment(this.#network.chainId, candidate.address, indexedBoundary, resolved, this.#requireLease())
+			} catch (error) {
+				console.warn(
+					`[${this.#network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.#rpcDiagnostics.activeNumber(), 'storage')}`,
+				)
+			}
 		} finally {
 			this.#lastDeploymentScanAt = Date.now()
 		}
@@ -1239,7 +1280,7 @@ class NetworkIndexer {
 							async (blockNumber) => new Date(Number((await this.#client.getBlock({ blockNumber })).timestamp) * 1_000),
 							(contract, error) =>
 								console.warn(
-									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${safeIndexerFailureReason(error)}`,
+									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${this.#rpcFailureReason(error)}`,
 								),
 						)
 						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
@@ -1252,7 +1293,7 @@ class NetworkIndexer {
 			},
 			(failedFrom, failedTo, retryTo, error) =>
 				console.warn(
-					`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+					`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${this.#rpcFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
 				),
 			isSplittableLogRangeError,
 		)
@@ -1289,7 +1330,7 @@ class NetworkIndexer {
 				},
 				(failedFrom, failedTo, retryTo, error) =>
 					console.warn(
-						`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
+						`[${this.#network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${this.#rpcFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`,
 					),
 				isSplittableLogRangeError,
 			)
