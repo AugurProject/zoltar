@@ -790,6 +790,19 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 	}
 }
 
+type OwnedNetworkLifecycle = Omit<NetworkLifecycle, 'verify' | 'poll'> & {
+	readonly reconcile: () => Promise<void>
+	readonly poll: () => Promise<boolean>
+	readonly runWithProvider: <T>(operation: () => Promise<T>) => Promise<T>
+}
+
+export const runOwnedNetworkLifecycle = async ({ reconcile, poll, runWithProvider, ...lifecycle }: OwnedNetworkLifecycle): Promise<void> =>
+	await runNetworkLifecycle({
+		...lifecycle,
+		verify: () => runWithProvider(reconcile),
+		poll: () => runWithProvider(poll),
+	})
+
 type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'>
 
 type OwnershipLifecycle<TLease extends LeaseControl> = {
@@ -910,9 +923,10 @@ class NetworkIndexer {
 			runOwned: async (lease) => {
 				this.#lease = lease
 				try {
-					await runNetworkLifecycle({
-						verify: () => this.#withProviderFailover(() => this.#reconcileManifestBackfill()),
-						poll: () => this.#withProviderFailover(() => this.#poll()),
+					await runOwnedNetworkLifecycle({
+						reconcile: () => this.#reconcileManifestBackfill(),
+						poll: () => this.#poll(),
+						runWithProvider: (operation) => this.#withProviderFailover(operation),
 						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,

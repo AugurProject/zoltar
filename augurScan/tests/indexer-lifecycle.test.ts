@@ -45,6 +45,7 @@ import {
 	runIndexerOwnershipLifecycle,
 	runIndexerTask,
 	runNetworkLifecycle,
+	runOwnedNetworkLifecycle,
 	safeIndexerFailure,
 	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
@@ -964,8 +965,8 @@ describe('network indexer lifecycle', () => {
 		let reconciliationAttempts = 0
 		let polls = 0
 
-		await runNetworkLifecycle({
-			verify: async () => {
+		await runOwnedNetworkLifecycle({
+			reconcile: async () => {
 				reconciliationAttempts++
 				if (reconciliationAttempts === 1) throw new Error('temporary deployment lookup timeout with secret=provider-key-sentinel')
 			},
@@ -978,6 +979,7 @@ describe('network indexer lifecycle', () => {
 				failures.push(message)
 				reasons.push(reason)
 			},
+			runWithProvider: async (operation) => await operation(),
 			intervalMs: 1,
 			signal: controller.signal,
 			random: () => 0.5,
