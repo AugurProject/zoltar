@@ -19,10 +19,23 @@ const executor = address(0xecec)
 const pool = address(0x3000)
 const hash = transactionHash('open-oracle-documentation-fixture')
 const checkedAt = sampledAt(0)
+const protectedFailureMarker = 'operator-secret'
+let fixtureStatus: OperatorSnapshot['status'] = 'running'
+let paused = false
+let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
+let fixtureStateUnavailable = false
+let fixtureStateHanging = false
+let fixtureConnectivityFailure = false
+let fixtureConnectivityHanging = false
+let fixtureConfigurationHanging = false
+let fixtureConfigurationUnavailable = false
+let fixtureNetworkConfigured = true
+let fixturePauseHanging = false
+const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
 	const profile = await mkdtemp(join(tmpdir(), 'zoltar-open-oracle-docs-'))
-	const child = Bun.spawn([chromium, '--headless', '--disable-gpu', '--hide-scrollbars', '--no-sandbox', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], {
+	const child = Bun.spawn([chromium, '--headless', '--hide-scrollbars', '--no-sandbox', '--remote-debugging-port=0', '--run-all-compositor-stages-before-draw', `--user-data-dir=${profile}`, 'about:blank'], {
 		stderr: 'pipe',
 		stdout: 'ignore',
 	})
@@ -44,9 +57,12 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		})
 		let nextId = 1
 		const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
+		const runtimeDiagnostics: string[] = []
 		socket.addEventListener('message', event => {
 			const response: unknown = JSON.parse(String(event.data))
-			if (typeof response !== 'object' || response === null || !('id' in response) || typeof response.id !== 'number') return
+			if (typeof response !== 'object' || response === null) return
+			if ('method' in response && (response.method === 'Runtime.exceptionThrown' || response.method === 'Log.entryAdded')) runtimeDiagnostics.push(JSON.stringify(response))
+			if (!('id' in response) || typeof response.id !== 'number') return
 			const request = pending.get(response.id)
 			if (request === undefined) return
 			pending.delete(response.id)
@@ -60,19 +76,129 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				pending.set(id, { reject, resolve })
 				socket.send(JSON.stringify({ id, method, params, sessionId }))
 			})
-		const target = await command('Target.createTarget', { url: `${origin}/` })
-		if (typeof target !== 'object' || target === null || !('targetId' in target) || typeof target.targetId !== 'string') throw new Error('Chromium did not create a screenshot target')
-		const attachment = await command('Target.attachToTarget', { flatten: true, targetId: target.targetId })
-		if (typeof attachment !== 'object' || attachment === null || !('sessionId' in attachment) || typeof attachment.sessionId !== 'string') throw new Error('Chromium did not attach to the screenshot target')
-		const sessionId = attachment.sessionId
-		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: 900, mobile: false, width: 1440 }, sessionId)
-		await command('Page.enable', {}, sessionId)
+		let targetId = ''
+		let sessionId = ''
+		const replacePage = async (url: string, width: number, height: number) => {
+			if (targetId === '') {
+				const target = await command('Target.createTarget', { url: 'about:blank' })
+				if (typeof target !== 'object' || target === null || !('targetId' in target) || typeof target.targetId !== 'string') throw new Error('Chromium did not create a screenshot target')
+				targetId = target.targetId
+				const attachment = await command('Target.attachToTarget', { flatten: true, targetId })
+				if (typeof attachment !== 'object' || attachment === null || !('sessionId' in attachment) || typeof attachment.sessionId !== 'string') throw new Error('Chromium did not attach to the screenshot target')
+				sessionId = attachment.sessionId
+				await command('Page.enable', {}, sessionId)
+				await command('Runtime.enable', {}, sessionId)
+				await command('Log.enable', {}, sessionId)
+				await command('Page.addScriptToEvaluateOnNewDocument', { source: `window.setInterval = () => 0` }, sessionId)
+			}
+			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+			await command('Emulation.setVisibleSize', { height, width }, sessionId)
+			await command('Page.navigate', { url }, sessionId)
+			await command('Target.activateTarget', { targetId })
+			await command('Page.bringToFront', {}, sessionId)
+		}
+		const settlePaint = async () => {
+			await command('Target.activateTarget', { targetId })
+			await command('Page.bringToFront', {}, sessionId)
+			await command(
+				'Runtime.evaluate',
+				{
+					awaitPromise: true,
+					expression: `(async () => {
+						await document.fonts.ready
+						await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+					})()`,
+				},
+				sessionId,
+			)
+		}
+		const capturePng = async (name: string) => {
+			await settlePaint()
+			const capture = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true }, sessionId)
+			if (typeof capture !== 'object' || capture === null || !('data' in capture) || typeof capture.data !== 'string') throw new Error(`Chromium did not capture ${name}`)
+			const bytes = await Bun.write(join(outputDirectory, name), Buffer.from(capture.data, 'base64'))
+			if (bytes === 0) throw new Error(`Chromium wrote an empty ${name}`)
+		}
+		const assertResumeDialogStart = async (label: string, width: number) => {
+			const result = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const dialog = document.querySelector('#resume-dialog')
+						const title = document.querySelector('#resume-title')
+						const consequence = document.querySelector('#resume-dialog .dialog-body > .muted')
+						const firstCheck = document.querySelector('#resume-preflight li')
+						const actions = document.querySelector('#resume-dialog .dialog-actions')
+						const dialogRect = dialog?.getBoundingClientRect()
+						const titleRect = title?.getBoundingClientRect()
+						const consequenceRect = consequence?.getBoundingClientRect()
+						const firstCheckRect = firstCheck?.getBoundingClientRect()
+						return {
+							actionsReachable: dialog instanceof HTMLElement && actions instanceof HTMLElement && actions.offsetTop + actions.offsetHeight <= dialog.scrollHeight,
+							bodyScrollWidth: document.body.scrollWidth,
+							dialogBounded: dialogRect !== undefined && dialogRect.top >= 0 && dialogRect.bottom <= window.innerHeight && dialogRect.left >= 0 && dialogRect.right <= window.innerWidth,
+							focusedTitle: document.activeElement === title,
+							introVisible: [titleRect, consequenceRect, firstCheckRect].every(rect => rect !== undefined && rect.top >= 0 && rect.bottom <= window.innerHeight),
+							open: dialog?.hasAttribute('open'),
+							scrollTop: dialog instanceof HTMLElement ? dialog.scrollTop : undefined
+						}
+					})()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			const value = typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+			if (
+				typeof value !== 'object' ||
+				value === null ||
+				!('open' in value) ||
+				value.open !== true ||
+				!('focusedTitle' in value) ||
+				value.focusedTitle !== true ||
+				!('scrollTop' in value) ||
+				value.scrollTop !== 0 ||
+				!('dialogBounded' in value) ||
+				value.dialogBounded !== true ||
+				!('introVisible' in value) ||
+				value.introVisible !== true ||
+				!('actionsReachable' in value) ||
+				value.actionsReachable !== true ||
+				!('bodyScrollWidth' in value) ||
+				typeof value.bodyScrollWidth !== 'number' ||
+				value.bodyScrollWidth > width
+			) {
+				throw new Error(`${label} resume dialog lost its safety context: ${JSON.stringify(value)}`)
+			}
+		}
+		const readSafetyActionPositions = async () => {
+			const result = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => Object.fromEntries(['refresh-button', 'pause-button'].map(id => {
+						const element = document.getElementById(id)
+						if (!(element instanceof HTMLElement)) return [id, undefined]
+						const rect = element.getBoundingClientRect()
+						return [id, { bottom: rect.bottom, height: rect.height, left: rect.left, right: rect.right, top: rect.top, width: rect.width }]
+					})))()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+		}
+		const assertStableSafetyActions = (expected: unknown, actual: unknown, label: string) => {
+			if (expected === undefined || JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} moved mobile safety actions: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
+		}
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
-			['dashboard-markets.png', 'markets'],
-			['dashboard-markets-mobile.png', 'markets'],
-			['dashboard-opportunities.png', 'operations'],
-			['dashboard-opportunities-mobile.png', 'operations'],
+			['dashboard-markets.png', 'token-market-title'],
+			...(process.env['OPEN_ORACLE_CAPTURE_QA'] === '1'
+				? ([
+						['dashboard-markets-mobile.png', 'token-market-title'],
+						['dashboard-opportunities.png', 'operations'],
+						['dashboard-opportunities-mobile.png', 'operations'],
+					] as const)
+				: []),
 			...(process.env['OPEN_ORACLE_CAPTURE_DEPLOYMENT'] === '1'
 				? ([
 						['deployment-desktop.png', 'deployment-configuration'],
@@ -86,11 +212,17 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						['configuration-mobile.png', 'complete-configuration'],
 					] as const)
 				: []),
+			...(process.env['OPEN_ORACLE_CAPTURE_SETTINGS'] === '1'
+				? ([
+						['settings-desktop.png', 'settings'],
+						['settings-mobile.png', 'settings'],
+					] as const)
+				: []),
 		] as const) {
-			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png'
-			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: mobile ? 844 : 900, mobile: false, width: mobile ? 390 : 1440 }, sessionId)
-			await command('Page.navigate', { url: `${origin}/` }, sessionId)
-			await Bun.sleep(1_500)
+			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
+			const fragment = section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'settings' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
+			await replacePage(`${origin}/`, mobile ? 390 : 1440, mobile ? 844 : 900)
+			await Bun.sleep(750)
 			if (section !== undefined) {
 				await command(
 					'Runtime.evaluate',
@@ -98,18 +230,824 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						expression: `(() => {
 							const section = document.getElementById(${JSON.stringify(section)})
 							if (section === null) return
+							const fragment = ${JSON.stringify(fragment)}
+							const directFragment = section.id === fragment
+							if (directFragment) window.location.hash = fragment
+							else {
+								history.replaceState(null, '', '#' + fragment)
+								const links = [...document.querySelectorAll('.section-nav a[href^="#"]')]
+								const activeLink = links.find(link => link.getAttribute('href') === '#' + fragment)
+								for (const link of links) {
+									if (link === activeLink) link.setAttribute('aria-current', 'page')
+									else link.removeAttribute('aria-current')
+								}
+								const navigation = activeLink?.closest('.section-nav')
+								if (activeLink instanceof HTMLElement && navigation instanceof HTMLElement) {
+									const activeRect = activeLink.getBoundingClientRect()
+									const navigationRect = navigation.getBoundingClientRect()
+									navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+								}
+							}
+							if (section instanceof HTMLDetailsElement) section.open = true
+							section.closest('details')?.setAttribute('open', '')
 							for (const scroller of document.querySelectorAll('.table-scroll')) scroller.scrollLeft = 0
-							window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - 16))
+							if (!directFragment) {
+								const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
+								window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - offset))
+							}
 						})()`,
 					},
 					sessionId,
 				)
 				await Bun.sleep(250)
 			}
-			const capture = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true }, sessionId)
-			if (typeof capture !== 'object' || capture === null || !('data' in capture) || typeof capture.data !== 'string') throw new Error(`Chromium did not capture ${name}`)
-			await Bun.write(join(outputDirectory, name), Buffer.from(capture.data, 'base64'))
+			await settlePaint()
+			const layout = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const target = ${section === undefined ? 'undefined' : `document.getElementById(${JSON.stringify(section)})`}
+						const active = document.querySelector('.section-nav a[aria-current="page"]')
+						const navigation = document.querySelector('.section-nav')
+						const activeRect = active?.getBoundingClientRect()
+						const navigationRect = navigation?.getBoundingClientRect()
+						const safetyTargets = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].map(id => document.getElementById(id))
+						return {
+							activeHref: active?.getAttribute('href'),
+							activeVisible: activeRect !== undefined && navigationRect !== undefined && activeRect.left >= navigationRect.left - 1 && activeRect.right <= navigationRect.right + 1,
+							bodyScrollWidth: document.body.scrollWidth,
+							clientWidth: document.documentElement.clientWidth,
+							headerBottom: document.querySelector('.operator-shell')?.getBoundingClientRect().bottom,
+							safetyVisible: safetyTargets.every(target => {
+								if (!(target instanceof HTMLElement)) return false
+								const rect = target.getBoundingClientRect()
+								return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+							}),
+							scrollX: window.scrollX,
+							targetTop: target?.getBoundingClientRect().top
+						}
+					})()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			const result = typeof layout === 'object' && layout !== null && 'result' in layout && typeof layout.result === 'object' && layout.result !== null && 'value' in layout.result ? layout.result.value : undefined
+			if (mobile && typeof result === 'object' && result !== null && 'bodyScrollWidth' in result && typeof result.bodyScrollWidth === 'number' && result.bodyScrollWidth > 390) {
+				throw new Error(`${name} overflows its 390px viewport at ${result.bodyScrollWidth.toString()}px`)
+			}
+			if (mobile && (typeof result !== 'object' || result === null || !('safetyVisible' in result) || result.safetyVisible !== true)) throw new Error(`${name} clips a sticky safety control`)
+			if (mobile && section !== undefined && typeof result === 'object' && result !== null && 'targetTop' in result && 'headerBottom' in result && typeof result.targetTop === 'number' && typeof result.headerBottom === 'number' && result.targetTop < result.headerBottom) {
+				throw new Error(`${name} places its target behind the sticky header`)
+			}
+			if (typeof result !== 'object' || result === null || !('activeHref' in result) || result.activeHref !== `#${fragment}` || !('activeVisible' in result) || result.activeVisible !== true) throw new Error(`${name} does not show its active ${fragment} navigation item`)
+			await capturePng(name)
 		}
+		if (process.env['OPEN_ORACLE_CAPTURE_SETTINGS'] === '1') {
+			await replacePage(`${origin}/?mutation=connectivity-error#settings`, 390, 844)
+			await Bun.sleep(750)
+			fixtureConnectivityFailure = true
+			await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const group = document.querySelector('#network-connectivity')
+						if (group instanceof HTMLDetailsElement) group.open = true
+						document.querySelector('#connectivity-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+					})()`,
+				},
+				sessionId,
+			)
+			await Bun.sleep(350)
+			const connectivityFailure = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const group = document.querySelector('#network-connectivity')
+						if (group instanceof HTMLElement) {
+							const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
+							window.scrollTo(0, Math.max(0, group.getBoundingClientRect().top + window.scrollY - offset))
+						}
+						return {
+							bodyContainsCredential: document.body.textContent?.includes(${JSON.stringify(protectedFailureMarker)}) === true,
+							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+							status: document.querySelector('#connectivity-status')?.textContent
+						}
+					})()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			const value = typeof connectivityFailure === 'object' && connectivityFailure !== null && 'result' in connectivityFailure && typeof connectivityFailure.result === 'object' && connectivityFailure.result !== null && 'value' in connectivityFailure.result ? connectivityFailure.result.value : undefined
+			if (
+				typeof value !== 'object' ||
+				value === null ||
+				!('bodyContainsCredential' in value) ||
+				value.bodyContainsCredential !== false ||
+				!('fieldsetDisabled' in value) ||
+				value.fieldsetDisabled !== false ||
+				!('status' in value) ||
+				value.status !== 'RPC connectivity checks failed. Review the submitted endpoints and retry.'
+			) {
+				throw new Error(`Connectivity mutation exposed unsafe failure text: ${JSON.stringify(value)}`)
+			}
+			await capturePng('connectivity-error-mobile.png')
+			const unexpectedMutationDiagnostics = runtimeDiagnostics.filter(diagnostic => !diagnostic.includes('Failed to load resource: the server responded with a status of 400 (Bad Request)') || !diagnostic.includes('/api/connectivity'))
+			if (unexpectedMutationDiagnostics.length > 0) throw new Error(`Chromium reported unexpected connectivity-mutation diagnostics: ${unexpectedMutationDiagnostics.join('\n')}`)
+			runtimeDiagnostics.length = 0
+			fixtureConnectivityFailure = false
+			await command('Runtime.evaluate', { expression: `document.querySelector('#connectivity-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))` }, sessionId)
+			await Bun.sleep(350)
+			const connectivityRecovery = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => ({
+					fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+					status: document.querySelector('#connectivity-status')?.textContent
+				}))()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			const recoveryValue = typeof connectivityRecovery === 'object' && connectivityRecovery !== null && 'result' in connectivityRecovery && typeof connectivityRecovery.result === 'object' && connectivityRecovery.result !== null && 'value' in connectivityRecovery.result ? connectivityRecovery.result.value : undefined
+			if (typeof recoveryValue !== 'object' || recoveryValue === null || !('fieldsetDisabled' in recoveryValue) || recoveryValue.fieldsetDisabled !== false || !('status' in recoveryValue) || recoveryValue.status !== 'RPCs passed chain checks and were saved for the next scan and future restarts.') {
+				throw new Error(`Connectivity mutation did not recover after retry: ${JSON.stringify(recoveryValue)}`)
+			}
+		}
+		if (process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION_STATES'] === '1') {
+			const readConfigurationState = async () => {
+				const result = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => ({
+							bodyScrollWidth: document.body.scrollWidth,
+							clientWidth: document.documentElement.clientWidth,
+							containerHidden: document.querySelector('#settings-load-state')?.hidden,
+							allDependentDisabled: ['strategy-fieldset', 'submission-fieldset', 'connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'tokens-fieldset'].every(id => document.getElementById(id)?.hasAttribute('disabled') === true),
+							allDependentEnabled: ['strategy-fieldset', 'submission-fieldset', 'connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'tokens-fieldset'].every(id => document.getElementById(id)?.hasAttribute('disabled') === false),
+							deploymentDisabled: document.querySelector('#deployment-fieldset')?.disabled,
+							retryHidden: document.querySelector('#retry-settings-button')?.hidden,
+							status: document.querySelector('#settings-load-status')?.textContent,
+							strategyDisabled: document.querySelector('#strategy-fieldset')?.disabled,
+							submissionDisabled: document.querySelector('#submission-fieldset')?.disabled
+						}))()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+			}
+			const assertConfigurationControls = (value: unknown, disabled: boolean, label: string, width: number) => {
+				if (
+					typeof value !== 'object' ||
+					value === null ||
+					!('strategyDisabled' in value) ||
+					value.strategyDisabled !== disabled ||
+					!('allDependentDisabled' in value) ||
+					!('allDependentEnabled' in value) ||
+					(disabled ? value.allDependentDisabled !== true : value.allDependentEnabled !== true) ||
+					!('submissionDisabled' in value) ||
+					value.submissionDisabled !== disabled ||
+					!('deploymentDisabled' in value) ||
+					value.deploymentDisabled !== disabled ||
+					!('bodyScrollWidth' in value) ||
+					typeof value.bodyScrollWidth !== 'number' ||
+					value.bodyScrollWidth > width
+				) {
+					throw new Error(`${label} configuration controls are unsafe: ${JSON.stringify(value)}`)
+				}
+			}
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				fixtureConfigurationHanging = true
+				await replacePage(`${origin}/?configuration=loading-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(150)
+				const loading = await readConfigurationState()
+				assertConfigurationControls(loading, true, 'Loading', width)
+				if (typeof loading !== 'object' || loading === null || !('containerHidden' in loading) || loading.containerHidden !== false || !('retryHidden' in loading) || loading.retryHidden !== true || !('status' in loading) || loading.status !== 'Loading operator configuration…') {
+					throw new Error(`Configuration loading state is not visible: ${JSON.stringify(loading)}`)
+				}
+				await capturePng(`configuration-loading-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationHanging = false
+				await Bun.sleep(350)
+				const loaded = await readConfigurationState()
+				assertConfigurationControls(loaded, false, 'Loaded', width)
+				if (typeof loaded !== 'object' || loaded === null || !('containerHidden' in loaded) || loaded.containerHidden !== true) throw new Error(`Configuration loading did not resolve: ${JSON.stringify(loaded)}`)
+
+				fixtureConfigurationUnavailable = true
+				fixtureConnectivityHanging = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#connectivity-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))` }, sessionId)
+				await Bun.sleep(50)
+				await command('Runtime.evaluate', { expression: `document.querySelector('#reload-configuration-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const reloadFailed = await readConfigurationState()
+				assertConfigurationControls(reloadFailed, true, 'Failed reload', width)
+				if (
+					typeof reloadFailed !== 'object' ||
+					reloadFailed === null ||
+					!('containerHidden' in reloadFailed) ||
+					reloadFailed.containerHidden !== false ||
+					!('retryHidden' in reloadFailed) ||
+					reloadFailed.retryHidden !== false ||
+					!('status' in reloadFailed) ||
+					typeof reloadFailed.status !== 'string' ||
+					!reloadFailed.status.includes('Complete configuration is unavailable.')
+				) {
+					throw new Error(`Failed configuration reload left stale controls available: ${JSON.stringify(reloadFailed)}`)
+				}
+				fixtureConnectivityHanging = false
+				await Bun.sleep(350)
+				const connectivityCompletedAfterReloadFailure = await readConfigurationState()
+				assertConfigurationControls(connectivityCompletedAfterReloadFailure, true, 'Connectivity completed after failed reload', width)
+				fixtureConfigurationUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const reloadRecovered = await readConfigurationState()
+				assertConfigurationControls(reloadRecovered, false, 'Reload-recovered', width)
+				if (typeof reloadRecovered !== 'object' || reloadRecovered === null || !('containerHidden' in reloadRecovered) || reloadRecovered.containerHidden !== true) throw new Error(`Failed configuration reload did not recover: ${JSON.stringify(reloadRecovered)}`)
+
+				fixtureConfigurationUnavailable = true
+				await replacePage(`${origin}/?configuration=failed-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(750)
+				const failed = await readConfigurationState()
+				assertConfigurationControls(failed, true, 'Failed', width)
+				if (
+					typeof failed !== 'object' ||
+					failed === null ||
+					!('containerHidden' in failed) ||
+					failed.containerHidden !== false ||
+					!('retryHidden' in failed) ||
+					failed.retryHidden !== false ||
+					!('status' in failed) ||
+					typeof failed.status !== 'string' ||
+					!failed.status.includes('Complete configuration is unavailable.')
+				) {
+					throw new Error(`Configuration failure has no visible recovery: ${JSON.stringify(failed)}`)
+				}
+				await capturePng(`configuration-failed-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const recovered = await readConfigurationState()
+				assertConfigurationControls(recovered, false, 'Recovered', width)
+				if (typeof recovered !== 'object' || recovered === null || !('containerHidden' in recovered) || recovered.containerHidden !== true) throw new Error(`Configuration retry did not recover: ${JSON.stringify(recovered)}`)
+
+				fixtureConfigurationHanging = true
+				await replacePage(`${origin}/?configuration=hanging-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(2_250)
+				const timedOut = await readConfigurationState()
+				assertConfigurationControls(timedOut, true, 'Timed-out', width)
+				if (
+					typeof timedOut !== 'object' ||
+					timedOut === null ||
+					!('containerHidden' in timedOut) ||
+					timedOut.containerHidden !== false ||
+					!('retryHidden' in timedOut) ||
+					timedOut.retryHidden !== false ||
+					!('status' in timedOut) ||
+					timedOut.status !== 'Configuration request timed out. Editable settings remain locked.'
+				) {
+					throw new Error(`Hanging configuration request did not time out visibly: ${JSON.stringify(timedOut)}`)
+				}
+				await capturePng(`configuration-timeout-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationHanging = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const timeoutRecovery = await readConfigurationState()
+				assertConfigurationControls(timeoutRecovery, false, 'Timeout-recovered', width)
+				if (typeof timeoutRecovery !== 'object' || timeoutRecovery === null || !('containerHidden' in timeoutRecovery) || timeoutRecovery.containerHidden !== true) throw new Error(`Timed-out configuration retry did not recover: ${JSON.stringify(timeoutRecovery)}`)
+			}
+			const unexpectedConfigurationDiagnostics = runtimeDiagnostics.filter(diagnostic => !diagnostic.includes('Failed to load resource: the server responded with a status of 503 (Service Unavailable)') || !diagnostic.includes('/api/configuration'))
+			if (unexpectedConfigurationDiagnostics.length > 0) throw new Error(`Chromium reported unexpected configuration diagnostics: ${unexpectedConfigurationDiagnostics.join('\n')}`)
+			runtimeDiagnostics.length = 0
+		}
+		if (process.env['OPEN_ORACLE_CAPTURE_RESUME'] === '1') {
+			fixtureNetworkConfigured = false
+			paused = true
+			const unconfiguredPauseRequestCount = fixturePauseRequests.length
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?resume=network-unconfigured-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				const unconfiguredResume = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const pause = document.querySelector('#pause-button')
+							const confirm = document.querySelector('#confirm-resume')
+							pause?.click()
+							confirm?.click()
+							return {
+								attentionHref: document.querySelector('#attention-badge')?.getAttribute('href'),
+								attentionText: document.querySelector('#attention-badge')?.textContent,
+								confirmDisabled: confirm?.disabled,
+								pauseBusy: pause?.getAttribute('aria-busy'),
+								pauseCursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
+								pauseDisabled: pause?.disabled,
+								resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open')
+							}
+						})()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				await Bun.sleep(100)
+				const unconfiguredResumeValue = typeof unconfiguredResume === 'object' && unconfiguredResume !== null && 'result' in unconfiguredResume && typeof unconfiguredResume.result === 'object' && unconfiguredResume.result !== null && 'value' in unconfiguredResume.result ? unconfiguredResume.result.value : undefined
+				if (
+					typeof unconfiguredResumeValue !== 'object' ||
+					unconfiguredResumeValue === null ||
+					!('pauseDisabled' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseDisabled !== true ||
+					!('attentionHref' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.attentionHref !== '#network-connectivity' ||
+					!('attentionText' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.attentionText !== '1 action' ||
+					!('pauseBusy' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseBusy !== null ||
+					!('pauseCursor' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.pauseCursor !== 'not-allowed' ||
+					!('confirmDisabled' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.confirmDisabled !== true ||
+					!('resumeOpen' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.resumeOpen !== false ||
+					fixturePauseRequests.length !== unconfiguredPauseRequestCount
+				) {
+					throw new Error(`Unconfigured network exposed Resume: ${JSON.stringify({ requests: fixturePauseRequests.length - unconfiguredPauseRequestCount, state: unconfiguredResumeValue })}`)
+				}
+				await capturePng(`resume-network-unconfigured-${mobile ? 'mobile' : 'desktop'}.png`)
+			}
+			fixtureNetworkConfigured = true
+			paused = false
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?pause=pending-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				fixturePauseHanging = true
+				let pendingPauseValue: unknown
+				try {
+					await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+					await Bun.sleep(100)
+					const pendingPause = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const pause = document.querySelector('#pause-button')
+								return {
+									busy: pause?.getAttribute('aria-busy'),
+									cursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
+									disabled: pause?.disabled,
+									text: pause?.textContent
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					pendingPauseValue = typeof pendingPause === 'object' && pendingPause !== null && 'result' in pendingPause && typeof pendingPause.result === 'object' && pendingPause.result !== null && 'value' in pendingPause.result ? pendingPause.result.value : undefined
+					await capturePng(`pause-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				} finally {
+					fixturePauseHanging = false
+				}
+				await Bun.sleep(350)
+				if (
+					typeof pendingPauseValue !== 'object' ||
+					pendingPauseValue === null ||
+					!('busy' in pendingPauseValue) ||
+					pendingPauseValue.busy !== 'true' ||
+					!('cursor' in pendingPauseValue) ||
+					pendingPauseValue.cursor !== 'wait' ||
+					!('disabled' in pendingPauseValue) ||
+					pendingPauseValue.disabled !== true ||
+					!('text' in pendingPauseValue) ||
+					pendingPauseValue.text !== 'Pausing…'
+				) {
+					throw new Error(`Pending Pause did not expose a busy control: ${JSON.stringify(pendingPauseValue)}`)
+				}
+				paused = false
+			}
+			paused = true
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				await replacePage(`${origin}/?resume=pending-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+				await Bun.sleep(100)
+				await assertResumeDialogStart(`${mobile ? 'Mobile' : 'Desktop'} initial`, width)
+				fixturePauseHanging = true
+				let pendingResumeValue: unknown
+				try {
+					await command('Runtime.evaluate', { expression: `document.querySelector('#confirm-resume')?.click()` }, sessionId)
+					await Bun.sleep(100)
+					await assertResumeDialogStart(`${mobile ? 'Mobile' : 'Desktop'} pending`, width)
+					const pendingResume = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const confirm = document.querySelector('#confirm-resume')
+								return {
+									busy: confirm?.getAttribute('aria-busy'),
+									cursor: confirm instanceof HTMLElement ? getComputedStyle(confirm).cursor : undefined,
+									disabled: confirm?.disabled,
+									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
+									text: confirm?.textContent
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					pendingResumeValue = typeof pendingResume === 'object' && pendingResume !== null && 'result' in pendingResume && typeof pendingResume.result === 'object' && pendingResume.result !== null && 'value' in pendingResume.result ? pendingResume.result.value : undefined
+					await capturePng(`resume-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				} finally {
+					fixturePauseHanging = false
+				}
+				await Bun.sleep(350)
+				if (
+					typeof pendingResumeValue !== 'object' ||
+					pendingResumeValue === null ||
+					!('busy' in pendingResumeValue) ||
+					pendingResumeValue.busy !== 'true' ||
+					!('cursor' in pendingResumeValue) ||
+					pendingResumeValue.cursor !== 'wait' ||
+					!('disabled' in pendingResumeValue) ||
+					pendingResumeValue.disabled !== true ||
+					!('resumeOpen' in pendingResumeValue) ||
+					pendingResumeValue.resumeOpen !== true ||
+					!('text' in pendingResumeValue) ||
+					pendingResumeValue.text !== 'Resuming…'
+				) {
+					throw new Error(`Pending Resume did not expose a busy control: ${JSON.stringify(pendingResumeValue)}`)
+				}
+				paused = true
+			}
+			paused = false
+			await replacePage(`${origin}/`, 1440, 900)
+			await Bun.sleep(750)
+			await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+			await Bun.sleep(2_250)
+			await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+			await Bun.sleep(250)
+			await settlePaint()
+			await capturePng('resume-preflight.png')
+		}
+		if (process.env['OPEN_ORACLE_CAPTURE_STATUS'] === '1') {
+			let mobileSafetyActionPositions: unknown
+			for (const status of ['running', 'paused', 'syncing', 'error'] as const) {
+				fixtureStatus = status
+				paused = status === 'paused'
+				fixtureAttention = status === 'error' ? 'error' : 'none'
+				for (const mobile of [false, true]) {
+					const width = mobile ? 390 : 1440
+					const height = mobile ? 844 : 900
+					await replacePage(`${origin}/?status=${status}-${mobile ? 'mobile' : 'desktop'}`, width, height)
+					await Bun.sleep(750)
+					if (status === 'error') {
+						await command('Runtime.evaluate', { expression: `document.querySelector('#attention-badge')?.click()` }, sessionId)
+						await Bun.sleep(250)
+					}
+					await settlePaint()
+					if (mobile) {
+						const actionPositions = await readSafetyActionPositions()
+						if (status === 'running') mobileSafetyActionPositions = actionPositions
+						else assertStableSafetyActions(mobileSafetyActionPositions, actionPositions, `${status} status`)
+					}
+					const state = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const badge = document.querySelector('#run-status-badge')
+								const active = document.querySelector('.section-nav a[aria-current="page"]')
+								const attention = document.querySelector('#attention-badge')
+								const header = document.querySelector('.operator-shell')
+								const notice = document.querySelector('#notice')
+								return {
+									activeHref: active?.getAttribute('href'),
+									attentionHref: attention?.getAttribute('href'),
+									attentionText: attention?.textContent,
+									bodyScrollWidth: document.body.scrollWidth,
+									clientWidth: document.documentElement.clientWidth,
+									hash: window.location.hash,
+									label: badge?.textContent,
+									noticeCopy: document.querySelector('#notice-copy')?.textContent,
+									bodyContainsCredential: document.body.textContent?.includes('operator-secret') === true,
+									endpointText: document.querySelector('#endpoint-checks')?.textContent,
+									noticeTitle: document.querySelector('#notice-title')?.textContent,
+									noticeTone: notice instanceof HTMLElement ? notice.dataset.tone : undefined,
+									operationText: document.querySelector('#operations-body')?.textContent,
+									status: badge instanceof HTMLElement ? badge.dataset.status : undefined,
+									transactionText: document.querySelector('#transactions-body')?.textContent,
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					const value = typeof state === 'object' && state !== null && 'result' in state && typeof state.result === 'object' && state.result !== null && 'value' in state.result ? state.result.value : undefined
+					if (typeof value !== 'object' || value === null || !('status' in value) || value.status !== status) throw new Error(`Run badge did not render ${status}`)
+					if (
+						status === 'error' &&
+						(!('attentionHref' in value) ||
+							value.attentionHref !== '#notice' ||
+							!('attentionText' in value) ||
+							value.attentionText !== '1 action' ||
+							!('hash' in value) ||
+							value.hash !== '#notice' ||
+							!('activeHref' in value) ||
+							value.activeHref !== '#overview' ||
+							!('noticeTone' in value) ||
+							value.noticeTone !== 'danger' ||
+							!('noticeTitle' in value) ||
+							value.noticeTitle !== 'Latest poll failed' ||
+							!('noticeCopy' in value) ||
+							value.noticeCopy !== 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' ||
+							!('bodyContainsCredential' in value) ||
+							value.bodyContainsCredential !== false ||
+							!('endpointText' in value) ||
+							typeof value.endpointText !== 'string' ||
+							!value.endpointText.includes('RPC connectivity or canonical chain reads failed. Automatic retry remains active.') ||
+							!('operationText' in value) ||
+							typeof value.operationText !== 'string' ||
+							!value.operationText.includes('Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.') ||
+							!('transactionText' in value) ||
+							typeof value.transactionText !== 'string' ||
+							!value.transactionText.includes('Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'))
+					)
+						throw new Error('Error state did not expose its attention and recovery context')
+					if (mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width) throw new Error(`${status} header overflows its ${width.toString()}px viewport`)
+					const name = `status-${status}-${mobile ? 'mobile' : 'desktop'}.png`
+					await capturePng(name)
+				}
+			}
+			fixtureStatus = 'running'
+			paused = false
+			fixtureAttention = 'none'
+			if (runtimeDiagnostics.length > 0) throw new Error(`Chromium reported unexpected diagnostics before connection-failure QA: ${runtimeDiagnostics.join('\n')}`)
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				fixtureStateUnavailable = true
+				await replacePage(`${origin}/?connection=initial-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				const readConnectionState = async () => {
+					const result = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].every(id => {
+									const target = document.getElementById(id)
+									if (!(target instanceof HTMLElement)) return false
+									const rect = target.getBoundingClientRect()
+									return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+								})
+								return {
+									attentionHref: document.querySelector('#attention-badge')?.getAttribute('href'),
+									attentionText: document.querySelector('#attention-badge')?.textContent,
+									bodyScrollWidth: document.body.scrollWidth,
+									mode: document.querySelector('#mode-badge')?.textContent,
+									network: document.querySelector('#header-network-badge')?.textContent,
+									noticeCopy: document.querySelector('#notice-copy')?.textContent,
+									noticeTitle: document.querySelector('#notice-title')?.textContent,
+									confirmDisabled: document.querySelector('#confirm-resume')?.disabled,
+									pauseDisabled: document.querySelector('#pause-button')?.disabled,
+									refreshBusy: document.querySelector('#refresh-button')?.getAttribute('aria-busy'),
+									refreshDisabled: document.querySelector('#refresh-button')?.disabled,
+									refreshText: document.querySelector('#refresh-button')?.textContent,
+									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
+									runStatus: document.querySelector('#run-status-badge')?.textContent,
+									safetyVisible,
+									scrollX: window.scrollX
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+				}
+				const initialFailure = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Initial connection failure')
+				if (
+					typeof initialFailure !== 'object' ||
+					initialFailure === null ||
+					!('attentionHref' in initialFailure) ||
+					initialFailure.attentionHref !== '#notice' ||
+					!('attentionText' in initialFailure) ||
+					initialFailure.attentionText !== '1 action' ||
+					!('mode' in initialFailure) ||
+					initialFailure.mode !== 'Mode unavailable' ||
+					!('network' in initialFailure) ||
+					initialFailure.network !== 'Network unavailable' ||
+					!('pauseDisabled' in initialFailure) ||
+					initialFailure.pauseDisabled !== true ||
+					!('runStatus' in initialFailure) ||
+					initialFailure.runStatus !== 'Disconnected' ||
+					!('safetyVisible' in initialFailure) ||
+					initialFailure.safetyVisible !== true ||
+					!('bodyScrollWidth' in initialFailure) ||
+					typeof initialFailure.bodyScrollWidth !== 'number' ||
+					initialFailure.bodyScrollWidth > width ||
+					!('scrollX' in initialFailure) ||
+					initialFailure.scrollX !== 0
+				) {
+					throw new Error(`Initial state-request failure is unsafe: ${JSON.stringify(initialFailure)}`)
+				}
+				await capturePng(`connection-initial-failure-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureStateUnavailable = false
+				await replacePage(`${origin}/?connection=post-success-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				fixtureStateUnavailable = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				const postSuccessFailure = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Post-success connection failure')
+				if (
+					typeof postSuccessFailure !== 'object' ||
+					postSuccessFailure === null ||
+					!('attentionText' in postSuccessFailure) ||
+					postSuccessFailure.attentionText !== '1 action' ||
+					!('network' in postSuccessFailure) ||
+					postSuccessFailure.network !== 'mainnet · 1 · last known' ||
+					!('noticeCopy' in postSuccessFailure) ||
+					postSuccessFailure.noticeCopy !== 'State polling failed. Automatic retry remains active; use Refresh to retry now.' ||
+					!('pauseDisabled' in postSuccessFailure) ||
+					postSuccessFailure.pauseDisabled !== false ||
+					!('runStatus' in postSuccessFailure) ||
+					postSuccessFailure.runStatus !== 'Disconnected' ||
+					!('safetyVisible' in postSuccessFailure) ||
+					postSuccessFailure.safetyVisible !== true ||
+					!('bodyScrollWidth' in postSuccessFailure) ||
+					typeof postSuccessFailure.bodyScrollWidth !== 'number' ||
+					postSuccessFailure.bodyScrollWidth > width ||
+					!('scrollX' in postSuccessFailure) ||
+					postSuccessFailure.scrollX !== 0
+				) {
+					throw new Error(`Post-success state-request failure is unsafe: ${JSON.stringify(postSuccessFailure)}`)
+				}
+				await capturePng(`connection-post-success-failure-${mobile ? 'mobile' : 'desktop'}.png`)
+				const pauseRequestCount = fixturePauseRequests.length
+				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				if (fixturePauseRequests.length !== pauseRequestCount + 1 || fixturePauseRequests.at(-1) !== true) throw new Error('Emergency Pause did not reach the bot while state polling was unavailable')
+				paused = false
+				fixtureStateUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				const recovery = await readConnectionState()
+				if (
+					typeof recovery !== 'object' ||
+					recovery === null ||
+					!('attentionText' in recovery) ||
+					recovery.attentionText !== 'No blockers' ||
+					!('network' in recovery) ||
+					recovery.network !== 'mainnet · 1' ||
+					!('pauseDisabled' in recovery) ||
+					recovery.pauseDisabled !== false ||
+					!('runStatus' in recovery) ||
+					recovery.runStatus !== 'Running'
+				) {
+					throw new Error(`State-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
+				}
+				await replacePage(`${origin}/?connection=hung-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				fixtureStateHanging = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(100)
+				const pendingRefresh = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending manual refresh')
+				if (
+					typeof pendingRefresh !== 'object' ||
+					pendingRefresh === null ||
+					!('refreshBusy' in pendingRefresh) ||
+					pendingRefresh.refreshBusy !== 'true' ||
+					!('refreshDisabled' in pendingRefresh) ||
+					pendingRefresh.refreshDisabled !== true ||
+					!('refreshText' in pendingRefresh) ||
+					pendingRefresh.refreshText !== 'Refreshing…'
+				) {
+					throw new Error(`Manual Refresh did not expose a busy control: ${JSON.stringify(pendingRefresh)}`)
+				}
+				await capturePng(`refresh-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				await Bun.sleep(1_150)
+				const hungRequest = await readConnectionState()
+				if (
+					typeof hungRequest !== 'object' ||
+					hungRequest === null ||
+					!('attentionText' in hungRequest) ||
+					hungRequest.attentionText !== '1 action' ||
+					!('confirmDisabled' in hungRequest) ||
+					hungRequest.confirmDisabled !== true ||
+					!('pauseDisabled' in hungRequest) ||
+					hungRequest.pauseDisabled !== false ||
+					!('resumeOpen' in hungRequest) ||
+					hungRequest.resumeOpen !== false ||
+					!('runStatus' in hungRequest) ||
+					hungRequest.runStatus !== 'Disconnected' ||
+					!('refreshBusy' in hungRequest) ||
+					hungRequest.refreshBusy !== null ||
+					!('refreshDisabled' in hungRequest) ||
+					hungRequest.refreshDisabled !== false ||
+					!('refreshText' in hungRequest) ||
+					hungRequest.refreshText !== 'Refresh'
+				) {
+					throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
+				}
+				fixtureStateHanging = false
+				await replacePage(`${origin}/?connection=hung-recovery-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				paused = true
+				await replacePage(`${origin}/?connection=resume-preflight-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
+				await Bun.sleep(100)
+				const openPreflight = await readConnectionState()
+				if (typeof openPreflight !== 'object' || openPreflight === null || !('resumeOpen' in openPreflight) || openPreflight.resumeOpen !== true || !('confirmDisabled' in openPreflight) || openPreflight.confirmDisabled !== false) {
+					throw new Error(`Resume preflight did not open from current state: ${JSON.stringify(openPreflight)}`)
+				}
+				fixtureStateUnavailable = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				const stalePreflight = await readConnectionState()
+				if (typeof stalePreflight !== 'object' || stalePreflight === null || !('resumeOpen' in stalePreflight) || stalePreflight.resumeOpen !== false || !('confirmDisabled' in stalePreflight) || stalePreflight.confirmDisabled !== true) {
+					throw new Error(`Disconnected resume preflight remained actionable: ${JSON.stringify(stalePreflight)}`)
+				}
+				fixtureStateUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(250)
+				const preflightRecovery = await readConnectionState()
+				if (typeof preflightRecovery !== 'object' || preflightRecovery === null || !('confirmDisabled' in preflightRecovery) || preflightRecovery.confirmDisabled !== false) {
+					throw new Error(`Resume confirmation did not recover after current state returned: ${JSON.stringify(preflightRecovery)}`)
+				}
+				paused = false
+			}
+			const unexpectedConnectionDiagnostics = runtimeDiagnostics.filter(diagnostic => !diagnostic.includes('Failed to load resource: the server responded with a status of 503 (Service Unavailable)') || !diagnostic.includes('/api/state'))
+			if (unexpectedConnectionDiagnostics.length > 0) throw new Error(`Chromium reported unexpected connection-failure diagnostics: ${unexpectedConnectionDiagnostics.join('\n')}`)
+			runtimeDiagnostics.length = 0
+		}
+		if (process.env['OPEN_ORACLE_CAPTURE_QA'] === '1') {
+			for (const attention of ['recovery', 'transaction'] as const) {
+				fixtureAttention = attention
+				const expectedTarget = attention === 'recovery' ? 'position-lifecycle' : 'transaction-tracking'
+				const expectedSection = 'operations'
+				for (const mobile of [false, true]) {
+					const width = mobile ? 390 : 1440
+					const height = mobile ? 844 : 900
+					await replacePage(`${origin}/?attention=${attention}-${mobile ? 'mobile' : 'desktop'}`, width, height)
+					await Bun.sleep(750)
+					await command('Runtime.evaluate', { expression: `document.querySelector('#attention-badge')?.click()` }, sessionId)
+					await Bun.sleep(250)
+					await settlePaint()
+					const navigation = await command(
+						'Runtime.evaluate',
+						{
+							expression: `(() => {
+								const active = document.querySelector('.section-nav a[aria-current="page"]')
+								const activeRect = active?.getBoundingClientRect()
+								const header = document.querySelector('.operator-shell')
+								const nav = document.querySelector('.section-nav')
+								const navRect = nav?.getBoundingClientRect()
+								const target = document.getElementById(${JSON.stringify(expectedTarget)})
+								return {
+									activeHref: active?.getAttribute('href'),
+									activeVisible: activeRect !== undefined && navRect !== undefined && activeRect.left >= navRect.left - 1 && activeRect.right <= navRect.right + 1,
+									bodyScrollWidth: document.body.scrollWidth,
+									hash: window.location.hash,
+									headerBottom: header?.getBoundingClientRect().bottom,
+									targetTop: target?.getBoundingClientRect().top
+								}
+							})()`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					const value = typeof navigation === 'object' && navigation !== null && 'result' in navigation && typeof navigation.result === 'object' && navigation.result !== null && 'value' in navigation.result ? navigation.result.value : undefined
+					if (
+						typeof value !== 'object' ||
+						value === null ||
+						!('activeHref' in value) ||
+						value.activeHref !== `#${expectedSection}` ||
+						!('activeVisible' in value) ||
+						value.activeVisible !== true ||
+						!('hash' in value) ||
+						value.hash !== `#${expectedTarget}` ||
+						!('headerBottom' in value) ||
+						!('targetTop' in value) ||
+						typeof value.headerBottom !== 'number' ||
+						typeof value.targetTop !== 'number' ||
+						value.targetTop < value.headerBottom ||
+						(mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width)
+					)
+						throw new Error(`${attention} attention navigation failed at ${width.toString()}px`)
+					const name = `attention-${attention}-${mobile ? 'mobile' : 'desktop'}.png`
+					await capturePng(name)
+				}
+			}
+			fixtureAttention = 'none'
+		}
+		if (runtimeDiagnostics.length > 0) throw new Error(`Chromium reported ${runtimeDiagnostics.length.toString()} runtime or console errors: ${runtimeDiagnostics.join('\n')}`)
+		if (targetId !== '') await command('Target.closeTarget', { targetId })
 		socket.close()
 	} finally {
 		child.kill()
@@ -530,14 +1468,53 @@ if (
 	throw new Error('OpenOracle documentation fixture position, risk, and profit totals are inconsistent')
 }
 
+function currentFixtureSnapshot(): OperatorSnapshot {
+	const fixturePositions = fixtureAttention === 'recovery' ? snapshot.positions.map((position, index) => (index === 0 ? { ...position, status: 'recovery-required' as const } : position)) : snapshot.positions
+	const rawRpcFailure = `Read RPC https://operator:${protectedFailureMarker}@rpc.example failed at block 23842152`
+	const rawRelayFailure = `Private relay https://operator:${protectedFailureMarker}@relay.example rejected the transaction`
+	const fixtureTransactions = snapshot.transactionActivity.map((transaction, index) => {
+		if (index !== 0) return transaction
+		if (fixtureAttention === 'transaction') return { ...transaction, status: 'confirmation-unknown' as const }
+		if (fixtureAttention === 'error') return { ...transaction, failedTargets: [{ error: rawRelayFailure, target: 'https://relay.example' }], status: 'submission-failed' as const }
+		return transaction
+	})
+	return {
+		...snapshot,
+		networkConfigured: fixtureNetworkConfigured,
+		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
+		lastError: fixtureAttention === 'error' ? rawRpcFailure : undefined,
+		operationLog: fixtureAttention === 'error' ? [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '816', timestamp: sampledAt(0) }, ...snapshot.operationLog] : snapshot.operationLog,
+		paused,
+		positions: fixturePositions,
+		status: paused ? 'paused' : fixtureStatus,
+		transactionActivity: fixtureTransactions,
+	}
+}
+
 const server = startDashboardServer(0, {
-	getConfiguration: async () => ({
-		configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
-		revision: 'fixture-revision',
-	}),
-	getSnapshot: () => snapshot,
-	setPaused: () => undefined,
-	updateConnectivity: () => snapshot.connectivity,
+	getConfiguration: async () => {
+		while (fixtureConfigurationHanging) await Bun.sleep(10)
+		if (fixtureConfigurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
+		return {
+			configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
+			revision: 'fixture-revision',
+		}
+	},
+	getSnapshot: async () => {
+		if (fixtureStateHanging) await new Promise<never>(() => {})
+		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')
+		return currentFixtureSnapshot()
+	},
+	setPaused: async value => {
+		fixturePauseRequests.push(value)
+		while (fixturePauseHanging) await Bun.sleep(10)
+		paused = value
+	},
+	updateConnectivity: async () => {
+		while (fixtureConnectivityHanging) await Bun.sleep(10)
+		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)
+		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, restartRequired: false }
+	},
 	updateConfiguration: value => value,
 	updateSigner: () => ({ wallet }),
 	updateStrategy: () => snapshot.settings,
