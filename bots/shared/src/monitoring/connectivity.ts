@@ -28,7 +28,8 @@ function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | '
 	if (error instanceof EndpointTransportError) return 'connectivity-degraded'
 	if (error instanceof Error) {
 		const message = error.message.toLowerCase()
-		if (error.name === 'AbortError' || error.name === 'HttpRequestError' || error.name === 'NetworkError' || error.name === 'TimeoutError' || message.includes('fetch failed') || message.includes('connection refused') || message.includes('unable to connect') || message.includes('timed out')) return 'connectivity-degraded'
+		if (error.name === 'AbortError' || error.name === 'HttpRequestError' || error.name === 'NetworkError' || error.name === 'TimeoutError' || message.includes('fetch failed') || message.includes('connection refused') || message.includes('unable to connect') || message.includes('timed out'))
+			return 'connectivity-degraded'
 	}
 	return 'safety-paused'
 }
@@ -108,17 +109,17 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
+	if (!response.ok) {
+		const message = `RPC returned HTTP ${response.status.toString()}`
+		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
+		throw new Error(message)
+	}
 	let value: JsonRpcResponse
 	try {
 		value = (await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'RPC')) as JsonRpcResponse
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`RPC returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
-	}
-	if (!response.ok) {
-		const message = `RPC returned HTTP ${response.status.toString()}`
-		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
-		throw new Error(message)
 	}
 	if (value.error !== undefined) throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`)
 	return value.result

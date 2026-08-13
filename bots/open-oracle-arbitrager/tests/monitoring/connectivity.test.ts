@@ -163,6 +163,17 @@ describe('operator connectivity', () => {
 		expect(state.endpointChecks.every(check => check.failureDisposition === 'safety-paused')).toBe(true)
 	})
 
+	test('classifies a non-JSON retryable HTTP response as degraded connectivity', async () => {
+		const server = Bun.serve({ fetch: () => new Response('temporarily unavailable', { status: 503 }), hostname: '127.0.0.1', port: 0 })
+		servers.push(server)
+		if (server.port === undefined) throw new Error('Test RPC did not expose a port')
+		const endpoint = `http://127.0.0.1:${server.port.toString()}/`
+		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+		await expect(updateConnectivityEndpointChecks(state, () => checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [endpoint], readRpcUrl: endpoint }), 1))).rejects.toThrow('HTTP 503')
+		expect(state.endpointChecks).toHaveLength(2)
+		expect(state.endpointChecks.every(check => check.failureDisposition === 'connectivity-degraded')).toBe(true)
+	})
+
 	test('accepts structured signature and invalid-parameter errors as positive relay capability evidence', async () => {
 		for (const error of [
 			{ code: -32_600, message: 'signature is required' },
