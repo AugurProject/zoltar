@@ -20,7 +20,6 @@ import {
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
-import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -137,7 +136,9 @@ describe('liquidator execution safety', () => {
 			availableExecutionObservations('scan', settled, value => value)
 			throw new Error('Expected an insufficient transport quorum')
 		} catch (error) {
-			expect(operationalFailureDisposition(error)).toBe('connectivity-degraded')
+			expect(error).toBeInstanceOf(Error)
+			if (!(error instanceof Error)) throw error
+			expect(error.name).toBe('ConnectivityDegradedError')
 		}
 	})
 	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {
