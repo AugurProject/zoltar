@@ -48,18 +48,11 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			parent.authorizeChildPool(child);
 			emit ChildPoolLinked(parent, outcomeIndex, child, truthAuction);
 
-			if (forkDataByPool[parent].ownFork && forkDataByPool[parent].vaultRepAtForkAttoRep > 0) {
-				uint256 parentDenominator = parent.totalRepBackingUnits();
-				uint256 childDenominator =
-					parentDenominator == 0
-						? forkDataByPool[parent].vaultRepAtForkAttoRep * SecurityPoolUtils.PRICE_PRECISION
-						: parentDenominator;
-				child.setTotalRepBackingUnits(childDenominator);
-			} else if (forkDataByPool[parent].ownFork) {
-				child.setTotalRepBackingUnits(forkDataByPool[parent].auctionableAttoRepAtFork * SecurityPoolUtils.PRICE_PRECISION);
-			} else {
-				child.setTotalRepBackingUnits(parent.totalRepBackingUnits());
-			}
+			uint256 childPoolHeldRepAtForkAttoRep =
+				forkDataByPool[parent].ownFork
+					? forkDataByPool[parent].vaultRepAtForkAttoRep
+					: forkDataByPool[parent].auctionableAttoRepAtFork;
+			child.setTotalRepBackingUnits(childPoolHeldRepAtForkAttoRep);
 			if (forkDataByPool[parent].unresolvedEscalationAtFork) {
 				child.setAwaitingForkContinuation(true);
 			}
@@ -114,7 +107,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		uint256 nextRepTransferredAttoRep =
 			parentForkData.migratedRepAllocatedForSettlementCollateralAttoRep + childRepAmountAttoRep;
 		require(nextRepTransferredAttoRep <= vaultRepAtForkAttoRep, 'Collateral high');
-		uint256 targetSettlementCollateralTransferredAttoEth = Math.ceilDiv(parentSettlementCollateralAtForkAttoEth * nextRepTransferredAttoRep, vaultRepAtForkAttoRep);
+		uint256 targetSettlementCollateralTransferredAttoEth = Math.mulDiv(parentSettlementCollateralAtForkAttoEth, nextRepTransferredAttoRep, vaultRepAtForkAttoRep, Math.Rounding.Ceil);
 		uint256 settlementCollateralToTransferAttoEth =
 			targetSettlementCollateralTransferredAttoEth - parentForkData.settlementCollateralTransferredAttoEth;
 		uint256 availableSettlementCollateralAttoEth = parent.settlementCollateralAttoEth();
@@ -170,7 +163,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			uint256 childCurrentFeeIndex
 		) = child.securityVaults(vault);
 		forkDataByPool[child].migratedCapacityOwnershipAttoRep += parentCapacityOwnershipAttoRep;
-		uint256 vaultRepBackingUnits = childCurrentRepBackingUnits + parentRepBackingUnits;
 		uint256 vaultFeeIndex = childCurrentCapacityOwnershipAttoRep > 0 ? childCurrentFeeIndex : 0;
 		if (parentCapacityOwnershipAttoRep > 0) vaultFeeIndex = child.feeIndex();
 		uint256 parentBackingUnitsDenominator = parent.totalRepBackingUnits();
@@ -180,12 +172,13 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			migratedAttoRep =
 				childForkData.migratedRepBackingUnits == parentBackingUnitsDenominator
 					? parentRepAtForkAttoRep - childForkData.migratedAttoRep
-					: (parentRepBackingUnits * parentRepAtForkAttoRep) / parentBackingUnitsDenominator;
+					: Math.mulDiv(parentRepBackingUnits, parentRepAtForkAttoRep, parentBackingUnitsDenominator);
 			uint256 nextMigratedAttoRep = childForkData.migratedAttoRep + migratedAttoRep;
 			_ensureMigratedVaultRepBacked(parent, child, nextMigratedAttoRep);
 			childForkData.migratedAttoRep = nextMigratedAttoRep;
 			_transferForkMigratedCollateralToChild(parent, child, migratedAttoRep);
 		}
+		uint256 vaultRepBackingUnits = childCurrentRepBackingUnits + migratedAttoRep;
 
 		(uint256 parentVaultBadDebtAttoEth, , ) = SecurityPoolUtils.configureForkMigratedVault(parent, child, vault, vaultRepBackingUnits, childCurrentCapacityOwnershipAttoRep + parentCapacityOwnershipAttoRep, vaultFeeIndex, parentVaultFeeIndex);
 		migratedBadDebtByPool[child] += parentVaultBadDebtAttoEth;
