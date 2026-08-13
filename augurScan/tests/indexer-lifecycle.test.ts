@@ -1,6 +1,12 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
-import type { StoredTransaction } from '../src/database.ts'
+import {
+	assertIndexerLeaseObservation,
+	assertIndexerLeaseReleaseObservation,
+	DatabaseConsistencyError,
+	runFencedIndexerTransaction,
+	type StoredTransaction,
+} from '../src/database.ts'
 import {
 	BaseError,
 	ContractFunctionExecutionError,
@@ -28,6 +34,8 @@ import {
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
+	nextIndexerOwnershipStatus,
+	ownershipFailureLogMessage,
 	planDeploymentAwareLogScan,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
@@ -911,6 +919,50 @@ describe('network indexer lifecycle', () => {
 		expect(failures).toEqual(['RPC request failed; retrying', 'RPC request failed; retrying', 'RPC request failed; retrying'])
 	})
 
+	test('attributes a network failure-recording error to the ownership recording stage', async () => {
+		const controller = new AbortController()
+		const events: unknown[] = []
+		let recordings = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => ({ backendPid: 42, assertHeld: async () => {}, release: async () => {} }),
+				seed: async () => {},
+				runOwned: async () => {
+					await runNetworkLifecycle({
+						verify: async () => {},
+						poll: async () => {
+							throw new Error('RPC unavailable')
+						},
+						failure: async () => {
+							throw new Error('first record failed')
+						},
+						intervalMs: 10,
+						signal: controller.signal,
+					})
+				},
+				failure: async () => {
+					recordings++
+					controller.abort()
+				},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: (event) => events.push(event),
+				random: () => 0.5,
+				signal: controller.signal,
+			})
+
+			expect(recordings).toBe(1)
+			expect(events).toContainEqual({ type: 'failure', stage: 'record-failure', consecutiveFailures: 1, retryDelayMs: 10, backendPid: 42 })
+			expect(logged).toHaveBeenCalledWith(
+				'[mainnet] indexer ownership failed; stage: record-failure; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: IndexerOwnershipStageError caused by Error',
+			)
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
 	test('does not turn token metadata transport failures into committed fallback data', async () => {
 		const transportFailure = new Error('provider unavailable')
 		transportFailure.name = 'HttpRequestError'
@@ -1042,6 +1094,7 @@ describe('network indexer lifecycle', () => {
 		const lease = { assertHeld: async () => {}, release: async () => {} }
 
 		await runIndexerOwnershipLifecycle({
+			networkId: 'sepolia',
 			acquire: async () => {
 				acquisitions++
 				if (acquisitions === 1) throw new Error('database starting')
@@ -1061,6 +1114,7 @@ describe('network indexer lifecycle', () => {
 			},
 			standby: () => {},
 			intervalMs: 1,
+			random: () => 0.5,
 			signal: controller.signal,
 		})
 
@@ -1073,14 +1127,15 @@ describe('network indexer lifecycle', () => {
 
 	test('logs an actionable configured-boundary failure during ownership seeding', async () => {
 		const controller = new AbortController()
-		const error = new Error(
+		const error = new DatabaseConsistencyError(
 			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
+			{ code: 'start-block-mismatch', configuredStartBlock: 200n, storedStartBlock: 100n, indexedBlock: 125n },
 		)
-		error.name = 'DatabaseConsistencyError'
 		let seeds = 0
 		const logged = spyOn(console, 'error').mockImplementation(() => {})
 		try {
 			await runIndexerOwnershipLifecycle({
+				networkId: 'sepolia',
 				acquire: async () => ({ assertHeld: async () => {}, release: async () => {} }),
 				seed: async () => {
 					seeds++
@@ -1092,10 +1147,271 @@ describe('network indexer lifecycle', () => {
 				intervalMs: 1,
 				signal: controller.signal,
 			})
-			expect(logged).toHaveBeenCalledWith(`Indexer ownership operation failed (DatabaseConsistencyError): ${error.message}`)
+			expect(logged).toHaveBeenCalledWith(
+				`[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 1ms; backend PID: unavailable; reason: DatabaseConsistencyError: ${error.message}`,
+			)
 		} finally {
 			logged.mockRestore()
 		}
+	})
+
+	test('reports sanitized ownership stages and backs off rapid failures', async () => {
+		const controller = new AbortController()
+		const delays: number[] = []
+		const ownershipEvents: unknown[] = []
+		let acquisitions = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => {
+					acquisitions++
+					if (acquisitions === 1) throw Object.assign(new Error('postgres://user:secret@database/augurscan'), { code: 'ECONNRESET' })
+					return {
+						backendPid: 42,
+						assertHeld: async () => {
+							if (acquisitions === 2) throw new Error('lease missing')
+						},
+						release: async () => {},
+					}
+				},
+				seed: async () => {},
+				runOwned: async () => controller.abort(),
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: (event) => ownershipEvents.push(event),
+				random: () => 0.5,
+				wait: async (delay) => {
+					delays.push(delay)
+				},
+				signal: controller.signal,
+			})
+
+			expect(delays).toEqual([10, 20])
+			expect(ownershipEvents).toEqual([
+				{ type: 'failure', stage: 'acquire', consecutiveFailures: 1, retryDelayMs: 10 },
+				{ type: 'failure', stage: 'verify', consecutiveFailures: 2, retryDelayMs: 20, backendPid: 42 },
+				{ type: 'released', backendPid: 42 },
+				{ type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false },
+				{ type: 'released', backendPid: 42 },
+			])
+			expect(logged).toHaveBeenNthCalledWith(
+				1,
+				'[mainnet] indexer ownership failed; stage: acquire; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: Error; code ECONNRESET',
+			)
+			expect(logged).toHaveBeenNthCalledWith(
+				2,
+				'[mainnet] indexer ownership failed; stage: verify; consecutive failures: 2; retry delay: 20ms; backend PID: 42; reason: Error',
+			)
+			expect(logged.mock.calls.flat().join(' ')).not.toContain('secret')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('formats ownership recovery failures without exposing arbitrary messages', () => {
+		const secret = 'postgres://user:password@database/augurscan'
+		expect(ownershipFailureLogMessage('sepolia', 'owned-run', Object.assign(new Error(secret), { name: `${secret}Error` }), 3, 40, 123)).toBe(
+			'[sepolia] indexer ownership failed; stage: owned-run; consecutive failures: 3; retry delay: 40ms; backend PID: 123; reason: UnknownError',
+		)
+		expect(ownershipFailureLogMessage('sepolia', 'seed', Object.assign(new Error(secret), { name: 'DatabaseConsistencyError' }), 1, 10)).toBe(
+			'[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError',
+		)
+		expect(ownershipFailureLogMessage('sepolia', 'seed', new DatabaseConsistencyError(secret), 1, 10)).toBe(
+			'[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError',
+		)
+		const moved = new DatabaseConsistencyError('unsafe original message', {
+			code: 'lease-backend-moved',
+			expectedBackendPid: 41,
+			observedBackendPid: 42,
+		})
+		expect(ownershipFailureLogMessage('sepolia', 'owned-run', new Error('wrapper secret', { cause: moved }), 1, 10)).toContain(
+			'Error caused by DatabaseConsistencyError: Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler',
+		)
+	})
+
+	test('backs off repeated immediate owned-run failures across reacquisition', async () => {
+		const controller = new AbortController()
+		const delays: number[] = []
+		let ownedRuns = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		const recovered = spyOn(console, 'info').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => ({ backendPid: 42, assertHeld: async () => {}, release: async () => {} }),
+				seed: async () => {},
+				runOwned: async () => {
+					ownedRuns++
+					throw new Error('immediate owned failure')
+				},
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				random: () => 0.5,
+				wait: async (delay) => {
+					delays.push(delay)
+					if (delays.length === 3) controller.abort()
+				},
+				signal: controller.signal,
+			})
+
+			expect(ownedRuns).toBe(3)
+			expect(delays).toEqual([10, 20, 40])
+			expect(logged.mock.calls.map(([message]) => message)).toEqual([
+				'[mainnet] indexer ownership failed; stage: owned-run; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: Error',
+				'[mainnet] indexer ownership failed; stage: owned-run; consecutive failures: 2; retry delay: 20ms; backend PID: 42; reason: Error',
+				'[mainnet] indexer ownership failed; stage: owned-run; consecutive failures: 3; retry delay: 40ms; backend PID: 42; reason: Error',
+			])
+		} finally {
+			logged.mockRestore()
+			recovered.mockRestore()
+		}
+	})
+
+	test('reports acquisition after standby without treating standby as a failure', async () => {
+		const controller = new AbortController()
+		const ownershipEvents: unknown[] = []
+		let acquisitions = 0
+		const recovered = spyOn(console, 'info').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'sepolia',
+				acquire: async () => {
+					acquisitions++
+					if (acquisitions === 1) return undefined
+					return { backendPid: 52, assertHeld: async () => {}, release: async () => {} }
+				},
+				seed: async () => {},
+				runOwned: async () => controller.abort(),
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: (event) => ownershipEvents.push(event),
+				wait: async () => {},
+				signal: controller.signal,
+			})
+
+			expect(ownershipEvents).toEqual([
+				{ type: 'standby' },
+				{ type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true },
+				{ type: 'released', backendPid: 52 },
+			])
+			expect(recovered).toHaveBeenCalledWith('[sepolia] indexer ownership reacquired; backend PID: 52; source: standby; previous consecutive failures: 0')
+		} finally {
+			recovered.mockRestore()
+		}
+	})
+
+	test('tracks process-local ownership failures and reacquisitions for health diagnostics', () => {
+		const failed = nextIndexerOwnershipStatus(
+			'sepolia',
+			undefined,
+			{ type: 'failure', stage: 'verify', consecutiveFailures: 2, retryDelayMs: 24_000, backendPid: 41 },
+			new Date('2026-08-13T10:00:00Z'),
+		)
+		expect(failed).toEqual({
+			networkId: 'sepolia',
+			active: false,
+			backendPid: 41,
+			failuresTotal: 1,
+			reacquisitionsTotal: 0,
+			consecutiveFailures: 2,
+			lastFailureAt: '2026-08-13T10:00:00.000Z',
+			lastFailureStage: 'verify',
+		})
+		expect(nextIndexerOwnershipStatus('sepolia', failed, { type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false })).toEqual(
+			{
+				...failed,
+				active: true,
+				backendPid: 42,
+				reacquisitionsTotal: 1,
+				consecutiveFailures: 0,
+			},
+		)
+		const standby = nextIndexerOwnershipStatus('mainnet', undefined, { type: 'standby' })
+		expect(nextIndexerOwnershipStatus('mainnet', standby, { type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true })).toEqual(
+			{
+				networkId: 'mainnet',
+				active: true,
+				backendPid: 52,
+				failuresTotal: 0,
+				reacquisitionsTotal: 1,
+				consecutiveFailures: 0,
+			},
+		)
+	})
+
+	test('reports a lease release failure through ownership diagnostics', async () => {
+		const controller = new AbortController()
+		const ownershipEvents: unknown[] = []
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => ({
+					backendPid: 42,
+					assertHeld: async () => {},
+					release: async () => {
+						throw Object.assign(new Error('connection secret'), { code: 'ERR_POSTGRES_CONNECTION_CLOSED' })
+					},
+				}),
+				seed: async () => {},
+				runOwned: async () => controller.abort(),
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: (event) => ownershipEvents.push(event),
+				random: () => 0.5,
+				signal: controller.signal,
+			})
+
+			expect(ownershipEvents).toEqual([
+				{ type: 'acquired', backendPid: 42, recoveredAfterFailures: 0, acquiredAfterStandby: false },
+				{ type: 'failure', stage: 'release', consecutiveFailures: 1, retryDelayMs: 10, backendPid: 42 },
+				{ type: 'released', backendPid: 42 },
+			])
+			expect(logged).toHaveBeenCalledWith(
+				'[mainnet] indexer ownership failed; stage: release; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: Error; code ERR_POSTGRES_CONNECTION_CLOSED',
+			)
+			expect(logged.mock.calls.flat().join(' ')).not.toContain('secret')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('rejects an indexer lease that moves to another PostgreSQL backend', () => {
+		expect(() => assertIndexerLeaseObservation(41, 41, true)).not.toThrow()
+		expect(() => assertIndexerLeaseObservation(41, 42, true)).toThrow(
+			'Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler',
+		)
+		expect(() => assertIndexerLeaseObservation(41, 41, false)).toThrow(DatabaseConsistencyError)
+		expect(() => assertIndexerLeaseObservation(41, 41, false)).toThrow('Indexer lease is no longer held by PostgreSQL backend 41')
+	})
+
+	test('rejects an indexer lease release on another backend or without an unlocked lock', () => {
+		expect(() => assertIndexerLeaseReleaseObservation(41, 41, true)).not.toThrow()
+		expect(() => assertIndexerLeaseReleaseObservation(41, 42, false)).toThrow('Indexer lease moved from PostgreSQL backend 41 to 42')
+		expect(() => assertIndexerLeaseReleaseObservation(41, 41, false)).toThrow(
+			'Indexer lease unlock failed on PostgreSQL backend 41; lock ownership may already be lost',
+		)
+	})
+
+	test('does not run a leased mutation when the transaction uses another PostgreSQL backend', async () => {
+		let mutated = false
+		const transaction = { backendPid: 42 }
+
+		await expect(
+			runFencedIndexerTransaction(
+				async (operation) => await operation(transaction),
+				async (activeTransaction: { readonly backendPid: number }) => assertIndexerLeaseObservation(41, activeTransaction.backendPid, true),
+				async () => {
+					mutated = true
+				},
+			),
+		).rejects.toThrow('Indexer lease moved from PostgreSQL backend 41 to 42')
+		expect(mutated).toBeFalse()
 	})
 
 	test('does not select shared tokens as standalone activity sources', () => {
