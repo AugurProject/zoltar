@@ -28,6 +28,7 @@ import {
 	createRpcDiagnosticContext,
 	deploymentReadBudget,
 	findContractDeploymentBlock,
+	findManifestContractDeployment,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
 	indexerWaitingMessage,
@@ -534,14 +535,40 @@ describe('network indexer lifecycle', () => {
 		).toBe(70n)
 	})
 
-	test('tracks token filter coverage without querying token logs', () => {
+	test('gives each manifest deployment search an independent read budget', async () => {
+		let now = 0
+		const codeAt = async (_candidate: Address, block: bigint) => {
+			now += 2
+			return block === 1n ? '0x01' : undefined
+		}
+		const first = await findManifestContractDeployment(address, 0n, 1n, false, codeAt, 5, () => now)
+		const second = await findManifestContractDeployment('0x2000000000000000000000000000000000000002', 0n, 1n, false, codeAt, 5, () => now)
+		expect(first).toEqual({ block: 1n, exact: true })
+		expect(second).toEqual({ block: 1n, exact: true })
+		expect(now).toBe(8)
+	})
+
+	test('tracks implicit token filter coverage from the replay start without querying token logs', async () => {
 		const tokenAddress = '0x3000000000000000000000000000000000000003'
 		const helperAddress = '0x4000000000000000000000000000000000000004'
 		const contracts = new Map<string, ContractMetadata>([
-			[tokenAddress, { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest', deploymentBlock: 70n }],
+			[tokenAddress, { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' }],
 			[helperAddress, { address: helperAddress, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' }],
 		])
-		expect(logScanCursorUpdates(contracts, [], 100n, 0n)).toEqual([{ contractAddress: tokenAddress, startBlock: 70n, lastRetrievedBlock: 100n }])
+		const updates = logScanCursorUpdates(contracts, [], 100n, 0n, 70n)
+		expect(updates).toEqual([{ contractAddress: tokenAddress, startBlock: 70n, lastRetrievedBlock: 100n }])
+		const cursor = updates[0]
+		if (cursor === undefined) throw new Error('Expected REP filter coverage cursor')
+		expect(
+			await planManifestBackfill(
+				[[tokenAddress, 'REP', 'reputationToken', 50n]],
+				contracts,
+				new Map([[tokenAddress, cursor]]),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(50n)
 	})
 
 	test('does not rewind for covered, future, absent, or non-activity manifest contracts', async () => {

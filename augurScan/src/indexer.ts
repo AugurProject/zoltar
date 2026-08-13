@@ -209,17 +209,32 @@ export const planManifestBackfill = async (
 	return replayStart
 }
 
+export const findManifestContractDeployment = async (
+	address: Address,
+	startBlock: bigint,
+	checkpoint: bigint,
+	startBlockKnownAbsent: boolean,
+	codeAt: (address: Address, block: bigint) => Promise<Hex | undefined>,
+	timeoutMs = 5_000,
+	now = Date.now,
+): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+	const readWithinBudget = deploymentReadBudget(timeoutMs, now)
+	return await findContractDeploymentBlock(startBlock, checkpoint, (blockNumber) => readWithinBudget(() => codeAt(address, blockNumber)), startBlockKnownAbsent)
+}
+
 export const logScanCursorUpdates = (
 	contracts: ReadonlyMap<string, ContractMetadata>,
 	scanInputs: readonly LogScanInput[],
 	endBlock: bigint,
 	configuredStartBlock: bigint,
+	coverageStartBlock = configuredStartBlock,
 ): readonly LogScanCursor[] =>
 	[...contracts.values()].flatMap((contract) => {
 		const scanInput = scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())
 		const tracksFilteredHistory = contract.kind === 'reputationToken' || contract.kind === 'weth'
 		if (!tracksFilteredHistory && (!isProtocolActivitySource(contract) || (scanInput === undefined && contract.discoveryBlock === undefined))) return []
-		const startBlock = scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? configuredStartBlock
+		const startBlock =
+			scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
 		return startBlock > endBlock ? [] : [{ contractAddress: contract.address, startBlock, lastRetrievedBlock: endBlock }]
 	})
 
@@ -1215,7 +1230,6 @@ class NetworkIndexer {
 			this.#database.contracts(this.#network.chainId, this.#requireLease()),
 			this.#database.logScanCursors(this.#network.chainId, this.#requireLease()),
 		])
-		const readWithinBudget = deploymentReadBudget()
 		const replayStart = await planManifestBackfill(
 			this.#network.contracts,
 			storedContracts,
@@ -1223,11 +1237,8 @@ class NetworkIndexer {
 			checkpoint.number,
 			this.#network.startBlock,
 			(address, startBlock, indexedBoundary, startBlockKnownAbsent) =>
-				findContractDeploymentBlock(
-					startBlock,
-					indexedBoundary,
-					(blockNumber) => readWithinBudget(() => this.#client.getBytecode({ address, blockNumber })),
-					startBlockKnownAbsent,
+				findManifestContractDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
+					this.#client.getBytecode({ address: candidate, blockNumber }),
 				),
 		)
 		if (replayStart === undefined) return
@@ -1439,7 +1450,7 @@ class NetworkIndexer {
 				? {
 						...indexed.block,
 						contractDeploymentObservations: segment.deploymentObservations,
-						logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, end, this.#network.startBlock),
+						logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, end, this.#network.startBlock, batchStart),
 					}
 				: indexed.block
 			await this.#assertLease()
