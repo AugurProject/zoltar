@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, LiquidationRequest, LiquidationSnapshot } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { LiquidationApprovalRegistry } from './LiquidationApprovalRegistry.sol';
@@ -523,7 +523,7 @@ contract OpenOraclePriceCoordinator {
 			maximumDebtAttoEth = stagedOperation.reservedLiquidationDebtAttoEth;
 		}
 		try
-			securityPool.performLiquidation(operationId, stagedOperation.operator, stagedOperation.receiverVault, stagedOperation.targetVault, maximumDebtAttoEth, stagedOperation.snapshotTargetBackingUnits, stagedOperation.snapshotTargetCapacityOwnershipAttoRep, stagedOperation.snapshotTotalPoolHeldAttoRep, stagedOperation.snapshotTotalRepBackingUnits, minimumHealthFactorBps, minLiquidationPriceDistanceBps)
+			securityPool.performLiquidation(LiquidationRequest({operationId: operationId, operator: stagedOperation.operator, receiverVault: stagedOperation.receiverVault, targetVault: stagedOperation.targetVault, requestedDebtAttoEth: maximumDebtAttoEth, snapshot: LiquidationSnapshot({targetBackingUnits: stagedOperation.snapshotTargetBackingUnits, targetCapacityOwnershipAttoRep: stagedOperation.snapshotTargetCapacityOwnershipAttoRep, totalPoolHeldAttoRep: stagedOperation.snapshotTotalPoolHeldAttoRep, totalRepBackingUnits: stagedOperation.snapshotTotalRepBackingUnits}), minimumReceiverHealthFactorBps: minimumHealthFactorBps, minLiquidationPriceDistanceBps: minLiquidationPriceDistanceBps}))
 		returns (uint256 debtMovedAttoEth, uint256, uint256) {
 			if (stagedOperation.liquidationApprovalId != bytes32(0))
 				require(debtMovedAttoEth <= stagedOperation.reservedLiquidationDebtAttoEth, 'Debt exceeds reservation');

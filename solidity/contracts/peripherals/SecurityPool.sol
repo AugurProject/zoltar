@@ -14,7 +14,9 @@ import {
 	AccountingReason,
 	SystemState,
 	QuestionOutcome,
-	ISecurityPoolFactory
+	ISecurityPoolFactory,
+	LiquidationRequest,
+	LiquidationExecutionRequest
 } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -350,22 +352,20 @@ contract SecurityPool is SecurityPoolStorage {
 	function attoRepToBackingUnits(uint256 attoRepAmount) public view returns (uint256) {
 		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || totalPoolHeldRepBalanceAttoRep == 0)
-			return attoRepAmount * SecurityPoolUtils.PRICE_PRECISION;
-		return (attoRepAmount * totalRepBackingUnits) / totalPoolHeldRepBalanceAttoRep;
+			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep);
 	}
 
 	function _attoRepToBackingUnitsRoundUp(uint256 attoRepAmount) private view returns (uint256) {
 		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || totalPoolHeldRepBalanceAttoRep == 0)
-			return attoRepAmount * SecurityPoolUtils.PRICE_PRECISION;
-		uint256 numerator = attoRepAmount * totalRepBackingUnits;
-		if (numerator == 0) return 0;
-		return (numerator - 1) / totalPoolHeldRepBalanceAttoRep + 1;
+			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep, Math.Rounding.Ceil);
 	}
 
 	function backingUnitsToAttoRep(uint256 repBackingUnits) public view returns (uint256) {
 		if (totalRepBackingUnits == 0) return 0;
-		return (repBackingUnits * getTotalPoolHeldAttoRep()) / totalRepBackingUnits;
+		return Math.mulDiv(repBackingUnits, getTotalPoolHeldAttoRep(), totalRepBackingUnits);
 	}
 
 	function getTotalPoolHeldAttoRep() public view returns (uint256) {
@@ -475,54 +475,36 @@ contract SecurityPool is SecurityPoolStorage {
 	// target vault REP backing. Earned fees and dispute-staked REP stay with the target. A maximum
 	// request records any uncovered remainder as realized bad debt, denominated in attoETH and borne
 	// by the target vault and pool as a non-recoverable accounting writeoff.
-	function performLiquidation(uint256 operationId, address operator, address receiverVault, address targetVaultAddress, uint256 requestedDebtAttoEth, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, uint256 minimumReceiverHealthFactorBps, uint256 minLiquidationPriceDistanceBps)
+	function performLiquidation(LiquidationRequest calldata request)
 		external
 		isOperational
 		onlyValidOracle
 		returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth)
 	{
-		// Pool execution uses the live backing rate so an unsolicited ERC-20
-		// transfer cannot cancel liquidation. The queue-time pool totals remain in
-		// the staged operation for reconstruction but do not govern execution.
-		assembly ('memory-safe') {
-			pop(snapshotTotalPoolHeldAttoRep)
-			pop(snapshotTotalRepBackingUnits)
-		}
+		// Pool execution uses the live backing rate so the queue-time pool totals in
+		// request.snapshot remain reconstruction evidence rather than execution inputs.
 		require(!isEscalationResolved(), 'Resolved');
-		updateVaultFees(targetVaultAddress);
-		updateVaultFees(receiverVault);
+		updateVaultFees(request.targetVault);
+		updateVaultFees(request.receiverVault);
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		address delegate = liquidationDelegate;
-		bytes4 selector = SecurityPoolLiquidationDelegate.performBundledLiquidation.selector;
-		assembly ('memory-safe') {
-			let pointer := mload(0x40)
-			mstore(pointer, selector)
-			mstore(add(pointer, 0x04), receiverVault)
-			mstore(add(pointer, 0x24), targetVaultAddress)
-			mstore(add(pointer, 0x44), requestedDebtAttoEth)
-			mstore(add(pointer, 0x64), snapshotTargetBackingUnits)
-			mstore(add(pointer, 0x84), snapshotTargetCapacityOwnershipAttoRep)
-			mstore(add(pointer, 0xa4), repEthPrice)
-			mstore(add(pointer, 0xc4), minimumReceiverHealthFactorBps)
-			mstore(add(pointer, 0xe4), minLiquidationPriceDistanceBps)
-			if iszero(delegatecall(gas(), delegate, pointer, 0x104, pointer, 0x60)) {
-				returndatacopy(pointer, 0, returndatasize())
-				revert(pointer, returndatasize())
+		LiquidationExecutionRequest memory executionRequest = LiquidationExecutionRequest({receiverVault: request.receiverVault, targetVault: request.targetVault, requestedDebtAttoEth: request.requestedDebtAttoEth, snapshotTargetBackingUnits: request.snapshot.targetBackingUnits, snapshotTargetCapacityOwnershipAttoRep: request.snapshot.targetCapacityOwnershipAttoRep, repEthPrice: repEthPrice, minimumReceiverHealthFactorBps: request.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: request.minLiquidationPriceDistanceBps});
+		(bool success, bytes memory result) = liquidationDelegate.delegatecall(abi.encodeCall(SecurityPoolLiquidationDelegate.performBundledLiquidation, (executionRequest)));
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(result, 0x20), mload(result))
 			}
-			debtMovedAttoEth := mload(pointer)
-			capacityOwnershipMovedAttoRep := mload(add(pointer, 0x20))
-			badDebtAttoEth := mload(add(pointer, 0x40))
 		}
+		(debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth) = abi.decode(result, (uint256, uint256, uint256));
 
-		_registerVault(targetVaultAddress);
-		if (debtMovedAttoEth != 0) _registerVault(receiverVault);
+		_registerVault(request.targetVault);
+		if (debtMovedAttoEth != 0) _registerVault(request.receiverVault);
 
 		if (debtMovedAttoEth != 0 || badDebtAttoEth != 0)
-			emit VaultLiquidated(operationId, operator, receiverVault, targetVaultAddress, debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth);
-		_emitVaultAccountingCheckpoint(targetVaultAddress);
-		if (debtMovedAttoEth != 0) _emitVaultAccountingCheckpoint(receiverVault);
-		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, receiverVault);
+			emit VaultLiquidated(request.operationId, request.operator, request.receiverVault, request.targetVault, debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth);
+		_emitVaultAccountingCheckpoint(request.targetVault);
+		if (debtMovedAttoEth != 0) _emitVaultAccountingCheckpoint(request.receiverVault);
+		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, request.receiverVault);
 	}
 
 	////////////////////////////////////////
@@ -655,7 +637,7 @@ contract SecurityPool is SecurityPoolStorage {
 		uint256 remainingAttoRep =
 			updatedRepBackingUnits == 0
 				? 0
-				: (updatedRepBackingUnits * postTransferPoolHeldRepBalanceAttoRep) / postTransferTotalRepBackingUnits;
+				: Math.mulDiv(updatedRepBackingUnits, postTransferPoolHeldRepBalanceAttoRep, postTransferTotalRepBackingUnits);
 		uint256 vaultDisputeStakedAttoRep =
 			escalationGame.disputeStakedRepByVaultAttoRep(msg.sender) + depositedAttoRep;
 		uint256 totalDisputeStakedAttoRep = escalationGame.totalDisputeStakedAttoRep() + depositedAttoRep;

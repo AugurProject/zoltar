@@ -279,7 +279,7 @@ describe('testnet deployment transaction authorization', () => {
 		])
 	})
 
-	test('caps padding at the transaction signer gas limit', async () => {
+	test('rejects estimates above the Osaka transaction gas limit', async () => {
 		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
 		const send = createBudgetedTransactionSender(
 			wallet({
@@ -293,8 +293,8 @@ describe('testnet deployment transaction authorization', () => {
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
 		)
 
-		expect(await send({ to: FIRST_ADDRESS })).toBe(FIRST_HASH)
-		expect(submitted?.gas).toBe(30_000_000n)
+		await expect(send({ to: FIRST_ADDRESS })).rejects.toThrow('exceeds the transaction signer limit 16777216')
+		expect(submitted).toBeUndefined()
 	})
 
 	test('uses the signer gas limit when estimation falsely reverts but a capped simulation succeeds', async () => {
@@ -325,14 +325,14 @@ describe('testnet deployment transaction authorization', () => {
 		expect(simulated).toEqual({
 			account: account.address,
 			data: '0x1234',
-			gas: 30_000_000n,
+			gas: 16_777_216n,
 			maxFeePerGas: 30n,
 			maxPriorityFeePerGas: 10n,
 			to: FIRST_ADDRESS,
 			value: undefined,
 		})
-		expect(submitted?.gas).toBe(30_000_000n)
-		expect(logs).toContain('  ├─ Gas estimate unavailable\n  │  ├─ Fallback gas limit: 30000000\n  │  └─ Validation: capped simulation succeeded')
+		expect(submitted?.gas).toBe(16_777_216n)
+		expect(logs).toContain('  ├─ Gas estimate unavailable\n  │  ├─ Fallback gas limit: 16777216\n  │  └─ Validation: capped simulation succeeded')
 	})
 
 	test('preserves an estimation failure when the capped simulation also reverts', async () => {
@@ -355,7 +355,7 @@ describe('testnet deployment transaction authorization', () => {
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
 		)
 
-		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toThrow('Gas estimation failed (estimate reverted) and the 30000000 gas fallback simulation also failed (simulation reverted)')
+		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toThrow('Gas estimation failed (estimate reverted) and the 16777216 gas fallback simulation also failed (simulation reverted)')
 		expect(sendCalled).toBe(false)
 	})
 
@@ -554,13 +554,17 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(12)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(12)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(16)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n }))
 		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
+		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 1n }))
+		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 2n }))
+		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
+		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
 		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
@@ -790,6 +794,15 @@ describe('testnet deployment plan', () => {
 
 		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
 		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')
+
+		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
+		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))
+		for (const id of ['priceCoordinatorCreationCodeFirstChunk', 'priceCoordinatorCreationCodeSecondChunk', 'securityPoolCreationCodeFirstChunk', 'securityPoolCreationCodeSecondChunk']) {
+			const chunkAddress = descendants[id]
+			if (chunkAddress === undefined) throw new Error(`Missing test descendant ${id}`)
+			await expect(assertBootstrapDescendantCode({ getCode: async ({ address }) => (address === chunkAddress ? undefined : '0x01') }, SEPOLIA_NETWORK_PROFILE, async () => undefined, expectedRuntimeCodeHashes)).rejects.toThrow(`Bootstrap descendant ${id} is missing`)
+			await expect(assertBootstrapDescendantCode({ getCode: async ({ address }) => (address === chunkAddress ? '0x02' : '0x01') }, SEPOLIA_NETWORK_PROFILE, undefined, expectedRuntimeCodeHashes)).rejects.toThrow(`Unexpected runtime code for ${id}`)
+		}
 	})
 
 	test('retries bootstrap descendants as one batch when RPC code state lags', async () => {

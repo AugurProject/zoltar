@@ -10,6 +10,7 @@ import { IShareToken } from '../interfaces/IShareToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { SecurityPoolEventEmitter } from '../SecurityPoolEventEmitter.sol';
+import { CreationCodeStorage } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
 
 contract SecurityPoolDeployer {
 	ISecurityPoolFactory immutable factory;
@@ -34,20 +35,22 @@ contract SecurityPoolDeploymentWorker {
 	address immutable deployer;
 	ISecurityPoolFactory public immutable factory;
 	SecurityPoolEventEmitter public immutable eventEmitter;
-	bytes private securityPoolCreationCode;
+	address private immutable creationCodeFirstChunk;
+	address private immutable creationCodeSecondChunk;
 
 	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter) {
 		deployer = msg.sender;
 		factory = _factory;
 		eventEmitter = _eventEmitter;
-		securityPoolCreationCode = type(SecurityPool).creationCode;
+		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SecurityPool).creationCode);
 	}
 
 	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialEscalationGameDepositAttoRep, address truthAuction) external returns (ISecurityPool securityPool) {
 		require(msg.sender == deployer, 'Only SecurityPoolDeployer can use the deployment worker');
 
-		// Keep SecurityPool init code in storage so this worker's runtime stays below EIP-170.
-		bytes memory initCode = abi.encodePacked(securityPoolCreationCode, abi.encode(securityPoolForker, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, initialEscalationGameDepositAttoRep, truthAuction));
+		// Keep SecurityPool init code in code chunks so this worker's runtime stays below EIP-170
+		// without paying storage-write gas during the factory deployment.
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(securityPoolForker, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, initialEscalationGameDepositAttoRep, truthAuction));
 		address deployed;
 		assembly {
 			deployed := create2(0, add(initCode, 0x20), mload(initCode), 0)
