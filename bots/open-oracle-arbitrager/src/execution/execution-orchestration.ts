@@ -2,7 +2,7 @@ import { bigintToSafeNumber, type Address, type BlockTransaction, type Hex, type
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
-import { quorumValue } from '#monitoring/read-quorum'
+import { quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
 import { isSelfReport } from '#core/strategy'
 import type { StandardUniswapFee } from '#core/uniswap-v4'
 import type { Venue } from '#core/venue-strategy'
@@ -53,6 +53,10 @@ export function buildHedgeExecutionPayload(parameters: {
 
 export function executionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly { endpoint: string; value: T }[]) {
 	return quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
+}
+
+export function settledExecutionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly Promise<{ endpoint: string; value: T }>[]) {
+	return settledQuorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
 }
 
 export function executionTokenAllowed(allowedTokens: readonly Address[], token: Address) {
@@ -240,7 +244,8 @@ type BlockHashReader = {
 
 export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashReader[], endpoints: readonly string[], label: string, blockNumber: bigint) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} canonical block ${blockNumber.toString()}`,
 		readers.map(async (reader, index) => {
 			const block = await reader.getBlock({ blockNumber })
 			if (block.hash == null) throw new Error(`${label} canonical block is missing its hash`)
@@ -250,7 +255,6 @@ export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashRe
 			}
 		}),
 	)
-	return quorumValue(`${label} canonical block ${blockNumber.toString()}`, observations)
 }
 
 type SenderNonceBlockReader = {
@@ -266,7 +270,8 @@ type TransactionIntentReader = {
 
 export async function transactionIntentWithQuorum(readers: readonly TransactionIntentReader[], endpoints: readonly string[], label: string, transactionHash: Hex) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} transaction readers and endpoints differ`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} transaction intent`,
 		readers.map(async (reader, index) => {
 			const transaction = await reader.getTransaction({ hash: transactionHash })
 			return {
@@ -281,13 +286,13 @@ export async function transactionIntentWithQuorum(readers: readonly TransactionI
 			}
 		}),
 	)
-	return quorumValue(`${label} transaction intent`, observations)
 }
 
 export async function transactionHashBySenderNonceWithQuorum(readers: readonly SenderNonceBlockReader[], endpoints: readonly string[], label: string, parameters: { account: Address; fromBlockNumber: bigint; nonce: bigint; toBlockNumber: bigint }) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	if (parameters.toBlockNumber < parameters.fromBlockNumber) throw new Error(`${label} replacement scan range is invalid`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} replacement transaction`,
 		readers.map(async (reader, index) => {
 			let value: Hex | undefined
 			if ((await reader.getTransactionCount({ address: parameters.account, blockNumber: parameters.toBlockNumber })) > parameters.nonce) {
@@ -315,7 +320,6 @@ export async function transactionHashBySenderNonceWithQuorum(readers: readonly S
 			}
 		}),
 	)
-	return quorumValue(`${label} replacement transaction`, observations)
 }
 
 export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
@@ -323,13 +327,7 @@ export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
 }
 
 export async function finalizeSubmittedLifecycleAttempt(lifecyclePosition: PositionRecord, recover: (position: PositionRecord) => Promise<PositionRecord>, persist: (position: PositionRecord) => Promise<unknown>) {
-	let recovered: PositionRecord
-	try {
-		recovered = await recover(lifecyclePosition)
-	} catch (error) {
-		await persist({ ...lifecyclePosition, status: 'recovery-required' })
-		throw error
-	}
+	const recovered = await recover(lifecyclePosition)
 	await persist(recovered)
 	if (recovered.status !== 'closed-pending-finality') throw new Error(`Position ${lifecyclePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
 	return recovered
@@ -363,7 +361,8 @@ function isMissingReceipt(error: unknown) {
 
 export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} canonical receipt blocks`,
 		readers.map(async (reader, index) => ({
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await Promise.all(
@@ -383,12 +382,12 @@ export async function receiptGasExpendituresWithQuorum(readers: readonly Receipt
 			),
 		})),
 	)
-	return quorumValue(`${label} canonical receipt blocks`, observations)
 }
 
 export async function transactionReceiptsWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} receipts`,
 		readers.map(async (reader, index) => {
 			const receipts = await Promise.all(transactionHashes.map(hash => reader.getTransactionReceipt({ hash })))
 			return {
@@ -397,12 +396,12 @@ export async function transactionReceiptsWithQuorum(readers: readonly Transactio
 			}
 		}),
 	)
-	return quorumValue(`${label} receipts`, observations)
 }
 
 export async function transactionReceiptsOrMissingWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`${label} optional receipts`,
 		readers.map(async (reader, index) => ({
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await Promise.all(
@@ -417,7 +416,6 @@ export async function transactionReceiptsOrMissingWithQuorum(readers: readonly T
 			),
 		})),
 	)
-	return quorumValue(`${label} optional receipts`, observations)
 }
 
 export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {

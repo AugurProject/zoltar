@@ -11,6 +11,7 @@ describe('liquidator dashboard server', () => {
 	test('returns only the fields consumed by the public dashboard', async () => {
 		const calldataMarker = `0x${'de'.repeat(64)}`
 		const protectedPath = '/protected/operator-state.json'
+		const rpcSecret = 'liquidator-rpc-secret'
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({}),
 			getState: () => ({
@@ -40,6 +41,7 @@ describe('liquidator dashboard server', () => {
 				},
 				operatorPath: protectedPath,
 				paused: false,
+				rpcEndpointHealth: [{ consecutiveFailures: 2, error: `RPC https://user:${rpcSecret}@rpc.example/private failed`, lastFailureAt: '2026-08-13T00:00:00.000Z', lastSuccessAt: undefined, latencyMilliseconds: undefined, nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: `https://user:${rpcSecret}@rpc.example/private?token=${rpcSecret}` }],
 				pendingTransactions: [
 					{
 						hash: `0x${'12'.repeat(32)}`,
@@ -85,7 +87,7 @@ describe('liquidator dashboard server', () => {
 					},
 				],
 				scanning: false,
-				status: 'running',
+				status: 'connectivity-degraded',
 				marketSources: [],
 				universes: [],
 				wallet: '0x3333333333333333333333333333333333333333',
@@ -107,6 +109,9 @@ describe('liquidator dashboard server', () => {
 		expect(response.status).toBe(200)
 		expect(body).not.toContain(calldataMarker)
 		expect(body).not.toContain(protectedPath)
+		expect(body).not.toContain(rpcSecret)
+		expect(Reflect.get(snapshot, 'status')).toBe('connectivity-degraded')
+		expect(Reflect.get(snapshot, 'rpcEndpointHealth')).toEqual([{ consecutiveFailures: 2, error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.', lastFailureAt: '2026-08-13T00:00:00.000Z', nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: 'https://rpc.example' }])
 		expect(body).not.toContain('manager-marker')
 		expect(body).not.toContain('nested-vault-marker')
 		expect(body).not.toContain('candidate-target-marker')
@@ -213,6 +218,9 @@ describe('liquidator dashboard server', () => {
 			testMarketSources: () => ({ assets: [], blockNumber: '1' }),
 		})
 		servers.push(server)
+		const health = await fetch(new URL('/healthz', server.url))
+		expect(health.status).toBe(200)
+		expect(await health.text()).toBe('ok')
 		const page = await fetch(server.url)
 		expect(page.status).toBe(200)
 		const pageSource = await page.text()

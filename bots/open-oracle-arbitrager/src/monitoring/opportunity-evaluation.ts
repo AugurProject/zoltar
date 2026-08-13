@@ -1,7 +1,7 @@
 import { getAddress, getBalanceAtBlock, getTransactionCountAtBlock, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
-import { executionSnapshotWithQuorum, selectBestExecution } from '#execution/execution-orchestration'
+import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'
 import type { ExecutionCandidate, Pool, ReadClient } from '#core/operator-types'
 import { errorMessage, requiredBigint, requiredBigintArray, requiredHash, requiredTuple } from '#core/rpc-validation'
 import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
@@ -245,75 +245,71 @@ export async function executionReadQuorum(clients: readonly ReadClient[], config
 	const game = report.game
 	const newAmount1 = calculateNextAmount1(game)
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
-	const observations = await Promise.all(
-		clients.map(async (readClient, index) => {
-			let hedgeQuotes: Promise<{ buyHedgeQuote: bigint; sellHedgeQuote: bigint }>
-			if (hedgeVenue === 'uniswap-v2') {
-				hedgeQuotes = (async () => {
-					if (pool.v2Pair === undefined) throw new Error('Uniswap V2 execution is missing its authenticated pair')
-					const reserves = await constantProductReserves(readClient, pool.v2Pair, pool.token, blockNumber)
-					return {
-						buyHedgeQuote: constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken),
-						sellHedgeQuote: constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth),
-					}
-				})()
-			} else if (hedgeVenue === 'uniswap-v4') {
-				hedgeQuotes = (async () => {
-					if (config.v4Quoter === undefined) throw new Error('Uniswap V4 execution is missing its authenticated quoter')
-					const plan = v4QuotePlan(pool.token, hedgeFee, game.currentAmount2, repWithFees)
-					return {
-						buyHedgeQuote: await quoteV4ExactOutput(readClient, config.v4Quoter, plan.buy, blockNumber),
-						sellHedgeQuote: await quoteV4ExactInput(readClient, config.v4Quoter, plan.sell, blockNumber),
-					}
-				})()
-			} else {
-				hedgeQuotes = Promise.all([quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber)]).then(
-					([sellHedgeQuote, buyHedgeQuote]) => ({
-						buyHedgeQuote,
-						sellHedgeQuote,
-					}),
-				)
-			}
-			const [block, stateHash, refreshedPool, replacementAmount2, refreshedHedgeQuotes, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
-				readClient.getBlock({ blockNumber }),
-				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
-				loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
-				quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
-				hedgeQuotes,
-				getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
-				getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
-				readContractAtBlock(readClient.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
-				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
-				readContractAtBlock(readClient.transport, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
-				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
-				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token1] }, blockNumber),
-				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token2] }, blockNumber),
-			])
-			if (block.hash == null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
-			return {
-				endpoint: endpointLabel(endpoints[index] ?? ''),
-				value: {
-					allowance1: requiredBigint(allowance1, 'Executor token1 allowance'),
-					allowance2: requiredBigint(allowance2, 'Executor token2 allowance'),
-					internalAllowance1: requiredBigint(internalAllowance1, 'Executor internal token1 allowance'),
-					internalAllowance2: requiredBigint(internalAllowance2, 'Executor internal token2 allowance'),
-					baseFeePerGas: block.baseFeePerGas ?? 0n,
-					blockHash: block.hash,
-					blockTimestamp: block.timestamp,
-					buyHedgeQuote: refreshedHedgeQuotes.buyHedgeQuote,
-					eth: requiredBigint(eth, 'Execution account ETH balance'),
-					nonce,
-					poolLiquidity: refreshedPool.liquidity,
-					poolSpotTick: refreshedPool.spotTick,
-					poolTwapTick: refreshedPool.twapTick,
-					replacementAmount2,
-					sellHedgeQuote: refreshedHedgeQuotes.sellHedgeQuote,
-					stateHash: requiredHash(stateHash, 'OpenOracle report state'),
-					token: requiredBigint(token, 'Execution account report-token balance'),
-					weth: requiredBigint(weth, 'Execution account WETH balance'),
-				},
-			}
-		}),
-	)
-	return executionSnapshotWithQuorum(blockNumber, observations)
+	const observations = clients.map(async (readClient, index) => {
+		let hedgeQuotes: Promise<{ buyHedgeQuote: bigint; sellHedgeQuote: bigint }>
+		if (hedgeVenue === 'uniswap-v2') {
+			hedgeQuotes = (async () => {
+				if (pool.v2Pair === undefined) throw new Error('Uniswap V2 execution is missing its authenticated pair')
+				const reserves = await constantProductReserves(readClient, pool.v2Pair, pool.token, blockNumber)
+				return {
+					buyHedgeQuote: constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken),
+					sellHedgeQuote: constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth),
+				}
+			})()
+		} else if (hedgeVenue === 'uniswap-v4') {
+			hedgeQuotes = (async () => {
+				if (config.v4Quoter === undefined) throw new Error('Uniswap V4 execution is missing its authenticated quoter')
+				const plan = v4QuotePlan(pool.token, hedgeFee, game.currentAmount2, repWithFees)
+				return {
+					buyHedgeQuote: await quoteV4ExactOutput(readClient, config.v4Quoter, plan.buy, blockNumber),
+					sellHedgeQuote: await quoteV4ExactInput(readClient, config.v4Quoter, plan.sell, blockNumber),
+				}
+			})()
+		} else {
+			hedgeQuotes = Promise.all([quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber)]).then(([sellHedgeQuote, buyHedgeQuote]) => ({
+				buyHedgeQuote,
+				sellHedgeQuote,
+			}))
+		}
+		const [block, stateHash, refreshedPool, replacementAmount2, refreshedHedgeQuotes, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
+			readClient.getBlock({ blockNumber }),
+			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
+			loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
+			quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
+			hedgeQuotes,
+			getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
+			getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
+			readContractAtBlock(readClient.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+			readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+			readContractAtBlock(readClient.transport, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+			readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token1] }, blockNumber),
+			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token2] }, blockNumber),
+		])
+		if (block.hash == null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
+		return {
+			endpoint: endpointLabel(endpoints[index] ?? ''),
+			value: {
+				allowance1: requiredBigint(allowance1, 'Executor token1 allowance'),
+				allowance2: requiredBigint(allowance2, 'Executor token2 allowance'),
+				internalAllowance1: requiredBigint(internalAllowance1, 'Executor internal token1 allowance'),
+				internalAllowance2: requiredBigint(internalAllowance2, 'Executor internal token2 allowance'),
+				baseFeePerGas: block.baseFeePerGas ?? 0n,
+				blockHash: block.hash,
+				blockTimestamp: block.timestamp,
+				buyHedgeQuote: refreshedHedgeQuotes.buyHedgeQuote,
+				eth: requiredBigint(eth, 'Execution account ETH balance'),
+				nonce,
+				poolLiquidity: refreshedPool.liquidity,
+				poolSpotTick: refreshedPool.spotTick,
+				poolTwapTick: refreshedPool.twapTick,
+				replacementAmount2,
+				sellHedgeQuote: refreshedHedgeQuotes.sellHedgeQuote,
+				stateHash: requiredHash(stateHash, 'OpenOracle report state'),
+				token: requiredBigint(token, 'Execution account report-token balance'),
+				weth: requiredBigint(weth, 'Execution account WETH balance'),
+			},
+		}
+	})
+	return settledExecutionSnapshotWithQuorum(blockNumber, observations)
 }

@@ -53,8 +53,9 @@ executor, which swaps the required inventory atomically and submits the OpenOrac
 dispute while preserving the wallet as the replacement reporter. After the dispute
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
-exact asset recovery agree through 12 canonical descendants and every configured
-read RPC serves the same twelfth-descendant block hash. If a later reporter replaces
+exact asset recovery pass the finality quorum through 12 canonical descendants. The
+finality quorum requires at least two available readers, and every available reader
+must agree. If a later reporter replaces
 the bot, it derives the exact one-token credit from the authenticated old and new
 report amounts, withdraws only that amount through a parent-bound executor call,
 and verifies the `ReplacementCreditWithdrawn` event through the same receipt and
@@ -95,10 +96,15 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
-  bytecode hash for every contract and executable token. Every read RPC authenticates
-  every manifest entry before the bot can sign.
-- At least two independently operated read RPCs: one primary plus one or more
-  quorum endpoints. Live execution requires exact
+  bytecode hash for every contract and executable token. At least two available read
+  RPCs authenticate every manifest entry before the bot can sign; a contradictory
+  authentication result fails closed.
+- At least three independently operated read RPCs: one primary plus two or more
+  quorum endpoints. Only a retryable transport failure makes a reader unavailable.
+  Live execution requires at least two responses, and every responding reader must
+  agree exactly. One transport-unavailable reader is reported as degraded without
+  stopping an otherwise healthy quorum; a malformed or contradictory response is a
+  safety fault and fails closed. Execution also requires exact
   quote-block agreement on OpenOracle state, pool state, quotes, confirmed nonce,
   and balances, plus exact agreement on the pending nonce actually signed. A
   legitimate pending transaction visible to only one provider blocks signing until
@@ -206,6 +212,11 @@ docker compose up --build --force-recreate
 
 On Windows, run `start.bat` from this directory to start the same Compose command.
 
+Compose restarts the container only while Docker and the host remain available; a
+direct Bun process needs an external supervisor. If the host or named volume is
+lost, restore the complete bot state before resuming live execution with the same
+signer. Do not reuse that signer from incomplete recovery state.
+
 On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
 local-only default password `zoltar-local-dashboard`.
@@ -252,11 +263,13 @@ execution opportunities, but no approvals or disputes are sent. Without an appro
 coordinator, dry-run still synchronizes a bounded sample for diagnostics but refuses
 to classify any report as an executable opportunity.
 
-When network settings exist, every startup and dashboard RPC change calls
+When network settings exist, startup and dashboard RPC changes validate
 `eth_chainId`. An initially unconfigured bot keeps its paused dashboard available
 without making RPC calls. It will not scan until a verified chain and endpoint set
-has been saved and the process restarted. The bot also checks the chain before every
-scan.
+has been saved and the process restarted. A configured bot also keeps the dashboard
+available when RPC validation is temporarily unavailable, reports
+`connectivity-degraded`, and retries with bounded backoff. The bot checks the chain
+before every scan.
 
 Startup enters **Syncing** while the bot scans the configured historical lookback in
 100-block chunks. The deliberately bounded response size prevents permissionless
@@ -324,8 +337,18 @@ is deterministic; use the same 32-byte `--salt` to obtain the same address on ev
 chain where the canonical CREATE2 proxy and executor init code are identical:
 
 ```bash
-PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://your-private-mainnet-rpc.example bun run deploy-executor -- --network=mainnet --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
+
+The three read RPCs must use independent origins. Before broadcasting, the command
+requires exact quorum agreement on chain, proxy and destination code, pending nonce,
+gas estimate, and gas price, then syncs the signed intent beside the active operator
+configuration as `<operator-config>.executor-deployment.json`. It also holds the same
+chain-and-signer process lock as the operator. Repeating the command with the same
+signer, chain, and salt recovers or rebroadcasts those exact bytes after a disconnect
+or crash; the journal is removed only after quorum-backed canonical finality. Set
+`OPEN_ORACLE_ARBITRAGER_CONFIG` when the operator configuration is not at its default
+path; both commands must use the same value.
 
 ### Executor ABI source
 
@@ -489,8 +512,8 @@ Before each dispute, the bot:
     internal transfers, WETH/token withdrawals, and the canonical parent check share
     one revert boundary. It records realized P&amp;L only when the canonical receipt
     contains the executor event matching the position's account, report, tokens, and
-    amounts, remains canonical through 12 descendants, and every configured read RPC
-    serves the same twelfth-descendant block hash. Before that point the position is
+    amounts, and passes the finality quorum through 12 canonical descendants. Before
+    that point the position is
     `closed-pending-finality`, still consumes its risk slot, and is automatically
     reopened if the receipt disappears in a reorganization. If a later reporter
     replaces the bot, it computes the exact credit from the two authenticated report
@@ -620,8 +643,8 @@ The dashboard shows:
   evidence** and is excluded from actual P&amp;L totals until receipt and executor-event
   quorum succeeds. A lifecycle attempt is likewise excluded while any receipt is
   ambiguous. `closed-pending-finality` retains its risk slot and does not contribute
-  realized profit until every configured read RPC serves the same
-  twelfth-descendant block hash for its exact lifecycle evidence. Realized totals
+  realized profit until its exact lifecycle evidence passes the finality quorum.
+  Realized totals
   include only closed positions whose expected
   inventory fully reconciled or whose manual reconciliation explicitly records
   P&amp;L.
@@ -854,7 +877,8 @@ signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
 token input and returned token delta are negative, while the native output delta is
 positive and cannot fall below the signed minimum WETH output.
 
-Every read RPC must return the same quote at the exact quorum block. The executor
+At least two available read RPCs must return the same quote at the exact quorum
+block, and every available response must agree. The executor
 calls the authenticated PoolManager directly, requires those signed deltas to match
 the requested input or output, settles only those deltas, and converts native ETH
 to or from WETH before funding the OpenOracle dispute. Hooked pools, dynamic-fee
@@ -978,8 +1002,8 @@ The entry executor call and the single lifecycle executor call require
 `blockhash(parent)` to equal the independently agreed quote-block hash. A relay or
 builder using a different same-height parent, retaining a transaction beyond its
 target, or splitting prerequisite entry approvals from the guarded call cannot
-execute the value-moving call. Immediately before journaling and delivery, all read
-RPCs must still agree on both the parent height and hash.
+execute the value-moving call. Immediately before journaling and delivery, the read
+quorum must still agree on both the parent height and hash.
 The configured number of relays must successfully simulate the bundle, and at least
 one of those relays must accept submission, or delivery fails closed. Configured
 endpoints must implement the
@@ -992,9 +1016,9 @@ It shows which targets accepted or rejected the payload. Every atomic entry and
 lifecycle transaction is parent-bound to one target block and is not resubmitted
 from a stale quote. In public mode, receipt polling yields once that target passes so
 the durable recovery loop can continue. Missing receipt evidence remains pending
-through a 12-block canonical-finality window in either delivery mode. If every read
-RPC then agrees that the parent-bound entry executor call was absent, the attempt
-becomes `expired-not-included` and releases its risk slot. A quorum-confirmed
+through a 12-block canonical-finality window in either delivery mode. If receipt
+absence passes the finality quorum, the attempt becomes `expired-not-included` and
+releases its risk slot. A quorum-confirmed
 reverted atomic entry is terminally closed after recording its gas; it cannot have
 changed OpenOracle state. If the atomic lifecycle call was absent, that attempt is
 cleared and the open position can safely retry from a fresh parent. Expired hashes
@@ -1004,9 +1028,11 @@ that late gas once, updates the UTC-day gas budget and realized P&amp;L where
 applicable, and then removes the archived attempt. An absent hash is also retired
 once independent RPCs prove at the finalized height that a later canonical
 transaction consumed its nonce, because the retained signature can no longer be
-mined. Unexpected successful evidence fails closed. A successful receipt without
-the expected executor event or exact durable transaction intent, RPC disagreement,
-or ambiguous evidence remains `recovery-required`. Active transaction-tracker rows
+mined. Unexpected successful evidence fails closed. Inter-reader disagreement rejects
+the quorum read, leaves the journal in its current state, and blocks execution until
+the readers agree. Once the quorum agrees, a successful receipt without the expected
+executor event, exact durable transaction intent, or attributable assets remains
+`recovery-required`. Active transaction-tracker rows
 are kept in process memory and reset on restart; confirmed dispute history and its
 ETH profit totals are persisted in the configured history file.
 
@@ -1085,7 +1111,7 @@ pending-entry → open → withdrawing → closed-pending-finality → closed
      │           └──────────┴──→ recovery-required
      │                                ↓ signer-key-authorized local reconciliation
      │                              closed (P&L recorded or unavailable)
-     ├── atomic public/private: after 12 canonical descendants and unanimous absence
+     ├── atomic public/private: after 12 canonical descendants and quorum-confirmed absence
      │    → expired-not-included
      ├── quorum-confirmed atomic revert → closed (gas recorded)
      └── lifecycle receipt removed by reorg → open (provisional accounting removed)
@@ -1098,8 +1124,10 @@ current canonical hash. Every receipt must include its mined effective gas price
 The bot then decodes the executor event and reconstructs actual entry gas and hedge
 economics before leaving `pending-entry`. A current atomic public or private attempt
 proven absent after the 12-block window becomes `expired-not-included`; a
-quorum-confirmed atomic revert closes after gas accounting. Missing or ambiguous
-evidence remains `recovery-required` and never produces trading profit. Legacy
+quorum-confirmed atomic revert closes after gas accounting. Inter-reader disagreement
+keeps the current journal state pending and blocks execution. Quorum-agreed evidence
+that is missing required executor events or conflicts with the durable journal moves
+the position to `recovery-required` and never produces trading profit. Legacy
 multi-transaction private records are never auto-expired because their prerequisite
 signatures lack the executor's on-chain parent binding.
 
@@ -1114,9 +1142,9 @@ balance deltas and `withdraw(max)` are not accounting evidence, so permissionles
 OpenOracle dust, unrelated transfers, and other positions sharing a token remain
 separate. Exact successful evidence first moves the record to
 `closed-pending-finality`. The bot retains the risk slot and transaction evidence
-until all configured read RPCs serve the same twelfth-descendant block hash; it then
+until the exact lifecycle evidence passes the finality quorum; it then
 realizes profit, or removes provisional withdrawal and gas accounting and reopens
-the position if the receipt was reorged out. A lagging or unavailable quorum RPC
+the position if the receipt was reorged out. Fewer than two available agreeing RPCs
 therefore delays closure rather than releasing the slot from the primary RPC's head.
 
 When another report replaces the bot, the durable entry already contains the exact
@@ -1135,8 +1163,11 @@ Stop new entries and preserve the position journal before investigating. Do not
 delete or hand-edit a record to bypass the one-position guard.
 
 1. Confirm the dashboard network, signer address, OpenOracle, executor, and token
-   match the journal record. Save a copy of the journal, operation log, relay
-   responses, and all configured read RPC responses.
+   match the journal record. Save a copy of the journal, operation log, and evidence
+   from every configured reader. At least two readers must respond and every response
+   must agree exactly; record a reader as unavailable only for a positively identified
+   retryable transport failure. Preserve malformed or contradictory responses as
+   safety-fault evidence rather than excluding them.
 2. For **entry receipt could not be recovered**, current records contain one
    `entryTransactionHashes` value. Look it up on independent explorers/RPCs. It must
    be absent, revert without an executor event, or succeed in its parent-bound target
@@ -1145,14 +1176,16 @@ delete or hand-edit a record to bypass the one-position guard.
    inspect every hash and never treat the record as expired merely because its target
    passed. If evidence is temporarily unavailable, restore independent RPC service
    and restart; the bot retries quorum recovery. For a successful mismatched receipt,
-   reorganization, disagreement, or legacy multi-transaction record, keep the bot
-   paused and reconcile allowances, wallet balances, OpenOracle holder balances, and
-   the current reporter manually.
+   reorganization, or legacy multi-transaction record, keep the bot paused and
+   reconcile allowances, wallet balances, OpenOracle holder balances, and the current
+   reporter manually. For inter-reader disagreement, preserve the contradictory
+   evidence and restore a trustworthy agreeing quorum before deciding whether manual
+   reconciliation is required.
 3. For **lifecycle receipt could not be recovered**, inspect the single
    `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. A successful
    call must be in that target block and emit the exact matching lifecycle event.
-   A public or private attempt that all RPCs still report absent after 12 canonical
-   descendants is automatically cleared for a fresh retry. Keep the bot paused for
+   A public or private attempt whose absence passes the finality quorum after 12
+   canonical descendants is automatically cleared for a fresh retry. Keep the bot paused for
    disagreement or ambiguous evidence; do not authorize a second transaction while
    the recorded attempt remains live.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
@@ -1217,12 +1250,15 @@ entry from depending on wallet inventory already committed to recovery.
   hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
   Identities remain operator-supplied, but
   live mode authenticates every address and runtime bytecode hash against the
-  reviewed deployment manifest through every read RPC. The manifest itself remains
-  an operator trust root.
+  reviewed deployment manifest through at least two available read RPCs. Every
+  available authentication result must agree; the manifest itself remains an
+  operator trust root.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
-- Live execution requires exact agreement from at least two configured read RPCs at
-  one canonical block. Signed entry values come from that agreed snapshot, and an
+- Live execution uses the exact read-quorum rule above at one canonical block:
+  only retryable transport failures omit a reader, at least two readers must
+  respond, and every response must agree exactly. Signed entry values come from
+  that agreed snapshot, and an
   on-chain guard binds entry and lifecycle executor calls to its exact parent hash. This
   catches disagreement; it does not help when all
   endpoints share the same compromised upstream, implementation bug, or correlated
@@ -1238,11 +1274,12 @@ entry from depending on wallet inventory already committed to recovery.
   short reorganizations. The retained pre-overlap block hash is checked on every
   poll; a deeper reorganization stops execution and requires restart so the complete
   lookback is rebuilt. Operators still need independent alerting.
-- Continuous mode retries transient poll failures. The dashboard exposes the latest
-  error, but production operation still requires external process supervision and
-  alerts.
+- Continuous mode retries transient poll failures with bounded exponential backoff.
+  The dashboard exposes per-endpoint health and the latest error, `/healthz` supports
+  container supervision, and Compose restarts an unexpectedly exited process.
+  Production operation still requires external alerts.
 - Every public transaction and private entry bundle targets one block. The bot waits
-  12 canonical descendants before unanimous receipt absence can finalize it as
+  12 canonical descendants before quorum-confirmed receipt absence can finalize it as
   `expired-not-included`.
   Disagreement or a successful receipt without the matching executor event remains
   fail-closed. A quorum-confirmed reverted atomic entry closes after recording its
@@ -1253,8 +1290,8 @@ entry from depending on wallet inventory already committed to recovery.
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt, mined gas price, canonical receipt-block hash, and
   executor event agree; a lifecycle attempt realizes profit and releases risk only
-  after its canonical receipt and exact executor event agree and every read RPC
-  serves the same twelfth-descendant block hash. Unavailable, lagging, or
+  after its canonical receipt and exact executor event agree and at least two
+  available read RPCs serve the same twelfth-descendant block hash. Insufficient, lagging, or
   inconsistent evidence fails closed under the recovery runbook above.
 - No automated trading system can guarantee that users never lose money. Reorgs,
   correlated RPC lies, relay/builder faults, base-fee spikes, malicious or rebasing

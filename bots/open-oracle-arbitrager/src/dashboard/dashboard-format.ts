@@ -156,6 +156,7 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
 	if (state.paused) return { mode: state.mode, status: 'Paused' }
 	const statuses: Record<PublicOperatorSnapshot['status'], string> = {
+		'connectivity-degraded': 'Connectivity degraded',
 		error: 'Error',
 		paused: 'Paused',
 		running: 'Running',

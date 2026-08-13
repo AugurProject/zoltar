@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from '#monitoring/resilience'
+import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
 
 describe('OpenOracle monitor resilience', () => {
 	test('keeps a healthy quote when another direction fails', async () => {
@@ -32,6 +32,27 @@ describe('OpenOracle monitor resilience', () => {
 		expect(polls).toBe(2)
 		expect(waits).toBe(1)
 		expect(errors).toHaveLength(1)
+	})
+
+	test('backs off repeated failures and resets after a successful cycle', async () => {
+		expect(retryDelayMilliseconds(1_000, 1, () => 0)).toBe(1_000)
+		expect(retryDelayMilliseconds(1_000, 4, () => 0)).toBe(8_000)
+		expect(retryDelayMilliseconds(60_000, 20, () => 0)).toBe(300_000)
+		const waits: number[] = []
+		let polls = 0
+		await pollUntilStopped(
+			async () => {
+				polls += 1
+				if (polls <= 2) throw new Error('offline')
+				return polls === 4
+			},
+			async failures => {
+				waits.push(failures)
+			},
+			false,
+			() => undefined,
+		)
+		expect(waits).toEqual([1, 2, 0])
 	})
 
 	test('removes orphaned overlap logs before replaying canonical replacements', () => {

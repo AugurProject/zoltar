@@ -98,9 +98,11 @@ type Snapshot = {
 		walletRep: string
 	}
 	paused: boolean
-	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
+	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
+	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
 	pools: Pool[]
 	scanning: boolean
+	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
 	marketSources: MarketSourceRow[]
 	universes: Universe[]
 	wallet?: string
@@ -907,6 +909,30 @@ function renderActivities(activities: Activity[]) {
 	)
 }
 
+function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
+	const container = element('rpc-endpoint-health', HTMLDivElement)
+	container.replaceChildren(
+		...(health ?? []).map(endpoint => {
+			const item = document.createElement('div')
+			item.className = 'rpc-health-item'
+			item.dataset['status'] = endpoint.status
+			const status = document.createElement('strong')
+			status.textContent = endpoint.status
+			const target = document.createElement('span')
+			target.className = 'mono'
+			target.textContent = endpoint.target
+			const detail = document.createElement('small')
+			const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
+				value => value !== undefined,
+			)
+			const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
+			detail.textContent = [primaryDetail, ...metadata].join(' · ')
+			item.append(status, target, detail)
+			return item
+		}),
+	)
+}
+
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	stateConnected = true
@@ -915,13 +941,13 @@ function render(snapshot: Snapshot) {
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
+	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(snapshot.error === undefined ? undefined : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`, 'Scan failed')
+	setGlobalError(snapshot.error === undefined ? undefined : snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`, 'Scan failed')
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
@@ -930,6 +956,7 @@ function render(snapshot: Snapshot) {
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
+	renderRpcEndpointHealth(snapshot.rpcEndpointHealth)
 	if (!initialFragmentApplied) {
 		initialFragmentApplied = true
 		const fragment = decodeURIComponent(window.location.hash.slice(1))

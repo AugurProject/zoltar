@@ -1,8 +1,10 @@
-import { createPublicClient, http, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { scanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
@@ -21,50 +23,68 @@ function missingReceipt(error: unknown) {
 	return error instanceof Error && error.message.includes('could not be found')
 }
 
-export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex) {
+function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, pool: ReturnType<typeof createRpcEndpointPool>) {
 	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-	const clients = endpoints.map(endpoint => createPublicClient({ chain: wallet.chain, transport: http(endpoint) }))
-	const results = await Promise.all(
-		clients.map(async (client, index) => {
+	return {
+		clients: endpoints.map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: pool.transportFor(endpoint) }), endpoint })),
+		endpoints,
+	}
+}
+
+export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
+	const readers = recoveryReaders(settings, wallet, pool)
+	const result = await settledQuorumValue<{
+		evidence:
+			| { blockHash: Hex; blockNumber: bigint; hash: Hex; logs: { address: `0x${string}`; data: Hex; topics: readonly Hex[] }[]; status: 'reverted' | 'success' }
+			| undefined
+		receipt: TransactionReceipt | undefined
+	}>(
+		`receipt ${hash}`,
+		readers.clients.map(async ({ client, endpoint }) => {
 			try {
 				const receipt = await client.getTransactionReceipt({ hash })
 				return {
-					endpoint: endpoints[index] ?? '',
-					receipt,
+					endpoint,
 					value: {
-						blockHash: receipt.blockHash,
-						blockNumber: receipt.blockNumber,
-						hash: receipt.transactionHash,
-						logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
-						status: receipt.status,
+						evidence: {
+							blockHash: receipt.blockHash,
+							blockNumber: receipt.blockNumber,
+							hash: receipt.transactionHash,
+							logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
+							status: receipt.status,
+						},
+						receipt,
 					},
 				}
 			} catch (error) {
-				if (missingReceipt(error)) return { endpoint: endpoints[index] ?? '', receipt: undefined, value: undefined }
+				if (missingReceipt(error)) return { endpoint, value: { evidence: undefined, receipt: undefined } }
 				throw error
 			}
 		}),
 	)
-	const evidence = quorumValue(
-		`receipt ${hash}`,
-		results.map(result => ({ endpoint: result.endpoint, value: result.value })),
+	if (result.evidence === undefined || result.receipt === undefined) return { observed: false as const, receipt: undefined }
+	const receipt = result.receipt
+	if (
+		!(await confirmCanonicalReceiptFinality(
+			readers.clients.map(reader => reader.client),
+			readers.endpoints,
+			`transaction ${hash}`,
+			receipt,
+			PRIVATE_INTENT_FINALITY_BLOCKS,
+		))
 	)
-	if (evidence === undefined) return { observed: false as const, receipt: undefined }
-	const receipt = results.find(result => result.receipt?.transactionHash.toLowerCase() === evidence.hash.toLowerCase())?.receipt
-	if (receipt === undefined) throw new Error(`Quorum receipt ${hash} was not available for semantic validation`)
-	if (!(await confirmCanonicalReceiptFinality(clients, endpoints, `transaction ${hash}`, receipt, PRIVATE_INTENT_FINALITY_BLOCKS))) return { observed: true as const, receipt: undefined }
+		return { observed: true as const, receipt: undefined }
 	return { observed: true as const, receipt }
 }
 
-export async function recoverPendingTransactions(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>) {
-	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
+export async function recoverPendingTransactions(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
 	for (const intent of [...state.pendingTransactions]) {
 		assertIntentSender(intent.sender, wallet.account.address)
 		if (parseTransaction(intent.serializedTransaction).chainId !== BigInt(settings.network.chainId)) {
 			throw new Error(`Pending transaction ${intent.hash} was signed for a different chain`)
 		}
-		const clients = endpoints.map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: http(endpoint) }), endpoint }))
-		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash)
+		const { clients } = recoveryReaders(settings, wallet, pool)
+		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
 		const receipt = receiptResult.receipt
 		if (receipt !== undefined) {
 			const receiptOutcome = receipt.status === 'success' ? validateReceiptExpectation(receipt, intent.receiptExpectation) : { queuedOperationId: undefined }
@@ -88,14 +108,19 @@ export async function recoverPendingTransactions(settings: OperatorSettings, wal
 			continue
 		}
 		if (receiptResult.observed) return true
-		const nonce = quorumValue(`pending signer nonce for ${intent.hash}`, await Promise.all(clients.map(async ({ client, endpoint }) => ({ endpoint, value: await client.getTransactionCount({ address: intent.sender, blockTag: 'pending' }) }))))
+		const nonce = await settledQuorumValue(
+			`pending signer nonce for ${intent.hash}`,
+			clients.map(async ({ client, endpoint }) => ({ endpoint, value: await client.getTransactionCount({ address: intent.sender, blockTag: 'pending' }) })),
+		)
 		if (nonce > intent.nonce) {
 			throw new Error(`Transaction ${intent.hash} has no receipt but signer nonce ${intent.nonce.toString()} was consumed; manual reconciliation is required`)
 		}
-		const blocks = await Promise.all(clients.map(async ({ client }) => await client.getBlockNumber()))
+		const settledBlocks = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
+		const blocks = availableSettledValues(settledBlocks)
+		if (blocks.length < 2) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery requires at least two available independent RPC endpoints`)
 		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
 		if (recoveryAction === 'expire-private') {
-			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS)
+			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS, pool)
 			state.pendingTransactions = state.pendingTransactions.filter(value => value.hash.toLowerCase() !== intent.hash.toLowerCase())
 			recordActivity(state, { hash: intent.hash, kind: intent.kind, message: `Private price-dependent intent expired after canonical finality without inclusion: ${intent.label}`, status: 'failed' })
 			await saveDurableState(settings.runtime.stateFile, state)
@@ -122,15 +147,17 @@ export async function recoverPendingTransactions(settings: OperatorSettings, wal
 	return false
 }
 
-export async function reconcilePendingStagedOperations(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>) {
-	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-	const clients = endpoints.map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: http(endpoint) }), endpoint }))
+export async function reconcilePendingStagedOperations(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
+	const { clients, endpoints } = recoveryReaders(settings, wallet, pool)
 	for (const pending of [...state.pendingStagedOperations]) {
-		const heads = await Promise.all(clients.map(async ({ client }) => await client.getBlockNumber()))
+		const settledHeads = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
+		const heads = availableSettledValues(settledHeads)
+		if (heads.length < 2) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery requires at least two available independent RPC endpoints`)
 		const toBlock = heads.reduce((minimum, head) => (head < minimum ? head : minimum))
 		let outcome: (NonNullable<ReturnType<typeof stagedOperationOutcome>> & { blockHash: Hex; blockNumber: bigint; transactionHash: Hex }) | undefined
 		for (const range of stagedOperationRecoveryRanges(pending.queuedBlock, toBlock)) {
-			const observations = await Promise.all(
+			const outcomes = await settledQuorumValue(
+				`staged operation ${pending.operationId.toString()} blocks ${range.fromBlock.toString()}-${range.toBlock.toString()}`,
 				clients.map(async ({ client, endpoint }) => ({
 					endpoint,
 					value: (await client.getLogs({ address: pending.coordinator, fromBlock: range.fromBlock, toBlock: range.toBlock })).flatMap(log => {
@@ -141,7 +168,6 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 					}),
 				})),
 			)
-			const outcomes = quorumValue(`staged operation ${pending.operationId.toString()} blocks ${range.fromBlock.toString()}-${range.toBlock.toString()}`, observations)
 			if (outcomes.length > 1) throw new Error(`Coordinator returned multiple outcomes for staged operation ${pending.operationId.toString()}`)
 			outcome = outcomes[0]
 			if (outcome !== undefined) break

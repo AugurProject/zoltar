@@ -1,5 +1,6 @@
 import { createPublicClient, defineChain, getAddress, http } from '@zoltar/bot-shared/ethereum'
-import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { securityPoolFactoryAbi } from '#contracts/abi'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 
@@ -20,23 +21,24 @@ export function chainFor(settings: OperatorSettings) {
 	})
 }
 
-export async function canonicalBlockHash(settings: OperatorSettings, blockNumber: bigint) {
+export async function canonicalBlockHash(settings: OperatorSettings, blockNumber: bigint, pool?: ReturnType<typeof createRpcEndpointPool>) {
 	const currentChain = chainFor(settings)
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		'market evidence canonical block',
 		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const block = await createPublicClient({ chain: currentChain, transport: http(endpoint) }).getBlock({ blockNumber })
+			const block = await createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) }).getBlock({ blockNumber })
 			if (block.hash === undefined) throw new Error('Canonical block is missing its hash')
 			return { endpoint, value: block.hash }
 		}),
 	)
-	return quorumValue('market evidence canonical block', observations)
 }
 
-export async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings) {
+export async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings, pool?: ReturnType<typeof createRpcEndpointPool>) {
 	const currentChain = chainFor(settings)
-	const observations = await Promise.all(
+	const address = await settledQuorumValue(
+		'desired origin security pool',
 		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const client = createPublicClient({ chain: currentChain, transport: http(endpoint) })
+			const client = createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) })
 			const originId = await client.readContract({
 				abi: securityPoolFactoryAbi,
 				address: settings.deployment.securityPoolFactory,
@@ -56,6 +58,5 @@ export async function desiredPoolStatus(settings: OperatorSettings, desired: Des
 			}
 		}),
 	)
-	const address = quorumValue('desired origin security pool', observations)
 	return { address, desired }
 }

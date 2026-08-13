@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, keccak256, type Address, type Hex } from '#ethereum'
 import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
+import { requireManifestAuthenticationQuorum } from '#config/runtime-deployment'
 
 const openOracle = getAddress('0x0000000000000000000000000000000000000001')
 const executor = getAddress('0x0000000000000000000000000000000000000002')
@@ -50,6 +51,12 @@ describe('deployment authentication', () => {
 		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
 		expect(parseDeploymentRole('uniswap-v4-pool-manager')).toBe('uniswap-v4-pool-manager')
 		expect(parseDeploymentRole('uniswap-v4-quoter')).toBe('uniswap-v4-quoter')
+	})
+
+	test('tolerates one unavailable manifest reader but never a safety mismatch', async () => {
+		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new TypeError('fetch failed'))])).resolves.toBeUndefined()
+		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.reject(new TypeError('fetch failed')), Promise.reject(new TypeError('fetch failed'))])).rejects.toThrow('at least two available independent RPC endpoints')
+		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new Error('runtime bytecode hash mismatch'))])).rejects.toThrow('runtime bytecode hash mismatch')
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

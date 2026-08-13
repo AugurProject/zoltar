@@ -191,9 +191,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		}
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
+			['dashboard-network.png', 'network-connectivity'],
 			['dashboard-markets.png', 'token-market-title'],
 			...(process.env['OPEN_ORACLE_CAPTURE_QA'] === '1'
 				? ([
+						['dashboard-network-mobile.png', 'network-connectivity'],
 						['dashboard-markets-mobile.png', 'token-market-title'],
 						['dashboard-opportunities.png', 'operations'],
 						['dashboard-opportunities-mobile.png', 'operations'],
@@ -219,8 +221,17 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					] as const)
 				: []),
 		] as const) {
-			const mobile = name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
-			const fragment = section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'settings' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
+			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
+			const fragment =
+				section === undefined
+					? 'overview'
+					: section === 'operations'
+						? 'operations'
+						: section === 'token-market-title'
+							? 'markets'
+							: section === 'network-connectivity' || section === 'settings' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration'
+								? 'settings'
+								: 'overview'
 			await replacePage(`${origin}/`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
@@ -1345,6 +1356,10 @@ const snapshot = {
 		{ chainId: 1, checkedAt, error: undefined, kind: 'read-rpc' as const, status: 'healthy' as const, target: 'https://read.example' },
 		{ chainId: 1, checkedAt, error: undefined, kind: 'public-rpc' as const, status: 'healthy' as const, target: 'https://rpc.example' },
 		{ chainId: 1, checkedAt, error: undefined, kind: 'private-relay' as const, status: 'healthy' as const, target: 'https://relay.flashbots.net' },
+	],
+	rpcEndpointHealth: [
+		{ consecutiveFailures: 0, error: undefined, lastFailureAt: undefined, lastSuccessAt: sampledAt(0), latencyMilliseconds: 76, nextRetryAt: undefined, status: 'healthy', target: 'https://rpc.example' },
+		{ consecutiveFailures: 1, error: 'HTTP 503 while calling eth_blockNumber', lastFailureAt: sampledAt(0), lastSuccessAt: undefined, latencyMilliseconds: 112, nextRetryAt: sampledAt(60), status: 'degraded', target: 'https://quorum.example' },
 	],
 	execute: true,
 	executionHistory: history,

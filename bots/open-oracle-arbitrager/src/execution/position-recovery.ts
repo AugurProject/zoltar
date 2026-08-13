@@ -5,7 +5,7 @@ import { decimalSignedEth, decimalWeth, parseDecimalWeth, parseSignedDecimalEth,
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from '#core/position-accounting'
 import { type PositionRecord } from '#state/position-store'
-import { quorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '#monitoring/read-quorum'
 import { calculateTrackedNetProfitEth } from '#core/strategy'
 import { receiptGasCost } from '#execution/transaction-tracker'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
@@ -79,7 +79,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
 	} catch (error) {
 		if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
-		if (!publicEntry && !(atomicPrivateEntry && executorReceipt.status === 'reverted')) throw new Error('Executor hedge event is missing from the durable entry receipt')
+		if (!publicEntry && !atomicPrivateEntry) throw new Error('Executor hedge event is missing from the durable entry receipt')
 	}
 	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
 		if ((publicEntry || atomicPrivateEntry) && executorReceipt.status === 'reverted') {
@@ -102,7 +102,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 				receipts,
 			}
 		}
-		if (publicEntry) {
+		if (publicEntry || atomicPrivateEntry) {
 			return {
 				position: {
 					...position,
@@ -142,9 +142,7 @@ export async function expireEntryWithQuorum(readClients: readonly ReadClient[], 
 	const targetBlockNumber = BigInt(position.entrySubmissionBlockNumber) + 1n
 	if (!attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw new Error('Entry target block is not sufficiently confirmed')
 	const finalityDescendantBlockNumber = targetBlockNumber + REORG_OVERLAP_BLOCKS
-	if ((await fixedBlockHashWithQuorum(readClients, config, `expired entry ${position.reportId} finality descendant`, finalityDescendantBlockNumber)) === undefined) {
-		throw new Error('Entry target finality block is unavailable from every read RPC')
-	}
+	await fixedBlockHashWithQuorum(readClients, config, `expired entry ${position.reportId} finality descendant`, finalityDescendantBlockNumber)
 	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes)
 	const executorReceipt = optionalReceipts.at(-1)
 	if (executorReceipt !== undefined) throw new Error('Entry executor receipt exists and requires normal recovery')
@@ -284,9 +282,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	} catch (error) {
 		if (currentBlockNumber === undefined || !attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw error
 		const finalityDescendantBlockNumber = targetBlockNumber + REORG_OVERLAP_BLOCKS
-		if ((await fixedBlockHashWithQuorum(readClients, config, `expired lifecycle ${position.reportId} finality descendant`, finalityDescendantBlockNumber)) === undefined) {
-			throw new Error('Lifecycle target finality block is unavailable from every read RPC')
-		}
+		await fixedBlockHashWithQuorum(readClients, config, `expired lifecycle ${position.reportId} finality descendant`, finalityDescendantBlockNumber)
 		const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `expired lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
 		if (optionalReceipts.some(receipt => receipt !== undefined)) throw error
 		return {
@@ -357,11 +353,11 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		}
 		const expectedAmount = BigInt(position.replacementCreditAmount)
 		if (execution.account.toLowerCase() !== position.account.toLowerCase() || execution.reportId.toString() !== position.reportId || execution.token.toLowerCase() !== position.replacementCreditToken.toLowerCase() || execution.amount !== expectedAmount) {
-			throw new Error('Replacement-credit executor event does not match the durable position')
+			return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		}
 		const creditIsWeth = execution.token.toLowerCase() === config.network.weth.toLowerCase()
 		const creditIsPositionToken = execution.token.toLowerCase() === position.token.toLowerCase()
-		if (!creditIsWeth && !creditIsPositionToken) throw new Error('Replacement credit uses an unexpected token')
+		if (!creditIsWeth && !creditIsPositionToken) return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 		return {
 			...accountedPosition,
 			closedAt: undefined,
@@ -386,7 +382,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		execution.amount1 !== expectedAttoWeth ||
 		execution.amount2 !== expectedToken
 	) {
-		throw new Error('Lifecycle executor event does not match the durable position')
+		return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
 	}
 	return {
 		...accountedPosition,
@@ -405,16 +401,14 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 async function fixedBlockHashWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, label: string, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	if (readClients.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
-	const blocks = await Promise.allSettled(readClients.map(client => client.getBlock({ blockNumber })))
-	const observations: { endpoint: string; value: Hex }[] = []
-	for (const [index, result] of blocks.entries()) {
-		if (result.status === 'rejected' || result.value.hash == null) return undefined
-		observations.push({
-			endpoint: endpointLabel(endpoints[index] ?? ''),
-			value: result.value.hash,
-		})
-	}
-	return quorumValue(`${label} ${blockNumber.toString()}`, observations)
+	return settledQuorumValue(
+		`${label} ${blockNumber.toString()}`,
+		readClients.map(async (client, index) => {
+			const block = await client.getBlock({ blockNumber })
+			if (block.hash == null) throw new Error(`${label} block is missing its canonical hash`)
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: block.hash }
+		}),
+	)
 }
 
 export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint): Promise<PositionRecord> {
@@ -482,12 +476,10 @@ export async function discoverPublicReplacementWithQuorum(readClients: readonly 
 					...position,
 					entryTransactionHash: discoveredHash,
 					entryTransactionHashes: [discoveredHash],
-					status: 'recovery-required' as const,
 				}
 			: {
 					...position,
 					lifecycleTransactionHashes: [discoveredHash],
-					status: 'recovery-required' as const,
 				}
 	await persistPosition(updated)
 	return updated

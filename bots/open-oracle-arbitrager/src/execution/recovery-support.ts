@@ -6,7 +6,7 @@ import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { endpointLabel } from '#monitoring/connectivity'
-import { quorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '#monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
 import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
@@ -114,35 +114,35 @@ export function immediateReplacementAmounts(position: Pick<PositionRecord, 'entr
 
 export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		'pending account nonce used for signing',
 		clients.map(async (client, index) => ({
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getTransactionCount({ address: account, blockTag: 'pending' }),
 		})),
 	)
-	return quorumValue('pending account nonce used for signing', observations)
 }
 
 export async function confirmedNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, account: Address, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`confirmed account nonce at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => ({
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getTransactionCount({ address: account, blockNumber }),
 		})),
 	)
-	return quorumValue(`confirmed account nonce at block ${blockNumber.toString()}`, observations)
 }
 
 export async function currentBlockNumberWithQuorum(clients: readonly ReadClient[], config: Configuration, label: string) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		label,
 		clients.map(async (client, index) => ({
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getBlockNumber(),
 		})),
 	)
-	return quorumValue(label, observations)
 }
 
 export async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
@@ -186,7 +186,8 @@ export async function storedReport(client: ReadClient, openOracle: Address, id: 
 
 export async function storedReportWithQuorum(clients: readonly ReadClient[], config: Configuration, id: bigint, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`stored report ${id.toString()} at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
 			const [block, report] = await Promise.all([client.getBlock({ blockNumber }), storedReport(client, config.openOracle, id, blockNumber)])
 			if (block.hash === null || block.hash === undefined) throw new Error(`Stored report ${id.toString()} block is missing its canonical hash`)
@@ -200,14 +201,14 @@ export async function storedReportWithQuorum(clients: readonly ReadClient[], con
 			}
 		}),
 	)
-	return quorumValue(`stored report ${id.toString()} at block ${blockNumber.toString()}`, observations)
 }
 
 export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: RecoveryConfiguration, account: Address, token: Address, blockNumber: bigint) {
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Lifecycle balance reads require the authenticated executor')
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
+	return settledQuorumValue(
+		`position lifecycle balances at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
 			const [block, rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = await Promise.all([
 				client.getBlock({ blockNumber }),
@@ -232,5 +233,4 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 			}
 		}),
 	)
-	return quorumValue(`position lifecycle balances at block ${blockNumber.toString()}`, observations)
 }

@@ -19,6 +19,7 @@ import {
 } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
+import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -113,6 +114,41 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 }
 
 describe('liquidator execution safety', () => {
+	test('tolerates one offline scan but never hides malformed state behind two agreeing scans', async () => {
+		const agreeing = { endpoint: 'rpc-a', state: { blockHash: '0xabc' } }
+		const healthy = [Promise.resolve(agreeing), Promise.resolve({ ...agreeing, endpoint: 'rpc-b' }), Promise.reject(new TypeError('fetch failed'))]
+		const available = availableExecutionObservations('liquidation snapshot', await Promise.allSettled(healthy), observation => ({ endpoint: observation.endpoint, value: observation.state }))
+		expect(available).toHaveLength(2)
+
+		const malformed = [Promise.resolve(agreeing), Promise.resolve({ ...agreeing, endpoint: 'rpc-b' }), Promise.reject(new Error('Constant-product pair returned malformed state'))]
+		const malformedSettled = await Promise.allSettled(malformed)
+		expect(() => availableExecutionObservations('liquidation snapshot', malformedSettled, observation => ({ endpoint: observation.endpoint, value: observation.state }))).toThrow('malformed state')
+	})
+
+	test('classifies insufficient transport-only scan observations as degraded connectivity', () => {
+		const unavailable = new TypeError('fetch failed')
+		const settled: PromiseSettledResult<{ endpoint: string; value: bigint }>[] = [
+			{ status: 'fulfilled', value: { endpoint: 'rpc-a', value: 1n } },
+			{ reason: unavailable, status: 'rejected' },
+			{ reason: unavailable, status: 'rejected' },
+		]
+		try {
+			availableExecutionObservations('scan', settled, value => value)
+			throw new Error('Expected an insufficient transport quorum')
+		} catch (error) {
+			expect(error).toBeInstanceOf(Error)
+			if (!(error instanceof Error)) throw error
+			expect(error.name).toBe('ConnectivityDegradedError')
+		}
+	})
+	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {
+		const observations = await Promise.allSettled([
+			Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }),
+			Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }),
+			Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] }),
+		])
+		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }))).toThrow('RPC disagreement')
+	})
 	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
 		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([
 			{ fromBlock: 5n, toBlock: 10_004n },

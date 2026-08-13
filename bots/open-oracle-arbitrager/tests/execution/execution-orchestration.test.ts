@@ -12,6 +12,7 @@ import {
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
 	executionSnapshotWithQuorum,
+	settledExecutionSnapshotWithQuorum,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
@@ -42,6 +43,7 @@ import {
 import { loadPositionJournal, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 import { assertSubmissionWindowOpen } from '#execution/transaction-submission'
 import { v4QuotePlan } from '#core/uniswap-v4'
+import { ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address
@@ -206,6 +208,11 @@ describe('funded execution orchestration', () => {
 				{ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } },
 			]),
 		).toThrow('RPC disagreement')
+	})
+
+	test('uses two agreeing execution snapshots when a third reader is offline', async () => {
+		const shared = { blockHash: `0x${'12'.repeat(32)}` as Hex, buyHedgeQuote: 13n, sellHedgeQuote: 11n }
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared }), Promise.reject(new TypeError('fetch failed'))])).resolves.toEqual(shared)
 	})
 
 	test('does not promote permissionlessly observed report tokens into the execution allowlist', () => {
@@ -520,7 +527,7 @@ describe('funded execution orchestration', () => {
 		expect(persisted).toBe(false)
 	})
 
-	test('preserves the durable lifecycle attempt when canonical post-state recovery fails', async () => {
+	test('keeps the durable lifecycle pending when canonical post-state recovery cannot be established', async () => {
 		const submitted = lifecyclePosition()
 		let persisted: PositionRecord | undefined
 		await expect(
@@ -533,12 +540,41 @@ describe('funded execution orchestration', () => {
 				},
 			),
 		).rejects.toThrow('reduced a tracked wallet balance')
-		expect(persisted?.status).toBe('recovery-required')
-		expect(persisted?.lifecycleTransactionHashes).toEqual([replacementHash])
-		expect(persisted?.lifecycleTargetBlockNumber).toBe('101')
-		expect(persisted?.lifecycleWalletTokenBefore).toBe('10')
-		expect(persisted?.lifecycleWalletWethBefore).toBe('20')
-		expect(persisted === undefined ? false : lifecycleAttemptNeedsRecovery(persisted)).toBe(true)
+		expect(persisted).toBeUndefined()
+		expect(submitted.status).toBe('withdrawing')
+		expect(lifecycleAttemptNeedsRecovery(submitted)).toBe(true)
+	})
+
+	test('keeps a private lifecycle pending when receipt quorum loses connectivity and resumes later', async () => {
+		const submitted = lifecyclePosition()
+		const persisted: PositionRecord[] = []
+		const connectivityFailure = new ConnectivityDegradedError('lifecycle receipt requires at least two available independent RPC endpoints')
+		await finalizeSubmittedLifecycleAttempt(
+			submitted,
+			() => Promise.reject(connectivityFailure),
+			position => {
+				persisted.push(position)
+				return Promise.resolve()
+			},
+		).catch(error => {
+			expect(error).toBe(connectivityFailure)
+			expect(operationalFailureDisposition(error)).toBe('connectivity-degraded')
+		})
+		expect(persisted).toEqual([])
+		expect(submitted.status).toBe('withdrawing')
+
+		const recovered = { ...submitted, lifecycleReceiptRecovered: true, status: 'closed-pending-finality' as const }
+		expect(
+			await finalizeSubmittedLifecycleAttempt(
+				submitted,
+				() => Promise.resolve(recovered),
+				position => {
+					persisted.push(position)
+					return Promise.resolve()
+				},
+			),
+		).toEqual(recovered)
+		expect(persisted).toEqual([recovered])
 	})
 
 	test('requires exact independent receipt agreement before entry accounting', async () => {

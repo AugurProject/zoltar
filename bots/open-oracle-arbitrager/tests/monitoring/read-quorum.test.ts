@@ -22,4 +22,31 @@ describe('independent read quorum', () => {
 		await expect(readWithQuorum('pending account nonce used for signing', ['primary', 'secondary'], async endpoint => (endpoint === 'primary' ? 7n : 8n))).rejects.toThrow('RPC disagreement')
 		expect(await readWithQuorum('pending account nonce used for signing', ['primary', 'secondary'], async () => 7n)).toBe(7n)
 	})
+
+	test('continues with two agreeing readers when a third is unavailable', async () => {
+		await expect(
+			readWithQuorum('canonical head', ['primary', 'secondary', 'offline'], async endpoint => {
+				if (endpoint === 'offline') throw new Error('connection refused')
+				return { hash: '0xabc', number: 42n }
+			}),
+		).resolves.toEqual({ hash: '0xabc', number: 42n })
+	})
+
+	test('still fails closed when every available reader does not agree', async () => {
+		await expect(
+			readWithQuorum('canonical head', ['primary', 'secondary', 'offline'], async endpoint => {
+				if (endpoint === 'offline') throw new Error('connection refused')
+				return endpoint === 'primary' ? '0xabc' : '0xdef'
+			}),
+		).rejects.toThrow('RPC disagreement')
+	})
+
+	test('does not hide a safety failure behind two healthy readers', async () => {
+		await expect(
+			readWithQuorum('deployment code', ['primary', 'secondary', 'malformed'], async endpoint => {
+				if (endpoint === 'malformed') throw new Error('runtime bytecode hash mismatch')
+				return '0xabc'
+			}),
+		).rejects.toThrow('runtime bytecode hash mismatch')
+	})
 })

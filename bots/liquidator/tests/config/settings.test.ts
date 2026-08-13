@@ -123,10 +123,11 @@ describe('liquidator settings', () => {
 		expect(() =>
 			parseSettings({
 				...settings,
+				connectivity: { ...settings.connectivity, quorumRpcUrls: ['https://quorum.example'] },
 				privateKey: `0x${'11'.repeat(32)}`,
 				runtime: { ...settings.runtime, execute: true },
 			}),
-		).toThrow('independent quorum RPC')
+		).toThrow('at least two independent quorum RPCs')
 	})
 
 	test('requires a deployed WETH contract for live execution', () => {
@@ -135,7 +136,7 @@ describe('liquidator settings', () => {
 				...settings,
 				connectivity: {
 					...settings.connectivity,
-					quorumRpcUrls: ['https://quorum.example'],
+					quorumRpcUrls: ['https://quorum-a.example', 'https://quorum-b.example'],
 				},
 				deployment: {
 					...settings.deployment,

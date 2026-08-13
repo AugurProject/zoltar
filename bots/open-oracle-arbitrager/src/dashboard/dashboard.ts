@@ -567,6 +567,12 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 	const container = element('endpoint-checks')
 	container.replaceChildren()
+	if (snapshot.endpointChecks.length > 0) {
+		const heading = document.createElement('h3')
+		heading.className = 'endpoint-check-heading'
+		heading.textContent = 'Configuration validation'
+		container.append(heading)
+	}
 	for (const check of snapshot.endpointChecks) {
 		const item = document.createElement('div')
 		item.className = 'endpoint-check'
@@ -578,6 +584,31 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 		target.textContent = check.target
 		const detail = document.createElement('small')
 		detail.textContent = check.error ?? `Chain ${check.chainId?.toString() ?? 'unconfirmed'} · ${check.kind}`
+		item.append(status, target, detail)
+		container.append(item)
+	}
+	const runtimeHealth = snapshot.rpcEndpointHealth ?? []
+	if (runtimeHealth.length > 0) {
+		const heading = document.createElement('h3')
+		heading.className = 'endpoint-check-heading'
+		heading.textContent = 'Live RPC health'
+		container.append(heading)
+	}
+	for (const endpoint of runtimeHealth) {
+		const item = document.createElement('div')
+		item.className = 'endpoint-check'
+		item.dataset['status'] = endpoint.status
+		const status = document.createElement('strong')
+		status.textContent = endpoint.status
+		const target = document.createElement('span')
+		target.className = 'mono'
+		target.textContent = endpoint.target
+		const detail = document.createElement('small')
+		const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
+			value => value !== undefined,
+		)
+		const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
+		detail.textContent = [primaryDetail, ...metadata].join(' · ')
 		item.append(status, target, detail)
 		container.append(item)
 	}

@@ -1,3 +1,5 @@
+import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
+
 function canonical(value: unknown): string {
 	if (typeof value === 'bigint') return `bigint:${value.toString()}`
 	if (value === undefined) return 'undefined'
@@ -23,7 +25,25 @@ export function quorumValue<T>(label: string, observations: readonly { endpoint:
 	return first.value
 }
 
+export function availableSettledValues<T>(settled: readonly PromiseSettledResult<T>[]) {
+	const safetyFailure = settled.find(result => result.status === 'rejected' && operationalFailureDisposition(result.reason) === 'safety-paused')
+	if (safetyFailure?.status === 'rejected') throw safetyFailure.reason
+	return settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
+}
+
+export async function settledQuorumValue<T>(label: string, observations: readonly Promise<{ endpoint: string; value: T }>[]) {
+	const settled = await Promise.allSettled(observations)
+	const available = availableSettledValues(settled)
+	if (available.length < 2) {
+		const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : []))
+		throw new ConnectivityDegradedError(`${label} requires at least two available independent RPC endpoints${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
+	}
+	return quorumValue(label, available)
+}
+
 export async function readWithQuorum<T>(label: string, endpoints: readonly string[], read: (endpoint: string) => Promise<T>) {
-	const observations = await Promise.all(endpoints.map(async endpoint => ({ endpoint, value: await read(endpoint) })))
-	return quorumValue(label, observations)
+	return settledQuorumValue(
+		label,
+		endpoints.map(async endpoint => ({ endpoint, value: await read(endpoint) })),
+	)
 }
