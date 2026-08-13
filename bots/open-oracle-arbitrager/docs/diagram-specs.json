@@ -279,7 +279,7 @@
 				},
 				"children": [
 					{
-						"text": "available quorum agrees at +12"
+						"text": "quorum agrees at +12"
 					}
 				],
 				"tag": "text"
