@@ -3,6 +3,7 @@ import type { Address, Hex } from '#ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
+import type { PositionRecord } from '#state/position-store'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -122,6 +123,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
+	expect(pageSource).toContain('id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span>')
+	expect(pageSource).toContain('id="retry-settings-button"')
 	expect(pageSource).toContain('Both delivery modes submit one parent-bound atomic entry transaction')
 	expect(pageSource).toContain('require sufficient pre-existing ERC-20 and OpenOracle internal allowances')
 	expect(pageSource).not.toContain('bundle prerequisite approvals')
@@ -193,6 +196,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	const browserSource = await browserScript.text()
 	expect(browserSource).toContain('setInterval')
+	expect(browserSource).toContain('Refreshing…')
+	expect(browserSource).toContain('Configuration request timed out.')
 	expect(browserSource).toContain('aria-labelledby')
 	expect(browserSource).toContain('Recent exact price samples')
 	expect(browserSource).toContain('Mainnet execution network')
@@ -304,12 +309,58 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(signerUpdate.status).toBe(200)
 	expect(await signerUpdate.json()).toEqual({ wallet: address })
 	const credentialMarker = 'operator-secret'
+	const endpointCredentialMarker = 'provider-secret'
+	const endpointPathMarker = 'tenant-private-path'
+	const entryCalldataMarker = '0xdeadbeef'
+	const lifecycleCalldataMarker = '0xcafebabe'
+	const credentialEndpoint = `https://operator:${endpointCredentialMarker}@rpc.example/${endpointPathMarker}?token=${endpointCredentialMarker}`
 	const rawRpcFailure = `Read RPC https://operator:${credentialMarker}@rpc.example failed at block 100`
 	const rawRelayFailure = `Private relay https://operator:${credentialMarker}@relay.example rejected the transaction`
 	const protectedSettingsFile = '/var/lib/zoltar/operator/mainnet/operator.json'
 	const transactionHash: Hex = `0x${'12'.repeat(32)}`
+	state.positions = [
+		{
+			account: address,
+			actualEntryGasCostEth: '0.001',
+			capitalAtRiskWeth: '1',
+			closedAt: undefined,
+			direction: 'buy-rep',
+			entryTransactionHash: transactionHash,
+			entryTransactionHashes: [transactionHash],
+			entryTransactionIntent: { data: entryCalldataMarker, to: address, value: '0' },
+			gasExpenditures: [],
+			historyOutbox: undefined,
+			hedgeAmountToken: '1',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '0.02',
+			lifecycleGasCostEth: '0.0005',
+			lifecycleReceiptRecovered: true,
+			lifecycleSettlerRewardEth: '0.0001',
+			lifecycleTargetBlockNumber: '110',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionHashes: [transactionHash],
+			lifecycleTransactionIntent: { data: lifecycleCalldataMarker, to: address, value: '0' },
+			lifecycleUpdatedAt: new Date(0).toISOString(),
+			lifecycleWalletTokenBefore: '1',
+			lifecycleWalletWethBefore: '1',
+			lockedToken: '1',
+			lockedWeth: '1',
+			manualReconciliation: undefined,
+			openedAt: new Date(0).toISOString(),
+			realizedNetProfitEth: undefined,
+			reportId: '1',
+			status: 'open',
+			token: address,
+			tokenSymbol: 'REP',
+			withdrawnToken: '0',
+			withdrawnWeth: '0',
+		} satisfies PositionRecord,
+	]
+	connectivity = { publicRpcUrls: [credentialEndpoint], readRpcUrl: credentialEndpoint }
+	submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [credentialEndpoint] }
+	deployment = { ...deployment, quorumRpcUrls: [credentialEndpoint] }
 	state.lastError = rawRpcFailure
-	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' }]
+	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: credentialEndpoint }]
 	state.operationLog = [
 		{ category: 'configuration', details: protectedSettingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined, timestamp: new Date(0).toISOString() },
 		{ category: 'decision', details: 'net 0.0158 ETH · 992 bps', level: 'info', message: 'Selected profitable sell-REP dispute', reason: 'quote, TWAP, inventory, and risk checks passed', reportId: '1', timestamp: new Date(0).toISOString() },
@@ -317,10 +368,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	]
 	state.transactionActivity = [
 		{
-			acceptedTargets: [],
+			acceptedTargets: [credentialEndpoint],
 			actualGasCostEth: undefined,
 			estimatedNetProfitEth: undefined,
-			failedTargets: [{ error: rawRelayFailure, target: 'https://relay.example' }],
+			failedTargets: [{ error: rawRelayFailure, target: credentialEndpoint }],
 			hash: transactionHash,
 			kind: 'dispute',
 			mode: 'private',
@@ -337,8 +388,32 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const reloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
 	expect(reloadedState).toMatchObject({ queuedWallet: address })
 	expect(reloadedState).toMatchObject({ savedWallet: address })
-	expect(JSON.stringify(reloadedState)).not.toContain(credentialMarker)
-	expect(JSON.stringify(reloadedState)).not.toContain(protectedSettingsFile)
+	const serializedState = JSON.stringify(reloadedState)
+	for (const protectedMarker of [credentialMarker, endpointCredentialMarker, endpointPathMarker, entryCalldataMarker, lifecycleCalldataMarker, protectedSettingsFile]) expect(serializedState).not.toContain(protectedMarker)
+	if (typeof reloadedState !== 'object' || reloadedState === null || Array.isArray(reloadedState)) throw new Error('Expected public dashboard state')
+	for (const configurationField of ['connectivity', 'deployment', 'settings']) expect(configurationField in reloadedState).toBe(false)
+	expect(reloadedState).toMatchObject({
+		positions: [
+			{
+				actualEntryGasCostEth: '0.001',
+				direction: 'buy-rep',
+				entryTransactionHash: transactionHash,
+				hedgedProfitBeforeGasEth: '0.02',
+				lifecycleGasCostEth: '0.0005',
+				lifecycleReceiptRecovered: true,
+				lifecycleSettlerRewardEth: '0.0001',
+				hasLifecycleTransactions: true,
+				manuallyReconciled: false,
+				openedAt: new Date(0).toISOString(),
+				reportId: '1',
+				status: 'open',
+				tokenSymbol: 'REP',
+				withdrawnToken: '0',
+				withdrawnWeth: '0',
+			},
+		],
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'private' },
+	})
 	const publicOperations = Reflect.get(reloadedState, 'operationLog')
 	expect(Array.isArray(publicOperations)).toBe(true)
 	if (!Array.isArray(publicOperations)) throw new Error('Expected public operation log')

@@ -163,6 +163,16 @@ try {
 			scrollY: window.scrollY
 		})`)
 	}
+	const readSafetyActionPositions = () =>
+		evaluate(`(() => Object.fromEntries(['refresh-button', 'pause-button'].map(id => {
+			const element = document.getElementById(id)
+			if (!(element instanceof HTMLElement)) return [id, undefined]
+			const rect = element.getBoundingClientRect()
+			return [id, { bottom: rect.bottom, height: rect.height, left: rect.left, right: rect.right, top: rect.top, width: rect.width }]
+		})))()`)
+	const assertStableSafetyActions = (expected: unknown, actual: unknown, label: string) => {
+		if (expected === undefined || JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} moved mobile safety actions: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
+	}
 
 	await navigateToDashboard('http://127.0.0.1:4183/')
 	const configurationLoading = await evaluate(`({
@@ -176,7 +186,16 @@ try {
 	await Bun.sleep(900)
 	diagnostics.length = 0
 	const desktop = await capture('liquidator-desktop', 1440, 900)
-	const unconfiguredNetworkBadge = await evaluate(`document.querySelector('#network-badge')?.textContent`)
+	await evaluate(`document.querySelector('#attention-badge')?.click()`)
+	await Bun.sleep(100)
+	const unconfiguredNetworkState = await evaluate(`({
+			activeSection: document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href'),
+			attentionHref: document.querySelector('#attention-badge')?.getAttribute('href'),
+			attentionText: document.querySelector('#attention-badge')?.textContent,
+			detailOpen: document.querySelector('#network-connectivity')?.hasAttribute('open'),
+			hash: window.location.hash,
+			networkBadge: document.querySelector('#network-badge')?.textContent
+		})`)
 	const unconfiguredNetworkMobile = await capture('liquidator-network-unconfigured-mobile', 390, 844)
 	await evaluate(`(() => {
 		const form = document.querySelector('#network-form')
@@ -195,19 +214,42 @@ try {
 	})()`)
 	await Bun.sleep(700)
 	const configuredNetwork = await evaluate(`({
+		attention: document.querySelector('#attention-badge')?.textContent,
 		badge: document.querySelector('#network-badge')?.textContent,
 		status: document.querySelector('#network-status')?.textContent
 	})`)
-	if (unconfiguredNetworkBadge !== 'Network not configured' || typeof configuredNetwork !== 'object' || configuredNetwork === null || !('badge' in configuredNetwork) || configuredNetwork.badge !== 'Mainnet · chain 1') {
+	if (
+		typeof unconfiguredNetworkState !== 'object' ||
+		unconfiguredNetworkState === null ||
+		!('networkBadge' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.networkBadge !== 'Network not configured' ||
+		!('attentionText' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.attentionText !== '2 actions' ||
+		!('attentionHref' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.attentionHref !== '#network-connectivity' ||
+		!('hash' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.hash !== '#network-connectivity' ||
+		!('activeSection' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.activeSection !== '#settings' ||
+		!('detailOpen' in unconfiguredNetworkState) ||
+		unconfiguredNetworkState.detailOpen !== true ||
+		typeof configuredNetwork !== 'object' ||
+		configuredNetwork === null ||
+		!('badge' in configuredNetwork) ||
+		configuredNetwork.badge !== 'Mainnet · chain 1' ||
+		!('attention' in configuredNetwork) ||
+		configuredNetwork.attention !== '1 action'
+	) {
 		throw new Error('Network safety badge did not update from unconfigured to mainnet')
 	}
 	const configuredNetworkDesktop = await capture('liquidator-network-mainnet-desktop', 1440, 900)
 	const configuredNetworkMobile = await capture('liquidator-network-mainnet-mobile', 390, 844)
+	const mobileSafetyActionPositions = await readSafetyActionPositions()
 	const networkStates = {
 		configured: configuredNetwork,
 		configuredDesktop: configuredNetworkDesktop,
 		configuredMobile: configuredNetworkMobile,
-		unconfiguredBadge: unconfiguredNetworkBadge,
+		unconfigured: unconfiguredNetworkState,
 		unconfiguredDesktop: desktop,
 		unconfiguredMobile: unconfiguredNetworkMobile,
 	}
@@ -241,6 +283,7 @@ try {
 				stateRequests: window.__qaStateRequestCount
 			}
 		})()`)
+		if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending Pause')
 		if (
 			typeof state !== 'object' ||
 			state === null ||
@@ -314,6 +357,7 @@ try {
 		await navigateToDashboard(`http://127.0.0.1:4183/?qaState=unavailable&connection=initial-${mobile ? 'mobile' : 'desktop'}`)
 		await Bun.sleep(1_000)
 		const initialFailure = await readConnectionState()
+		if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Initial connection failure')
 		const stateRequestsBeforeManualRefresh = await evaluate(`window.__qaStateRequestCount`)
 		await evaluate(`document.querySelector('#refresh-button')?.click()`)
 		await Bun.sleep(250)
@@ -358,6 +402,7 @@ try {
 		await evaluate(`history.replaceState(null, '', '?qaState=unavailable')`)
 		await Bun.sleep(3_200)
 		const postSuccessFailure = await readConnectionState()
+		if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Post-success connection failure')
 		if (
 			typeof postSuccessFailure !== 'object' ||
 			postSuccessFailure === null ||
@@ -712,16 +757,62 @@ try {
 			runStatus: document.querySelector('#run-status-badge')?.textContent
 		})`),
 	}
-	await evaluate(`document.querySelector('#pause-button')?.click()`)
-	await Bun.sleep(200)
-	Object.assign(evidence.livePaused, {
-		resumeDialog: await capture('liquidator-resume-preflight-desktop', 1440, 900),
-		resumePreflight: await evaluate(`({
-			open: document.querySelector('#resume-dialog')?.hasAttribute('open'),
-			text: document.querySelector('#resume-preflight')?.textContent
-		})`),
-	})
-	await evaluate(`document.querySelector('#cancel-resume')?.click()`)
+	const resumePreflight: Record<string, unknown> = {}
+	for (const mobile of [false, true]) {
+		const width = mobile ? 390 : 1440
+		const height = mobile ? 844 : 900
+		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
+		await evaluate(`document.querySelector('#pause-button')?.click()`)
+		await Bun.sleep(200)
+		const state = await evaluate(`(() => {
+			const dialog = document.querySelector('#resume-dialog')
+			const title = document.querySelector('#resume-title')
+			const consequence = document.querySelector('#resume-dialog .dialog-body > .muted')
+			const firstCheck = document.querySelector('#resume-preflight li')
+			const actions = document.querySelector('#resume-dialog .dialog-actions')
+			const dialogRect = dialog?.getBoundingClientRect()
+			return {
+				actionsReachable: dialog instanceof HTMLElement && actions instanceof HTMLElement && actions.offsetTop + actions.offsetHeight <= dialog.scrollHeight,
+				bodyScrollWidth: document.body.scrollWidth,
+				dialogBounded: dialogRect !== undefined && dialogRect.top >= 0 && dialogRect.bottom <= window.innerHeight && dialogRect.left >= 0 && dialogRect.right <= window.innerWidth,
+				focusedTitle: document.activeElement === title,
+				introVisible: [title, consequence, firstCheck].every(element => {
+					const rect = element?.getBoundingClientRect()
+					return rect !== undefined && rect.top >= 0 && rect.bottom <= window.innerHeight
+				}),
+				open: dialog?.hasAttribute('open'),
+				scrollTop: dialog instanceof HTMLElement ? dialog.scrollTop : undefined,
+				text: document.querySelector('#resume-preflight')?.textContent
+			}
+		})()`)
+		if (
+			typeof state !== 'object' ||
+			state === null ||
+			!('open' in state) ||
+			state.open !== true ||
+			!('focusedTitle' in state) ||
+			state.focusedTitle !== true ||
+			!('scrollTop' in state) ||
+			state.scrollTop !== 0 ||
+			!('dialogBounded' in state) ||
+			state.dialogBounded !== true ||
+			!('introVisible' in state) ||
+			state.introVisible !== true ||
+			!('actionsReachable' in state) ||
+			state.actionsReachable !== true ||
+			!('bodyScrollWidth' in state) ||
+			typeof state.bodyScrollWidth !== 'number' ||
+			state.bodyScrollWidth > width
+		) {
+			throw new Error(`Liquidator resume dialog lost its safety context at ${width.toString()}px: ${JSON.stringify(state)}`)
+		}
+		resumePreflight[mobile ? 'mobile' : 'desktop'] = {
+			screenshot: await capture(`liquidator-resume-preflight-${mobile ? 'mobile' : 'desktop'}`, width, height),
+			state,
+		}
+		await evaluate(`document.querySelector('#cancel-resume')?.click()`)
+	}
+	Object.assign(evidence.livePaused, { resumePreflight })
 	await evaluate(`window.fetch = window.__qaOriginalFetch`)
 	await navigateToDashboard('http://127.0.0.1:4183/')
 	await Bun.sleep(1_000)

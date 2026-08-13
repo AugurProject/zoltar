@@ -128,6 +128,8 @@
 
 .operator-dialog {
 	width: min(34rem, calc(100% - 2rem));
+	max-height: calc(100dvh - 2rem);
+	overflow: auto;
 	padding: 0;
 	border: 1px solid var(--operator-border);
 	border-radius: 0.9rem;
@@ -202,10 +204,30 @@
 		flex-direction: column;
 	}
 
-	.operator-safety {
+	.operator-primary > .operator-safety {
+		display: grid;
+		align-items: stretch;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		width: 100%;
-		justify-content: space-between;
-		flex-wrap: wrap;
+	}
+
+	.operator-primary > .operator-safety > .badge {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0;
+		min-height: 4rem;
+		overflow-wrap: anywhere;
+		text-align: center;
+		white-space: normal;
+	}
+
+	.operator-primary > .operator-safety > button {
+		width: 100%;
+	}
+
+	.operator-primary > .operator-safety > .action-status {
+		grid-column: 1 / -1;
 	}
 
 	.section-nav {

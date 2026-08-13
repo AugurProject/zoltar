@@ -299,6 +299,12 @@ section,
 	color: var(--text);
 }
 
+.settings-load-state {
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+
 .notice[data-tone="warning"] {
 	border-left-color: var(--warning);
 }

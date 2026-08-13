@@ -228,7 +228,7 @@ function setMutationControlsEnabled(enabled: boolean) {
 
 async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number) {
 	const controller = new window.AbortController()
-	let timeout: ReturnType<typeof window.setTimeout> | undefined
+	let timeout: number | undefined
 	const deadline = new Promise<never>((_resolve, reject) => {
 		timeout = window.setTimeout(() => {
 			controller.abort()
@@ -917,10 +917,7 @@ function render(snapshot: Snapshot) {
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
 	runStatusBadge.textContent = snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
-	const attentionCount = snapshotAttentionCount(snapshot)
-	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
-	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
-	attentionBadge.href = snapshot.pendingTransactions.length > 0 ? '#recovery' : snapshot.error !== undefined ? '#global-error' : snapshot.alerts.length > 0 ? '#operations' : '#overview'
+	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
@@ -944,7 +941,20 @@ function render(snapshot: Snapshot) {
 }
 
 function snapshotAttentionCount(snapshot: Snapshot) {
-	return Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+	return (configurationConnected && currentConfiguration?.network === undefined ? 1 : 0) + Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+}
+
+function renderAttention(snapshot: Snapshot) {
+	const networkSetupRequired = configurationConnected && currentConfiguration?.network === undefined
+	const attentionCount = snapshotAttentionCount(snapshot)
+	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
+	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
+	let attentionTarget = '#overview'
+	if (networkSetupRequired) attentionTarget = '#network-connectivity'
+	else if (snapshot.pendingTransactions.length > 0) attentionTarget = '#recovery'
+	else if (snapshot.error !== undefined) attentionTarget = '#global-error'
+	else if (snapshot.alerts.length > 0) attentionTarget = '#operations'
+	attentionBadge.href = attentionTarget
 }
 
 function setFormValue(name: string, value: string | number | boolean) {
@@ -980,6 +990,7 @@ function populateConfiguration(configuration: Configuration) {
 	configurationStatus.replaceChildren()
 	updateHealthPolicyPreview()
 	if (currentSnapshot !== undefined) {
+		renderAttention(currentSnapshot)
 		renderUniverses(currentSnapshot)
 		renderPools(currentSnapshot)
 	}
@@ -1130,14 +1141,14 @@ function renderNetworkBadge() {
 
 function renderConnectionFailure(error: unknown) {
 	void error
-	const retainedSnapshot = currentSnapshot !== undefined
+	const snapshot = currentSnapshot
 	stateConnected = false
-	modeBadge.textContent = retainedSnapshot ? `${currentSnapshot.execute ? 'Live' : 'Dry run'} · last known` : 'Mode unavailable'
+	modeBadge.textContent = snapshot === undefined ? 'Mode unavailable' : `${snapshot.execute ? 'Live' : 'Dry run'} · last known`
 	modeBadge.className = 'badge warning'
 	renderNetworkBadge()
 	runStatusBadge.textContent = 'Disconnected'
 	runStatusBadge.className = 'badge warning'
-	const attentionCount = 1 + (currentSnapshot === undefined ? 0 : Math.max(currentSnapshot.pendingTransactions.length, currentSnapshot.alerts.length))
+	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length))
 	attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = 'badge warning'
 	attentionBadge.href = '#global-error'
@@ -1189,6 +1200,8 @@ function openResumePreflight(snapshot: Snapshot) {
 	)
 	if ('showModal' in resumeDialog && typeof resumeDialog.showModal === 'function') resumeDialog.showModal()
 	if (!resumeDialog.hasAttribute('open')) resumeDialog.setAttribute('open', '')
+	element('resume-title', HTMLElement).focus({ preventScroll: true })
+	resumeDialog.scrollTop = 0
 }
 
 function closeResumePreflight() {
@@ -1236,6 +1249,7 @@ strategyForm.addEventListener('input', updateHealthPolicyPreview)
 const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
 const fragmentSections: Readonly<Record<string, string>> = {
 	'global-error': 'overview',
+	'network-connectivity': 'settings',
 	recovery: 'operations',
 }
 
@@ -1255,6 +1269,7 @@ function scrollToSection(id: string) {
 	const target = document.getElementById(id)
 	const shell = document.querySelector<HTMLElement>('.operator-shell')
 	if (target === null || shell === null) return
+	if (target instanceof HTMLDetailsElement) target.open = true
 	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
 	window.scrollTo({ top: Math.max(0, top) })
 }

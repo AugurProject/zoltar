@@ -147,6 +147,11 @@ export type OperationEntry = {
 	timestamp: string
 }
 
+export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & {
+	details?: string | undefined
+	reason?: string | undefined
+}
+
 export type OperatorSnapshot = {
 	activeReportCount: number
 	balances: BalanceSnapshot | undefined
@@ -213,6 +218,66 @@ export type OperatorSnapshot = {
 	wallet: Address | undefined
 }
 
+export type PublicExecutionRecord = Pick<ExecutionRecord, 'actualGasCostEth' | 'direction' | 'estimatedNetProfitWeth' | 'executedAt' | 'reportId' | 'requiredToken' | 'requiredWeth' | 'tokenSymbol' | 'trackedNetProfitEth' | 'transactionHash'>
+
+export type PublicPositionRecord = Pick<
+	PositionRecord,
+	'actualEntryGasCostEth' | 'direction' | 'entryTransactionHash' | 'hedgedProfitBeforeGasEth' | 'lifecycleGasCostEth' | 'lifecycleReceiptRecovered' | 'lifecycleSettlerRewardEth' | 'openedAt' | 'realizedNetProfitEth' | 'reportId' | 'status' | 'tokenSymbol' | 'withdrawnToken' | 'withdrawnWeth'
+> & {
+	hasLifecycleTransactions: boolean
+	manuallyReconciled: boolean
+}
+
+export type PublicTransactionActivity = Pick<TransactionActivity, 'acceptedTargets' | 'actualGasCostEth' | 'estimatedNetProfitEth' | 'hash' | 'kind' | 'mode' | 'reportId' | 'status' | 'tokenSymbol' | 'trackedNetProfitEth' | 'updatedAt'> & {
+	failedTargets: readonly SubmissionTargetResult[]
+}
+
+export type PublicOperatorSnapshot = {
+	activeReportCount: number
+	balances: BalanceSnapshot | undefined
+	blockNumber: string | undefined
+	blockTimestamp: string | undefined
+	centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
+	marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
+	execute: boolean
+	executor: Address | undefined
+	executionHistory: readonly PublicExecutionRecord[]
+	executionHistoryRecordCount: number
+	positionRecordCount: number
+	expectedChainId: number
+	explorerUrl: string
+	endpointChecks: readonly EndpointCheck[]
+	gameCapital: GameCapitalSnapshot
+	lastError: string | undefined
+	lastPollAt: string | undefined
+	mode: 'dry-run' | 'execute'
+	network: NetworkName
+	networkConfigured: boolean
+	openOracle: Address
+	operationLog: readonly PublicOperationEntry[]
+	opportunities: readonly OpportunitySnapshot[]
+	positions: readonly PublicPositionRecord[]
+	paused: boolean
+	queuedWallet: Address | null | undefined
+	savedWallet: Address | undefined
+	status: OperatorSnapshot['status']
+	submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
+	tokenAddresses: readonly Address[]
+	tokenMarkets: readonly TokenMarketSnapshot[]
+	priceHistory: readonly MarketPricePoint[]
+	reportPaths: readonly ReportPathSnapshot[]
+	risk: {
+		limits: OperatorSnapshot['risk']['limits']
+		usage: Pick<OperatorSnapshot['risk']['usage'], 'dailyGasSpentWeth' | 'lockedWeth' | 'openPositions'>
+	}
+	totalActualGasCostEth: string
+	totalHedgedProfitBeforeGasEth: string
+	totalOpenHedgedNetProfitEth: string
+	totalRealizedNetProfitEth: string
+	transactionActivity: readonly PublicTransactionActivity[]
+	wallet: Address | undefined
+}
+
 export type OperatorState = {
 	activeReportCount: number
 	balances: BalanceSnapshot | undefined
@@ -268,8 +333,8 @@ function publicInformationalOperationValue(value: string | undefined) {
 	return value
 }
 
-function publicOperationEntry(entry: OperationEntry): OperationEntry {
-	const publicEntry: OperationEntry = {
+function publicOperationEntry(entry: OperationEntry): PublicOperationEntry {
+	const publicEntry: PublicOperationEntry = {
 		category: entry.category,
 		level: entry.level,
 		message: entry.message,
@@ -286,16 +351,186 @@ function publicOperationEntry(entry: OperationEntry): OperationEntry {
 	return publicEntry
 }
 
-export function publicOperatorSnapshot(snapshot: OperatorSnapshot): OperatorSnapshot {
+function publicEndpointTarget(target: string) {
+	try {
+		const parsed = new URL(target)
+		return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : 'Protected endpoint'
+	} catch (error) {
+		void error
+		return publicInformationalOperationValue(target) ?? 'Protected endpoint'
+	}
+}
+
+export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperatorSnapshot {
 	return {
-		...snapshot,
-		endpointChecks: snapshot.endpointChecks.map(check => ({ ...check, error: check.error === undefined ? undefined : publicOperatorFailure(check.error) })),
-		lastError: snapshot.lastError === undefined ? undefined : publicOperatorFailure(snapshot.lastError),
-		operationLog: snapshot.operationLog.map(publicOperationEntry),
-		transactionActivity: snapshot.transactionActivity.map(activity => ({
-			...activity,
-			failedTargets: activity.failedTargets.map(target => ({ ...target, error: target.error === undefined ? undefined : publicOperatorFailure(target.error) })),
+		activeReportCount: snapshot.activeReportCount,
+		balances:
+			snapshot.balances === undefined
+				? undefined
+				: {
+						availableEth: snapshot.balances.availableEth,
+						availableRep: snapshot.balances.availableRep,
+						availableWeth: snapshot.balances.availableWeth,
+						repValueWeth: snapshot.balances.repValueWeth,
+						totalValueWeth: snapshot.balances.totalValueWeth,
+					},
+		blockNumber: snapshot.blockNumber,
+		blockTimestamp: snapshot.blockTimestamp,
+		centralizedMarket: snapshot.centralizedMarket,
+		marketConsensus: snapshot.marketConsensus,
+		execute: snapshot.execute,
+		executor: snapshot.executor,
+		executionHistory: snapshot.executionHistory.map(record => ({
+			actualGasCostEth: record.actualGasCostEth,
+			direction: record.direction,
+			estimatedNetProfitWeth: record.estimatedNetProfitWeth,
+			executedAt: record.executedAt,
+			reportId: record.reportId,
+			requiredToken: record.requiredToken,
+			requiredWeth: record.requiredWeth,
+			tokenSymbol: record.tokenSymbol,
+			trackedNetProfitEth: record.trackedNetProfitEth,
+			transactionHash: record.transactionHash,
 		})),
+		executionHistoryRecordCount: snapshot.executionHistoryRecordCount,
+		positionRecordCount: snapshot.positionRecordCount,
+		expectedChainId: snapshot.expectedChainId,
+		explorerUrl: snapshot.explorerUrl,
+		endpointChecks: snapshot.endpointChecks.map(check => ({
+			chainId: check.chainId,
+			checkedAt: check.checkedAt,
+			error: check.error === undefined ? undefined : publicOperatorFailure(check.error),
+			kind: check.kind,
+			status: check.status,
+			target: publicEndpointTarget(check.target),
+		})),
+		gameCapital: {
+			eth: snapshot.gameCapital.eth,
+			totalEthWeth: snapshot.gameCapital.totalEthWeth,
+			weth: snapshot.gameCapital.weth,
+		},
+		lastError: snapshot.lastError === undefined ? undefined : publicOperatorFailure(snapshot.lastError),
+		lastPollAt: snapshot.lastPollAt,
+		mode: snapshot.mode,
+		network: snapshot.network,
+		networkConfigured: snapshot.networkConfigured,
+		openOracle: snapshot.openOracle,
+		operationLog: snapshot.operationLog.map(publicOperationEntry),
+		opportunities: snapshot.opportunities.map(opportunity => ({
+			centralizedPriceDeviationBps: opportunity.centralizedPriceDeviationBps,
+			decision: opportunity.decision,
+			direction: opportunity.direction,
+			estimatedNetProfitWeth: opportunity.estimatedNetProfitWeth,
+			estimatedNetProfitEth: opportunity.estimatedNetProfitEth,
+			executablePriceRepPerEth: opportunity.executablePriceRepPerEth,
+			hasRequiredInventory: opportunity.hasRequiredInventory,
+			pool: opportunity.pool,
+			poolFee: opportunity.poolFee,
+			reportId: opportunity.reportId,
+			requiredToken: opportunity.requiredToken,
+			requiredWeth: opportunity.requiredWeth,
+			token: opportunity.token,
+			tokenSymbol: opportunity.tokenSymbol,
+			timeRemaining: opportunity.timeRemaining,
+			venue: opportunity.venue,
+			windowUnit: opportunity.windowUnit,
+		})),
+		positions: snapshot.positions.map(position => ({
+			actualEntryGasCostEth: position.actualEntryGasCostEth,
+			direction: position.direction,
+			entryTransactionHash: position.entryTransactionHash,
+			hedgedProfitBeforeGasEth: position.hedgedProfitBeforeGasEth,
+			lifecycleGasCostEth: position.lifecycleGasCostEth,
+			lifecycleReceiptRecovered: position.lifecycleReceiptRecovered,
+			lifecycleSettlerRewardEth: position.lifecycleSettlerRewardEth,
+			hasLifecycleTransactions: position.lifecycleTransactionHashes.length !== 0,
+			manuallyReconciled: position.manualReconciliation !== undefined,
+			openedAt: position.openedAt,
+			realizedNetProfitEth: position.realizedNetProfitEth,
+			reportId: position.reportId,
+			status: position.status,
+			tokenSymbol: position.tokenSymbol,
+			withdrawnToken: position.withdrawnToken,
+			withdrawnWeth: position.withdrawnWeth,
+		})),
+		paused: snapshot.paused,
+		queuedWallet: snapshot.queuedWallet,
+		savedWallet: snapshot.savedWallet,
+		status: snapshot.status,
+		submission: {
+			minimumBundleRelaySuccesses: snapshot.submission.minimumBundleRelaySuccesses,
+			mode: snapshot.submission.mode,
+		},
+		tokenAddresses: [...snapshot.tokenAddresses],
+		tokenMarkets: snapshot.tokenMarkets.map(token => ({
+			address: token.address,
+			balance: token.balance,
+			decimals: token.decimals,
+			name: token.name,
+			pools: token.pools.map(pool => ({
+				address: pool.address,
+				fee: pool.fee,
+				liquidity: pool.liquidity,
+				priceWeth: pool.priceWeth,
+				url: pool.url,
+				venue: pool.venue,
+			})),
+			symbol: token.symbol,
+		})),
+		priceHistory: snapshot.priceHistory.map(point => ({
+			blockNumber: point.blockNumber,
+			pool: point.pool,
+			priceWeth: point.priceWeth,
+			sampledAt: point.sampledAt,
+			symbol: point.symbol,
+			token: point.token,
+			venue: point.venue,
+		})),
+		reportPaths: snapshot.reportPaths.map(path => ({
+			reportId: path.reportId,
+			settled: path.settled,
+			steps: path.steps.map(step => ({
+				amount1: step.amount1,
+				amount2: step.amount2,
+				blockNumber: step.blockNumber,
+				event: step.event,
+				reporter: step.reporter,
+				transactionHash: step.transactionHash,
+			})),
+		})),
+		risk: {
+			limits: {
+				lifecycleGasReserveWeth: snapshot.risk.limits.lifecycleGasReserveWeth,
+				maxConcurrentPositions: snapshot.risk.limits.maxConcurrentPositions,
+				maxDailyGasSpendWeth: snapshot.risk.limits.maxDailyGasSpendWeth,
+				maxPositionNotionalWeth: snapshot.risk.limits.maxPositionNotionalWeth,
+				maxTotalLockedWeth: snapshot.risk.limits.maxTotalLockedWeth,
+			},
+			usage: {
+				dailyGasSpentWeth: snapshot.risk.usage.dailyGasSpentWeth,
+				lockedWeth: snapshot.risk.usage.lockedWeth,
+				openPositions: snapshot.risk.usage.openPositions,
+			},
+		},
+		totalActualGasCostEth: snapshot.totalActualGasCostEth,
+		totalHedgedProfitBeforeGasEth: snapshot.totalHedgedProfitBeforeGasEth,
+		totalOpenHedgedNetProfitEth: snapshot.totalOpenHedgedNetProfitEth,
+		totalRealizedNetProfitEth: snapshot.totalRealizedNetProfitEth,
+		transactionActivity: snapshot.transactionActivity.map(activity => ({
+			acceptedTargets: activity.acceptedTargets.map(publicEndpointTarget),
+			actualGasCostEth: activity.actualGasCostEth,
+			estimatedNetProfitEth: activity.estimatedNetProfitEth,
+			failedTargets: activity.failedTargets.map(target => ({ error: target.error === undefined ? undefined : publicOperatorFailure(target.error), target: publicEndpointTarget(target.target) })),
+			hash: activity.hash,
+			kind: activity.kind,
+			mode: activity.mode,
+			reportId: activity.reportId,
+			status: activity.status,
+			tokenSymbol: activity.tokenSymbol,
+			trackedNetProfitEth: activity.trackedNetProfitEth,
+			updatedAt: activity.updatedAt,
+		})),
+		wallet: snapshot.wallet,
 	}
 }
 
@@ -610,7 +845,7 @@ export function operatorSnapshot(
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(bigintToSafeNumber(BigInt(state.blockTimestamp) * 1_000n, 'Operator block timestamp'))
 	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
-	return publicOperatorSnapshot({
+	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
 		blockNumber: state.blockNumber,
@@ -690,5 +925,5 @@ export function operatorSnapshot(
 		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),
 		wallet: fixed.wallet,
-	})
+	}
 }

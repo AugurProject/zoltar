@@ -56,8 +56,8 @@ function universe(id: string, parentId?: string, outcomeIndex?: string): Dashboa
 		id,
 		migratableVaultCount: 0,
 		operationalPoolCount: 1,
-		outcomeIndex,
-		parentId,
+		...(outcomeIndex === undefined ? {} : { outcomeIndex }),
+		...(parentId === undefined ? {} : { parentId }),
 		poolCount: 1,
 		repToken: '0x3',
 		selectedPoolCount: 1,
@@ -70,7 +70,7 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		centralizedMarkets: {},
 		childMarketConfigurations: [],
 		desiredPools: [],
-		network,
+		...(network === undefined ? {} : { network }),
 		selectedPools: ['0x1111111111111111111111111111111111111111'],
 		strategy: {},
 	}
@@ -410,9 +410,13 @@ describe('liquidator dashboard refresh behavior', () => {
 			const control = page.window.document.getElementById(id)
 			expect(control?.hasAttribute('disabled')).toBe(true)
 		}
-		expect(page.window.document.querySelector<HTMLInputElement>('#signer-form input[name="privateKey"]')?.disabled).toBe(true)
-		expect(page.window.document.querySelector<HTMLInputElement>('#pool-rows input')?.disabled).toBe(true)
-		expect(page.window.document.querySelector<HTMLInputElement>('#universe-rows input')?.disabled).toBe(true)
+		const signerInput = page.window.document.querySelector('#signer-form input[name="privateKey"]')
+		const poolInput = page.window.document.querySelector('#pool-rows input')
+		const universeInput = page.window.document.querySelector('#universe-rows input')
+		if (!(signerInput instanceof page.window.HTMLInputElement) || !(poolInput instanceof page.window.HTMLInputElement) || !(universeInput instanceof page.window.HTMLInputElement)) throw new Error('Expected mutation controls')
+		expect(signerInput.disabled).toBe(true)
+		expect(poolInput.disabled).toBe(true)
+		expect(universeInput.disabled).toBe(true)
 
 		page.setStateRequestFailure(false)
 		await page.refresh()
@@ -421,14 +425,26 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('market-configuration-fields')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('strategy-fields')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('clear-signer')?.hasAttribute('disabled')).toBe(false)
-		expect(page.window.document.querySelector<HTMLInputElement>('#signer-form input[name="privateKey"]')?.disabled).toBe(false)
-		expect(page.window.document.querySelector<HTMLInputElement>('#pool-rows input')?.disabled).toBe(false)
-		expect(page.window.document.querySelector<HTMLInputElement>('#universe-rows input')?.disabled).toBe(false)
+		expect(signerInput.disabled).toBe(false)
+		const recoveredPoolInput = page.window.document.querySelector('#pool-rows input')
+		const recoveredUniverseInput = page.window.document.querySelector('#universe-rows input')
+		if (!(recoveredPoolInput instanceof page.window.HTMLInputElement) || !(recoveredUniverseInput instanceof page.window.HTMLInputElement)) throw new Error('Expected recovered mutation controls')
+		expect(recoveredPoolInput.disabled).toBe(false)
+		expect(recoveredUniverseInput.disabled).toBe(false)
 	})
 
 	test('keeps network identity visible and updates it after configuration', async () => {
 		const unconfigured = await dashboard(configuration(), state())
 		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Network not configured')
+		const attention = unconfigured.window.document.getElementById('attention-badge')
+		expect(attention?.textContent).toBe('1 action')
+		expect(attention?.getAttribute('href')).toBe('#network-connectivity')
+		if (!(attention instanceof unconfigured.window.HTMLAnchorElement)) throw new Error('Expected network-setup attention action')
+		attention.click()
+		await Bun.sleep(1)
+		expect(unconfigured.window.location.hash).toBe('#network-connectivity')
+		expect(unconfigured.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#settings')
+		expect(unconfigured.window.document.getElementById('network-connectivity')?.hasAttribute('open')).toBe(true)
 		const networkForm = unconfigured.window.document.getElementById('network-form')
 		const networkName = unconfigured.window.document.getElementById('network-name')
 		const readRpcUrl = unconfigured.window.document.getElementById('read-rpc-url')
@@ -443,9 +459,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		await unconfigured.waitUntilComplete()
 		await Bun.sleep(1)
 		expect({
+			attention: unconfigured.window.document.getElementById('attention-badge')?.textContent,
 			badge: unconfigured.window.document.getElementById('network-badge')?.textContent,
 			status: unconfigured.window.document.getElementById('network-status')?.textContent,
-		}).toEqual({ badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
+		}).toEqual({ attention: 'No blockers', badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
 
 		const mainnet = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
 		expect(mainnet.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
@@ -523,9 +540,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		poolSnapshot.pools.push({ ...firstPool, address: '0x2222222222222222222222222222222222222222', selected: false })
 		const poolPage = await dashboard(configuration(), poolSnapshot)
 		poolPage.suspendNextSelectedPoolRequest()
-		const firstPoolControl = poolPage.window.document.querySelector<HTMLInputElement>('input[data-record-key="pool:0x1111111111111111111111111111111111111111"]')
-		const secondPoolControl = poolPage.window.document.querySelector<HTMLInputElement>('input[data-record-key="pool:0x2222222222222222222222222222222222222222"]')
-		if (firstPoolControl === null || secondPoolControl === null) throw new Error('Expected pool controls')
+		const firstPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x1111111111111111111111111111111111111111"]')
+		const secondPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x2222222222222222222222222222222222222222"]')
+		if (!(firstPoolControl instanceof poolPage.window.HTMLInputElement) || !(secondPoolControl instanceof poolPage.window.HTMLInputElement)) throw new Error('Expected pool controls')
 		firstPoolControl.click()
 		await Bun.sleep(1)
 		expect(secondPoolControl.disabled).toBe(true)
@@ -538,7 +555,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('turns a scan-only error into an actionable blocker', async () => {
-		const page = await dashboard(configuration(), state('read RPC stalled'))
+		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state('read RPC stalled'))
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Error')
 		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
 		const action = page.window.document.querySelector('#attention-badge[href="#global-error"]')
@@ -692,12 +709,13 @@ describe('liquidator dashboard refresh behavior', () => {
 		page.setSnapshot(state(undefined, [], { execute: true, pendingTransactions: [pending] }))
 		await page.refresh()
 		const recoveryGuidance = page.window.document.getElementById('recovery-guidance')
-		expect(recoveryGuidance?.hidden).toBe(false)
-		expect(recoveryGuidance?.textContent).toContain('Pause the bot')
+		if (!(recoveryGuidance instanceof page.window.HTMLElement)) throw new Error('Expected recovery guidance')
+		expect(recoveryGuidance.hidden).toBe(false)
+		expect(recoveryGuidance.textContent).toContain('Pause the bot')
 
 		page.setSnapshot(state(undefined, [], { execute: true, paused: true, pendingTransactions: [pending] }))
 		await page.refresh()
-		expect(recoveryGuidance?.hidden).toBe(true)
+		expect(recoveryGuidance.hidden).toBe(true)
 
 		const recoveryLink = page.window.document.querySelector('#operator-alerts a[href="#recovery"]')
 		expect(recoveryLink?.textContent).toBe('Review recovery')

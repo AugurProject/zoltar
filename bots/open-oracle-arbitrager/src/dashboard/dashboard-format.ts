@@ -1,4 +1,4 @@
-import type { OperatorSnapshot, OpportunitySnapshot, TransactionActivity } from '#state/operator-state'
+import type { OpportunitySnapshot, PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
 
 const DECIMAL_SCALE = 18
@@ -53,13 +53,13 @@ export function singleFlight<T>(operation: () => Promise<T>) {
 	}
 }
 
-export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number) {
+export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
 	const controller = new AbortController()
 	let timeout: ReturnType<typeof setTimeout> | undefined
 	const deadline = new Promise<never>((_resolve, reject) => {
 		timeout = setTimeout(() => {
 			controller.abort()
-			reject(new Error('Dashboard state request timed out'))
+			reject(new Error(timeoutMessage))
 		}, timeoutMilliseconds)
 	})
 	try {
@@ -152,10 +152,10 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	return nowMilliseconds >= timestampMilliseconds ? `${label} behind` : `${label} ahead of local clock`
 }
 
-export function botStatusLabels(state: Pick<OperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
+export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
 	if (state.paused) return { mode: state.mode, status: 'Paused' }
-	const statuses: Record<OperatorSnapshot['status'], string> = {
+	const statuses: Record<PublicOperatorSnapshot['status'], string> = {
 		error: 'Error',
 		paused: 'Paused',
 		running: 'Running',
@@ -184,7 +184,7 @@ export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot,
 	return reasons[opportunity.decision]
 }
 
-export function transactionKindLabel(transaction: Pick<TransactionActivity, 'kind' | 'tokenSymbol'>) {
+export function transactionKindLabel(transaction: Pick<PublicTransactionActivity, 'kind' | 'tokenSymbol'>) {
 	return transaction.kind === 'approval-token' ? `approve ${transaction.tokenSymbol ?? 'token'}` : transaction.kind.replaceAll('-', ' ')
 }
 

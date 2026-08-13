@@ -1,6 +1,5 @@
 import type { ConnectivitySettings } from '#monitoring/connectivity'
-import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from '#state/operator-state'
-import type { PositionRecord } from '#state/position-store'
+import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
 import {
 	blockAgeLabel,
 	botStatusLabels,
@@ -28,7 +27,7 @@ import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
-let latestSnapshot: OperatorSnapshot | undefined
+let latestSnapshot: PublicOperatorSnapshot | undefined
 let settingsLoaded = false
 let submissionLoaded = false
 let connectivityLoaded = false
@@ -38,15 +37,17 @@ let deploymentLoaded = false
 let tokensLoaded = false
 let configurationLoaded = false
 let configurationLoading = false
-let configurationAttempted = false
+let configurationLoadError: string | undefined
 let configurationRevision: string | undefined
 let initialFragmentApplied = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
 let pauseRequestPending: 'pause' | 'resume' | undefined
+let manualRefreshPending = false
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
+const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -76,6 +77,7 @@ function prettyJson(value: unknown) {
 
 function setControlsEnabled(enabled: boolean) {
 	connected = enabled
+	const focusedSettingsEnabled = enabled && configurationLoaded
 	const pauseControls = pauseControlState({
 		connected: enabled,
 		networkConfigured: latestSnapshot?.networkConfigured === true,
@@ -95,14 +97,17 @@ function setControlsEnabled(enabled: boolean) {
 	if (!enabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
-	fieldset.disabled = !enabled
+	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
-	submissionFieldset.disabled = !enabled
+	submissionFieldset.disabled = !focusedSettingsEnabled || !submissionLoaded
 	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
-		fieldset.disabled = id === 'connectivity-fieldset' ? connectivityControlsDisabled(enabled, connectivityRequestPending) : !enabled
+		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(focusedSettingsEnabled, connectivityRequestPending) || !connectivityLoaded
+		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
+		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded
+		else fieldset.disabled = !enabled
 	}
 	updateConfigurationControls()
 }
@@ -112,6 +117,36 @@ function updateConfigurationControls() {
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
 	fieldset.disabled = !connected || !configurationLoaded || configurationLoading
 	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || configurationLoading
+}
+
+function updateSettingsLoadState() {
+	const container = element('settings-load-state')
+	const retry = element<HTMLButtonElement>('retry-settings-button')
+	if (configurationLoading) {
+		container.hidden = false
+		setText('settings-load-status', 'Loading operator configuration…')
+		retry.hidden = true
+		retry.disabled = true
+		return
+	}
+	if (configurationLoaded) {
+		container.hidden = true
+		retry.hidden = true
+		retry.disabled = false
+		return
+	}
+	container.hidden = false
+	setText('settings-load-status', configurationLoadError === undefined ? 'Operator configuration is unavailable.' : `${configurationLoadError} Editable settings remain locked.`)
+	retry.hidden = false
+	retry.disabled = false
+}
+
+function updateManualRefreshState() {
+	const button = element<HTMLButtonElement>('refresh-button')
+	button.disabled = manualRefreshPending
+	button.textContent = manualRefreshPending ? 'Refreshing…' : 'Refresh'
+	if (manualRefreshPending) button.setAttribute('aria-busy', 'true')
+	else button.removeAttribute('aria-busy')
 }
 
 function updateNetworkTargetStatus() {
@@ -179,8 +214,8 @@ function amount(value: string | undefined, symbol: string) {
 	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
 }
 
-function isSnapshot(value: unknown): value is OperatorSnapshot {
-	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'positions' in value && 'transactionActivity' in value
+function isSnapshot(value: unknown): value is PublicOperatorSnapshot {
+	return typeof value === 'object' && value !== null && 'status' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'positions' in value && 'transactionActivity' in value
 }
 
 function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
@@ -189,25 +224,31 @@ function isConfigurationEnvelope(value: unknown): value is { configuration: unkn
 
 async function loadCompleteConfiguration() {
 	if (configurationLoading) return
-	configurationAttempted = true
 	configurationLoading = true
+	configurationLoaded = false
+	configurationLoadError = undefined
 	updateConfigurationControls()
+	updateSettingsLoadState()
+	setControlsEnabled(connected)
 	setText('configuration-status', 'Loading complete configuration…')
 	try {
-		const envelope = await api<unknown>('/api/configuration')
+		const envelope = await requestWithTimeout(signal => api<unknown>('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
 		if (!isConfigurationEnvelope(envelope)) throw new Error('Bot returned an invalid configuration document')
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(envelope.configuration)
-		synchronizePersistedConnectivity(envelope.configuration)
+		synchronizeFocusedConfiguration(envelope.configuration)
 		configurationRevision = envelope.revision
 		configurationLoaded = true
+		configurationLoadError = undefined
 		setText('configuration-status', 'Changes are schema-validated before the owner-only configuration file is replaced.')
 	} catch (error) {
 		configurationLoaded = false
+		configurationLoadError = error instanceof Error ? error.message : String(error)
 		configurationRevision = undefined
-		setText('configuration-status', `${error instanceof Error ? error.message : String(error)} Use Reload configuration to retry.`)
+		setText('configuration-status', `${configurationLoadError} Use Reload configuration to retry.`)
 	} finally {
 		configurationLoading = false
-		updateConfigurationControls()
+		updateSettingsLoadState()
+		setControlsEnabled(connected)
 	}
 }
 
@@ -264,7 +305,7 @@ function decisionBadge(opportunity: OpportunitySnapshot) {
 	return badge
 }
 
-function renderBalances(snapshot: OperatorSnapshot) {
+function renderBalances(snapshot: PublicOperatorSnapshot) {
 	const list = element('balance-list')
 	list.replaceChildren()
 	setText('wallet-address', snapshot.wallet === undefined ? 'No execution wallet' : snapshot.wallet)
@@ -322,7 +363,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 	setText('opportunity-count', `${opportunities.length.toString()} evaluated`)
 }
 
-function renderHistory(history: readonly ExecutionRecord[], recordCount: number) {
+function renderHistory(history: readonly PublicExecutionRecord[], recordCount: number) {
 	const body = element<HTMLTableSectionElement>('history-body')
 	body.replaceChildren()
 	for (const record of history) {
@@ -346,13 +387,13 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 	renderProfitChart(history, recordCount)
 }
 
-function renderPositions(positions: readonly PositionRecord[], recordCount: number) {
+function renderPositions(positions: readonly PublicPositionRecord[], recordCount: number) {
 	const body = element<HTMLTableSectionElement>('positions-body')
 	body.replaceChildren()
 	for (const position of positions) {
-		const manuallyReconciled = position.manualReconciliation !== undefined
+		const manuallyReconciled = position.manuallyReconciled
 		const awaitingEntryEvidence = position.actualEntryGasCostEth === '0'
-		const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
+		const awaitingLifecycleEvidence = position.hasLifecycleTransactions && !position.lifecycleReceiptRecovered
 		const accountingPending = !manuallyReconciled && (awaitingEntryEvidence || awaitingLifecycleEvidence)
 		let hedgedProfit = exactAmount(position.hedgedProfitBeforeGasEth, 'ETH')
 		if (manuallyReconciled) hedgedProfit = 'Manual reconciliation recorded'
@@ -384,7 +425,7 @@ function renderPositions(positions: readonly PositionRecord[], recordCount: numb
 	setText('position-count', recordCount > positions.length ? `Latest ${positions.length.toString()} of ${recordCount.toString()}` : countLabel(recordCount, 'durable position'))
 }
 
-function renderProfitChart(history: readonly ExecutionRecord[], recordCount: number) {
+function renderProfitChart(history: readonly PublicExecutionRecord[], recordCount: number) {
 	const container = element('profit-chart')
 	container.replaceChildren()
 	if (history.length === 0) return
@@ -470,7 +511,60 @@ function loadConnectivity(connectivity: ConnectivitySettings) {
 	element<HTMLTextAreaElement>('public-rpc-urls').value = connectivity.publicRpcUrls.join('\n')
 }
 
-function renderEndpointChecks(snapshot: OperatorSnapshot) {
+function isStringArray(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+function isStrategySettings(value: unknown): value is StrategySettings {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+	return (
+		typeof Reflect.get(value, 'maxSpotTwapTicks') === 'string' &&
+		typeof Reflect.get(value, 'minimumProfitBps') === 'string' &&
+		typeof Reflect.get(value, 'minimumProfitWeth') === 'string' &&
+		typeof Reflect.get(value, 'minimumRemainingBlocks') === 'string' &&
+		typeof Reflect.get(value, 'minimumRemainingSeconds') === 'string' &&
+		typeof Reflect.get(value, 'pollMilliseconds') === 'number' &&
+		typeof Reflect.get(value, 'twapSeconds') === 'number'
+	)
+}
+
+function isSubmissionSettings(value: unknown): value is SubmissionSettings {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+	const mode = Reflect.get(value, 'mode')
+	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
+}
+
+function isDeploymentSettings(value: unknown): value is DeploymentSettings {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+	for (const key of ['openOracle', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
+		if (typeof Reflect.get(value, key) !== 'string') return false
+	}
+	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
+		const candidate = Reflect.get(value, key)
+		if (candidate !== undefined && candidate !== null && typeof candidate !== 'string') return false
+	}
+	return isStringArray(Reflect.get(value, 'coordinatorAddresses')) && isStringArray(Reflect.get(value, 'quorumRpcUrls'))
+}
+
+function synchronizeFocusedConfiguration(configuration: unknown) {
+	if (typeof configuration !== 'object' || configuration === null || Array.isArray(configuration)) throw new Error('Bot returned an invalid configuration document')
+	const strategy = Reflect.get(configuration, 'strategy')
+	const submission = Reflect.get(configuration, 'submission')
+	const deployment = Reflect.get(configuration, 'deployment')
+	const tokenAddresses = Reflect.get(configuration, 'tokenAddresses')
+	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(tokenAddresses)) throw new Error('Bot returned an invalid configuration document')
+	loadSettings(strategy)
+	settingsLoaded = true
+	loadSubmission(submission)
+	submissionLoaded = true
+	synchronizePersistedConnectivity(configuration)
+	loadDeployment(deployment)
+	deploymentLoaded = true
+	element<HTMLTextAreaElement>('token-addresses').value = tokenAddresses.join('\n')
+	tokensLoaded = true
+}
+
+function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 	const container = element('endpoint-checks')
 	container.replaceChildren()
 	for (const check of snapshot.endpointChecks) {
@@ -489,7 +583,7 @@ function renderEndpointChecks(snapshot: OperatorSnapshot) {
 	}
 }
 
-function renderOperations(operations: readonly OperationEntry[]) {
+function renderOperations(operations: readonly PublicOperationEntry[]) {
 	const visibleOperations = operations.filter(operation => operation.category !== 'scan')
 	const body = element<HTMLTableSectionElement>('operations-body')
 	body.replaceChildren()
@@ -504,7 +598,7 @@ function renderOperations(operations: readonly OperationEntry[]) {
 	setText('operation-count', countLabel(visibleOperations.length, 'entry', 'entries'))
 }
 
-function renderTokenMarkets(snapshot: OperatorSnapshot) {
+function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
@@ -539,7 +633,7 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	setText('token-count', `${countLabel(snapshot.tokenMarkets.length, 'token')} · ${countLabel(poolCount, 'pool')}`)
 }
 
-function renderCentralizedMarket(snapshot: OperatorSnapshot) {
+function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('centralized-market-body')
 	body.replaceChildren()
 	const market = snapshot.centralizedMarket
@@ -568,7 +662,7 @@ function renderCentralizedMarket(snapshot: OperatorSnapshot) {
 	element('centralized-market-empty').hidden = market.observations.length !== 0
 }
 
-function renderDisputePaths(snapshot: OperatorSnapshot) {
+function renderDisputePaths(snapshot: PublicOperatorSnapshot) {
 	const container = element('dispute-paths')
 	const disclosureState = new Map(Array.from(container.querySelectorAll<HTMLDetailsElement>('details[data-report-id]')).map(details => [details.dataset['reportId'] ?? '', { focused: details.querySelector('summary') === document.activeElement, open: details.open }]))
 	container.replaceChildren()
@@ -619,7 +713,7 @@ function chartPrice(value: number) {
 	return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 5, notation: 'scientific' }).format(value)
 }
 
-function renderMarketPriceChart(snapshot: OperatorSnapshot) {
+function renderMarketPriceChart(snapshot: PublicOperatorSnapshot) {
 	const selector = element<HTMLSelectElement>('price-token')
 	const selected = selector.value
 	const tokens = [...new Map(snapshot.priceHistory.map(point => [point.token.toLowerCase(), { address: point.token, symbol: point.symbol }])).values()]
@@ -746,7 +840,7 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	if (samplesWereFocused) summary.focus({ preventScroll: true })
 }
 
-function renderSignerStatus(snapshot: OperatorSnapshot) {
+function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 	const privateKeyInput = element<HTMLInputElement>('private-key')
 	const rememberSignerInput = element<HTMLInputElement>('remember-signer')
 	const signerStatus = element('signer-status')
@@ -779,7 +873,7 @@ function renderSignerStatus(snapshot: OperatorSnapshot) {
 	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
 }
 
-function renderTransactions(transactions: readonly TransactionActivity[]) {
+function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
 	const body = element<HTMLTableSectionElement>('transactions-body')
 	body.replaceChildren()
 	for (const transaction of transactions) {
@@ -808,34 +902,12 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 	setText('transaction-count', `${transactions.length.toString()} tracked`)
 }
 
-function render(snapshot: OperatorSnapshot) {
+function render(snapshot: PublicOperatorSnapshot) {
 	const activeElement = document.activeElement
 	const focusKey = activeElement instanceof HTMLElement ? activeElement.dataset['focusKey'] : undefined
 	const scrollPosition = { left: window.scrollX, top: window.scrollY }
 	latestSnapshot = snapshot
 	setControlsEnabled(true)
-	if (!settingsLoaded) {
-		loadSettings(snapshot.settings)
-		settingsLoaded = true
-	}
-	if (!submissionLoaded) {
-		loadSubmission(snapshot.submission)
-		submissionLoaded = true
-	}
-	if (!connectivityLoaded) {
-		loadConnectivity(snapshot.connectivity)
-		if (snapshot.networkConfigured) element<HTMLSelectElement>('network-name').value = snapshot.network
-		connectivityLoaded = true
-	}
-	if (!deploymentLoaded) {
-		loadDeployment(snapshot.deployment)
-		deploymentLoaded = true
-	}
-	if (!tokensLoaded) {
-		element<HTMLTextAreaElement>('token-addresses').value = snapshot.tokenAddresses.join('\n')
-		tokensLoaded = true
-	}
-	if (!configurationAttempted) void loadCompleteConfiguration()
 	const modeBadge = element('mode-badge')
 	const statusLabels = botStatusLabels(snapshot)
 	modeBadge.className = 'badge'
@@ -851,11 +923,12 @@ function render(snapshot: OperatorSnapshot) {
 	headerNetworkBadge.className = `badge${snapshot.networkConfigured ? '' : ' badge-warning'}`
 	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
 	const uncertainTransactionCount = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
-	const attentionCount = recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
+	const networkSetupCount = snapshot.networkConfigured ? 0 : 1
+	const attentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge attention-badge${attentionCount === 0 ? ' badge-ok' : ' badge-warning'}`
-	attentionBadge.href = recoveryCount > 0 ? '#position-lifecycle' : uncertainTransactionCount > 0 ? '#transaction-tracking' : snapshot.lastError === undefined ? '#overview' : '#notice'
+	attentionBadge.href = networkSetupCount > 0 ? '#network-connectivity' : recoveryCount > 0 ? '#position-lifecycle' : uncertainTransactionCount > 0 ? '#transaction-tracking' : snapshot.lastError === undefined ? '#overview' : '#notice'
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
@@ -960,7 +1033,7 @@ const refresh = singleFlight(async () => {
 		runStatusBadge.textContent = 'Disconnected'
 		runStatusBadge.className = 'badge badge-danger'
 		const attentionBadge = element<HTMLAnchorElement>('attention-badge')
-		const retainedAttentionCount = latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
+		const retainedAttentionCount = latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length + (latestSnapshot.networkConfigured ? 0 : 1)
 		const attentionCount = retainedAttentionCount + 1
 		attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 		attentionBadge.className = 'badge attention-badge badge-danger'
@@ -977,8 +1050,21 @@ const refresh = singleFlight(async () => {
 	}
 })
 
-element('refresh-button').addEventListener('click', () => void refresh())
+async function manualRefresh() {
+	if (manualRefreshPending) return
+	manualRefreshPending = true
+	updateManualRefreshState()
+	try {
+		await refresh()
+	} finally {
+		manualRefreshPending = false
+		updateManualRefreshState()
+	}
+}
+
+element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
+element('retry-settings-button').addEventListener('click', () => void loadCompleteConfiguration())
 element<HTMLFormElement>('configuration-form').addEventListener('submit', async event => {
 	event.preventDefault()
 	const button = element<HTMLFormElement>('configuration-form').querySelector('button[type="submit"]')
@@ -995,7 +1081,7 @@ element<HTMLFormElement>('configuration-form').addEventListener('submit', async 
 		})
 		if (!isConfigurationEnvelope(response)) throw new Error('Bot returned an invalid configuration document')
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(response.configuration)
-		synchronizePersistedConnectivity(response.configuration)
+		synchronizeFocusedConfiguration(response.configuration)
 		configurationRevision = response.revision
 		setText('configuration-status', 'Complete configuration saved. Restart the bot to apply every field.')
 	} catch (error) {
@@ -1035,7 +1121,7 @@ function preflightItem(label: string, value: string) {
 	return item
 }
 
-function openResumePreflight(snapshot: OperatorSnapshot) {
+function openResumePreflight(snapshot: PublicOperatorSnapshot) {
 	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
 	const uncertainTransactions = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
 	const selectedOpportunities = snapshot.opportunities.filter(opportunity => opportunity.decision === 'selected' || opportunity.decision === 'eligible').length
@@ -1052,6 +1138,8 @@ function openResumePreflight(snapshot: OperatorSnapshot) {
 	const dialog = element<HTMLDialogElement>('resume-dialog')
 	if (typeof dialog.showModal === 'function') dialog.showModal()
 	if (!dialog.hasAttribute('open')) dialog.setAttribute('open', '')
+	element<HTMLElement>('resume-title').focus({ preventScroll: true })
+	dialog.scrollTop = 0
 }
 
 function closeResumePreflight() {
@@ -1131,6 +1219,7 @@ function scrollToSection(id: string) {
 	const target = document.getElementById(id)
 	const shell = document.querySelector<HTMLElement>('.operator-shell')
 	if (target === null || shell === null) return
+	if (target instanceof HTMLDetailsElement) target.open = true
 	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
 	window.scrollTo({ top: Math.max(0, top) })
 }
@@ -1385,4 +1474,5 @@ element<HTMLInputElement>('private-key').addEventListener('input', () => {
 })
 
 void refresh()
+void loadCompleteConfiguration()
 window.setInterval(() => void refresh(), 2_000)

@@ -26,6 +26,8 @@ let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
 let fixtureStateUnavailable = false
 let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
+let fixtureConfigurationHanging = false
+let fixtureConfigurationUnavailable = false
 let fixtureNetworkConfigured = true
 let fixturePauseHanging = false
 const fixturePauseRequests: boolean[] = []
@@ -115,6 +117,76 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			if (typeof capture !== 'object' || capture === null || !('data' in capture) || typeof capture.data !== 'string') throw new Error(`Chromium did not capture ${name}`)
 			const bytes = await Bun.write(join(outputDirectory, name), Buffer.from(capture.data, 'base64'))
 			if (bytes === 0) throw new Error(`Chromium wrote an empty ${name}`)
+		}
+		const assertResumeDialogStart = async (label: string, width: number) => {
+			const result = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const dialog = document.querySelector('#resume-dialog')
+						const title = document.querySelector('#resume-title')
+						const consequence = document.querySelector('#resume-dialog .dialog-body > .muted')
+						const firstCheck = document.querySelector('#resume-preflight li')
+						const actions = document.querySelector('#resume-dialog .dialog-actions')
+						const dialogRect = dialog?.getBoundingClientRect()
+						const titleRect = title?.getBoundingClientRect()
+						const consequenceRect = consequence?.getBoundingClientRect()
+						const firstCheckRect = firstCheck?.getBoundingClientRect()
+						return {
+							actionsReachable: dialog instanceof HTMLElement && actions instanceof HTMLElement && actions.offsetTop + actions.offsetHeight <= dialog.scrollHeight,
+							bodyScrollWidth: document.body.scrollWidth,
+							dialogBounded: dialogRect !== undefined && dialogRect.top >= 0 && dialogRect.bottom <= window.innerHeight && dialogRect.left >= 0 && dialogRect.right <= window.innerWidth,
+							focusedTitle: document.activeElement === title,
+							introVisible: [titleRect, consequenceRect, firstCheckRect].every(rect => rect !== undefined && rect.top >= 0 && rect.bottom <= window.innerHeight),
+							open: dialog?.hasAttribute('open'),
+							scrollTop: dialog instanceof HTMLElement ? dialog.scrollTop : undefined
+						}
+					})()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			const value = typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+			if (
+				typeof value !== 'object' ||
+				value === null ||
+				!('open' in value) ||
+				value.open !== true ||
+				!('focusedTitle' in value) ||
+				value.focusedTitle !== true ||
+				!('scrollTop' in value) ||
+				value.scrollTop !== 0 ||
+				!('dialogBounded' in value) ||
+				value.dialogBounded !== true ||
+				!('introVisible' in value) ||
+				value.introVisible !== true ||
+				!('actionsReachable' in value) ||
+				value.actionsReachable !== true ||
+				!('bodyScrollWidth' in value) ||
+				typeof value.bodyScrollWidth !== 'number' ||
+				value.bodyScrollWidth > width
+			) {
+				throw new Error(`${label} resume dialog lost its safety context: ${JSON.stringify(value)}`)
+			}
+		}
+		const readSafetyActionPositions = async () => {
+			const result = await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => Object.fromEntries(['refresh-button', 'pause-button'].map(id => {
+						const element = document.getElementById(id)
+						if (!(element instanceof HTMLElement)) return [id, undefined]
+						const rect = element.getBoundingClientRect()
+						return [id, { bottom: rect.bottom, height: rect.height, left: rect.left, right: rect.right, top: rect.top, width: rect.width }]
+					})))()`,
+					returnByValue: true,
+				},
+				sessionId,
+			)
+			return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+		}
+		const assertStableSafetyActions = (expected: unknown, actual: unknown, label: string) => {
+			if (expected === undefined || JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} moved mobile safety actions: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
 		}
 		for (const [name, section] of [
 			['dashboard-overview.png', undefined],
@@ -300,6 +372,147 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				throw new Error(`Connectivity mutation did not recover after retry: ${JSON.stringify(recoveryValue)}`)
 			}
 		}
+		if (process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION_STATES'] === '1') {
+			const readConfigurationState = async () => {
+				const result = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => ({
+							bodyScrollWidth: document.body.scrollWidth,
+							clientWidth: document.documentElement.clientWidth,
+							containerHidden: document.querySelector('#settings-load-state')?.hidden,
+							allDependentDisabled: ['strategy-fieldset', 'submission-fieldset', 'connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'tokens-fieldset'].every(id => document.getElementById(id)?.hasAttribute('disabled') === true),
+							allDependentEnabled: ['strategy-fieldset', 'submission-fieldset', 'connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'tokens-fieldset'].every(id => document.getElementById(id)?.hasAttribute('disabled') === false),
+							deploymentDisabled: document.querySelector('#deployment-fieldset')?.disabled,
+							retryHidden: document.querySelector('#retry-settings-button')?.hidden,
+							status: document.querySelector('#settings-load-status')?.textContent,
+							strategyDisabled: document.querySelector('#strategy-fieldset')?.disabled,
+							submissionDisabled: document.querySelector('#submission-fieldset')?.disabled
+						}))()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
+			}
+			const assertConfigurationControls = (value: unknown, disabled: boolean, label: string, width: number) => {
+				if (
+					typeof value !== 'object' ||
+					value === null ||
+					!('strategyDisabled' in value) ||
+					value.strategyDisabled !== disabled ||
+					!('allDependentDisabled' in value) ||
+					!('allDependentEnabled' in value) ||
+					(disabled ? value.allDependentDisabled !== true : value.allDependentEnabled !== true) ||
+					!('submissionDisabled' in value) ||
+					value.submissionDisabled !== disabled ||
+					!('deploymentDisabled' in value) ||
+					value.deploymentDisabled !== disabled ||
+					!('bodyScrollWidth' in value) ||
+					typeof value.bodyScrollWidth !== 'number' ||
+					value.bodyScrollWidth > width
+				) {
+					throw new Error(`${label} configuration controls are unsafe: ${JSON.stringify(value)}`)
+				}
+			}
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				const height = mobile ? 844 : 900
+				fixtureConfigurationHanging = true
+				await replacePage(`${origin}/?configuration=loading-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(150)
+				const loading = await readConfigurationState()
+				assertConfigurationControls(loading, true, 'Loading', width)
+				if (typeof loading !== 'object' || loading === null || !('containerHidden' in loading) || loading.containerHidden !== false || !('retryHidden' in loading) || loading.retryHidden !== true || !('status' in loading) || loading.status !== 'Loading operator configuration…') {
+					throw new Error(`Configuration loading state is not visible: ${JSON.stringify(loading)}`)
+				}
+				await capturePng(`configuration-loading-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationHanging = false
+				await Bun.sleep(350)
+				const loaded = await readConfigurationState()
+				assertConfigurationControls(loaded, false, 'Loaded', width)
+				if (typeof loaded !== 'object' || loaded === null || !('containerHidden' in loaded) || loaded.containerHidden !== true) throw new Error(`Configuration loading did not resolve: ${JSON.stringify(loaded)}`)
+
+				fixtureConfigurationUnavailable = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#reload-configuration-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const reloadFailed = await readConfigurationState()
+				assertConfigurationControls(reloadFailed, true, 'Failed reload', width)
+				if (
+					typeof reloadFailed !== 'object' ||
+					reloadFailed === null ||
+					!('containerHidden' in reloadFailed) ||
+					reloadFailed.containerHidden !== false ||
+					!('retryHidden' in reloadFailed) ||
+					reloadFailed.retryHidden !== false ||
+					!('status' in reloadFailed) ||
+					typeof reloadFailed.status !== 'string' ||
+					!reloadFailed.status.includes('Complete configuration is unavailable.')
+				) {
+					throw new Error(`Failed configuration reload left stale controls available: ${JSON.stringify(reloadFailed)}`)
+				}
+				fixtureConfigurationUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const reloadRecovered = await readConfigurationState()
+				assertConfigurationControls(reloadRecovered, false, 'Reload-recovered', width)
+				if (typeof reloadRecovered !== 'object' || reloadRecovered === null || !('containerHidden' in reloadRecovered) || reloadRecovered.containerHidden !== true) throw new Error(`Failed configuration reload did not recover: ${JSON.stringify(reloadRecovered)}`)
+
+				fixtureConfigurationUnavailable = true
+				await replacePage(`${origin}/?configuration=failed-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(750)
+				const failed = await readConfigurationState()
+				assertConfigurationControls(failed, true, 'Failed', width)
+				if (
+					typeof failed !== 'object' ||
+					failed === null ||
+					!('containerHidden' in failed) ||
+					failed.containerHidden !== false ||
+					!('retryHidden' in failed) ||
+					failed.retryHidden !== false ||
+					!('status' in failed) ||
+					typeof failed.status !== 'string' ||
+					!failed.status.includes('Complete configuration is unavailable.')
+				) {
+					throw new Error(`Configuration failure has no visible recovery: ${JSON.stringify(failed)}`)
+				}
+				await capturePng(`configuration-failed-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationUnavailable = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const recovered = await readConfigurationState()
+				assertConfigurationControls(recovered, false, 'Recovered', width)
+				if (typeof recovered !== 'object' || recovered === null || !('containerHidden' in recovered) || recovered.containerHidden !== true) throw new Error(`Configuration retry did not recover: ${JSON.stringify(recovered)}`)
+
+				fixtureConfigurationHanging = true
+				await replacePage(`${origin}/?configuration=hanging-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await Bun.sleep(2_250)
+				const timedOut = await readConfigurationState()
+				assertConfigurationControls(timedOut, true, 'Timed-out', width)
+				if (
+					typeof timedOut !== 'object' ||
+					timedOut === null ||
+					!('containerHidden' in timedOut) ||
+					timedOut.containerHidden !== false ||
+					!('retryHidden' in timedOut) ||
+					timedOut.retryHidden !== false ||
+					!('status' in timedOut) ||
+					timedOut.status !== 'Configuration request timed out. Editable settings remain locked.'
+				) {
+					throw new Error(`Hanging configuration request did not time out visibly: ${JSON.stringify(timedOut)}`)
+				}
+				await capturePng(`configuration-timeout-${mobile ? 'mobile' : 'desktop'}.png`)
+				fixtureConfigurationHanging = false
+				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
+				await Bun.sleep(350)
+				const timeoutRecovery = await readConfigurationState()
+				assertConfigurationControls(timeoutRecovery, false, 'Timeout-recovered', width)
+				if (typeof timeoutRecovery !== 'object' || timeoutRecovery === null || !('containerHidden' in timeoutRecovery) || timeoutRecovery.containerHidden !== true) throw new Error(`Timed-out configuration retry did not recover: ${JSON.stringify(timeoutRecovery)}`)
+			}
+			const unexpectedConfigurationDiagnostics = runtimeDiagnostics.filter(diagnostic => !diagnostic.includes('Failed to load resource: the server responded with a status of 503 (Service Unavailable)') || !diagnostic.includes('/api/configuration'))
+			if (unexpectedConfigurationDiagnostics.length > 0) throw new Error(`Chromium reported unexpected configuration diagnostics: ${unexpectedConfigurationDiagnostics.join('\n')}`)
+			runtimeDiagnostics.length = 0
+		}
 		if (process.env['OPEN_ORACLE_CAPTURE_RESUME'] === '1') {
 			fixtureNetworkConfigured = false
 			paused = true
@@ -318,6 +531,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							pause?.click()
 							confirm?.click()
 							return {
+								attentionHref: document.querySelector('#attention-badge')?.getAttribute('href'),
+								attentionText: document.querySelector('#attention-badge')?.textContent,
 								confirmDisabled: confirm?.disabled,
 								pauseBusy: pause?.getAttribute('aria-busy'),
 								pauseCursor: pause instanceof HTMLElement ? getComputedStyle(pause).cursor : undefined,
@@ -336,6 +551,10 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					unconfiguredResumeValue === null ||
 					!('pauseDisabled' in unconfiguredResumeValue) ||
 					unconfiguredResumeValue.pauseDisabled !== true ||
+					!('attentionHref' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.attentionHref !== '#network-connectivity' ||
+					!('attentionText' in unconfiguredResumeValue) ||
+					unconfiguredResumeValue.attentionText !== '1 action' ||
 					!('pauseBusy' in unconfiguredResumeValue) ||
 					unconfiguredResumeValue.pauseBusy !== null ||
 					!('pauseCursor' in unconfiguredResumeValue) ||
@@ -408,11 +627,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await Bun.sleep(750)
 				await command('Runtime.evaluate', { expression: `document.querySelector('#pause-button')?.click()` }, sessionId)
 				await Bun.sleep(100)
+				await assertResumeDialogStart(`${mobile ? 'Mobile' : 'Desktop'} initial`, width)
 				fixturePauseHanging = true
 				let pendingResumeValue: unknown
 				try {
 					await command('Runtime.evaluate', { expression: `document.querySelector('#confirm-resume')?.click()` }, sessionId)
 					await Bun.sleep(100)
+					await assertResumeDialogStart(`${mobile ? 'Mobile' : 'Desktop'} pending`, width)
 					const pendingResume = await command(
 						'Runtime.evaluate',
 						{
@@ -465,6 +686,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			await capturePng('resume-preflight.png')
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_STATUS'] === '1') {
+			let mobileSafetyActionPositions: unknown
 			for (const status of ['running', 'paused', 'syncing', 'error'] as const) {
 				fixtureStatus = status
 				paused = status === 'paused'
@@ -479,6 +701,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						await Bun.sleep(250)
 					}
 					await settlePaint()
+					if (mobile) {
+						const actionPositions = await readSafetyActionPositions()
+						if (status === 'running') mobileSafetyActionPositions = actionPositions
+						else assertStableSafetyActions(mobileSafetyActionPositions, actionPositions, `${status} status`)
+					}
 					const state = await command(
 						'Runtime.evaluate',
 						{
@@ -577,6 +804,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									noticeTitle: document.querySelector('#notice-title')?.textContent,
 									confirmDisabled: document.querySelector('#confirm-resume')?.disabled,
 									pauseDisabled: document.querySelector('#pause-button')?.disabled,
+									refreshBusy: document.querySelector('#refresh-button')?.getAttribute('aria-busy'),
+									refreshDisabled: document.querySelector('#refresh-button')?.disabled,
+									refreshText: document.querySelector('#refresh-button')?.textContent,
 									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
 									runStatus: document.querySelector('#run-status-badge')?.textContent,
 									safetyVisible,
@@ -590,6 +820,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					return typeof result === 'object' && result !== null && 'result' in result && typeof result.result === 'object' && result.result !== null && 'value' in result.result ? result.result.value : undefined
 				}
 				const initialFailure = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Initial connection failure')
 				if (
 					typeof initialFailure !== 'object' ||
 					initialFailure === null ||
@@ -623,6 +854,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
 				await Bun.sleep(250)
 				const postSuccessFailure = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Post-success connection failure')
 				if (
 					typeof postSuccessFailure !== 'object' ||
 					postSuccessFailure === null ||
@@ -670,33 +902,53 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				) {
 					throw new Error(`State-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
 				}
-				if (!mobile) {
-					await replacePage(`${origin}/?connection=hung-desktop`, width, height)
-					await Bun.sleep(750)
-					fixtureStateHanging = true
-					await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-					await Bun.sleep(1_250)
-					const hungRequest = await readConnectionState()
-					if (
-						typeof hungRequest !== 'object' ||
-						hungRequest === null ||
-						!('attentionText' in hungRequest) ||
-						hungRequest.attentionText !== '1 action' ||
-						!('confirmDisabled' in hungRequest) ||
-						hungRequest.confirmDisabled !== true ||
-						!('pauseDisabled' in hungRequest) ||
-						hungRequest.pauseDisabled !== false ||
-						!('resumeOpen' in hungRequest) ||
-						hungRequest.resumeOpen !== false ||
-						!('runStatus' in hungRequest) ||
-						hungRequest.runStatus !== 'Disconnected'
-					) {
-						throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
-					}
-					fixtureStateHanging = false
-					await replacePage(`${origin}/?connection=hung-recovery-desktop`, width, height)
-					await Bun.sleep(750)
+				await replacePage(`${origin}/?connection=hung-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
+				fixtureStateHanging = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+				await Bun.sleep(100)
+				const pendingRefresh = await readConnectionState()
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending manual refresh')
+				if (
+					typeof pendingRefresh !== 'object' ||
+					pendingRefresh === null ||
+					!('refreshBusy' in pendingRefresh) ||
+					pendingRefresh.refreshBusy !== 'true' ||
+					!('refreshDisabled' in pendingRefresh) ||
+					pendingRefresh.refreshDisabled !== true ||
+					!('refreshText' in pendingRefresh) ||
+					pendingRefresh.refreshText !== 'Refreshing…'
+				) {
+					throw new Error(`Manual Refresh did not expose a busy control: ${JSON.stringify(pendingRefresh)}`)
 				}
+				await capturePng(`refresh-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				await Bun.sleep(1_150)
+				const hungRequest = await readConnectionState()
+				if (
+					typeof hungRequest !== 'object' ||
+					hungRequest === null ||
+					!('attentionText' in hungRequest) ||
+					hungRequest.attentionText !== '1 action' ||
+					!('confirmDisabled' in hungRequest) ||
+					hungRequest.confirmDisabled !== true ||
+					!('pauseDisabled' in hungRequest) ||
+					hungRequest.pauseDisabled !== false ||
+					!('resumeOpen' in hungRequest) ||
+					hungRequest.resumeOpen !== false ||
+					!('runStatus' in hungRequest) ||
+					hungRequest.runStatus !== 'Disconnected' ||
+					!('refreshBusy' in hungRequest) ||
+					hungRequest.refreshBusy !== null ||
+					!('refreshDisabled' in hungRequest) ||
+					hungRequest.refreshDisabled !== false ||
+					!('refreshText' in hungRequest) ||
+					hungRequest.refreshText !== 'Refresh'
+				) {
+					throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
+				}
+				fixtureStateHanging = false
+				await replacePage(`${origin}/?connection=hung-recovery-${mobile ? 'mobile' : 'desktop'}`, width, height)
+				await Bun.sleep(750)
 				paused = true
 				await replacePage(`${origin}/?connection=resume-preflight-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
@@ -1232,10 +1484,14 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 }
 
 const server = startDashboardServer(0, {
-	getConfiguration: async () => ({
-		configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
-		revision: 'fixture-revision',
-	}),
+	getConfiguration: async () => {
+		while (fixtureConfigurationHanging) await Bun.sleep(10)
+		if (fixtureConfigurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
+		return {
+			configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
+			revision: 'fixture-revision',
+		}
+	},
 	getSnapshot: async () => {
 		if (fixtureStateHanging) await new Promise<never>(() => {})
 		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')

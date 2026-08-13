@@ -340,6 +340,7 @@
 					<h2>Settings</h2>
 				</div>
 			</div>
+			<div id="settings-load-state" class="notice settings-load-state"><span id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span><button id="retry-settings-button" class="button button-secondary" type="button" hidden>Retry</button></div>
 			<div class="settings-stack">
 				<details class="settings-group panel">
 					<summary>
@@ -481,7 +482,7 @@
 			<div class="dialog-body">
 				<div>
 					<p class="eyebrow">Live resume check</p>
-					<h2 id="resume-title">Review execution readiness</h2>
+					<h2 id="resume-title" tabindex="-1">Review execution readiness</h2>
 				</div>
 				<p class="muted">Resuming restarts scans. Existing guards still decide whether a transaction may execute.</p>
 				<ul id="resume-preflight" class="preflight-list"></ul>
