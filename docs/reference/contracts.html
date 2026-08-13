@@ -228,7 +228,7 @@
 							<td><code>burnEscalationWinnerHaircut(amountAttoRep)</code></td>
 							<td>This pool's <code>EscalationGame</code> only</td>
 							<td>Caller is the configured escalation game; amount is positive and the game has already transferred enough REP to the pool.</td>
-							<td>Burns REP transferred from the configured game for either a winning-deposit haircut or the complete residual of a finalized fork continuation.</td>
+							<td>Burns the winning-deposit haircut from REP already escrowed in the game.</td>
 							<td><code>RepBurned</code> and ERC-20 <code>Transfer</code>; child REP also emits <code>Burn</code></td>
 						</tr>
 						<tr>
@@ -325,7 +325,7 @@
 						<tr>
 							<td><code>performLiquidation(request)</code></td>
 							<td>This pool's <code>OpenOraclePriceCoordinator</code> only</td>
-							<td>In ABI order, <code>request</code> contains <code>operationId</code>, <code>operator</code>, <code>receiverVault</code>, <code>targetVault</code>, <code>requestedDebtAttoEth</code>, <code>snapshot</code>, <code>minimumReceiverHealthFactorBps</code>, and <code>minLiquidationPriceDistanceBps</code>. The nested snapshot contains <code>targetBackingUnits</code>, <code>targetCapacityOwnershipAttoRep</code>, <code>totalPoolHeldAttoRep</code>, and <code>totalRepBackingUnits</code>. Fresh settled coordinator price; operational pool in an unforked universe; <code>isEscalationResolved()</code> is false; receiver differs from target. The target backing and capacity-ownership snapshot fields must match; the two pool-total snapshot fields are reconstruction evidence, while execution uses live pool totals. After target and receiver fee checkpoints, the liquidation delegate requires live target backing, dispute-staked REP, and open interest to remain at least <code>minLiquidationPriceDistanceBps</code> beyond the liquidation threshold and requires the live target state to remain unhealthy. When debt moves, the receiver must satisfy the protocol backing checks multiplied by its approved minimum health factor, using live post-liquidation state and upward-rounded requirements; its resulting debt must meet the configured debt floor and its REP must meet the vault floor. The target resulting debt must be zero or meet the debt floor; when debt remains, target REP must meet the vault floor.</td>
+							<td>Fresh settled coordinator price; operational pool in an unforked universe; <code>isEscalationResolved()</code> is false; receiver differs from target. Target snapshots must match. After target and receiver fee checkpoints, the liquidation delegate requires live target backing, dispute-staked REP, and open interest to remain at least <code>minLiquidationPriceDistanceBps</code> beyond the liquidation threshold and requires the live target state to remain unhealthy. When debt moves, the receiver must satisfy the protocol backing checks multiplied by its approved minimum health factor, using live post-liquidation state and upward-rounded requirements; its resulting debt must meet the configured debt floor and its REP must meet the vault floor. The target resulting debt must be zero or meet the debt floor; when debt remains, target REP must meet the vault floor.</td>
 							<td>Capped by the target vault's open interest and fundable REP award, a nominal debt quote selects proportional capacity ownership rounded downward and moves that ownership to the explicitly selected receiver vault. Moved security-bond debt is the receiver's exact live open-interest increase and cannot exceed the nominal quote or request. On a delegated route, the coordinator additionally bounds it by the staged approval reservation; the self-receiving route has no approval reservation. The operator only submits the transaction. Dispute-staked REP claims, accrued claimable fees, surplus vault REP backing, and unmatched ownership remain with the target. On a full-target request, target open interest minus exact moved debt is recorded as attoETH-denominated bad debt; that residual can include both an award-unfunded slice and integer-allocation residue. Receiver or target dust cannot turn otherwise funded debt into bad debt.</td>
 							<td>Fee-accrual and target or receiver <code>VaultAccountingCheckpoint</code> events as needed; <code>VaultLiquidated</code> identifies operation, operator, receiver, target, moved debt, moved ownership, and bad debt; <code>VaultBadDebtRecorded</code> records residual target debt on a full-target request; final pool accounting checkpoint</td>
 						</tr>
@@ -486,14 +486,14 @@
 							<td><code>migrateVault(securityPool, outcomeIndex)</code></td>
 							<td>Vault owner for their non-escrowed position</td>
 							<td>Migration window open; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.</td>
-							<td>Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing claim, capacity ownership, or vault bad debt to move.</td>
+							<td>Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.</td>
 							<td><code>VaultBadDebtMigrated</code> and <code>VaultMigrationCheckpoint</code></td>
 						</tr>
 						<tr>
 							<td><code>migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)</code></td>
 							<td>The named vault owner</td>
 							<td>Migration window open; caller equals <code>vault</code>; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
-							<td>First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.</td>
+							<td>First runs ordinary migration for the same vault, which may transfer REP backing units, capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.</td>
 							<td>Vault migration events, including <code>VaultBadDebtMigrated</code>, plus <code>EscalationMigrationEntitlementInitialized</code> on first export and <code>EscalationMigrationEntitlementMaterialized</code> for the selected child</td>
 						</tr>
 						<tr>
@@ -687,8 +687,8 @@
 							<td><code>sweepResidualRepToSecurityPool()</code></td>
 							<td>Anyone</td>
 							<td>Final outcome; no unresolved principal; no vault escrow; positive residual balance.</td>
-							<td>Returns ordinary-game residual REP to the owning pool. Burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.</td>
-							<td><code>ResidualRepSweptToSecurityPool</code> for an ordinary game; <code>ForkContinuationResidualRepBurned</code> for a fork continuation</td>
+							<td>Returns otherwise stranded residual REP to the owning pool.</td>
+							<td><code>ResidualRepSweptToSecurityPool</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -933,7 +933,7 @@
 					</tbody>
 				</table>
 				<h2 id="uniformpricedualcapbatchauction">UniformPriceDualCapBatchAuction</h2>
-				<p>Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. AVL, cumulative-allocation, and refund-prefix mechanics live in <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol">UniformPriceDualCapBatchAuctionStorage</a>, an internal storage library. <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">Source</a></p>
+				<p>Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">Source</a></p>
 				<p>Read surface: Auction summary getters are <code>maxAttoRepBeingSold</code>, <code>attoEthRaiseCap</code>, <code>finalized</code>, <code>clearingTick</code>, <code>ethFilledAtClearingAttoEth</code>, <code>attoEthRaised</code>, <code>totalAttoRepPurchased</code>, <code>auctionStarted</code>, <code>minBidSizeAttoEth</code>, <code>owner</code>, <code>underfunded</code>, <code>underfundedThreshold</code>, <code>underfundedWinningAttoEth</code>, and <code>activeTickCount</code>. <code>pendingEthRefundsAttoEth</code> reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use <code>computeClearing</code>, <code>previewFinalization</code>, <code>tickToPrice</code>, <code>getTickSummary</code>, <code>getTickCount</code>, <code>getTickPage</code>, <code>getActiveTickPage</code>, <code>getBidCountAtTick</code>, <code>getBidPageAtTick</code>, <code>getBidderBidCount</code>, and <code>getBidderBidPage</code> before finalizing or submitting settlement indexes.</p>
 
 				<!-- Validated read ABI fingerprint: e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc -->

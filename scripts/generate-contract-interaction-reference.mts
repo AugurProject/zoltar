@@ -46,7 +46,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/reference/contracts.html'
-const expectedProductionSoliditySourceFingerprint = 'a3ca48e7b6130686eb5f81541fd24dd854aef0bca5ca68751abe77cc4c15f456'
+const expectedProductionSoliditySourceFingerprint = 'd7f143000d729b03a6a7a0d37923ae035c2e13f80f86c0fb6807419d63fbd1dc'
 
 const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -118,7 +118,6 @@ const eventSourceByName: Record<string, string> = {
 	RepBurned: 'solidity/contracts/Zoltar.sol',
 	RepEthPriceSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
-	ForkContinuationResidualRepBurned: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SecurityPoolForkSnapshot: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	SecurityPoolRegistered: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
@@ -337,7 +336,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'c209c24aef4071e13c7598ed7b8a6dc733f3946e8646307befa3c9a60387ff72'
+const referencedEventAbiFingerprint = 'f73cedceb07d7243fbd91f9e0bdd7c5f19a886ba391f5e8bcd115408d9489206'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -777,7 +776,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`burnEscalationWinnerHaircut(amountAttoRep)`',
 				caller: "This pool's `EscalationGame` only",
-				effect: 'Burns REP transferred from the configured game for either a winning-deposit haircut or the complete residual of a finalized fork continuation.',
+				effect: 'Burns the winning-deposit haircut from REP already escrowed in the game.',
 				declarations: [{ name: 'burnEscalationWinnerHaircut' }],
 				preconditions: 'Caller is the configured escalation game; amount is positive and the game has already transferred enough REP to the pool.',
 				signals: '`RepBurned` and ERC-20 `Transfer`; child REP also emits `Burn`',
@@ -901,7 +900,7 @@ const contractReferences: ContractReference[] = [
 					"Capped by the target vault's open interest and fundable REP award, a nominal debt quote selects proportional capacity ownership rounded downward and moves that ownership to the explicitly selected receiver vault. Moved security-bond debt is the receiver's exact live open-interest increase and cannot exceed the nominal quote or request. On a delegated route, the coordinator additionally bounds it by the staged approval reservation; the self-receiving route has no approval reservation. The operator only submits the transaction. Dispute-staked REP claims, accrued claimable fees, surplus vault REP backing, and unmatched ownership remain with the target. On a full-target request, target open interest minus exact moved debt is recorded as attoETH-denominated bad debt; that residual can include both an award-unfunded slice and integer-allocation residue. Receiver or target dust cannot turn otherwise funded debt into bad debt.",
 				declarations: [{ name: 'performLiquidation' }],
 				preconditions:
-					'In ABI order, `request` contains `operationId`, `operator`, `receiverVault`, `targetVault`, `requestedDebtAttoEth`, `snapshot`, `minimumReceiverHealthFactorBps`, and `minLiquidationPriceDistanceBps`. The nested snapshot contains `targetBackingUnits`, `targetCapacityOwnershipAttoRep`, `totalPoolHeldAttoRep`, and `totalRepBackingUnits`. Fresh settled coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; receiver differs from target. The target backing and capacity-ownership snapshot fields must match; the two pool-total snapshot fields are reconstruction evidence, while execution uses live pool totals. After target and receiver fee checkpoints, the liquidation delegate requires live target backing, dispute-staked REP, and open interest to remain at least `minLiquidationPriceDistanceBps` beyond the liquidation threshold and requires the live target state to remain unhealthy. When debt moves, the receiver must satisfy the protocol backing checks multiplied by its approved minimum health factor, using live post-liquidation state and upward-rounded requirements; its resulting debt must meet the configured debt floor and its REP must meet the vault floor. The target resulting debt must be zero or meet the debt floor; when debt remains, target REP must meet the vault floor.',
+					'Fresh settled coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; receiver differs from target. Target snapshots must match. After target and receiver fee checkpoints, the liquidation delegate requires live target backing, dispute-staked REP, and open interest to remain at least `minLiquidationPriceDistanceBps` beyond the liquidation threshold and requires the live target state to remain unhealthy. When debt moves, the receiver must satisfy the protocol backing checks multiplied by its approved minimum health factor, using live post-liquidation state and upward-rounded requirements; its resulting debt must meet the configured debt floor and its REP must meet the vault floor. The target resulting debt must be zero or meet the debt floor; when debt remains, target REP must meet the vault floor.',
 				signals:
 					'Fee-accrual and target or receiver `VaultAccountingCheckpoint` events as needed; `VaultLiquidated` identifies operation, operator, receiver, target, moved debt, moved ownership, and bad debt; `VaultBadDebtRecorded` records residual target debt on a full-target request; final pool accounting checkpoint',
 			},
@@ -1100,7 +1099,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for their non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
 				effect:
-					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing claim, capacity ownership, or vault bad debt to move.",
+					"Transfers the caller's REP backing units, REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
 				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
 				signals: '`VaultBadDebtMigrated` and `VaultMigrationCheckpoint`',
 			},
@@ -1108,7 +1107,7 @@ const contractReferences: ContractReference[] = [
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault owner',
 				effect:
-					"First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may transfer REP backing units, capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
 				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals: 'Vault migration events, including `VaultBadDebtMigrated`, plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
@@ -1377,10 +1376,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`sweepResidualRepToSecurityPool()`',
 				caller: 'Anyone',
-				effect: 'Returns ordinary-game residual REP to the owning pool. Burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.',
+				effect: 'Returns otherwise stranded residual REP to the owning pool.',
 				declarations: [{ name: 'sweepResidualRepToSecurityPool', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				preconditions: 'Final outcome; no unresolved principal; no vault escrow; positive residual balance.',
-				signals: '`ResidualRepSweptToSecurityPool` for an ordinary game; `ForkContinuationResidualRepBurned` for a fork continuation',
+				signals: '`ResidualRepSweptToSecurityPool`',
 			},
 		],
 	},
@@ -1712,8 +1711,7 @@ const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: '0f7cbe10566e33d0de1300b8613ef64fff72b11845bff8c4f2aa470d1ee1eb16',
 		name: 'UniformPriceDualCapBatchAuction',
-		purpose:
-			'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. AVL, cumulative-allocation, and refund-prefix mechanics live in [UniformPriceDualCapBatchAuctionStorage](../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol), an internal storage library.',
+		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
 		readAbiFingerprint: 'e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc',
 		readSurface:
 			'Auction summary getters are `maxAttoRepBeingSold`, `attoEthRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `attoEthRaised`, `totalAttoRepPurchased`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',

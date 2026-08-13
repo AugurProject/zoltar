@@ -31,11 +31,12 @@ const CANCUN_CAPABILITY_RESULT = '0x00000000000000000000000000000000000000000000
 const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
-const MAX_SIGNABLE_TRANSACTION_GAS = 30_000_000n
+const MAX_SIGNABLE_TRANSACTION_GAS = 16_777_216n
 // These per-step ceilings are based on fresh Osaka Anvil deployments, increased
 // by roughly 50%, rounded upward, and capped only where the signer itself caps a
-// transaction at 30M gas. Canonical deployer entries cover their optional atomic
-// funding transaction; their fixed raw-transaction cost is added separately.
+// transaction at the Osaka 2^24 gas limit. Canonical deployer entries cover
+// their optional atomic funding transaction; its fixed raw-transaction cost is
+// added separately.
 export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	arachnidCreate2Deployer: 500_000n,
 	permit2: 3_250_000n,
@@ -56,11 +57,11 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	zoltarQuestionData: 2_750_000n,
 	zoltar: 4_250_000n,
 	shareTokenFactory: 5_500_000n,
-	priceOracleManagerAndOperatorQueuerFactory: 30_000_000n,
+	priceOracleManagerAndOperatorQueuerFactory: 12_250_000n,
 	securityPoolForker: 16_250_000n,
 	escalationGameClaimDelegate: 1_250_000n,
 	escalationGameFactory: 14_250_000n,
-	securityPoolFactory: 30_000_000n,
+	securityPoolFactory: 14_750_000n,
 }
 const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
@@ -75,32 +76,40 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 
 const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainnet' | 'sepolia', Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		escalationGameCreationCodePartOne: '0xecf55e350e2158895d39af95e7cc99a25cbc2fb64ebec6069f69f35cee545db7',
-		escalationGameCreationCodePartTwo: '0xba1921aa1b55f7d069312214225cf0ac6a956aabed09625b53605ebc7fa1e5ea',
+		escalationGameCreationCodePartOne: '0x52a4d390db4466028d21a9a860bcb8d813a75d8992d4a60802d394c0a48c894f',
+		escalationGameCreationCodePartTwo: '0x459bfd493b790b379f3277d3743179fffbe696e202f275f0c9d79e6c510a235e',
 		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-		liquidationApprovalRegistryDeployer: '0x5ee2ee116e6f05fff3d2c500944f05a1be2bdf5074d7519c10a917e239056598',
+		liquidationApprovalRegistryDeployer: '0xed84241b2f52567067de2d09e99197e9a4e5cd5ee616f4a9875ab9c9a88848ed',
 		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
-		priceCoordinatorDeploymentWorker: '0x47c7a08211d80321c70916f13a073688d396f8193ebf28882032c8a2b36af430',
-		securityPoolDeployer: '0x22a19bda5afe1b304fab5acb79ddddf875a36541cda897ced2c375e9d5d39f2b',
-		securityPoolDeploymentWorker: '0xf48868951d32a32830b41f3a516bc28f315803b4fb491780aa0c2cc0e2e970c5',
+		priceCoordinatorCreationCodeFirstChunk: '0xc3e110e017b867329b513a7edd0ef6c39ffe4f75a320971964d79a641adc707f',
+		priceCoordinatorCreationCodeSecondChunk: '0x4f877ecb4c99e4f19a92f5c35b421a83b0071ec3369252bbdc4fdd2002390972',
+		priceCoordinatorDeploymentWorker: '0x18d32be232a07f25d78e7f72eac779f48bb9cf145da56523f7bab99c7ab40c74',
+		securityPoolDeployer: '0xb854e8103f8b84b2246805fb184069d328e87d73430ff2cca743231009578224',
+		securityPoolDeploymentWorker: '0xa01f09056ba4ae13cfc1d7d4fd269bea40e10431451e14aafc46aae73a62a012',
+		securityPoolCreationCodeFirstChunk: '0xba9db8cf7f05baf275ab1dbcb71d6376c1a565c0139c0fb67e4463f49098c0a8',
+		securityPoolCreationCodeSecondChunk: '0xf2de4a7379c2c340196391461885f4357364144a6dff6c97e2bc784e7af6a40d',
 		securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-		securityPoolForkerEscalationGameForkerDelegate: '0x4fc434a4c257ccdaa813adc5520eff624f1de2c957c8fd71092d54c5314f0291',
+		securityPoolForkerEscalationGameForkerDelegate: '0x1a087c4065743488f8e9e1fb06371b7a8bb16ece688f96970a60e3085f2109d5',
 		securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-		securityPoolForkerVaultMigrationDelegate: '0x9ad30b73c8c845f48391855bf15c65f0dca042d9e928e0c43b4589469bf7c433',
+		securityPoolForkerVaultMigrationDelegate: '0xdcc1ac37f5d921fce2657bfc177026d6d5c25848537f4e2039749a9aad81be6b',
 	},
 	mainnet: {
-		escalationGameCreationCodePartOne: '0xecf55e350e2158895d39af95e7cc99a25cbc2fb64ebec6069f69f35cee545db7',
-		escalationGameCreationCodePartTwo: '0xba1921aa1b55f7d069312214225cf0ac6a956aabed09625b53605ebc7fa1e5ea',
+		escalationGameCreationCodePartOne: '0x52a4d390db4466028d21a9a860bcb8d813a75d8992d4a60802d394c0a48c894f',
+		escalationGameCreationCodePartTwo: '0x459bfd493b790b379f3277d3743179fffbe696e202f275f0c9d79e6c510a235e',
 		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
-		liquidationApprovalRegistryDeployer: '0x75fc5fcec4b2fbc89b4405b12cdf3dc6a9a474aa569ee3acf46da6bc9e9080b8',
+		liquidationApprovalRegistryDeployer: '0xae2dbd55eb1ab2b498378044c8f6fa4ab8736c5da0a36bcaf5db2e123bb617d8',
 		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
-		priceCoordinatorDeploymentWorker: '0xc7c618e2e0c2c3e39e8ae430a722719c3a0874a1f77f90225a7449213435aac1',
-		securityPoolDeployer: '0x760ff26cd6cc8e14f30585f10067b7631884a93ac40a17c20277c71002af473f',
-		securityPoolDeploymentWorker: '0x88b711503d0c7f00f28088893ce34b985cd80ef8b4562f1fe28fc0a05bfc066f',
+		priceCoordinatorCreationCodeFirstChunk: '0xc3e110e017b867329b513a7edd0ef6c39ffe4f75a320971964d79a641adc707f',
+		priceCoordinatorCreationCodeSecondChunk: '0x4f877ecb4c99e4f19a92f5c35b421a83b0071ec3369252bbdc4fdd2002390972',
+		priceCoordinatorDeploymentWorker: '0xcd6c6e0c9d71396f1d987ab652bdafe97bd8612864b87abb54638632cfbbed04',
+		securityPoolDeployer: '0x244c164d626a1e9e2c4bab28db28f7abb8ce46becad9da46c483a7018425d8df',
+		securityPoolDeploymentWorker: '0x9c877654aef40ad6a2ceac92dafc88fd7ef12c9db8e360c1843b5cc86a678e99',
+		securityPoolCreationCodeFirstChunk: '0xba9db8cf7f05baf275ab1dbcb71d6376c1a565c0139c0fb67e4463f49098c0a8',
+		securityPoolCreationCodeSecondChunk: '0xf2de4a7379c2c340196391461885f4357364144a6dff6c97e2bc784e7af6a40d',
 		securityPoolEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-		securityPoolForkerEscalationGameForkerDelegate: '0x5d009b8b354aedb7b5fe6fa460deb342409775833164fca7bc55eb9f5d9bf67a',
+		securityPoolForkerEscalationGameForkerDelegate: '0x7dcb3ac7aafad729212b36a17f07ebfcf595692333f1308a356f089e77efa273',
 		securityPoolForkerEventEmitter: '0xc534a6454451a2194188b0b2685d0e8c33c4f163601be6c1a5061a9165e90269',
-		securityPoolForkerVaultMigrationDelegate: '0x934d2c535fafda3ccb0eb9596634bcce7fb6610877b86fc4ac49494e5e2f238e',
+		securityPoolForkerVaultMigrationDelegate: '0xe751effe31909d312b519427f51f004bb8e0090c656799e807b4bcc0db3b422b',
 	},
 }
 
@@ -328,9 +337,9 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 			to: transaction.to ?? undefined,
 			value: transaction.value ?? transaction.amount,
 		}
-		let gas: bigint
+		let gasEstimate: bigint | undefined
 		try {
-			gas = paddedGas(await wallet.estimateGas(estimationRequest))
+			gasEstimate = await wallet.estimateGas(estimationRequest)
 		} catch (estimateError) {
 			// CREATE/CREATE2 proxies can turn an inner out-of-gas during an RPC
 			// estimator's binary search into an indistinguishable empty revert.
@@ -341,14 +350,14 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 				const estimateReason = estimateError instanceof Error ? estimateError.message : String(estimateError)
 				throw new Error(`Gas estimation failed (${estimateReason}) and the ${MAX_SIGNABLE_TRANSACTION_GAS.toString()} gas fallback simulation also failed (${simulationReason})`, { cause: estimateError })
 			}
-			gas = MAX_SIGNABLE_TRANSACTION_GAS
 			log(
 				formatDeploymentLogBranch('Gas estimate unavailable', [
-					['Fallback gas limit', gas.toString()],
+					['Fallback gas limit', MAX_SIGNABLE_TRANSACTION_GAS.toString()],
 					['Validation', 'capped simulation succeeded'],
 				]),
 			)
 		}
+		const gas = gasEstimate === undefined ? MAX_SIGNABLE_TRANSACTION_GAS : paddedGas(gasEstimate)
 		const transactionValue = transaction.value ?? transaction.amount ?? 0n
 		const worstCaseCost = gas * maxFeePerGas + transactionValue
 		budget.recordWalletTransaction(worstCaseCost)
