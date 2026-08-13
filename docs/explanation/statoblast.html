@@ -130,7 +130,7 @@
 				<p><code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.</p>
 
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="340" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="606" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share Lifecycle</span>Complete sets mint one Invalid, Yes, and No share; operational redemption burns the complete set, while finalized settlement redeems the winning outcome.</p>
 				</figure>
 			</section>
@@ -157,7 +157,7 @@
 				<p>A pool can also enter fork resolution when another Zoltar application forks the same universe. The pool then migrates to the child universes, runs a truth auction if needed, and continues there.</p>
 
 				<figure class="diagram" id="fig-statoblast-fork-state-machine">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, auction repair, and child settlement.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="906" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, and any auction repair to an operational child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Fork Timeline</span>The parent pool pauses, vault owners select child universes, and each child resumes only after migration and any required collateral repair.</p>
 				</figure>
 
@@ -298,14 +298,14 @@
 				<p>Child pools resolve outcomes through the forker. When the parent universe forks on the pool's question, each child stores its selected Zoltar outcome as the fixed result, whether the fork began through the pool-specific path or a direct Zoltar call. The pool stores and reports that result from child creation, and it is final for that pool. Pool asset redemptions begin after the child becomes operational.</p>
 
 				<figure class="diagram" id="fig-statoblast-system-decision-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="500" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="1564" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.</span></div>
 					<p class="diagram-caption"><span class="figure-label">System Decision Flow</span>The lifecycle connects question registration, pool operation, local escalation, fork migration, auction repair, settlement, and recursive continuation when a child remains unresolved.</p>
 				</figure>
 
 				<h3>Shares migration</h3>
 				<p>When a fork occurs, share migration locks the source balance and accepts an ordered list of child targets. The first materialization gives each untouched selected child the full current source balance; later calls mint only that child's unmaterialized delta. Shares do not disappear from the source or split into a pro-rata remainder.</p>
 				<figure class="diagram" id="fig-statoblast-share-migration">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="468" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current parent balance materializes in each selected child token id while the source remains locked as an entitlement. Later calls mint only the unmaterialized delta for each child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share Migration</span>Share migration is not a pro-rata split across selected branches. The source balance remains as a transfer-locked entitlement after first use, and each untouched selected child first materializes the full current balance. Later calls mint only that child's unmaterialized delta.</p>
 				</figure>
 			</section>
@@ -326,7 +326,7 @@
 						<label>Auction ETH raised <input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
 					</div>
 					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="360" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
 						<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction compares received settlement collateral with the parent settlement target and shows any remaining shortfall.</p>
 					</figure>
 					<div class="example-visual">
@@ -367,8 +367,8 @@
 				<p>Statoblast retrieves this price using <a href="https://docs.openoracle.org/">OpenOracle</a>; see the <a href="../explanation/open-oracle.html#statoblast-integration">OpenOracle integration</a> explanation for the coordinator lifecycle.</p>
 
 				<figure class="diagram" id="fig-statoblast-oracle-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow for REP withdrawals and liquidations"><span class="plot-chart-fallback">A REP withdrawal or liquidation either executes immediately with a valid cached price or stages behind a pending OpenOracle report.</span></div>
-					<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately; a stale price moves operations into a pending-settlement path whose callback batch is capped at four operations but whose duration is unbounded under paid rolling disputes.</p>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="1064" role="img" aria-label="Queued REP/ETH oracle operation flow for REP withdrawals and liquidations"><span class="plot-chart-fallback">A REP withdrawal or liquidation executes immediately with a fresh price or stages behind an OpenOracle report. An accepted settlement callback attempts up to four still-active pending operations, consuming each success or terminal failure and skipping already-consumed entries. A rejected report leaves the price cache unchanged and terminally consumes its attached batch. Overflow operations remain active for later execution with a fresh price.</span></div>
+					<p class="diagram-caption"><span class="figure-label">REP/ETH Oracle Flow</span>The coordinator is a queue plus cache. A fresh price can execute immediately. An accepted settlement callback attempts up to four still-active pending operations; a rejected report instead terminally consumes its attached batch without refreshing the cache. Overflow operations remain active for later execution with a fresh price.</p>
 				</figure>
 			</section>
 		</main>

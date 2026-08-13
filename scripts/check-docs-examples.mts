@@ -15,7 +15,7 @@ import {
 	ESCALATION_TIME_LENGTH_SECONDS,
 } from '../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../shared/ts/escalationMath'
-import { updateDiagramControl } from '../docs/charts/diagramControl'
+import { centeredDiagramScrollLeft, updateDiagramControl } from '../docs/charts/diagramControl'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 type InteractiveExampleHarness = {
@@ -452,21 +452,28 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 function checkDiagramControlStates(): void {
 	const window = new Window()
 	try {
+		assert.equal(centeredDiagramScrollLeft(330, 1120), 395, 'wide diagrams must open at their horizontal center')
+		assert.equal(centeredDiagramScrollLeft(1120, 1120), 0, 'fitted diagrams must keep their initial horizontal position')
+		assert.equal(centeredDiagramScrollLeft(1120, 900), 0, 'narrow diagrams must not produce a negative scroll position')
 		const button = window.document.createElement('button')
 		const cue = window.document.createElement('span')
 		button.setAttribute('aria-pressed', 'true')
 
 		updateDiagramControl(button, cue, true)
-		assert.equal(button.textContent, 'Close full screen', 'expanded mode must name the action that returns to the document')
+		assert.equal(button.textContent, 'Exit full screen', 'expanded mode must name the action that returns to the document')
 		assert.equal(button.getAttribute('aria-pressed'), null, 'an action-labeled diagram control must not announce a contradictory pressed state')
 		assert.equal(button.getAttribute('aria-expanded'), 'true', 'expanded mode must expose its relationship to the full-screen diagram')
-		assert.equal(cue.textContent, 'Scroll horizontally for detailed labels. Press Escape to close.', 'expanded mode must explain horizontal inspection and keyboard exit')
+		assert.equal(button.getAttribute('aria-label'), 'Exit full-screen diagram', 'expanded mode must expose a complete accessible action name')
+		assert.equal(button.getAttribute('title'), 'Exit full-screen diagram', 'expanded mode must expose its action on hover')
+		assert.equal(cue.textContent, 'Scroll to inspect detailed labels. Press Escape to close.', 'expanded mode must explain diagram inspection and keyboard exit')
 
 		updateDiagramControl(button, cue, false)
-		assert.equal(button.textContent, 'View full screen', 'document mode must name the action that opens the larger fitted diagram')
+		assert.equal(button.textContent, 'Full screen', 'document mode must keep the visible action concise')
 		assert.equal(button.getAttribute('aria-pressed'), null, 'document mode must remain an action button rather than a stateful toggle')
 		assert.equal(button.getAttribute('aria-expanded'), 'false', 'document mode must expose that the full-screen diagram is closed')
-		assert.equal(cue.textContent, 'Scroll horizontally or use full screen for detailed labels.', 'document mode must explain the available detail controls')
+		assert.equal(button.getAttribute('aria-label'), 'View diagram full screen', 'document mode must expose a complete accessible action name')
+		assert.equal(button.getAttribute('title'), 'View diagram full screen', 'document mode must expose its action on hover')
+		assert.equal(cue.textContent, 'Use full screen to inspect detailed labels.', 'document mode must explain the available detail control')
 	} finally {
 		window.close()
 	}
@@ -900,7 +907,8 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
 assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
 assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
-assert.match(chartRuntimeSource, /ticks: \[0, 3, 52\]/, 'whitepaper escalation Plot should mark game start, activation, and curve end')
+assert.match(chartRuntimeSource, /ticks: compact \? \[0, 52\] : \[0, 3, 52\]/, 'whitepaper escalation Plot should preserve all milestone ticks on wide screens without colliding day 0 and day 3 on narrow screens')
+assert.match(chartRuntimeSource, /label: '● won'[\s\S]*label: '● partial'[\s\S]*label: '● refund'/, 'narrow truth-auction charts should keep a readable non-color status key')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
 const oneThirdPowerOfTwoTimeDays = Number.parseInt((ESCALATION_TIME_LENGTH_SECONDS / 3n).toString(), 10) / 86_400
