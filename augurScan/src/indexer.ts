@@ -6,6 +6,7 @@ import {
 	databaseConsistencyDiagnosticMessage,
 	type IndexedBlock,
 	type IndexerLease,
+	type LogScanCursor,
 	type RichListBalance,
 	type ScannerDatabase,
 	type StoredTransaction,
@@ -27,7 +28,7 @@ import {
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { unixSecondsToDate } from './time.ts'
-import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+import type { ContractMetadata, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
 
 type RpcBlockHeader = {
@@ -173,6 +174,69 @@ export type LogQueryGroup = {
 	readonly addresses: Address[]
 	readonly fromBlock: bigint
 }
+
+export const planManifestBackfill = async (
+	manifestContracts: readonly ManifestContract[],
+	contracts: ReadonlyMap<string, ContractMetadata>,
+	cursors: ReadonlyMap<string, LogScanCursor>,
+	checkpoint: bigint,
+	configuredStartBlock: bigint,
+	findDeployment: (
+		address: Address,
+		startBlock: bigint,
+		checkpoint: bigint,
+		startBlockKnownAbsent: boolean,
+	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+): Promise<bigint | undefined> => {
+	let replayStart: bigint | undefined
+	for (const [address, label, kind, configuredDeploymentBlock] of manifestContracts) {
+		const contract = contracts.get(address.toLowerCase()) ?? { address, label, kind, provenance: 'manifest' }
+		if (!requiresManifestHistoryCoverage(contract)) continue
+		const cursor = cursors.get(address.toLowerCase())
+		let deploymentBlock = configuredDeploymentBlock ?? contract.deploymentBlock
+		if (cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint && (deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)) continue
+		if (deploymentBlock === undefined) {
+			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
+			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined) continue
+			const deployment = await findDeployment(address, searchStart, checkpoint, contract.deploymentCheckedBlock !== undefined)
+			if (deployment === undefined) continue
+			deploymentBlock = deployment.block
+		}
+		if (deploymentBlock > checkpoint) continue
+		const missingStart = cursor === undefined || cursor.startBlock > deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
+		if (missingStart <= checkpoint && (replayStart === undefined || missingStart < replayStart)) replayStart = missingStart
+	}
+	return replayStart
+}
+
+export const findManifestContractDeployment = async (
+	address: Address,
+	startBlock: bigint,
+	checkpoint: bigint,
+	startBlockKnownAbsent: boolean,
+	codeAt: (address: Address, block: bigint) => Promise<Hex | undefined>,
+	timeoutMs = 5_000,
+	now = Date.now,
+): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+	const readWithinBudget = deploymentReadBudget(timeoutMs, now)
+	return await findContractDeploymentBlock(startBlock, checkpoint, (blockNumber) => readWithinBudget(() => codeAt(address, blockNumber)), startBlockKnownAbsent)
+}
+
+export const logScanCursorUpdates = (
+	contracts: ReadonlyMap<string, ContractMetadata>,
+	scanInputs: readonly LogScanInput[],
+	endBlock: bigint,
+	configuredStartBlock: bigint,
+	coverageStartBlock = configuredStartBlock,
+): readonly LogScanCursor[] =>
+	[...contracts.values()].flatMap((contract) => {
+		const scanInput = scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())
+		const tracksFilteredHistory = contract.kind === 'reputationToken' || contract.kind === 'weth'
+		if (!tracksFilteredHistory && (!isProtocolActivitySource(contract) || (scanInput === undefined && contract.discoveryBlock === undefined))) return []
+		const startBlock =
+			scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
+		return startBlock > endBlock ? [] : [{ contractAddress: contract.address, startBlock, lastRetrievedBlock: endBlock }]
+	})
 
 export const rpcLogQueryGroups = (inputs: readonly LogScanInput[]): readonly LogQueryGroup[] => {
 	const byStart = new Map<bigint, Address[]>()
@@ -712,6 +776,7 @@ type NetworkLifecycle = {
 	readonly intervalMs: number
 	readonly signal: AbortSignal
 	readonly random?: () => number
+	readonly shouldRethrow?: (error: unknown) => boolean
 }
 
 export class IndexerOwnershipStageError extends Error {
@@ -731,7 +796,7 @@ export const retryDelayMs = (consecutiveFailures: number, intervalMs: number, ra
 	return Math.min(Math.round(base * (0.8 + random() * 0.4)), 300_000)
 }
 
-export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random }: NetworkLifecycle): Promise<void> => {
+export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random, shouldRethrow }: NetworkLifecycle): Promise<void> => {
 	let verified = false
 	let consecutiveFailures = 0
 	while (!signal.aborted) {
@@ -746,7 +811,7 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			caughtUp = await poll()
 			consecutiveFailures = 0
 		} catch (error) {
-			if (error instanceof LeaseLostError) throw error
+			if (error instanceof LeaseLostError || shouldRethrow?.(error) === true) throw error
 			consecutiveFailures++
 			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
 			try {
@@ -758,6 +823,20 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 		await waitForIndexerDelay(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)
 	}
 }
+
+type OwnedNetworkLifecycle = Omit<NetworkLifecycle, 'verify' | 'poll'> & {
+	readonly reconcile: () => Promise<void>
+	readonly poll: () => Promise<boolean>
+	readonly runWithProvider: <T>(operation: () => Promise<T>) => Promise<T>
+}
+
+export const runOwnedNetworkLifecycle = async ({ reconcile, poll, runWithProvider, ...lifecycle }: OwnedNetworkLifecycle): Promise<void> =>
+	await runNetworkLifecycle({
+		...lifecycle,
+		verify: () => runWithProvider(reconcile),
+		poll: () => runWithProvider(poll),
+		shouldRethrow: (error) => error instanceof DatabaseConsistencyError || lifecycle.shouldRethrow?.(error) === true,
+	})
 
 type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'> & { readonly backendPid?: number }
 
@@ -985,6 +1064,9 @@ export const isProtocolActivitySource = (contract: ContractMetadata | undefined)
 	contract.kind !== 'multicall3' &&
 	contract.kind !== 'proxyDeployer'
 
+export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
+	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth'
+
 export const isProtocolEvidenceEmitter = (contract: ContractMetadata | undefined): contract is ContractMetadata => contract !== undefined
 
 const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, blockNumber: bigint): void => {
@@ -1039,9 +1121,10 @@ class NetworkIndexer {
 			runOwned: async (lease) => {
 				this.#lease = lease
 				try {
-					await runNetworkLifecycle({
-						verify: () => this.#withProviderFailover(async () => undefined),
-						poll: () => this.#withProviderFailover(() => this.#poll()),
+					await runOwnedNetworkLifecycle({
+						reconcile: () => this.#reconcileManifestBackfill(),
+						poll: () => this.#poll(),
+						runWithProvider: (operation) => this.#withProviderFailover(operation),
 						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,
@@ -1127,6 +1210,52 @@ class NetworkIndexer {
 	#requireLease(): IndexerLease {
 		if (this.#lease === undefined) throw new LeaseLostError('Indexer lease is unavailable; reacquiring')
 		return this.#lease
+	}
+
+	#withManifestDeploymentBlocks(contracts: ReadonlyMap<string, ContractMetadata>): Map<string, ContractMetadata> {
+		const configured = new Map(this.#network.contracts.map(([address, , , deploymentBlock]) => [address.toLowerCase(), deploymentBlock]))
+		return new Map(
+			[...contracts].map(([key, contract]) => {
+				const deploymentBlock = configured.get(key)
+				return [key, deploymentBlock === undefined ? contract : { ...contract, deploymentBlock, deploymentBlockExact: true }]
+			}),
+		)
+	}
+
+	async #reconcileManifestBackfill(): Promise<void> {
+		await this.#assertLease()
+		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
+		if (checkpoint === undefined) return
+		const [storedContracts, cursors] = await Promise.all([
+			this.#database.contracts(this.#network.chainId, this.#requireLease()),
+			this.#database.logScanCursors(this.#network.chainId, this.#requireLease()),
+		])
+		const replayStart = await planManifestBackfill(
+			this.#network.contracts,
+			storedContracts,
+			cursors,
+			checkpoint.number,
+			this.#network.startBlock,
+			(address, startBlock, indexedBoundary, startBlockKnownAbsent) =>
+				findManifestContractDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
+					this.#client.getBytecode({ address: candidate, blockNumber }),
+				),
+		)
+		if (replayStart === undefined) return
+		const ancestor = replayStart <= this.#network.startBlock ? -1n : replayStart - 1n
+		const ancestorHash = ancestor < 0n ? undefined : await this.#database.canonicalHash(this.#network.chainId, ancestor, this.#requireLease())
+		if (ancestor >= 0n && ancestorHash === undefined)
+			throw new DatabaseConsistencyError('Manifest backfill ancestor is unavailable', {
+				code: 'manifest-backfill-ancestor-missing',
+				ancestor,
+			})
+		await this.#assertLease()
+		await this.#database.rewind(this.#network.chainId, ancestor, ancestorHash, this.#requireLease())
+		this.#indexingStartReported = false
+		this.#lastReportedPhase = undefined
+		console.info(
+			`[${this.#network.id}] manifest history gap detected; rewound to ${ancestor < 0n ? 'before the configured start block' : `block #${ancestor}`} to replay from block #${replayStart}`,
+		)
 	}
 
 	async #reconcileReorg(): Promise<void> {
@@ -1224,7 +1353,7 @@ class NetworkIndexer {
 			this.#indexingStartReported = true
 		}
 		const batchStart = nextBlock
-		let contracts = await this.#database.contracts(this.#network.chainId, this.#requireLease())
+		let contracts = this.#withManifestDeploymentBlocks(await this.#database.contracts(this.#network.chainId, this.#requireLease()))
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId, this.#requireLease())
 		const storedCursors = await this.#database.logScanCursors(this.#network.chainId, this.#requireLease())
 		const initialContracts = [...contracts.values()].filter(isProtocolActivitySource)
@@ -1324,20 +1453,7 @@ class NetworkIndexer {
 				? {
 						...indexed.block,
 						contractDeploymentObservations: segment.deploymentObservations,
-						logScanCursors: [...indexed.contracts.values()]
-							.filter(
-								(contract) =>
-									isProtocolActivitySource(contract) &&
-									(segment.scanInputs.some(({ address }) => address.toLowerCase() === contract.address.toLowerCase()) || contract.discoveryBlock !== undefined),
-							)
-							.map((contract) => ({
-								contractAddress: contract.address,
-								startBlock:
-									segment.scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())?.startBlock ??
-									contract.discoveryBlock ??
-									this.#network.startBlock,
-								lastRetrievedBlock: end,
-							})),
+						logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, end, this.#network.startBlock, batchStart),
 					}
 				: indexed.block
 			await this.#assertLease()

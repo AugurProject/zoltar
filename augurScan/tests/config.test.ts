@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { loadNetworks } from '../src/config.ts'
+import { loadNetworks, parseManifestValue } from '../src/config.ts'
 
 const originalNetworks = process.env['NETWORKS']
 const originalMainnetRpc = process.env['MAINNET_RPC_URL']
@@ -27,6 +27,15 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
+	test('accepts an optional exact deployment block in manifest entries', () => {
+		expect(
+			parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', '900000']] }, 'test.json'),
+		).toEqual([['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900_000n]])
+		expect(() =>
+			parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900000]] }, 'test.json'),
+		).toThrow('test.json contract 0 is invalid')
+	})
+
 	test('uses public endpoints with historical state by default', async () => {
 		process.env['NETWORKS'] = 'mainnet,sepolia'
 		delete process.env['MAINNET_RPC_URL']
