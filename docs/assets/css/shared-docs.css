@@ -3765,10 +3765,20 @@ body.paper-zoltar .footer-note {
 	}
 }
 
-@media screen and (max-width: 420px) {
+@media screen and (max-width: 640px) {
 	.docs-responsive-table > tbody > tr > td {
-		grid-template-columns: 1fr;
-		gap: 0.2rem;
+		display: block;
+	}
+
+	.docs-responsive-table > tbody > tr > td::before {
+		display: block;
+		margin-bottom: 0.2rem;
+	}
+
+	body.doc-openoracle .docs-responsive-table td > code:only-child {
+		max-width: 100%;
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 }
 

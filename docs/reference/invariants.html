@@ -756,7 +756,7 @@
 						<summary><code>BAL-05</code><span class="invariant-title">REP backing units conversion consistency</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">After deposits, withdrawals, liquidations, escalation transfers, migration, and auction claims, the same current pool-held REP balance and total REP backing units govern both REP-to-backing-unit and backing-units-to-REP conversion.</div>
+							<div class="invariant-property">After deposits, withdrawals, liquidations, escalation transfers, migration, and auction claims, the same current pool-held REP balance and total REP backing units govern both REP-to-backing-unit and backing-units-to-REP conversion. Both proportional directions use full-precision multiplication and division so a representable claim cannot fail only because its intermediate product exceeds <code>uint256</code>.</div>
 							<p class="invariant-example"><strong>Example:</strong> Depositing REP and immediately converting the resulting REP backing units back to REP uses the same denominator rather than a stale pre-deposit balance.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1269,7 +1269,7 @@
 						<summary><code>FORK-07</code><span class="invariant-title">Single-use non-escrowed vault migration</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Vault migration credits one child and clears the corresponding parent REP backing units and capacity ownership before reuse. It checkpoints and retains claimable fees in the parent vault while routing proportional settlement collateral separately at pool level.</div>
+							<div class="invariant-property">Vault migration converts the parent's backing-unit claim to REP, credits that REP amount as child-local backing units, and clears the corresponding parent REP backing units and capacity ownership before reuse. A positive parent claim that maps to zero child REP receives zero child backing units, so rounding cannot preserve a stale claim that later regains value. Claimable fees remain in the parent vault while proportional settlement collateral routes separately at pool level.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Alice migrates her non-escrowed vault accounting to the Yes child, a second migration call cannot credit the same parent REP backing units to the No child.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1603,7 +1603,7 @@
 						<summary><code>ESC-08</code><span class="invariant-title">Game REP settlement conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Every REP unit held for a game is accounted for exactly once as winning principal, reward funding, losing principal, unsettled residual, or REP swept back to the pool. Settlement cannot create an additional REP claim.</div>
+							<div class="invariant-property">Every REP unit held for a game is accounted for exactly once as winning principal, reward funding, losing principal, unsettled residual, ordinary-game REP swept back to the pool, or fork-continuation REP burned. Settlement cannot create an additional REP claim.</div>
 							<p class="invariant-example"><strong>Example:</strong> Paying winners and sweeping the final residual reduces the game balance to zero without total payouts exceeding the REP previously held.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -1675,7 +1675,7 @@
 						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be swept until effective unresolved principal is zero for every outcome and <code>totalDisputeStakedAttoRep</code> is zero. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition.</div>
+							<div class="invariant-property">Residual REP cannot be settled until effective unresolved principal is zero for every outcome. For a continuation, the sweep first retires its inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>; after that retirement, no local dispute stake or vault escrow may remain in <code>totalDisputeStakedAttoRep</code>. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition. Ordinary-game residual returns to the pool, while fork-continuation residual is burned and cannot accrue to child-local backing units.</div>
 							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2116,7 +2116,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>_allocateFromCumulativePosition</code></a>
+										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol"><code>allocateFromCumulativePosition</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2150,7 +2150,7 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated capacity ownership to the bid's recorded vault. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero.</div>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated capacity ownership to the bid's recorded vault. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero.</div>
 							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid; the claim adds the REP backing units and deterministic capacity ownership share assigned to that bid while the purchased REP remains pool-held. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2264,7 +2264,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code> and refund-prefix accounting</a>
+										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code></a>
+										and
+										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol">refund-prefix accounting</a>
 										and
 										<a href="../../solidity/ts/tests/auction.test.ts">repeated tick deletion/recreation tests</a>
 									</dd>
@@ -2294,7 +2296,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">AVL tree, enumeration, and clearing</a>,
+										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol">AVL tree and clearing</a>, <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">enumeration and auction integration</a>,
 										<a href="../../solidity/ts/tests/auction.test.ts">seeded independent-model and frozen-snapshot tests</a>
 									</dd>
 								</div>

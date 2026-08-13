@@ -8,6 +8,7 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
 import { EscalationForkSnapshot, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
 	Zoltar public immutable zoltar;
@@ -26,14 +27,15 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
 		uint256 childRepBalanceAttoRep = securityPool.repToken().balanceOf(address(securityPool));
 		if (totalRepBackingUnits == 0 || childRepBalanceAttoRep == 0)
-			return attoRepAmount * SecurityPoolUtils.PRICE_PRECISION;
-		return (attoRepAmount * totalRepBackingUnits) / childRepBalanceAttoRep;
+			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, childRepBalanceAttoRep);
 	}
 
 	function backingUnitsToAttoRep(ISecurityPool securityPool, uint256 repBackingUnits) public view returns (uint256) {
+		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
+		if (totalRepBackingUnits == 0) return 0;
 		return
-			(repBackingUnits * securityPool.repToken().balanceOf(address(securityPool))) /
-			securityPool.totalRepBackingUnits();
+			Math.mulDiv(repBackingUnits, securityPool.repToken().balanceOf(address(securityPool)), totalRepBackingUnits);
 	}
 
 	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {

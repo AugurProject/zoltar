@@ -1415,7 +1415,7 @@ describe('Peripherals: escalation migration', () => {
 			args: [],
 		})
 		await client.waitForTransactionReceipt({ hash: sweepHash })
-		assert.ok((await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesPool.securityPool)) > yesPoolRepBeforeSweep, 'the child should sweep residual REP after only winners claim')
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesPool.securityPool), yesPoolRepBeforeSweep, 'fork-continuation residual must not enter child ownership after only winners claim')
 		await assert.rejects(
 			client.writeContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
