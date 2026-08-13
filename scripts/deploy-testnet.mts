@@ -336,8 +336,10 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 			// estimator's binary search into an indistinguishable empty revert.
 			try {
 				await wallet.call({ ...estimationRequest, gas: MAX_SIGNABLE_TRANSACTION_GAS })
-			} catch {
-				throw estimateError
+			} catch (simulationError) {
+				const simulationReason = simulationError instanceof Error ? simulationError.message : String(simulationError)
+				const estimateReason = estimateError instanceof Error ? estimateError.message : String(estimateError)
+				throw new Error(`Gas estimation failed (${estimateReason}) and the ${MAX_SIGNABLE_TRANSACTION_GAS.toString()} gas fallback simulation also failed (${simulationReason})`, { cause: estimateError })
 			}
 			gas = MAX_SIGNABLE_TRANSACTION_GAS
 			log(

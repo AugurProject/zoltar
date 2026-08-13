@@ -355,7 +355,7 @@ describe('testnet deployment transaction authorization', () => {
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
 		)
 
-		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toBe(estimateError)
+		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toThrow('Gas estimation failed (estimate reverted) and the 30000000 gas fallback simulation also failed (simulation reverted)')
 		expect(sendCalled).toBe(false)
 	})
 
