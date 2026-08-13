@@ -26,6 +26,7 @@ let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
 let fixtureStateUnavailable = false
 let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
+let fixtureConnectivityHanging = false
 let fixtureConfigurationHanging = false
 let fixtureConfigurationUnavailable = false
 let fixtureNetworkConfigured = true
@@ -434,6 +435,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				if (typeof loaded !== 'object' || loaded === null || !('containerHidden' in loaded) || loaded.containerHidden !== true) throw new Error(`Configuration loading did not resolve: ${JSON.stringify(loaded)}`)
 
 				fixtureConfigurationUnavailable = true
+				fixtureConnectivityHanging = true
+				await command('Runtime.evaluate', { expression: `document.querySelector('#connectivity-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))` }, sessionId)
+				await Bun.sleep(50)
 				await command('Runtime.evaluate', { expression: `document.querySelector('#reload-configuration-button')?.click()` }, sessionId)
 				await Bun.sleep(350)
 				const reloadFailed = await readConfigurationState()
@@ -451,6 +455,10 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				) {
 					throw new Error(`Failed configuration reload left stale controls available: ${JSON.stringify(reloadFailed)}`)
 				}
+				fixtureConnectivityHanging = false
+				await Bun.sleep(350)
+				const connectivityCompletedAfterReloadFailure = await readConfigurationState()
+				assertConfigurationControls(connectivityCompletedAfterReloadFailure, true, 'Connectivity completed after failed reload', width)
 				fixtureConfigurationUnavailable = false
 				await command('Runtime.evaluate', { expression: `document.querySelector('#retry-settings-button')?.click()` }, sessionId)
 				await Bun.sleep(350)
@@ -1502,7 +1510,8 @@ const server = startDashboardServer(0, {
 		while (fixturePauseHanging) await Bun.sleep(10)
 		paused = value
 	},
-	updateConnectivity: () => {
+	updateConnectivity: async () => {
+		while (fixtureConnectivityHanging) await Bun.sleep(10)
 		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)
 		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, restartRequired: false }
 	},

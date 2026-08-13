@@ -1339,7 +1339,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		await refresh()
 	} finally {
 		connectivityRequestPending = false
-		fieldset.disabled = connectivityControlsDisabled(connected, connectivityRequestPending)
+		setControlsEnabled(connected)
 	}
 })
 
