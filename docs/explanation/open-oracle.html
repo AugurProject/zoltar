@@ -52,8 +52,8 @@
 
 				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report. The coordinator's validity window then determines whether the child price can be used.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
-					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="320" data-plot-width="980" role="img"><span class="plot-chart-fallback">Statoblast queues solvency-sensitive operations behind a bounded OpenOracle REP/ETH report and executes them only with a fresh accepted price.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. It applies guardrails before request and staging, then again after callback before execution.</p>
+					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. After settlement, an accepted report refreshes the cache before guarded execution; a rejected report leaves the cache unchanged and terminally fails the attached batch.</p>
 				</figure>
 			</section>
 
