@@ -13,6 +13,7 @@ import {
 	ContractFunctionExecutionError,
 	decodeFunctionResult,
 	HttpRequestError,
+	http,
 	parseAbi,
 	RpcRequestError,
 	TimeoutError,
@@ -26,6 +27,7 @@ import {
 	confirmCanonicalBlock,
 	contractDeploymentScanDue,
 	createRpcDiagnosticContext,
+	createRpcRequestQueue,
 	deploymentReadBudget,
 	findContractDeploymentBlock,
 	findManifestContractDeployment,
@@ -60,6 +62,7 @@ import {
 	tokenMetadataNeedsRead,
 	uniswapV4PoolIds,
 	waitForIndexerDelay,
+	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -90,7 +93,118 @@ const malformedDecimalsResult = (): number => {
 	return value
 }
 
+const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string } => {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value))
+		throw new Error('Unexpected RPC request')
+	if (value.id !== null && typeof value.id !== 'number' && typeof value.id !== 'string') throw new Error('Unexpected RPC request ID')
+	return { id: value.id, method: value.method }
+}
+
 describe('network indexer lifecycle', () => {
+	test('queues RPC work above the configured concurrency limit', async () => {
+		const queue = createRpcRequestQueue(5)
+		let active = 0
+		let maximumActive = 0
+		const releases: Array<() => void> = []
+		const operations = Array.from({ length: 12 }, (_, index) =>
+			queue.run(
+				() =>
+					new Promise<number>((resolve) => {
+						active++
+						maximumActive = Math.max(maximumActive, active)
+						releases.push(() => {
+							active--
+							resolve(index)
+						})
+					}),
+			),
+		)
+
+		await Promise.resolve()
+		expect(active).toBe(5)
+		expect(releases).toHaveLength(5)
+		for (let index = 0; index < 5; index++) releases[index]?.()
+		await Promise.all(operations.slice(0, 5))
+		await Promise.resolve()
+		expect(active).toBe(5)
+		expect(releases).toHaveLength(10)
+		for (let index = 5; index < 10; index++) releases[index]?.()
+		await Promise.all(operations.slice(5, 10))
+		await Promise.resolve()
+		expect(active).toBe(2)
+		expect(releases).toHaveLength(12)
+		for (let index = 10; index < 12; index++) releases[index]?.()
+
+		expect(await Promise.all(operations)).toEqual(Array.from({ length: 12 }, (_, index) => index))
+		expect(maximumActive).toBe(5)
+	})
+
+	test('starts transport timeouts after dequeue and releases rejected operations', async () => {
+		const queue = createRpcRequestQueue(1)
+		const requestedMethods: string[] = []
+		const transport = withRpcRequestQueue(
+			http('https://rpc.example', {
+				fetchFn: async (_input, init) => {
+					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
+					requestedMethods.push(body.method)
+					if (body.method === 'fail') throw new Error('expected transport failure')
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method })
+				},
+				retryCount: 0,
+				timeout: 5,
+			}),
+			queue,
+		)({})
+		let releaseBlocker: (() => void) | undefined
+		const blocker = queue.run(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseBlocker = resolve
+				}),
+		)
+		const delayed = transport.request({ method: 'delayed' })
+
+		await Bun.sleep(15)
+		expect(requestedMethods).toEqual([])
+		releaseBlocker?.()
+		await blocker
+		expect(await delayed).toBe('delayed')
+
+		const failed = transport.request({ method: 'fail' })
+		const afterFailure = transport.request({ method: 'after-failure' })
+		await expect(failed).rejects.toThrow()
+		expect(await afterFailure).toBe('after-failure')
+		expect(requestedMethods).toEqual(['delayed', 'fail', 'after-failure'])
+	})
+
+	test('forwards viem request options through the RPC queue', async () => {
+		const queue = createRpcRequestQueue(5)
+		let fetches = 0
+		let releaseFetch: (() => void) | undefined
+		const transport = withRpcRequestQueue(
+			http('https://rpc.example', {
+				fetchFn: async (_input, init) => {
+					fetches++
+					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
+					await new Promise<void>((resolve) => {
+						releaseFetch = resolve
+					})
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: 'shared-result' })
+				},
+				retryCount: 0,
+			}),
+			queue,
+		)({})
+		const first = transport.request({ method: 'deduplicated' }, { dedupe: true })
+		const second = transport.request({ method: 'deduplicated' }, { dedupe: true })
+
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(fetches).toBe(1)
+		releaseFetch?.()
+		expect(await Promise.all([first, second])).toEqual(['shared-result', 'shared-result'])
+	})
+
 	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
 		const contracts = new Map<string, ContractMetadata>([
 			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],

@@ -17,6 +17,7 @@ import {
 	getAddress,
 	type Hash,
 	type Hex,
+	type HttpTransport,
 	http,
 	type Log,
 	type PublicClient,
@@ -36,6 +37,8 @@ type RpcBlockHeader = {
 	readonly parentHash: Hash
 	readonly timestamp: bigint
 }
+
+const RPC_CONCURRENCY = 5
 
 const erc20MetadataAbi = parseAbi([
 	'function decimals() view returns (uint8)',
@@ -161,6 +164,51 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 	for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
 	return result
 }
+
+type RpcRequestQueue = {
+	readonly run: <T>(operation: () => Promise<T>) => Promise<T>
+}
+
+export const createRpcRequestQueue = (concurrency: number): RpcRequestQueue => {
+	if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('RPC concurrency must be a positive safe integer')
+	let active = 0
+	const pending: Array<() => void> = []
+	const drain = (): void => {
+		while (active < concurrency) {
+			const start = pending.shift()
+			if (start === undefined) return
+			active++
+			start()
+		}
+	}
+	return {
+		run: <T>(operation: () => Promise<T>) =>
+			new Promise<T>((resolve, reject) => {
+				pending.push(() => {
+					void Promise.resolve()
+						.then(operation)
+						.then(resolve, reject)
+						.finally(() => {
+							active--
+							drain()
+						})
+				})
+				drain()
+			}),
+	}
+}
+
+export const withRpcRequestQueue =
+	(transport: HttpTransport, queue: RpcRequestQueue): HttpTransport =>
+	(parameters) => {
+		const configured = transport(parameters)
+		return {
+			...configured,
+			request: async (request, options) => await queue.run(() => configured.request(request, options)),
+		}
+	}
+
+const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY)
 
 export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
@@ -1101,7 +1149,8 @@ class NetworkIndexer {
 		this.#database = database
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
-			const client = createPublicClient({ transport: http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 }) })
+			const transport = http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 })
+			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue) })
 			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId(), number: index + 1 }
 		})
 		const firstProvider = this.#providers[0]
