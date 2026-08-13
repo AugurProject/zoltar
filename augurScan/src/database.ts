@@ -1,4 +1,4 @@
-import { type ReservedSQL, SQL } from 'bun'
+import { type ReservedSQL, SQL, type TransactionSQL } from 'bun'
 import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
 import type { ContractMetadata, DecodedRecord, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
@@ -118,8 +118,75 @@ type RewindCheckpoint = {
 	readonly indexedHash?: string
 }
 
+type DatabaseConsistencyDiagnostic =
+	| { readonly code: 'lease-backend-moved'; readonly expectedBackendPid: number; readonly observedBackendPid: number }
+	| { readonly code: 'lease-not-held'; readonly expectedBackendPid: number }
+	| { readonly code: 'lease-release-failed'; readonly expectedBackendPid: number }
+	| { readonly code: 'checkpoint-before-start'; readonly indexedBlock: bigint; readonly storedStartBlock: bigint }
+	| {
+			readonly code: 'start-block-mismatch'
+			readonly configuredStartBlock: bigint
+			readonly storedStartBlock: bigint
+			readonly indexedBlock: bigint
+	  }
+
 export class DatabaseConsistencyError extends Error {
 	override name = 'DatabaseConsistencyError'
+
+	constructor(
+		message: string,
+		readonly diagnostic?: DatabaseConsistencyDiagnostic,
+	) {
+		super(message)
+	}
+}
+
+export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyError): string | undefined => {
+	const diagnostic = error.diagnostic
+	if (diagnostic?.code === 'lease-backend-moved') {
+		if (!Number.isSafeInteger(diagnostic.expectedBackendPid) || !Number.isSafeInteger(diagnostic.observedBackendPid)) return undefined
+		return `Indexer lease moved from PostgreSQL backend ${diagnostic.expectedBackendPid} to ${diagnostic.observedBackendPid}; use a direct connection or a session-mode pooler`
+	}
+	if (diagnostic?.code === 'lease-not-held') {
+		if (!Number.isSafeInteger(diagnostic.expectedBackendPid)) return undefined
+		return `Indexer lease is no longer held by PostgreSQL backend ${diagnostic.expectedBackendPid}`
+	}
+	if (diagnostic?.code === 'lease-release-failed') {
+		if (!Number.isSafeInteger(diagnostic.expectedBackendPid)) return undefined
+		return `Indexer lease unlock failed on PostgreSQL backend ${diagnostic.expectedBackendPid}; lock ownership may already be lost`
+	}
+	if (diagnostic?.code === 'checkpoint-before-start') {
+		if (typeof diagnostic.indexedBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint') return undefined
+		return `Stored checkpoint ${diagnostic.indexedBlock} is below configured start block ${diagnostic.storedStartBlock}; rebuild the augurScan database from the configured start block`
+	}
+	if (diagnostic?.code === 'start-block-mismatch') {
+		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint')
+			return undefined
+		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while checkpoint ${diagnostic.indexedBlock} exists; rebuild the augurScan database from the new start block`
+	}
+	return undefined
+}
+
+export const assertIndexerLeaseObservation = (expectedBackendPid: number, observedBackendPid: number, held: boolean): void => {
+	if (observedBackendPid !== expectedBackendPid)
+		throw new DatabaseConsistencyError(
+			`Indexer lease moved from PostgreSQL backend ${expectedBackendPid} to ${observedBackendPid}; use a direct connection or a session-mode pooler`,
+			{ code: 'lease-backend-moved', expectedBackendPid, observedBackendPid },
+		)
+	if (!held)
+		throw new DatabaseConsistencyError(`Indexer lease is no longer held by PostgreSQL backend ${expectedBackendPid}`, {
+			code: 'lease-not-held',
+			expectedBackendPid,
+		})
+}
+
+export const assertIndexerLeaseReleaseObservation = (expectedBackendPid: number, observedBackendPid: number, unlocked: boolean): void => {
+	assertIndexerLeaseObservation(expectedBackendPid, observedBackendPid, true)
+	if (!unlocked)
+		throw new DatabaseConsistencyError(`Indexer lease unlock failed on PostgreSQL backend ${expectedBackendPid}; lock ownership may already be lost`, {
+			code: 'lease-release-failed',
+			expectedBackendPid,
+		})
 }
 
 export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHash'>, checkpoint: StoredCheckpoint): void => {
@@ -141,10 +208,12 @@ export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedS
 	if (indexedBlock < storedStartBlock)
 		throw new DatabaseConsistencyError(
 			`Stored checkpoint ${indexedBlock} is below configured start block ${storedStartBlock}; rebuild the augurScan database from the configured start block`,
+			{ code: 'checkpoint-before-start', indexedBlock, storedStartBlock },
 		)
 	if (configuredStartBlock === storedStartBlock) return
 	throw new DatabaseConsistencyError(
 		`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`,
+		{ code: 'start-block-mismatch', configuredStartBlock, storedStartBlock, indexedBlock },
 	)
 }
 
@@ -186,12 +255,32 @@ export const releaseReservedConnection = async (connection: Pick<ReservedSQL, 'r
 	await connection.release()
 }
 
+export const runFencedIndexerTransaction = async <TTransaction, TResult>(
+	begin: (operation: (transaction: TTransaction) => Promise<TResult>) => Promise<TResult>,
+	assertHeld: (transaction: TTransaction) => Promise<void>,
+	operation: (transaction: TTransaction) => Promise<TResult>,
+): Promise<TResult> =>
+	await begin(async (transaction) => {
+		await assertHeld(transaction)
+		return await operation(transaction)
+	})
+
 export type IndexerLease = {
 	readonly backendPid: number
 	readonly connection: ReservedSQL
-	readonly assertHeld: () => Promise<void>
+	readonly assertHeld: (sql?: SQL) => Promise<void>
 	readonly release: () => Promise<void>
 }
+
+const withIndexerLease = async <T>(lease: IndexerLease, operation: (transaction: TransactionSQL) => Promise<T>): Promise<T> =>
+	await runFencedIndexerTransaction(
+		async (fencedOperation) => await lease.connection.begin(fencedOperation),
+		async (transaction) => await lease.assertHeld(transaction),
+		operation,
+	)
+
+const withOptionalIndexerLease = async <T>(sql: SQL, lease: IndexerLease | undefined, operation: (sql: SQL) => Promise<T>): Promise<T> =>
+	lease === undefined ? await operation(sql) : await withIndexerLease(lease, operation)
 
 export class ScannerDatabase {
 	readonly sql: SQL
@@ -306,29 +395,38 @@ export class ScannerDatabase {
 				await releaseConnection()
 				return undefined
 			}
+			const backendPid = Number(rows[0]?.['backend_pid'])
 			let released = false
 			return {
-				backendPid: Number(rows[0]?.['backend_pid']),
+				backendPid,
 				connection,
-				assertHeld: async () => {
+				assertHeld: async (sql = connection) => {
 					if (released) throw new Error('Indexer lease was released')
-					const leaseRows = await connection`
-						SELECT EXISTS (
+					const leaseRows = await sql`
+						SELECT pg_backend_pid() AS backend_pid, EXISTS (
 							SELECT 1 FROM pg_locks
 							WHERE locktype = 'advisory'
 								AND pid = pg_backend_pid()
 								AND classid::bigint = 92138472
 								AND objid::bigint = ${chainId}
+								AND objsubid = 2
 								AND granted
 						) AS held
 					`
-					if (leaseRows[0]?.['held'] !== true) throw new Error('Indexer lease is no longer held')
+					assertIndexerLeaseObservation(backendPid, Number(leaseRows[0]?.['backend_pid']), leaseRows[0]?.['held'] === true)
 				},
 				release: async () => {
 					if (released) return
 					released = true
 					try {
-						await connection`SELECT pg_advisory_unlock(92138472, ${chainId})`
+						const releaseRows = await connection`
+							SELECT pg_backend_pid() AS backend_pid,
+								CASE WHEN pg_backend_pid() = ${backendPid}
+									THEN pg_advisory_unlock(92138472, ${chainId})
+									ELSE false
+								END AS unlocked
+						`
+						assertIndexerLeaseReleaseObservation(backendPid, Number(releaseRows[0]?.['backend_pid']), releaseRows[0]?.['unlocked'] === true)
 					} finally {
 						await releaseConnection()
 					}
@@ -341,9 +439,7 @@ export class ScannerDatabase {
 	}
 
 	async seedNetwork(network: NetworkConfig, lease?: IndexerLease): Promise<void> {
-		await lease?.assertHeld()
-		const sql = lease?.connection ?? this.sql
-		await sql.begin(async (transaction) => {
+		const operation = async (transaction: TransactionSQL): Promise<void> => {
 			const existingRows = await transaction`
 				SELECT start_block, indexed_block
 				FROM networks
@@ -390,7 +486,9 @@ export class ScannerDatabase {
 					AND contract.address = discovery.address
 					AND NOT contract.canonical
 			`
-		})
+		}
+		if (lease === undefined) await this.sql.begin(operation)
+		else await withIndexerLease(lease, operation)
 	}
 
 	async upsertContract(chainId: number, contract: ContractMetadata, sql: SQL = this.sql): Promise<void> {
@@ -407,26 +505,29 @@ export class ScannerDatabase {
 		`
 	}
 
-	async contracts(chainId: number): Promise<Map<string, ContractMetadata>> {
-		const rows = await this
-			.sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
-		return new Map(rows.map((row: Record<string, unknown>) => [String(row['address']), contractMetadataFromRow(row)]))
+	async contracts(chainId: number, lease?: IndexerLease): Promise<Map<string, ContractMetadata>> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows =
+				await sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
+			return new Map(rows.map((row: Record<string, unknown>) => [String(row['address']), contractMetadataFromRow(row)]))
+		})
 	}
 
 	async contractDeploymentCandidate(chainId: number, observedHead: bigint, lease: IndexerLease): Promise<ContractMetadata | undefined> {
-		await lease.assertHeld()
 		const staleBefore = observedHead >= 100n ? observedHead - 100n : -1n
-		const rows = await lease.connection`
-			SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp,
-				deployment_block_exact, deployment_checked_block
-			FROM contracts
-			WHERE chain_id = ${chainId} AND canonical AND deployment_block IS NULL
-				AND (deployment_checked_block IS NULL OR deployment_checked_block <= ${staleBefore.toString()})
-			ORDER BY deployment_checked_block NULLS FIRST, label, address
-			LIMIT 1
-		`
-		const row = rows[0]
-		return row === undefined ? undefined : contractMetadataFromRow(row)
+		return await withIndexerLease(lease, async (transaction) => {
+			const rows = await transaction`
+				SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, deployment_block, deployment_timestamp,
+					deployment_block_exact, deployment_checked_block
+				FROM contracts
+				WHERE chain_id = ${chainId} AND canonical AND deployment_block IS NULL
+					AND (deployment_checked_block IS NULL OR deployment_checked_block <= ${staleBefore.toString()})
+				ORDER BY deployment_checked_block NULLS FIRST, label, address
+				LIMIT 1
+			`
+			const row = rows[0]
+			return row === undefined ? undefined : contractMetadataFromRow(row)
+		})
 	}
 
 	async recordContractDeployment(
@@ -436,62 +537,67 @@ export class ScannerDatabase {
 		deployment: { readonly block: bigint; readonly timestamp: Date; readonly exact: boolean } | undefined,
 		lease: IndexerLease,
 	): Promise<void> {
-		await lease.assertHeld()
-		await lease.connection`
-			UPDATE contracts SET
-				deployment_block = ${deployment?.block.toString() ?? null},
-				deployment_timestamp = ${deployment?.timestamp ?? null},
-				deployment_block_exact = ${deployment?.exact ?? null},
-				deployment_checked_block = ${checkedBlock.toString()}
-			WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()} AND canonical
-		`
+		await withIndexerLease(lease, async (transaction) => {
+			await transaction`
+				UPDATE contracts SET
+					deployment_block = ${deployment?.block.toString() ?? null},
+					deployment_timestamp = ${deployment?.timestamp ?? null},
+					deployment_block_exact = ${deployment?.exact ?? null},
+					deployment_checked_block = ${checkedBlock.toString()}
+				WHERE chain_id = ${chainId} AND address = ${address.toLowerCase()} AND canonical
+			`
+		})
 	}
 
-	async tokenMetadata(chainId: number): Promise<Map<string, TokenMetadata>> {
-		const rows = await this.sql`SELECT address, name, symbol, decimals, read_error, read_block FROM token_metadata WHERE chain_id = ${chainId} AND canonical`
-		return new Map(
-			rows.map((row: Record<string, unknown>) => {
-				const address = String(row['address']) as Address
-				return [
-					address,
-					{
+	async tokenMetadata(chainId: number, lease?: IndexerLease): Promise<Map<string, TokenMetadata>> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT address, name, symbol, decimals, read_error, read_block FROM token_metadata WHERE chain_id = ${chainId} AND canonical`
+			return new Map(
+				rows.map((row: Record<string, unknown>) => {
+					const address = String(row['address']) as Address
+					return [
 						address,
-						...(row['name'] === null ? {} : { name: String(row['name']) }),
-						...(row['symbol'] === null ? {} : { symbol: String(row['symbol']) }),
-						...(row['decimals'] === null ? {} : { decimals: Number(row['decimals']) }),
-						...(row['read_error'] === null ? {} : { readError: String(row['read_error']) }),
-						readBlock: BigInt(String(row['read_block'])),
-					},
-				]
-			}),
-		)
+						{
+							address,
+							...(row['name'] === null ? {} : { name: String(row['name']) }),
+							...(row['symbol'] === null ? {} : { symbol: String(row['symbol']) }),
+							...(row['decimals'] === null ? {} : { decimals: Number(row['decimals']) }),
+							...(row['read_error'] === null ? {} : { readError: String(row['read_error']) }),
+							readBlock: BigInt(String(row['read_block'])),
+						},
+					]
+				}),
+			)
+		})
 	}
 
-	async logScanCursors(chainId: number): Promise<Map<string, LogScanCursor>> {
-		const rows = await this.sql`
-			SELECT contract_address, start_block, last_retrieved_block
-			FROM log_scan_cursors
-			WHERE chain_id = ${chainId}
-			ORDER BY contract_address
-		`
-		return new Map(
-			rows.map((row: Record<string, unknown>) => {
-				const contractAddress = getAddress(String(row['contract_address']))
-				return [
-					contractAddress.toLowerCase(),
-					{
-						contractAddress,
-						startBlock: BigInt(String(row['start_block'])),
-						lastRetrievedBlock: BigInt(String(row['last_retrieved_block'])),
-					},
-				]
-			}),
-		)
+	async logScanCursors(chainId: number, lease?: IndexerLease): Promise<Map<string, LogScanCursor>> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`
+				SELECT contract_address, start_block, last_retrieved_block
+				FROM log_scan_cursors
+				WHERE chain_id = ${chainId}
+				ORDER BY contract_address
+			`
+			return new Map(
+				rows.map((row: Record<string, unknown>) => {
+					const contractAddress = getAddress(String(row['contract_address']))
+					return [
+						contractAddress.toLowerCase(),
+						{
+							contractAddress,
+							startBlock: BigInt(String(row['start_block'])),
+							lastRetrievedBlock: BigInt(String(row['last_retrieved_block'])),
+						},
+					]
+				}),
+			)
+		})
 	}
 
-	async richListBalanceTargets(chainId: number, limit = 10): Promise<RichListBalanceTargets> {
-		const [addressRows, assetRows] = await Promise.all([
-			this.sql`
+	async richListBalanceTargets(chainId: number, limit = 10, lease?: IndexerLease): Promise<RichListBalanceTargets> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const addressRows = await sql`
 				WITH assets AS (
 					SELECT address FROM contracts WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
 				)
@@ -508,26 +614,25 @@ export class ScannerDatabase {
 				ORDER BY ((SELECT count(*) FROM assets) + 1 - COALESCE(latest.sampled_assets, 0)) DESC,
 					latest.block_number ASC NULLS FIRST, activity.address
 				LIMIT ${limit}
-			`,
-			this.sql`
+			`
+			const assetRows = await sql`
 				SELECT address, kind FROM contracts
 				WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
 				ORDER BY kind, address
-			`,
-		])
-		return {
-			addresses: addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address),
-			assets: assetRows.map((row: Record<string, unknown>) => ({
-				address: String(row['address']) as Address,
-				kind: row['kind'] === 'weth' ? 'weth' : 'rep',
-			})),
-		}
+			`
+			return {
+				addresses: addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address),
+				assets: assetRows.map((row: Record<string, unknown>) => ({
+					address: String(row['address']) as Address,
+					kind: row['kind'] === 'weth' ? 'weth' : 'rep',
+				})),
+			}
+		})
 	}
 
 	async storeRichListBalances(chainId: number, blockNumber: bigint, blockHash: Hash, balances: readonly RichListBalance[], lease: IndexerLease): Promise<void> {
 		if (balances.length === 0) return
-		await lease.assertHeld()
-		await lease.connection.begin(async (transaction) => {
+		await withIndexerLease(lease, async (transaction) => {
 			const canonicalRows = await transaction`
 				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${blockNumber.toString()} AND hash = ${blockHash} AND canonical
 			`
@@ -543,22 +648,25 @@ export class ScannerDatabase {
 		})
 	}
 
-	async checkpoint(chainId: number): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
-		const rows = await this.sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId}`
-		const row = rows[0]
-		if (row === undefined || row['indexed_block'] === null || row['indexed_hash'] === null) return undefined
-		return { number: BigInt(String(row['indexed_block'])), hash: String(row['indexed_hash']) as Hash }
+	async checkpoint(chainId: number, lease?: IndexerLease): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId}`
+			const row = rows[0]
+			if (row === undefined || row['indexed_block'] === null || row['indexed_hash'] === null) return undefined
+			return { number: BigInt(String(row['indexed_block'])), hash: String(row['indexed_hash']) as Hash }
+		})
 	}
 
-	async canonicalHash(chainId: number, number: bigint): Promise<Hash | undefined> {
-		const rows = await this.sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND number = ${number.toString()} AND canonical`
-		const hash = rows[0]?.['hash']
-		return hash === undefined ? undefined : (String(hash) as Hash)
+	async canonicalHash(chainId: number, number: bigint, lease?: IndexerLease): Promise<Hash | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND number = ${number.toString()} AND canonical`
+			const hash = rows[0]?.['hash']
+			return hash === undefined ? undefined : (String(hash) as Hash)
+		})
 	}
 
 	async rewind(chainId: number, ancestor: bigint, ancestorHash: Hash | undefined, lease: IndexerLease): Promise<void> {
-		await lease.assertHeld()
-		await lease.connection.begin(async (transaction) => {
+		await withIndexerLease(lease, async (transaction) => {
 			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const checkpoint = checkpointRows[0]
 			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before rewinding`)
@@ -659,8 +767,7 @@ export class ScannerDatabase {
 	}
 
 	async storeBlock(chainId: number, block: IndexedBlock, lease: IndexerLease): Promise<void> {
-		await lease.assertHeld()
-		await lease.connection.begin(async (transaction) => {
+		await withIndexerLease(lease, async (transaction) => {
 			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const checkpoint = checkpointRows[0]
 			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before indexing`)
@@ -876,8 +983,7 @@ export class ScannerDatabase {
 	}
 
 	async updateObservedHead(chainId: number, head: bigint, phase: string, lease: IndexerLease): Promise<void> {
-		await lease.assertHeld()
-		await lease.connection.begin(async (transaction) => {
+		await withIndexerLease(lease, async (transaction) => {
 			await transaction`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now() WHERE chain_id = ${chainId}`
 			await lockLiveEventWriter(transaction)
 			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', ${JSON.stringify({ chainId, blockNumber: head.toString() })}::jsonb)`
@@ -885,8 +991,7 @@ export class ScannerDatabase {
 	}
 
 	async recordFailure(chainId: number, message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
-		await lease.assertHeld()
-		await lease.connection.begin(async (transaction) => {
+		await withIndexerLease(lease, async (transaction) => {
 			const rows = await transaction`
 				UPDATE networks SET phase = 'degraded', last_error = ${message.slice(0, 2000)}, last_poll_at = now(),
 					failure_started_at = COALESCE(failure_started_at, now()), consecutive_failures = consecutive_failures + 1,
