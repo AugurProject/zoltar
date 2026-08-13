@@ -4,6 +4,12 @@
 coverage
 node_modules
 **/node_modules
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
 shared/js
 solidity/artifacts
 solidity/coverage

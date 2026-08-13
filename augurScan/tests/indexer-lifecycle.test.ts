@@ -7,19 +7,7 @@ import {
 	runFencedIndexerTransaction,
 	type StoredTransaction,
 } from '../src/database.ts'
-import {
-	type Address,
-	BaseError,
-	ContractFunctionExecutionError,
-	createPublicClient,
-	decodeFunctionResult,
-	HttpRequestError,
-	http,
-	parseAbi,
-	RpcRequestError,
-	TimeoutError,
-	toHex,
-} from '../src/ethereum.ts'
+import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -81,20 +69,69 @@ const tokenMetadata: TokenMetadata = {
 const address = '0x1000000000000000000000000000000000000001' as const
 const metadataAbi = parseAbi(['function decimals() view returns (uint8)', 'function name() view returns (string)', 'function symbol() view returns (string)'])
 
+class BaseError extends Error {
+	constructor(message: string, options: { cause?: unknown; name?: string } = {}) {
+		super(message, options.cause === undefined ? undefined : { cause: options.cause })
+		this.name = options.name ?? 'BaseError'
+	}
+}
+
+class ContractFunctionExecutionError extends Error {
+	constructor(cause: Error, _options?: unknown) {
+		super('Contract function execution failed', { cause })
+		this.name = 'ContractFunctionExecutionError'
+	}
+}
+
+class HttpRequestError extends Error {
+	readonly details: string
+	readonly status: number
+
+	constructor(options: { details: string; status: number; url: string }) {
+		super(options.details)
+		this.name = 'HttpRequestError'
+		this.details = options.details
+		this.status = options.status
+	}
+}
+
+class RpcRequestError extends Error {
+	readonly code: number
+	readonly details: string
+
+	constructor(options: { body: unknown; error: { code: number; message: string }; url: string }) {
+		super(options.error.message)
+		this.name = 'RpcRequestError'
+		this.code = options.error.code
+		this.details = options.error.message
+	}
+}
+
+class TimeoutError extends Error {
+	constructor(_options?: unknown) {
+		super('The request took too long to respond.')
+		this.name = 'TimeoutError'
+	}
+}
+
 const malformedMetadataResult = (functionName: 'name' | 'symbol', data: `0x${string}`): Error => {
 	try {
 		decodeFunctionResult({ abi: metadataAbi, functionName, data })
 		throw new Error(`Malformed ${functionName} result unexpectedly decoded`)
 	} catch (error) {
-		if (!(error instanceof BaseError)) throw error
-		return new ContractFunctionExecutionError(error, { abi: metadataAbi, contractAddress: address, functionName })
+		if (!(error instanceof Error) || error.name !== 'AbiDecodingError') throw error
+		return new ContractFunctionExecutionError(error)
 	}
 }
 
-const malformedDecimalsResult = (): number => {
-	const value = decodeFunctionResult({ abi: metadataAbi, functionName: 'decimals', data: toHex(256n, { size: 32 }) })
-	if (typeof value !== 'number') throw new Error('Malformed decimals result did not decode to a number')
-	return value
+const malformedDecimalsResult = (): Error => {
+	try {
+		decodeFunctionResult({ abi: metadataAbi, functionName: 'decimals', data: toHex(256n, { size: 32 }) })
+		throw new Error('Malformed decimals result unexpectedly decoded')
+	} catch (error) {
+		if (!(error instanceof Error) || error.name !== 'AbiDecodingError') throw error
+		return error
+	}
 }
 
 const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string } => {
@@ -196,7 +233,7 @@ describe('network indexer lifecycle', () => {
 		)
 	})
 
-	test('recognizes viem-wrapped queue saturation from a contract read without provider failover', async () => {
+	test('recognizes adapter-wrapped queue saturation from a contract read without provider failover', async () => {
 		const queue = createRpcRequestQueue(1, 0)
 		let releaseActive: (() => void) | undefined
 		const active = queue.run(
@@ -259,13 +296,14 @@ describe('network indexer lifecycle', () => {
 					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
 					requestedMethods.push(body.method)
 					if (body.method === 'eth_getLogs') throw new Error('expected transport failure')
-					return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method })
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method === 'eth_chainId' ? '0x1' : '0x2' })
 				},
 				retryCount: 0,
-				timeout: 5,
+				requestTimeout: 5,
 			}),
 			queue,
-		)({})
+		)
+		const client = createPublicClient({ transport })
 		let releaseBlocker: (() => void) | undefined
 		const blocker = queue.run(
 			() =>
@@ -273,16 +311,16 @@ describe('network indexer lifecycle', () => {
 					releaseBlocker = resolve
 				}),
 		)
-		const delayed = transport.request({ method: 'delayed' })
+		const delayed = client.getChainId()
 
 		await Bun.sleep(15)
 		expect(requestedMethods).toEqual([])
 		releaseBlocker?.()
 		await blocker
-		expect(await delayed).toBe('delayed')
+		expect(await delayed).toBe(1)
 
-		const failed = transport.request({ method: 'eth_getLogs' })
-		const afterFailure = transport.request({ method: 'after-failure' })
+		const failed = client.getLogs({})
+		const afterFailure = client.getBlockNumber()
 		let transportFailure: unknown
 		try {
 			await failed
@@ -290,15 +328,14 @@ describe('network indexer lifecycle', () => {
 			transportFailure = error
 		}
 		expect(safeIndexerFailureReason(transportFailure)).toContain('method eth_getLogs')
-		expect(await afterFailure).toBe('after-failure')
-		expect(requestedMethods).toEqual(['delayed', 'eth_getLogs', 'after-failure'])
+		expect(await afterFailure).toBe(2n)
+		expect(requestedMethods).toEqual(['eth_chainId', 'eth_getLogs', 'eth_blockNumber'])
 	})
 
-	test('attributes a failed RPC batch to each request method independently', async () => {
+	test('does not batch unrelated RPC methods and attributes failures independently', async () => {
 		let fetches = 0
 		const transport = withRpcRequestQueue(
 			http('https://rpc.example', {
-				batch: { batchSize: 50, wait: 0 },
 				fetchFn: async () => {
 					fetches++
 					throw new Error('shared batch failure')
@@ -306,44 +343,69 @@ describe('network indexer lifecycle', () => {
 				retryCount: 0,
 			}),
 			createRpcRequestQueue(5),
-		)({})
-		const results = await Promise.allSettled([transport.request({ method: 'eth_getLogs' }), transport.request({ method: 'eth_chainId' })])
+		)
+		const client = createPublicClient({ transport })
+		const results = await Promise.allSettled([client.getLogs({}), client.getChainId()])
 		const reasonFrom = (result: PromiseSettledResult<unknown>): string => {
 			if (result.status !== 'rejected') throw new Error('Expected the RPC batch request to fail')
 			return safeIndexerFailureReason(result.reason)
 		}
 
-		expect(fetches).toBe(1)
+		expect(fetches).toBe(2)
 		expect(reasonFrom(results[0])).toContain('method eth_getLogs')
 		expect(reasonFrom(results[1])).toContain('method eth_chainId')
 	})
 
-	test('forwards viem request options through the RPC queue', async () => {
+	test('schedules concurrent adapter requests independently through the RPC queue', async () => {
 		const queue = createRpcRequestQueue(5)
 		let fetches = 0
-		let releaseFetch: (() => void) | undefined
+		const releaseFetches: Array<() => void> = []
 		const transport = withRpcRequestQueue(
 			http('https://rpc.example', {
 				fetchFn: async (_input, init) => {
 					fetches++
 					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
 					await new Promise<void>((resolve) => {
-						releaseFetch = resolve
+						releaseFetches.push(resolve)
 					})
-					return Response.json({ id: body.id, jsonrpc: '2.0', result: 'shared-result' })
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
 				},
 				retryCount: 0,
 			}),
 			queue,
-		)({})
-		const first = transport.request({ method: 'deduplicated' }, { dedupe: true })
-		const second = transport.request({ method: 'deduplicated' }, { dedupe: true })
+		)
+		const client = createPublicClient({ transport })
+		const first = client.getChainId()
+		const second = client.getChainId()
 
-		await Promise.resolve()
-		await Promise.resolve()
-		expect(fetches).toBe(1)
-		releaseFetch?.()
-		expect(await Promise.all([first, second])).toEqual(['shared-result', 'shared-result'])
+		while (fetches < 2) await Promise.resolve()
+		expect(fetches).toBe(2)
+		for (const release of releaseFetches) release()
+		expect(await Promise.all([first, second])).toEqual([1, 1])
+	})
+
+	test('retries queued HTTP and JSON-RPC provider throttling responses', async () => {
+		for (const throttled of [
+			new Response(undefined, { status: 429 }),
+			Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id: 1, jsonrpc: '2.0' }),
+		]) {
+			const responses = [throttled, Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })]
+			const transport = withRpcRequestQueue(
+				http('https://rpc.example', {
+					fetchFn: async () => {
+						const response = responses.shift()
+						if (response === undefined) throw new Error('Unexpected RPC request')
+						return response
+					},
+					retryCount: 1,
+					retryDelay: 0,
+				}),
+				createRpcRequestQueue(1),
+			)
+
+			expect(await createPublicClient({ transport }).getChainId()).toBe(1)
+			expect(responses).toHaveLength(0)
+		}
 	})
 
 	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
@@ -431,7 +493,7 @@ describe('network indexer lifecycle', () => {
 		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
 	})
 
-	test('does not split viem HTTP rate-limit failures', async () => {
+	test('does not split HTTP rate-limit failures', async () => {
 		for (const details of ['rate limit exceeded', 'Too Many Requests']) {
 			const attempts: Array<readonly [bigint, bigint]> = []
 			const failure = new HttpRequestError({ details, status: 429, url: 'https://rpc.example' })
@@ -549,7 +611,7 @@ describe('network indexer lifecycle', () => {
 		expect(commits).toBe(0)
 	})
 
-	test('splits viem timeout and oversized-response failures at exact inclusive boundaries', async () => {
+	test('splits timeout and oversized-response failures at exact inclusive boundaries', async () => {
 		const oversizedFailure = new BaseError('HTTP response body exceeded the size limit and contained provider-key-sentinel.', {
 			name: 'ResponseBodyTooLargeError',
 		})
@@ -1054,7 +1116,7 @@ describe('network indexer lifecycle', () => {
 		expect(rpcIndexerFailureReason(new TypeError('fetch failed\n\u001b[31mconnection refused\u001b[0m'))).toBe('TypeError: fetch failed connection refused')
 	})
 
-	test('retains viem unknown-node diagnostics for provider RPC failures', () => {
+	test('retains unknown-node diagnostics for provider RPC failures', () => {
 		const secret = 'provider-key-sentinel'
 		const error = Object.assign(new Error(`request failed at https://rpc.example/${secret}`), {
 			name: 'UnknownNodeError',
@@ -1496,12 +1558,42 @@ describe('network indexer lifecycle', () => {
 		).toEqual({ address, decimals: 6, symbol: 'TKN', readBlock: 10n })
 	})
 
+	test('records metadata fallback from actual zero-data and revert RPC responses', async () => {
+		for (const response of [
+			Response.json({ id: 1, jsonrpc: '2.0', result: '0x' }),
+			Response.json({ error: { code: 3, message: 'execution reverted' }, id: 1, jsonrpc: '2.0' }),
+		]) {
+			const client = createPublicClient({
+				transport: withRpcRequestQueue(
+					http('https://rpc.example', {
+						fetchFn: async () => response.clone(),
+						retryCount: 0,
+					}),
+					createRpcRequestQueue(1),
+				),
+			})
+			expect(
+				await readTokenMetadata(address, 10n, {
+					decimals: async () => {
+						const result = await client.readContract({ address, abi: metadataAbi, functionName: 'decimals', blockNumber: 10n })
+						if (typeof result !== 'bigint') throw new Error('Invalid decimals result')
+						return Number(result)
+					},
+					name: async () => 'Token',
+					symbol: async () => 'TKN',
+				}),
+			).toEqual({ address, readError: 'ERC-20 metadata unavailable', readBlock: 10n })
+		}
+	})
+
 	test('records fallback metadata for malformed contract return bytes', async () => {
 		const invalidDecimals = malformedDecimalsResult()
 		const invalidString = (functionName: 'name' | 'symbol') => malformedMetadataResult(functionName, toHex(64n, { size: 32 }))
 		expect(
 			await readTokenMetadata(address, 10n, {
-				decimals: async () => invalidDecimals,
+				decimals: async () => {
+					throw invalidDecimals
+				},
 				name: async () => 'Token',
 				symbol: async () => 'TKN',
 			}),

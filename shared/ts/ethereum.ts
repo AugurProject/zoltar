@@ -1,6 +1,6 @@
 import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
-import { addr, amounts, Transaction } from 'micro-eth-signer'
+import { addr, amounts, Transaction as MicroTransaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
 
 export type Hex = `0x${string}`
@@ -18,6 +18,8 @@ export type AbiParameter = {
 	readonly type: string
 }
 export type Abi = readonly AbiParameter[]
+export type AbiEvent = AbiParameter & { readonly inputs: readonly AbiParameter[]; readonly name: string; readonly type: 'event' }
+export type AbiFunction = AbiParameter & { readonly inputs: readonly AbiParameter[]; readonly name: string; readonly outputs: readonly AbiParameter[]; readonly type: 'function' }
 
 type FixedArrayValue<TValue, TLength extends number, TAccumulator extends readonly unknown[] = readonly []> = TAccumulator['length'] extends TLength ? TAccumulator : FixedArrayValue<TValue, TLength, readonly [...TAccumulator, TValue]>
 
@@ -246,6 +248,8 @@ export type TransactionLog = {
 	transactionIndex?: bigint | undefined
 }
 
+export type Log = TransactionLog
+
 export type TransactionReceipt = {
 	blockHash: Hash
 	blockNumber: bigint
@@ -280,6 +284,7 @@ type WaitForTransactionReceiptParameters = {
 }
 
 export type BlockTransaction = {
+	blockHash?: Hash | undefined
 	blockNumber?: bigint | undefined
 	from: Address
 	gas: bigint
@@ -294,6 +299,8 @@ export type BlockTransaction = {
 	type?: string | undefined
 	value: bigint
 }
+
+export type Transaction = BlockTransaction
 
 export type Block = {
 	baseFeePerGas?: bigint | undefined
@@ -340,13 +347,18 @@ export type ParsedTransaction = {
 	value?: bigint | undefined
 }
 
+export type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
+export type RpcFetchFn = (input: string | URL | Request, init?: RequestInit | undefined) => Promise<Response>
+
 type TransportRetryOptions = {
 	batch?: unknown
+	requestScheduler?: RpcRequestScheduler | undefined
 	retryCount?: number | undefined
 	retryDelay?: number | undefined
 }
 
-type HttpTransportOptions = TransportRetryOptions & {
+export type HttpTransportOptions = TransportRetryOptions & {
+	fetchFn?: RpcFetchFn | undefined
 	requestTimeout?: number | undefined
 }
 
@@ -354,12 +366,15 @@ type TypedTransport =
 	| {
 			kind: 'custom'
 			provider: EIP1193Provider
+			requestScheduler?: RpcRequestScheduler | undefined
 			retryCount: number
 			retryDelay: number
 	  }
 	| {
 			kind: 'http'
+			fetchFn?: RpcFetchFn | undefined
 			requestTimeout: number
+			requestScheduler?: RpcRequestScheduler | undefined
 			retryCount: number
 			retryDelay: number
 			url: string
@@ -401,6 +416,13 @@ export class RpcError extends Error {
 	}
 }
 
+class ContractFunctionError extends Error {
+	constructor(name: 'ContractFunctionRevertedError' | 'ContractFunctionZeroDataError', message: string, cause?: unknown) {
+		super(message, cause === undefined ? undefined : { cause })
+		this.name = name
+	}
+}
+
 export const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
 export const zeroHash = `0x${'00'.repeat(32)}` satisfies Hash
 export const maxUint256 = amounts.maxUint256
@@ -421,14 +443,22 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	extend: <TExtension extends object>(extension: (client: PublicClientShape<TTransport, TChain>) => TExtension) => PublicClientShape<TTransport, TChain> & TExtension
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
 	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
-	getBalance: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
+	getBalance: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
-	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
+	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
+	getBytecode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getGasPrice: () => Promise<bigint>
 	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
-	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
+	getLogs: <TEvent extends AbiParameter | undefined>(parameters: {
+		address?: Address | readonly Address[] | undefined
+		args?: Readonly<Record<string, unknown>> | undefined
+		event?: TEvent
+		fromBlock?: bigint | undefined
+		toBlock?: bigint | undefined
+		topics?: readonly LogTopicFilter[] | undefined
+	}) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
@@ -932,8 +962,14 @@ function normalizeDecodeFunctionArgs(value: unknown) {
 }
 
 function decodeFunctionOutput(abiItem: AbiParameter, data: Hex) {
-	const method = getContractMethod(abiItem)
-	return normalizeDecodedFunctionOutput(abiItem, method.decodeOutput(nobleHexToBytes(stripHexPrefix(data))))
+	try {
+		const method = getContractMethod(abiItem)
+		return normalizeDecodedFunctionOutput(abiItem, method.decodeOutput(nobleHexToBytes(stripHexPrefix(data))))
+	} catch (cause) {
+		const error = new Error(`Unable to decode ${abiItem.name ?? 'contract function'} result`, { cause })
+		error.name = 'AbiDecodingError'
+		throw error
+	}
 }
 
 function rlpEncodeBytes(value: Uint8Array): Uint8Array {
@@ -1024,6 +1060,30 @@ function getAbiSignature(parameter: AbiParameter): string {
 	return parameter.type
 }
 
+export function formatAbiParameter(parameter: AbiParameter): string {
+	const type = parameter.type.startsWith('tuple') ? `(${(parameter.components ?? []).map(formatAbiParameter).join(', ')})${parameter.type.slice(5)}` : parameter.type
+	return [type, parameter.indexed === true ? 'indexed' : undefined, parameter.name].filter((value): value is string => value !== undefined && value !== '').join(' ')
+}
+
+export function formatAbiItem(parameter: AbiParameter): string {
+	if (parameter.type !== 'event' && parameter.type !== 'function') return getAbiSignature(parameter)
+	const inputs = (parameter.inputs ?? []).map(formatAbiParameter).join(', ')
+	const outputs = parameter.type === 'function' && (parameter.outputs?.length ?? 0) > 0 ? ` returns (${(parameter.outputs ?? []).map(formatAbiParameter).join(', ')})` : ''
+	const stateMutability = parameter.type === 'function' && parameter.stateMutability !== undefined && parameter.stateMutability !== 'nonpayable' ? ` ${parameter.stateMutability}` : ''
+	const anonymous = parameter.type === 'event' && parameter.anonymous === true ? ' anonymous' : ''
+	return `${parameter.type} ${parameter.name ?? ''}(${inputs})${stateMutability}${outputs}${anonymous}`
+}
+
+export function toEventSelector(parameter: AbiParameter): Hex {
+	if (parameter.type !== 'event') throw new Error('ABI item is not an event')
+	return keccak256(getAbiSignature(parameter))
+}
+
+export function toFunctionSelector(parameter: AbiParameter): Hex {
+	if (parameter.type !== 'function') throw new Error('ABI item is not a function')
+	return `0x${keccak256(getAbiSignature(parameter)).slice(2, 10)}`
+}
+
 function getEventSignatureHash(eventAbi: AbiParameter) {
 	return stripHexPrefix(keccak256(getAbiSignature(eventAbi))).toLowerCase()
 }
@@ -1042,58 +1102,61 @@ function ensureConstructorAbi(abi: readonly unknown[]) {
 }
 
 async function requestTransportOnce<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
-	if (transport.kind === 'custom') {
-		try {
-			return (await transport.provider.request({
-				method: parameters.method,
-				params: parameters.params,
-			})) as TValue
-		} catch (error) {
-			throw toRpcError(error, `${parameters.method} failed`)
+	const request = async (): Promise<TValue> => {
+		if (transport.kind === 'custom') {
+			try {
+				return (await transport.provider.request({
+					method: parameters.method,
+					params: parameters.params,
+				})) as TValue
+			} catch (error) {
+				throw toRpcError(error, `${parameters.method} failed`)
+			}
 		}
-	}
 
-	const response = await fetch(transport.url, {
-		body: JSON.stringify({
-			id: 1,
-			jsonrpc: '2.0',
-			method: parameters.method,
-			params: parameters.params ?? [],
-		}),
-		headers: {
-			'content-type': 'application/json',
-		},
-		method: 'POST',
-		redirect: 'error',
-		signal: AbortSignal.timeout(transport.requestTimeout),
-	})
-	if (!response.ok) {
-		throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
-			code: response.status,
-			shortMessage: `HTTP ${response.status} while calling ${parameters.method}`,
+		const response = await (transport.fetchFn ?? fetch)(transport.url, {
+			body: JSON.stringify({
+				id: 1,
+				jsonrpc: '2.0',
+				method: parameters.method,
+				params: parameters.params ?? [],
+			}),
+			headers: {
+				'content-type': 'application/json',
+			},
+			method: 'POST',
+			redirect: 'error',
+			signal: AbortSignal.timeout(transport.requestTimeout),
 		})
-	}
+		if (!response.ok) {
+			throw new RpcError(`HTTP ${response.status} while calling ${parameters.method}`, {
+				code: response.status,
+				shortMessage: `HTTP ${response.status} while calling ${parameters.method}`,
+			})
+		}
 
-	const payload: unknown = await response.json()
-	if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
-	const envelope = payload as Record<string, unknown>
-	const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
-	const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error')
-	if (envelope['jsonrpc'] !== '2.0' || envelope['id'] !== 1 || hasResult === hasError) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
-	if (hasError) {
-		const error = envelope['error']
-		if (typeof error !== 'object' || error === null || Array.isArray(error)) throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
-		const errorRecord = error as Record<string, unknown>
-		const code = errorRecord['code']
-		const message = errorRecord['message']
-		if (typeof code !== 'number' || !Number.isInteger(code) || typeof message !== 'string') throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
-		throw new RpcError(message, {
-			cause: errorRecord['data'],
-			code,
-			shortMessage: message,
-		})
+		const payload: unknown = await response.json()
+		if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
+		const envelope = payload as Record<string, unknown>
+		const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
+		const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error')
+		if (envelope['jsonrpc'] !== '2.0' || envelope['id'] !== 1 || hasResult === hasError) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
+		if (hasError) {
+			const error = envelope['error']
+			if (typeof error !== 'object' || error === null || Array.isArray(error)) throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
+			const errorRecord = error as Record<string, unknown>
+			const code = errorRecord['code']
+			const message = errorRecord['message']
+			if (typeof code !== 'number' || !Number.isInteger(code) || typeof message !== 'string') throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
+			throw new RpcError(message, {
+				cause: errorRecord['data'],
+				code,
+				shortMessage: message,
+			})
+		}
+		return envelope['result'] as TValue
 	}
-	return envelope['result'] as TValue
+	return transport.requestScheduler === undefined ? await request() : await transport.requestScheduler(parameters.method, request)
 }
 
 async function retryRateLimited<TValue>(operation: () => Promise<TValue>, options: { retryCount?: number | undefined; retryDelay: number; startTime?: number | undefined; timeout?: number | undefined }) {
@@ -1187,6 +1250,7 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction')
 	const transaction = value as Record<string, unknown>
 	return {
+		blockHash: transaction['blockHash'] === undefined || transaction['blockHash'] === null ? undefined : normalizeHash(transaction['blockHash']),
 		blockNumber: transaction['blockNumber'] === undefined || transaction['blockNumber'] === null ? undefined : normalizeRpcBigInt(transaction['blockNumber']),
 		from: normalizeAddress(transaction['from']),
 		gas: normalizeRpcBigInt(transaction['gas']),
@@ -1206,6 +1270,7 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 function normalizeBlock(value: unknown, includeTransactions: boolean) {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid block')
 	const block = value as Record<string, unknown>
+	if (block['timestamp'] === undefined || block['timestamp'] === null) throw new Error('RPC returned a block without a timestamp')
 	return {
 		baseFeePerGas: block['baseFeePerGas'] === undefined || block['baseFeePerGas'] === null ? undefined : normalizeRpcBigInt(block['baseFeePerGas']),
 		hash: block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash']),
@@ -1225,7 +1290,14 @@ function isTransactionNotFoundError(error: unknown) {
 }
 
 function isRateLimitError(error: unknown) {
-	return error instanceof RpcError && (error.code === 429 || error.code === '429' || error.message.includes('HTTP 429'))
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if (current instanceof RpcError && (current.code === 429 || current.code === '429' || current.code === -32_005 || current.code === '-32005' || current.message.includes('HTTP 429'))) return true
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
 }
 
 function isAlreadyKnownTransactionError(error: unknown) {
@@ -1293,8 +1365,9 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
-	const rawResult = normalizeRpcHex(
-		await requestTransport<string>(transport, {
+	let rpcResult: string
+	try {
+		rpcResult = await requestTransport<string>(transport, {
 			method: 'eth_call',
 			params: [
 				buildRpcTransactionRequest({
@@ -1309,12 +1382,22 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 				}),
 				blockSelector,
 			],
-		}),
-	)
-	if (rawResult === '0x' && (abiItem.outputs?.length ?? 0) > 0) {
-		throw new RpcError(`The contract function "${parameters.functionName}" returned no data ("0x"). The contract does not have the function "${parameters.functionName}".`, {
-			shortMessage: `The contract function "${parameters.functionName}" returned no data ("0x"). The contract does not have the function "${parameters.functionName}".`,
 		})
+	} catch (cause) {
+		const seen = new Set<unknown>()
+		let current: unknown = cause
+		while (typeof current === 'object' && current !== null && !seen.has(current)) {
+			seen.add(current)
+			if (current instanceof RpcError && current.message.toLowerCase().includes('revert')) {
+				throw new ContractFunctionError('ContractFunctionRevertedError', current.message, cause)
+			}
+			current = 'cause' in current ? current.cause : undefined
+		}
+		throw cause
+	}
+	const rawResult = normalizeRpcHex(rpcResult)
+	if (rawResult === '0x' && (abiItem.outputs?.length ?? 0) > 0) {
+		throw new ContractFunctionError('ContractFunctionZeroDataError', `The contract function "${parameters.functionName}" returned no data ("0x"). The contract does not have the function "${parameters.functionName}".`)
 	}
 	return {
 		abiItem,
@@ -1323,6 +1406,16 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 }
 
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
+	const getCode: PublicClientActions['getCode'] = async parameters => {
+		const result = normalizeRpcHex(
+			await requestTransport<string>(transport, {
+				method: 'eth_getCode',
+				params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
+			}),
+		)
+		return result === '0x' ? undefined : result
+	}
+
 	return {
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
 			normalizeRpcBigInt(
@@ -1356,7 +1449,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_getBalance',
-					params: [parameters.address, parameters.blockTag ?? 'latest'],
+					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
 			),
 		getBlock: async parameters => {
@@ -1370,15 +1463,8 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		},
 		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
 		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
-		getCode: async parameters => {
-			const result = normalizeRpcHex(
-				await requestTransport<string>(transport, {
-					method: 'eth_getCode',
-					params: [parameters.address, parameters.blockTag ?? 'latest'],
-				}),
-			)
-			return result === '0x' ? undefined : result
-		},
+		getCode,
+		getBytecode: getCode,
 		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
 		getTransactionCount: async parameters =>
 			normalizeRpcBigInt(
@@ -1387,7 +1473,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					params: [getAddress(parameters.address), parameters.blockTag ?? 'latest'],
 				}),
 			),
-		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
+		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
 			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
 			const topics =
@@ -1396,6 +1482,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					? undefined
 					: encodeEventTopics({
 							abi: [event],
+							...(parameters.args === undefined ? {} : { args: parameters.args }),
 							eventName: event.name ?? 'event',
 						}))
 			const rawLogs = await requestTransport<unknown[]>(transport, {
@@ -1790,13 +1877,13 @@ function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
 	const retryDelay = options.retryDelay ?? RATE_LIMIT_RETRY_DELAY_MILLISECONDS
 	if (!Number.isSafeInteger(retryCount) || retryCount < 0) throw new Error('RPC retry count must be a non-negative safe integer')
 	if (!Number.isSafeInteger(retryDelay) || retryDelay < 0) throw new Error('RPC retry delay must be a non-negative safe integer')
-	return { retryCount, retryDelay }
+	return { ...(options.requestScheduler === undefined ? {} : { requestScheduler: options.requestScheduler }), retryCount, retryDelay }
 }
 
 function normalizeHttpTransportOptions(options: HttpTransportOptions = {}) {
 	const requestTimeout = options.requestTimeout ?? 30_000
 	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
-	return { ...normalizeTransportRetryOptions(options), requestTimeout }
+	return { ...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }), ...normalizeTransportRetryOptions(options), requestTimeout }
 }
 
 export function http(url: string, options?: HttpTransportOptions) {
@@ -1864,6 +1951,10 @@ export function toHex(value: bigint | number | string | Uint8Array, options: { s
 	return ensure0x(nobleBytesToHex(Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])))
 }
 
+export function stringToHex(value: string): Hex {
+	return toHex(value)
+}
+
 export function numberToBytes(value: bigint | number, options: { size?: number | undefined } = {}) {
 	const bytes = bigintToBytes(normalizeQuantityValue(value))
 	if (options.size === undefined) return bytes
@@ -1922,6 +2013,10 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	}
 }
 
+export function decodeFunctionResult<TAbi extends Abi, TFunctionName extends string>(parameters: { abi: TAbi; data: Hex; functionName: TFunctionName }): ContractFunctionResult<TAbi, TFunctionName> {
+	return decodeFunctionOutput(getNamedFunctionAbi(parameters.abi, parameters.functionName), parameters.data) as ContractFunctionResult<TAbi, TFunctionName>
+}
+
 function encodeDeploymentWithMicroEthSigner(abi: Abi, bytecode: Hex, constructorArguments: readonly unknown[]) {
 	const deploymentEncoder = deployContract as (...args: readonly unknown[]) => unknown
 	const encoded = deploymentEncoder(...[abi, bytecode, ...constructorArguments])
@@ -1965,15 +2060,46 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 	}
 }
 
-export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }) {
+export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }): readonly (Hex | readonly Hex[] | null)[] {
 	const eventAbi = getNamedEventAbi(parameters.abi, parameters.eventName)
-	return getEventDecoder(eventAbi)
-		.topics(normalizeEventTopicArgs(eventAbi, parameters.args))
-		.map((topic: string | null) => (topic === null ? null : ensure0x(topic)))
+	const decoder = getEventDecoder(eventAbi)
+	const inputs = eventAbi.inputs ?? []
+	const normalizedArgs = normalizeEventTopicArgs(eventAbi, parameters.args)
+	const usesFullInputArray = Array.isArray(parameters.args) && parameters.args.length === inputs.length
+	let indexedInputIndex = 0
+	const alternatives = inputs.flatMap((input, inputIndex) => {
+		const indexedPosition = indexedInputIndex
+		if (input.indexed === true) indexedInputIndex += 1
+		if (input.indexed !== true || input.type.includes('[') || input.type.startsWith('tuple')) return []
+		const argumentIndex = usesFullInputArray ? inputIndex : indexedPosition
+		let value: unknown
+		if (Array.isArray(parameters.args)) value = parameters.args[argumentIndex]
+		else if (parameters.args !== undefined && input.name !== undefined) value = Reflect.get(parameters.args, input.name)
+		return Array.isArray(value) ? [{ input, inputIndex, selectionIndex: Array.isArray(parameters.args) ? argumentIndex : inputIndex, values: value }] : []
+	})
+	if (alternatives.length === 0) return decoder.topics(normalizedArgs).map((topic: string | null) => (topic === null ? null : ensure0x(topic)))
+	const withAlternatives = (selected: ReadonlyMap<number, unknown>) =>
+		normalizeEventTopicArgs(
+			eventAbi,
+			Array.isArray(parameters.args)
+				? parameters.args.map((value, argumentIndex) => selected.get(argumentIndex) ?? value)
+				: Object.fromEntries(inputs.map((input, inputIndex) => [input.name as string, selected.get(inputIndex) ?? (parameters.args === undefined ? undefined : Reflect.get(parameters.args, input.name as string))])),
+		)
+	const defaults = new Map(alternatives.map(({ selectionIndex, values }) => [selectionIndex, values[0]]))
+	const topics: Array<Hex | readonly Hex[] | null> = decoder.topics(withAlternatives(defaults)).map((topic: string | null) => (topic === null ? null : ensure0x(topic)))
+	for (const { input, inputIndex, selectionIndex, values } of alternatives) {
+		const topicIndex = inputs.slice(0, inputIndex + 1).filter(candidate => candidate.indexed === true).length
+		topics[topicIndex] = values.map(value => {
+			const topic = decoder.topics(withAlternatives(new Map([...defaults, [selectionIndex, value]])))[topicIndex]
+			if (topic === undefined || topic === null) throw new Error(`Event topic ${topicIndex.toString()} could not be encoded for ${input.name ?? 'indexed input'}`)
+			return ensure0x(topic)
+		})
+	}
+	return topics
 }
 
 export function parseTransaction(serializedTransaction: Hex) {
-	const transaction = Transaction.fromHex(serializedTransaction)
+	const transaction = MicroTransaction.fromHex(serializedTransaction)
 	return {
 		chainId: 'chainId' in transaction.raw && typeof transaction.raw.chainId === 'bigint' ? transaction.raw.chainId : undefined,
 		data: normalizeHexData(transaction.raw.data),
@@ -1989,7 +2115,7 @@ export function parseTransaction(serializedTransaction: Hex) {
 }
 
 export async function recoverTransactionAddress(parameters: { serializedTransaction: Hex }) {
-	return getAddress(Transaction.fromHex(parameters.serializedTransaction).sender)
+	return getAddress(MicroTransaction.fromHex(parameters.serializedTransaction).sender)
 }
 
 export function privateKeyToAccount(privateKey: Hex) {
@@ -1997,7 +2123,7 @@ export function privateKeyToAccount(privateKey: Hex) {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
 		signTransaction: async parameters => {
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
-			const transaction = Transaction.prepare({
+			const transaction = MicroTransaction.prepare({
 				chainId: hexToBigInt(parameters.chainId) ?? 1n,
 				data: parameters.data ?? '0x',
 				gasLimit: hexToBigInt(parameters.gas) ?? 21_000n,
@@ -2179,6 +2305,10 @@ function parseParameterList(value: string) {
 
 export function parseAbiParameters(value: string) {
 	return parseParameterList(value)
+}
+
+export function parseAbi(values: readonly string[]): Abi {
+	return values.map(parseAbiItem)
 }
 
 export function parseAbiItem(value: string) {

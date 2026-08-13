@@ -13,11 +13,11 @@ import {
 } from './database.ts'
 import {
 	type Address,
+	type Block,
 	createPublicClient,
 	getAddress,
 	type Hash,
 	type Hex,
-	type HttpTransport,
 	http,
 	type Log,
 	type PublicClient,
@@ -25,6 +25,7 @@ import {
 	parseAbiItem,
 	type Transaction,
 	type TransactionReceipt,
+	type Transport,
 	zeroAddress,
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
@@ -36,6 +37,13 @@ type RpcBlockHeader = {
 	readonly hash: Hash
 	readonly parentHash: Hash
 	readonly timestamp: bigint
+}
+
+const requireRpcBlockHeader = (block: Block, blockNumber: bigint): RpcBlockHeader => {
+	if (block.hash === undefined || block.parentHash === undefined || block.number !== blockNumber) {
+		throw new Error(`RPC returned an invalid canonical header for block ${blockNumber}`)
+	}
+	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp }
 }
 
 const RPC_CONCURRENCY = 5
@@ -79,22 +87,7 @@ type TokenMetadataCalls = {
 	readonly symbol: () => Promise<string>
 }
 
-const unavailableMetadataErrors = new Set([
-	'AbiDecodingDataSizeInvalidError',
-	'AbiDecodingDataSizeTooSmallError',
-	'AbiDecodingZeroDataError',
-	'ContractFunctionRevertedError',
-	'ContractFunctionZeroDataError',
-	'IntegerOutOfRangeError',
-	'InvalidBytesLengthError',
-	'InvalidHexValueError',
-	'NegativeOffsetError',
-	'PositionOutOfBoundsError',
-	'RecursiveReadLimitExceededError',
-	'SizeExceedsPaddingSizeError',
-	'SizeOverflowError',
-	'SliceOffsetOutOfBoundsError',
-])
+const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError'])
 
 const errorChainIncludes = (error: unknown, names: ReadonlySet<string>): boolean => {
 	const seen = new Set<unknown>()
@@ -256,21 +249,16 @@ export const createRpcRequestQueue = (concurrency: number, maximumPending = RPC_
 	}
 }
 
-export const withRpcRequestQueue =
-	(transport: HttpTransport, queue: RpcRequestQueue): HttpTransport =>
-	(parameters) => {
-		const configured = transport(parameters)
-		return {
-			...configured,
-			request: async (request, options) => {
-				try {
-					return await queue.run(() => configured.request(request, options))
-				} catch (error) {
-					throw new RpcRequestMethodError(request.method, error)
-				}
-			},
+export const withRpcRequestQueue = (transport: Transport, queue: RpcRequestQueue): Transport => ({
+	...transport,
+	requestScheduler: async <TValue>(method: string, operation: () => Promise<TValue>): Promise<TValue> => {
+		try {
+			return await queue.run(() => (transport.requestScheduler === undefined ? operation() : transport.requestScheduler(method, operation)))
+		} catch (error) {
+			throw new RpcRequestMethodError(method, error)
 		}
-	}
+	},
+})
 
 const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY, RPC_MAX_PENDING)
 
@@ -615,13 +603,22 @@ export const addressActivityFrom = (
 }
 
 const requireLogPosition = (log: Log): { transactionHash: Hash; transactionIndex: number; logIndex: number; blockHash: Hash; blockNumber: bigint } => {
-	if (log.transactionHash === null || log.transactionIndex === null || log.logIndex === null || log.blockHash === null || log.blockNumber === null) {
+	if (
+		log.transactionHash === undefined ||
+		log.transactionIndex === undefined ||
+		log.logIndex === undefined ||
+		log.blockHash === undefined ||
+		log.blockNumber === undefined
+	) {
 		throw new Error('RPC returned a pending log while indexing a confirmed block')
 	}
+	const transactionIndex = Number(log.transactionIndex)
+	const logIndex = Number(log.logIndex)
+	if (!Number.isSafeInteger(transactionIndex) || !Number.isSafeInteger(logIndex)) throw new Error('RPC returned a log position outside the safe integer range')
 	return {
 		transactionHash: log.transactionHash,
-		transactionIndex: log.transactionIndex,
-		logIndex: log.logIndex,
+		transactionIndex,
+		logIndex,
 		blockHash: log.blockHash,
 		blockNumber: log.blockNumber,
 	}
@@ -1301,7 +1298,7 @@ class NetworkIndexer {
 		this.#database = database
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
-			const transport = http(rpcUrl, { batch: { batchSize: 50, wait: 0 }, timeout: 20_000, retryCount: 2 })
+			const transport = http(rpcUrl, { requestTimeout: 20_000, retryCount: 2 })
 			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue) })
 			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId(), number: index + 1 }
 		})
@@ -1309,6 +1306,10 @@ class NetworkIndexer {
 		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
 		this.#client = firstProvider.client
 		this.#rpcDiagnostics = createRpcDiagnosticContext(firstProvider)
+	}
+
+	async #getBlockHeader(blockNumber: bigint): Promise<RpcBlockHeader> {
+		return requireRpcBlockHeader(await this.#client.getBlock({ blockNumber }), blockNumber)
 	}
 
 	async run(): Promise<void> {
@@ -1462,13 +1463,13 @@ class NetworkIndexer {
 	async #reconcileReorg(): Promise<void> {
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
 		if (checkpoint === undefined) return
-		const remote = await this.#client.getBlock({ blockNumber: checkpoint.number })
+		const remote = await this.#getBlockHeader(checkpoint.number)
 		if (remote.hash === checkpoint.hash) return
 		const floor = reorgSearchFloor(this.#network.startBlock, checkpoint.number, this.#network.confirmationDepth)
 		for (let number = checkpoint.number - 1n; number >= floor; number--) {
 			const [storedHash, block] = await Promise.all([
 				this.#database.canonicalHash(this.#network.chainId, number, this.#requireLease()),
-				this.#client.getBlock({ blockNumber: number }),
+				this.#getBlockHeader(number),
 			])
 			if (storedHash !== undefined && storedHash === block.hash) {
 				await this.#assertLease()
@@ -1507,7 +1508,7 @@ class NetworkIndexer {
 						? undefined
 						: {
 								...deployment,
-								timestamp: new Date(Number((await readWithinBudget(() => this.#client.getBlock({ blockNumber: deployment.block }))).timestamp) * 1_000),
+								timestamp: new Date(Number((await readWithinBudget(() => this.#getBlockHeader(deployment.block))).timestamp) * 1_000),
 							}
 			} catch (error) {
 				if (rpcQueueSaturationFrom(error) !== undefined) throw error
@@ -1576,7 +1577,7 @@ class NetworkIndexer {
 		try {
 			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialContracts)
 			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
-			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#client.getBlock({ blockNumber }))
+			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#getBlockHeader(blockNumber))
 			const endHeader = headers.at(-1)
 			if (endHeader === undefined) throw new Error(`RPC did not return block ${segment.toBlock}`)
 			if (segment.endBlockHash !== undefined && endHeader.hash !== segment.endBlockHash)
@@ -1607,7 +1608,7 @@ class NetworkIndexer {
 		this.#mergeLogs(logsByBlock, segment.logs)
 		let expectedParentHash = checkpoint?.hash
 		if (expectedParentHash === undefined && requiresParentLookup(nextBlock, this.#network.startBlock)) {
-			expectedParentHash = (await this.#client.getBlock({ blockNumber: nextBlock - 1n })).hash
+			expectedParentHash = (await this.#getBlockHeader(nextBlock - 1n)).hash
 		}
 		while (nextBlock <= end && !this.#signal.aborted) {
 			const header = headers[Number(nextBlock - batchStart)]
@@ -1725,7 +1726,7 @@ class NetworkIndexer {
 	): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
 		const range = await queryCanonicalLogRange(
 			toBlock,
-			async () => (await this.#client.getBlock({ blockNumber: toBlock })).hash,
+			async () => (await this.#getBlockHeader(toBlock)).hash,
 			() => this.#queryLogs(toBlock, inputs, contracts),
 		)
 		return { logs: range.items, endBlockHash: range.endBlockHash }
@@ -1770,7 +1771,7 @@ class NetworkIndexer {
 				const contractMap = new Map(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
 				const range = await queryCanonicalLogRange(
 					rangeEnd,
-					async () => (await this.#client.getBlock({ blockNumber: rangeEnd })).hash,
+					async () => (await this.#getBlockHeader(rangeEnd)).hash,
 					async () => {
 						plan = await planDeploymentAwareLogScan(
 							contracts,
@@ -1778,7 +1779,7 @@ class NetworkIndexer {
 							rangeEnd,
 							this.#network.startBlock,
 							(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
-							async (blockNumber) => new Date(Number((await this.#client.getBlock({ blockNumber })).timestamp) * 1_000),
+							async (blockNumber) => new Date(Number((await this.#getBlockHeader(blockNumber)).timestamp) * 1_000),
 							(contract, error) =>
 								console.warn(
 									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${this.#rpcFailureReason(error)}`,
@@ -1903,11 +1904,13 @@ class NetworkIndexer {
 			})) {
 				requireReceiptPosition(receipt, block.hash, number)
 				if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
-				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === null)
+				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined)
 					throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
+				const transactionIndex = Number(transaction.transactionIndex)
+				if (!Number.isSafeInteger(transactionIndex)) throw new Error(`Transaction ${transaction.hash} index exceeds the safe integer range`)
 				receipts.push(receipt)
 				receiptByHash.set(receipt.transactionHash, receipt)
-				transactionByHash.set(transaction.hash, { transaction, index: transaction.transactionIndex })
+				transactionByHash.set(transaction.hash, { transaction, index: transactionIndex })
 			}
 		}
 		await fetchMissingEvidence()
@@ -1937,13 +1940,14 @@ class NetworkIndexer {
 				}
 			}
 			for (const coordinator of discovered.filter((contract) => contract.kind === 'priceCoordinator')) {
-				const registryAddress = await this.#client.readContract({
+				const registryResult = await this.#client.readContract({
 					address: coordinator.address,
 					abi: priceCoordinatorDependenciesAbi,
 					functionName: 'liquidationApprovalRegistry',
 					blockNumber: number,
 				})
-				const registry = getAddress(registryAddress)
+				if (typeof registryResult !== 'string') throw new Error(`${coordinator.label}.liquidationApprovalRegistry returned an invalid address`)
+				const registry = getAddress(registryResult)
 				if (!contracts.has(registry.toLowerCase())) {
 					const metadata: ContractMetadata = {
 						address: registry,
@@ -2033,7 +2037,7 @@ class NetworkIndexer {
 			const receipt = receiptByHash.get(hash)
 			if (pair === undefined || receipt === undefined) throw new Error(`Block ${number} did not contain relevant transaction ${hash}`)
 			if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${hash} did not succeed`)
-			const to = pair.transaction.to === null ? null : getAddress(pair.transaction.to)
+			const to = pair.transaction.to === null || pair.transaction.to === undefined ? null : getAddress(pair.transaction.to)
 			storedTransactions.push({
 				hash,
 				transactionIndex: pair.index,
@@ -2056,7 +2060,7 @@ class NetworkIndexer {
 		}
 
 		const finalizedThrough = observedHead > this.#network.confirmationDepth ? observedHead - this.#network.confirmationDepth : 0n
-		await confirmCanonicalBlock(number, block.hash, async (blockNumber) => (await this.#client.getBlock({ blockNumber })).hash)
+		await confirmCanonicalBlock(number, block.hash, async (blockNumber) => (await this.#getBlockHeader(blockNumber)).hash)
 		return {
 			contracts,
 			tokenMetadata,
@@ -2099,18 +2103,22 @@ class NetworkIndexer {
 						owner,
 						assetAddress: asset.address,
 						assetKind: asset.kind,
-						balance: await this.#client.readContract({
-							address: asset.address,
-							abi: erc20BalanceAbi,
-							functionName: 'balanceOf',
-							args: [owner],
-							blockNumber,
-						}),
+						balance: await (async () => {
+							const result = await this.#client.readContract({
+								address: asset.address,
+								abi: erc20BalanceAbi,
+								functionName: 'balanceOf',
+								args: [owner],
+								blockNumber,
+							})
+							if (typeof result !== 'bigint') throw new Error(`${asset.address} balanceOf returned an invalid value`)
+							return result
+						})(),
 					}))),
 				)
 				return balances
 			},
-			async (number) => (await this.#client.getBlock({ blockNumber: number })).hash,
+			async (number) => (await this.#getBlockHeader(number)).hash,
 			async (balances) => {
 				await this.#assertLease()
 				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease())
@@ -2120,9 +2128,21 @@ class NetworkIndexer {
 
 	async #readTokenMetadata(address: Address, blockNumber: bigint): Promise<TokenMetadata> {
 		return await readTokenMetadata(address, blockNumber, {
-			decimals: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber }),
-			name: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber }),
-			symbol: () => this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber }),
+			decimals: async () => {
+				const result = await this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'decimals', blockNumber })
+				if (typeof result !== 'bigint' || result > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('ERC-20 decimals returned an invalid value')
+				return Number(result)
+			},
+			name: async () => {
+				const result = await this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'name', blockNumber })
+				if (typeof result !== 'string') throw new Error('ERC-20 name returned an invalid value')
+				return result
+			},
+			symbol: async () => {
+				const result = await this.#client.readContract({ address, abi: erc20MetadataAbi, functionName: 'symbol', blockNumber })
+				if (typeof result !== 'string') throw new Error('ERC-20 symbol returned an invalid value')
+				return result
+			},
 		})
 	}
 }

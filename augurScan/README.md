@@ -47,7 +47,7 @@ Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL m
 
 `POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
 
-The standalone package centralizes its `viem` runtime dependency in `src/viem-runtime.js`; application and test code import Ethereum primitives through `src/ethereum.ts`. `bun run check:ethereum-imports` enforces that boundary across TypeScript and JavaScript sources without requiring parent-repository files in the Docker build context.
+The scanner imports its Ethereum primitives through `src/ethereum.ts`, which reuses the repository's `micro-eth-signer`-based shared adapter. The adapter performs strict JSON-RPC envelope validation and does not batch unrelated requests, so malformed provider responses cannot be mistaken for missing blocks. `bun run check:ethereum-imports` rejects direct Viem imports. The Docker image copies only the scanner inputs and this shared adapter source from the repository build context.
 
 The default test suite runs without infrastructure. To exercise migration, checkpoint restart, dynamic discovery persistence, reorg/orphan retention, and current-chain API results, start a separate disposable PostgreSQL container and run the integration test against it:
 
@@ -71,7 +71,7 @@ Regenerate the committed ABI snapshot after contract event/function changes:
 bun run metadata:snapshot
 ```
 
-The script reads Solidity and deployment-address sources from the parent repository, then refreshes `config/abis.json` and the mainnet/Sepolia manifests. It only writes inside `augurScan/config`; the production image does not depend on parent files.
+The script reads Solidity and deployment-address sources from the parent repository, then refreshes `config/abis.json` and the mainnet/Sepolia manifests. It only writes inside `augurScan/config`; the production image uses the generated snapshot and does not copy those Solidity or deployment sources.
 
 ## Indexing model
 

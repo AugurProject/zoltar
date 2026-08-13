@@ -17,8 +17,8 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: augurScan/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:

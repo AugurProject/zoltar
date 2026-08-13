@@ -1,1 +1,1 @@
-export * from './viem-runtime.js'
+export * from '../../shared/ts/ethereum.ts'

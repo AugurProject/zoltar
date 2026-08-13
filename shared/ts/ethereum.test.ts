@@ -11,6 +11,7 @@ import {
 	encodeDeployData,
 	encodeEventTopics,
 	encodeFunctionData,
+	formatAbiItem,
 	formatEther,
 	formatUnits,
 	getAddress,
@@ -410,6 +411,57 @@ describe('shared ethereum compatibility layer', () => {
 		expect(isAddress(OWNER_ADDRESS)).toBe(true)
 		expect(isAddress(`0X${OWNER_ADDRESS.slice(2)}`)).toBe(false)
 		expect(concatHex(['0x12', '0x34', '0xab'])).toBe('0x1234ab')
+	})
+
+	test('ABI formatting preserves mutability and named tuple components', () => {
+		expect(
+			formatAbiItem({
+				inputs: [
+					{
+						components: [
+							{ name: 'amount', type: 'uint256' },
+							{ name: 'owner', type: 'address' },
+						],
+						name: 'item',
+						type: 'tuple',
+					},
+				],
+				name: 'inspect',
+				outputs: [
+					{
+						components: [
+							{ name: 'ok', type: 'bool' },
+							{ name: 'id', type: 'bytes32' },
+						],
+						name: 'result',
+						type: 'tuple',
+					},
+				],
+				stateMutability: 'view',
+				type: 'function',
+			}),
+		).toBe('function inspect((uint256 amount, address owner) item) view returns ((bool ok, bytes32 id) result)')
+		expect(formatAbiItem({ inputs: [{ name: 'amount', type: 'uint256' }], name: 'deposit', outputs: [], stateMutability: 'payable', type: 'function' })).toBe('function deposit(uint256 amount) payable')
+	})
+
+	test('getLogs encodes alternative indexed values as a JSON-RPC topic set', async () => {
+		const id1 = `0x${'11'.repeat(32)}` satisfies Hex
+		const id2 = `0x${'22'.repeat(32)}` satisfies Hex
+		const event = parseAbiItem('event Swap(bytes32 indexed id,address indexed sender)')
+		const calls: { method: string; params: unknown }[] = []
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method === 'eth_getLogs') return []
+					throw new Error(`Unexpected method: ${method}`)
+				}, calls),
+			),
+		})
+
+		await client.getLogs({ event, args: { id: [id1, id2] } })
+		const parameters = getArrayEntry(calls[0]?.params, 0, 'eth_getLogs params')
+		const topics = getObjectEntry(parameters, 'topics', 'eth_getLogs filter')
+		expect(topics).toEqual([encodeEventTopics({ abi: [event], eventName: 'Swap' })[0], [id1, id2], null])
 	})
 
 	test('overloaded function selection resolves by signature and argument count', () => {
@@ -937,6 +989,14 @@ describe('shared ethereum compatibility layer', () => {
 				blockNumber: 1n,
 			}),
 		).rejects.toThrow('RPC returned an invalid hash')
+	})
+
+	test('public client rejects blocks without a required timestamp', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
 	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
@@ -1512,6 +1572,24 @@ describe('shared ethereum compatibility layer', () => {
 			globalThis.fetch = originalFetch
 		}
 
+		expect(responses).toHaveLength(0)
+	})
+
+	test('HTTP transport retries provider JSON-RPC rate-limit errors', async () => {
+		const responses = [Response.json({ error: { code: -32_005, message: 'project ID request rate exceeded' }, id: 1, jsonrpc: '2.0' }), Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' })]
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: http('https://rpc.example.test', {
+				fetchFn: async () => {
+					const response = responses.shift()
+					if (response === undefined) throw new Error('Unexpected HTTP RPC request')
+					return response
+				},
+				retryDelay: 0,
+			}),
+		})
+
+		expect(await client.getCode({ address: TOKEN_ADDRESS })).toBe('0x1234')
 		expect(responses).toHaveLength(0)
 	})
 
