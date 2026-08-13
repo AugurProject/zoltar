@@ -77,10 +77,19 @@ try {
 	await command('Page.addScriptToEvaluateOnNewDocument', {
 		source: `(() => {
 			const originalFetch = window.fetch
+			window.__qaPauseRequestCount = 0
+			window.__qaStateRequestCount = 0
 			window.fetch = (input, init) => {
 				const path = typeof input === 'string' ? new URL(input, window.location.href).pathname : input instanceof Request ? new URL(input.url).pathname : String(input)
+				if (path === '/api/state' && init?.method === undefined) window.__qaStateRequestCount += 1
 				if (new URL(window.location.href).searchParams.get('qaState') === 'unavailable' && path === '/api/state' && init?.method === undefined) {
 					return Promise.resolve(new Response(JSON.stringify({ error: 'fixture state endpoint unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 }))
+				}
+				if (new URL(window.location.href).searchParams.get('qaPause') === 'pending' && path === '/api/paused' && init?.method === 'PUT') {
+					window.__qaPauseRequestCount += 1
+					return new Promise(resolve => {
+						window.__qaReleasePause = () => resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }))
+					})
 				}
 				return originalFetch(input, init)
 			}
@@ -202,9 +211,76 @@ try {
 		unconfiguredDesktop: desktop,
 		unconfiguredMobile: unconfiguredNetworkMobile,
 	}
+	const pausePending: Record<string, unknown> = {}
+	for (const mobile of [false, true]) {
+		const width = mobile ? 390 : 1440
+		const height = mobile ? 844 : 900
+		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
+		await navigateToDashboard(`http://127.0.0.1:4183/?qaPause=pending&pending=${mobile ? 'mobile' : 'desktop'}`)
+		await Bun.sleep(1_000)
+		await evaluate(`document.querySelector('#pause-button')?.click()`)
+		await Bun.sleep(150)
+		await evaluate(`document.querySelector('#refresh-button')?.click()`)
+		await Bun.sleep(250)
+		await evaluate(`document.querySelector('#pause-button')?.click()`)
+		const state = await evaluate(`(() => {
+			const pause = document.querySelector('#pause-button')
+			const refresh = document.querySelector('#refresh-button')
+			if (!(pause instanceof HTMLButtonElement) || !(refresh instanceof HTMLButtonElement)) return undefined
+			return {
+				bodyScrollWidth: document.body.scrollWidth,
+				pauseBusy: pause.getAttribute('aria-busy'),
+				pauseDisabled: pause.disabled,
+				pauseLabel: pause.textContent,
+				pauseRequests: window.__qaPauseRequestCount,
+				refreshBusy: refresh.hasAttribute('aria-busy'),
+				refreshDisabled: refresh.disabled,
+				refreshLabel: refresh.textContent,
+				runStatus: document.querySelector('#run-status-badge')?.textContent,
+				scrollX: window.scrollX,
+				stateRequests: window.__qaStateRequestCount
+			}
+		})()`)
+		if (
+			typeof state !== 'object' ||
+			state === null ||
+			!('bodyScrollWidth' in state) ||
+			typeof state.bodyScrollWidth !== 'number' ||
+			state.bodyScrollWidth > width ||
+			!('pauseBusy' in state) ||
+			state.pauseBusy !== 'true' ||
+			!('pauseDisabled' in state) ||
+			state.pauseDisabled !== true ||
+			!('pauseLabel' in state) ||
+			state.pauseLabel !== 'Pausing…' ||
+			!('pauseRequests' in state) ||
+			state.pauseRequests !== 1 ||
+			!('refreshBusy' in state) ||
+			state.refreshBusy !== false ||
+			!('refreshDisabled' in state) ||
+			state.refreshDisabled !== false ||
+			!('refreshLabel' in state) ||
+			state.refreshLabel !== 'Refresh' ||
+			!('runStatus' in state) ||
+			state.runStatus !== 'Running' ||
+			!('scrollX' in state) ||
+			state.scrollX !== 0 ||
+			!('stateRequests' in state) ||
+			typeof state.stateRequests !== 'number' ||
+			state.stateRequests < 2
+		) {
+			throw new Error(`Liquidator pending Pause state is not single-flight: ${JSON.stringify(state)}`)
+		}
+		pausePending[mobile ? 'mobile' : 'desktop'] = {
+			screenshot: await capture(`liquidator-pause-pending-${mobile ? 'mobile' : 'desktop'}`, width, height),
+			state,
+		}
+		await evaluate(`window.__qaReleasePause?.()`)
+		await Bun.sleep(300)
+	}
 	const readConnectionState = () =>
 		evaluate(`(() => {
-			const safetyVisible = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'pause-button'].every(id => {
+			const safetyVisible = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'refresh-button', 'pause-button'].every(id => {
 				const target = document.getElementById(id)
 				if (!(target instanceof HTMLElement)) return false
 				const rect = target.getBoundingClientRect()
@@ -218,6 +294,8 @@ try {
 				network: document.querySelector('#network-badge')?.textContent,
 				noticeCopy: document.querySelector('#global-error')?.textContent,
 				pauseDisabled: document.querySelector('#pause-button')?.disabled,
+				refreshDisabled: document.querySelector('#refresh-button')?.disabled,
+				refreshText: document.querySelector('#refresh-button')?.textContent,
 				runStatus: document.querySelector('#run-status-badge')?.textContent,
 				safetyVisible,
 				settingsDisabled: ['network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer'].every(id => {
@@ -236,6 +314,10 @@ try {
 		await navigateToDashboard(`http://127.0.0.1:4183/?qaState=unavailable&connection=initial-${mobile ? 'mobile' : 'desktop'}`)
 		await Bun.sleep(1_000)
 		const initialFailure = await readConnectionState()
+		const stateRequestsBeforeManualRefresh = await evaluate(`window.__qaStateRequestCount`)
+		await evaluate(`document.querySelector('#refresh-button')?.click()`)
+		await Bun.sleep(250)
+		const stateRequestsAfterManualRefresh = await evaluate(`window.__qaStateRequestCount`)
 		if (
 			typeof initialFailure !== 'object' ||
 			initialFailure === null ||
@@ -247,6 +329,10 @@ try {
 			initialFailure.network !== 'Mainnet · chain 1 · unverified' ||
 			!('pauseDisabled' in initialFailure) ||
 			initialFailure.pauseDisabled !== true ||
+			!('refreshDisabled' in initialFailure) ||
+			initialFailure.refreshDisabled !== false ||
+			!('refreshText' in initialFailure) ||
+			initialFailure.refreshText !== 'Refresh' ||
 			!('runStatus' in initialFailure) ||
 			initialFailure.runStatus !== 'Disconnected' ||
 			!('settingsDisabled' in initialFailure) ||
@@ -259,7 +345,10 @@ try {
 			typeof initialFailure.bodyScrollWidth !== 'number' ||
 			initialFailure.bodyScrollWidth > width ||
 			!('scrollX' in initialFailure) ||
-			initialFailure.scrollX !== 0
+			initialFailure.scrollX !== 0 ||
+			typeof stateRequestsBeforeManualRefresh !== 'number' ||
+			typeof stateRequestsAfterManualRefresh !== 'number' ||
+			stateRequestsAfterManualRefresh !== stateRequestsBeforeManualRefresh + 1
 		) {
 			throw new Error(`Initial Liquidator state-request failure is unsafe: ${JSON.stringify(initialFailure)}`)
 		}
@@ -286,6 +375,10 @@ try {
 			postSuccessFailure.noticeCopy.includes('fixture state endpoint unavailable') ||
 			!('pauseDisabled' in postSuccessFailure) ||
 			postSuccessFailure.pauseDisabled !== false ||
+			!('refreshDisabled' in postSuccessFailure) ||
+			postSuccessFailure.refreshDisabled !== false ||
+			!('refreshText' in postSuccessFailure) ||
+			postSuccessFailure.refreshText !== 'Refresh' ||
 			!('runStatus' in postSuccessFailure) ||
 			postSuccessFailure.runStatus !== 'Disconnected' ||
 			!('settingsDisabled' in postSuccessFailure) ||
@@ -438,6 +531,7 @@ try {
 		errorOnly: { desktop: errorOnlyDesktop, mobile: errorOnlyMobile, state: errorOnlyState },
 		expandedAddressDesktop,
 		networkStates,
+		pausePending,
 		pausedDesktop,
 		pausedMobile,
 		recoveryDesktop,
@@ -643,7 +737,7 @@ try {
 	})()`)
 	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0, 'settings')
 	const deepScrollSafety = await evaluate(`(() => {
-		const ids = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'pause-button']
+		const ids = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'refresh-button', 'pause-button']
 		return Object.fromEntries(ids.map(id => {
 			const target = document.getElementById(id)
 			if (!(target instanceof HTMLElement)) return [id, { visible: false }]

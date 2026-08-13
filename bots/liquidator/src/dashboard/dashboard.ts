@@ -1,14 +1,11 @@
 type Activity = {
 	at: string
 	details?: string
-	hash?: string
-	kind: string
 	message: string
 	status: string
 }
 
 type Vault = {
-	address: string
 	capacityOwnershipRep: string
 	openInterestDisplay: string
 	healthBps?: string
@@ -16,20 +13,13 @@ type Vault = {
 	claimableFeesEth: string
 }
 
-type Candidate = {
-	bonusValueEth: string
-	requestedDebtEth: string
-	target: string
-	topUpRep: string
-}
-
 type Pool = {
 	knownVaultCount: string
 	address: string
 	approvedUniverse: boolean
+	bestCandidateBonusValueEth?: string
 	botVault: Vault
-	candidates: Candidate[]
-	settlementCollateralEth: string
+	candidateCount: number
 	centralizedPriceAllowed: boolean
 	centralizedPriceDeviationBps?: string
 	isPriceValid: boolean
@@ -45,17 +35,14 @@ type Pool = {
 }
 
 type Universe = {
-	approved: boolean
 	forkedPoolCount: number
 	forkQuestionId: string
-	forkTime: string
 	id: string
 	migratableVaultCount: number
 	operationalPoolCount: number
 	outcomeIndex?: string
 	parentId?: string
 	poolCount: number
-	repToken: string
 	selectedPoolCount: number
 }
 
@@ -113,10 +100,9 @@ type Snapshot = {
 		walletRep: string
 	}
 	paused: boolean
-	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
+	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
 	pools: Pool[]
 	scanning: boolean
-	status: string
 	marketSources: MarketSourceRow[]
 	universes: Universe[]
 	wallet?: string
@@ -177,6 +163,7 @@ const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
 const attentionBadge = element('attention-badge', HTMLAnchorElement)
+const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const lastScan = element('last-scan', HTMLParagraphElement)
@@ -211,14 +198,23 @@ let marketSourceProbeRows: MarketSourceRow[] | undefined
 let initialFragmentApplied = false
 let stateConnected = false
 let configurationConnected = false
+let pauseRequestPending: boolean | undefined
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
 
 function setMutationControlsEnabled(enabled: boolean) {
 	const configurationAvailable = enabled && currentConfiguration !== undefined
 	const resumeAvailable = configurationAvailable && configurationConnected && currentConfiguration?.network !== undefined
-	pauseButton.disabled = currentSnapshot === undefined || (currentSnapshot.paused && !resumeAvailable)
-	confirmResume.disabled = !resumeAvailable
+	const paused = currentSnapshot?.paused
+	const pendingLabel = pauseRequestPending === true ? 'Pausing…' : 'Resuming…'
+	pauseButton.textContent = pauseRequestPending === undefined ? (paused === true ? 'Resume' : 'Pause') : pendingLabel
+	pauseButton.disabled = pauseRequestPending !== undefined || currentSnapshot === undefined || (paused === true && !resumeAvailable)
+	pauseButton.toggleAttribute('aria-busy', pauseRequestPending !== undefined)
+	if (pauseRequestPending !== undefined) pauseButton.setAttribute('aria-busy', 'true')
+	confirmResume.textContent = pauseRequestPending === false ? 'Resuming…' : 'Resume bot'
+	confirmResume.disabled = pauseRequestPending !== undefined || !resumeAvailable
+	confirmResume.toggleAttribute('aria-busy', pauseRequestPending === false)
+	if (pauseRequestPending === false) confirmResume.setAttribute('aria-busy', 'true')
 	networkFields.disabled = !configurationAvailable
 	marketConfigurationFields.disabled = !configurationAvailable
 	strategyFields.disabled = !configurationAvailable
@@ -864,7 +860,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
 				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCapacityOwnershipRep} REP capacity ownership · ${pool.knownVaultCount} known vaults`)),
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.capacityOwnershipRep} REP capacity ownership · ${pool.botVault.openInterestDisplay} ETH open interest · ${pool.botVault.claimableFeesEth} ETH fees`)),
-				cell(stacked(pool.candidates.length.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.candidates[0] === undefined ? 'No executable target' : `${pool.candidates[0].bonusValueEth} ETH best bonus`)),
+				cell(stacked(pool.candidateCount.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.bestCandidateBonusValueEth === undefined ? 'No executable target' : `${pool.bestCandidateBonusValueEth} ETH best bonus`)),
 			]
 			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
 			const headings = ['pool-selected-heading', 'pool-address-heading', 'pool-question-heading', 'pool-oracle-heading', 'pool-totals-heading', 'pool-vault-heading', 'pool-targets-heading']
@@ -916,6 +912,7 @@ function renderActivities(activities: Activity[]) {
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	stateConnected = true
+	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
 	setMutationControlsEnabled(true)
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
@@ -926,8 +923,6 @@ function render(snapshot: Snapshot) {
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
 	attentionBadge.href = snapshot.pendingTransactions.length > 0 ? '#recovery' : snapshot.error !== undefined ? '#global-error' : snapshot.alerts.length > 0 ? '#operations' : '#overview'
-	pauseButton.textContent = snapshot.paused ? 'Resume' : 'Pause'
-	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
@@ -1204,10 +1199,10 @@ function closeResumePreflight() {
 }
 
 async function changePaused(paused: boolean) {
-	if (currentSnapshot === undefined || (!paused && (!stateConnected || !configurationConnected || currentConfiguration?.network === undefined))) return
-	pauseButton.disabled = true
-	confirmResume.disabled = true
-	actionStatus(pauseStatus, paused ? 'Pausing…' : 'Resuming…')
+	if (pauseRequestPending !== undefined || currentSnapshot === undefined || (!paused && (!stateConnected || !configurationConnected || currentConfiguration?.network === undefined))) return
+	pauseRequestPending = paused
+	setMutationControlsEnabled(stateConnected)
+	actionStatus(pauseStatus, '')
 	try {
 		await put('/api/paused', { paused })
 		await refresh()
@@ -1216,6 +1211,7 @@ async function changePaused(paused: boolean) {
 	} catch (error) {
 		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.'), true)
 	} finally {
+		pauseRequestPending = undefined
 		setMutationControlsEnabled(stateConnected)
 	}
 }
@@ -1355,21 +1351,31 @@ clearSignerButton.addEventListener('click', async () => {
 let refreshInFlight: Promise<void> | undefined
 let refreshQueued = false
 
+function setRefreshControlPending(pending: boolean) {
+	refreshButton.disabled = pending
+	refreshButton.textContent = pending ? 'Refreshing…' : 'Refresh'
+	refreshButton.toggleAttribute('aria-busy', pending)
+	if (pending) refreshButton.setAttribute('aria-busy', 'true')
+}
+
 function refresh() {
 	if (refreshInFlight !== undefined) {
 		refreshQueued = true
 		return refreshInFlight
 	}
-	refreshInFlight = (async () => {
+	const operation = (async () => {
 		refreshQueued = false
 		await performRefresh()
 		while (refreshQueued) {
 			refreshQueued = false
 			await performRefresh()
 		}
-	})().finally(() => {
+	})()
+	refreshInFlight = operation.finally(() => {
 		refreshInFlight = undefined
+		setRefreshControlPending(false)
 	})
+	setRefreshControlPending(true)
 	return refreshInFlight
 }
 
@@ -1407,5 +1413,6 @@ async function loadConfiguration() {
 }
 
 void loadConfiguration()
+refreshButton.addEventListener('click', () => void refresh())
 void refresh()
 setInterval(refresh, 3_000)

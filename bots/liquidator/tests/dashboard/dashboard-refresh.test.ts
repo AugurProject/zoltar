@@ -101,7 +101,7 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 				address: '0x1111111111111111111111111111111111111111',
 				approvedUniverse: true,
 				botVault: { address: '0x2', capacityOwnershipRep: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' },
-				candidates: [],
+				candidateCount: 0,
 				settlementCollateralEth: '0',
 				centralizedPriceAllowed: true,
 				isPriceValid: true,
@@ -144,7 +144,7 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	browsers.push(browser)
 	const page = browser.newPage()
 	page.url = server.url.href
-	page.content = await (await fetch(server.url)).text()
+	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
 	const window = page.mainFrame.window
 	Reflect.set(window, 'Boolean', Boolean)
 	Reflect.set(window, 'AbortController', AbortController)
@@ -176,6 +176,7 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	let stateRequestFailure = initialStateRequestFailure
 	let hangNextStateRequest = false
 	let releaseStateRequest: (() => void) | undefined
+	let releasePauseRequest: (() => void) | undefined
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
@@ -236,7 +237,11 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 			}
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
-		if (url.pathname === '/api/paused') pauseRequests.push(JSON.parse(String(init?.body)))
+		if (url.pathname === '/api/paused') {
+			const request: unknown = JSON.parse(String(init?.body))
+			pauseRequests.push(request)
+			if (releasePauseRequest !== undefined) await new Promise<void>(resolve => (releasePauseRequest = resolve))
+		}
 		return new window.Response('{}', { headers: { 'content-type': 'application/json' } })
 	}
 	page.evaluate(await (await fetch(new URL('/dashboard.js', server.url))).text())
@@ -275,6 +280,14 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 			releaseStateRequest = undefined
 			release?.()
 		},
+		suspendNextPauseRequest: () => {
+			releasePauseRequest = () => undefined
+		},
+		releasePauseRequest: () => {
+			const release = releasePauseRequest
+			releasePauseRequest = undefined
+			release?.()
+		},
 		suspendNextApprovedUniverseRequest: () => {
 			releaseApprovedUniverseRequest = () => undefined
 		},
@@ -297,6 +310,58 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('provides a durable manual refresh action across success and failure', async () => {
+		const page = await dashboard()
+		const refreshButton = page.window.document.getElementById('refresh-button')
+		if (!(refreshButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected refresh control')
+		const before = page.stateRequestCount()
+
+		refreshButton.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.stateRequestCount()).toBe(before + 1)
+		expect(refreshButton.disabled).toBe(false)
+		expect(refreshButton.textContent).toBe('Refresh')
+		expect(refreshButton.hasAttribute('aria-busy')).toBe(false)
+
+		page.setStateRequestFailure(true)
+		refreshButton.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.stateRequestCount()).toBe(before + 2)
+		expect(refreshButton.disabled).toBe(false)
+		expect(refreshButton.textContent).toBe('Refresh')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+	})
+
+	test('keeps a run-state mutation single-flight across an intervening successful poll', async () => {
+		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
+		const pauseButton = page.window.document.getElementById('pause-button')
+		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause control')
+		page.suspendNextPauseRequest()
+
+		pauseButton.click()
+		await Bun.sleep(1)
+		expect(page.pauseRequests).toEqual([{ paused: true }])
+		expect(pauseButton.disabled).toBe(true)
+		expect(pauseButton.textContent).toBe('Pausing…')
+		expect(pauseButton.getAttribute('aria-busy')).toBe('true')
+
+		await page.refresh()
+		expect(pauseButton.disabled).toBe(true)
+		expect(pauseButton.textContent).toBe('Pausing…')
+		pauseButton.click()
+		expect(page.pauseRequests).toHaveLength(1)
+
+		page.setSnapshot(state(undefined, [], { paused: true }))
+		page.releasePauseRequest()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(pauseButton.disabled).toBe(false)
+		expect(pauseButton.textContent).toBe('Resume')
+		expect(pauseButton.hasAttribute('aria-busy')).toBe(false)
+	})
+
 	test('makes initial and post-success state request failures explicit and recovers', async () => {
 		const mainnet = { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' as const }
 		const initialFailure = await dashboard(configuration(['1'], mainnet), state(), true)

@@ -49,38 +49,117 @@ function publicOperatorFailure(error: string, fallback = 'The operation returned
 }
 
 function containsSensitiveOperatorDetail(value: string) {
-	return /https?:\/\/[^\s/:]+:[^@\s]+@/i.test(value) || /(?:api[_-]?key|authorization|bearer|password|secret|token)\s*[=:]\s*\S+/i.test(value)
+	return /https?:\/\/[^\s/:]+:[^@\s]+@/i.test(value) || /(?:api[_-]?key|authorization|bearer|password|secret|token)\s*[=:]\s*\S+/i.test(value) || /(?:calldata|data|serializedTransaction|transactionData)\s*[=:]\s*0x[0-9a-f]{16,}/i.test(value) || /(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value)
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
+}
+
+function publicFields(value: unknown, fields: readonly string[]) {
+	const source = record(value)
+	const result: Record<string, unknown> = {}
+	if (source === undefined) return result
+	for (const field of fields) {
+		if (!Object.hasOwn(source, field)) continue
+		const candidate = source[field]
+		if (candidate !== undefined) result[field] = candidate
+	}
+	return result
+}
+
+function publicList(value: unknown, transform: (entry: unknown) => Record<string, unknown>) {
+	return Array.isArray(value) ? value.flatMap(entry => (record(entry) === undefined ? [] : [transform(entry)])) : []
+}
+
+function publicActivityDetails(kind: unknown, status: unknown, details: string) {
+	if (kind === 'error' || status === 'failed') return publicOperatorFailure(details)
+	if (containsSensitiveOperatorDetail(details)) return undefined
+	if (kind === 'scan' && /^block=\d+$/.test(details)) return details
+	if (kind !== 'configuration') return undefined
+	if (details === 'Set the chain and RPC endpoints in the dashboard') return details
+	if (/^\d+(?:, \d+)*$/.test(details)) return details
+	if (/^\d+ source\(s\) responded$/.test(details)) return details
+	if (/^\d+ CEX source\(s\) across \d+ REP asset\(s\)$/.test(details)) return details
+	if (/^chain=\d+ (?:factory=0x[0-9a-f]{40}|readRpc=[a-z0-9.:[\]-]+)$/i.test(details)) return details
+	return undefined
 }
 
 function publicActivity(value: unknown) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
-	const activity = { ...value }
-	const details = Reflect.get(value, 'details')
-	const kind = Reflect.get(value, 'kind')
-	const message = Reflect.get(value, 'message')
-	const status = Reflect.get(value, 'status')
-	if (typeof details === 'string' && (kind === 'error' || status === 'failed' || containsSensitiveOperatorDetail(details))) activity['details'] = publicOperatorFailure(details)
+	const source = record(value)
+	if (source === undefined) return {}
+	const activity = publicFields(source, ['at', 'message', 'status'])
+	const details = source['details']
+	const kind = source['kind']
+	const message = source['message']
+	const status = source['status']
+	if (typeof details === 'string') {
+		const safeDetails = publicActivityDetails(kind, status, details)
+		if (safeDetails !== undefined) activity['details'] = safeDetails
+	}
 	if (typeof message === 'string' && containsSensitiveOperatorDetail(message)) activity['message'] = 'An operator activity requires attention. Check protected bot logs for details.'
 	return activity
 }
 
 function publicAlert(value: unknown) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
-	const alert = { ...value }
-	const message = Reflect.get(value, 'message')
+	const source = record(value)
+	if (source === undefined) return {}
+	const alert = publicFields(source, ['message', 'severity'])
+	const message = source['message']
 	if (typeof message === 'string' && containsSensitiveOperatorDetail(message)) alert['message'] = publicOperatorFailure(message, 'An operator alert requires attention. Check protected bot logs for details.')
 	return alert
 }
 
+function publicCentralizedMarket(value: unknown) {
+	const market = publicFields(value, ['askDepthEth', 'bidDepthEth', 'priceRepPerEth', 'reasons', 'reliable'])
+	const source = record(value)
+	if (source !== undefined && Array.isArray(source['observations'])) {
+		market['observations'] = publicList(source['observations'], observation => publicFields(observation, ['askDepthEth', 'bidDepthEth', 'exchangeId', 'observedAt', 'priceRepPerEth', 'repMarket']))
+	}
+	return market
+}
+
+function publicMarketConsensus(value: unknown) {
+	const consensus = publicFields(value, ['priceRepPerEth', 'reasons', 'reliable', 'sourceCount'])
+	const source = record(value)
+	if (source === undefined) return consensus
+	for (const group of ['cex', 'dex'] as const) {
+		if (record(source[group]) !== undefined) consensus[group] = publicFields(source[group], ['askDepthEth', 'bidDepthEth', 'priceRepPerEth', 'reliable', 'sourceCount'])
+	}
+	return consensus
+}
+
+function publicPool(value: unknown) {
+	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep', 'truncatedVaults', 'universeId'])
+	const source = record(value)
+	if (source === undefined) return pool
+	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipRep', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
+	const candidates = source['candidates']
+	pool['candidateCount'] = Array.isArray(candidates) ? candidates.length : 0
+	const bestCandidate = Array.isArray(candidates) ? record(candidates[0]) : undefined
+	if (typeof bestCandidate?.['bonusValueEth'] === 'string') pool['bestCandidateBonusValueEth'] = bestCandidate['bonusValueEth']
+	return pool
+}
+
 function publicOperatorSnapshot(value: unknown) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
-	const snapshot = { ...value }
-	const error = Reflect.get(value, 'error')
-	const activities = Reflect.get(value, 'activities')
-	const alerts = Reflect.get(value, 'alerts')
+	const source = record(value)
+	if (source === undefined) return {}
+	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'paused', 'scanning', 'wallet'])
+	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
-	if (Array.isArray(activities)) snapshot['activities'] = activities.map(publicActivity)
-	if (Array.isArray(alerts)) snapshot['alerts'] = alerts.map(publicAlert)
+	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
+	if (Array.isArray(source['alerts'])) snapshot['alerts'] = publicList(source['alerts'], publicAlert)
+	if (record(source['centralizedMarket']) !== undefined) snapshot['centralizedMarket'] = publicCentralizedMarket(source['centralizedMarket'])
+	if (record(source['marketConsensus']) !== undefined) snapshot['marketConsensus'] = publicMarketConsensus(source['marketConsensus'])
+	if (record(source['metrics']) !== undefined) {
+		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth', 'walletRep'])
+	}
+	if (Array.isArray(source['pendingTransactions'])) snapshot['pendingTransactions'] = publicList(source['pendingTransactions'], intent => publicFields(intent, ['hash', 'label', 'mode', 'nonce', 'submissionBlock']))
+	if (Array.isArray(source['pools'])) snapshot['pools'] = publicList(source['pools'], publicPool)
+	if (Array.isArray(source['marketSources'])) snapshot['marketSources'] = publicList(source['marketSources'], marketSource => publicFields(marketSource, ['assetId', 'id', 'kind', 'market', 'reason', 'status']))
+	if (Array.isArray(source['universes'])) {
+		snapshot['universes'] = publicList(source['universes'], universe => publicFields(universe, ['forkedPoolCount', 'forkQuestionId', 'id', 'migratableVaultCount', 'operationalPoolCount', 'outcomeIndex', 'parentId', 'poolCount', 'selectedPoolCount']))
+	}
 	return snapshot
 }
 

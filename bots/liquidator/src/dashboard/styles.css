@@ -63,6 +63,10 @@ button:disabled {
 	opacity: 0.55;
 }
 
+button[aria-busy="true"] {
+	cursor: wait;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
