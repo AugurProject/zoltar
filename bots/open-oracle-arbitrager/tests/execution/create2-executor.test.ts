@@ -198,6 +198,18 @@ test('clearing an absent deployment intent is idempotent when its directory is a
 	await expect(clearExecutorDeploymentIntent(join(directory, 'deployment.json'))).resolves.toBeUndefined()
 })
 
+test('syncs the parent directory when retrying an intent clear after unlink already succeeded', async () => {
+	let synced = 0
+	let closed = 0
+	await clearExecutorDeploymentIntent('/operator/deployment.json', {
+		open: () => Promise.resolve({ close: () => Promise.resolve(void (closed += 1)), sync: () => Promise.resolve(void (synced += 1)) }),
+		readFile: () => Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' })),
+		rm: () => Promise.reject(new Error('unlink should not repeat')),
+	})
+	expect(synced).toBe(1)
+	expect(closed).toBe(1)
+})
+
 test('requires three distinct read RPC origins inside the deployment primitive', async () => {
 	const common = {
 		chain: mainnet,

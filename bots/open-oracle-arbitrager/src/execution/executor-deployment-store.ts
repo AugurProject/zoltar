@@ -83,18 +83,36 @@ export async function saveExecutorDeploymentIntent(path: string, intent: Executo
 	}
 }
 
-export async function clearExecutorDeploymentIntent(path: string) {
+type DeploymentIntentFilesystem = {
+	open(path: string, flags: 'r'): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
+	readFile(path: string, encoding: 'utf8'): Promise<string>
+	rm(path: string, options: { force: true }): Promise<void>
+}
+
+export async function clearExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentFilesystem = { open, readFile, rm }) {
+	const syncParentDirectory = async () => {
+		let directory
+		try {
+			directory = await filesystem.open(dirname(path), 'r')
+		} catch (error) {
+			if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
+			throw error
+		}
+		try {
+			await directory.sync()
+		} finally {
+			await directory.close()
+		}
+	}
 	try {
-		await readFile(path, 'utf8')
+		await filesystem.readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+			await syncParentDirectory()
+			return
+		}
 		throw error
 	}
-	await rm(path, { force: true })
-	const directory = await open(dirname(path), 'r')
-	try {
-		await directory.sync()
-	} finally {
-		await directory.close()
-	}
+	await filesystem.rm(path, { force: true })
+	await syncParentDirectory()
 }
