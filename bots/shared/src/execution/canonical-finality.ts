@@ -1,5 +1,6 @@
 import type { Hex } from '../ethereum.ts'
-import { quorumValue } from '../monitoring/read-quorum.ts'
+import { availableSettledValues, settledQuorumValue } from '../monitoring/read-quorum.ts'
+import { ConnectivityDegradedError } from '../monitoring/resilience.ts'
 
 export type CanonicalBlockReader = {
 	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined }>
@@ -12,30 +13,22 @@ export async function confirmCanonicalReceiptFinality(readers: readonly Canonica
 	if (confirmationBlocks < 1n) throw new Error(`${label} confirmation depth must be positive`)
 	const finalityBlockNumber = receipt.blockNumber + confirmationBlocks
 	if (knownMinimumHead === undefined) {
-		const heads = await Promise.all(readers.map(reader => reader.getBlockNumber()))
+		const settledHeads = await Promise.allSettled(readers.map(reader => reader.getBlockNumber()))
+		const heads = availableSettledValues(settledHeads)
+		if (heads.length < 2) throw new ConnectivityDegradedError(`${label} finality head requires at least two available independent RPC endpoints`)
 		if (heads.some(head => head < finalityBlockNumber)) return false
 	} else if (knownMinimumHead < finalityBlockNumber) return false
 
-	const canonicalReceiptBlockHash = quorumValue(
-		`${label} receipt block`,
-		await Promise.all(
-			readers.map(async (reader, index) => {
-				const block = await reader.getBlock({ blockNumber: receipt.blockNumber })
-				if (block.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
-				return { endpoint: endpoints[index] ?? '', value: block.hash }
-			}),
-		),
-	)
-	if (canonicalReceiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
-
-	const descendants = await Promise.allSettled(readers.map(reader => reader.getBlock({ blockNumber: finalityBlockNumber })))
-	if (descendants.some(result => result.status === 'rejected' || result.value.hash == null)) return false
-	quorumValue(
-		`${label} finality descendant`,
-		descendants.map((result, index) => {
-			if (result.status === 'rejected' || result.value.hash == null) throw new Error(`${label} finality descendant is unavailable`)
-			return { endpoint: endpoints[index] ?? '', value: result.value.hash }
+	const ancestry = await settledQuorumValue(
+		`${label} finality ancestry`,
+		readers.map(async (reader, index) => {
+			const descendant = await reader.getBlock({ blockNumber: finalityBlockNumber })
+			if (descendant.hash == null) throw new Error(`${label} finality descendant is unavailable`)
+			const receiptBlock = await reader.getBlock({ blockNumber: receipt.blockNumber })
+			if (receiptBlock.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
+			return { endpoint: endpoints[index] ?? '', value: { descendantHash: descendant.hash, receiptBlockHash: receiptBlock.hash } }
 		}),
 	)
+	if (ancestry.receiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
 	return true
 }

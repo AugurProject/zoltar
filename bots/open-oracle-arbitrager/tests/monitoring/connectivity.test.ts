@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { Hex } from '#ethereum'
+import { keccak256, type Hex } from '#ethereum'
 import {
 	checkConnectivity,
 	checkSubmissionEndpoints,
@@ -42,6 +42,29 @@ function rpc(handler: (method: string, params: readonly unknown[]) => unknown | 
 }
 
 describe('operator connectivity', () => {
+	test('treats an already-known exact signed transaction as accepted', async () => {
+		const server = Bun.serve({
+			port: 0,
+			fetch: () => Response.json({ error: { code: -32_000, message: 'already known' }, id: 1, jsonrpc: '2.0' }),
+		})
+		servers.push(server)
+		if (server.port === undefined) throw new Error('RPC test server did not expose a port')
+		const serialized = '0x1234' as const
+		await expect(sendRawTransactionToRpc(`http://127.0.0.1:${server.port.toString()}`, serialized)).resolves.toBe(keccak256(serialized))
+	})
+
+	test('does not mistake an unknown transaction type for an accepted transaction', async () => {
+		const server = Bun.serve({
+			port: 0,
+			fetch: () => Response.json({ error: { code: -32_000, message: 'unknown transaction type' }, id: 1, jsonrpc: '2.0' }),
+		})
+		try {
+			if (server.port === undefined) throw new Error('Transaction rejection test server did not expose a port')
+			await expect(sendRawTransactionToRpc(`http://127.0.0.1:${server.port.toString()}`, '0x1234')).rejects.toThrow('unknown transaction type')
+		} finally {
+			server.stop(true)
+		}
+	})
 	test('rejects a quorum that only varies paths on the same RPC origin', () => {
 		expect(() => validateIndependentReadRpcUrls('https://rpc.example', ['https://rpc.example'])).toThrow('independent origins')
 		expect(() => validateIndependentReadRpcUrls('https://rpc.example/read', ['https://rpc.example/quorum'])).toThrow('independent origins')
@@ -111,6 +134,7 @@ describe('operator connectivity', () => {
 
 	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {
 		for (const error of [
+			{ code: -32_601, message: 'fetch failed with HTTP 500' },
 			{ code: -32_601, message: 'method not found' },
 			{ code: -32_004, message: 'Method not supported' },
 			{ code: -32_004, message: 'invalid params' },
@@ -127,7 +151,27 @@ describe('operator connectivity', () => {
 			await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_callBundle support')
 			expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
 			expect(state.endpointChecks[0]?.error).toContain(error.message)
+			expect(state.endpointChecks[0]?.failureDisposition).toBe('safety-paused')
 		}
+	})
+
+	test('keeps coded JSON-RPC failures safety-classified even when their message resembles transport loss', async () => {
+		const endpoint = rpc(() => Response.json({ error: { code: -32_000, message: 'fetch failed with HTTP 500' }, id: 1, jsonrpc: '2.0' }))
+		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+		await expect(updateConnectivityEndpointChecks(state, () => checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [endpoint], readRpcUrl: endpoint }), 1))).rejects.toThrow('fetch failed with HTTP 500')
+		expect(state.endpointChecks).toHaveLength(2)
+		expect(state.endpointChecks.every(check => check.failureDisposition === 'safety-paused')).toBe(true)
+	})
+
+	test('classifies a non-JSON retryable HTTP response as degraded connectivity', async () => {
+		const server = Bun.serve({ fetch: () => new Response('temporarily unavailable', { status: 503 }), hostname: '127.0.0.1', port: 0 })
+		servers.push(server)
+		if (server.port === undefined) throw new Error('Test RPC did not expose a port')
+		const endpoint = `http://127.0.0.1:${server.port.toString()}/`
+		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+		await expect(updateConnectivityEndpointChecks(state, () => checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [endpoint], readRpcUrl: endpoint }), 1))).rejects.toThrow('HTTP 503')
+		expect(state.endpointChecks).toHaveLength(2)
+		expect(state.endpointChecks.every(check => check.failureDisposition === 'connectivity-degraded')).toBe(true)
 	})
 
 	test('accepts structured signature and invalid-parameter errors as positive relay capability evidence', async () => {

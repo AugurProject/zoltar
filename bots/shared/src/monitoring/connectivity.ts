@@ -1,5 +1,5 @@
 import type { Address, Hex } from '../ethereum.ts'
-import { bigintToSafeNumber } from '../ethereum/codec.ts'
+import { bigintToSafeNumber, keccak256 } from '../ethereum/codec.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
@@ -14,9 +14,24 @@ export type EndpointCheck = {
 	chainId: number | undefined
 	checkedAt: string
 	error: string | undefined
+	failureDisposition?: 'connectivity-degraded' | 'safety-paused' | undefined
 	kind: 'private-relay' | 'public-rpc' | 'read-rpc'
 	status: 'failed' | 'healthy'
 	target: string
+}
+
+class EndpointTransportError extends Error {}
+class EndpointSafetyError extends Error {}
+
+function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | 'safety-paused' {
+	if (error instanceof EndpointSafetyError) return 'safety-paused'
+	if (error instanceof EndpointTransportError) return 'connectivity-degraded'
+	if (error instanceof Error) {
+		const message = error.message.toLowerCase()
+		if (error.name === 'AbortError' || error.name === 'HttpRequestError' || error.name === 'NetworkError' || error.name === 'TimeoutError' || message.includes('fetch failed') || message.includes('connection refused') || message.includes('unable to connect') || message.includes('timed out'))
+			return 'connectivity-degraded'
+	}
+	return 'safety-paused'
 }
 
 type JsonRpcResponse = {
@@ -27,7 +42,7 @@ type JsonRpcResponse = {
 	result?: unknown
 }
 
-class EndpointCheckFailure extends Error {
+export class EndpointCheckFailure extends Error {
 	readonly checks: readonly EndpointCheck[]
 
 	constructor(message: string, checks: readonly EndpointCheck[]) {
@@ -94,6 +109,11 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
+	if (!response.ok) {
+		const message = `RPC returned HTTP ${response.status.toString()}`
+		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
+		throw new Error(message)
+	}
 	let value: JsonRpcResponse
 	try {
 		value = (await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'RPC')) as JsonRpcResponse
@@ -101,8 +121,7 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 		if (error instanceof SyntaxError) throw new Error(`RPC returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (!response.ok) throw new Error(`RPC returned HTTP ${response.status.toString()}`)
-	if (value.error !== undefined) throw new Error(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`)
+	if (value.error !== undefined) throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`)
 	return value.result
 }
 
@@ -115,7 +134,14 @@ export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
 }
 
 export async function sendRawTransactionToRpc(url: string, serializedTransaction: Hex, timeoutMilliseconds = 10_000) {
-	const result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+	let result: unknown
+	try {
+		result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+	} catch (error) {
+		const message = error instanceof Error ? error.message.toLowerCase() : ''
+		if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
+		throw error
+	}
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
 	return result as Hex
 }
@@ -148,6 +174,7 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 			chainId: undefined,
 			checkedAt,
 			error: error instanceof Error ? error.message : String(error),
+			failureDisposition: endpointFailureDisposition(error),
 			kind,
 			status: 'failed',
 			target: endpointLabel(url),
@@ -163,7 +190,11 @@ async function assertRelayMethodCapability(url: string, method: 'eth_callBundle'
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
-	if (!response.ok) throw new Error(`Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`)
+	if (!response.ok) {
+		const message = `Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`
+		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
+		throw new Error(message)
+	}
 	let value: unknown
 	try {
 		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'Bundle relay capability check')
@@ -186,7 +217,7 @@ async function assertRelayMethodCapability(url: string, method: 'eth_callBundle'
 		normalizedMessage.includes('invalid params') || normalizedMessage.includes('invalid parameters') || normalizedMessage.includes('invalid argument') || normalizedMessage.includes('missing transaction') || normalizedMessage.includes('missing tx') || normalizedMessage.includes('invalid transaction')
 	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
 	if (!recognizedCapabilityEvidence) {
-		throw new Error(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
+		throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
 	}
 }
 
@@ -204,6 +235,7 @@ async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): 
 			chainId,
 			checkedAt,
 			error: error instanceof Error ? error.message : String(error),
+			failureDisposition: endpointFailureDisposition(error),
 			kind: 'private-relay',
 			status: 'failed',
 			target: endpointLabel(url),

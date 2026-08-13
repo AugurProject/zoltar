@@ -216,6 +216,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const submission = validateSubmissionSettings(record['submission'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
+	if (runtime.execute && deployment.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	return {
 		centralizedMarkets,
 		connectivity,

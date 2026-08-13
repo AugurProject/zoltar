@@ -31,9 +31,9 @@
 				<p>The bot follows approved <code>OpenOraclePriceCoordinator</code> reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Uniswap V3 remains the reference and TWAP anchor. Only the best currently eligible opportunity may be selected.</p>
 				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle" tabindex="0" aria-label="Scrollable OpenOracle arbitrager execution and recovery lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-lifecycle" data-plot-width="1160" data-plot-height="390" role="img" aria-label="OpenOracle arbitrager execution and recovery lifecycle">
-						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after every configured read RPC serves the same twelfth-descendant block hash; ambiguous evidence stays in durable recovery.</span>
+						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after at least two available read RPCs return the same twelfth-descendant finality evidence; every available response must agree, and ambiguous evidence stays in durable recovery.</span>
 					</div>
-					<p class="diagram-caption"><span class="figure-label">Execution lifecycle</span>Both public and private delivery sign a parent-bound executor transaction. A missed target cannot later succeed; after twelve descendants and unanimous missing-receipt evidence, the bot safely expires the entry or retries the lifecycle while continuing to watch the old hash for late revert gas.</p>
+					<p class="diagram-caption"><span class="figure-label">Execution lifecycle</span>Both public and private delivery sign a parent-bound executor transaction. A missed target cannot later succeed; after twelve descendants, at least two available readers and every available response must agree on missing-receipt evidence before the bot safely expires the entry or retries the lifecycle while continuing to watch the old hash for late revert gas.</p>
 				</figure>
 				<div class="compact-grid">
 					<div>
@@ -63,7 +63,7 @@ bun run run</code></pre>
 				<p>For Sepolia, copy the example to a separate operator file, start it with <code>OPEN_ORACLE_ARBITRAGER_CONFIG</code>, and use separate history, price-history, and position paths. A configured operator file cannot be retargeted to another chain because its journals are not chain-tagged. Keep <code>runtime.execute</code> off for the first rehearsal.</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
-					Execution also requires an authenticated manifest, at least two independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected.
+					Execution also requires an authenticated manifest, at least three independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected. A retryable transport failure may make one reader unavailable; critical evidence still requires at least two available readers, with every available response agreeing exactly.
 				</div>
 				<div class="table-scroll" tabindex="0" aria-label="Important configuration groups">
 					<table>
@@ -229,7 +229,7 @@ bun run run</code></pre>
 						The lifecycle reserve is the larger of the configured floor and
 						<code>(callbackGasLimit + 900,000) × gas price</code>.
 					</li>
-					<li>Open hedged net uses actual executor hedge evidence and gas recorded so far. Realized net adds the exact ETH settler reward emitted by the lifecycle executor and requires exact withdrawal evidence. It closes only when every configured read RPC serves the same twelfth-descendant block hash.</li>
+					<li>Open hedged net uses actual executor hedge evidence and gas recorded so far. Realized net adds the exact ETH settler reward emitted by the lifecycle executor and requires exact withdrawal evidence. It closes only when at least two available readers return the same twelfth-descendant finality evidence and every available response agrees.</li>
 				</ul>
 			</section>
 
@@ -303,8 +303,8 @@ bun run run</code></pre>
 					<li>withdrawing (replacement credit)</li>
 					<li>replaced</li>
 				</ul>
-				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until it rereads the receipt and every configured read RPC serves the same twelfth-descendant block hash. A lagging RPC delays closure; the primary RPC's head alone cannot release risk or record realized profit.</p>
-				<p>If a shallow reorganization removes that receipt, provisional gas and withdrawals are rolled back, the old signed hash is archived for late revert monitoring, and the position returns to <code>open</code> for a fresh parent-bound lifecycle attempt. If evidence disagrees, an executor event is missing or exact assets cannot be attributed, the state becomes <code>recovery-required</code> and continues consuming the risk limit.</p>
+				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until at least two available read RPCs return the same receipt and twelfth-descendant finality evidence, with every available response agreeing. A lagging or contradictory reader delays closure; a reader is omitted only for a retryable transport failure. The primary RPC's head alone cannot release risk or record realized profit.</p>
+				<p>If a shallow reorganization removes that receipt, provisional gas and withdrawals are rolled back, the old signed hash is archived for late revert monitoring, and the position returns to <code>open</code> for a fresh parent-bound lifecycle attempt. Disagreement between readers keeps finality pending and fails the scan closed. Once the read quorum agrees, evidence that conflicts with the durable journal—such as a missing executor event or assets that cannot be attributed exactly—moves the position to <code>recovery-required</code> and continues consuming the risk limit.</p>
 				<p>A canonical immediate replacement is handled separately. The bot derives the exact credited token and amount from its durable entry report and the immediate successor, submits one parent-bound exact withdrawal, and waits for the normal twelve-descendant RPC quorum. Success becomes <code>replaced</code>, not <code>closed</code>: the claimed credit is known, but the hedge's remaining one-sided inventory has not been valued or unwound automatically.</p>
 				<div class="callout">
 					<strong>Never delete a recovery record to make the bot trade again</strong>

@@ -331,7 +331,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
-	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length === 0) throw new Error('Live execution requires at least one independent quorum RPC')
+	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
 	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')

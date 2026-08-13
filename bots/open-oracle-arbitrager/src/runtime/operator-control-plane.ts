@@ -5,6 +5,7 @@ import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseO
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
@@ -28,9 +29,22 @@ export type PendingOperatorUpdates = {
 	tokenAddresses: Address[] | undefined
 }
 
-export async function deployExecutorFromConnectivity(parameters: { chain: Configuration['network']['chain']; connectivity: ConnectivitySettings; privateKey: Hex; salt: unknown }, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
+export async function deployExecutorFromConnectivity(
+	parameters: {
+		chain: Configuration['network']['chain']
+		connectivity: ConnectivitySettings
+		existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
+		persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
+		privateKey: Hex
+		quorumRpcUrls: readonly string[]
+		salt: unknown
+	},
+	deploy: typeof deployExecutorCreate2 = deployExecutorCreate2,
+) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
-	return await deploy({ chain: parameters.chain, privateKey: parameters.privateKey, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
+	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
+	if (readRpcUrls.length < 3) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
+	return await deploy({ chain: parameters.chain, existingIntent: parameters.existingIntent, persistIntent: parameters.persistIntent, privateKey: parameters.privateKey, readRpcUrls, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
 }
 
 export function requireActivePersistedNetwork(activeNetwork: Configuration['network']['name'], persistedNetwork: PersistedOperatorSettings['network']) {
@@ -41,7 +55,46 @@ export function requirePausedExecutorDeployment(execute: boolean, paused: boolea
 	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
 
-export function startOperatorControlPlane(parameters: { config: Configuration; fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }; getCursor: () => SyncCursor | undefined; lockManager: ExecutionLockManager | undefined; signerOperationGate: SignerOperationGate; state: OperatorState }) {
+export async function requireNoPendingExecutorDeployment(settingsFile: string) {
+	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+}
+
+export type DeploymentRecoveryState = { pending: boolean }
+
+export async function acquireScanSignerOperation(signerOperationGate: SignerOperationGate, deploymentRecovery: DeploymentRecoveryState, intentPath: string) {
+	if (deploymentRecovery.pending) return undefined
+	const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
+	try {
+		if ((await loadExecutorDeploymentIntent(intentPath)) !== undefined) {
+			deploymentRecovery.pending = true
+			await intentLock.release()
+			return undefined
+		}
+		if (!signerOperationGate.acquire('scan')) {
+			await intentLock.release()
+			return undefined
+		}
+		return intentLock
+	} catch (error) {
+		await intentLock.release()
+		throw error
+	}
+}
+
+export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
+	deploymentRecovery.pending = true
+	await saveExecutorDeploymentIntent(path, intent)
+}
+
+export function startOperatorControlPlane(parameters: {
+	config: Configuration
+	deploymentRecovery: DeploymentRecoveryState
+	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
+	getCursor: () => SyncCursor | undefined
+	lockManager: ExecutionLockManager | undefined
+	signerOperationGate: SignerOperationGate
+	state: OperatorState
+}) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const pending: PendingOperatorUpdates = {
 		connectivity: undefined,
@@ -110,6 +163,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
 				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints, then restart before resuming')
+				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				state.paused = paused
 				state.status = operatorStatusAfterPause(paused, parameters.getCursor()?.initial === false, state.lastError !== undefined)
@@ -117,6 +171,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			}),
 		updateConnectivity: async value => {
 			return queueSettingsUpdate(async () => {
+				if (pending.deployment !== undefined) throw new Error('Restart to apply the saved deployment and quorum RPC changes before updating active connectivity')
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				if (latest.settings.networkConfigured) {
@@ -152,6 +207,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
+				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
 				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
@@ -180,30 +236,52 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(value['salt'])
 			return await queueSettingsUpdate(async () => {
-				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
-				if (latest === undefined) throw configurationRevisionConflict()
-				requireActivePersistedNetwork(config.network.name, latest.settings.network)
-				requirePausedExecutorDeployment(config.execute, state.paused)
-				if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
-				let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
+				const intentPath = executorDeploymentIntentPath(config.settingsFile)
+				const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
+				let deploymentSignerLock: ExclusiveProcessLock | undefined
+				let signerOperationAcquired = false
 				try {
-					deployed = await deployExecutorFromConnectivity({ chain: config.network.chain, connectivity: latest.settings.connectivity, privateKey, salt: plan.salt })
+					const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+					if (latest === undefined) throw configurationRevisionConflict()
+					requireActivePersistedNetwork(config.network.name, latest.settings.network)
+					requirePausedExecutorDeployment(config.execute, state.paused)
+					if (lockManager === undefined) throw new Error('Executor deployment signer lock management is unavailable')
+					if (!config.execute) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
+					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+					signerOperationAcquired = true
+					const existingIntent = await loadExecutorDeploymentIntent(intentPath)
+					const deployed = await deployExecutorFromConnectivity({
+						chain: config.network.chain,
+						connectivity: latest.settings.connectivity,
+						existingIntent,
+						persistIntent: intent => persistExecutorDeploymentIntentForRecovery(intentPath, intent, parameters.deploymentRecovery),
+						privateKey,
+						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
+						salt: plan.salt,
+					})
+					const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
+					await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
+					await clearExecutorDeploymentIntent(intentPath)
+					parameters.deploymentRecovery.pending = false
+					pending.deployment = next
+					fixedState.deployment = next
+					recordOperation(state, {
+						category: 'transaction',
+						details: deployed.transactionHash,
+						level: 'info',
+						message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
+						reason: `Saved predictable executor ${deployed.address} for restart`,
+						reportId: undefined,
+					})
+					return deployed
 				} finally {
-					signerOperationGate.release('deployment')
+					if (signerOperationAcquired) signerOperationGate.release('deployment')
+					try {
+						if (deploymentSignerLock !== undefined && lockManager !== undefined) await lockManager.release(deploymentSignerLock)
+					} finally {
+						await intentLock.release()
+					}
 				}
-				const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
-				await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
-				pending.deployment = next
-				fixedState.deployment = next
-				recordOperation(state, {
-					category: 'transaction',
-					details: deployed.transactionHash,
-					level: 'info',
-					message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
-					reason: `Saved predictable executor ${deployed.address} for restart`,
-					reportId: undefined,
-				})
-				return deployed
 			})
 		},
 		updateSigner: async value => {

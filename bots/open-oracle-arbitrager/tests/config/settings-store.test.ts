@@ -91,6 +91,12 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
+	test('requires three independent read endpoints for live execution', () => {
+		const value = settings(privateKey)
+		const serialized = serializeOperatorSettings(value)
+		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
+	})
+
 	test('syncs settings contents and the parent directory before returning success', async () => {
 		const events: string[] = []
 		let opened = 0

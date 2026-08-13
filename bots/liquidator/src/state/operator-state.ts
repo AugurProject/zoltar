@@ -8,6 +8,7 @@ import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
+import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
 export type PoolObservation = {
 	knownVaultCount: bigint
@@ -128,12 +129,13 @@ export type RuntimeState = {
 	lastScannedBlockHash: Hex | undefined
 	lastScannedTimestamp: bigint | undefined
 	paused: boolean
+	rpcEndpointHealth: readonly RpcEndpointHealth[]
 	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
 	pools: PoolObservation[]
 	scanning: boolean
 	startedAt: string
-	status: 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
+	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
 	universes: UniverseObservation[]
 	wallet: Address | undefined
 	walletAttoEth: bigint
@@ -154,6 +156,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		lastScannedBlockHash: undefined,
 		lastScannedTimestamp: undefined,
 		paused,
+		rpcEndpointHealth: [],
 		pendingStagedOperations: [],
 		pendingTransactions: [],
 		pools: [],
@@ -249,6 +252,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const rootConfiguration = configurations[0]
 	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
+	if (state.status === 'connectivity-degraded') alerts.push({ message: state.error ?? 'RPC connectivity is degraded; automatic execution is blocked until connectivity recovers', severity: 'warning' })
 	if (state.pendingTransactions.length > 0) alerts.push({ message: `${state.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`, severity: 'error' })
 	for (const configuration of configurations) {
 		if (configuration !== rootConfiguration && !discoveredRepAssets.has(configuration.assetAddress.toLowerCase())) continue
@@ -341,6 +345,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			walletRep: formatDecimalAmount(walletRep),
 		},
 		paused: state.paused,
+		rpcEndpointHealth: state.rpcEndpointHealth,
 		pendingTransactions: state.pendingTransactions.map(intent => ({
 			hash: intent.hash,
 			kind: intent.kind,

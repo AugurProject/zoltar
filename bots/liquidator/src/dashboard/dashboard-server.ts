@@ -141,10 +141,29 @@ function publicPool(value: unknown) {
 	return pool
 }
 
+function publicEndpointTarget(value: unknown) {
+	if (typeof value !== 'string') return 'Protected endpoint'
+	try {
+		const parsed = new URL(value)
+		return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : 'Protected endpoint'
+	} catch (error) {
+		void error
+		return 'Protected endpoint'
+	}
+}
+
+function publicRpcEndpointHealth(value: unknown) {
+	const health = publicFields(value, ['consecutiveFailures', 'lastFailureAt', 'lastSuccessAt', 'latencyMilliseconds', 'nextRetryAt', 'status'])
+	const source = record(value)
+	health['target'] = publicEndpointTarget(source?.['target'])
+	if (typeof source?.['error'] === 'string') health['error'] = publicOperatorFailure(source['error'])
+	return health
+}
+
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'paused', 'scanning', 'wallet'])
+	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
@@ -155,6 +174,7 @@ function publicOperatorSnapshot(value: unknown) {
 		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth', 'walletRep'])
 	}
 	if (Array.isArray(source['pendingTransactions'])) snapshot['pendingTransactions'] = publicList(source['pendingTransactions'], intent => publicFields(intent, ['hash', 'label', 'mode', 'nonce', 'submissionBlock']))
+	if (Array.isArray(source['rpcEndpointHealth'])) snapshot['rpcEndpointHealth'] = publicList(source['rpcEndpointHealth'], publicRpcEndpointHealth)
 	if (Array.isArray(source['pools'])) snapshot['pools'] = publicList(source['pools'], publicPool)
 	if (Array.isArray(source['marketSources'])) snapshot['marketSources'] = publicList(source['marketSources'], marketSource => publicFields(marketSource, ['assetId', 'id', 'kind', 'market', 'reason', 'status']))
 	if (Array.isArray(source['universes'])) {
@@ -181,6 +201,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.headers.get('host') !== authority) {
 				return json({ error: 'Request authority is not accepted' }, 403)
 			}
+			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: headers('text/plain; charset=utf-8') })
 			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}

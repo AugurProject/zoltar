@@ -6,7 +6,7 @@ async function exampleSettings() {
 	return parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 }
 
-const request = (network: 'mainnet' | 'sepolia', quorumRpcUrls = ['https://quorum.example/']) => ({
+const request = (network: 'mainnet' | 'sepolia', quorumRpcUrls = ['https://quorum-a.example/', 'https://quorum-b.example/']) => ({
 	connectivity: {
 		publicRpcUrls: ['https://public.example/'],
 		quorumRpcUrls,

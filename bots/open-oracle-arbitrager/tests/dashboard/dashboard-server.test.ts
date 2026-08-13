@@ -105,6 +105,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	servers.push(server)
 	const origin = `http://${server.hostname}:${server.port}`
+	const health = await fetch(`${origin}/healthz`)
+	expect(health.status).toBe(200)
+	expect(await health.text()).toBe('ok')
 	const page = await fetch(origin)
 	expect(page.status).toBe(200)
 	expect(page.headers.get('content-security-policy')).toContain("default-src 'self'")
@@ -361,6 +364,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	deployment = { ...deployment, quorumRpcUrls: [credentialEndpoint] }
 	state.lastError = rawRpcFailure
 	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: credentialEndpoint }]
+	state.rpcEndpointHealth = [{ consecutiveFailures: 2, error: rawRpcFailure, lastFailureAt: new Date(0).toISOString(), lastSuccessAt: undefined, latencyMilliseconds: undefined, nextRetryAt: new Date(1_000).toISOString(), status: 'offline', target: credentialEndpoint }]
 	state.operationLog = [
 		{ category: 'configuration', details: protectedSettingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined, timestamp: new Date(0).toISOString() },
 		{ category: 'decision', details: 'net 0.0158 ETH · 992 bps', level: 'info', message: 'Selected profitable sell-REP dispute', reason: 'quote, TWAP, inventory, and risk checks passed', reportId: '1', timestamp: new Date(0).toISOString() },
@@ -390,6 +394,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(reloadedState).toMatchObject({ savedWallet: address })
 	const serializedState = JSON.stringify(reloadedState)
 	for (const protectedMarker of [credentialMarker, endpointCredentialMarker, endpointPathMarker, entryCalldataMarker, lifecycleCalldataMarker, protectedSettingsFile]) expect(serializedState).not.toContain(protectedMarker)
+	expect(reloadedState).toMatchObject({ rpcEndpointHealth: [{ consecutiveFailures: 2, status: 'offline', target: 'https://rpc.example' }] })
 	if (typeof reloadedState !== 'object' || reloadedState === null || Array.isArray(reloadedState)) throw new Error('Expected public dashboard state')
 	for (const configurationField of ['connectivity', 'deployment', 'settings']) expect(configurationField in reloadedState).toBe(false)
 	expect(reloadedState).toMatchObject({

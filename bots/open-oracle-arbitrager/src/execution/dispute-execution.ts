@@ -52,6 +52,7 @@ import type { Venue } from '#core/venue-strategy'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
 import { executionReadQuorum, quoteInput, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
+import { operationalFailureDisposition } from '#monitoring/resilience'
 import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
 
@@ -325,14 +326,12 @@ export async function executeDispute(
 				...stagedPosition,
 				entryTransactionHash: replacement.transaction.hash,
 				entryTransactionHashes: [replacement.transaction.hash],
-				status: 'recovery-required',
 			}),
 		)
 		const receiptPosition = {
 			...stagedPosition,
 			entryTransactionHash: observedReceipt.transactionHash,
 			entryTransactionHashes: [observedReceipt.transactionHash],
-			status: 'recovery-required' as const,
 		}
 		await persistPosition(receiptPosition)
 		const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `public entry ${reportId}`, [observedReceipt.transactionHash])
@@ -499,6 +498,7 @@ export async function executeDispute(
 			recoveredEntry = await recoverPendingEntryWithQuorum(readClients, config, stagedPosition, tokenMetadata.decimals, targetBlockNumber)
 		} catch (error) {
 			for (const transaction of pending) track(trackedActivity(transaction, 'confirmation-unknown'))
+			if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 			throw new Error(`Atomic bundle receipt quorum failed: ${errorMessage(error)}`)
 		}
 		const confirmedReceipts = recoveredEntry.receipts
