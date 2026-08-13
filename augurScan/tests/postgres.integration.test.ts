@@ -357,6 +357,14 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			await contenderLease.assertHeld()
 			await contenderLease.release()
 
+			const collisionLease = await database.tryAcquireIndexerLock(chainId)
+			if (collisionLease === undefined) throw new Error('indexer did not acquire its lock for exact-key validation')
+			await collisionLease.connection`SELECT pg_advisory_lock((92138472::bigint << 32) | ${chainId}::bigint)`
+			await collisionLease.connection`SELECT pg_advisory_unlock(92138472, ${chainId})`
+			await expect(collisionLease.assertHeld()).rejects.toThrow('Indexer lease is no longer held')
+			await collisionLease.connection`SELECT pg_advisory_unlock((92138472::bigint << 32) | ${chainId}::bigint)`
+			await expect(collisionLease.release()).rejects.toThrow('Indexer lease unlock failed')
+
 			const lostLease = await database.tryAcquireIndexerLock(chainId)
 			if (lostLease === undefined) throw new Error('indexer did not reacquire its lock for lease-loss validation')
 			await contender.sql`SELECT pg_terminate_backend(${lostLease.backendPid})`

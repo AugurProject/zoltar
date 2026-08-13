@@ -115,7 +115,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 				pending.restartTokenAddresses = undefined
 				config.persistedPrivateKey = next.privateKey
 				fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
-				recordOperation(state, { category: 'configuration', details: config.settingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined })
+				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined })
 				return { configuration: serializeOperatorSettings(next, true), revision: savedRevision }
 			}),
 		setPaused: paused =>

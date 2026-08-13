@@ -8,6 +8,179 @@ afterEach(() => {
 })
 
 describe('liquidator dashboard server', () => {
+	test('returns only the fields consumed by the public dashboard', async () => {
+		const calldataMarker = `0x${'de'.repeat(64)}`
+		const protectedPath = '/protected/operator-state.json'
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => ({
+				activities: [
+					{
+						at: '2026-08-13T00:00:00.000Z',
+						details: `to=0x1111111111111111111111111111111111111111 data=${calldataMarker} value=0`,
+						internalPath: protectedPath,
+						kind: 'liquidation',
+						message: 'Transaction submitted',
+						status: 'pending',
+					},
+				],
+				alerts: [{ internalPath: protectedPath, message: 'Execution is paused', severity: 'warning' }],
+				execute: true,
+				metrics: {
+					approvedUniverseCount: 1,
+					assumedOpenInterestEth: '2',
+					candidateCount: 1,
+					deployedRep: '3',
+					eligiblePoolCount: 1,
+					internalPath: protectedPath,
+					poolCount: 1,
+					selectedPoolCount: 1,
+					walletEth: '4',
+					walletRep: '5',
+				},
+				operatorPath: protectedPath,
+				paused: false,
+				pendingTransactions: [
+					{
+						hash: `0x${'12'.repeat(32)}`,
+						kind: 'liquidation',
+						label: 'Liquidate vault',
+						maxBlockNumber: '120',
+						mode: 'public',
+						nonce: '7',
+						receiptExpectation: { path: protectedPath },
+						requiresMarketEvidence: true,
+						serializedTransaction: calldataMarker,
+						submissionBlock: '100',
+					},
+				],
+				pools: [
+					{
+						address: '0x2222222222222222222222222222222222222222',
+						approvedUniverse: true,
+						botVault: {
+							address: 'vault-address-marker',
+							capacityOwnershipRep: '6',
+							claimableFeesEth: '0.1',
+							healthBps: '12500',
+							openInterestDisplay: '2',
+							protectedPath,
+							vaultRepBacking: '7',
+						},
+						candidates: [{ bonusValueEth: '0.25', calldata: calldataMarker, requestedDebtEth: '8', target: 'candidate-target-marker' }],
+						centralizedPriceAllowed: true,
+						isPriceValid: true,
+						knownVaultCount: '9',
+						lastPrice: '10',
+						manager: 'manager-marker',
+						multiplierBps: '20000',
+						questionId: '11',
+						selected: true,
+						systemState: '0',
+						totalCapacityOwnershipRep: '12',
+						totalPoolHeldRep: '13',
+						truncatedVaults: false,
+						universeId: '14',
+						vaults: [{ address: 'nested-vault-marker', path: protectedPath }],
+					},
+				],
+				scanning: false,
+				status: 'running',
+				marketSources: [],
+				universes: [],
+				wallet: '0x3333333333333333333333333333333333333333',
+				walletRep: { protected: calldataMarker },
+			}),
+			hostname: '127.0.0.1',
+			setApprovedUniverses: value => value,
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const response = await fetch(new URL('/api/state', server.url))
+		const body = await response.text()
+		const snapshot: unknown = JSON.parse(body)
+		if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) throw new Error('Expected public dashboard snapshot')
+		expect(response.status).toBe(200)
+		expect(body).not.toContain(calldataMarker)
+		expect(body).not.toContain(protectedPath)
+		expect(body).not.toContain('manager-marker')
+		expect(body).not.toContain('nested-vault-marker')
+		expect(body).not.toContain('candidate-target-marker')
+		expect(body).not.toContain('vault-address-marker')
+		expect(Reflect.get(snapshot, 'activities')).toEqual([{ at: '2026-08-13T00:00:00.000Z', message: 'Transaction submitted', status: 'pending' }])
+		expect(Reflect.get(snapshot, 'pools')).toEqual([
+			{
+				address: '0x2222222222222222222222222222222222222222',
+				approvedUniverse: true,
+				bestCandidateBonusValueEth: '0.25',
+				botVault: { capacityOwnershipRep: '6', claimableFeesEth: '0.1', healthBps: '12500', openInterestDisplay: '2', vaultRepBacking: '7' },
+				candidateCount: 1,
+				centralizedPriceAllowed: true,
+				isPriceValid: true,
+				knownVaultCount: '9',
+				lastPrice: '10',
+				multiplierBps: '20000',
+				questionId: '11',
+				selected: true,
+				systemState: '0',
+				totalCapacityOwnershipRep: '12',
+				totalPoolHeldRep: '13',
+				truncatedVaults: false,
+			},
+		])
+	})
+
+	test('keeps snapshot and controller failures out of public dashboard responses', async () => {
+		const credential = 'https://operator:operator-secret@rpc.example/private'
+		const server = startDashboardServer(0, {
+			getConfiguration: () => {
+				throw new Error(`configuration read failed at ${credential}`)
+			},
+			getState: () => ({
+				activities: [{ at: '2026-08-13T00:00:00.000Z', details: `provider rejected ${credential}`, kind: 'error', message: 'Scan cycle failed', status: 'failed' }],
+				alerts: [{ message: `RPC alert from ${credential}`, severity: 'error' }],
+				error: `RPC ${credential} returned authorization=Bearer-secret`,
+			}),
+			hostname: '127.0.0.1',
+			setApprovedUniverses: value => value,
+			setPaused: () => {
+				throw new Error(`pause write failed at ${credential}`)
+			},
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const snapshotResponse = await fetch(new URL('/api/state', server.url))
+		const snapshotBody = await snapshotResponse.text()
+		expect(snapshotResponse.status).toBe(200)
+		expect(snapshotBody).not.toContain('operator-secret')
+		expect(snapshotBody).not.toContain('rpc.example')
+		expect(snapshotBody).not.toContain('Bearer-secret')
+		expect(snapshotBody).toContain('RPC connectivity')
+
+		const configurationResponse = await fetch(new URL('/api/configuration', server.url))
+		const configurationBody = await configurationResponse.text()
+		expect(configurationResponse.status).toBe(503)
+		expect(configurationBody).not.toContain('operator-secret')
+		expect(configurationBody).not.toContain('rpc.example')
+
+		const mutationResponse = await fetch(new URL('/api/paused', server.url), {
+			body: JSON.stringify({ paused: true }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		const mutationBody = await mutationResponse.text()
+		expect(mutationResponse.status).toBe(400)
+		expect(mutationBody).not.toContain('operator-secret')
+		expect(mutationBody).not.toContain('rpc.example')
+	})
+
 	test('serves the dashboard and protects configuration mutations by origin', async () => {
 		let paused = false
 		let marketConfiguration: unknown
@@ -55,11 +228,19 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="guarded-market-price"')
 		expect(pageSource).toContain('id="market-configuration-json"')
 		expect(pageSource).toContain('id="network-name"')
+		expect(pageSource).toContain('id="network-badge"')
+		expect(pageSource).toContain('id="refresh-button"')
 		expect(pageSource).toContain('id="test-market-sources"')
 		expect(pageSource).toContain('id="recovery-list"')
+		expect(pageSource).toContain('id="resume-dialog"')
+		expect(pageSource).toContain('class="section-nav"')
+		expect(pageSource).toContain('Universe truth policy')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
+		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
+		expect(sharedStyles.status).toBe(200)
+		expect(await sharedStyles.text()).toContain('.operator-shell')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {

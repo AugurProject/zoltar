@@ -2,8 +2,8 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { loadNetworks, runtimeConfig } from './config.ts'
 import { ScannerDatabase } from './database.ts'
-import { liveStreamResponse, staticAssetResponse } from './http.ts'
-import { startIndexers } from './indexer.ts'
+import { indexerHealthUnavailableResponse, liveStreamResponse, staticAssetResponse } from './http.ts'
+import { indexerOwnershipStatuses, startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
 import { migrate } from './migrate.ts'
@@ -92,6 +92,7 @@ const server = Bun.serve({
 						{
 							status: healthy ? 'healthy' : 'degraded',
 							networks: rows,
+							ownership: indexerOwnershipStatuses(),
 							staleChainIds: stale.map((row: Record<string, unknown>) => Number(row['chain_id'])),
 							integrityIssues: issues,
 						},
@@ -99,7 +100,7 @@ const server = Bun.serve({
 					)
 				} catch (error) {
 					console.error(`augurScan indexer health check failed (${error instanceof Error ? error.name : typeof error})`)
-					return Response.json({ status: 'unknown' }, { status: 503 })
+					return indexerHealthUnavailableResponse(indexerOwnershipStatuses())
 				}
 			})
 		}
