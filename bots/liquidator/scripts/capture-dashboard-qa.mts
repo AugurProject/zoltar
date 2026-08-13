@@ -95,6 +95,18 @@ try {
 		if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Runtime evaluation is missing its result')
 		return Reflect.get(result, 'value')
 	}
+	const navigateToDashboard = async (url: string) => {
+		let observedTitle: unknown
+		for (let attempt = 0; attempt < 3; attempt += 1) {
+			await command('Page.navigate', { url })
+			for (let poll = 0; poll < 50; poll += 1) {
+				observedTitle = await evaluate(`document.querySelector('h1')?.textContent`)
+				if (observedTitle === 'Pool liquidator') return
+				await Bun.sleep(100)
+			}
+		}
+		throw new Error(`Liquidator dashboard fixture did not load at ${url}: ${String(observedTitle)}`)
+	}
 
 	const capture = async (name: string, width: number, height: number, scrollY = 0, fragment = 'overview') => {
 		await command('Emulation.setDeviceMetricsOverride', {
@@ -140,14 +152,7 @@ try {
 		})`)
 	}
 
-	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
-	let loadedTitle: unknown
-	for (let attempt = 0; attempt < 50; attempt += 1) {
-		loadedTitle = await evaluate(`document.querySelector('h1')?.textContent`)
-		if (loadedTitle === 'Pool liquidator') break
-		await Bun.sleep(100)
-	}
-	if (loadedTitle !== 'Pool liquidator') throw new Error(`Liquidator dashboard fixture did not load: ${String(loadedTitle)}`)
+	await navigateToDashboard('http://127.0.0.1:4183/')
 	const configurationLoading = await evaluate(`({
 		checkboxDisabled: document.querySelector('#pool-rows input[type="checkbox"]')?.disabled,
 		strategyDisabled: document.querySelector('#strategy-fields')?.disabled,
@@ -225,7 +230,7 @@ try {
 		const width = mobile ? 390 : 1440
 		const height = mobile ? 844 : 900
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
-		await command('Page.navigate', { url: `http://127.0.0.1:4183/?qaState=unavailable&connection=initial-${mobile ? 'mobile' : 'desktop'}` })
+		await navigateToDashboard(`http://127.0.0.1:4183/?qaState=unavailable&connection=initial-${mobile ? 'mobile' : 'desktop'}`)
 		await Bun.sleep(1_000)
 		const initialFailure = await readConnectionState()
 		if (
@@ -256,7 +261,7 @@ try {
 			throw new Error(`Initial Liquidator state-request failure is unsafe: ${JSON.stringify(initialFailure)}`)
 		}
 		connectionFailures[`initial-${mobile ? 'mobile' : 'desktop'}`] = { screenshot: await capture(`liquidator-connection-initial-failure-${mobile ? 'mobile' : 'desktop'}`, width, height), state: initialFailure }
-		await command('Page.navigate', { url: `http://127.0.0.1:4183/?connection=post-success-${mobile ? 'mobile' : 'desktop'}` })
+		await navigateToDashboard(`http://127.0.0.1:4183/?connection=post-success-${mobile ? 'mobile' : 'desktop'}`)
 		await Bun.sleep(1_000)
 		await evaluate(`history.replaceState(null, '', '?qaState=unavailable')`)
 		await Bun.sleep(3_200)
@@ -596,7 +601,7 @@ try {
 	})
 	await evaluate(`document.querySelector('#cancel-resume')?.click()`)
 	await evaluate(`window.fetch = window.__qaOriginalFetch`)
-	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
+	await navigateToDashboard('http://127.0.0.1:4183/')
 	await Bun.sleep(1_000)
 	await evaluate(`document.querySelector('#test-market-sources')?.click()`)
 	await Bun.sleep(500)
@@ -679,7 +684,7 @@ try {
 			const width = mobile ? 390 : 1440
 			const height = mobile ? 844 : 900
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
-			await command('Page.navigate', { url: `http://127.0.0.1:4183/?qa=${fragment}-${mobile ? 'mobile' : 'desktop'}#${fragment}` })
+			await navigateToDashboard(`http://127.0.0.1:4183/?qa=${fragment}-${mobile ? 'mobile' : 'desktop'}#${fragment}`)
 			await Bun.sleep(1_000)
 			const directEvidence = await evaluate(`(() => {
 				const active = document.querySelector('.section-nav a[aria-current="page"]')
