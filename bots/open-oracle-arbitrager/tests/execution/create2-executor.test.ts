@@ -164,7 +164,7 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 	expect(receivedRpcUrls).toEqual(publicRpcUrls)
 })
 
-async function runDeploymentScenario(options: { alreadyDeployed?: boolean; existingIntent?: boolean; primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
+async function runDeploymentScenario(options: { alreadyDeployed?: boolean; differingRecoveryHeads?: boolean; existingIntent?: boolean; primaryPreparationFails: boolean; primaryReceiptFails: boolean }) {
 	const privateKey = `0x${'11'.repeat(32)}` as Hex
 	const account = privateKeyToAccount(privateKey)
 	const salt = `0x${'22'.repeat(32)}` as Hex
@@ -205,7 +205,10 @@ async function runDeploymentScenario(options: { alreadyDeployed?: boolean; exist
 			return new Response('invalid request', { status: 400 })
 		}
 		if (body.method === 'eth_chainId') return rpcResponse('0x1')
-		if (body.method === 'eth_blockNumber') return rpcResponse('0x70')
+		if (body.method === 'eth_blockNumber') {
+			const head = options.differingRecoveryHeads ? { primary: 112n, secondary: 113n, tertiary: 114n }[name] : 112n
+			return rpcResponse(`0x${head.toString(16)}`)
+		}
 		if (body.method === 'eth_getBlockByNumber') return rpcResponse(block(BigInt(String(body.params[0]))))
 		if (body.method === 'eth_getTransactionCount') return rpcResponse('0x0')
 		if (body.method === 'eth_estimateGas') return rpcResponse('0x300000')
@@ -311,7 +314,7 @@ test('confirms through the secondary when the primary fails receipt polling afte
 })
 
 test('recovers a matching executor deployed by another account after this intent was persisted', async () => {
-	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, existingIntent: true, primaryPreparationFails: false, primaryReceiptFails: false })
+	const { broadcastRequests, result } = await runDeploymentScenario({ alreadyDeployed: true, differingRecoveryHeads: true, existingIntent: true, primaryPreparationFails: false, primaryReceiptFails: false })
 	expect(result.alreadyDeployed).toBe(true)
 	expect(result.transactionHash).toBeDefined()
 	expect(broadcastRequests).toEqual([])

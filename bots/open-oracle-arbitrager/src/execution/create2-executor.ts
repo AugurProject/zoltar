@@ -142,10 +142,10 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 	if (intent !== undefined) await assertExecutorDeploymentIntent(intent, account.address, parameters.chain.id, plan)
 	if (environment.code === 'verified' && parameters.existingIntent === undefined) return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
 	if (environment.code === 'verified' && parameters.existingIntent !== undefined) {
-		const head = await settledQuorumValue(
-			'executor deployment recovery head',
-			clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: await client.getBlockNumber() })),
-		)
+		const settledHeads = await Promise.allSettled(clients.map(async ({ client, rpcUrl }) => ({ endpoint: endpointLabel(rpcUrl), value: await client.getBlockNumber() })))
+		const heads = availableSettledValues(settledHeads)
+		if (heads.length < 2) throw new ConnectivityDegradedError('Executor deployment recovery requires at least two available independent RPC endpoints')
+		const head = heads.reduce((minimum, observation) => (observation.value < minimum ? observation.value : minimum), heads[0]?.value ?? 0n)
 		if (head < 12n) throw new ConnectivityDegradedError('Executor deployment recovery requires twelve canonical descendant blocks')
 		const finalizedCodeStatus = await settledQuorumValue(
 			'executor deployment finalized runtime',
