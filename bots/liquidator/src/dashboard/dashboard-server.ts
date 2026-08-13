@@ -65,6 +65,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					headers: headers('text/css; charset=utf-8'),
 				})
 			}
+			if (request.method === 'GET' && url.pathname === '/operator-console.css') {
+				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), {
+					headers: headers('text/css; charset=utf-8'),
+				})
+			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(transpiler.transformSync(await browserSource.text()), {
 					headers: headers('text/javascript; charset=utf-8'),

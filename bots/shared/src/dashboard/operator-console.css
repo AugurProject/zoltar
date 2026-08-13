@@ -1,0 +1,244 @@
+.operator-shell {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	border-bottom: 1px solid var(--operator-border);
+	background: var(--operator-background);
+}
+
+.operator-primary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.operator-safety {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.65rem;
+	min-width: 0;
+}
+
+.section-nav {
+	display: flex;
+	gap: 0.5rem;
+	overflow-x: auto;
+	padding-block: 0.75rem;
+	scrollbar-width: thin;
+}
+
+.section-nav a {
+	flex: 0 0 auto;
+	min-height: 2.25rem;
+	padding: 0.45rem 0.75rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 99rem;
+	color: var(--operator-muted);
+	text-decoration: none;
+}
+
+.section-nav a:hover,
+.section-nav a:focus-visible,
+.section-nav a[aria-current="page"] {
+	border-color: var(--operator-accent);
+	color: var(--operator-text);
+}
+
+.section-nav a[aria-current="page"] {
+	background: color-mix(in srgb, var(--operator-accent), transparent 88%);
+}
+
+.settings-intro {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-top: 1rem;
+}
+
+.settings-stack {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.settings-group > summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	min-height: 3rem;
+	cursor: pointer;
+	list-style: none;
+}
+
+.settings-group > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-group > summary::after {
+	content: "+";
+	flex: none;
+	color: var(--operator-accent);
+	font-size: 1.25rem;
+	line-height: 1;
+}
+
+.settings-group[open] > summary::after {
+	content: "−";
+}
+
+.settings-summary-copy {
+	display: grid;
+	gap: 0.2rem;
+	min-width: 0;
+}
+
+.settings-summary-copy small {
+	color: var(--operator-muted);
+	font-size: 0.78rem;
+	font-weight: 400;
+}
+
+.settings-body {
+	padding-top: 1rem;
+	border-top: 1px solid var(--operator-border);
+}
+
+.settings-subgroup {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.settings-subgroup + .settings-subgroup {
+	margin-top: 1.25rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--operator-border);
+}
+
+.settings-subgroup legend {
+	margin-bottom: 0.75rem;
+	color: var(--operator-text);
+	font-weight: 750;
+}
+
+.operator-dialog {
+	width: min(34rem, calc(100% - 2rem));
+	padding: 0;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.9rem;
+	background: var(--operator-surface);
+	color: var(--operator-text);
+	box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 50%);
+}
+
+.operator-dialog::backdrop {
+	background: rgb(0 0 0 / 70%);
+}
+
+.dialog-body {
+	display: grid;
+	gap: 1rem;
+	padding: 1.25rem;
+}
+
+.dialog-body h2,
+.dialog-body p {
+	margin: 0;
+}
+
+.preflight-list {
+	display: grid;
+	gap: 0.55rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.preflight-list li {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.7rem 0;
+	border-top: 1px solid var(--operator-border);
+}
+
+.preflight-list strong {
+	text-align: right;
+}
+
+.dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.75rem;
+}
+
+.alert-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.alert-action {
+	flex: none;
+	min-height: 2.25rem;
+	padding: 0.45rem 0.7rem;
+	border: 1px solid currentColor;
+	border-radius: 0.55rem;
+	color: inherit;
+	font-weight: 750;
+	text-decoration: none;
+}
+
+@media (max-width: 42rem) {
+	.operator-primary {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.operator-safety {
+		width: 100%;
+		justify-content: space-between;
+		flex-wrap: wrap;
+	}
+
+	.section-nav {
+		margin-inline: -0.15rem;
+		padding-top: 0.65rem;
+	}
+
+	.settings-intro,
+	.alert-row,
+	.preflight-list li {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.preflight-list strong {
+		text-align: left;
+	}
+
+	.alert-action {
+		align-self: flex-start;
+	}
+
+	.dialog-actions {
+		flex-direction: column-reverse;
+	}
+
+	.dialog-actions button {
+		width: 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.operator-shell,
+	.section-nav {
+		scroll-behavior: auto !important;
+	}
+}

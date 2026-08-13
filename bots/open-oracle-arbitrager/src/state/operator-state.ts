@@ -238,6 +238,43 @@ export type OperatorState = {
 	transactionActivity: TransactionActivity[]
 }
 
+const GENERIC_PUBLIC_FAILURE = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
+
+export function publicOperatorFailure(error: string, fallback = GENERIC_PUBLIC_FAILURE) {
+	const normalized = error.toLowerCase()
+	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
+	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
+	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
+	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
+	if (normalized.includes('risk') || normalized.includes('limit') || normalized.includes('policy')) return 'A risk or execution policy prevented this operation. Review the active risk envelope and protected bot logs.'
+	return fallback
+}
+
+function transactionActivityOperation(entry: OperationEntry) {
+	return entry.category === 'transaction' && /^(?:approval-token|approval-weth|canonical-head|dispute|settle|withdraw-replacement|withdraw-token|withdraw-weth) (?:confirmation-unknown|confirmed|pending|reverted|submission-failed|submitting)$/.test(entry.message)
+}
+
+export function publicOperatorSnapshot(snapshot: OperatorSnapshot): OperatorSnapshot {
+	return {
+		...snapshot,
+		endpointChecks: snapshot.endpointChecks.map(check => ({ ...check, error: check.error === undefined ? undefined : publicOperatorFailure(check.error) })),
+		lastError: snapshot.lastError === undefined ? undefined : publicOperatorFailure(snapshot.lastError),
+		operationLog: snapshot.operationLog.map(entry => {
+			const errorBearingEntry = entry.level !== 'info'
+			if (!errorBearingEntry && !transactionActivityOperation(entry)) return entry
+			return {
+				...entry,
+				details: entry.details === undefined ? undefined : publicOperatorFailure(entry.details),
+				reason: errorBearingEntry && entry.reason !== undefined ? publicOperatorFailure(entry.reason) : entry.reason,
+			}
+		}),
+		transactionActivity: snapshot.transactionActivity.map(activity => ({
+			...activity,
+			failedTargets: activity.failedTargets.map(target => ({ ...target, error: target.error === undefined ? undefined : publicOperatorFailure(target.error) })),
+		})),
+	}
+}
+
 export function recordOperation(state: OperatorState, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
 	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
 }
@@ -549,7 +586,7 @@ export function operatorSnapshot(
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(bigintToSafeNumber(BigInt(state.blockTimestamp) * 1_000n, 'Operator block timestamp'))
 	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
-	return {
+	return publicOperatorSnapshot({
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
 		blockNumber: state.blockNumber,
@@ -629,5 +666,5 @@ export function operatorSnapshot(
 		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),
 		wallet: fixed.wallet,
-	}
+	})
 }

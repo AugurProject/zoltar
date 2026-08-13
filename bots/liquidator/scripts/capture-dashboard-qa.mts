@@ -11,7 +11,8 @@ type CdpResponse = {
 
 const qaDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
 await mkdir(qaDirectory, { recursive: true })
-const browser = Bun.spawn(['/usr/bin/chromium', '--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--remote-debugging-port=9333', `--user-data-dir=${resolve(qaDirectory, `chrome-profile-${Date.now().toString()}`)}`, 'about:blank'], { stderr: 'pipe', stdout: 'pipe' })
+const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
+const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--remote-debugging-port=9333', `--user-data-dir=${resolve(qaDirectory, `chrome-profile-${Date.now().toString()}`)}`, 'about:blank'], { stderr: 'pipe', stdout: 'pipe' })
 
 try {
 	let tabs: unknown
@@ -70,6 +71,18 @@ try {
 	await command('Runtime.enable')
 	await command('Log.enable')
 	await command('Page.enable')
+	await command('Page.addScriptToEvaluateOnNewDocument', {
+		source: `(() => {
+			const originalFetch = window.fetch
+			window.fetch = (input, init) => {
+				const path = typeof input === 'string' ? new URL(input, window.location.href).pathname : input instanceof Request ? new URL(input.url).pathname : String(input)
+				if (new URL(window.location.href).searchParams.get('qaState') === 'unavailable' && path === '/api/state' && init?.method === undefined) {
+					return Promise.resolve(new Response(JSON.stringify({ error: 'fixture state endpoint unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 }))
+				}
+				return originalFetch(input, init)
+			}
+		})()`,
+	})
 
 	const evaluate = async (expression: string) => {
 		const response = await command('Runtime.evaluate', {
@@ -83,14 +96,30 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async (name: string, width: number, height: number, scrollY = 0) => {
+	const capture = async (name: string, width: number, height: number, scrollY = 0, fragment = 'overview') => {
 		await command('Emulation.setDeviceMetricsOverride', {
 			deviceScaleFactor: 1,
 			height,
 			mobile: false,
 			width,
 		})
-		await evaluate(`window.scrollTo(0, ${scrollY.toString()})`)
+		await evaluate(`(() => {
+			history.replaceState(null, '', '#${fragment}')
+			const links = [...document.querySelectorAll('.section-nav a[href^="#"]')]
+			const primaryFragment = ${JSON.stringify(fragment === 'recovery' ? 'operations' : fragment)}
+			const activeLink = links.find(link => link.hash === '#' + primaryFragment)
+			for (const link of links) {
+				if (link === activeLink) link.setAttribute('aria-current', 'page')
+				else link.removeAttribute('aria-current')
+			}
+			const navigation = activeLink?.closest('.section-nav')
+			if (navigation instanceof HTMLElement && activeLink instanceof HTMLElement) {
+				const activeRect = activeLink.getBoundingClientRect()
+				const navigationRect = navigation.getBoundingClientRect()
+				navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+			}
+			window.scrollTo(0, ${scrollY.toString()})
+		})()`)
 		await Bun.sleep(200)
 		const response = await command('Page.captureScreenshot', {
 			captureBeyondViewport: false,
@@ -112,7 +141,13 @@ try {
 	}
 
 	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
-	await Bun.sleep(100)
+	let loadedTitle: unknown
+	for (let attempt = 0; attempt < 50; attempt += 1) {
+		loadedTitle = await evaluate(`document.querySelector('h1')?.textContent`)
+		if (loadedTitle === 'Pool liquidator') break
+		await Bun.sleep(100)
+	}
+	if (loadedTitle !== 'Pool liquidator') throw new Error(`Liquidator dashboard fixture did not load: ${String(loadedTitle)}`)
 	const configurationLoading = await evaluate(`({
 		checkboxDisabled: document.querySelector('#pool-rows input[type="checkbox"]')?.disabled,
 		strategyDisabled: document.querySelector('#strategy-fields')?.disabled,
@@ -124,23 +159,233 @@ try {
 	await Bun.sleep(900)
 	diagnostics.length = 0
 	const desktop = await capture('liquidator-desktop', 1440, 900)
+	const unconfiguredNetworkBadge = await evaluate(`document.querySelector('#network-badge')?.textContent`)
+	const unconfiguredNetworkMobile = await capture('liquidator-network-unconfigured-mobile', 390, 844)
+	await evaluate(`(() => {
+		const form = document.querySelector('#network-form')
+		const network = document.querySelector('#network-name')
+		const readRpc = document.querySelector('#read-rpc-url')
+		const publicRpcs = document.querySelector('#public-rpc-urls')
+		const quorumRpcs = document.querySelector('#quorum-rpc-urls')
+		if (!(form instanceof HTMLFormElement) || !(network instanceof HTMLSelectElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) {
+			throw new Error('Network configuration controls missing')
+		}
+		network.value = 'mainnet'
+		readRpc.value = 'https://read.example'
+		publicRpcs.value = 'https://rpc.example'
+		quorumRpcs.value = 'https://quorum.example'
+		form.requestSubmit()
+	})()`)
+	await Bun.sleep(700)
+	const configuredNetwork = await evaluate(`({
+		badge: document.querySelector('#network-badge')?.textContent,
+		status: document.querySelector('#network-status')?.textContent
+	})`)
+	if (unconfiguredNetworkBadge !== 'Network not configured' || typeof configuredNetwork !== 'object' || configuredNetwork === null || !('badge' in configuredNetwork) || configuredNetwork.badge !== 'Mainnet · chain 1') {
+		throw new Error('Network safety badge did not update from unconfigured to mainnet')
+	}
+	const configuredNetworkDesktop = await capture('liquidator-network-mainnet-desktop', 1440, 900)
+	const configuredNetworkMobile = await capture('liquidator-network-mainnet-mobile', 390, 844)
+	const networkStates = {
+		configured: configuredNetwork,
+		configuredDesktop: configuredNetworkDesktop,
+		configuredMobile: configuredNetworkMobile,
+		unconfiguredBadge: unconfiguredNetworkBadge,
+		unconfiguredDesktop: desktop,
+		unconfiguredMobile: unconfiguredNetworkMobile,
+	}
+	const readConnectionState = () =>
+		evaluate(`(() => {
+			const safetyVisible = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'pause-button'].every(id => {
+				const target = document.getElementById(id)
+				if (!(target instanceof HTMLElement)) return false
+				const rect = target.getBoundingClientRect()
+				return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+			})
+			return {
+				attentionHref: document.querySelector('#attention-badge')?.getAttribute('href'),
+				attentionText: document.querySelector('#attention-badge')?.textContent,
+				bodyScrollWidth: document.body.scrollWidth,
+				mode: document.querySelector('#mode-badge')?.textContent,
+				network: document.querySelector('#network-badge')?.textContent,
+				noticeCopy: document.querySelector('#global-error')?.textContent,
+				pauseDisabled: document.querySelector('#pause-button')?.disabled,
+				runStatus: document.querySelector('#run-status-badge')?.textContent,
+				safetyVisible,
+				settingsDisabled: ['network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer'].every(id => {
+					const target = document.getElementById(id)
+					return target instanceof HTMLFieldSetElement || target instanceof HTMLButtonElement ? target.disabled : false
+				}),
+				dynamicControlsDisabled: [...document.querySelectorAll('#pool-rows input, #universe-rows input, #recovery-list input, #recovery-list button')].every(control => control instanceof HTMLInputElement || control instanceof HTMLButtonElement ? control.disabled : false),
+				scrollX: window.scrollX
+			}
+		})()`)
+	const connectionFailures: Record<string, unknown> = {}
+	for (const mobile of [false, true]) {
+		const width = mobile ? 390 : 1440
+		const height = mobile ? 844 : 900
+		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
+		await command('Page.navigate', { url: `http://127.0.0.1:4183/?qaState=unavailable&connection=initial-${mobile ? 'mobile' : 'desktop'}` })
+		await Bun.sleep(1_000)
+		const initialFailure = await readConnectionState()
+		if (
+			typeof initialFailure !== 'object' ||
+			initialFailure === null ||
+			!('attentionText' in initialFailure) ||
+			initialFailure.attentionText !== '1 action' ||
+			!('mode' in initialFailure) ||
+			initialFailure.mode !== 'Mode unavailable' ||
+			!('network' in initialFailure) ||
+			initialFailure.network !== 'Mainnet · chain 1 · unverified' ||
+			!('pauseDisabled' in initialFailure) ||
+			initialFailure.pauseDisabled !== true ||
+			!('runStatus' in initialFailure) ||
+			initialFailure.runStatus !== 'Disconnected' ||
+			!('settingsDisabled' in initialFailure) ||
+			initialFailure.settingsDisabled !== true ||
+			!('dynamicControlsDisabled' in initialFailure) ||
+			initialFailure.dynamicControlsDisabled !== true ||
+			!('safetyVisible' in initialFailure) ||
+			initialFailure.safetyVisible !== true ||
+			!('bodyScrollWidth' in initialFailure) ||
+			typeof initialFailure.bodyScrollWidth !== 'number' ||
+			initialFailure.bodyScrollWidth > width ||
+			!('scrollX' in initialFailure) ||
+			initialFailure.scrollX !== 0
+		) {
+			throw new Error(`Initial Liquidator state-request failure is unsafe: ${JSON.stringify(initialFailure)}`)
+		}
+		connectionFailures[`initial-${mobile ? 'mobile' : 'desktop'}`] = { screenshot: await capture(`liquidator-connection-initial-failure-${mobile ? 'mobile' : 'desktop'}`, width, height), state: initialFailure }
+		await command('Page.navigate', { url: `http://127.0.0.1:4183/?connection=post-success-${mobile ? 'mobile' : 'desktop'}` })
+		await Bun.sleep(1_000)
+		await evaluate(`history.replaceState(null, '', '?qaState=unavailable')`)
+		await Bun.sleep(3_200)
+		const postSuccessFailure = await readConnectionState()
+		if (
+			typeof postSuccessFailure !== 'object' ||
+			postSuccessFailure === null ||
+			!('attentionHref' in postSuccessFailure) ||
+			postSuccessFailure.attentionHref !== '#global-error' ||
+			!('attentionText' in postSuccessFailure) ||
+			postSuccessFailure.attentionText !== '2 actions' ||
+			!('mode' in postSuccessFailure) ||
+			postSuccessFailure.mode !== 'Dry run · last known' ||
+			!('network' in postSuccessFailure) ||
+			postSuccessFailure.network !== 'Mainnet · chain 1 · last known' ||
+			!('noticeCopy' in postSuccessFailure) ||
+			typeof postSuccessFailure.noticeCopy !== 'string' ||
+			!postSuccessFailure.noticeCopy.includes('Automatic retry is active') ||
+			postSuccessFailure.noticeCopy.includes('fixture state endpoint unavailable') ||
+			!('pauseDisabled' in postSuccessFailure) ||
+			postSuccessFailure.pauseDisabled !== true ||
+			!('runStatus' in postSuccessFailure) ||
+			postSuccessFailure.runStatus !== 'Disconnected' ||
+			!('settingsDisabled' in postSuccessFailure) ||
+			postSuccessFailure.settingsDisabled !== true ||
+			!('dynamicControlsDisabled' in postSuccessFailure) ||
+			postSuccessFailure.dynamicControlsDisabled !== true ||
+			!('safetyVisible' in postSuccessFailure) ||
+			postSuccessFailure.safetyVisible !== true ||
+			!('bodyScrollWidth' in postSuccessFailure) ||
+			typeof postSuccessFailure.bodyScrollWidth !== 'number' ||
+			postSuccessFailure.bodyScrollWidth > width ||
+			!('scrollX' in postSuccessFailure) ||
+			postSuccessFailure.scrollX !== 0
+		) {
+			throw new Error(`Post-success Liquidator state-request failure is unsafe: ${JSON.stringify(postSuccessFailure)}`)
+		}
+		connectionFailures[`post-success-${mobile ? 'mobile' : 'desktop'}`] = { screenshot: await capture(`liquidator-connection-post-success-failure-${mobile ? 'mobile' : 'desktop'}`, width, height), state: postSuccessFailure }
+		await evaluate(`history.replaceState(null, '', '/')`)
+		await Bun.sleep(3_200)
+		const recovery = await readConnectionState()
+		if (
+			typeof recovery !== 'object' ||
+			recovery === null ||
+			!('attentionText' in recovery) ||
+			recovery.attentionText !== '1 action' ||
+			!('mode' in recovery) ||
+			recovery.mode !== 'Dry run' ||
+			!('network' in recovery) ||
+			recovery.network !== 'Mainnet · chain 1' ||
+			!('pauseDisabled' in recovery) ||
+			recovery.pauseDisabled !== false ||
+			!('runStatus' in recovery) ||
+			recovery.runStatus !== 'Running'
+		) {
+			throw new Error(`Liquidator state-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
+		}
+	}
+	await evaluate(`(() => {
+		window.__qaErrorOriginalFetch = window.fetch
+		window.fetch = async (input, init) => {
+			const path = typeof input === 'string' ? input : input instanceof Request ? new URL(input.url).pathname : String(input)
+			const response = await window.__qaErrorOriginalFetch(input, init)
+			if (path !== '/api/state' || init?.method !== undefined) return response
+			const state = await response.json()
+			return new Response(JSON.stringify({ ...state, alerts: [], error: 'Read RPC stalled at block 8842011', pendingTransactions: [] }), {
+				headers: { 'content-type': 'application/json' },
+				status: response.status
+			})
+		}
+	})()`)
+	await Bun.sleep(3_200)
+	const errorOnlyState = await evaluate(`({
+		action: document.querySelector('#attention-badge[href="#global-error"]')?.textContent,
+		attention: document.querySelector('#attention-badge')?.textContent,
+		detail: document.querySelector('#global-error')?.textContent,
+		noticeCount: [...document.querySelectorAll('main > .notice.error:not(.hidden)')].length,
+		operatorAlertsHidden: document.querySelector('#operator-alerts')?.classList.contains('hidden'),
+		runStatus: document.querySelector('#run-status-badge')?.textContent
+	})`)
+	if (
+		typeof errorOnlyState !== 'object' ||
+		errorOnlyState === null ||
+		!('action' in errorOnlyState) ||
+		!('attention' in errorOnlyState) ||
+		!('detail' in errorOnlyState) ||
+		!('noticeCount' in errorOnlyState) ||
+		!('operatorAlertsHidden' in errorOnlyState) ||
+		!('runStatus' in errorOnlyState) ||
+		errorOnlyState.action !== '1 action' ||
+		errorOnlyState.attention !== '1 action' ||
+		typeof errorOnlyState.detail !== 'string' ||
+		!errorOnlyState.detail.includes('RPC connectivity or chain reads failed.') ||
+		!errorOnlyState.detail.includes('Automatic retry is active.') ||
+		errorOnlyState.detail.includes('Read RPC stalled at block 8842011') ||
+		errorOnlyState.noticeCount !== 1 ||
+		errorOnlyState.operatorAlertsHidden !== true ||
+		errorOnlyState.runStatus !== 'Error'
+	) {
+		throw new Error('Scan-only error did not create one actionable operator blocker')
+	}
+	const errorOnlyDesktop = await capture('liquidator-error-only-desktop', 1440, 900)
+	const errorOnlyMobile = await capture('liquidator-error-only-mobile', 390, 844)
+	await evaluate(`window.fetch = window.__qaErrorOriginalFetch`)
+	await Bun.sleep(3_200)
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressDesktop = await capture('liquidator-address-expanded-desktop', 1440, 900)
 	await evaluate(`document.querySelector('.address-details')?.removeAttribute('open')`)
 	await evaluate(`document.querySelector('#pause-button')?.click()`)
 	await Bun.sleep(500)
 	const pausedDesktop = await capture('liquidator-paused-desktop', 1440, 900)
+	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await Bun.sleep(100)
 	const recoveryDesktopOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof recoveryDesktopOffset !== 'number') throw new Error('Desktop recovery section offset is unavailable')
-	const recoveryDesktop = await capture('liquidator-recovery-desktop', 1440, 900, recoveryDesktopOffset)
+	const recoveryDesktop = await capture('liquidator-recovery-desktop', 1440, 900, recoveryDesktopOffset, 'recovery')
 	const pausedMobile = await capture('liquidator-paused-mobile', 390, 844)
+	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await Bun.sleep(100)
 	const recoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof recoveryMobileOffset !== 'number') throw new Error('Mobile recovery section offset is unavailable')
-	const recoveryMobile = await capture('liquidator-recovery-mobile', 390, 844, recoveryMobileOffset)
+	const recoveryMobile = await capture('liquidator-recovery-mobile', 390, 844, recoveryMobileOffset, 'recovery')
 	const evidence = {
+		connectionFailures,
 		configurationLoading,
 		desktop,
+		errorOnly: { desktop: errorOnlyDesktop, mobile: errorOnlyMobile, state: errorOnlyState },
 		expandedAddressDesktop,
+		networkStates,
 		pausedDesktop,
 		pausedMobile,
 		recoveryDesktop,
@@ -263,7 +508,7 @@ try {
 				if (!(universeCheckbox instanceof HTMLInputElement)) throw new Error('Universe checkbox missing')
 				universeCheckbox.click()
 				await new Promise(resolve => setTimeout(resolve, 100))
-				const universe = universeCheckbox.closest('td')?.querySelector('.action-status')?.textContent
+				const universe = universeCheckbox.closest('.truth-family')?.querySelector('.action-status')?.textContent
 				failedPath = '/api/strategy'
 				document.querySelector('#strategy-form')?.requestSubmit()
 				await new Promise(resolve => setTimeout(resolve, 100))
@@ -288,7 +533,7 @@ try {
 		configurationFailure,
 		centralizedMarketsDesktop: undefined as unknown,
 		centralizedMarketsMobile: undefined as unknown,
-		livePaused: undefined as unknown,
+		livePaused: {} as Record<string, unknown>,
 		mobileOverview: undefined as unknown,
 		mobileMigrationControl: undefined as unknown,
 		mobilePools: undefined as unknown,
@@ -309,6 +554,7 @@ try {
 		}
 	})()`)
 	await Bun.sleep(3_200)
+	await evaluate(`document.querySelector('#pause-status')?.replaceChildren()`)
 	evidence.livePaused = {
 		desktop: await capture('liquidator-paused-live-desktop', 1440, 900),
 		mobile: await capture('liquidator-paused-live-mobile', 390, 844),
@@ -317,6 +563,16 @@ try {
 			runStatus: document.querySelector('#run-status-badge')?.textContent
 		})`),
 	}
+	await evaluate(`document.querySelector('#pause-button')?.click()`)
+	await Bun.sleep(200)
+	Object.assign(evidence.livePaused, {
+		resumeDialog: await capture('liquidator-resume-preflight-desktop', 1440, 900),
+		resumePreflight: await evaluate(`({
+			open: document.querySelector('#resume-dialog')?.hasAttribute('open'),
+			text: document.querySelector('#resume-preflight')?.textContent
+		})`),
+	})
+	await evaluate(`document.querySelector('#cancel-resume')?.click()`)
 	await evaluate(`window.fetch = window.__qaOriginalFetch`)
 	await command('Page.navigate', { url: 'http://127.0.0.1:4183/' })
 	await Bun.sleep(1_000)
@@ -325,10 +581,43 @@ try {
 	const sourceProbeRows = await evaluate(`[...document.querySelectorAll('#market-source-rows tr')].map(row => row.textContent)`)
 	Object.assign(evidence, { sourceProbeRows })
 	evidence.mobileOverview = await capture('liquidator-mobile-overview', 390, 844)
-	const universesTop = await evaluate(`Math.max(0, (document.querySelector('#universes-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
-	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0)
+	const universesTop = await evaluate(`(() => {
+		const target = document.querySelector('#universes-title')?.closest('details')
+		target?.setAttribute('open', '')
+		return Math.max(0, (target?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)
+	})()`)
+	evidence.mobileUniverses = await capture('liquidator-mobile-universes', 390, 844, typeof universesTop === 'number' ? universesTop : 0, 'settings')
+	const deepScrollSafety = await evaluate(`(() => {
+		const ids = ['mode-badge', 'network-badge', 'run-status-badge', 'attention-badge', 'pause-button']
+		return Object.fromEntries(ids.map(id => {
+			const target = document.getElementById(id)
+			if (!(target instanceof HTMLElement)) return [id, { visible: false }]
+			const rect = target.getBoundingClientRect()
+			return [id, {
+				bottom: rect.bottom,
+				left: rect.left,
+				right: rect.right,
+				top: rect.top,
+				visible: rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+			}]
+		}))
+	})()`)
+	if (typeof deepScrollSafety !== 'object' || deepScrollSafety === null || Object.values(deepScrollSafety).some(value => typeof value !== 'object' || value === null || !('visible' in value) || value.visible !== true)) {
+		throw new Error(`Deep-scroll safety controls are not fully visible: ${JSON.stringify(deepScrollSafety)}`)
+	}
+	Object.assign(evidence, { deepScrollSafety })
+	const rootUniverseTarget = await evaluate(`(() => {
+		const target = document.querySelector('.truth-root-toggle')
+		if (!(target instanceof HTMLElement)) return undefined
+		const rect = target.getBoundingClientRect()
+		return { height: rect.height, width: rect.width }
+	})()`)
+	if (typeof rootUniverseTarget !== 'object' || rootUniverseTarget === null || !('height' in rootUniverseTarget) || !('width' in rootUniverseTarget) || typeof rootUniverseTarget.height !== 'number' || typeof rootUniverseTarget.width !== 'number' || rootUniverseTarget.height < 44 || rootUniverseTarget.width < 44) {
+		throw new Error('Root universe approval target is smaller than 44px')
+	}
+	Object.assign(evidence, { rootUniverseTarget })
 	const centralizedMarketsMobileTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
-	evidence.centralizedMarketsMobile = await capture('liquidator-centralized-markets-mobile', 390, 844, typeof centralizedMarketsMobileTop === 'number' ? centralizedMarketsMobileTop : 0)
+	evidence.centralizedMarketsMobile = await capture('liquidator-centralized-markets-mobile', 390, 844, typeof centralizedMarketsMobileTop === 'number' ? centralizedMarketsMobileTop : 0, 'markets')
 	await command('Emulation.setDeviceMetricsOverride', {
 		deviceScaleFactor: 1,
 		height: 900,
@@ -336,28 +625,90 @@ try {
 		width: 1440,
 	})
 	const centralizedMarketsDesktopTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
-	const sourceProbeDesktop = await capture('liquidator-source-probe-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0)
+	const sourceProbeDesktop = await capture('liquidator-source-probe-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0, 'markets')
 	Object.assign(evidence, { sourceProbeDesktop })
 	await evaluate(`document.querySelector('#show-active-admission')?.click()`)
 	await Bun.sleep(200)
-	evidence.centralizedMarketsDesktop = await capture('liquidator-centralized-markets-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0)
+	evidence.centralizedMarketsDesktop = await capture('liquidator-centralized-markets-desktop', 1440, 900, typeof centralizedMarketsDesktopTop === 'number' ? centralizedMarketsDesktopTop : 0, 'markets')
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressTop = await evaluate(`Math.max(0, (document.querySelector('.address-details')?.getBoundingClientRect().top ?? 0) + window.scrollY - 160)`)
 	const expandedAddressScroll = typeof expandedAddressTop === 'number' ? expandedAddressTop : 0
-	const expandedAddressMobile = await capture('liquidator-address-expanded-mobile', 390, 844, expandedAddressScroll)
+	const expandedAddressMobile = await capture('liquidator-address-expanded-mobile', 390, 844, expandedAddressScroll, 'pools')
 	await evaluate(`document.querySelector('.address-details')?.removeAttribute('open')`)
 	const poolsTop = await evaluate(`Math.max(0, (document.querySelector('#pools-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
-	const strategyTop = await evaluate(`Math.max(0, (document.querySelector('#strategy-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 16)`)
-	evidence.mobilePools = await capture('liquidator-mobile-pools', 390, 844, typeof poolsTop === 'number' ? poolsTop : 0)
-	evidence.mobileStrategy = await capture('liquidator-mobile-strategy', 390, 844, typeof strategyTop === 'number' ? strategyTop : 0)
+	const strategyTop = await evaluate(`(() => {
+		const target = document.querySelector('#strategy-title')?.closest('details')
+		target?.setAttribute('open', '')
+		return Math.max(0, (target?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)
+	})()`)
+	evidence.mobilePools = await capture('liquidator-mobile-pools', 390, 844, typeof poolsTop === 'number' ? poolsTop : 0, 'pools')
+	evidence.mobileStrategy = await capture('liquidator-mobile-strategy', 390, 844, typeof strategyTop === 'number' ? strategyTop : 0, 'settings')
 	const migrationControlTop = await evaluate(`Math.max(0, (document.querySelector('input[name="allowAutomaticVaultMigrations"]')?.getBoundingClientRect().top ?? 0) + window.scrollY - 500)`)
-	evidence.mobileMigrationControl = await capture('liquidator-mobile-migration-control', 390, 844, typeof migrationControlTop === 'number' ? migrationControlTop : 0)
+	evidence.mobileMigrationControl = await capture('liquidator-mobile-migration-control', 390, 844, typeof migrationControlTop === 'number' ? migrationControlTop : 0, 'settings')
 	Object.assign(evidence, { expandedAddressMobile })
 	const mobileOverflow = await evaluate(`[...document.querySelectorAll('*')]
 		.filter(element => element.closest('thead') === null && !element.classList.contains('visually-hidden'))
 		.map(element => ({ className: element.className, id: element.id, name: element.tagName, rect: element.getBoundingClientRect().toJSON(), scrollWidth: element.scrollWidth }))
 		.filter(item => item.rect.right > document.documentElement.clientWidth + 1 || item.scrollWidth > item.rect.width + 1)
 		.slice(0, 20)`)
+	const directFragments: Record<string, unknown> = {}
+	for (const fragment of ['overview', 'pools', 'markets', 'operations', 'settings']) {
+		for (const mobile of [false, true]) {
+			const width = mobile ? 390 : 1440
+			const height = mobile ? 844 : 900
+			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
+			await command('Page.navigate', { url: `http://127.0.0.1:4183/?qa=${fragment}-${mobile ? 'mobile' : 'desktop'}#${fragment}` })
+			await Bun.sleep(1_000)
+			const directEvidence = await evaluate(`(() => {
+				const active = document.querySelector('.section-nav a[aria-current="page"]')
+				const header = document.querySelector('.operator-shell')
+				const navigation = document.querySelector('.section-nav')
+				const target = document.getElementById(${JSON.stringify(fragment)})
+				if (!(active instanceof HTMLAnchorElement) || !(header instanceof HTMLElement) || !(navigation instanceof HTMLElement) || !(target instanceof HTMLElement)) return undefined
+				const context = target.querySelector('h2') ?? target
+				const activeRect = active.getBoundingClientRect()
+				const navigationRect = navigation.getBoundingClientRect()
+				return {
+					activeLeft: activeRect.left,
+					activeRight: activeRect.right,
+					activeHref: active.getAttribute('href'),
+					activeVisible: activeRect.left >= navigationRect.left - 1 && activeRect.right <= navigationRect.right + 1,
+					bodyScrollWidth: document.body.scrollWidth,
+					headerBottom: header.getBoundingClientRect().bottom,
+					navigationClientWidth: navigation.clientWidth,
+					navigationLeft: navigationRect.left,
+					navigationRight: navigationRect.right,
+					navigationScrollLeft: navigation.scrollLeft,
+					navigationScrollWidth: navigation.scrollWidth,
+					targetTop: context.getBoundingClientRect().top
+				}
+			})()`)
+			if (
+				typeof directEvidence !== 'object' ||
+				directEvidence === null ||
+				!('activeHref' in directEvidence) ||
+				directEvidence.activeHref !== `#${fragment}` ||
+				!('activeVisible' in directEvidence) ||
+				directEvidence.activeVisible !== true ||
+				!('headerBottom' in directEvidence) ||
+				!('targetTop' in directEvidence) ||
+				typeof directEvidence.headerBottom !== 'number' ||
+				typeof directEvidence.targetTop !== 'number' ||
+				directEvidence.targetTop < directEvidence.headerBottom ||
+				(mobile && 'bodyScrollWidth' in directEvidence && typeof directEvidence.bodyScrollWidth === 'number' && directEvidence.bodyScrollWidth > width)
+			) {
+				throw new Error(`Direct #${fragment} navigation failed at ${width.toString()}px: ${JSON.stringify(directEvidence)}`)
+			}
+			const response = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })
+			if (typeof response !== 'object' || response === null || Array.isArray(response)) throw new Error(`Direct #${fragment} screenshot response is invalid`)
+			const data = Reflect.get(response, 'data')
+			if (typeof data !== 'string') throw new Error(`Direct #${fragment} screenshot is missing PNG data`)
+			const key = `${fragment}-${mobile ? 'mobile' : 'desktop'}`
+			directFragments[key] = directEvidence
+			await Bun.write(resolve(qaDirectory, `liquidator-direct-${key}.png`), Buffer.from(data, 'base64'))
+		}
+	}
+	Object.assign(evidence, { directFragments })
 	await Bun.write(resolve(qaDirectory, 'evidence.json'), `${JSON.stringify({ diagnostics, evidence, mobileOverflow }, undefined, 2)}\n`)
 	socket.close()
 } finally {

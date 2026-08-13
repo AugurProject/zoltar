@@ -164,16 +164,18 @@ const marketConfigurationSaveStatus = element('market-configuration-save-status'
 const testMarketSourcesButton = element('test-market-sources', HTMLButtonElement)
 const showActiveAdmissionButton = element('show-active-admission', HTMLButtonElement)
 const marketSourceCaption = element('market-source-caption', HTMLTableCaptionElement)
-const marketSourceTestStatus = element('market-source-test-status', HTMLParagraphElement)
+const marketSourceTestStatus = element('market-source-test-status', HTMLSpanElement)
 const marketSourceRows = element('market-source-rows', HTMLTableSectionElement)
 const operatorAlerts = element('operator-alerts', HTMLUListElement)
 const recoveryList = element('recovery-list', HTMLDivElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
-const universeRows = element('universe-rows', HTMLTableSectionElement)
+const universeRows = element('universe-rows', HTMLDivElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
+const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
+const attentionBadge = element('attention-badge', HTMLAnchorElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const lastScan = element('last-scan', HTMLParagraphElement)
@@ -187,7 +189,12 @@ const signerForm = element('signer-form', HTMLFormElement)
 const signerStatus = element('signer-status', HTMLSpanElement)
 const updateSignerButton = element('update-signer', HTMLButtonElement)
 const clearSignerButton = element('clear-signer', HTMLButtonElement)
-const walletAddress = element('wallet-address', HTMLParagraphElement)
+const walletAddress = element('wallet-address', HTMLElement)
+const healthPolicyPreview = element('health-policy-preview', HTMLParagraphElement)
+const resumeDialog = element('resume-dialog', HTMLElement)
+const resumePreflight = element('resume-preflight', HTMLUListElement)
+const cancelResume = element('cancel-resume', HTMLButtonElement)
+const confirmResume = element('confirm-resume', HTMLButtonElement)
 
 let currentSnapshot: Snapshot | undefined
 let currentConfiguration: Configuration | undefined
@@ -200,6 +207,25 @@ const universeActionStates = new Map<string, { failed: boolean; message: string 
 const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
 let renderedAlertKey: string | undefined
 let marketSourceProbeRows: MarketSourceRow[] | undefined
+let initialFragmentApplied = false
+let stateConnected = false
+
+function setMutationControlsEnabled(enabled: boolean) {
+	const configurationAvailable = enabled && currentConfiguration !== undefined
+	pauseButton.disabled = !enabled
+	confirmResume.disabled = !enabled
+	networkFields.disabled = !configurationAvailable
+	marketConfigurationFields.disabled = !configurationAvailable
+	strategyFields.disabled = !configurationAvailable
+	const privateKeyField = signerForm.elements.namedItem('privateKey')
+	for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !enabled
+	updateSignerButton.disabled = !enabled || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
+	testMarketSourcesButton.disabled = !enabled
+	recheckRecovery.disabled = !enabled
+	if (!enabled) {
+		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #universe-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
+	}
+}
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
 	const response = await fetch(path, options)
@@ -256,15 +282,39 @@ function renderMetrics(snapshot: Snapshot) {
 }
 
 function renderAlerts(snapshot: Snapshot) {
-	const alertKey = snapshot.alerts.map(alert => `${alert.severity}:${alert.message}`).join('\n')
+	const alertKey = `${snapshot.pendingTransactions.length.toString()}\n${snapshot.alerts.map(alert => `${alert.severity}:${alert.message}`).join('\n')}`
 	if (renderedAlertKey === alertKey) return
 	renderedAlertKey = alertKey
-	operatorAlerts.classList.toggle('hidden', snapshot.alerts.length === 0)
+	const alerts: { actionHref?: string; actionLabel?: string; message: string; severity: 'error' | 'warning' }[] = snapshot.alerts.map(alert => ({ ...alert }))
+	if (snapshot.pendingTransactions.length > 0) {
+		const recoveryAlert = alerts[0]
+		if (recoveryAlert === undefined) {
+			alerts.unshift({
+				actionHref: '#recovery',
+				actionLabel: 'Review recovery',
+				message: `${snapshot.pendingTransactions.length.toString()} transaction ${snapshot.pendingTransactions.length === 1 ? 'intent requires' : 'intents require'} operator recovery before execution can continue.`,
+				severity: 'warning',
+			})
+		} else {
+			recoveryAlert.actionHref = '#recovery'
+			recoveryAlert.actionLabel = 'Review recovery'
+		}
+	}
+	operatorAlerts.classList.toggle('hidden', alerts.length === 0)
 	operatorAlerts.replaceChildren(
-		...snapshot.alerts.map(alert => {
+		...alerts.map(alert => {
 			const item = document.createElement('li')
-			item.className = `notice ${alert.severity}`
-			item.textContent = alert.message
+			item.className = `notice alert-row ${alert.severity}`
+			const message = document.createElement('span')
+			message.textContent = alert.message
+			item.append(message)
+			if (alert.actionHref !== undefined && alert.actionLabel !== undefined) {
+				const action = document.createElement('a')
+				action.className = 'alert-action'
+				action.href = alert.actionHref
+				action.textContent = alert.actionLabel
+				item.append(action)
+			}
 			return item
 		}),
 	)
@@ -332,7 +382,7 @@ function renderRecovery(snapshot: Snapshot) {
 			const button = document.createElement('button')
 			button.type = 'submit'
 			button.textContent = 'Verify & reconcile'
-			button.disabled = !snapshot.paused
+			button.disabled = !stateConnected || !snapshot.paused
 			const status = document.createElement('span')
 			status.className = 'action-status'
 			status.setAttribute('role', 'alert')
@@ -355,7 +405,7 @@ function renderRecovery(snapshot: Snapshot) {
 					recoveryActionStates.set(intent.hash.toLowerCase(), { failed: true, message })
 					actionStatus(status, message, true)
 				} finally {
-					button.disabled = !snapshot.paused
+					button.disabled = !stateConnected || !snapshot.paused
 				}
 			})
 			card.append(heading, metadata, form)
@@ -436,82 +486,208 @@ function restoreRecordFocus(container: HTMLElement, recordKey?: string) {
 	}
 }
 
+function universeMetadata(universe: Universe, includeOutcome: boolean) {
+	const metadata = document.createElement('p')
+	metadata.className = 'truth-metadata'
+	const values = [
+		`${universe.poolCount.toString()} pool${universe.poolCount === 1 ? '' : 's'} · question #${universe.forkQuestionId}`,
+		universeState(universe),
+		`${universe.selectedPoolCount.toString()} selected`,
+		universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} migratable vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No vault migration',
+	]
+	if (includeOutcome) values.unshift(forkOutcome(universe.outcomeIndex))
+	for (const value of values) {
+		const item = document.createElement('span')
+		item.textContent = value
+		metadata.append(item)
+	}
+	return metadata
+}
+
+async function saveUniversePolicy(actionKey: string, next: Set<string>, status: HTMLElement) {
+	pendingUniverseMutations += 1
+	universeActionStates.set(actionKey, { failed: false, message: 'Saving…' })
+	actionStatus(status, 'Saving…')
+	try {
+		await put('/api/approved-universes', [...next])
+		approvedUniverses = next
+		universeActionStates.set(actionKey, { failed: false, message: 'Saved' })
+	} catch (error) {
+		universeActionStates.set(actionKey, { failed: true, message: publicFailure(error, 'Could not save universe approval. Retry this selection.') })
+	} finally {
+		pendingUniverseMutations -= 1
+		if (currentSnapshot !== undefined) renderUniverses(currentSnapshot)
+	}
+}
+
+function removeUniverseSubtrees(next: Set<string>, rootIds: readonly string[]) {
+	if (currentSnapshot === undefined) {
+		for (const rootId of rootIds) next.delete(rootId)
+		return
+	}
+	const childrenByParent = new Map<string, string[]>()
+	for (const universe of currentSnapshot.universes) {
+		if (universe.parentId === undefined) continue
+		const children = childrenByParent.get(universe.parentId) ?? []
+		children.push(universe.id)
+		childrenByParent.set(universe.parentId, children)
+	}
+	const pending = [...rootIds]
+	for (let index = 0; index < pending.length; index += 1) {
+		const universeId = pending[index]
+		if (universeId === undefined) continue
+		next.delete(universeId)
+		pending.push(...(childrenByParent.get(universeId) ?? []))
+	}
+}
+
+function universeChoice(universe: Universe, siblingIds: readonly string[]) {
+	const choice = document.createElement('label')
+	choice.className = 'truth-choice'
+	const input = document.createElement('input')
+	input.type = 'radio'
+	input.name = `truth-path-${universe.parentId ?? 'root'}`
+	input.value = universe.id
+	input.dataset['recordKey'] = `universe:${universe.id}`
+	input.checked = approvedUniverses.has(universe.id)
+	input.disabled = currentConfiguration === undefined || !stateConnected
+	const copy = document.createElement('span')
+	copy.className = 'truth-choice-copy'
+	const title = document.createElement('strong')
+	title.textContent = `${forkOutcome(universe.outcomeIndex)} · universe #${universe.id}`
+	copy.append(title, universeMetadata(universe, false))
+	const status = document.createElement('span')
+	status.className = 'action-status'
+	const saved = universeActionStates.get(universe.id)
+	if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
+	input.addEventListener('change', () => {
+		if (!input.checked) return
+		const next = new Set(approvedUniverses)
+		removeUniverseSubtrees(
+			next,
+			siblingIds.filter(siblingId => siblingId !== universe.id),
+		)
+		next.add(universe.id)
+		void saveUniversePolicy(universe.id, next, status)
+	})
+	choice.append(copy, input, status)
+	return choice
+}
+
+function universeFamily(parent: Universe, children: readonly Universe[]) {
+	const family = document.createElement('div')
+	family.className = 'truth-family'
+	const heading = document.createElement('div')
+	heading.className = 'truth-parent'
+	const copy = document.createElement('div')
+	const title = document.createElement('h3')
+	title.textContent = `${parent.parentId === undefined ? 'Root' : 'Parent'} universe #${parent.id}`
+	copy.append(title, universeMetadata(parent, parent.parentId !== undefined))
+	heading.append(copy)
+	if (parent.parentId === undefined) {
+		const toggleTarget = document.createElement('label')
+		toggleTarget.className = 'pool-toggle truth-root-toggle'
+		const toggle = document.createElement('input')
+		toggle.type = 'checkbox'
+		toggle.dataset['recordKey'] = `universe:${parent.id}`
+		toggle.checked = approvedUniverses.has(parent.id)
+		toggle.disabled = currentConfiguration === undefined || !stateConnected
+		toggle.setAttribute('aria-label', `Approve root universe ${parent.id}`)
+		toggle.addEventListener('change', () => {
+			const next = new Set(approvedUniverses)
+			if (toggle.checked) next.add(parent.id)
+			else removeUniverseSubtrees(next, [parent.id])
+			void saveUniversePolicy(parent.id, next, status)
+		})
+		const status = document.createElement('span')
+		status.className = 'action-status truth-parent-status'
+		const saved = universeActionStates.get(parent.id)
+		if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
+		toggleTarget.append(toggle)
+		heading.append(toggleTarget, status)
+	} else {
+		const approval = document.createElement('span')
+		approval.className = `badge ${approvedUniverses.has(parent.id) ? 'ok' : ''}`
+		approval.textContent = approvedUniverses.has(parent.id) ? 'Approved path' : 'Not approved'
+		heading.append(approval)
+	}
+	family.append(heading)
+	if (children.length === 0) return family
+	const options = document.createElement('fieldset')
+	options.className = 'truth-options'
+	const legend = document.createElement('legend')
+	legend.append(document.createTextNode('Truth outcome'))
+	const legendContext = document.createElement('span')
+	legendContext.className = 'visually-hidden'
+	legendContext.textContent = ` for universe #${parent.id}`
+	legend.append(legendContext)
+	options.append(legend)
+	const childIds = children.map(child => child.id)
+	const none = document.createElement('label')
+	none.className = 'truth-choice'
+	const noneInput = document.createElement('input')
+	noneInput.type = 'radio'
+	noneInput.name = `truth-path-${parent.id}`
+	noneInput.value = ''
+	noneInput.dataset['recordKey'] = `universe:none:${parent.id}`
+	noneInput.checked = childIds.every(childId => !approvedUniverses.has(childId))
+	noneInput.disabled = currentConfiguration === undefined || !stateConnected
+	const noneCopy = document.createElement('span')
+	noneCopy.className = 'truth-choice-copy'
+	const noneTitle = document.createElement('strong')
+	noneTitle.textContent = 'No child approved'
+	const noneDescription = document.createElement('small')
+	noneDescription.textContent = 'Keep every child universe inert'
+	noneCopy.append(noneTitle, noneDescription)
+	const noneStatus = document.createElement('span')
+	noneStatus.className = 'action-status'
+	const saved = universeActionStates.get(`none:${parent.id}`)
+	if (saved !== undefined) actionStatus(noneStatus, saved.message, saved.failed)
+	noneInput.addEventListener('change', () => {
+		if (!noneInput.checked) return
+		const next = new Set(approvedUniverses)
+		removeUniverseSubtrees(next, childIds)
+		void saveUniversePolicy(`none:${parent.id}`, next, noneStatus)
+	})
+	none.append(noneCopy, noneInput, noneStatus)
+	options.append(none, ...children.map(child => universeChoice(child, childIds)))
+	family.append(options)
+	return family
+}
+
 function renderUniverses(snapshot: Snapshot) {
 	if (pendingUniverseMutations > 0) return
 	const focusedRecord = activeRecordKey(universeRows)
 	if (snapshot.universes.length === 0) {
-		const row = document.createElement('tr')
-		const empty = cell('No universes are registered.')
-		empty.colSpan = 6
+		const empty = document.createElement('p')
 		empty.className = 'empty'
-		row.append(empty)
-		universeRows.replaceChildren(row)
+		empty.textContent = 'No universes are registered.'
+		universeRows.replaceChildren(empty)
 		return
 	}
-	universeRows.replaceChildren(
-		...snapshot.universes.map(universe => {
-			const row = document.createElement('tr')
-			const checkbox = document.createElement('input')
-			checkbox.type = 'checkbox'
-			checkbox.dataset['recordKey'] = `universe:${universe.id}`
-			checkbox.checked = approvedUniverses.has(universe.id)
-			checkbox.disabled = currentConfiguration === undefined
-			checkbox.setAttribute('aria-label', `Approve universe ${universe.id}`)
-			const toggle = document.createElement('label')
-			toggle.className = 'pool-toggle'
-			const hidden = document.createElement('span')
-			hidden.className = 'visually-hidden'
-			hidden.textContent = `Approve universe ${universe.id}`
-			toggle.append(checkbox, hidden)
-			const status = document.createElement('span')
-			status.className = 'action-status'
-			const savedActionState = universeActionStates.get(universe.id)
-			if (savedActionState !== undefined) {
-				actionStatus(status, savedActionState.message, savedActionState.failed)
-				if (!savedActionState.failed && savedActionState.message === 'Saved') universeActionStates.delete(universe.id)
-			}
-			checkbox.addEventListener('change', async () => {
-				checkbox.disabled = true
-				pendingUniverseMutations += 1
-				universeActionStates.set(universe.id, { failed: false, message: 'Saving…' })
-				actionStatus(status, 'Saving…')
-				const next = new Set(approvedUniverses)
-				if (checkbox.checked) next.add(universe.id)
-				else next.delete(universe.id)
-				try {
-					await put('/api/approved-universes', [...next])
-					approvedUniverses = next
-					universeActionStates.set(universe.id, { failed: false, message: 'Saved' })
-					actionStatus(status, 'Saved')
-				} catch (error) {
-					checkbox.checked = !checkbox.checked
-					const message = publicFailure(error, 'Could not save universe approval. Retry this selection.')
-					universeActionStates.set(universe.id, { failed: true, message })
-					actionStatus(status, message, true)
-				} finally {
-					checkbox.disabled = false
-					pendingUniverseMutations -= 1
-				}
-			})
-			const migration = universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} eligible parent vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No eligible parent vault'
-			const cells = [
-				cell(toggle, status),
-				cell(stacked(`#${universe.id}`, `${universe.poolCount.toString()} pool${universe.poolCount === 1 ? '' : 's'} · question #${universe.forkQuestionId}`)),
-				cell(universe.parentId === undefined ? 'Root universe' : `#${universe.parentId}`),
-				cell(forkOutcome(universe.outcomeIndex)),
-				cell(stacked(universeState(universe), `${universe.selectedPoolCount.toString()} selected pool${universe.selectedPoolCount === 1 ? '' : 's'}`)),
-				cell(migration),
-			]
-			const labels = ['Approved', 'Universe', 'Parent', 'Fork outcome', 'Pool state', 'Vault migration']
-			const headings = ['universe-approved-heading', 'universe-id-heading', 'universe-parent-heading', 'universe-outcome-heading', 'universe-state-heading', 'universe-migration-heading']
-			for (const [index, value] of cells.entries()) {
-				value.dataset['label'] = labels[index]
-				value.headers = headings[index] ?? ''
-			}
-			row.append(...cells)
-			return row
-		}),
-	)
+	const childrenByParent = new Map<string, Universe[]>()
+	for (const universe of snapshot.universes) {
+		if (universe.parentId === undefined) continue
+		const children = childrenByParent.get(universe.parentId) ?? []
+		children.push(universe)
+		childrenByParent.set(universe.parentId, children)
+	}
+	const families: HTMLElement[] = []
+	const visited = new Set<string>()
+	const appendFamily = (parent: Universe) => {
+		if (visited.has(parent.id)) return
+		visited.add(parent.id)
+		const children = childrenByParent.get(parent.id) ?? []
+		families.push(universeFamily(parent, children))
+		for (const child of children) {
+			if (childrenByParent.has(child.id)) appendFamily(child)
+		}
+	}
+	for (const root of snapshot.universes.filter(universe => universe.parentId === undefined)) appendFamily(root)
+	for (const universe of snapshot.universes) {
+		if (!visited.has(universe.id) && childrenByParent.has(universe.id)) appendFamily(universe)
+	}
+	universeRows.replaceChildren(...families)
 	restoreRecordFocus(universeRows, focusedRecord)
 }
 
@@ -579,7 +755,7 @@ function renderPools(snapshot: Snapshot) {
 			checkbox.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
 			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
 			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
-			checkbox.disabled = currentConfiguration === undefined
+			checkbox.disabled = currentConfiguration === undefined || !stateConnected
 			const toggle = document.createElement('label')
 			toggle.className = 'pool-toggle'
 			const toggleText = document.createElement('span')
@@ -614,7 +790,7 @@ function renderPools(snapshot: Snapshot) {
 					poolActionStates.set(pool.address.toLowerCase(), { failed: true, message })
 					actionStatus(poolStatus, message, true)
 				} finally {
-					checkbox.disabled = false
+					checkbox.disabled = !stateConnected
 					pendingPoolMutations -= 1
 				}
 			})
@@ -694,14 +870,22 @@ function renderActivities(activities: Activity[]) {
 
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
+	stateConnected = true
+	setMutationControlsEnabled(true)
+	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
 	runStatusBadge.textContent = snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
+	const attentionCount = snapshotAttentionCount(snapshot)
+	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
+	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
+	attentionBadge.href = snapshot.pendingTransactions.length > 0 ? '#recovery' : snapshot.error !== undefined ? '#global-error' : snapshot.alerts.length > 0 ? '#operations' : '#overview'
 	pauseButton.textContent = snapshot.paused ? 'Resume' : 'Pause'
+	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(snapshot.error === undefined ? undefined : 'The bot scan failed. Check the bot logs; the dashboard will retry automatically.')
+	setGlobalError(snapshot.error === undefined ? undefined : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`, 'Scan failed')
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
@@ -710,6 +894,18 @@ function render(snapshot: Snapshot) {
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
+	if (!initialFragmentApplied) {
+		initialFragmentApplied = true
+		const fragment = decodeURIComponent(window.location.hash.slice(1))
+		if (fragment !== '') {
+			syncSectionNavigation()
+			scrollToSection(fragment)
+		}
+	}
+}
+
+function snapshotAttentionCount(snapshot: Snapshot) {
+	return Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
 }
 
 function setFormValue(name: string, value: string | number | boolean) {
@@ -720,6 +916,7 @@ function setFormValue(name: string, value: string | number | boolean) {
 
 function populateConfiguration(configuration: Configuration) {
 	currentConfiguration = configuration
+	renderNetworkBadge()
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
@@ -741,10 +938,12 @@ function populateConfiguration(configuration: Configuration) {
 	strategyFields.disabled = false
 	configurationStatus.classList.add('hidden')
 	configurationStatus.replaceChildren()
+	updateHealthPolicyPreview()
 	if (currentSnapshot !== undefined) {
 		renderUniverses(currentSnapshot)
 		renderPools(currentSnapshot)
 	}
+	setMutationControlsEnabled(stateConnected)
 }
 
 networkForm.addEventListener('submit', async event => {
@@ -766,7 +965,7 @@ networkForm.addEventListener('submit', async event => {
 	} catch (error) {
 		actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.'), true)
 	} finally {
-		networkFields.disabled = false
+		networkFields.disabled = !stateConnected || currentConfiguration === undefined
 	}
 })
 
@@ -786,7 +985,7 @@ marketConfigurationForm.addEventListener('submit', async event => {
 	} catch (error) {
 		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the JSON and retry.'), true)
 	} finally {
-		marketConfigurationFields.disabled = false
+		marketConfigurationFields.disabled = !stateConnected || currentConfiguration === undefined
 	}
 })
 
@@ -813,7 +1012,7 @@ testMarketSourcesButton.addEventListener('click', async () => {
 		if (currentSnapshot !== undefined) renderMarketSources(currentSnapshot.marketSources)
 		actionStatus(marketSourceTestStatus, publicFailure(error, 'Could not test saved market sources. Check the bot logs and retry.'), true)
 	} finally {
-		testMarketSourcesButton.disabled = false
+		testMarketSourcesButton.disabled = !stateConnected
 	}
 })
 
@@ -830,42 +1029,205 @@ recheckRecovery.addEventListener('click', async () => {
 	try {
 		await refresh()
 	} finally {
-		recheckRecovery.disabled = false
+		recheckRecovery.disabled = !stateConnected
 	}
 })
 
-function setGlobalError(message?: string) {
+function scanFailureDetail(error: string) {
+	const normalized = error.toLowerCase()
+	if (normalized.includes('rpc')) return 'RPC connectivity or chain reads failed.'
+	if (normalized.includes('market') || normalized.includes('price')) return 'Market evidence or price validation failed.'
+	if (normalized.includes('persist') || normalized.includes('state')) return 'Durable operator state could not be saved.'
+	if (normalized.includes('signer') || normalized.includes('wallet')) return 'Signer or wallet access failed.'
+	if (normalized.includes('chain') || normalized.includes('block')) return 'Canonical chain data validation failed.'
+	return 'The latest scan cycle returned an unexpected error.'
+}
+
+function setGlobalError(message?: string, title = 'Dashboard unavailable') {
 	if (message === undefined) {
 		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
-		if (globalError.textContent !== '') globalError.textContent = ''
+		if (globalError.childNodes.length > 0) globalError.replaceChildren()
+		delete globalError.dataset['noticeKey']
 		return
 	}
+	const noticeKey = `${title}\n${message}`
+	if (globalError.dataset['noticeKey'] === noticeKey && !globalError.classList.contains('hidden')) return
+	globalError.dataset['noticeKey'] = noticeKey
 	if (globalError.classList.contains('hidden')) globalError.classList.remove('hidden')
-	if (globalError.textContent !== message) globalError.textContent = message
+	const heading = document.createElement('strong')
+	heading.textContent = title
+	const copy = document.createElement('p')
+	copy.textContent = message
+	globalError.replaceChildren(heading, copy)
 }
 
-function showGlobalError(error: unknown) {
-	setGlobalError(publicFailure(error, 'Dashboard data is unavailable. Check the bot connection; the dashboard will retry automatically.'))
+function networkFailureLabel(retainedSnapshot: boolean) {
+	if (currentConfiguration?.network === undefined) return 'Network unavailable'
+	const networkLabel = currentConfiguration.network.name === 'mainnet' ? 'Mainnet' : 'Sepolia'
+	return `${networkLabel} · chain ${currentConfiguration.network.chainId.toString()} · ${retainedSnapshot ? 'last known' : 'unverified'}`
 }
 
-pauseButton.addEventListener('click', async () => {
-	if (currentSnapshot === undefined) return
+function renderNetworkBadge() {
+	if (!stateConnected) {
+		networkBadge.textContent = networkFailureLabel(currentSnapshot !== undefined)
+		networkBadge.className = 'badge warning'
+		return
+	}
+	if (currentConfiguration?.network === undefined) {
+		networkBadge.textContent = 'Network not configured'
+		networkBadge.className = 'badge warning'
+		return
+	}
+	const networkLabel = currentConfiguration.network.name === 'mainnet' ? 'Mainnet' : 'Sepolia'
+	networkBadge.textContent = `${networkLabel} · chain ${currentConfiguration.network.chainId.toString()}`
+	networkBadge.className = 'badge'
+}
+
+function renderConnectionFailure(error: unknown) {
+	void error
+	const retainedSnapshot = currentSnapshot !== undefined
+	stateConnected = false
+	modeBadge.textContent = retainedSnapshot ? `${currentSnapshot.execute ? 'Live' : 'Dry run'} · last known` : 'Mode unavailable'
+	modeBadge.className = 'badge warning'
+	renderNetworkBadge()
+	runStatusBadge.textContent = 'Disconnected'
+	runStatusBadge.className = 'badge warning'
+	const attentionCount = 1 + (currentSnapshot === undefined ? 0 : Math.max(currentSnapshot.pendingTransactions.length, currentSnapshot.alerts.length))
+	attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
+	attentionBadge.className = 'badge warning'
+	attentionBadge.href = '#global-error'
+	setMutationControlsEnabled(false)
+	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')
+}
+
+function strategyInput(name: string) {
+	const field = strategyForm.elements.namedItem(name)
+	return field instanceof HTMLInputElement ? field.value.trim() : ''
+}
+
+function healthPercent(value: string) {
+	if (value === '') return '—'
+	const basisPoints = Number(value)
+	return Number.isFinite(basisPoints) ? `${(basisPoints / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%` : '—'
+}
+
+function updateHealthPolicyPreview() {
+	const topUp = healthPercent(strategyInput('vaultTopUpHealthBps'))
+	const target = healthPercent(strategyInput('vaultTargetHealthBps'))
+	const withdraw = healthPercent(strategyInput('vaultWithdrawHealthBps'))
+	healthPolicyPreview.textContent = `Top up below ${topUp} · restore to ${target} · withdraw excess above ${withdraw}`
+}
+
+function preflightItem(label: string, value: string) {
+	const item = document.createElement('li')
+	const name = document.createElement('span')
+	name.textContent = label
+	const status = document.createElement('strong')
+	status.textContent = value
+	item.append(name, status)
+	return item
+}
+
+function openResumePreflight(snapshot: Snapshot) {
+	const automaticActions = ['allowAutomaticDeposits', 'allowAutomaticPoolCreation', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals'].filter(name => {
+		const field = strategyForm.elements.namedItem(name)
+		return field instanceof HTMLInputElement && field.checked
+	}).length
+	resumePreflight.replaceChildren(
+		preflightItem('Mode', 'Live execution'),
+		preflightItem('Transaction recovery', snapshot.pendingTransactions.length === 0 ? 'Clear' : `${snapshot.pendingTransactions.length.toString()} unresolved`),
+		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
+		preflightItem('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
+		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)),
+		preflightItem('Automatic actions enabled', automaticActions.toString()),
+	)
+	if ('showModal' in resumeDialog && typeof resumeDialog.showModal === 'function') resumeDialog.showModal()
+	if (!resumeDialog.hasAttribute('open')) resumeDialog.setAttribute('open', '')
+}
+
+function closeResumePreflight() {
+	if (resumeDialog.hasAttribute('open') && 'close' in resumeDialog && typeof resumeDialog.close === 'function') resumeDialog.close()
+	else resumeDialog.removeAttribute('open')
+}
+
+async function changePaused(paused: boolean) {
 	pauseButton.disabled = true
-	actionStatus(pauseStatus, currentSnapshot.paused ? 'Resuming…' : 'Pausing…')
+	confirmResume.disabled = true
+	actionStatus(pauseStatus, paused ? 'Pausing…' : 'Resuming…')
 	try {
-		await put('/api/paused', { paused: !currentSnapshot.paused })
+		await put('/api/paused', { paused })
 		await refresh()
 		actionStatus(pauseStatus, '')
+		closeResumePreflight()
 	} catch (error) {
 		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.'), true)
 	} finally {
-		pauseButton.disabled = false
+		pauseButton.disabled = !stateConnected
+		confirmResume.disabled = !stateConnected
 	}
+}
+
+pauseButton.addEventListener('click', () => {
+	if (currentSnapshot === undefined) return
+	if (pauseButton.dataset['action'] === 'confirm-resume') {
+		openResumePreflight(currentSnapshot)
+		return
+	}
+	void changePaused(!currentSnapshot.paused)
 })
+
+cancelResume.addEventListener('click', closeResumePreflight)
+confirmResume.addEventListener('click', () => void changePaused(false))
+resumeDialog.addEventListener('cancel', () => actionStatus(pauseStatus, ''))
 
 poolFilter.addEventListener('input', () => {
 	if (currentSnapshot !== undefined) renderPools(currentSnapshot)
 })
+
+strategyForm.addEventListener('input', updateHealthPolicyPreview)
+
+const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
+const fragmentSections: Readonly<Record<string, string>> = {
+	'global-error': 'overview',
+	recovery: 'operations',
+}
+
+function revealSectionLink(link: HTMLAnchorElement) {
+	const navigation = link.closest<HTMLElement>('.section-nav')
+	if (navigation === null || navigation.scrollWidth <= navigation.clientWidth) return
+	const align = () => {
+		const activeRect = link.getBoundingClientRect()
+		const navigationRect = navigation.getBoundingClientRect()
+		navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+	}
+	align()
+	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
+}
+
+function scrollToSection(id: string) {
+	const target = document.getElementById(id)
+	const shell = document.querySelector<HTMLElement>('.operator-shell')
+	if (target === null || shell === null) return
+	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
+	window.scrollTo({ top: Math.max(0, top) })
+}
+
+function syncSectionNavigation(scrollToTarget = false) {
+	const targetId = window.location.hash.slice(1) || 'overview'
+	const activeId = fragmentSections[targetId] ?? targetId
+	let activeLink: HTMLAnchorElement | undefined
+	for (const link of sectionLinks) {
+		if (link.hash.slice(1) === activeId) {
+			link.setAttribute('aria-current', 'page')
+			activeLink = link
+		} else link.removeAttribute('aria-current')
+	}
+	if (activeLink !== undefined) revealSectionLink(activeLink)
+	if (scrollToTarget) scrollToSection(targetId)
+}
+
+window.addEventListener('hashchange', () => syncSectionNavigation(true))
+syncSectionNavigation()
 
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()
@@ -916,7 +1278,7 @@ signerForm.addEventListener('submit', async event => {
 
 signerForm.addEventListener('input', () => {
 	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	updateSignerButton.disabled = !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
+	updateSignerButton.disabled = !stateConnected || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
 })
 
 clearSignerButton.addEventListener('click', async () => {
@@ -933,7 +1295,7 @@ clearSignerButton.addEventListener('click', async () => {
 	} catch (error) {
 		actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.'), true)
 	} finally {
-		clearSignerButton.disabled = false
+		clearSignerButton.disabled = !stateConnected
 	}
 })
 
@@ -962,7 +1324,7 @@ async function performRefresh() {
 	try {
 		render(await api<Snapshot>('/api/state'))
 	} catch (error) {
-		showGlobalError(error)
+		renderConnectionFailure(error)
 	}
 }
 
@@ -974,6 +1336,8 @@ async function loadConfiguration() {
 	try {
 		populateConfiguration(await api<Configuration>('/api/configuration'))
 	} catch (error) {
+		networkBadge.textContent = 'Network unavailable'
+		networkBadge.className = 'badge warning'
 		configurationStatus.classList.add('error')
 		const message = document.createElement('span')
 		message.textContent = publicFailure(error, 'Configuration is unavailable. Check the bot connection, then retry. ')

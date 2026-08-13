@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
+import type { Address, Hex } from '#ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
@@ -44,6 +44,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	}
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
+	let connectivityFailure: Error | undefined
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
 	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
@@ -53,6 +54,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			state.paused = paused
 		},
 		updateConnectivity: value => {
+			if (connectivityFailure !== undefined) throw connectivityFailure
 			if (
 				typeof value !== 'object' ||
 				value === null ||
@@ -110,8 +112,12 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('<a href="/documentation">Operator guide</a>')
 	expect(pageSource).not.toContain('>Starting<')
 	expect(pageSource).toContain('id="mode-badge" class="badge">Mode —</span>')
+	expect(pageSource).toContain('id="run-status-badge" class="badge">Run —</span>')
 	expect(pageSource).toContain('id="status-value">—</strong>')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
+	expect(pageSource).toContain('id="resume-dialog"')
+	expect(pageSource).toContain('class="section-nav"')
+	expect(pageSource).toContain('class="mobile-record-table"')
 	expect(pageSource).toContain('id="hedged-profit-value"')
 	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
@@ -176,7 +182,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(fixtureSource).toContain('id="open-oracle-market-fixture"')
 	expect(fixtureSource).toContain('href="/scripts/check-market-fixture.mts"')
 	expect(fixtureSource).toContain('href="/src/core/strategy.ts"')
-	for (const asset of ['/README.md', '/operator-guide.css', '/shared.css', '/chart-runtime.js', '/assets/dashboard-overview.png', '/assets/dashboard-markets.png', '/scripts/check-market-fixture.mts', '/src/core/strategy.ts']) {
+	for (const asset of ['/README.md', '/operator-guide.css', '/shared.css', '/operator-console.css', '/chart-runtime.js', '/assets/dashboard-overview.png', '/assets/dashboard-markets.png', '/scripts/check-market-fixture.mts', '/src/core/strategy.ts']) {
 		const response = await fetch(`${origin}${asset}`)
 		expect(response.status).toBe(200)
 	}
@@ -251,6 +257,18 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(connectivityUpdate.status).toBe(200)
 	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet', restartRequired: false })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
+	const mutationCredentialMarker = 'mutation-operator-secret'
+	connectivityFailure = new Error(`RPC https://operator:${mutationCredentialMarker}@rpc.example returned credential-bearing provider text`)
+	const failedConnectivityUpdate = await fetch(`${origin}/api/connectivity`, {
+		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(failedConnectivityUpdate.status).toBe(400)
+	const failedConnectivityBody = await failedConnectivityUpdate.json()
+	expect(JSON.stringify(failedConnectivityBody)).not.toContain(mutationCredentialMarker)
+	expect(failedConnectivityBody).toEqual({ error: 'RPC connectivity checks failed. Review the submitted endpoints and retry.' })
+	connectivityFailure = undefined
 	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
 		body: JSON.stringify([address]),
 		headers: { 'content-type': 'application/json', origin },
@@ -285,9 +303,47 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	expect(signerUpdate.status).toBe(200)
 	expect(await signerUpdate.json()).toEqual({ wallet: address })
+	const credentialMarker = 'operator-secret'
+	const rawRpcFailure = `Read RPC https://operator:${credentialMarker}@rpc.example failed at block 100`
+	const rawRelayFailure = `Private relay https://operator:${credentialMarker}@relay.example rejected the transaction`
+	const transactionHash: Hex = `0x${'12'.repeat(32)}`
+	state.lastError = rawRpcFailure
+	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' }]
+	state.operationLog = [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '1', timestamp: new Date(0).toISOString() }]
+	state.transactionActivity = [
+		{
+			acceptedTargets: [],
+			actualGasCostEth: undefined,
+			estimatedNetProfitEth: undefined,
+			failedTargets: [{ error: rawRelayFailure, target: 'https://relay.example' }],
+			hash: transactionHash,
+			kind: 'dispute',
+			mode: 'private',
+			originalHash: transactionHash,
+			reportId: '1',
+			status: 'submission-failed',
+			submittedAt: new Date(0).toISOString(),
+			token: undefined,
+			tokenSymbol: undefined,
+			trackedNetProfitEth: undefined,
+			updatedAt: new Date(0).toISOString(),
+		},
+	]
 	const reloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
 	expect(reloadedState).toMatchObject({ queuedWallet: address })
 	expect(reloadedState).toMatchObject({ savedWallet: address })
+	expect(JSON.stringify(reloadedState)).not.toContain(credentialMarker)
+	expect(reloadedState).toMatchObject({
+		endpointChecks: [{ error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' }],
+		lastError: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
+		operationLog: [
+			{
+				details: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.',
+				reason: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
+			},
+		],
+		transactionActivity: [{ failedTargets: [{ error: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.' }] }],
+	})
 	const forgetSigner = await fetch(`${origin}/api/signer`, {
 		body: JSON.stringify({ forgetSavedSigner: true }),
 		headers: { 'content-type': 'application/json', origin },
@@ -329,7 +385,7 @@ test('returns a structured unavailable response when the initial state read fail
 	servers.push(server)
 	const response = await fetch(`http://${server.hostname}:${server.port}/api/state`)
 	expect(response.status).toBe(503)
-	expect(await response.json()).toEqual({ error: 'RPC unavailable' })
+	expect(await response.json()).toEqual({ error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' })
 })
 
 test('supports a container bind while retaining loopback request authority', async () => {

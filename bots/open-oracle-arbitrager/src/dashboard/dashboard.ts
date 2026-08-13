@@ -54,6 +54,15 @@ function setText(id: string, value: string) {
 	if (target.textContent !== value) target.textContent = value
 }
 
+function publicPollFailure(error: string) {
+	const normalized = error.toLowerCase()
+	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
+	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
+	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
+	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
+	return 'The latest polling cycle returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
+}
+
 function prettyJson(value: unknown) {
 	const serialized = JSON.stringify(value, undefined, 2)
 	if (serialized === undefined) throw new Error('Configuration cannot be represented as JSON')
@@ -63,6 +72,8 @@ function prettyJson(value: unknown) {
 function setControlsEnabled(enabled: boolean) {
 	connected = enabled
 	element<HTMLButtonElement>('pause-button').disabled = !enabled
+	element<HTMLButtonElement>('confirm-resume').disabled = !enabled
+	if (!enabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
 	fieldset.disabled = !enabled
@@ -191,10 +202,12 @@ async function api<T>(path: string, init?: RequestInit) {
 	return value as T
 }
 
-function row(cells: readonly (HTMLElement | string)[]) {
+function row(cells: readonly (HTMLElement | string)[], labels?: readonly string[]) {
 	const tableRow = document.createElement('tr')
-	for (const value of cells) {
+	for (const [index, value] of cells.entries()) {
 		const cell = document.createElement('td')
+		const label = labels?.[index]
+		if (label !== undefined) cell.dataset['label'] = label
 		if (typeof value === 'string') cell.textContent = value
 		else cell.append(value)
 		tableRow.append(cell)
@@ -267,20 +280,23 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 	body.replaceChildren()
 	for (const opportunity of opportunities) {
 		body.append(
-			row([
-				opportunity.reportId,
-				decisionBadge(opportunity),
-				opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
-				amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
-				opportunityDecisionReason(opportunity),
-				opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
-				amount(opportunity.estimatedNetProfitEth, 'ETH'),
-				amount(opportunity.requiredWeth, 'WETH'),
-				amount(opportunity.requiredToken, opportunity.tokenSymbol),
-				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
-				venueLabel(opportunity.venue),
-				link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
-			]),
+			row(
+				[
+					opportunity.reportId,
+					decisionBadge(opportunity),
+					opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
+					amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
+					opportunityDecisionReason(opportunity),
+					opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
+					amount(opportunity.estimatedNetProfitEth, 'ETH'),
+					amount(opportunity.requiredWeth, 'WETH'),
+					amount(opportunity.requiredToken, opportunity.tokenSymbol),
+					`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
+					venueLabel(opportunity.venue),
+					link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
+				],
+				['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required WETH', 'Required token', 'Window', 'Venue', 'Pool / manager'],
+			),
 		)
 	}
 	element('opportunities-empty').hidden = opportunities.length !== 0
@@ -292,16 +308,19 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 	body.replaceChildren()
 	for (const record of history) {
 		body.append(
-			row([
-				new Date(record.executedAt).toLocaleString(),
-				record.reportId,
-				record.direction === 'buy-rep' ? `buy ${record.tokenSymbol}` : `sell ${record.tokenSymbol}`,
-				exactAmount(record.estimatedNetProfitWeth, 'ETH'),
-				exactAmount(record.trackedNetProfitEth, 'ETH'),
-				exactAmount(record.actualGasCostEth, 'ETH'),
-				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredToken, record.tokenSymbol)}`,
-				link(record.transactionHash, 'tx', `history:${record.reportId}:transaction`),
-			]),
+			row(
+				[
+					new Date(record.executedAt).toLocaleString(),
+					record.reportId,
+					record.direction === 'buy-rep' ? `buy ${record.tokenSymbol}` : `sell ${record.tokenSymbol}`,
+					exactAmount(record.estimatedNetProfitWeth, 'ETH'),
+					exactAmount(record.trackedNetProfitEth, 'ETH'),
+					exactAmount(record.actualGasCostEth, 'ETH'),
+					`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredToken, record.tokenSymbol)}`,
+					link(record.transactionHash, 'tx', `history:${record.reportId}:transaction`),
+				],
+				['Time', 'Report', 'Direction', 'Modeled net', 'Tracked net', 'Actual gas', 'Inventory used', 'Transaction'],
+			),
 		)
 	}
 	element('history-empty').hidden = history.length !== 0
@@ -324,19 +343,22 @@ function renderPositions(positions: readonly PositionRecord[], recordCount: numb
 		else if (awaitingLifecycleEvidence) lifecycleGas = 'Awaiting lifecycle evidence'
 		const settlerRewardAttoEth = awaitingLifecycleEvidence ? 'Awaiting lifecycle evidence' : exactAmount(position.lifecycleSettlerRewardEth, 'ETH')
 		body.append(
-			row([
-				new Date(position.openedAt).toLocaleString(),
-				position.reportId,
-				position.direction === 'buy-rep' ? `buy ${position.tokenSymbol}` : `sell ${position.tokenSymbol}`,
-				manuallyReconciled ? `${position.status} · manual` : position.status,
-				hedgedProfit,
-				awaitingEntryEvidence ? 'Awaiting entry evidence' : exactAmount(position.actualEntryGasCostEth, 'ETH'),
-				lifecycleGas,
-				settlerRewardAttoEth,
-				exactAmount(position.realizedNetProfitEth, 'ETH'),
-				`${amount(position.withdrawnWeth, 'WETH')} · ${amount(position.withdrawnToken, position.tokenSymbol)}`,
-				link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),
-			]),
+			row(
+				[
+					new Date(position.openedAt).toLocaleString(),
+					position.reportId,
+					position.direction === 'buy-rep' ? `buy ${position.tokenSymbol}` : `sell ${position.tokenSymbol}`,
+					manuallyReconciled ? `${position.status} · manual` : position.status,
+					hedgedProfit,
+					awaitingEntryEvidence ? 'Awaiting entry evidence' : exactAmount(position.actualEntryGasCostEth, 'ETH'),
+					lifecycleGas,
+					settlerRewardAttoEth,
+					exactAmount(position.realizedNetProfitEth, 'ETH'),
+					`${amount(position.withdrawnWeth, 'WETH')} · ${amount(position.withdrawnToken, position.tokenSymbol)}`,
+					link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),
+				],
+				['Opened', 'Report', 'Direction', 'Status', 'Hedged pre-gas', 'Entry gas', 'Lifecycle gas', 'Settler reward', 'Realized net', 'Withdrawn', 'Entry transaction'],
+			),
 		)
 	}
 	element('positions-empty').hidden = positions.length !== 0
@@ -457,7 +479,7 @@ function renderOperations(operations: readonly OperationEntry[]) {
 		level.className = 'log-level'
 		level.dataset['level'] = operation.level
 		level.textContent = operation.level
-		body.append(row([new Date(operation.timestamp).toLocaleTimeString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—']))
+		body.append(row([new Date(operation.timestamp).toLocaleTimeString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—'], ['Time', 'Level', 'Category', 'Report', 'Operation', 'Why', 'Details']))
 	}
 	element('operations-empty').hidden = visibleOperations.length !== 0
 	setText('operation-count', countLabel(visibleOperations.length, 'entry', 'entries'))
@@ -469,7 +491,12 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
 	for (const token of snapshot.tokenMarkets) {
 		if (token.pools.length === 0) {
-			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'Monitoring only', 'No supported WETH pools found', '—', 'Unavailable', '0']))
+			body.append(
+				row(
+					[token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'Monitoring only', 'No supported WETH pools found', '—', 'Unavailable', '0'],
+					['Token', 'Address', 'Wallet balance', 'Exchange', 'Strategy use', 'Pool', 'Fee', 'Spot', 'Liquidity / reserves'],
+				),
+			)
 			continue
 		}
 		for (const pool of token.pools) {
@@ -480,7 +507,12 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 			poolLink.rel = 'noreferrer'
 			poolLink.textContent = shorten(pool.address)
 			const strategyUse = marketPoolStrategyUse(executableTokens.has(token.address.toLowerCase()), pool.venue)
-			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
+			body.append(
+				row(
+					[token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity],
+					['Token', 'Address', 'Wallet balance', 'Exchange', 'Strategy use', 'Pool', 'Fee', 'Spot', 'Liquidity / reserves'],
+				),
+			)
 		}
 	}
 	element('token-markets-empty').hidden = snapshot.tokenMarkets.length !== 0
@@ -512,7 +544,7 @@ function renderCentralizedMarket(snapshot: OperatorSnapshot) {
 	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
 	setText('centralized-market-source-count', consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 	for (const observation of market.observations) {
-		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()]))
+		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()], ['Exchange', 'Market', 'REP / ETH', 'Bid depth', 'Ask depth', 'Observed']))
 	}
 	element('centralized-market-empty').hidden = market.observations.length !== 0
 }
@@ -591,9 +623,9 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	const maximum = Math.max(...values)
 	const range = maximum - minimum || Math.max(maximum, 1)
 	const width = Math.max(container.clientWidth, 320)
-	const height = 300
 	const compact = width < 600
-	const plot = { bottom: 250, left: 105, right: width - 70, top: 24 }
+	const height = compact ? 300 : 270
+	const plot = { bottom: compact ? 250 : 220, left: 105, right: width - 70, top: 24 }
 	const plotWidth = plot.right - plot.left
 	const plotHeight = plot.bottom - plot.top
 	const orderedPoints = [...points].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
@@ -631,8 +663,8 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 		.filter(point => point !== undefined)
 	for (const point of xTicks) {
 		const x = plot.left + ((Date.parse(point.sampledAt) - first) / timeRange) * plotWidth
-		const blockLabel = svgText(`Block ${point.blockNumber}`, x, 274, 'middle')
-		const timeLabel = svgText(new Date(point.sampledAt).toLocaleTimeString(), x, 292, 'middle')
+		const blockLabel = svgText(`Block ${point.blockNumber}`, x, height - 26, 'middle')
+		const timeLabel = svgText(new Date(point.sampledAt).toLocaleTimeString(), x, height - 8, 'middle')
 		blockLabel.setAttribute('class', 'chart-axis-label')
 		timeLabel.setAttribute('class', 'chart-axis-label')
 		svg.append(blockLabel, timeLabel)
@@ -736,18 +768,21 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 		const failed = transaction.failedTargets.map(target => `failed: ${target.target}${target.error === undefined ? '' : ` (${target.error})`}`)
 		const targets = [...accepted, ...failed].join(', ') || '—'
 		body.append(
-			row([
-				new Date(transaction.updatedAt).toLocaleString(),
-				transaction.reportId,
-				link(transaction.hash, 'tx', `transaction:${transaction.reportId}:${transaction.hash}`),
-				transactionKindLabel(transaction),
-				transaction.mode,
-				transaction.status.replaceAll('-', ' '),
-				targets,
-				exactAmount(transaction.estimatedNetProfitEth, 'ETH'),
-				exactAmount(transaction.trackedNetProfitEth, 'ETH'),
-				exactAmount(transaction.actualGasCostEth, 'ETH'),
-			]),
+			row(
+				[
+					new Date(transaction.updatedAt).toLocaleString(),
+					transaction.reportId,
+					link(transaction.hash, 'tx', `transaction:${transaction.reportId}:${transaction.hash}`),
+					transactionKindLabel(transaction),
+					transaction.mode,
+					transaction.status.replaceAll('-', ' '),
+					targets,
+					exactAmount(transaction.estimatedNetProfitEth, 'ETH'),
+					exactAmount(transaction.trackedNetProfitEth, 'ETH'),
+					exactAmount(transaction.actualGasCostEth, 'ETH'),
+				],
+				['Updated', 'Report', 'Transaction', 'Kind', 'Delivery', 'Status', 'Target results', 'Estimated net', 'Tracked net', 'Actual gas'],
+			),
 		)
 	}
 	element('transactions-empty').hidden = transactions.length !== 0
@@ -784,8 +819,24 @@ function render(snapshot: OperatorSnapshot) {
 	if (!configurationAttempted) void loadCompleteConfiguration()
 	const modeBadge = element('mode-badge')
 	const statusLabels = botStatusLabels(snapshot)
+	modeBadge.className = 'badge'
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
+	const runStatusBadge = element('run-status-badge')
+	const runStatus = snapshot.paused ? 'paused' : snapshot.status
+	runStatusBadge.dataset['status'] = runStatus
+	runStatusBadge.textContent = statusLabels.status
+	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
+	const headerNetworkBadge = element('header-network-badge')
+	headerNetworkBadge.textContent = snapshot.networkConfigured ? `${snapshot.network} · ${snapshot.expectedChainId.toString()}` : 'Network setup'
+	headerNetworkBadge.className = `badge${snapshot.networkConfigured ? '' : ' badge-warning'}`
+	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
+	const uncertainTransactionCount = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
+	const attentionCount = recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
+	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
+	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
+	attentionBadge.className = `badge attention-badge${attentionCount === 0 ? ' badge-ok' : ' badge-warning'}`
+	attentionBadge.href = recoveryCount > 0 ? '#position-lifecycle' : uncertainTransactionCount > 0 ? '#transaction-tracking' : snapshot.lastError === undefined ? '#overview' : '#notice'
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
@@ -811,14 +862,17 @@ function render(snapshot: OperatorSnapshot) {
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
+		launchNotice.hidden = false
 		setText('launch-notice-title', 'Network setup required')
 		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. The bot remains paused until the saved network is applied on restart.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else if (snapshot.network === 'mainnet') {
+		launchNotice.hidden = true
 		setText('launch-notice-title', 'Mainnet execution network')
 		setText('launch-notice-copy', 'Use only reviewed deployments, current market evidence, low risk limits, and supervised recovery procedures.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else {
+		launchNotice.hidden = true
 		setText('launch-notice-title', 'Sepolia rehearsal network')
 		setText('launch-notice-copy', 'Use this network to rehearse execution and recovery. Testnet success is not production approval.')
 		launchNotice.dataset['tone'] = 'warning'
@@ -839,7 +893,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 	if (snapshot.lastError !== undefined) {
 		noticeTitle = 'Latest poll failed'
-		noticeCopy = snapshot.lastError
+		noticeCopy = publicPollFailure(snapshot.lastError)
 		noticeTone = 'danger'
 	}
 	setText('notice-title', noticeTitle)
@@ -864,7 +918,10 @@ function render(snapshot: OperatorSnapshot) {
 	if (!initialFragmentApplied) {
 		initialFragmentApplied = true
 		const fragment = decodeURIComponent(window.location.hash.slice(1))
-		if (fragment !== '') document.getElementById(fragment)?.scrollIntoView()
+		if (fragment !== '') {
+			syncSectionNavigation()
+			scrollToSection(fragment)
+		}
 	}
 }
 
@@ -874,14 +931,31 @@ const refresh = singleFlight(async () => {
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
 		render(value)
 	} catch (error) {
+		void error
 		setControlsEnabled(false)
 		const modeBadge = element('mode-badge')
 		const statusLabels = botStatusLabels(undefined)
 		delete modeBadge.dataset['mode']
-		modeBadge.textContent = statusLabels.mode
+		modeBadge.textContent = 'Mode unavailable'
+		modeBadge.className = 'badge badge-danger'
+		const runStatusBadge = element('run-status-badge')
+		runStatusBadge.dataset['status'] = 'disconnected'
+		runStatusBadge.textContent = 'Disconnected'
+		runStatusBadge.className = 'badge badge-danger'
+		const attentionBadge = element<HTMLAnchorElement>('attention-badge')
+		const retainedAttentionCount = latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
+		const attentionCount = retainedAttentionCount + 1
+		attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
+		attentionBadge.className = 'badge attention-badge badge-danger'
+		attentionBadge.href = '#notice'
+		const headerNetworkBadge = element('header-network-badge')
+		if (latestSnapshot?.networkConfigured === true) headerNetworkBadge.textContent = `${latestSnapshot.network} · ${latestSnapshot.expectedChainId.toString()} · last known`
+		else if (latestSnapshot !== undefined) headerNetworkBadge.textContent = 'Network setup · last known'
+		else headerNetworkBadge.textContent = 'Network unavailable'
+		headerNetworkBadge.className = 'badge badge-warning'
 		setText('status-value', statusLabels.status)
 		setText('notice-title', 'Dashboard disconnected')
-		setText('notice-copy', error instanceof Error ? error.message : String(error))
+		setText('notice-copy', 'State polling failed. Automatic retry remains active; use Refresh to retry now.')
 		element('notice').dataset['tone'] = 'danger'
 	}
 })
@@ -933,24 +1007,128 @@ element('tokens-form').addEventListener('submit', async event => {
 		setText('tokens-status', error instanceof Error ? error.message : String(error))
 	}
 })
-element('pause-button').addEventListener('click', async event => {
-	const button = event.currentTarget
-	if (!(button instanceof HTMLButtonElement) || latestSnapshot === undefined) return
+
+function preflightItem(label: string, value: string) {
+	const item = document.createElement('li')
+	const name = document.createElement('span')
+	name.textContent = label
+	const status = document.createElement('strong')
+	status.textContent = value
+	item.append(name, status)
+	return item
+}
+
+function openResumePreflight(snapshot: OperatorSnapshot) {
+	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
+	const uncertainTransactions = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
+	const selectedOpportunities = snapshot.opportunities.filter(opportunity => opportunity.decision === 'selected' || opportunity.decision === 'eligible').length
+	element('resume-preflight').replaceChildren(
+		preflightItem('Mode', 'Live execution'),
+		preflightItem('Network', snapshot.networkConfigured ? `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Not configured'),
+		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)),
+		preflightItem('Recovery-required positions', recoveryCount.toString()),
+		preflightItem('Unknown confirmations', uncertainTransactions.toString()),
+		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
+		preflightItem('Eligible opportunities now', selectedOpportunities.toString()),
+		preflightItem('Submission', snapshot.submission.mode === 'private' ? `${snapshot.submission.minimumBundleRelaySuccesses.toString()} private relay confirmations` : 'Public mempool'),
+	)
+	const dialog = element<HTMLDialogElement>('resume-dialog')
+	if (typeof dialog.showModal === 'function') dialog.showModal()
+	if (!dialog.hasAttribute('open')) dialog.setAttribute('open', '')
+}
+
+function closeResumePreflight() {
+	const dialog = element<HTMLDialogElement>('resume-dialog')
+	if (dialog.open && typeof dialog.close === 'function') dialog.close()
+	else dialog.removeAttribute('open')
+}
+
+async function changePaused(paused: boolean) {
+	if (!connected) {
+		closeResumePreflight()
+		return
+	}
+	const button = element<HTMLButtonElement>('pause-button')
 	button.disabled = true
+	element<HTMLButtonElement>('confirm-resume').disabled = true
 	try {
 		await api('/api/paused', {
-			body: JSON.stringify({ paused: !latestSnapshot.paused }),
+			body: JSON.stringify({ paused }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
 		await refresh()
+		closeResumePreflight()
 	} catch (error) {
 		setControlsEnabled(false)
 		setText('notice-title', 'Unable to change bot state')
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'
+	} finally {
+		element<HTMLButtonElement>('confirm-resume').disabled = !connected
 	}
+}
+
+element('pause-button').addEventListener('click', () => {
+	if (latestSnapshot === undefined) return
+	if (latestSnapshot.paused && latestSnapshot.execute) {
+		openResumePreflight(latestSnapshot)
+		return
+	}
+	void changePaused(!latestSnapshot.paused)
 })
+
+element('cancel-resume').addEventListener('click', closeResumePreflight)
+element('confirm-resume').addEventListener('click', () => void changePaused(false))
+
+const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
+const fragmentSections: Readonly<Record<string, string>> = {
+	'market-history': 'markets',
+	'network-connectivity': 'settings',
+	'complete-configuration': 'settings',
+	'deployment-configuration': 'settings',
+	notice: 'overview',
+	'position-lifecycle': 'operations',
+	'risk-envelope': 'overview',
+	'transaction-tracking': 'operations',
+}
+
+function revealSectionLink(link: HTMLAnchorElement) {
+	const navigation = link.closest<HTMLElement>('.section-nav')
+	if (navigation === null || navigation.scrollWidth <= navigation.clientWidth) return
+	const align = () => {
+		const activeRect = link.getBoundingClientRect()
+		const navigationRect = navigation.getBoundingClientRect()
+		navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+	}
+	align()
+	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
+}
+
+function scrollToSection(id: string) {
+	const target = document.getElementById(id)
+	const shell = document.querySelector<HTMLElement>('.operator-shell')
+	if (target === null || shell === null) return
+	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
+	window.scrollTo({ top: Math.max(0, top) })
+}
+
+function syncSectionNavigation(scrollToTarget = false) {
+	const targetId = window.location.hash.slice(1) || 'overview'
+	const activeId = fragmentSections[targetId] ?? targetId
+	let activeLink: HTMLAnchorElement | undefined
+	for (const link of sectionLinks) {
+		if (link.hash.slice(1) === activeId) {
+			link.setAttribute('aria-current', 'page')
+			activeLink = link
+		} else link.removeAttribute('aria-current')
+	}
+	if (activeLink !== undefined) revealSectionLink(activeLink)
+	if (scrollToTarget) scrollToSection(targetId)
+}
+
+window.addEventListener('hashchange', () => syncSectionNavigation(true))
+syncSectionNavigation()
 
 element<HTMLFormElement>('strategy-form').addEventListener('submit', async event => {
 	event.preventDefault()

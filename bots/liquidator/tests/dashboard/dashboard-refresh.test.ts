@@ -10,12 +10,78 @@ afterEach(async () => {
 	for (const browser of browsers.splice(0)) await browser.close()
 })
 
-function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = []) {
+type PendingTransaction = {
+	hash: string
+	kind: string
+	label: string
+	maxBlockNumber: string
+	mode: 'private' | 'public'
+	nonce: string
+	requiresMarketEvidence: boolean
+	submissionBlock: string
+}
+
+type DashboardUniverse = {
+	approved: boolean
+	forkedPoolCount: number
+	forkQuestionId: string
+	forkTime: string
+	id: string
+	migratableVaultCount: number
+	operationalPoolCount: number
+	outcomeIndex?: string
+	parentId?: string
+	poolCount: number
+	repToken: string
+	selectedPoolCount: number
+}
+
+type DashboardConfiguration = {
+	approvedUniverses: string[]
+	centralizedMarkets: unknown
+	childMarketConfigurations: unknown[]
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
+	desiredPools: unknown[]
+	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
+	selectedPools: string[]
+	strategy: Record<string, string | number | boolean>
+}
+
+function universe(id: string, parentId?: string, outcomeIndex?: string): DashboardUniverse {
+	return {
+		approved: true,
+		forkedPoolCount: 0,
+		forkQuestionId: '7',
+		forkTime: '0',
+		id,
+		migratableVaultCount: 0,
+		operationalPoolCount: 1,
+		outcomeIndex,
+		parentId,
+		poolCount: 1,
+		repToken: '0x3',
+		selectedPoolCount: 1,
+	}
+}
+
+function configuration(approvedUniverses = ['1'], network?: DashboardConfiguration['network']): DashboardConfiguration {
+	return {
+		approvedUniverses,
+		centralizedMarkets: {},
+		childMarketConfigurations: [],
+		desiredPools: [],
+		network,
+		selectedPools: ['0x1111111111111111111111111111111111111111'],
+		strategy: {},
+	}
+}
+
+function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = [], options: { execute?: boolean; paused?: boolean; pendingTransactions?: PendingTransaction[]; universes?: DashboardUniverse[] } = {}) {
 	return {
 		activities: [],
 		alerts,
 		error,
-		execute: false,
+		execute: options.execute ?? false,
 		metrics: {
 			approvedUniverseCount: 1,
 			assumedOpenInterestEth: '0',
@@ -27,8 +93,8 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 			walletEth: '1',
 			walletRep: '2',
 		},
-		paused: false,
-		pendingTransactions: [],
+		paused: options.paused ?? false,
+		pendingTransactions: options.pendingTransactions ?? [],
 		pools: [
 			{
 				knownVaultCount: '0',
@@ -53,24 +119,11 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 		scanning: false,
 		status: 'running',
 		marketSources: [],
-		universes: [
-			{
-				approved: true,
-				forkedPoolCount: 0,
-				forkQuestionId: '7',
-				forkTime: '0',
-				id: '1',
-				migratableVaultCount: 0,
-				operationalPoolCount: 1,
-				poolCount: 1,
-				repToken: '0x3',
-				selectedPoolCount: 1,
-			},
-		],
+		universes: options.universes ?? [universe('1')],
 	}
 }
 
-async function dashboard() {
+async function dashboard(initialConfiguration = configuration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false) {
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
@@ -93,9 +146,15 @@ async function dashboard() {
 	page.url = server.url.href
 	page.content = await (await fetch(server.url)).text()
 	const window = page.mainFrame.window
+	Reflect.set(window, 'Boolean', Boolean)
 	Reflect.set(window, 'Map', Map)
 	Reflect.set(window, 'Set', Set)
 	Reflect.set(window, 'JSON', JSON)
+	Reflect.set(window, 'Error', Error)
+	Reflect.set(window, 'Math', Math)
+	Reflect.set(window, 'Object', Object)
+	Reflect.set(window, 'Reflect', Reflect)
+	Reflect.set(window, 'decodeURIComponent', decodeURIComponent)
 	const refreshCallbacks: (() => unknown)[] = []
 	window.setInterval = handler => {
 		if (typeof handler === 'function') refreshCallbacks.push(() => handler())
@@ -103,22 +162,27 @@ async function dashboard() {
 		window.clearTimeout(timeout)
 		return timeout
 	}
-	let snapshot = state('rpc secret at /api/internal')
+	let snapshot = initialState
+	let currentConfiguration = initialConfiguration
 	let rejectPause = false
+	const pauseRequests: unknown[] = []
+	const approvedUniverseRequests: string[][] = []
 	let stateRequestCount = 0
+	let stateRequestFailure = initialStateRequestFailure
 	let releaseStateRequest: (() => void) | undefined
-	window.fetch = async input => {
+	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/configuration') {
-			return new window.Response(JSON.stringify({ approvedUniverses: ['1'], selectedPools: ['0x1111111111111111111111111111111111111111'], strategy: {} }), {
+			return new window.Response(JSON.stringify(currentConfiguration), {
 				headers: { 'content-type': 'application/json' },
 			})
 		}
 		if (url.pathname === '/api/state') {
 			stateRequestCount += 1
 			if (releaseStateRequest !== undefined) await new Promise<void>(resolve => (releaseStateRequest = resolve))
+			if (stateRequestFailure) return new window.Response(JSON.stringify({ error: 'state fixture unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 })
 			return new window.Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/test-market-sources') {
@@ -127,6 +191,27 @@ async function dashboard() {
 		if (url.pathname === '/api/paused' && rejectPause) {
 			return new window.Response(JSON.stringify({ error: 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		}
+		if (url.pathname === '/api/approved-universes') {
+			const approved: unknown = JSON.parse(String(init?.body))
+			if (!Array.isArray(approved)) throw new Error('Unexpected approved-universe request')
+			const approvedValues: string[] = []
+			for (const value of approved) {
+				if (typeof value !== 'string') throw new Error('Unexpected approved-universe request')
+				approvedValues.push(value)
+			}
+			approvedUniverseRequests.push(approvedValues)
+			currentConfiguration = { ...currentConfiguration, approvedUniverses: approvedValues }
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
+		if (url.pathname === '/api/network-connectivity') {
+			currentConfiguration = {
+				...currentConfiguration,
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example' },
+				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
+			}
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
+		if (url.pathname === '/api/paused') pauseRequests.push(JSON.parse(String(init?.body)))
 		return new window.Response('{}', { headers: { 'content-type': 'application/json' } })
 	}
 	page.evaluate(await (await fetch(new URL('/dashboard.js', server.url))).text())
@@ -144,7 +229,12 @@ async function dashboard() {
 		setSnapshot: (next: ReturnType<typeof state>) => {
 			snapshot = next
 		},
+		approvedUniverseRequests,
+		pauseRequests,
 		stateRequestCount: () => stateRequestCount,
+		setStateRequestFailure: (failed: boolean) => {
+			stateRequestFailure = failed
+		},
 		suspendNextStateRequest: () => {
 			releaseStateRequest = () => undefined
 		},
@@ -159,8 +249,133 @@ async function dashboard() {
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('makes initial and post-success state request failures explicit and recovers', async () => {
+		const mainnet = { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' as const }
+		const initialFailure = await dashboard(configuration(['1'], mainnet), state(), true)
+		expect(initialFailure.window.document.getElementById('mode-badge')?.textContent).toBe('Mode unavailable')
+		expect(initialFailure.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · unverified')
+		expect(initialFailure.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(initialFailure.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
+		expect(initialFailure.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('#global-error')
+		expect(initialFailure.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
+		expect(initialFailure.window.document.getElementById('global-error')?.textContent).toContain('Automatic retry is active')
+		expect(initialFailure.window.document.body.textContent).not.toContain('state fixture unavailable')
+
+		const recovered = await dashboard(configuration(['1'], mainnet), state())
+		recovered.setStateRequestFailure(true)
+		await recovered.refresh()
+		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run · last known')
+		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · last known')
+		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
+		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
+		recovered.setStateRequestFailure(false)
+		await recovered.refresh()
+		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run')
+		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
+		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Running')
+		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
+		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
+		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
+	})
+
+	test('keeps every execution-affecting control disabled when a pause mutation cannot refresh state', async () => {
+		const page = await dashboard(configuration(), state())
+		page.setStateRequestFailure(true)
+		const pauseButton = page.window.document.getElementById('pause-button')
+		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause control')
+		pauseButton.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		for (const id of ['pause-button', 'network-fields', 'market-configuration-fields', 'strategy-fields', 'clear-signer']) {
+			const control = page.window.document.getElementById(id)
+			expect(control?.hasAttribute('disabled')).toBe(true)
+		}
+		expect(page.window.document.querySelector<HTMLInputElement>('#signer-form input[name="privateKey"]')?.disabled).toBe(true)
+		expect(page.window.document.querySelector<HTMLInputElement>('#pool-rows input')?.disabled).toBe(true)
+		expect(page.window.document.querySelector<HTMLInputElement>('#universe-rows input')?.disabled).toBe(true)
+
+		page.setStateRequestFailure(false)
+		await page.refresh()
+		expect(pauseButton.disabled).toBe(false)
+		expect(page.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
+		expect(page.window.document.getElementById('market-configuration-fields')?.hasAttribute('disabled')).toBe(false)
+		expect(page.window.document.getElementById('strategy-fields')?.hasAttribute('disabled')).toBe(false)
+		expect(page.window.document.getElementById('clear-signer')?.hasAttribute('disabled')).toBe(false)
+		expect(page.window.document.querySelector<HTMLInputElement>('#signer-form input[name="privateKey"]')?.disabled).toBe(false)
+		expect(page.window.document.querySelector<HTMLInputElement>('#pool-rows input')?.disabled).toBe(false)
+		expect(page.window.document.querySelector<HTMLInputElement>('#universe-rows input')?.disabled).toBe(false)
+	})
+
+	test('keeps network identity visible and updates it after configuration', async () => {
+		const unconfigured = await dashboard(configuration(), state())
+		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Network not configured')
+		const networkForm = unconfigured.window.document.getElementById('network-form')
+		const networkName = unconfigured.window.document.getElementById('network-name')
+		const readRpcUrl = unconfigured.window.document.getElementById('read-rpc-url')
+		const publicRpcUrls = unconfigured.window.document.getElementById('public-rpc-urls')
+		if (!(networkForm instanceof unconfigured.window.HTMLFormElement) || !(networkName instanceof unconfigured.window.HTMLSelectElement) || !(readRpcUrl instanceof unconfigured.window.HTMLInputElement) || !(publicRpcUrls instanceof unconfigured.window.HTMLTextAreaElement)) {
+			throw new Error('Expected network configuration controls')
+		}
+		networkName.value = 'sepolia'
+		readRpcUrl.value = 'https://sepolia.example'
+		publicRpcUrls.value = 'https://sepolia.example'
+		networkForm.dispatchEvent(new unconfigured.window.Event('submit', { bubbles: true, cancelable: true }))
+		await unconfigured.waitUntilComplete()
+		await Bun.sleep(1)
+		expect({
+			badge: unconfigured.window.document.getElementById('network-badge')?.textContent,
+			status: unconfigured.window.document.getElementById('network-status')?.textContent,
+		}).toEqual({ badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
+
+		const mainnet = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
+		expect(mainnet.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
+	})
+
+	test('prunes approved descendants when changing or clearing a truth path', async () => {
+		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1')]
+		const siblingPage = await dashboard(configuration(['1', '2', '4']), state(undefined, [], { universes }))
+		const legend = siblingPage.window.document.querySelector('.truth-options legend')
+		expect(legend?.firstChild?.textContent).toBe('Truth outcome')
+		expect(legend?.textContent).toBe('Truth outcome for universe #1')
+		const sibling = siblingPage.window.document.querySelector('input[value="3"]')
+		if (!(sibling instanceof siblingPage.window.HTMLInputElement)) throw new Error('Expected sibling truth control')
+		sibling.click()
+		await siblingPage.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(siblingPage.approvedUniverseRequests.at(-1)?.sort()).toEqual(['1', '3'])
+
+		const nonePage = await dashboard(configuration(['1', '2', '4']), state(undefined, [], { universes }))
+		const none = nonePage.window.document.querySelector('input[data-record-key="universe:none:1"]')
+		if (!(none instanceof nonePage.window.HTMLInputElement)) throw new Error('Expected no-child truth control')
+		none.click()
+		await nonePage.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(nonePage.approvedUniverseRequests.at(-1)).toEqual(['1'])
+	})
+
+	test('turns a scan-only error into an actionable blocker', async () => {
+		const page = await dashboard(configuration(), state('read RPC stalled'))
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Error')
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
+		const action = page.window.document.querySelector('#attention-badge[href="#global-error"]')
+		expect(action?.textContent).toBe('1 action')
+		if (!(action instanceof page.window.HTMLAnchorElement)) throw new Error('Expected scan-error action')
+		const globalError = page.window.document.getElementById('global-error')
+		expect(globalError?.textContent).toContain('RPC connectivity or chain reads failed.')
+		expect(globalError?.textContent).toContain('Automatic retry is active.')
+		expect(globalError?.textContent).not.toContain('read RPC stalled')
+		expect(page.window.document.getElementById('operator-alerts')?.classList.contains('hidden')).toBe(true)
+		action.click()
+		await Bun.sleep(1)
+		expect(page.window.location.hash).toBe('#global-error')
+		expect(page.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#overview')
+	})
+
 	test('surfaces an incomplete vault registry scan', async () => {
 		const page = await dashboard()
+		const rootUniverseToggle = page.window.document.querySelector('.truth-root-toggle input[type="checkbox"]')
+		expect(rootUniverseToggle?.getAttribute('aria-label')).toBe('Approve root universe 1')
 		const snapshot = state()
 		const [pool] = snapshot.pools
 		if (pool === undefined) throw new Error('Expected pool snapshot')
@@ -266,5 +481,50 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(pauseStatus?.textContent).toContain('Check the bot connection and retry')
 		expect(pauseStatus?.textContent).not.toContain('/api/paused')
 		expect(page.window.document.body.textContent).not.toContain('Fixture rejected')
+	})
+
+	test('links recovery blockers and confirms before resuming live execution', async () => {
+		const page = await dashboard()
+		const pending: PendingTransaction = {
+			hash: `0x${'1'.repeat(64)}`,
+			kind: 'liquidate',
+			label: 'Liquidate pool',
+			maxBlockNumber: '120',
+			mode: 'private',
+			nonce: '8',
+			requiresMarketEvidence: true,
+			submissionBlock: '100',
+		}
+		page.setSnapshot(state(undefined, [], { execute: true, paused: true, pendingTransactions: [pending] }))
+		await page.refresh()
+
+		const recoveryLink = page.window.document.querySelector('#operator-alerts a[href="#recovery"]')
+		expect(recoveryLink?.textContent).toBe('Review recovery')
+		if (!(recoveryLink instanceof page.window.HTMLAnchorElement)) throw new Error('Expected recovery link')
+		recoveryLink.click()
+		await Bun.sleep(1)
+		expect(page.window.location.hash).toBe('#recovery')
+		expect(page.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#operations')
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toContain('action')
+		const pauseButton = page.window.document.getElementById('pause-button')
+		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause button')
+		expect(pauseButton.textContent).toBe('Resume')
+		expect(page.window.document.getElementById('mode-badge')?.textContent).toBe('Live')
+		expect(page.pauseRequests).toHaveLength(0)
+		pauseButton.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		const dialog = page.window.document.getElementById('resume-dialog')
+		expect(page.pauseRequests).toHaveLength(0)
+		expect(dialog?.hasAttribute('open')).toBe(true)
+		expect(page.window.document.getElementById('resume-preflight')?.textContent).toContain('Transaction recovery')
+
+		const confirm = page.window.document.getElementById('confirm-resume')
+		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected resume confirmation')
+		confirm.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.pauseRequests.length).toBeGreaterThan(0)
+		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
 	})
 })

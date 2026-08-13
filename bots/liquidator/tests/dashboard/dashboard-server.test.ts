@@ -52,11 +52,18 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="guarded-market-price"')
 		expect(pageSource).toContain('id="market-configuration-json"')
 		expect(pageSource).toContain('id="network-name"')
+		expect(pageSource).toContain('id="network-badge"')
 		expect(pageSource).toContain('id="test-market-sources"')
 		expect(pageSource).toContain('id="recovery-list"')
+		expect(pageSource).toContain('id="resume-dialog"')
+		expect(pageSource).toContain('class="section-nav"')
+		expect(pageSource).toContain('Universe truth policy')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
+		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
+		expect(sharedStyles.status).toBe(200)
+		expect(await sharedStyles.text()).toContain('.operator-shell')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {
