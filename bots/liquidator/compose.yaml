@@ -7,9 +7,8 @@ services:
       context: ../..
       dockerfile: bots/liquidator/Dockerfile
     image: zoltar-liquidator
-    user: ${LIQUIDATOR_UID:?Set LIQUIDATOR_UID in .env}:${LIQUIDATOR_GID:?Set LIQUIDATOR_GID in .env}
     environment:
-      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:?Set ZOLTAR_BOT_DASHBOARD_PASSWORD in .env}
+      ZOLTAR_BOT_DASHBOARD_PASSWORD: ${ZOLTAR_BOT_DASHBOARD_PASSWORD:-zoltar-local-dashboard}
     ports:
       - 127.0.0.1:4183:4183
     healthcheck:
@@ -19,4 +18,7 @@ services:
       retries: 3
       start_period: 10s
     volumes:
-      - ./.state:/app/bots/liquidator/.state
+      - liquidator-state:/app/bots/liquidator/.state
+
+volumes:
+  liquidator-state:

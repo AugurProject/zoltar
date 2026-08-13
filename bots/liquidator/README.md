@@ -26,34 +26,29 @@ threshold.
 
 ### Docker Compose
 
-From the monorepo root, create the private environment and operator files:
+From this directory, build and start the bot:
 
 ```bash
-cd bots/liquidator
+docker compose up --build --force-recreate
+```
+
+On Windows, run `start.bat` from this directory to start the same Compose command.
+
+On first start, the container creates a paused, dry-run configuration in its named
+volume. Open `http://127.0.0.1:4183` and sign in as `operator` with the local-only
+default password `zoltar-local-dashboard`.
+
+For anything beyond local evaluation, create `.env` from `.env.example` and set a
+unique dashboard password of at least 16 characters before starting Compose:
+
+```bash
 install -m 600 .env.example .env
-install -d -m 700 .state
-install -m 600 config/operator.example.json .state/operator.json
 ```
 
-In `.env`, set a unique dashboard password of at least 16 characters. Set
-`LIQUIDATOR_UID` and `LIQUIDATOR_GID` to the output of `id -u` and `id -g`; this
-lets the container read and update the owner-only state files without making them
-public.
-
-In `.state/operator.json`, add the reviewed deployment settings and set
-`runtime.uiHost` to `0.0.0.0`. Keep the operator file owner-only and keep
-`runtime.execute` false while testing the setup. Then build and start the bot:
-
-```bash
-docker compose up --build --detach
-```
-
-The example starts paused. Open `http://127.0.0.1:4183`, sign in as `operator` with
-the password from `.env`, save the chain and RPCs in **Chain and RPC
-connectivity**, finish the remaining configuration, and resume only after reviewing
-the saved settings. Run `docker compose down` to stop the bot and
-`docker compose up --detach` to start it again. The bind-mounted `.state` directory
-preserves its configuration, history, and recovery state.
+Save the chain and RPCs in **Chain and RPC connectivity**, finish the remaining
+configuration, and resume only after reviewing the saved settings. Run
+`docker compose down` to stop the bot and `docker compose up` to start it again.
+The named volume preserves its configuration, history, and recovery state.
 
 Compose restarts the container only while Docker and the host remain available; a
 direct Bun process needs an external supervisor. If the host or state storage is
