@@ -192,8 +192,8 @@ export const planManifestBackfill = async (
 		const contract = contracts.get(address.toLowerCase()) ?? { address, label, kind, provenance: 'manifest' }
 		if (!requiresManifestHistoryCoverage(contract)) continue
 		const cursor = cursors.get(address.toLowerCase())
-		if (cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint) continue
 		let deploymentBlock = configuredDeploymentBlock ?? contract.deploymentBlock
+		if (cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint && (deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)) continue
 		if (deploymentBlock === undefined) {
 			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
 			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined) continue
@@ -202,7 +202,7 @@ export const planManifestBackfill = async (
 			deploymentBlock = deployment.block
 		}
 		if (deploymentBlock > checkpoint) continue
-		const missingStart = cursor === undefined || cursor.lastRetrievedBlock < deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
+		const missingStart = cursor === undefined || cursor.startBlock > deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
 		if (missingStart <= checkpoint && (replayStart === undefined || missingStart < replayStart)) replayStart = missingStart
 	}
 	return replayStart

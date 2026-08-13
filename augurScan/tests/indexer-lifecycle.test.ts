@@ -496,6 +496,20 @@ describe('network indexer lifecycle', () => {
 		expect(detection).not.toHaveBeenCalled()
 	})
 
+	test('backfills when an exact manifest boundary moves earlier than a complete cursor', async () => {
+		const contract = { address, label: 'Promoted manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind, 50n]],
+				new Map([[address.toLowerCase(), contract]]),
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(50n)
+	})
+
 	test('backfills a newly configured token because it changes historical market filters', async () => {
 		const tokenAddress = '0x3000000000000000000000000000000000000003'
 		const contract = { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' } satisfies ContractMetadata
