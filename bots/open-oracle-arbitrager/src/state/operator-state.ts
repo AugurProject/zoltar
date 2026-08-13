@@ -249,6 +249,7 @@ export type PublicOperatorSnapshot = {
 	expectedChainId: number
 	explorerUrl: string
 	endpointChecks: readonly EndpointCheck[]
+	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined

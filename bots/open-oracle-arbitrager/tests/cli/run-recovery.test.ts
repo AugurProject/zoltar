@@ -741,7 +741,7 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(finalized.lifecycleTransactionHashes).toEqual([])
 	})
 
-		test('classifies fewer than two available finality descendants as degraded connectivity', async () => {
+	test('classifies fewer than two available finality descendants as degraded connectivity', async () => {
 		const position = {
 			...confirmedPosition(),
 			lifecycleSubmissionBlockNumber: '99',
@@ -753,7 +753,7 @@ describe('atomic lifecycle crash recovery', () => {
 			status: 'withdrawing' as const,
 		}
 		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
-			expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), recoveryConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+		expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), recoveryConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
 	})
 
 	test('finalizes successful lifecycle evidence when two readers agree and a third is offline', async () => {

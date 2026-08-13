@@ -74,7 +74,7 @@ export async function submitExecutorDeploymentTransaction(parameters: { account:
 }
 
 function receiptNotFound(error: unknown) {
-	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || error.message.toLowerCase().includes('transaction receipt') && error.message.toLowerCase().includes('not found'))
+	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || (error.message.toLowerCase().includes('transaction receipt') && error.message.toLowerCase().includes('not found')))
 }
 
 async function executorDeploymentReceipt(parameters: { clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; transactionHash: Hash }) {
@@ -122,15 +122,7 @@ async function waitForExecutorDeployment(parameters: { address: Address; clients
 	}
 }
 
-export async function deployExecutorCreate2(parameters: {
-	chain: Chain
-	existingIntent?: ExecutorDeploymentIntent | undefined
-	persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined
-	privateKey: Hex
-	readRpcUrls?: readonly string[] | undefined
-	rpcUrls: readonly string[]
-	salt: unknown
-}) {
+export async function deployExecutorCreate2(parameters: { chain: Chain; existingIntent?: ExecutorDeploymentIntent | undefined; persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined; privateKey: Hex; readRpcUrls?: readonly string[] | undefined; rpcUrls: readonly string[]; salt: unknown }) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)

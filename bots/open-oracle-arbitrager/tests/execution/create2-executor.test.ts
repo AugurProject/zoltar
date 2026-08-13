@@ -272,7 +272,7 @@ async function runDeploymentScenario(options: { alreadyDeployed?: boolean; exist
 					serializedTransaction: recoveredSerializedTransaction,
 					transactionHash: keccak256(recoveredSerializedTransaction),
 					version: 1,
-				}) satisfies ExecutorDeploymentIntent
+				} satisfies ExecutorDeploymentIntent)
 			: undefined
 		const result = await deployExecutorCreate2({
 			chain: mainnet,

@@ -29,15 +29,18 @@ export type PendingOperatorUpdates = {
 	tokenAddresses: Address[] | undefined
 }
 
-export async function deployExecutorFromConnectivity(parameters: {
-	chain: Configuration['network']['chain']
-	connectivity: ConnectivitySettings
-	existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
-	persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
-	privateKey: Hex
-	quorumRpcUrls: readonly string[]
-	salt: unknown
-}, deploy: typeof deployExecutorCreate2 = deployExecutorCreate2) {
+export async function deployExecutorFromConnectivity(
+	parameters: {
+		chain: Configuration['network']['chain']
+		connectivity: ConnectivitySettings
+		existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
+		persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
+		privateKey: Hex
+		quorumRpcUrls: readonly string[]
+		salt: unknown
+	},
+	deploy: typeof deployExecutorCreate2 = deployExecutorCreate2,
+) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
 	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
 	if (readRpcUrls.length < 3) throw new Error('Executor deployment requires three independently configured read RPC endpoints')

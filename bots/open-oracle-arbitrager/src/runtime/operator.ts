@@ -56,7 +56,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			: createWalletClient({
 					account: privateKeyToAccount(config.privateKey),
 					chain: config.network.chain,
-						transport: readPool.transport,
+					transport: readPool.transport,
 				})
 	let client = createClient()
 	let readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
@@ -211,9 +211,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							if (availableClient === undefined) throw new Error('Configured chain validation requires an available read RPC endpoint')
 							client = availableClient
 						}
-						coordinatorPolicies = config.execute
-							? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config)
-							: await loadCoordinatorPolicies(client, config)
+						coordinatorPolicies = config.execute ? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config) : await loadCoordinatorPolicies(client, config)
 						await authenticateConfiguredDeployments(readClients, config)
 						if (config.execute && config.executor !== undefined) {
 							const executorCode = await client.getCode({ address: config.executor })
@@ -238,7 +236,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const availableHeads = availableSettledValues(settledHeads)
 						if (availableHeads.length < 2) {
 							const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-								throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+							throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
 						}
 						const sharedHead = availableHeads.reduce((minimum, observation) => (observation.head < minimum ? observation.head : minimum), availableHeads[0]?.head ?? 0n)
 						const settledBlocks = await Promise.allSettled(
@@ -253,7 +251,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const availableBlocks = availableSettledValues(settledBlocks)
 						if (availableBlocks.length < 2) {
 							const failures = settledBlocks.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-								throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+							throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
 						}
 						quorumValue(
 							`canonical head ${sharedHead.toString()}`,
@@ -292,9 +290,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										reportId: position.reportId,
 									})
 								}
-								} catch (error) {
-									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-									const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
+							} catch (error) {
+								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
 								nextError = message
 								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
 							}
@@ -325,9 +323,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										reportId: position.reportId,
 									})
 								}
-								} catch (error) {
-									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-									const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
+							} catch (error) {
+								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
 								nextError = message
 								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Position lifecycle failed closed', reason: message, reportId: position.reportId })
 							}
@@ -613,10 +611,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									nextError = message
 									console.error(`historyPersistenceFailed=${message}`)
 								}
-								} catch (error) {
-									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-									const message = errorMessage(error)
+							} catch (error) {
+								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
+								const message = errorMessage(error)
 								selected.opportunity.decision = executionFailureDecision(error)
 								if (selected.opportunity.decision === 'execution-failed') {
 									nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
