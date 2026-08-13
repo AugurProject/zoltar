@@ -67,8 +67,8 @@ export function acquireScanSignerOperation(signerOperationGate: SignerOperationG
 }
 
 export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
-	await saveExecutorDeploymentIntent(path, intent)
 	deploymentRecovery.pending = true
+	await saveExecutorDeploymentIntent(path, intent)
 }
 
 export function startOperatorControlPlane(parameters: {

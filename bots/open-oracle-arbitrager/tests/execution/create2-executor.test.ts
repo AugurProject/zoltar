@@ -6,7 +6,7 @@ import type { Hex } from '#ethereum'
 import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -149,6 +149,25 @@ test('activates the signer blocker as soon as a fresh deployment intent is durab
 		expect(deploymentRecovery.pending).toBe(true)
 		expect(acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery)).toBe(false)
 		expect(await loadExecutorDeploymentIntent(intentPath)).toBeDefined()
+	} finally {
+		await rm(directory, { force: true, recursive: true })
+	}
+})
+
+test('keeps the signer blocker active when deployment intent persistence is uncertain', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-persist-failure-'))
+	try {
+		const privateKey = `0x${'11'.repeat(32)}` as Hex
+		const account = privateKeyToAccount(privateKey)
+		const salt = `0x${'22'.repeat(32)}` as Hex
+		const plan = executorDeploymentPlan(salt)
+		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		const deploymentRecovery = { pending: false }
+		const parentFile = join(directory, 'not-a-directory')
+		await writeFile(parentFile, 'occupied', 'utf8')
+		await expect(persistExecutorDeploymentIntentForRecovery(join(parentFile, 'deployment.json'), { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)).rejects.toThrow()
+		expect(deploymentRecovery.pending).toBe(true)
+		expect(acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery)).toBe(false)
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}
