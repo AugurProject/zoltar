@@ -554,13 +554,17 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(12)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(12)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(16)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n }))
 		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
+		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 1n }))
+		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 2n }))
+		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
+		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
 		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
@@ -790,6 +794,15 @@ describe('testnet deployment plan', () => {
 
 		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
 		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')
+
+		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
+		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))
+		for (const id of ['priceCoordinatorCreationCodeFirstChunk', 'priceCoordinatorCreationCodeSecondChunk', 'securityPoolCreationCodeFirstChunk', 'securityPoolCreationCodeSecondChunk']) {
+			const chunkAddress = descendants[id]
+			if (chunkAddress === undefined) throw new Error(`Missing test descendant ${id}`)
+			await expect(assertBootstrapDescendantCode({ getCode: async ({ address }) => (address === chunkAddress ? undefined : '0x01') }, SEPOLIA_NETWORK_PROFILE, async () => undefined, expectedRuntimeCodeHashes)).rejects.toThrow(`Bootstrap descendant ${id} is missing`)
+			await expect(assertBootstrapDescendantCode({ getCode: async ({ address }) => (address === chunkAddress ? '0x02' : '0x01') }, SEPOLIA_NETWORK_PROFILE, undefined, expectedRuntimeCodeHashes)).rejects.toThrow(`Unexpected runtime code for ${id}`)
+		}
 	})
 
 	test('retries bootstrap descendants as one batch when RPC code state lags', async () => {
