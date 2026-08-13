@@ -22,7 +22,7 @@
 		"qa:browser": "bun ./scripts/browser-qa.mts",
 		"deploy:local": "bun ./ts/deploy/deploy-local.mts",
 		"docker:build": "docker build --file Dockerfile --tag zoltar-trading ..",
-		"docker:run": "docker run --rm --publish 12346:12346 zoltar-trading",
+		"docker:run": "docker run --rm --publish 4163:4163 zoltar-trading",
 		"gas-costs": "bun run compile && TRADING_REPORT_GAS=1 bun test ./ts/tests/pairRouter.integration.test.ts && bun ./ts/tests/gas-costs.mts"
 	},
 	"dependencies": {

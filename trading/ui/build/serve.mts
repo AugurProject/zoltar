@@ -16,6 +16,6 @@ export function serveTradingAsset(request: Request) {
 }
 
 if (import.meta.main) {
-	Bun.serve({ port: 12346, fetch: serveTradingAsset })
-	console.log('Trading UI: http://localhost:12346/?demo=1#/markets')
+	Bun.serve({ port: 4163, fetch: serveTradingAsset })
+	console.log('Trading UI: http://localhost:4163/?demo=1#/markets')
 }

@@ -5,7 +5,9 @@ import { join } from 'node:path'
 
 const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
+const composeFile = join(import.meta.dir, '..', 'compose.yaml')
 const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
+const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
@@ -28,6 +30,18 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 }
 
 describe('Docker entrypoint', () => {
+	test('provides a location-independent Windows launcher', async () => {
+		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
+		expect(source).toContain('pushd "%~dp0"')
+		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+	})
+
+	test('provides a local-only dashboard password when .env is absent', async () => {
+		const source = await readFile(composeFile, 'utf8')
+		expect(source).toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:-')
+		expect(source).not.toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:?')
+	})
+
 	test('installs production dependencies where shared bot sources can resolve them', async () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
