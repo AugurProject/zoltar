@@ -13,9 +13,10 @@ Every visible route refreshes automatically after a committed block notification
 From this directory:
 
 ```bash
-cp .env.example .env
-docker compose up --build
+docker compose up --build --force-recreate
 ```
+
+On Windows, run `start.bat` from this directory to start the same Compose command.
 
 Open <http://localhost:3000>. PostgreSQL is included and stored in the `augurscan-data` named volume. The website is available while historical backfill is running and reports the indexed block, its timestamp/age, observed head, lag, percentage complete, estimated time remaining, and network errors. Completion is measured from the configured start block to the latest observed head. The ETA appears after the indexer or browser has observed enough forward progress to measure throughput.
 
