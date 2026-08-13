@@ -257,7 +257,7 @@ function paddedGas(gasEstimate: bigint) {
 	return padded > MAX_SIGNABLE_TRANSACTION_GAS ? MAX_SIGNABLE_TRANSACTION_GAS : padded
 }
 
-type BudgetedWallet = Pick<WriteClient, 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>
+type BudgetedWallet = Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>
 
 export function createDeploymentBudget(maxTotalCost: bigint) {
 	const accountedCanonicalSigners = new Set<string>()
@@ -320,16 +320,35 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 				['Maximum fee', `${formatEther(maxFeePerGas * 1_000_000_000n)} gwei`],
 			]),
 		)
-		const gas = paddedGas(
-			await wallet.estimateGas({
-				account: account.address,
-				data: transaction.data,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				to: transaction.to ?? undefined,
-				value: transaction.value ?? transaction.amount,
-			}),
-		)
+		const estimationRequest = {
+			account: account.address,
+			data: transaction.data,
+			maxFeePerGas,
+			maxPriorityFeePerGas,
+			to: transaction.to ?? undefined,
+			value: transaction.value ?? transaction.amount,
+		}
+		let gas: bigint
+		try {
+			gas = paddedGas(await wallet.estimateGas(estimationRequest))
+		} catch (estimateError) {
+			// CREATE/CREATE2 proxies can turn an inner out-of-gas during an RPC
+			// estimator's binary search into an indistinguishable empty revert.
+			try {
+				await wallet.call({ ...estimationRequest, gas: MAX_SIGNABLE_TRANSACTION_GAS })
+			} catch (simulationError) {
+				const simulationReason = simulationError instanceof Error ? simulationError.message : String(simulationError)
+				const estimateReason = estimateError instanceof Error ? estimateError.message : String(estimateError)
+				throw new Error(`Gas estimation failed (${estimateReason}) and the ${MAX_SIGNABLE_TRANSACTION_GAS.toString()} gas fallback simulation also failed (${simulationReason})`, { cause: estimateError })
+			}
+			gas = MAX_SIGNABLE_TRANSACTION_GAS
+			log(
+				formatDeploymentLogBranch('Gas estimate unavailable', [
+					['Fallback gas limit', gas.toString()],
+					['Validation', 'capped simulation succeeded'],
+				]),
+			)
+		}
 		const transactionValue = transaction.value ?? transaction.amount ?? 0n
 		const worstCaseCost = gas * maxFeePerGas + transactionValue
 		budget.recordWalletTransaction(worstCaseCost)
