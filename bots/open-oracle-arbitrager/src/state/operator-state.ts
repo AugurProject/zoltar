@@ -458,6 +458,11 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		})),
 		paused: snapshot.paused,
 		queuedWallet: snapshot.queuedWallet,
+		rpcEndpointHealth: (snapshot.rpcEndpointHealth ?? []).map(endpoint => ({
+			...endpoint,
+			error: endpoint.error === undefined ? undefined : publicOperatorFailure(endpoint.error),
+			target: publicEndpointTarget(endpoint.target),
+		})),
 		savedWallet: snapshot.savedWallet,
 		status: snapshot.status,
 		submission: {
