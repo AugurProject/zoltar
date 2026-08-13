@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
 import {
 	assertIndexerLeaseObservation,
@@ -8,6 +8,7 @@ import {
 	type StoredTransaction,
 } from '../src/database.ts'
 import {
+	type Address,
 	BaseError,
 	ContractFunctionExecutionError,
 	decodeFunctionResult,
@@ -27,6 +28,7 @@ import {
 	createRpcDiagnosticContext,
 	deploymentReadBudget,
 	findContractDeploymentBlock,
+	findManifestContractDeployment,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
 	indexerWaitingMessage,
@@ -34,9 +36,11 @@ import {
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
+	logScanCursorUpdates,
 	nextIndexerOwnershipStatus,
 	ownershipFailureLogMessage,
 	planDeploymentAwareLogScan,
+	planManifestBackfill,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
 	readTokenMetadata,
@@ -50,6 +54,7 @@ import {
 	runIndexerOwnershipLifecycle,
 	runIndexerTask,
 	runNetworkLifecycle,
+	runOwnedNetworkLifecycle,
 	safeIndexerFailure,
 	safeIndexerFailureReason,
 	tokenMetadataNeedsRead,
@@ -471,6 +476,129 @@ describe('network indexer lifecycle', () => {
 		expect(failures).toHaveLength(1)
 	})
 
+	test('plans a manifest backfill from a newly added contract deployment', async () => {
+		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const contracts = new Map([[address.toLowerCase(), contract]])
+		const detected: bigint[] = []
+		expect(
+			await planManifestBackfill([[address, contract.label, contract.kind]], contracts, new Map(), 100n, 0n, async (_address, startBlock, checkpoint) => {
+				detected.push(startBlock, checkpoint)
+				return { block: 75n, exact: true }
+			}),
+		).toBe(75n)
+		expect(detected).toEqual([0n, 100n])
+	})
+
+	test('uses explicit manifest deployment blocks and resumes partial contract coverage', async () => {
+		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const contracts = new Map([[address.toLowerCase(), contract]])
+		const detection = mock(async () => ({ block: 90n, exact: true }))
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind, 75n]],
+				contracts,
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]),
+				100n,
+				0n,
+				detection,
+			),
+		).toBe(81n)
+		expect(detection).not.toHaveBeenCalled()
+	})
+
+	test('backfills when an exact manifest boundary moves earlier than a complete cursor', async () => {
+		const contract = { address, label: 'Promoted manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind, 50n]],
+				new Map([[address.toLowerCase(), contract]]),
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(50n)
+	})
+
+	test('backfills a newly configured token because it changes historical market filters', async () => {
+		const tokenAddress = '0x3000000000000000000000000000000000000003'
+		const contract = { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' } satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[tokenAddress, contract.label, contract.kind, 70n]],
+				new Map([[tokenAddress, contract]]),
+				new Map(),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(70n)
+	})
+
+	test('gives each manifest deployment search an independent read budget', async () => {
+		let now = 0
+		const codeAt = async (_candidate: Address, block: bigint) => {
+			now += 2
+			return block === 1n ? '0x01' : undefined
+		}
+		const first = await findManifestContractDeployment(address, 0n, 1n, false, codeAt, 5, () => now)
+		const second = await findManifestContractDeployment('0x2000000000000000000000000000000000000002', 0n, 1n, false, codeAt, 5, () => now)
+		expect(first).toEqual({ block: 1n, exact: true })
+		expect(second).toEqual({ block: 1n, exact: true })
+		expect(now).toBe(8)
+	})
+
+	test('tracks implicit token filter coverage from the replay start without querying token logs', async () => {
+		const tokenAddress = '0x3000000000000000000000000000000000000003'
+		const helperAddress = '0x4000000000000000000000000000000000000004'
+		const contracts = new Map<string, ContractMetadata>([
+			[tokenAddress, { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' }],
+			[helperAddress, { address: helperAddress, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' }],
+		])
+		const updates = logScanCursorUpdates(contracts, [], 100n, 0n, 70n)
+		expect(updates).toEqual([{ contractAddress: tokenAddress, startBlock: 70n, lastRetrievedBlock: 100n }])
+		const cursor = updates[0]
+		if (cursor === undefined) throw new Error('Expected REP filter coverage cursor')
+		expect(
+			await planManifestBackfill(
+				[[tokenAddress, 'REP', 'reputationToken', 50n]],
+				contracts,
+				new Map([[tokenAddress, cursor]]),
+				100n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(50n)
+	})
+
+	test('does not rewind for covered, future, absent, or non-activity manifest contracts', async () => {
+		const absentAddress = '0x2000000000000000000000000000000000000002'
+		const helperAddress = '0x3000000000000000000000000000000000000003'
+		const contracts = new Map<string, ContractMetadata>([
+			[address.toLowerCase(), { address, label: 'Covered', kind: 'openOracle', provenance: 'manifest' }],
+			[absentAddress, { address: absentAddress, label: 'Absent', kind: 'zoltar', provenance: 'manifest' }],
+			[helperAddress, { address: helperAddress, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' }],
+		])
+		const cursors = new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]])
+		const detection = mock(async (candidate: Address) => (candidate.toLowerCase() === absentAddress ? undefined : { block: 75n, exact: true }))
+		expect(
+			await planManifestBackfill(
+				[
+					[address, 'Covered', 'openOracle'],
+					[absentAddress, 'Absent', 'zoltar'],
+					[helperAddress, 'Multicall3', 'multicall3'],
+					['0x4000000000000000000000000000000000000004', 'Future', 'zoltar', 101n],
+				],
+				contracts,
+				cursors,
+				100n,
+				0n,
+				detection,
+			),
+		).toBeUndefined()
+		expect(detection).toHaveBeenCalledTimes(1)
+	})
+
 	test('bounds a stalled optional contract deployment history read', async () => {
 		let deploymentTimeout: unknown
 		try {
@@ -865,33 +993,70 @@ describe('network indexer lifecycle', () => {
 		expect(safeIndexerFailure(error)).toBe('Database request failed; retrying')
 	})
 
-	test('retries initial chain verification and begins polling after recovery', async () => {
+	test('reports and retries failed startup deployment reconciliation before polling', async () => {
 		const controller = new AbortController()
 		const failures: string[] = []
-		let verificationAttempts = 0
+		const reasons: string[] = []
+		let reconciliationAttempts = 0
 		let polls = 0
 
-		await runNetworkLifecycle({
-			verify: async () => {
-				verificationAttempts++
-				if (verificationAttempts === 1) throw new Error('temporary timeout with secret=provider-key-sentinel')
+		await runOwnedNetworkLifecycle({
+			reconcile: async () => {
+				reconciliationAttempts++
+				if (reconciliationAttempts === 1) throw new Error('temporary deployment lookup timeout with secret=provider-key-sentinel')
 			},
 			poll: async () => {
 				polls++
 				controller.abort()
 				return true
 			},
-			failure: async (message) => {
+			failure: async (message, _nextRetryAt, reason) => {
 				failures.push(message)
+				reasons.push(reason)
 			},
+			runWithProvider: async (operation) => await operation(),
 			intervalMs: 1,
 			signal: controller.signal,
 			random: () => 0.5,
 		})
 
-		expect(verificationAttempts).toBe(2)
+		expect(reconciliationAttempts).toBe(2)
 		expect(polls).toBe(1)
 		expect(failures).toEqual(['RPC request failed; retrying'])
+		expect(reasons).toEqual(['Error'])
+	})
+
+	test('preserves actionable reconciliation consistency failures without polling', async () => {
+		const controller = new AbortController()
+		let polls = 0
+		let failures = 0
+		const error = new DatabaseConsistencyError('unsafe internal ancestor detail', {
+			code: 'manifest-backfill-ancestor-missing',
+			ancestor: 49n,
+		})
+
+		await expect(
+			runOwnedNetworkLifecycle({
+				reconcile: async () => {
+					throw error
+				},
+				poll: async () => {
+					polls++
+					return true
+				},
+				failure: async () => {
+					failures++
+				},
+				runWithProvider: async (operation) => await operation(),
+				intervalMs: 1,
+				signal: controller.signal,
+			}),
+		).rejects.toBe(error)
+		expect(polls).toBe(0)
+		expect(failures).toBe(0)
+		const log = ownershipFailureLogMessage('sepolia', 'owned-run', error, 1, 10)
+		expect(log).toContain('Manifest backfill cannot find canonical block 49; rebuild the augurScan database from the configured start block')
+		expect(log).not.toContain('unsafe internal ancestor detail')
 	})
 
 	test('keeps retrying an RPC outage until the network recovers', async () => {
