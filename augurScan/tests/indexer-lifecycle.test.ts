@@ -53,6 +53,7 @@ import {
 	requiresParentLookup,
 	retryDelayMs,
 	rpcFailureLogMessage,
+	rpcIndexerFailureReason,
 	rpcLogAddressGroups,
 	rpcLogQueryGroups,
 	rpcProviderLabel,
@@ -1040,6 +1041,19 @@ describe('network indexer lifecycle', () => {
 		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
 	})
 
+	test('reports the concrete message and cause for generic transport errors', () => {
+		const cause = Object.assign(new Error('connection timed out'), { code: 'ETIMEDOUT', name: 'ConnectTimeoutError' })
+		const error = new TypeError('fetch failed', { cause })
+
+		expect(rpcIndexerFailureReason(error)).toBe('TypeError: fetch failed caused by ConnectTimeoutError: connection timed out; code ETIMEDOUT')
+		expect(rpcIndexerFailureReason({ code: 'ECONNREFUSED', message: 'provider connection refused' })).toBe(
+			'UnknownError: provider connection refused; code ECONNREFUSED',
+		)
+		expect(rpcIndexerFailureReason(new Error('request failed', { cause: 'socket closed' }))).toBe('Error: request failed caused by UnknownError: socket closed')
+		expect(rpcIndexerFailureReason(new Error('fetch failed', { cause: new TypeError('fetch failed') }))).toBe('Error: fetch failed caused by TypeError')
+		expect(rpcIndexerFailureReason(new TypeError('fetch failed\n\u001b[31mconnection refused\u001b[0m'))).toBe('TypeError: fetch failed connection refused')
+	})
+
 	test('retains viem unknown-node diagnostics for provider RPC failures', () => {
 		const secret = 'provider-key-sentinel'
 		const error = Object.assign(new Error(`request failed at https://rpc.example/${secret}`), {
@@ -1082,7 +1096,7 @@ describe('network indexer lifecycle', () => {
 		}
 
 		expect(rejected).toBe(failure)
-		expect(diagnostics.failureReason(rejected)).toBe('RPC #2: RpcRequestError; code -32000')
+		expect(diagnostics.failureReason(rejected)).toBe('RPC #2: RpcRequestError: upstream rejected query; code -32000')
 		expect(diagnostics.activeEndpoint()).toBe('#2 https://rpc-two.example')
 	})
 
@@ -1308,7 +1322,7 @@ describe('network indexer lifecycle', () => {
 		await runOwnedNetworkLifecycle({
 			reconcile: async () => {
 				reconciliationAttempts++
-				if (reconciliationAttempts === 1) throw new Error('temporary deployment lookup timeout with secret=provider-key-sentinel')
+				if (reconciliationAttempts === 1) throw new Error('temporary deployment lookup timeout\n\u001b[31mwith secret=provider-key-sentinel\u001b[0m')
 			},
 			poll: async () => {
 				polls++
@@ -1328,7 +1342,7 @@ describe('network indexer lifecycle', () => {
 		expect(reconciliationAttempts).toBe(2)
 		expect(polls).toBe(1)
 		expect(failures).toEqual(['RPC request failed; retrying'])
-		expect(reasons).toEqual(['Error'])
+		expect(reasons).toEqual(['Error: temporary deployment lookup timeout with secret=provider-key-sentinel'])
 	})
 
 	test('preserves actionable reconciliation consistency failures without polling', async () => {
