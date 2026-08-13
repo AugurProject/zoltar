@@ -874,7 +874,7 @@
 				</table>
 				<h2 id="openoracleoperationbountyboard">OpenOracleOperationBountyBoard</h2>
 				<p>Escrows REP or WETH rewards for creator-defined coordinator operations and pays the operator only after successful staged execution. <a href="../../solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol">Source</a></p>
-				<p>Read surface: Use <code>coordinator</code>, <code>reputationToken</code>, and <code>weth</code> to identify the bound pool contracts. <code>nextOperationBountyId</code>, <code>operationBounties</code>, and <code>operationExecutionStatuses</code> expose bounty identity, escrow terms, assignment, staged operation and report IDs, terminal state, and execution outcome. <code>getOperationBounties</code> pages forward from an explicit ID. The co-located deployment factory exposes its immutable <code>owner</code> and shared <code>implementation</code>.</p>
+				<p>Read surface: Use <code>coordinator</code>, <code>reputationToken</code>, and <code>weth</code> to identify the bound coordinator and token contracts. <code>nextOperationBountyId</code>, <code>operationBounties</code>, and <code>operationExecutionStatuses</code> expose bounty identity, escrow terms, assignment, staged operation and report IDs, terminal state, and execution outcome. <code>getOperationBounties</code> pages forward from an explicit ID. The co-located deployment factory exposes its immutable <code>owner</code> and shared <code>implementation</code>.</p>
 
 				<!-- Validated read ABI fingerprint: b4c41228128077b7670e924c6f3952cfd00a5b10fc12533316cdb7f5e684c601 -->
 				<!-- Validated complete compiled ABI fingerprint: 46b37ce4b96591befccadb0f39f90495131153c75924d48fd58686fb3282215a -->
@@ -891,7 +891,7 @@
 					<tbody>
 						<tr>
 							<td><code>initialize(coordinator, reputationToken, weth)</code></td>
-							<td>The co-located deployment factory, immediately after deterministic proxy deployment</td>
+							<td>Anyone while uninitialized; the canonical factory initializes new clones atomically</td>
 							<td>The proxy is not initialized and every supplied address is nonzero. The shared implementation is constructor-locked against initialization.</td>
 							<td>Binds the proxy to its coordinator and token pair and starts bounty IDs at one.</td>
 							<td>No event; the factory completes initialization before returning the proxy.</td>
@@ -899,13 +899,13 @@
 						<tr>
 							<td><code>postOperationBounty(operation, targetVault, amount, validForSeconds, rewardToken, rewardAmount, acceptanceDeadline, minimumInitialAttoWeth, maximumInitialAttoWeth)</code></td>
 							<td>Any creator with sufficient REP or WETH allowance and balance</td>
-							<td>Reward token is the coordinator REP or WETH; amount and reward are positive; acceptance is in the future; execution validity is from 1 second through 5 minutes; WETH bounds are ordered; withdrawals target the creator and liquidations target another vault.</td>
+							<td><code>amount</code> is positive attoREP for a withdrawal or positive maximum requested debt in attoETH for a liquidation. The reward is positive coordinator REP or WETH; its token amount uses that token's 18-decimal base unit. The acceptance deadline is strictly in the future; execution validity is from 1 second through 5 minutes. A zero <code>maximumInitialAttoWeth</code> means no maximum; otherwise the minimum cannot exceed it. Withdrawals target the creator and liquidations target another vault.</td>
 							<td>Creates an open bounty and escrows the full reward on the board.</td>
 							<td><code>OperationBountyPosted</code></td>
 						</tr>
 						<tr>
 							<td><code>acceptOperationBounty(bountyId, proposedRepPerEthPrice, requestedInitialAttoWeth)</code> with report funding when stale</td>
-							<td>Any operator before the acceptance deadline</td>
+							<td>Any operator at or before the acceptance deadline</td>
 							<td>Bounty is open; its initial WETH bounds admit the new or existing report; the settlement batch has room; and an existing pending report is sponsored by this operator.</td>
 							<td>Assigns the bounty, stages its operation, and either executes against a fresh price or attaches to a pending report. When a report must be opened, the operator supplies its REP, WETH, and ETH funding and becomes the report sponsor.</td>
 							<td><code>OperationBountyAccepted</code>; coordinator staging and reporting events</td>
@@ -920,7 +920,7 @@
 						<tr>
 							<td><code>refundOperationBounty(bountyId)</code></td>
 							<td>Bounty creator only</td>
-							<td>Bounty is open, has failed, or is assigned to a staged operation whose settlement-plus-validity deadline has elapsed. Successful execution cannot be refunded.</td>
+							<td>Bounty is open, has failed, or remains assigned and pending strictly after <code>queuedAt + settlementTime + validForSeconds</code>; equality is still active. That fixed cancellation deadline does not move when disputes extend report settlement. Successful execution cannot be refunded.</td>
 							<td>Cancels an open bounty immediately, refunds a failed bounty, or expires an overdue staged operation before refunding its full escrow.</td>
 							<td><code>OperationBountyRefunded</code>; overdue assigned bounties also produce <code>ExecutedStagedOperation</code></td>
 						</tr>

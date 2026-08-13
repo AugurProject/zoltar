@@ -89,7 +89,7 @@ export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransacti
 	if (transactionOriginRef.current.transactionKey !== transactionKey) transactionOriginRef.current = { routeKey, transactionKey }
 	if (transactionDismissKey !== undefined && transactionDismissKey === dismissedKey) return undefined
 	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'pending' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
-	const compact = canDismiss && routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey
+	const compact = canDismiss && (transaction.tone === 'success' || (routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey))
 	const dismiss = () => {
 		if (transactionDismissKey === undefined) return
 		if (shouldRememberDismissal(transaction)) rememberDismissal(transactionDismissKey)

@@ -268,7 +268,7 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 						const rewardSymbol = sameAddress(bounty.rewardToken, managerDetails.reputationTokenAddress) ? commonCopy.rep : commonCopy.weth
 						const bountyOperationUnit = getOperationUnit(bounty.operation)
 						return (
-							<article className='entity-card compact' key={bounty.bountyId.toString()}>
+							<article className='entity-card compact flat' key={bounty.bountyId.toString()}>
 								<div className='entity-card-header'>
 									<div className='entity-card-copy'>
 										<h5 className='entity-card-title'>{securityPoolCopy.formatOperationBountyLabel(bounty.bountyId.toString(), getOperationLabel(bounty.operation))}</h5>

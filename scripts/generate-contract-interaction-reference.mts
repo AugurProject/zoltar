@@ -1644,14 +1644,14 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Escrows REP or WETH rewards for creator-defined coordinator operations and pays the operator only after successful staged execution.',
 		readAbiFingerprint: 'b4c41228128077b7670e924c6f3952cfd00a5b10fc12533316cdb7f5e684c601',
 		readSurface:
-			'Use `coordinator`, `reputationToken`, and `weth` to identify the bound pool contracts. `nextOperationBountyId`, `operationBounties`, and `operationExecutionStatuses` expose bounty identity, escrow terms, assignment, staged operation and report IDs, terminal state, and execution outcome. `getOperationBounties` pages forward from an explicit ID. The co-located deployment factory exposes its immutable `owner` and shared `implementation`.',
+			'Use `coordinator`, `reputationToken`, and `weth` to identify the bound coordinator and token contracts. `nextOperationBountyId`, `operationBounties`, and `operationExecutionStatuses` expose bounty identity, escrow terms, assignment, staged operation and report IDs, terminal state, and execution outcome. `getOperationBounties` pages forward from an explicit ID. The co-located deployment factory exposes its immutable `owner` and shared `implementation`.',
 		readDeclarations: [{ name: 'getOperationBounties' }],
 		readStorageDeclarations: [{ name: 'coordinator' }, { name: 'reputationToken' }, { name: 'weth' }, { name: 'nextOperationBountyId' }, { name: 'operationBounties' }, { name: 'operationExecutionStatuses' }, { name: 'owner' }, { name: 'implementation' }],
 		sourcePath: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 		interactions: [
 			{
 				call: '`initialize(coordinator, reputationToken, weth)`',
-				caller: 'The co-located deployment factory, immediately after deterministic proxy deployment',
+				caller: 'Anyone while uninitialized; the canonical factory initializes new clones atomically',
 				effect: 'Binds the proxy to its coordinator and token pair and starts bounty IDs at one.',
 				declarations: [{ name: 'initialize' }],
 				preconditions: 'The proxy is not initialized and every supplied address is nonzero. The shared implementation is constructor-locked against initialization.',
@@ -1662,12 +1662,13 @@ const contractReferences: ContractReference[] = [
 				caller: 'Any creator with sufficient REP or WETH allowance and balance',
 				effect: 'Creates an open bounty and escrows the full reward on the board.',
 				declarations: [{ name: 'postOperationBounty' }],
-				preconditions: 'Reward token is the coordinator REP or WETH; amount and reward are positive; acceptance is in the future; execution validity is from 1 second through 5 minutes; WETH bounds are ordered; withdrawals target the creator and liquidations target another vault.',
+				preconditions:
+					"`amount` is positive attoREP for a withdrawal or positive maximum requested debt in attoETH for a liquidation. The reward is positive coordinator REP or WETH; its token amount uses that token's 18-decimal base unit. The acceptance deadline is strictly in the future; execution validity is from 1 second through 5 minutes. A zero `maximumInitialAttoWeth` means no maximum; otherwise the minimum cannot exceed it. Withdrawals target the creator and liquidations target another vault.",
 				signals: '`OperationBountyPosted`',
 			},
 			{
 				call: '`acceptOperationBounty(bountyId, proposedRepPerEthPrice, requestedInitialAttoWeth)` with report funding when stale',
-				caller: 'Any operator before the acceptance deadline',
+				caller: 'Any operator at or before the acceptance deadline',
 				effect: 'Assigns the bounty, stages its operation, and either executes against a fresh price or attaches to a pending report. When a report must be opened, the operator supplies its REP, WETH, and ETH funding and becomes the report sponsor.',
 				declarations: [{ name: 'acceptOperationBounty' }],
 				preconditions: 'Bounty is open; its initial WETH bounds admit the new or existing report; the settlement batch has room; and an existing pending report is sponsored by this operator.',
@@ -1686,7 +1687,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Bounty creator only',
 				effect: 'Cancels an open bounty immediately, refunds a failed bounty, or expires an overdue staged operation before refunding its full escrow.',
 				declarations: [{ name: 'refundOperationBounty' }],
-				preconditions: 'Bounty is open, has failed, or is assigned to a staged operation whose settlement-plus-validity deadline has elapsed. Successful execution cannot be refunded.',
+				preconditions: 'Bounty is open, has failed, or remains assigned and pending strictly after `queuedAt + settlementTime + validForSeconds`; equality is still active. That fixed cancellation deadline does not move when disputes extend report settlement. Successful execution cannot be refunded.',
 				signals: '`OperationBountyRefunded`; overdue assigned bounties also produce `ExecutedStagedOperation`',
 			},
 			{

@@ -434,6 +434,42 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(replayed.pendingSettlementOperationCount, pendingSettlementOperationCount, `${context}: pending settlement count replay mismatch`)
 	}
 
+	test('factory-created bounty boards are initialized exactly once and implementations stay locked', async () => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		assert.strictEqual((await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'coordinator', args: [] })).toLowerCase(), priceOracle.toLowerCase(), 'the factory should initialize the clone with its coordinator')
+		assert.strictEqual((await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'reputationToken', args: [] })).toLowerCase(), repToken.toLowerCase(), 'the factory should initialize the clone with coordinator REP')
+		assert.strictEqual((await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'weth', args: [] })).toLowerCase(), WETH_ADDRESS.toLowerCase(), 'the factory should initialize the clone with WETH')
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'nextOperationBountyId', args: [] }), 1n, 'the initialized clone should start bounty ids at one')
+		await assert.rejects(
+			client.simulateContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: operationBountyBoard,
+				functionName: 'initialize',
+				args: [priceOracle, repToken, WETH_ADDRESS],
+				account: client.account,
+			}),
+			/Operation bounty board is already initialized/,
+		)
+
+		const implementation = await deployContract(
+			encodeDeployData({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				bytecode: applyLibraries(peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.evm.bytecode.object),
+			}),
+		)
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: implementation, functionName: 'nextOperationBountyId', args: [] }), 0n, 'the implementation must remain unusable rather than becoming an independently initialized board')
+		await assert.rejects(
+			client.simulateContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: implementation,
+				functionName: 'initialize',
+				args: [priceOracle, repToken, WETH_ADDRESS],
+				account: client.account,
+			}),
+			/Operation bounty board is already initialized/,
+		)
+	})
+
 	test('an operator can fund a creator withdrawal and claim its WETH operation bounty', async () => {
 		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const rewardAmount = 2n * 10n ** 18n
@@ -469,6 +505,27 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		await operator.waitForTransactionReceipt({ hash: acceptHash })
 		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'operationExecutionStatuses', args: [1n] }), 1n, 'accepted bounty should remain pending until the oracle report settles')
+		await assert.rejects(
+			operator.simulateContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: operationBountyBoard,
+				functionName: 'recordOperationResult',
+				args: [1n, true],
+				account: operator.account,
+			}),
+			/Only coordinator/,
+		)
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'operationExecutionStatuses', args: [1n] }), 1n, 'a rejected result forgery should leave the bounty pending')
+		await assert.rejects(
+			operator.simulateContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: operationBountyBoard,
+				functionName: 'claimOperationBounty',
+				args: [1n],
+				account: operator.account,
+			}),
+			/Operation bounty cannot be claimed before successful execution/,
+		)
 
 		await handleOracleReporting(operator, mockWindow, priceOracle, proposedRepPerEthPrice)
 		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'operationExecutionStatuses', args: [1n] }), 2n, 'successful execution should make the bounty claimable')
@@ -482,6 +539,100 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		await operator.waitForTransactionReceipt({ hash: claimHash })
 		assert.strictEqual(await getERC20Balance(operator, WETH_ADDRESS, operator.account.address), operatorWethBeforeClaim + rewardAmount, 'the operator should receive the escrowed bounty')
+	})
+
+	test('an expired liquidation bounty preserves attoETH units and refunds its REP escrow', async () => {
+		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const targetVault = addressString(TEST_ADDRESSES[2])
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		const requestedDebtAttoEth = 7n * 10n ** 17n
+		const validForSeconds = 60n
+		const rewardAmountAttoRep = 3n * 10n ** 18n
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialWeth = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'minimumToken1ReportAttoEth',
+			args: [],
+		})
+		const requestCost = await getRequestPriceCostAttoEth(client, priceOracle)
+		const creatorRepBeforePost = await getERC20Balance(client, repToken, client.account.address)
+
+		await approveToken(client, repToken, operationBountyBoard)
+		await wrapWeth(operator, requestedInitialWeth)
+		await approveToken(operator, WETH_ADDRESS, priceOracle)
+		await approveToken(operator, repToken, priceOracle)
+
+		const postHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'postOperationBounty',
+			args: [OperationType.Liquidation, targetVault, requestedDebtAttoEth, validForSeconds, repToken, rewardAmountAttoRep, (await mockWindow.getTime()) + DAY, 0n, 0n],
+		})
+		await client.waitForTransactionReceipt({ hash: postHash })
+		assert.strictEqual(await getERC20Balance(client, repToken, client.account.address), creatorRepBeforePost - rewardAmountAttoRep, 'posting should transfer the exact REP reward into escrow')
+		assert.strictEqual(await getERC20Balance(client, repToken, operationBountyBoard), rewardAmountAttoRep, 'the bounty board should hold the REP escrow')
+
+		const postedBounty = await client.readContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'operationBounties',
+			args: [1n],
+		})
+		assert.strictEqual(postedBounty[2], BigInt(OperationType.Liquidation), 'the bounty should retain the liquidation operation type')
+		assert.strictEqual(postedBounty[3].toLowerCase(), targetVault.toLowerCase(), 'the bounty should retain the liquidation target')
+		assert.strictEqual(postedBounty[4], requestedDebtAttoEth, 'the bounty amount should remain denominated in attoETH without rescaling')
+
+		const acceptHash = await operator.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'acceptOperationBounty',
+			args: [1n, proposedRepPerEthPrice, 0n],
+			value: requestCost,
+		})
+		await operator.waitForTransactionReceipt({ hash: acceptHash })
+
+		const acceptedBounty = await client.readContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'operationBounties',
+			args: [1n],
+		})
+		const operationId = acceptedBounty[11]
+		const stagedOperation = await getStagedOperation(client, priceOracle, operationId)
+		assert.strictEqual(stagedOperation[0], BigInt(OperationType.Liquidation), 'the coordinator should stage a liquidation')
+		assert.strictEqual(stagedOperation[3].toLowerCase(), targetVault.toLowerCase(), 'the coordinator should stage the requested target vault')
+		assert.strictEqual(stagedOperation[4], requestedDebtAttoEth, 'the coordinator should receive the exact requested debt in attoETH')
+		assert.strictEqual(await getPendingReportId(client, priceOracle), acceptedBounty[12], 'the oracle report should still be pending while the operation expires')
+
+		const expirationTimestamp = stagedOperation[5] + BigInt(ORACLE_SETTLEMENT_TIME) + stagedOperation[6]
+		await mockWindow.setTime(expirationTimestamp)
+		await assert.rejects(
+			client.simulateContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: operationBountyBoard,
+				functionName: 'refundOperationBounty',
+				args: [1n],
+				account: client.account,
+			}),
+			/Staged operation active/,
+			'the operation should remain active at the exact settlement-plus-validity boundary',
+		)
+
+		await mockWindow.setTime(expirationTimestamp + 1n)
+		const refundHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'refundOperationBounty',
+			args: [1n],
+		})
+		await client.waitForTransactionReceipt({ hash: refundHash })
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'operationExecutionStatuses', args: [1n] }), 3n, 'expiration should record failed execution')
+		assert.strictEqual((await client.readContract({ abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi, address: operationBountyBoard, functionName: 'operationBounties', args: [1n] }))[13], 4n, 'the bounty should transition to refunded')
+		assert.strictEqual(await getERC20Balance(client, repToken, client.account.address), creatorRepBeforePost, 'refund should return the full REP escrow to the creator')
+		assert.strictEqual(await getERC20Balance(client, repToken, operationBountyBoard), 0n, 'the board should not retain refunded REP')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, operationId))[1], zeroAddress, 'expiration should consume the staged operation')
+		assert.strictEqual(await getPendingReportId(client, priceOracle), acceptedBounty[12], 'refunding an expired operation should not settle or cancel its pending oracle report')
 	})
 
 	test('coordinator dynamically sizes the minimum WETH report side from the current base fee', async () => {

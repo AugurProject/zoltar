@@ -269,6 +269,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 	color: var(--docs-shell-muted);
 	font-size: 0.86rem;
 	line-height: 1.35;
+	overflow-wrap: anywhere;
 	text-decoration: none;
 }
 

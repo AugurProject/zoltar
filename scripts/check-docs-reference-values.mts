@@ -32,6 +32,7 @@ const escalationGameCalculations = await readFile('solidity/contracts/peripheral
 const escalationGameSettlement = await readFile('solidity/contracts/peripherals/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
 const escalationGameFactory = await readFile('solidity/contracts/peripherals/factories/EscalationGameFactory.sol', 'utf8')
+const operationBountyBoard = await readFile('solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
 const liquidationApprovalRegistry = await readFile('solidity/contracts/peripherals/LiquidationApprovalRegistry.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/peripherals/openOracle/OpenOracle.sol', 'utf8')
@@ -493,6 +494,11 @@ function assertLifecycleReferences(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
+	const initializeOperationBountyBoardRow = getContractInteractionRow('initialize(coordinator, reputationToken, weth)')
+	const postOperationBountyRow = getContractInteractionRow('postOperationBounty(operation, targetVault, amount, validForSeconds, rewardToken, rewardAmount, acceptanceDeadline, minimumInitialAttoWeth, maximumInitialAttoWeth)')
+	const acceptOperationBountyRow = contractInteractionReference.split('\n').find(row => row.startsWith('`acceptOperationBounty(bountyId, proposedRepPerEthPrice, requestedInitialAttoWeth)` with report funding when stale\t'))
+	assert.ok(acceptOperationBountyRow, 'Expected exactly one generated acceptOperationBounty interaction row')
+	const refundOperationBountyRow = getContractInteractionRow('refundOperationBounty(bountyId)')
 	const activateForkModeRow = getContractInteractionRow('activateForkMode()')
 	const initiateSecurityPoolForkRow = getContractInteractionRow('initiateSecurityPoolFork(securityPool)')
 	const ownEscalationForkRow = getContractInteractionRow('forkZoltarWithOwnEscalationGame(securityPool)')
@@ -510,6 +516,17 @@ function assertContractInteractionDistinctions(): void {
 	const recordForkedEscrowRow = getContractInteractionRow('recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep)')
 	const startTruthAuctionRow = getContractInteractionRow('startTruthAuction(securityPool)')
 	const finalizeTruthAuctionRow = getContractInteractionRow('finalizeTruthAuction(securityPool)')
+	const initializeOperationBountyBoard = operationBountyBoard.match(/function initialize\([\s\S]*?\n\t\}/)?.[0]
+	assert.ok(initializeOperationBountyBoard, 'OpenOracleOperationBountyBoard.sol must define initialize')
+	assert.match(initializeOperationBountyBoard, /require\(!initialized, 'Operation bounty board is already initialized'\)/)
+	assert.doesNotMatch(initializeOperationBountyBoard, /msg\.sender/)
+	assert.match(initializeOperationBountyBoardRow, /Anyone while uninitialized; the canonical factory initializes new clones atomically[\s\S]*implementation is constructor-locked/)
+	assert.match(operationBountyBoard, /maximumInitialAttoWeth == 0 \|\| minimumInitialAttoWeth <= maximumInitialAttoWeth/)
+	assert.match(postOperationBountyRow, /positive attoREP for a withdrawal[\s\S]*positive maximum requested debt in attoETH for a liquidation[\s\S]*zero `maximumInitialAttoWeth` means no maximum/)
+	assert.match(operationBountyBoard, /block\.timestamp <= bounty\.acceptanceDeadline/)
+	assert.match(acceptOperationBountyRow, /at or before the acceptance deadline/)
+	assert.match(priceCoordinator, /block\.timestamp > stagedOperation\.queuedAt \+ settlementTime \+ stagedOperation\.validForSeconds, 'Staged operation active'/)
+	assert.match(refundOperationBountyRow, /strictly after `queuedAt \+ settlementTime \+ validForSeconds`; equality is still active[\s\S]*does not move when disputes extend report settlement/)
 	assert.match(contractReferenceGenerator, /interaction\.declarations\.length, 1,[\s\S]*interaction rows must describe exactly one entrypoint name; split materially different guards, effects, and signals into separate rows/, 'generated interaction rows must remain limited to one entrypoint name')
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*remaining economic claim[\s\S]*source entitlements/)
 	assert.match(invariantsHtml, /id="fork-10"[\s\S]*<code>FORK-10<\/code>[\s\S]*mints only the unmaterialized balance/)

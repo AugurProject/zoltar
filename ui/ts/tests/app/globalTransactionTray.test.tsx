@@ -54,7 +54,9 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByText('Question ID')).not.toBeNull()
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
+		expect(documentQueries.getByText('View transaction details', { selector: 'summary' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Close transaction status' })).not.toBeNull()
 	})
 
 	test('reserves the transaction tray height in the viewport scroll area', async () => {
@@ -67,7 +69,7 @@ describe('GlobalTransactionTray', () => {
 
 		expect(document.documentElement.style.scrollPaddingBottom).not.toBe('')
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Close transaction status' }))
 		})
 		expect(document.documentElement.style.scrollPaddingBottom).toBe('')
 	})
@@ -330,7 +332,7 @@ describe('GlobalTransactionTray', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => {
-			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Close transaction status' }))
 		})
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
@@ -362,7 +364,7 @@ describe('GlobalTransactionTray', () => {
 				render(<GlobalTransactionTray transaction={createTransaction(index)} />, renderedComponent.container)
 			})
 			await act(() => {
-				fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
+				fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Close transaction status' }))
 			})
 		}
 		await renderedComponent.cleanup()
@@ -413,9 +415,10 @@ describe('GlobalTransactionTray', () => {
 
 		expect(within(document.body).getByText('Confirmed')).not.toBeNull()
 		expect(within(document.body).getByText('Question Created')).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
 	})
 
-	test('compacts a completed transaction after navigation while keeping details available', async () => {
+	test('keeps a completed transaction compact across navigation while retaining details', async () => {
 		const transaction = {
 			dismissKey: 'question-created-route-handoff',
 			hash: '0x7234000000000000000000000000000000000000000000000000000000000000' as const,
@@ -426,7 +429,7 @@ describe('GlobalTransactionTray', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={transaction} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.querySelector('.global-transaction-notice-compact')).toBeNull()
+		expect(document.body.querySelector('.global-transaction-notice-compact')).not.toBeNull()
 
 		await act(() => {
 			render(<GlobalTransactionTray routeKey='security-pools:create' transaction={transaction} />, renderedComponent.container)
