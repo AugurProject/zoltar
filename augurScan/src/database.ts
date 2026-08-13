@@ -287,11 +287,18 @@ const withIndexerLease = async <T>(lease: IndexerLease, operation: (transaction:
 const withOptionalIndexerLease = async <T>(sql: SQL, lease: IndexerLease | undefined, operation: (sql: SQL) => Promise<T>): Promise<T> =>
 	lease === undefined ? await operation(sql) : await withIndexerLease(lease, operation)
 
+export const scannerDatabaseOptions = (maxConnections: number, connectionTimeoutSeconds: number) => ({
+	max: maxConnections,
+	idleTimeout: 0,
+	maxLifetime: 0,
+	connectionTimeout: connectionTimeoutSeconds,
+})
+
 export class ScannerDatabase {
 	readonly sql: SQL
 
 	constructor(url: string, maxConnections = 10, connectionTimeoutSeconds = 5) {
-		this.sql = new SQL(url, { max: maxConnections, idleTimeout: 30, connectionTimeout: connectionTimeoutSeconds })
+		this.sql = new SQL(url, scannerDatabaseOptions(maxConnections, connectionTimeoutSeconds))
 	}
 
 	async close(): Promise<void> {
