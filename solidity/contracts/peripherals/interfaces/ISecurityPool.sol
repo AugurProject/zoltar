@@ -47,6 +47,35 @@ struct PoolAccountingSnapshot {
 	uint256 currentRetentionRate;
 }
 
+struct LiquidationSnapshot {
+	uint256 targetBackingUnits;
+	uint256 targetCapacityOwnershipAttoRep;
+	uint256 totalPoolHeldAttoRep;
+	uint256 totalRepBackingUnits;
+}
+
+struct LiquidationRequest {
+	uint256 operationId;
+	address operator;
+	address receiverVault;
+	address targetVault;
+	uint256 requestedDebtAttoEth;
+	LiquidationSnapshot snapshot;
+	uint256 minimumReceiverHealthFactorBps;
+	uint256 minLiquidationPriceDistanceBps;
+}
+
+struct LiquidationExecutionRequest {
+	address receiverVault;
+	address targetVault;
+	uint256 requestedDebtAttoEth;
+	uint256 snapshotTargetBackingUnits;
+	uint256 snapshotTargetCapacityOwnershipAttoRep;
+	uint256 repEthPrice;
+	uint256 minimumReceiverHealthFactorBps;
+	uint256 minLiquidationPriceDistanceBps;
+}
+
 enum AccountingReason {
 	Accrual,
 	VaultCheckpoint,
@@ -150,7 +179,7 @@ interface ISecurityPool {
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
 	function redeemRepFromVault(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
-	function performLiquidation(uint256 operationId, address operator, address receiverVault, address targetVaultAddress, uint256 requestedDebtAttoEth, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, uint256 minimumReceiverHealthFactorBps, uint256 minLiquidationPriceDistanceBps) external returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
+	function performLiquidation(LiquidationRequest calldata request) external returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amountAttoShares) external;
 

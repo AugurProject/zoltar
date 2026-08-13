@@ -133,7 +133,7 @@ library SecurityPoolUtils {
 		uint256 reservedBackingUnits;
 		if (minimumRemainingAttoRep != 0) {
 			if (currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0) {
-				reservedBackingUnits = minimumRemainingAttoRep * PRICE_PRECISION;
+				reservedBackingUnits = Math.mulDiv(minimumRemainingAttoRep, PRICE_PRECISION, 1);
 			} else {
 				reservedBackingUnits = Math.mulDiv(minimumRemainingAttoRep, currentTotalRepBackingUnits, currentPoolHeldAttoRepBalance, Math.Rounding.Ceil);
 			}
@@ -171,7 +171,7 @@ library SecurityPoolUtils {
 		uint256 grossRepAwardAttoRep = Math.mulDiv(debtToMoveAttoEth, repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), PRICE_PRECISION * BPS_DENOMINATOR, Math.Rounding.Ceil);
 		backingUnitsToTransfer =
 			currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0
-				? grossRepAwardAttoRep * PRICE_PRECISION
+				? Math.mulDiv(grossRepAwardAttoRep, PRICE_PRECISION, 1)
 				: Math.mulDiv(grossRepAwardAttoRep, currentTotalRepBackingUnits, currentPoolHeldAttoRepBalance, Math.Rounding.Ceil);
 	}
 

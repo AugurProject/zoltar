@@ -282,7 +282,7 @@ describe('SecurityPoolUtils', () => {
 				abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 				address: harnessAddress,
 				functionName: 'performBundledLiquidation',
-				args: [receiverVault, targetVault, 1n, 2n, 1n, PRICE_PRECISION, 10_000n, 0n],
+				args: [{ receiverVault, targetVault, requestedDebtAttoEth: 1n, snapshotTargetBackingUnits: 2n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 			}),
 		).rejects.toThrow('Receiver debt below minimum')
 
@@ -317,7 +317,7 @@ describe('SecurityPoolUtils', () => {
 			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [receiverVault, targetVault, 5n, 7n, 10n, PRICE_PRECISION, 10_000n, 2_000n],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
 		})
 
 		const reduceOpenInterestHash = await client.writeContract({
@@ -332,7 +332,7 @@ describe('SecurityPoolUtils', () => {
 				abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 				address: harnessAddress,
 				functionName: 'performBundledLiquidation',
-				args: [receiverVault, targetVault, 5n, 7n, 10n, PRICE_PRECISION, 10_000n, 2_000n],
+				args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
 			}),
 		).rejects.toThrow('Liquidation distance too low')
 	})
@@ -353,11 +353,19 @@ describe('SecurityPoolUtils', () => {
 		})
 		await client.waitForTransactionReceipt({ hash: configureHash })
 
+		const typedRequest = { receiverVault, targetVault, requestedDebtAttoEth: 4n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 2n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
+		const liquidationGas = await client.estimateContractGas({
+			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
+			address: harnessAddress,
+			functionName: 'performBundledLiquidation',
+			args: [typedRequest],
+		})
+		expect(liquidationGas, `typed liquidation request exceeds the audited gas bound: ${liquidationGas.toString()}`).toBeLessThan(1_000_000n)
 		const liquidation = await client.simulateContract({
 			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [receiverVault, targetVault, 4n, 7n, 2n, PRICE_PRECISION, 10_000n, 0n],
+			args: [typedRequest],
 		})
 		strictEqualTypeSafe(liquidation.result[0], 4n, 'receiver accepts the target debt assigned by total capacity')
 		strictEqualTypeSafe(liquidation.result[1], 2n, 'receiver receives the target capacity ownership')
@@ -396,7 +404,7 @@ describe('SecurityPoolUtils', () => {
 			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [receiverVault, targetVault, 2n, 3n, 1n, PRICE_PRECISION, 10_000n, 0n],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 		})
 		strictEqualTypeSafe(liquidationPreview.result[0], 1n, 'receiver exact debt increase is below the two-attoETH nominal quote')
 		strictEqualTypeSafe(liquidationPreview.result[1], 1n, 'full-target quote moves the target ownership')
@@ -405,7 +413,7 @@ describe('SecurityPoolUtils', () => {
 			abi: test_peripherals_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [receiverVault, targetVault, 2n, 3n, 1n, PRICE_PRECISION, 10_000n, 0n],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 		})
 		await client.waitForTransactionReceipt({ hash: liquidationHash })
 		const targetAfter = await client.readContract({

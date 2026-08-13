@@ -6,6 +6,7 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
@@ -16,9 +17,9 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		if (amountAttoRep == 0 && newCapacityOwnershipAttoRep == 0) return;
 		uint256 auctionRepBackingUnitsPerAttoRep = data.auctionRepBackingUnitsPerAttoRep;
 		if (amountAttoRep > 0) require(auctionRepBackingUnitsPerAttoRep > 0, 'Rate');
-		uint256 auctionRepBackingUnits = amountAttoRep * auctionRepBackingUnitsPerAttoRep;
+		uint256 auctionRepBackingUnits = Math.mulDiv(amountAttoRep, auctionRepBackingUnitsPerAttoRep, 1);
 		uint256 nextClaimedAuctionRepBackingUnits = data.claimedAuctionRepBackingUnits + auctionRepBackingUnits;
-		require(nextClaimedAuctionRepBackingUnits <= totalAttoRepPurchased * auctionRepBackingUnitsPerAttoRep, 'REP');
+		require(nextClaimedAuctionRepBackingUnits <= Math.mulDiv(totalAttoRepPurchased, auctionRepBackingUnitsPerAttoRep, 1), 'REP');
 		uint256 nextClaimedAuctionedCapacityOwnershipAttoRep =
 			data.claimedAuctionedCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep;
 		require(nextClaimedAuctionedCapacityOwnershipAttoRep <= data.auctionedCapacityOwnershipAttoRep, 'Commitment');

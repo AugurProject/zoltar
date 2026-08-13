@@ -84,6 +84,13 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		uint256 amountAttoRep = repToken.balanceOf(address(this));
 		require(amountAttoRep > 0, 'No sweepable REP');
 		_safeTransferRep(address(securityPool), amountAttoRep);
+		if (forkContinuation) {
+			// Continuation backing predates every child-local owner class. Burning its
+			// terminal residual prevents both late capture and ownerless stranding.
+			securityPool.burnEscalationWinnerHaircut(amountAttoRep);
+			emit ForkContinuationResidualRepBurned(amountAttoRep);
+			return;
+		}
 		emit ResidualRepSweptToSecurityPool(amountAttoRep);
 	}
 

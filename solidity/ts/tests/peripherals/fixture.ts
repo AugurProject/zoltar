@@ -528,6 +528,7 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'getERC20Balance',
 		'addressString',
 		'approveAndDepositRepToVault',
+		'manipulatePriceOracle',
 		'manipulatePriceOracleAndPerformOperation',
 		'triggerOwnGameFork',
 		'getInfraContractAddresses',

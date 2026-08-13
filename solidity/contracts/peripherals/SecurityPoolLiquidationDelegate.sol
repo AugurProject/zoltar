@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
@@ -37,67 +37,69 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 		emit AwaitingForkContinuationSet(false);
 	}
 
-	function performBundledLiquidation(address receiverVault, address targetVault, uint256 requestedDebtAttoEth, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 repEthPrice, uint256 minimumReceiverHealthFactorBps, uint256 minLiquidationPriceDistanceBps) external returns (uint256 debtToMoveAttoEth, uint256 capacityOwnershipToMoveAttoRep, uint256 badDebtAttoEth) {
+	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 capacityOwnershipToMoveAttoRep, uint256 badDebtAttoEth) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(receiverVault != targetVault, 'Receiver bad');
-		require(securityVaults[targetVault].repBackingUnits == snapshotTargetBackingUnits, 'Target backingUnits changed');
-		require(securityVaults[targetVault].capacityOwnershipAttoRep == snapshotTargetCapacityOwnershipAttoRep, 'Target commitment changed');
-		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(snapshotTargetBackingUnits);
+		require(request.receiverVault != request.targetVault, 'Receiver bad');
+		require(securityVaults[request.targetVault].repBackingUnits == request.snapshotTargetBackingUnits, 'Target backingUnits changed');
+		require(securityVaults[request.targetVault].capacityOwnershipAttoRep == request.snapshotTargetCapacityOwnershipAttoRep, 'Target commitment changed');
+		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(request.snapshotTargetBackingUnits);
 		uint256 targetDisputeStakedAttoRep =
-			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(targetVault);
-		uint256 targetOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(targetVault);
-		uint256 receiverOpenInterestBeforeAttoEth = pool.getVaultOpenInterestAttoEth(receiverVault);
-		require(SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, statoblastSecurityMultiplierBps, repEthPrice, minLiquidationPriceDistanceBps), 'Liquidation distance too low');
-		require(!SecurityPoolUtils.isVaultHealthy(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps), 'Target safe');
+			address(escalationGame) == address(0x0)
+				? 0
+				: escalationGame.disputeStakedRepByVaultAttoRep(request.targetVault);
+		uint256 targetOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(request.targetVault);
+		uint256 receiverOpenInterestBeforeAttoEth = pool.getVaultOpenInterestAttoEth(request.receiverVault);
+		require(SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, statoblastSecurityMultiplierBps, request.repEthPrice, request.minLiquidationPriceDistanceBps), 'Liquidation distance too low');
+		require(!SecurityPoolUtils.isVaultHealthy(targetVaultRepBackingAttoRep, targetDisputeStakedAttoRep, targetOpenInterestAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps), 'Target safe');
 		uint256 nominalDebtToMoveAttoEth;
 		uint256 maximumBackingUnitsToTransfer;
 		uint256 minimumRemainingAttoRep =
-			requestedDebtAttoEth >= targetOpenInterestAttoEth ? 0 : minimumVaultRepDepositAttoRep;
-		(nominalDebtToMoveAttoEth, capacityOwnershipToMoveAttoRep, , maximumBackingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(securityVaults[targetVault].repBackingUnits, snapshotTargetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, minimumRemainingAttoRep);
-		uint256 receiverGrossOpenInterestAfterAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[receiverVault].capacityOwnershipAttoRep + capacityOwnershipToMoveAttoRep, totalCapacityOwnershipAttoRep);
+			request.requestedDebtAttoEth >= targetOpenInterestAttoEth ? 0 : minimumVaultRepDepositAttoRep;
+		(nominalDebtToMoveAttoEth, capacityOwnershipToMoveAttoRep, , maximumBackingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(securityVaults[request.targetVault].repBackingUnits, request.snapshotTargetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, request.requestedDebtAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, minimumRemainingAttoRep);
+		uint256 receiverGrossOpenInterestAfterAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[request.receiverVault].capacityOwnershipAttoRep + capacityOwnershipToMoveAttoRep, totalCapacityOwnershipAttoRep);
 		uint256 receiverOpenInterestAfterAttoEth =
-			receiverGrossOpenInterestAfterAttoEth > vaultBadDebtAttoEth[receiverVault]
-				? receiverGrossOpenInterestAfterAttoEth - vaultBadDebtAttoEth[receiverVault]
+			receiverGrossOpenInterestAfterAttoEth > vaultBadDebtAttoEth[request.receiverVault]
+				? receiverGrossOpenInterestAfterAttoEth - vaultBadDebtAttoEth[request.receiverVault]
 				: 0;
 		require(receiverOpenInterestAfterAttoEth >= receiverOpenInterestBeforeAttoEth, 'Receiver debt decreased');
 		debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;
-		require(debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= requestedDebtAttoEth, 'Debt exceeds request');
+		require(debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= request.requestedDebtAttoEth, 'Debt exceeds request');
 		if (nominalDebtToMoveAttoEth != 0 && debtToMoveAttoEth == 0) revert('Receiver debt below minimum');
-		uint256 backingUnitsToTransfer = SecurityPoolUtils.calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits);
+		uint256 backingUnitsToTransfer = SecurityPoolUtils.calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits);
 		require(backingUnitsToTransfer <= maximumBackingUnitsToTransfer, 'Award exceeds funded quote');
-		if (requestedDebtAttoEth >= targetOpenInterestAttoEth) {
+		if (request.requestedDebtAttoEth >= targetOpenInterestAttoEth) {
 			badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth;
 			if (badDebtAttoEth != 0) {
 				totalBadDebtAttoEth += badDebtAttoEth;
-				vaultBadDebtAttoEth[targetVault] += badDebtAttoEth;
-				emit VaultBadDebtRecorded(targetVault, badDebtAttoEth, vaultBadDebtAttoEth[targetVault], totalBadDebtAttoEth);
+				vaultBadDebtAttoEth[request.targetVault] += badDebtAttoEth;
+				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, vaultBadDebtAttoEth[request.targetVault], totalBadDebtAttoEth);
 			}
 		}
 		require(debtToMoveAttoEth > 0 || badDebtAttoEth > 0, 'No liq');
 
 		feeIndexRemainder = 0;
-		securityVaults[targetVault].capacityOwnershipAttoRep =
-			snapshotTargetCapacityOwnershipAttoRep - capacityOwnershipToMoveAttoRep;
-		securityVaults[targetVault].repBackingUnits -= backingUnitsToTransfer;
+		securityVaults[request.targetVault].capacityOwnershipAttoRep =
+			request.snapshotTargetCapacityOwnershipAttoRep - capacityOwnershipToMoveAttoRep;
+		securityVaults[request.targetVault].repBackingUnits -= backingUnitsToTransfer;
 		if (debtToMoveAttoEth == 0) return (debtToMoveAttoEth, capacityOwnershipToMoveAttoRep, badDebtAttoEth);
-		securityVaults[receiverVault].capacityOwnershipAttoRep += capacityOwnershipToMoveAttoRep;
-		securityVaults[receiverVault].repBackingUnits += backingUnitsToTransfer;
-		uint256 receiverOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(receiverVault);
+		securityVaults[request.receiverVault].capacityOwnershipAttoRep += capacityOwnershipToMoveAttoRep;
+		securityVaults[request.receiverVault].repBackingUnits += backingUnitsToTransfer;
+		uint256 receiverOpenInterestAttoEth = pool.getVaultOpenInterestAttoEth(request.receiverVault);
 		require(receiverOpenInterestAttoEth - receiverOpenInterestBeforeAttoEth == debtToMoveAttoEth, 'Debt settlement mismatch');
 		if (receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth) revert('Receiver debt below minimum');
 		uint256 receiverDisputeStakedAttoRep;
 		if (address(escalationGame) != address(0x0)) {
-			try escalationGame.disputeStakedRepByVaultAttoRep(receiverVault) returns (uint256 claimRep) {
+			try escalationGame.disputeStakedRepByVaultAttoRep(request.receiverVault) returns (uint256 claimRep) {
 				receiverDisputeStakedAttoRep = claimRep;
 			} catch {
 				revert('Claim balance failed');
 			}
 		}
-		require(SecurityPoolUtils.isVaultHealthyAtFactor(pool.backingUnitsToAttoRep(securityVaults[receiverVault].repBackingUnits), receiverDisputeStakedAttoRep, receiverOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps, minimumReceiverHealthFactorBps), 'Receiver bad');
-		uint256 targetOpenInterestAttoEthAfter = pool.getVaultOpenInterestAttoEth(targetVault);
-		uint256 targetVaultRepBackingAfterAttoRep = pool.backingUnitsToAttoRep(securityVaults[targetVault].repBackingUnits);
+		require(SecurityPoolUtils.isVaultHealthyAtFactor(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits), receiverDisputeStakedAttoRep, receiverOpenInterestAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps, request.minimumReceiverHealthFactorBps), 'Receiver bad');
+		uint256 targetOpenInterestAttoEthAfter = pool.getVaultOpenInterestAttoEth(request.targetVault);
+		uint256 targetVaultRepBackingAfterAttoRep = pool.backingUnitsToAttoRep(securityVaults[request.targetVault].repBackingUnits);
 		require(targetOpenInterestAttoEthAfter == 0 || targetOpenInterestAttoEthAfter >= minimumSecurityBondDebtAttoEth, 'Target debt');
 		require(targetOpenInterestAttoEthAfter == 0 || targetVaultRepBackingAfterAttoRep >= minimumVaultRepDepositAttoRep, 'Target REP');
-		require(pool.backingUnitsToAttoRep(securityVaults[receiverVault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Receiver REP');
+		require(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Receiver REP');
 	}
 }
