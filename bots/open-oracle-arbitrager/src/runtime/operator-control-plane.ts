@@ -55,6 +55,10 @@ export function requirePausedExecutorDeployment(execute: boolean, paused: boolea
 	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
 
+export async function requireNoPendingExecutorDeployment(settingsFile: string) {
+	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+}
+
 export function startOperatorControlPlane(parameters: { config: Configuration; fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }; getCursor: () => SyncCursor | undefined; lockManager: ExecutionLockManager | undefined; signerOperationGate: SignerOperationGate; state: OperatorState }) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const pending: PendingOperatorUpdates = {
@@ -124,6 +128,7 @@ export function startOperatorControlPlane(parameters: { config: Configuration; f
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
 				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints, then restart before resuming')
+				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				state.paused = paused
 				state.status = operatorStatusAfterPause(paused, parameters.getCursor()?.initial === false, state.lastError !== undefined)

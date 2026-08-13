@@ -3,7 +3,7 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, as
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { clearExecutorDeploymentIntent, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -101,6 +101,25 @@ test('durably round trips and clears the exact signed executor deployment intent
 		await expect(loadExecutorDeploymentIntent(path)).resolves.toEqual(intent)
 		await clearExecutorDeploymentIntent(path)
 		await expect(loadExecutorDeploymentIntent(path)).resolves.toBeUndefined()
+	} finally {
+		await rm(directory, { force: true, recursive: true })
+	}
+})
+
+test('blocks resume while a durable executor deployment intent remains unresolved', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-resume-'))
+	try {
+		const privateKey = `0x${'11'.repeat(32)}` as Hex
+		const account = privateKeyToAccount(privateKey)
+		const salt = `0x${'22'.repeat(32)}` as Hex
+		const plan = executorDeploymentPlan(salt)
+		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		const settingsFile = join(directory, 'operator.json')
+		const intentPath = `${settingsFile}.executor-deployment.json`
+		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
+		await expect(requireNoPendingExecutorDeployment(settingsFile)).rejects.toThrow('Recover the pending executor deployment')
+		await clearExecutorDeploymentIntent(intentPath)
+		await expect(requireNoPendingExecutorDeployment(settingsFile)).resolves.toBeUndefined()
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}

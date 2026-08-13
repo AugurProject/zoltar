@@ -30,6 +30,7 @@ import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticat
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
 import { startOperatorControlPlane } from './operator-control-plane.ts'
+import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-execution-state.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
@@ -135,6 +136,19 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let activeSignerLock = initialSignerLock
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
+	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorDeploymentIntentPath(config.settingsFile))
+	if (pendingExecutorDeployment !== undefined) {
+		state.paused = true
+		state.status = 'paused'
+		recordOperation(state, {
+			category: 'configuration',
+			details: pendingExecutorDeployment.transactionHash,
+			level: 'error',
+			message: 'Execution paused for pending executor deployment recovery',
+			reason: 'Retry the executor deployment to reconcile its durable signed transaction before resuming',
+			reportId: undefined,
+		})
+	}
 	const trackTransaction: TrackTransaction = activity => {
 		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
 		recordOperation(state, {
