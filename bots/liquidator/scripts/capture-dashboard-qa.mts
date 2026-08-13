@@ -18,12 +18,15 @@ try {
 	let tabs: unknown
 	for (let attempt = 0; attempt < 50; attempt += 1) {
 		try {
-			tabs = await fetch('http://127.0.0.1:9333/json/list').then(response => response.json())
-			break
+			const candidate: unknown = await fetch('http://127.0.0.1:9333/json/list').then(response => response.json())
+			if (Array.isArray(candidate) && candidate.length > 0) {
+				tabs = candidate
+				break
+			}
 		} catch (error) {
 			void error
-			await Bun.sleep(100)
 		}
+		await Bun.sleep(100)
 	}
 	if (!Array.isArray(tabs) || tabs.length === 0) throw new Error('Chromium debugging tab did not become available')
 	const firstTab = tabs[0]
@@ -388,6 +391,24 @@ try {
 	const runningRecoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof runningRecoveryMobileOffset !== 'number') throw new Error('Running mobile recovery section offset is unavailable')
 	const runningRecoveryMobile = await capture('liquidator-recovery-running-mobile', 390, 844, runningRecoveryMobileOffset, 'recovery')
+	const signerSummaryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#wallet-address')?.closest('details')?.getBoundingClientRect().top ?? 0) + window.scrollY - 500)`)
+	if (typeof signerSummaryMobileOffset !== 'number') throw new Error('Mobile signer summary offset is unavailable')
+	const signerSummaryMobile = await capture('liquidator-signer-summary-mobile', 390, 844, signerSummaryMobileOffset, 'settings')
+	const signerSummaryState = await evaluate(`(() => {
+		const copy = document.querySelector('#wallet-address')
+		const container = copy?.parentElement
+		const summary = copy?.closest('summary')
+		if (!(copy instanceof HTMLElement) || !(container instanceof HTMLElement) || !(summary instanceof HTMLElement)) return undefined
+		const gap = Number.parseFloat(window.getComputedStyle(summary).columnGap)
+		const markerWidth = Number.parseFloat(window.getComputedStyle(summary, '::after').width)
+		return {
+			fits: container.scrollWidth <= summary.clientWidth - gap - markerWidth + 1,
+			text: copy.textContent
+		}
+	})()`)
+	if (typeof signerSummaryState !== 'object' || signerSummaryState === null || !('fits' in signerSummaryState) || signerSummaryState.fits !== true || !('text' in signerSummaryState) || typeof signerSummaryState.text !== 'string' || !signerSummaryState.text.startsWith('0x')) {
+		throw new Error(`Mobile signer summary overflowed its disclosure control: ${JSON.stringify(signerSummaryState)}`)
+	}
 	await evaluate(`document.querySelector('#pause-button')?.click()`)
 	await Bun.sleep(500)
 	const pausedGuidanceHidden = await evaluate(`document.querySelector('#recovery-guidance')?.hidden`)
@@ -417,6 +438,7 @@ try {
 		recoveryMobile,
 		runningRecoveryDesktop,
 		runningRecoveryMobile,
+		signerSummaryMobile,
 		interactions: await evaluate(`(async () => {
 			const pause = document.querySelector('#pause-button')
 			if (!(pause instanceof HTMLButtonElement)) throw new Error('Pause control missing')
@@ -707,6 +729,14 @@ try {
 					navigationRight: navigationRect.right,
 					navigationScrollLeft: navigation.scrollLeft,
 					navigationScrollWidth: navigation.scrollWidth,
+					settingsSummaryCopyFits: [...target.querySelectorAll('.settings-summary-copy small')].every(copy => {
+						const container = copy.parentElement
+						const summary = copy.closest('summary')
+						if (!(container instanceof HTMLElement) || !(summary instanceof HTMLElement)) return false
+						const gap = Number.parseFloat(window.getComputedStyle(summary).columnGap)
+						const markerWidth = Number.parseFloat(window.getComputedStyle(summary, '::after').width)
+						return container.scrollWidth <= summary.clientWidth - gap - markerWidth + 1
+					}),
 					targetTop: context.getBoundingClientRect().top
 				}
 			})()`)
@@ -722,7 +752,8 @@ try {
 				typeof directEvidence.headerBottom !== 'number' ||
 				typeof directEvidence.targetTop !== 'number' ||
 				directEvidence.targetTop < directEvidence.headerBottom ||
-				(mobile && 'bodyScrollWidth' in directEvidence && typeof directEvidence.bodyScrollWidth === 'number' && directEvidence.bodyScrollWidth > width)
+				(mobile && 'bodyScrollWidth' in directEvidence && typeof directEvidence.bodyScrollWidth === 'number' && directEvidence.bodyScrollWidth > width) ||
+				(mobile && fragment === 'settings' && (!('settingsSummaryCopyFits' in directEvidence) || directEvidence.settingsSummaryCopyFits !== true))
 			) {
 				throw new Error(`Direct #${fragment} navigation failed at ${width.toString()}px: ${JSON.stringify(directEvidence)}`)
 			}

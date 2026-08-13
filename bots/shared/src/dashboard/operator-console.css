@@ -96,6 +96,7 @@
 }
 
 .settings-summary-copy small {
+	overflow-wrap: anywhere;
 	color: var(--operator-muted);
 	font-size: 0.78rem;
 	font-weight: 400;
