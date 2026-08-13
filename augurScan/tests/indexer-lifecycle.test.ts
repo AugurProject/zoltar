@@ -11,8 +11,10 @@ import {
 	type Address,
 	BaseError,
 	ContractFunctionExecutionError,
+	createPublicClient,
 	decodeFunctionResult,
 	HttpRequestError,
+	http,
 	parseAbi,
 	RpcRequestError,
 	TimeoutError,
@@ -26,6 +28,7 @@ import {
 	confirmCanonicalBlock,
 	contractDeploymentScanDue,
 	createRpcDiagnosticContext,
+	createRpcRequestQueue,
 	deploymentReadBudget,
 	findContractDeploymentBlock,
 	findManifestContractDeployment,
@@ -33,6 +36,7 @@ import {
 	indexerProgressMessage,
 	indexerWaitingMessage,
 	indexingCompletion,
+	isLocalIndexerFailure,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
@@ -43,6 +47,7 @@ import {
 	planManifestBackfill,
 	queryAdaptiveLogRange,
 	queryCanonicalLogRange,
+	RpcQueueSaturatedError,
 	readTokenMetadata,
 	reorgSearchFloor,
 	requiresParentLookup,
@@ -60,6 +65,7 @@ import {
 	tokenMetadataNeedsRead,
 	uniswapV4PoolIds,
 	waitForIndexerDelay,
+	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -90,7 +96,225 @@ const malformedDecimalsResult = (): number => {
 	return value
 }
 
+const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string } => {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value))
+		throw new Error('Unexpected RPC request')
+	if (value.id !== null && typeof value.id !== 'number' && typeof value.id !== 'string') throw new Error('Unexpected RPC request ID')
+	return { id: value.id, method: value.method }
+}
+
 describe('network indexer lifecycle', () => {
+	test('queues RPC work above the configured concurrency limit', async () => {
+		const queue = createRpcRequestQueue(5)
+		let active = 0
+		let maximumActive = 0
+		const releases: Array<() => void> = []
+		const operations = Array.from({ length: 12 }, (_, index) =>
+			queue.run(
+				() =>
+					new Promise<number>((resolve) => {
+						active++
+						maximumActive = Math.max(maximumActive, active)
+						releases.push(() => {
+							active--
+							resolve(index)
+						})
+					}),
+			),
+		)
+
+		await Promise.resolve()
+		expect(active).toBe(5)
+		expect(releases).toHaveLength(5)
+		for (let index = 0; index < 5; index++) releases[index]?.()
+		await Promise.all(operations.slice(0, 5))
+		await Promise.resolve()
+		expect(active).toBe(5)
+		expect(releases).toHaveLength(10)
+		for (let index = 5; index < 10; index++) releases[index]?.()
+		await Promise.all(operations.slice(5, 10))
+		await Promise.resolve()
+		expect(active).toBe(2)
+		expect(releases).toHaveLength(12)
+		for (let index = 10; index < 12; index++) releases[index]?.()
+
+		expect(await Promise.all(operations)).toEqual(Array.from({ length: 12 }, (_, index) => index))
+		expect(maximumActive).toBe(5)
+	})
+
+	test('rejects RPC work above the bounded pending capacity and preserves queued FIFO work', async () => {
+		const queue = createRpcRequestQueue(1, 2)
+		const started: number[] = []
+		let releaseActive: (() => void) | undefined
+		const active = queue.run(
+			() =>
+				new Promise<number>((resolve) => {
+					started.push(0)
+					releaseActive = () => resolve(0)
+				}),
+		)
+		const firstQueued = queue.run(async () => {
+			started.push(1)
+			return 1
+		})
+		const secondQueued = queue.run(async () => {
+			started.push(2)
+			return 2
+		})
+
+		await expect(queue.run(async () => 3)).rejects.toBeInstanceOf(RpcQueueSaturatedError)
+		expect(started).toEqual([0])
+		releaseActive?.()
+		expect(await Promise.all([active, firstQueued, secondQueued])).toEqual([0, 1, 2])
+		expect(started).toEqual([0, 1, 2])
+	})
+
+	test('treats RPC queue saturation as local backpressure without provider failover', async () => {
+		const providers = [
+			{ getChainId: async () => 1, id: 'first' },
+			{ getChainId: async () => 1, id: 'second' },
+		]
+		const attempts: string[] = []
+		const saturation = new RpcQueueSaturatedError({ active: 5, highWaterMark: 100, maximumPending: 100, pending: 100, saturationCount: 1 })
+
+		await expect(
+			withVerifiedProvider(
+				providers,
+				1,
+				async (provider) => {
+					attempts.push(provider.id)
+					throw saturation
+				},
+				isLocalIndexerFailure,
+			),
+		).rejects.toBe(saturation)
+		expect(attempts).toEqual(['first'])
+		expect(safeIndexerFailure(saturation)).toBe('RPC queue saturated; retrying')
+		expect(safeIndexerFailureReason(saturation)).toBe(
+			'RpcQueueSaturatedError; active 5; queued 100; maximum queued 100; high-water mark 100; saturation count 1',
+		)
+	})
+
+	test('recognizes viem-wrapped queue saturation from a contract read without provider failover', async () => {
+		const queue = createRpcRequestQueue(1, 0)
+		let releaseActive: (() => void) | undefined
+		const active = queue.run(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseActive = resolve
+				}),
+		)
+		let fetches = 0
+		const client = createPublicClient({
+			transport: withRpcRequestQueue(
+				http('https://rpc.example', {
+					fetchFn: async () => {
+						fetches++
+						return Response.json({ id: 1, jsonrpc: '2.0', result: '0x' })
+					},
+					retryCount: 0,
+				}),
+				queue,
+			),
+		})
+		const providers = [
+			{ getChainId: async () => 1, id: 'first' },
+			{ getChainId: async () => 1, id: 'second' },
+		]
+		const verified = new WeakSet(providers)
+		const attempts: string[] = []
+		let wrapped: unknown
+
+		try {
+			await withVerifiedProvider(
+				providers,
+				1,
+				async (provider) => {
+					attempts.push(provider.id)
+					return await client.readContract({ address, abi: metadataAbi, functionName: 'decimals' })
+				},
+				isLocalIndexerFailure,
+				() => {},
+				verified,
+			)
+		} catch (error) {
+			wrapped = error
+		}
+		expect(wrapped).toBeDefined()
+		expect(attempts).toEqual(['first'])
+		expect(fetches).toBe(0)
+		expect(safeIndexerFailure(wrapped)).toBe('RPC queue saturated; retrying')
+		expect(safeIndexerFailureReason(wrapped)).toContain('RpcQueueSaturatedError; active 1; queued 0; maximum queued 0')
+		releaseActive?.()
+		await active
+	})
+
+	test('starts transport timeouts after dequeue and releases rejected operations', async () => {
+		const queue = createRpcRequestQueue(1)
+		const requestedMethods: string[] = []
+		const transport = withRpcRequestQueue(
+			http('https://rpc.example', {
+				fetchFn: async (_input, init) => {
+					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
+					requestedMethods.push(body.method)
+					if (body.method === 'fail') throw new Error('expected transport failure')
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method })
+				},
+				retryCount: 0,
+				timeout: 5,
+			}),
+			queue,
+		)({})
+		let releaseBlocker: (() => void) | undefined
+		const blocker = queue.run(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseBlocker = resolve
+				}),
+		)
+		const delayed = transport.request({ method: 'delayed' })
+
+		await Bun.sleep(15)
+		expect(requestedMethods).toEqual([])
+		releaseBlocker?.()
+		await blocker
+		expect(await delayed).toBe('delayed')
+
+		const failed = transport.request({ method: 'fail' })
+		const afterFailure = transport.request({ method: 'after-failure' })
+		await expect(failed).rejects.toThrow()
+		expect(await afterFailure).toBe('after-failure')
+		expect(requestedMethods).toEqual(['delayed', 'fail', 'after-failure'])
+	})
+
+	test('forwards viem request options through the RPC queue', async () => {
+		const queue = createRpcRequestQueue(5)
+		let fetches = 0
+		let releaseFetch: (() => void) | undefined
+		const transport = withRpcRequestQueue(
+			http('https://rpc.example', {
+				fetchFn: async (_input, init) => {
+					fetches++
+					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
+					await new Promise<void>((resolve) => {
+						releaseFetch = resolve
+					})
+					return Response.json({ id: body.id, jsonrpc: '2.0', result: 'shared-result' })
+				},
+				retryCount: 0,
+			}),
+			queue,
+		)({})
+		const first = transport.request({ method: 'deduplicated' }, { dedupe: true })
+		const second = transport.request({ method: 'deduplicated' }, { dedupe: true })
+
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(fetches).toBe(1)
+		releaseFetch?.()
+		expect(await Promise.all([first, second])).toEqual(['shared-result', 'shared-result'])
+	})
+
 	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
 		const contracts = new Map<string, ContractMetadata>([
 			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
@@ -474,6 +698,44 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('propagates wrapped queue saturation instead of falling back during deployment detection', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const saturation = new RpcQueueSaturatedError({ active: 5, highWaterMark: 100, maximumPending: 100, pending: 100, saturationCount: 1 })
+		const wrapped = new Error('contract read failed', { cause: saturation })
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => {
+					throw wrapped
+				},
+				async () => new Date(0),
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(wrapped)
+		expect(failures).toEqual([])
+
+		const controller = new AbortController()
+		const messages: string[] = []
+		await runNetworkLifecycle({
+			verify: async () => {},
+			poll: async () => {
+				throw wrapped
+			},
+			failure: async (message) => {
+				messages.push(message)
+				controller.abort()
+			},
+			intervalMs: 1,
+			signal: controller.signal,
+		})
+		expect(messages).toEqual(['RPC queue saturated; retrying'])
 	})
 
 	test('plans a manifest backfill from a newly added contract deployment', async () => {
