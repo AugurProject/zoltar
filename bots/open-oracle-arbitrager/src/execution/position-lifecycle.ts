@@ -284,6 +284,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	try {
 		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending, targetBlockNumber), persistPosition)
 	} catch (error) {
+		if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 		throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 	}
 	return 'progressed' as const

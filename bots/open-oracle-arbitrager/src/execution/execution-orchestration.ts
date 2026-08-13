@@ -1,5 +1,6 @@
 import { bigintToSafeNumber, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
+import { operationalFailureDisposition } from '#monitoring/resilience'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
@@ -331,6 +332,7 @@ export async function finalizeSubmittedLifecycleAttempt(lifecyclePosition: Posit
 	try {
 		recovered = await recover(lifecyclePosition)
 	} catch (error) {
+		if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 		await persist({ ...lifecyclePosition, status: 'recovery-required' })
 		throw error
 	}

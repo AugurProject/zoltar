@@ -43,6 +43,7 @@ import {
 import { loadPositionJournal, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 import { assertSubmissionWindowOpen } from '#execution/transaction-submission'
 import { v4QuotePlan } from '#core/uniswap-v4'
+import { ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address
@@ -545,6 +546,38 @@ describe('funded execution orchestration', () => {
 		expect(persisted?.lifecycleWalletTokenBefore).toBe('10')
 		expect(persisted?.lifecycleWalletWethBefore).toBe('20')
 		expect(persisted === undefined ? false : lifecycleAttemptNeedsRecovery(persisted)).toBe(true)
+	})
+
+	test('keeps a private lifecycle pending when receipt quorum loses connectivity and resumes later', async () => {
+		const submitted = lifecyclePosition()
+		const persisted: PositionRecord[] = []
+		const connectivityFailure = new ConnectivityDegradedError('lifecycle receipt requires at least two available independent RPC endpoints')
+		await finalizeSubmittedLifecycleAttempt(
+			submitted,
+			() => Promise.reject(connectivityFailure),
+			position => {
+				persisted.push(position)
+				return Promise.resolve()
+			},
+		).catch(error => {
+			expect(error).toBe(connectivityFailure)
+			expect(operationalFailureDisposition(error)).toBe('connectivity-degraded')
+		})
+		expect(persisted).toEqual([])
+		expect(submitted.status).toBe('withdrawing')
+
+		const recovered = { ...submitted, lifecycleReceiptRecovered: true, status: 'closed-pending-finality' as const }
+		expect(
+			await finalizeSubmittedLifecycleAttempt(
+				submitted,
+				() => Promise.resolve(recovered),
+				position => {
+					persisted.push(position)
+					return Promise.resolve()
+				},
+			),
+		).toEqual(recovered)
+		expect(persisted).toEqual([recovered])
 	})
 
 	test('requires exact independent receipt agreement before entry accounting', async () => {
