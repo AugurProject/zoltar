@@ -15,6 +15,7 @@ import {
 	opportunityDecisionReason,
 	persistedConnectivity,
 	requiredSignerPrivateKey,
+	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
@@ -42,6 +43,8 @@ let initialFragmentApplied = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
+
+const STATE_REQUEST_TIMEOUT_MS = 1_000
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -927,7 +930,7 @@ function render(snapshot: OperatorSnapshot) {
 
 const refresh = singleFlight(async () => {
 	try {
-		const value: unknown = await api<unknown>('/api/state')
+		const value: unknown = await requestWithTimeout(signal => api<unknown>('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
 		render(value)
 	} catch (error) {

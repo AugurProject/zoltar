@@ -365,8 +365,28 @@ try {
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressDesktop = await capture('liquidator-address-expanded-desktop', 1440, 900)
 	await evaluate(`document.querySelector('.address-details')?.removeAttribute('open')`)
+	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await Bun.sleep(100)
+	const runningGuidance = await evaluate(`({
+		hidden: document.querySelector('#recovery-guidance')?.hidden,
+		text: document.querySelector('#recovery-guidance')?.textContent
+	})`)
+	if (typeof runningGuidance !== 'object' || runningGuidance === null || !('hidden' in runningGuidance) || runningGuidance.hidden !== false || !('text' in runningGuidance) || typeof runningGuidance.text !== 'string' || !runningGuidance.text.includes('Pause the bot')) {
+		throw new Error(`Running recovery guidance is unavailable: ${JSON.stringify(runningGuidance)}`)
+	}
+	const runningRecoveryDesktopOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	if (typeof runningRecoveryDesktopOffset !== 'number') throw new Error('Running desktop recovery section offset is unavailable')
+	const runningRecoveryDesktop = await capture('liquidator-recovery-running-desktop', 1440, 900, runningRecoveryDesktopOffset, 'recovery')
+	await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: 844, mobile: false, width: 390 })
+	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await Bun.sleep(100)
+	const runningRecoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
+	if (typeof runningRecoveryMobileOffset !== 'number') throw new Error('Running mobile recovery section offset is unavailable')
+	const runningRecoveryMobile = await capture('liquidator-recovery-running-mobile', 390, 844, runningRecoveryMobileOffset, 'recovery')
 	await evaluate(`document.querySelector('#pause-button')?.click()`)
 	await Bun.sleep(500)
+	const pausedGuidanceHidden = await evaluate(`document.querySelector('#recovery-guidance')?.hidden`)
+	if (pausedGuidanceHidden !== true) throw new Error('Paused recovery guidance still instructs the operator to pause')
 	const pausedDesktop = await capture('liquidator-paused-desktop', 1440, 900)
 	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
 	await Bun.sleep(100)
@@ -390,6 +410,8 @@ try {
 		pausedMobile,
 		recoveryDesktop,
 		recoveryMobile,
+		runningRecoveryDesktop,
+		runningRecoveryMobile,
 		interactions: await evaluate(`(async () => {
 			const pause = document.querySelector('#pause-button')
 			if (!(pause instanceof HTMLButtonElement)) throw new Error('Pause control missing')

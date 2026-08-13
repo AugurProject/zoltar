@@ -168,6 +168,7 @@ const marketSourceTestStatus = element('market-source-test-status', HTMLSpanElem
 const marketSourceRows = element('market-source-rows', HTMLTableSectionElement)
 const operatorAlerts = element('operator-alerts', HTMLUListElement)
 const recoveryList = element('recovery-list', HTMLDivElement)
+const recoveryGuidance = element('recovery-guidance', HTMLParagraphElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
 const universeRows = element('universe-rows', HTMLDivElement)
 const poolRows = element('pool-rows', HTMLTableSectionElement)
@@ -209,11 +210,15 @@ let renderedAlertKey: string | undefined
 let marketSourceProbeRows: MarketSourceRow[] | undefined
 let initialFragmentApplied = false
 let stateConnected = false
+let configurationConnected = false
+
+const STATE_REQUEST_TIMEOUT_MS = 1_000
 
 function setMutationControlsEnabled(enabled: boolean) {
 	const configurationAvailable = enabled && currentConfiguration !== undefined
-	pauseButton.disabled = !enabled
-	confirmResume.disabled = !enabled
+	const resumeAvailable = configurationAvailable && configurationConnected && currentConfiguration?.network !== undefined
+	pauseButton.disabled = !enabled || (currentSnapshot?.paused === true && !resumeAvailable)
+	confirmResume.disabled = !resumeAvailable
 	networkFields.disabled = !configurationAvailable
 	marketConfigurationFields.disabled = !configurationAvailable
 	strategyFields.disabled = !configurationAvailable
@@ -227,8 +232,24 @@ function setMutationControlsEnabled(enabled: boolean) {
 	}
 }
 
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
-	const response = await fetch(path, options)
+async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number) {
+	const controller = new window.AbortController()
+	let timeout: ReturnType<typeof window.setTimeout> | undefined
+	const deadline = new Promise<never>((_resolve, reject) => {
+		timeout = window.setTimeout(() => {
+			controller.abort()
+			reject(new Error('Dashboard state request timed out'))
+		}, timeoutMilliseconds)
+	})
+	try {
+		return await Promise.race([request(controller.signal), deadline])
+	} finally {
+		if (timeout !== undefined) window.clearTimeout(timeout)
+	}
+}
+
+async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<T> {
+	const response = await (timeoutMilliseconds === undefined ? fetch(path, options) : requestWithTimeout(signal => fetch(path, { ...options, signal }), timeoutMilliseconds))
 	const value: unknown = await response.json()
 	if (!response.ok) {
 		const error = typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
@@ -505,7 +526,9 @@ function universeMetadata(universe: Universe, includeOutcome: boolean) {
 }
 
 async function saveUniversePolicy(actionKey: string, next: Set<string>, status: HTMLElement) {
+	if (pendingUniverseMutations > 0) return
 	pendingUniverseMutations += 1
+	for (const control of universeRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
 	universeActionStates.set(actionKey, { failed: false, message: 'Saving…' })
 	actionStatus(status, 'Saving…')
 	try {
@@ -518,6 +541,30 @@ async function saveUniversePolicy(actionKey: string, next: Set<string>, status: 
 		pendingUniverseMutations -= 1
 		if (currentSnapshot !== undefined) renderUniverses(currentSnapshot)
 	}
+}
+
+function selectUniversePath(universe: Universe) {
+	const next = new Set(approvedUniverses)
+	if (currentSnapshot === undefined) {
+		next.add(universe.id)
+		return next
+	}
+	const universesById = new Map(currentSnapshot.universes.map(candidate => [candidate.id, candidate]))
+	let selected: Universe | undefined = universe
+	const visited = new Set<string>()
+	while (selected !== undefined && !visited.has(selected.id)) {
+		visited.add(selected.id)
+		next.add(selected.id)
+		if (selected.parentId === undefined) break
+		const selectedId = selected.id
+		const parentId = selected.parentId
+		removeUniverseSubtrees(
+			next,
+			currentSnapshot.universes.filter(candidate => candidate.parentId === parentId && candidate.id !== selectedId).map(candidate => candidate.id),
+		)
+		selected = universesById.get(parentId)
+	}
+	return next
 }
 
 function removeUniverseSubtrees(next: Set<string>, rootIds: readonly string[]) {
@@ -541,7 +588,7 @@ function removeUniverseSubtrees(next: Set<string>, rootIds: readonly string[]) {
 	}
 }
 
-function universeChoice(universe: Universe, siblingIds: readonly string[]) {
+function universeChoice(universe: Universe) {
 	const choice = document.createElement('label')
 	choice.className = 'truth-choice'
 	const input = document.createElement('input')
@@ -562,13 +609,7 @@ function universeChoice(universe: Universe, siblingIds: readonly string[]) {
 	if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
 	input.addEventListener('change', () => {
 		if (!input.checked) return
-		const next = new Set(approvedUniverses)
-		removeUniverseSubtrees(
-			next,
-			siblingIds.filter(siblingId => siblingId !== universe.id),
-		)
-		next.add(universe.id)
-		void saveUniversePolicy(universe.id, next, status)
+		void saveUniversePolicy(universe.id, selectUniversePath(universe), status)
 	})
 	choice.append(copy, input, status)
 	return choice
@@ -650,7 +691,7 @@ function universeFamily(parent: Universe, children: readonly Universe[]) {
 		void saveUniversePolicy(`none:${parent.id}`, next, noneStatus)
 	})
 	none.append(noneCopy, noneInput, noneStatus)
-	options.append(none, ...children.map(child => universeChoice(child, childIds)))
+	options.append(none, ...children.map(child => universeChoice(child)))
 	family.append(options)
 	return family
 }
@@ -772,8 +813,12 @@ function renderPools(snapshot: Snapshot) {
 				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
 			}
 			checkbox.addEventListener('change', async () => {
-				checkbox.disabled = true
+				if (pendingPoolMutations > 0) {
+					checkbox.checked = selectedPools.has(pool.address.toLowerCase())
+					return
+				}
 				pendingPoolMutations += 1
+				for (const control of poolRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
 				poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saving…' })
 				actionStatus(poolStatus, 'Saving…')
 				const next = new Set(selectedPools)
@@ -790,8 +835,8 @@ function renderPools(snapshot: Snapshot) {
 					poolActionStates.set(pool.address.toLowerCase(), { failed: true, message })
 					actionStatus(poolStatus, message, true)
 				} finally {
-					checkbox.disabled = !stateConnected
 					pendingPoolMutations -= 1
+					if (currentSnapshot !== undefined) renderPools(currentSnapshot)
 				}
 			})
 			const addressDetails = document.createElement('details')
@@ -883,6 +928,7 @@ function render(snapshot: Snapshot) {
 	attentionBadge.href = snapshot.pendingTransactions.length > 0 ? '#recovery' : snapshot.error !== undefined ? '#global-error' : snapshot.alerts.length > 0 ? '#operations' : '#overview'
 	pauseButton.textContent = snapshot.paused ? 'Resume' : 'Pause'
 	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
+	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	setGlobalError(snapshot.error === undefined ? undefined : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`, 'Scan failed')
@@ -916,6 +962,7 @@ function setFormValue(name: string, value: string | number | boolean) {
 
 function populateConfiguration(configuration: Configuration) {
 	currentConfiguration = configuration
+	configurationConnected = true
 	renderNetworkBadge()
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
@@ -1073,6 +1120,11 @@ function renderNetworkBadge() {
 		networkBadge.className = 'badge warning'
 		return
 	}
+	if (!configurationConnected) {
+		networkBadge.textContent = 'Network unavailable'
+		networkBadge.className = 'badge warning'
+		return
+	}
 	if (currentConfiguration?.network === undefined) {
 		networkBadge.textContent = 'Network not configured'
 		networkBadge.className = 'badge warning'
@@ -1096,6 +1148,7 @@ function renderConnectionFailure(error: unknown) {
 	attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = 'badge warning'
 	attentionBadge.href = '#global-error'
+	recoveryGuidance.hidden = true
 	setMutationControlsEnabled(false)
 	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')
 }
@@ -1162,8 +1215,7 @@ async function changePaused(paused: boolean) {
 	} catch (error) {
 		actionStatus(pauseStatus, publicFailure(error, 'Could not change bot status. Check the bot connection and retry.'), true)
 	} finally {
-		pauseButton.disabled = !stateConnected
-		confirmResume.disabled = !stateConnected
+		setMutationControlsEnabled(stateConnected)
 	}
 }
 
@@ -1322,7 +1374,7 @@ function refresh() {
 
 async function performRefresh() {
 	try {
-		render(await api<Snapshot>('/api/state'))
+		render(await api<Snapshot>('/api/state', undefined, STATE_REQUEST_TIMEOUT_MS))
 	} catch (error) {
 		renderConnectionFailure(error)
 	}
@@ -1336,6 +1388,8 @@ async function loadConfiguration() {
 	try {
 		populateConfiguration(await api<Configuration>('/api/configuration'))
 	} catch (error) {
+		currentConfiguration = undefined
+		configurationConnected = false
 		networkBadge.textContent = 'Network unavailable'
 		networkBadge.className = 'badge warning'
 		configurationStatus.classList.add('error')
@@ -1347,6 +1401,7 @@ async function loadConfiguration() {
 		retry.textContent = 'Retry configuration'
 		retry.addEventListener('click', loadConfiguration)
 		configurationStatus.replaceChildren(message, retry)
+		setMutationControlsEnabled(stateConnected)
 	}
 }
 

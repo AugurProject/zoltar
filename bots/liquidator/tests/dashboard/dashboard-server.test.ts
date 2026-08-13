@@ -8,6 +8,53 @@ afterEach(() => {
 })
 
 describe('liquidator dashboard server', () => {
+	test('keeps snapshot and controller failures out of public dashboard responses', async () => {
+		const credential = 'https://operator:operator-secret@rpc.example/private'
+		const server = startDashboardServer(0, {
+			getConfiguration: () => {
+				throw new Error(`configuration read failed at ${credential}`)
+			},
+			getState: () => ({
+				activities: [{ at: '2026-08-13T00:00:00.000Z', details: `provider rejected ${credential}`, kind: 'error', message: 'Scan cycle failed', status: 'failed' }],
+				alerts: [{ message: `RPC alert from ${credential}`, severity: 'error' }],
+				error: `RPC ${credential} returned authorization=Bearer-secret`,
+			}),
+			hostname: '127.0.0.1',
+			setApprovedUniverses: value => value,
+			setPaused: () => {
+				throw new Error(`pause write failed at ${credential}`)
+			},
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const snapshotResponse = await fetch(new URL('/api/state', server.url))
+		const snapshotBody = await snapshotResponse.text()
+		expect(snapshotResponse.status).toBe(200)
+		expect(snapshotBody).not.toContain('operator-secret')
+		expect(snapshotBody).not.toContain('rpc.example')
+		expect(snapshotBody).not.toContain('Bearer-secret')
+		expect(snapshotBody).toContain('RPC connectivity')
+
+		const configurationResponse = await fetch(new URL('/api/configuration', server.url))
+		const configurationBody = await configurationResponse.text()
+		expect(configurationResponse.status).toBe(503)
+		expect(configurationBody).not.toContain('operator-secret')
+		expect(configurationBody).not.toContain('rpc.example')
+
+		const mutationResponse = await fetch(new URL('/api/paused', server.url), {
+			body: JSON.stringify({ paused: true }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		const mutationBody = await mutationResponse.text()
+		expect(mutationResponse.status).toBe(400)
+		expect(mutationBody).not.toContain('operator-secret')
+		expect(mutationBody).not.toContain('rpc.example')
+	})
+
 	test('serves the dashboard and protects configuration mutations by origin', async () => {
 		let paused = false
 		let marketConfiguration: unknown

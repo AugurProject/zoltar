@@ -24,6 +24,7 @@ let fixtureStatus: OperatorSnapshot['status'] = 'running'
 let paused = false
 let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
 let fixtureStateUnavailable = false
+let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
@@ -506,6 +507,31 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					recovery.runStatus !== 'Running'
 				) {
 					throw new Error(`State-request recovery did not restore the safety shell: ${JSON.stringify(recovery)}`)
+				}
+				if (!mobile) {
+					fixtureStateHanging = true
+					await replacePage(`${origin}/?connection=hung-desktop`, width, height)
+					await Bun.sleep(1_250)
+					const hungRequest = await readConnectionState()
+					if (
+						typeof hungRequest !== 'object' ||
+						hungRequest === null ||
+						!('attentionText' in hungRequest) ||
+						hungRequest.attentionText !== '1 action' ||
+						!('confirmDisabled' in hungRequest) ||
+						hungRequest.confirmDisabled !== true ||
+						!('pauseDisabled' in hungRequest) ||
+						hungRequest.pauseDisabled !== true ||
+						!('resumeOpen' in hungRequest) ||
+						hungRequest.resumeOpen !== false ||
+						!('runStatus' in hungRequest) ||
+						hungRequest.runStatus !== 'Disconnected'
+					) {
+						throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
+					}
+					fixtureStateHanging = false
+					await replacePage(`${origin}/?connection=hung-recovery-desktop`, width, height)
+					await Bun.sleep(750)
 				}
 				paused = true
 				await replacePage(`${origin}/?connection=resume-preflight-${mobile ? 'mobile' : 'desktop'}`, width, height)
@@ -1045,7 +1071,8 @@ const server = startDashboardServer(0, {
 		configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
 		revision: 'fixture-revision',
 	}),
-	getSnapshot: () => {
+	getSnapshot: async () => {
+		if (fixtureStateHanging) await new Promise<never>(() => {})
 		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')
 		return currentFixtureSnapshot()
 	},

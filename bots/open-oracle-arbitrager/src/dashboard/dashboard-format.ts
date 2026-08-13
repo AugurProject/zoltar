@@ -45,6 +45,22 @@ export function singleFlight<T>(operation: () => Promise<T>) {
 	}
 }
 
+export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number) {
+	const controller = new AbortController()
+	let timeout: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<never>((_resolve, reject) => {
+		timeout = setTimeout(() => {
+			controller.abort()
+			reject(new Error('Dashboard state request timed out'))
+		}, timeoutMilliseconds)
+	})
+	try {
+		return await Promise.race([request(controller.signal), deadline])
+	} finally {
+		if (timeout !== undefined) clearTimeout(timeout)
+	}
+}
+
 function parseSignedDecimal(value: string) {
 	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid decimal amount: ${value}`)
 	const negative = value.startsWith('-')

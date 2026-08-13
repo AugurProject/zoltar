@@ -38,6 +38,57 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
+function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {
+	const normalized = error.toLowerCase()
+	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
+	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
+	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
+	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
+	if (normalized.includes('risk') || normalized.includes('limit') || normalized.includes('policy')) return 'A risk or execution policy prevented this operation. Review the active policy and protected bot logs.'
+	return fallback
+}
+
+function containsSensitiveOperatorDetail(value: string) {
+	return /https?:\/\/[^\s/:]+:[^@\s]+@/i.test(value) || /(?:api[_-]?key|authorization|bearer|password|secret|token)\s*[=:]\s*\S+/i.test(value)
+}
+
+function publicActivity(value: unknown) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
+	const activity = { ...value }
+	const details = Reflect.get(value, 'details')
+	const kind = Reflect.get(value, 'kind')
+	const message = Reflect.get(value, 'message')
+	const status = Reflect.get(value, 'status')
+	if (typeof details === 'string' && (kind === 'error' || status === 'failed' || containsSensitiveOperatorDetail(details))) activity['details'] = publicOperatorFailure(details)
+	if (typeof message === 'string' && containsSensitiveOperatorDetail(message)) activity['message'] = 'An operator activity requires attention. Check protected bot logs for details.'
+	return activity
+}
+
+function publicAlert(value: unknown) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
+	const alert = { ...value }
+	const message = Reflect.get(value, 'message')
+	if (typeof message === 'string' && containsSensitiveOperatorDetail(message)) alert['message'] = publicOperatorFailure(message, 'An operator alert requires attention. Check protected bot logs for details.')
+	return alert
+}
+
+function publicOperatorSnapshot(value: unknown) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
+	const snapshot = { ...value }
+	const error = Reflect.get(value, 'error')
+	const activities = Reflect.get(value, 'activities')
+	const alerts = Reflect.get(value, 'alerts')
+	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
+	if (Array.isArray(activities)) snapshot['activities'] = activities.map(publicActivity)
+	if (Array.isArray(alerts)) snapshot['alerts'] = alerts.map(publicAlert)
+	return snapshot
+}
+
+function publicError(error: unknown, status: number, operation: string, fallback: string) {
+	console.error(`dashboardOperation=${operation} failed=${errorMessage(error)}`)
+	return json({ error: fallback }, status)
+}
+
 export function startDashboardServer(port: number, controller: DashboardController) {
 	validateDashboardAuthentication(controller.hostname, controller.password)
 	const directory = import.meta.dir
@@ -77,16 +128,16 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			}
 			if (request.method === 'GET' && url.pathname === '/api/state') {
 				try {
-					return json(await controller.getState())
+					return json(publicOperatorSnapshot(await controller.getState()))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 503)
+					return publicError(error, 503, 'state-read', publicOperatorFailure(errorMessage(error), 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.'))
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/configuration') {
 				try {
 					return json(await controller.getConfiguration())
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 503)
+					return publicError(error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
 				}
 			}
 			const origin = request.headers.get('origin')
@@ -109,7 +160,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(await handler(await boundedDashboardJson(request)))
 				} catch (error) {
-					return json({ error: errorMessage(error) }, 400)
+					return publicError(error, 400, `mutation:${url.pathname}`, 'The dashboard change could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') {

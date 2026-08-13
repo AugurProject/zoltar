@@ -14,6 +14,7 @@ import {
 	opportunityDecisionReason,
 	persistedConnectivity,
 	requiredSignerPrivateKey,
+	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
@@ -93,6 +94,22 @@ describe('dashboard exact ETH formatting', () => {
 		release?.()
 		await Promise.all([first, second])
 		expect(calls).toBe(2)
+	})
+
+	test('aborts and rejects a state request that never resolves', async () => {
+		let aborted = false
+		const request = requestWithTimeout(
+			signal =>
+				new Promise<never>(() => {
+					signal.addEventListener('abort', () => {
+						aborted = true
+					})
+				}),
+			10,
+		)
+
+		await expect(request).rejects.toThrow('timed out')
+		expect(aborted).toBe(true)
 	})
 
 	test('shows block delay against the operator computer without hiding clock skew', () => {
