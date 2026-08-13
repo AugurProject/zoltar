@@ -2,7 +2,6 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
-const approvedBoundaries = new Set(['src/viem-runtime.js', 'src/viem-runtime.d.ts'])
 const sourceExtensions = new Set(['.ts', '.js', '.mts', '.mjs', '.cts', '.cjs'])
 const directViemImport = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\()\s*['"]viem(?:\/[^'"]*)?['"]/
 
@@ -34,13 +33,10 @@ for (const directory of ['src', 'scripts', 'tests', 'public']) await visit(path.
 const violations: string[] = []
 for (const file of files) {
 	const source = await readFile(path.join(projectRoot, file), 'utf8')
-	if (directViemImport.test(source) && !approvedBoundaries.has(file)) violations.push(file)
+	if (directViemImport.test(source)) violations.push(file)
 }
 
-for (const boundary of approvedBoundaries) {
-	const source = await readFile(path.join(projectRoot, boundary), 'utf8')
-	if (!directViemImport.test(source)) throw new Error(`${boundary} no longer defines the scanner Ethereum provider boundary`)
-}
-if (violations.length > 0) throw new Error(`Import Ethereum primitives through src/ethereum.ts; direct viem imports found in: ${violations.join(', ')}`)
+if (violations.length > 0)
+	throw new Error(`Viem imports are not allowed; import Micro-based Ethereum primitives through src/ethereum.ts: ${violations.join(', ')}`)
 
-console.log(`Validated the isolated Ethereum provider boundary across ${files.length} source files`)
+console.log(`Validated the Micro-based Ethereum provider boundary across ${files.length} source files`)

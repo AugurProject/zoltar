@@ -1,12 +1,14 @@
 import path from 'node:path'
-import { type AbiParameter, formatAbiItem, formatAbiParameter } from 'abitype'
 import {
 	type Abi,
 	type AbiEvent,
 	type AbiFunction,
+	type AbiParameter,
 	type Address,
 	decodeEventLog,
 	decodeFunctionData,
+	formatAbiItem,
+	formatAbiParameter,
 	formatUnits,
 	getAddress,
 	type Hex,
@@ -81,9 +83,12 @@ export const abiForKind = (kind: string): Abi | undefined => {
 }
 
 const eventByTopic = new Map<Hex, AbiEvent[]>()
+const isAbiEvent = (item: AbiParameter): item is AbiEvent => item.type === 'event' && item.name !== undefined && item.inputs !== undefined
+const isAbiFunction = (item: AbiParameter): item is AbiFunction =>
+	item.type === 'function' && item.name !== undefined && item.inputs !== undefined && item.outputs !== undefined
 for (const { abi } of Object.values(catalogFile.contracts)) {
 	for (const item of abi) {
-		if (item.type !== 'event') continue
+		if (!isAbiEvent(item)) continue
 		const topic = toEventSelector(item)
 		const existing = eventByTopic.get(topic)
 		if (existing?.some((candidate) => formatAbiItem(candidate) === formatAbiItem(item))) continue
@@ -208,11 +213,12 @@ const addressValues = (value: unknown): Address[] => {
 
 const addressesFromParameter = (parameter: AbiParameter, value: unknown): Address[] => {
 	if (parameter.type === 'address' || parameter.type.startsWith('address[')) return addressValues(value)
-	if (!('components' in parameter)) return []
+	const components = parameter.components
+	if (components === undefined) return []
 	const tuples = parameter.type === 'tuple' ? [value] : Array.isArray(value) ? value : []
 	return tuples.flatMap((tuple) => {
 		if (typeof tuple !== 'object' || tuple === null) return []
-		return parameter.components.flatMap((component, index) => {
+		return components.flatMap((component, index) => {
 			const componentValue = Array.isArray(tuple) ? tuple[index] : Object.entries(tuple).find(([key]) => key === (component.name || String(index)))?.[1]
 			return addressesFromParameter(component, componentValue)
 		})
@@ -331,7 +337,7 @@ const decodeWithEvents = (
 	let lastError: unknown
 	for (const event of events) {
 		try {
-			const result = decodeEventLog({ abi: [event], topics: topics as [Hex, ...Hex[]], data, strict: true })
+			const result = decodeEventLog({ abi: [event], topics, data })
 			const argumentsValue = serializeArguments(result.args)
 			const displayArguments = argumentsValue === undefined ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 			if (argumentsValue !== undefined && displayArguments !== undefined)
@@ -457,7 +463,7 @@ export const decodeLogRecord = (
 	const packedName = kind === 'openOracle' ? packedReportTopics.get(topic) : undefined
 	if (packedName !== undefined) return decodePackedReport(packedName, topics, data, labels, tokenMetadata, contractKinds, context)
 	const kindAbi = kind === undefined ? undefined : abiForKind(kind)
-	const kindEvents = kindAbi?.filter((item): item is AbiEvent => item.type === 'event' && toEventSelector(item) === topic) ?? []
+	const kindEvents = kindAbi?.filter((item): item is AbiEvent => isAbiEvent(item) && toEventSelector(item) === topic) ?? []
 	const candidates = kindEvents.length > 0 ? kindEvents : (eventByTopic.get(topic) ?? [])
 	if (candidates.length === 0) return { status: 'unknown', summary: `Unknown event ${topic.slice(0, 10)}…` }
 	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, context)
@@ -477,7 +483,7 @@ export const decodeAction = (
 	try {
 		const result = decodeFunctionData({ abi, data: input })
 		const selector = input.slice(0, 10)
-		const functionItem = abi.find((item): item is AbiFunction => item.type === 'function' && toFunctionSelector(item) === selector)
+		const functionItem = abi.find((item): item is AbiFunction => isAbiFunction(item) && toFunctionSelector(item) === selector)
 		if (functionItem === undefined) throw new Error(`ABI function not found for ${selector}`)
 		const decodedArguments = Array.isArray(result.args) ? result.args : []
 		const argumentsValue = Object.fromEntries(

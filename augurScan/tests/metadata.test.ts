@@ -418,7 +418,7 @@ describe('ABI metadata', () => {
 	test('extracts only ABI-typed addresses from decoded evidence', () => {
 		const nestedOwner = getAddress('0x3333333333333333333333333333333333333333')
 		const [event] = parseAbi(['event Evidence(string title,address vault,(string note,address owner) nested)'])
-		if (event?.type !== 'event') throw new Error('Evidence event ABI missing')
+		if (event?.type !== 'event' || event.inputs === undefined) throw new Error('Evidence event ABI missing')
 		expect(
 			referencedAddressesFrom(event.inputs, {
 				title: account,

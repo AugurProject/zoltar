@@ -17,8 +17,8 @@
 		"format": "bun x biome check --write ."
 	},
 	"dependencies": {
-		"abitype": "1.1.0",
-		"viem": "2.38.5"
+		"@noble/hashes": "2.2.0",
+		"micro-eth-signer": "0.18.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

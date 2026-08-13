@@ -4,11 +4,11 @@
 
 augurScan is a self-contained, read-only protocol explorer and debugging tool. It indexes activity from configured EVM JSON-RPC networks into PostgreSQL, presents a live one-row-per-log feed, explains decoded values and known addresses, and retains raw and historical evidence. Ethereum Mainnet and Sepolia are configured initially; more networks can be added through the same configuration model.
 
-Everything needed to build and run the scanner lives under `/augurScan`. The Docker image does not import parent-repository runtime files. Sending transactions, holding keys, indexing unrelated contracts, and claiming internal calls that emit no log are outside this release.
+The scanner owns its application, configuration, and database inputs under `/augurScan` and reuses the parent repository's shared Ethereum adapter at build time. The Docker image copies that adapter alongside the scanner rather than depending on the parent checkout at runtime. Sending transactions, holding keys, indexing unrelated contracts, and claiming internal calls that emit no log are outside this release.
 
 ## Delivered architecture
 
-The shipped stack is Bun and TypeScript, `viem` for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app runs idempotent migrations before it serves traffic.
+The shipped stack is Bun and TypeScript, the repository's `micro-eth-signer`-based adapter for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app runs idempotent migrations before it serves traffic.
 
 Configuration is checked in under `config/`:
 
