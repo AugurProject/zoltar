@@ -61,9 +61,24 @@ export async function requireNoPendingExecutorDeployment(settingsFile: string) {
 
 export type DeploymentRecoveryState = { pending: boolean }
 
-export function acquireScanSignerOperation(signerOperationGate: SignerOperationGate, deploymentRecovery: DeploymentRecoveryState) {
-	if (deploymentRecovery.pending) return false
-	return signerOperationGate.acquire('scan')
+export async function acquireScanSignerOperation(signerOperationGate: SignerOperationGate, deploymentRecovery: DeploymentRecoveryState, intentPath: string) {
+	if (deploymentRecovery.pending) return undefined
+	const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
+	try {
+		if ((await loadExecutorDeploymentIntent(intentPath)) !== undefined) {
+			deploymentRecovery.pending = true
+			await intentLock.release()
+			return undefined
+		}
+		if (!signerOperationGate.acquire('scan')) {
+			await intentLock.release()
+			return undefined
+		}
+		return intentLock
+	} catch (error) {
+		await intentLock.release()
+		throw error
+	}
 }
 
 export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {

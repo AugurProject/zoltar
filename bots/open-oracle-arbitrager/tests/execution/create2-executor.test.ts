@@ -127,13 +127,29 @@ test('blocks resume while a durable executor deployment intent remains unresolve
 	}
 })
 
-test('blocks every scan signer path until deployment recovery clears its durable intent', () => {
+test('blocks every scan signer path until deployment recovery clears its durable intent', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-scan-gate-'))
 	const gate = createSignerOperationGate()
 	const deploymentRecovery = { pending: true }
-	expect(acquireScanSignerOperation(gate, deploymentRecovery)).toBe(false)
-	deploymentRecovery.pending = false
-	expect(acquireScanSignerOperation(gate, deploymentRecovery)).toBe(true)
-	gate.release('scan')
+	const intentPath = join(directory, 'deployment.json')
+	try {
+		expect(await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)).toBeUndefined()
+		deploymentRecovery.pending = false
+		const intentLock = await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)
+		expect(intentLock).toBeDefined()
+		await expect(acquireExecutorDeploymentIntentLock(intentPath)).rejects.toThrow('already locked')
+		gate.release('scan')
+		await intentLock?.release()
+		const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
+		const salt = `0x${'22'.repeat(32)}` as Hex
+		const plan = executorDeploymentPlan(salt)
+		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
+		expect(await acquireScanSignerOperation(gate, deploymentRecovery, intentPath)).toBeUndefined()
+		expect(deploymentRecovery.pending).toBe(true)
+	} finally {
+		await rm(directory, { force: true, recursive: true })
+	}
 })
 
 test('activates the signer blocker as soon as a fresh deployment intent is durable', async () => {
@@ -148,7 +164,7 @@ test('activates the signer blocker as soon as a fresh deployment intent is durab
 		const intentPath = join(directory, 'deployment.json')
 		await persistExecutorDeploymentIntentForRecovery(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)
 		expect(deploymentRecovery.pending).toBe(true)
-		expect(acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery)).toBe(false)
+		expect(await acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery, intentPath)).toBeUndefined()
 		expect(await loadExecutorDeploymentIntent(intentPath)).toBeDefined()
 	} finally {
 		await rm(directory, { force: true, recursive: true })
@@ -168,7 +184,7 @@ test('keeps the signer blocker active when deployment intent persistence is unce
 		await writeFile(parentFile, 'occupied', 'utf8')
 		await expect(persistExecutorDeploymentIntentForRecovery(join(parentFile, 'deployment.json'), { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 }, deploymentRecovery)).rejects.toThrow()
 		expect(deploymentRecovery.pending).toBe(true)
-		expect(acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery)).toBe(false)
+		expect(await acquireScanSignerOperation(createSignerOperationGate(), deploymentRecovery, join(parentFile, 'deployment.json'))).toBeUndefined()
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}

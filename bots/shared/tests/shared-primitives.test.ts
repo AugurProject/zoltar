@@ -80,6 +80,26 @@ describe('shared bot primitives', () => {
 		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(112n, descendantHash)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('RPC disagreement')
 	})
 
+	test('rejects finality evidence when readers switch forks after the descendant query', async () => {
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const replacementReceiptHash = `0x${'33'.repeat(32)}` as const
+		const descendantHash = `0x${'22'.repeat(32)}` as const
+		const switchingReader = () => {
+			let switched = false
+			return {
+				getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+					if (blockNumber === 112n) {
+						switched = true
+						return { hash: descendantHash }
+					}
+					return { hash: switched ? replacementReceiptHash : receiptHash }
+				},
+				getBlockNumber: async () => 112n,
+			}
+		}
+		await expect(confirmCanonicalReceiptFinality([switchingReader(), switchingReader()], ['one', 'two'], 'switching receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('receipt is no longer canonical')
+	})
+
 	test('never omits semantic failures from canonical finality evidence', async () => {
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const

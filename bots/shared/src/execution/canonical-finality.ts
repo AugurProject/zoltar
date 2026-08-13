@@ -19,16 +19,6 @@ export async function confirmCanonicalReceiptFinality(readers: readonly Canonica
 		if (heads.some(head => head < finalityBlockNumber)) return false
 	} else if (knownMinimumHead < finalityBlockNumber) return false
 
-	const canonicalReceiptBlockHash = await settledQuorumValue(
-		`${label} receipt block`,
-		readers.map(async (reader, index) => {
-			const block = await reader.getBlock({ blockNumber: receipt.blockNumber })
-			if (block.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
-			return { endpoint: endpoints[index] ?? '', value: block.hash }
-		}),
-	)
-	if (canonicalReceiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
-
 	const descendants = await Promise.allSettled(
 		readers.map(async (reader, index) => {
 			const block = await reader.getBlock({ blockNumber: finalityBlockNumber })
@@ -39,5 +29,15 @@ export async function confirmCanonicalReceiptFinality(readers: readonly Canonica
 	const availableDescendants = availableSettledValues(descendants)
 	if (availableDescendants.length < 2) throw new ConnectivityDegradedError(`${label} finality descendant requires at least two available independent RPC endpoints`)
 	quorumValue(`${label} finality descendant`, availableDescendants)
+
+	const canonicalReceiptBlockHash = await settledQuorumValue(
+		`${label} receipt block`,
+		readers.map(async (reader, index) => {
+			const block = await reader.getBlock({ blockNumber: receipt.blockNumber })
+			if (block.hash == null) throw new Error(`${label} receipt block is missing its canonical hash`)
+			return { endpoint: endpoints[index] ?? '', value: block.hash }
+		}),
+	)
+	if (canonicalReceiptBlockHash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt is no longer canonical`)
 	return true
 }

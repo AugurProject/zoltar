@@ -197,7 +197,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	try {
 		await pollUntilStopped(
 			async () => {
-				if (!acquireScanSignerOperation(signerOperationGate, deploymentRecovery)) return false
+				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorDeploymentIntentPath(config.settingsFile))
+				if (scanIntentLock === undefined) return false
 				try {
 					state.rpcEndpointHealth = readPool.snapshot()
 					applyQueuedExecutionSettings(config, state, pending)
@@ -660,7 +661,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
 					return config.once
 				} finally {
-					signerOperationGate.release('scan')
+					try {
+						signerOperationGate.release('scan')
+					} finally {
+						await scanIntentLock.release()
+					}
 				}
 			},
 			consecutiveFailures => Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)),
