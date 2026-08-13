@@ -26,7 +26,10 @@ class EndpointSafetyError extends Error {}
 function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | 'safety-paused' {
 	if (error instanceof EndpointSafetyError) return 'safety-paused'
 	if (error instanceof EndpointTransportError) return 'connectivity-degraded'
-	if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError' || error.message.toLowerCase().includes('fetch failed') || error.message.toLowerCase().includes('connection refused'))) return 'connectivity-degraded'
+	if (error instanceof Error) {
+		const message = error.message.toLowerCase()
+		if (error.name === 'AbortError' || error.name === 'HttpRequestError' || error.name === 'NetworkError' || error.name === 'TimeoutError' || message.includes('fetch failed') || message.includes('connection refused') || message.includes('unable to connect') || message.includes('timed out')) return 'connectivity-degraded'
+	}
 	return 'safety-paused'
 }
 
