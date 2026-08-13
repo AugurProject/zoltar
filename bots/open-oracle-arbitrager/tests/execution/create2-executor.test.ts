@@ -5,7 +5,7 @@ import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
 import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
-import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -229,15 +229,21 @@ test('standalone deployment shares the operator signer lock and durable recovery
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
 	const settingsFile = join(directory, 'operator.json')
 	const intentPath = executorDeploymentIntentPath(settingsFile)
+	const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 	const lock = await acquireExecutionSignerLock(1, account.address)
 	try {
+		await expect(acquireExecutorDeploymentIntentLock(intentPath)).rejects.toThrow('already locked')
 		await expect(acquireExecutionSignerLock(1, account.address)).rejects.toThrow('already locked')
 		const salt = `0x${'22'.repeat(32)}` as Hex
 		const plan = executorDeploymentPlan(salt)
 		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
 		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
 	} finally {
-		await lock.release()
+		try {
+			await lock.release()
+		} finally {
+			await intentLock.release()
+		}
 	}
 	try {
 		await expect(requireNoPendingExecutorDeployment(settingsFile)).rejects.toThrow('Recover the pending executor deployment')
@@ -245,6 +251,44 @@ test('standalone deployment shares the operator signer lock and durable recovery
 		await clearExecutorDeploymentIntent(intentPath)
 		await rm(directory, { force: true, recursive: true })
 	}
+})
+
+test('syncs every newly created intent directory entry before opening the journal', async () => {
+	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
+	const salt = `0x${'22'.repeat(32)}` as Hex
+	const plan = executorDeploymentPlan(salt)
+	const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+	const events: string[] = []
+	let directoriesCreated = false
+	await saveExecutorDeploymentIntent(
+		'/durable/a/operator/deployment.json',
+		{ account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 },
+		{
+			mkdir: () => {
+				directoriesCreated = true
+				events.push('mkdir')
+				return Promise.resolve()
+			},
+			openDirectory: path => {
+				if (!directoriesCreated && (path === '/durable/a/operator' || path === '/durable/a')) return Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+				return Promise.resolve({
+					close: () => Promise.resolve(),
+					sync: () => {
+						events.push(`sync:${path}`)
+						return Promise.resolve()
+					},
+				})
+			},
+			openFile: () => {
+				events.push('open-file')
+				return Promise.resolve({ chmod: () => Promise.resolve(), close: () => Promise.resolve(), sync: () => Promise.resolve(), writeFile: () => Promise.resolve() })
+			},
+			rename: () => Promise.resolve(),
+			rm: () => Promise.resolve(),
+		},
+	)
+	expect(events.slice(0, 4)).toEqual(['mkdir', 'sync:/durable/a', 'sync:/durable', 'open-file'])
+	expect(events.at(-1)).toBe('sync:/durable/a/operator')
 })
 
 test('requires three distinct read RPC origins inside the deployment primitive', async () => {

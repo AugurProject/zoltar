@@ -1,7 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '#ethereum'
+import { acquireExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 
 export type ExecutorDeploymentIntent = {
 	account: Address
@@ -15,6 +17,12 @@ export type ExecutorDeploymentIntent = {
 
 export function executorDeploymentIntentPath(settingsFile: string) {
 	return `${settingsFile}.executor-deployment.json`
+}
+
+export function acquireExecutorDeploymentIntentLock(path: string) {
+	const intentPath = resolve(path)
+	const lockName = createHash('sha256').update(intentPath).digest('hex')
+	return acquireExclusiveProcessLock(join(tmpdir(), 'zoltar-bot-locks', `executor-intent-${lockName}.lock`), `Executor deployment intent ${intentPath}`, { intentPath })
 }
 
 function parseHex(value: unknown, bytes: number, label: string) {
@@ -81,11 +89,57 @@ export async function loadExecutorDeploymentIntent(path: string, filesystem: Dep
 	return parseExecutorDeploymentIntent(JSON.parse(contents))
 }
 
-export async function saveExecutorDeploymentIntent(path: string, intent: ExecutorDeploymentIntent) {
-	await mkdir(dirname(path), { mode: 0o700, recursive: true })
+type DeploymentIntentWriteFilesystem = {
+	mkdir(path: string, options: { mode: number; recursive: true }): Promise<unknown>
+	openDirectory(path: string): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
+	openFile(path: string): Promise<{ chmod(mode: number): Promise<void>; close(): Promise<void>; sync(): Promise<void>; writeFile(data: string, encoding: 'utf8'): Promise<void> }>
+	rename(from: string, to: string): Promise<void>
+	rm(path: string, options: { force: true }): Promise<void>
+}
+
+const deploymentIntentWriteFilesystem: DeploymentIntentWriteFilesystem = {
+	mkdir,
+	openDirectory: path => open(path, 'r'),
+	openFile: path => open(path, 'wx', 0o600),
+	rename,
+	rm,
+}
+
+async function ensureDurableDirectory(path: string, filesystem: DeploymentIntentWriteFilesystem) {
+	const missingDirectories: string[] = []
+	let existingDirectory = path
+	for (;;) {
+		let handle
+		try {
+			handle = await filesystem.openDirectory(existingDirectory)
+		} catch (error) {
+			if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error
+			const parent = dirname(existingDirectory)
+			if (parent === existingDirectory) throw error
+			missingDirectories.push(existingDirectory)
+			existingDirectory = parent
+			continue
+		}
+		await handle.close()
+		break
+	}
+	if (missingDirectories.length === 0) return
+	await filesystem.mkdir(path, { mode: 0o700, recursive: true })
+	for (const directory of missingDirectories) {
+		const parent = await filesystem.openDirectory(dirname(directory))
+		try {
+			await parent.sync()
+		} finally {
+			await parent.close()
+		}
+	}
+}
+
+export async function saveExecutorDeploymentIntent(path: string, intent: ExecutorDeploymentIntent, filesystem: DeploymentIntentWriteFilesystem = deploymentIntentWriteFilesystem) {
+	await ensureDurableDirectory(dirname(path), filesystem)
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
 	try {
-		const handle = await open(temporaryPath, 'wx', 0o600)
+		const handle = await filesystem.openFile(temporaryPath)
 		try {
 			await handle.writeFile(`${JSON.stringify(intent, undefined, 2)}\n`, 'utf8')
 			await handle.chmod(0o600)
@@ -93,15 +147,15 @@ export async function saveExecutorDeploymentIntent(path: string, intent: Executo
 		} finally {
 			await handle.close()
 		}
-		await rename(temporaryPath, path)
-		const directory = await open(dirname(path), 'r')
+		await filesystem.rename(temporaryPath, path)
+		const directory = await filesystem.openDirectory(dirname(path))
 		try {
 			await directory.sync()
 		} finally {
 			await directory.close()
 		}
 	} catch (error) {
-		await rm(temporaryPath, { force: true })
+		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 }

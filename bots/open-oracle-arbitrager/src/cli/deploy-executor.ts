@@ -4,7 +4,7 @@ import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
 
@@ -46,8 +46,10 @@ const plan = executorDeploymentPlan(salt)
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 const intentPath = executorDeploymentIntentPath(settingsFile)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
-const signerLock = await acquireExecutionSignerLock(network.chain.id, account.address)
+const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
+let signerLock: Awaited<ReturnType<typeof acquireExecutionSignerLock>> | undefined
 try {
+	signerLock = await acquireExecutionSignerLock(network.chain.id, account.address)
 	const deployment = await deployExecutorCreate2({
 		chain: network.chain,
 		existingIntent: await loadExecutorDeploymentIntent(intentPath),
@@ -60,5 +62,9 @@ try {
 	await clearExecutorDeploymentIntent(intentPath)
 	console.log(`executor=${deployment.address} transaction=${deployment.transactionHash ?? 'already-deployed'}`)
 } finally {
-	await signerLock.release()
+	try {
+		if (signerLock !== undefined) await signerLock.release()
+	} finally {
+		await intentLock.release()
+	}
 }

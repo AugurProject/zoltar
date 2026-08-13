@@ -5,7 +5,7 @@ import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseO
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
@@ -221,16 +221,21 @@ export function startOperatorControlPlane(parameters: {
 			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(value['salt'])
 			return await queueSettingsUpdate(async () => {
-				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
-				if (latest === undefined) throw configurationRevisionConflict()
-				requireActivePersistedNetwork(config.network.name, latest.settings.network)
-				requirePausedExecutorDeployment(config.execute, state.paused)
-				if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
 				const intentPath = executorDeploymentIntentPath(config.settingsFile)
-				let deployed: Awaited<ReturnType<typeof deployExecutorCreate2>>
+				const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
+				let deploymentSignerLock: ExclusiveProcessLock | undefined
+				let signerOperationAcquired = false
 				try {
+					const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
+					if (latest === undefined) throw configurationRevisionConflict()
+					requireActivePersistedNetwork(config.network.name, latest.settings.network)
+					requirePausedExecutorDeployment(config.execute, state.paused)
+					if (lockManager === undefined) throw new Error('Executor deployment signer lock management is unavailable')
+					if (!config.execute) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
+					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
+					signerOperationAcquired = true
 					const existingIntent = await loadExecutorDeploymentIntent(intentPath)
-					deployed = await deployExecutorFromConnectivity({
+					const deployed = await deployExecutorFromConnectivity({
 						chain: config.network.chain,
 						connectivity: latest.settings.connectivity,
 						existingIntent,
@@ -239,24 +244,29 @@ export function startOperatorControlPlane(parameters: {
 						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
 						salt: plan.salt,
 					})
+					const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
+					await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
+					await clearExecutorDeploymentIntent(intentPath)
+					parameters.deploymentRecovery.pending = false
+					pending.deployment = next
+					fixedState.deployment = next
+					recordOperation(state, {
+						category: 'transaction',
+						details: deployed.transactionHash,
+						level: 'info',
+						message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
+						reason: `Saved predictable executor ${deployed.address} for restart`,
+						reportId: undefined,
+					})
+					return deployed
 				} finally {
-					signerOperationGate.release('deployment')
+					if (signerOperationAcquired) signerOperationGate.release('deployment')
+					try {
+						if (deploymentSignerLock !== undefined && lockManager !== undefined) await lockManager.release(deploymentSignerLock)
+					} finally {
+						await intentLock.release()
+					}
 				}
-				const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
-				await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
-				await clearExecutorDeploymentIntent(intentPath)
-				parameters.deploymentRecovery.pending = false
-				pending.deployment = next
-				fixedState.deployment = next
-				recordOperation(state, {
-					category: 'transaction',
-					details: deployed.transactionHash,
-					level: 'info',
-					message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
-					reason: `Saved predictable executor ${deployed.address} for restart`,
-					reportId: undefined,
-				})
-				return deployed
 			})
 		},
 		updateSigner: async value => {

@@ -23,24 +23,10 @@ export { createExecutionLockManager, persistSignerSettingsWithProvisionalLock } 
 
 async function main() {
 	const config = await loadConfiguration()
-	if (!config.execute) {
-		let startupFailures = 0
-		for (;;) {
-			try {
-				await runOperator(config, undefined, undefined)
-				return
-			} catch (error) {
-				if (config.once || operationalFailureDisposition(error) === 'safety-paused') throw error
-				startupFailures += 1
-				console.error(`startupConnectivityDegraded=${errorMessage(error)}`)
-				await Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, startupFailures))
-			}
-		}
-	}
 	const lockManager = createExecutionLockManager(account => acquireExecutionSignerLock(config.network.chain.id, account))
 	try {
-		await lockManager.hold(acquirePositionJournalLock(config.positionFile))
-		const initialSignerLock = config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
+		if (config.execute) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
+		const initialSignerLock = !config.execute || config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
 		let startupFailures = 0
 		for (;;) {
 			try {
