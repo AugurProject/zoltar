@@ -279,7 +279,7 @@ describe('testnet deployment transaction authorization', () => {
 		])
 	})
 
-	test('caps padding at the transaction signer gas limit', async () => {
+	test('rejects estimates above the Osaka transaction gas limit', async () => {
 		let submitted: Parameters<WriteClient['sendTransaction']>[0] | undefined
 		const send = createBudgetedTransactionSender(
 			wallet({
@@ -293,8 +293,8 @@ describe('testnet deployment transaction authorization', () => {
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
 		)
 
-		expect(await send({ to: FIRST_ADDRESS })).toBe(FIRST_HASH)
-		expect(submitted?.gas).toBe(30_000_000n)
+		await expect(send({ to: FIRST_ADDRESS })).rejects.toThrow('exceeds the transaction signer limit 16777216')
+		expect(submitted).toBeUndefined()
 	})
 
 	test('uses the signer gas limit when estimation falsely reverts but a capped simulation succeeds', async () => {
@@ -325,14 +325,14 @@ describe('testnet deployment transaction authorization', () => {
 		expect(simulated).toEqual({
 			account: account.address,
 			data: '0x1234',
-			gas: 30_000_000n,
+			gas: 16_777_216n,
 			maxFeePerGas: 30n,
 			maxPriorityFeePerGas: 10n,
 			to: FIRST_ADDRESS,
 			value: undefined,
 		})
-		expect(submitted?.gas).toBe(30_000_000n)
-		expect(logs).toContain('  ├─ Gas estimate unavailable\n  │  ├─ Fallback gas limit: 30000000\n  │  └─ Validation: capped simulation succeeded')
+		expect(submitted?.gas).toBe(16_777_216n)
+		expect(logs).toContain('  ├─ Gas estimate unavailable\n  │  ├─ Fallback gas limit: 16777216\n  │  └─ Validation: capped simulation succeeded')
 	})
 
 	test('preserves an estimation failure when the capped simulation also reverts', async () => {
@@ -355,7 +355,7 @@ describe('testnet deployment transaction authorization', () => {
 			{ maxFeePerGas: 100n, maxTotalCost: 1_000_000_000_000n },
 		)
 
-		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toThrow('Gas estimation failed (estimate reverted) and the 30000000 gas fallback simulation also failed (simulation reverted)')
+		await expect(send({ data: '0x1234', to: FIRST_ADDRESS })).rejects.toThrow('Gas estimation failed (estimate reverted) and the 16777216 gas fallback simulation also failed (simulation reverted)')
 		expect(sendCalled).toBe(false)
 	})
 
