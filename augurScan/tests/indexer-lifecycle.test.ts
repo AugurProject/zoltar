@@ -18,8 +18,10 @@ import {
 	compactIndexerDuration,
 	confirmCanonicalBlock,
 	contractDeploymentScanDue,
+	createRpcDiagnosticContext,
 	deploymentReadBudget,
 	findContractDeploymentBlock,
+	indexerOperationFailureReason,
 	indexerProgressMessage,
 	indexerWaitingMessage,
 	indexingCompletion,
@@ -608,6 +610,49 @@ describe('network indexer lifecycle', () => {
 		expect(reason).not.toContain(secret)
 		expect(reason).not.toContain('rpc.example')
 		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
+	})
+
+	test('identifies the active RPC number after provider failover', async () => {
+		const failure = new RpcRequestError({
+			body: { method: 'eth_getLogs' },
+			error: { code: -32000, message: 'upstream rejected query' },
+			url: 'https://rpc.example',
+		})
+		const firstProvider = {
+			endpoint: '#1 https://rpc-one.example',
+			getChainId: async () => 1,
+			number: 1,
+			read: async () => Promise.reject(new Error('offline')),
+		}
+		const secondProvider = { endpoint: '#2 https://rpc-two.example', getChainId: async () => 1, number: 2, read: async () => Promise.reject(failure) }
+		const providers = [firstProvider, secondProvider]
+		const diagnostics = createRpcDiagnosticContext(firstProvider)
+		let rejected: unknown
+		try {
+			await withVerifiedProvider(
+				providers,
+				1,
+				(provider) => provider.read(),
+				() => false,
+				(provider) => diagnostics.select(provider),
+			)
+		} catch (error) {
+			rejected = error
+		}
+
+		expect(rejected).toBe(failure)
+		expect(diagnostics.failureReason(rejected)).toBe('RPC #2: RpcRequestError; code -32000')
+		expect(diagnostics.activeEndpoint()).toBe('#2 https://rpc-two.example')
+	})
+
+	test('does not attribute database or lease failures to the active RPC', () => {
+		const databaseFailure = new Error('connection closed')
+		databaseFailure.name = 'PostgresError'
+		const leaseFailure = new Error('lease lost')
+
+		expect(indexerOperationFailureReason(databaseFailure, 2, 'storage')).toBe('PostgresError')
+		expect(indexerOperationFailureReason(leaseFailure, 2, 'storage')).toBe('Error')
+		expect(indexerOperationFailureReason(leaseFailure, 2, 'storage')).not.toContain('RPC #2')
 	})
 
 	test('reports a sanitized JSON-RPC provider message without request or endpoint secrets', async () => {
