@@ -3767,8 +3767,12 @@ body.paper-zoltar .footer-note {
 
 @media screen and (max-width: 420px) {
 	.docs-responsive-table > tbody > tr > td {
-		grid-template-columns: 1fr;
-		gap: 0.2rem;
+		display: block;
+	}
+
+	.docs-responsive-table > tbody > tr > td::before {
+		display: block;
+		margin-bottom: 0.2rem;
 	}
 }
 
