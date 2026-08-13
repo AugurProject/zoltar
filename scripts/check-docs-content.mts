@@ -359,7 +359,7 @@ assert.ok(
 const functionStyleRoundingPattern = /(?<!Math\.)\b(?:floor|ceil)\(/
 assert.match('floor(displayedValue)', functionStyleRoundingPattern, 'displayed function-style rounding fixture should be rejected')
 assert.doesNotMatch('Math.floor(executableValue)', functionStyleRoundingPattern, 'executable Math.floor calls should remain allowed')
-const visibleFormulaSourcePaths = [...new Bun.Glob('docs/**/*.html').scanSync('.'), 'docs/charts/diagramSpecs.json', 'docs/charts/chartRuntime.ts']
+const visibleFormulaSourcePaths = [...new Bun.Glob('docs/**/*.html').scanSync('.'), 'docs/charts/chartMetadata.ts', 'docs/charts/diagramModels.ts', 'docs/charts/chartRuntime.ts']
 for (const path of visibleFormulaSourcePaths) {
 	const source = await Bun.file(path).text()
 	const visibleSource = path.endsWith('.html') ? source.replaceAll(/<script\b[\s\S]*?<\/script>/gi, '') : source
@@ -377,12 +377,6 @@ assert.doesNotMatch(whitepaper, /newest valid claim becomes the tentative winner
 assert.match(zoltarWhitepaper, /anyone able to commit the required REP threshold[\s\S]{0,120}an eligible ended global question/)
 assert.match(zoltarWhitepaper, /applications may choose to continue/)
 assert.match(zoltarWhitepaper, /data-rounding="integer-flooring"/)
-assert.match(diagramSpecs, /≈5% of theoretical REP supply/)
-assert.match(diagramSpecs, /approximately 20 percent uncredited haircut/)
-assert.match(diagramSpecs, /approximately 80 percent migration balance/)
-assert.match(diagramSpecs, /Vault REP backing/)
-assert.match(diagramSpecs, /Settlement collateral/)
-assert.doesNotMatch(diagramSpecs, /Redeemable REP|(?<!Settlement )Collateral Decay/)
 assert.doesNotMatch(zoltarWhitepaper, /applies to every product built on the same Zoltar deployment/)
 assert.match(zoltarWhitepaper, /Forking affects applications and users relying on that parent universe/)
 assert.doesNotMatch(zoltarWhitepaper, /affects every application and user operating on the same Zoltar deployment/)
@@ -472,8 +466,6 @@ assert.ok(!uiCopy.includes('Selected deposits leave the parent pool and reappear
 assert.ok(!uiCopy.includes('migratable escalation deposits'))
 assert.match(whitepaper, /Each child receives one canonical unresolved-escalation[\s\S]{0,80}snapshot and aggregate backing; winners later settle by proof/)
 assert.match(whitepaper, /Child creation stores unresolved escalation commitments and aggregate backing once without copying individual claims[\s\S]{0,120}Winning proofs can be relayed permissionlessly and pay the original depositor/i)
-assert.match(diagramSpecs, /Escalation Carry/)
-assert.match(diagramSpecs, /snapshot \+ backing once/)
 assert.ok(!/eligible[\s\n]+escalation positions move into child pools/.test(whitepaper))
 assert.ok(!whitepaper.includes('Migrated winners'))
 assert.ok(!/inherited deposits\s+must be settled/.test(whitepaper))
