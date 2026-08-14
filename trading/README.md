@@ -19,6 +19,7 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 From this directory, build and start the live UI:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
@@ -44,6 +45,7 @@ To use an existing reviewed trading deployment instead, first copy its manifest 
 
 ```bash
 cp /absolute/path/to/reviewed.json deployments/reviewed.json
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
 ```
 

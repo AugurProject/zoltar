@@ -23,3 +23,8 @@ services:
 
 volumes:
   liquidator-state:
+
+networks:
+  default:
+    name: zoltar
+    external: true
