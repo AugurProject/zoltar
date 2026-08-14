@@ -317,7 +317,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
 							try {
-								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, reports.get(BigInt(position.reportId)), persistPosition, trackTransaction)
+								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction)
 								if (result === 'processed' || result === 'progressed') {
 									lifecycleProcessed = true
 									const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)

@@ -312,17 +312,18 @@ const GENERIC_PUBLIC_FAILURE = 'The operation returned an unexpected error. Auto
 function publicFailureDetail(error: string, translateChainTerm = true) {
 	const trimmed = error.trim()
 	if (trimmed === '') return undefined
-	const urlMatches = [...trimmed.matchAll(/https?:\/\/\S+/gi)]
+	const urlMatches = [...trimmed.matchAll(/[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+/g)]
 	let sanitized = trimmed
 	for (const match of urlMatches.reverse()) {
 		if (match.index === undefined) return undefined
+		let replacement = '[redacted URL]'
 		try {
-			const origin = new URL(match[0]).origin
-			sanitized = `${sanitized.slice(0, match.index)}${origin}${sanitized.slice(match.index + match[0].length)}`
+			const url = new URL(match[0])
+			if (url.protocol === 'http:' || url.protocol === 'https:') replacement = url.origin
 		} catch (urlError) {
 			void urlError
-			return undefined
 		}
+		sanitized = `${sanitized.slice(0, match.index)}${replacement}${sanitized.slice(match.index + match[0].length)}`
 	}
 	sanitized = sanitized
 		.replace(/(["']?(?:api(?:[_ -]?key)|auth(?:orization)?|bearer|credentials?|password|secret|token)["']?\s*[=:]\s*)"(?:\\.|[^"\\\r\n])*"/gi, '$1"[redacted]"')
@@ -331,8 +332,12 @@ function publicFailureDetail(error: string, translateChainTerm = true) {
 		.replace(/(bearer\s+)\S+/gi, '$1[redacted]')
 		.replace(/((?:api(?:[_ -]?key)|auth(?:orization)?|credentials?|password|secret|token)\s*[=:]\s*)\S+/gi, '$1[redacted]')
 		.replace(/(["'])(?:[A-Za-z]:[\\/]|~?\/|\.\.?\/|\\\\)[^"'\r\n]*\1/g, '$1[protected path]$1')
+		.replace(/(["'])(?![A-Za-z]+:\/\/)(?=[^"'\r\n]*[\\/])[^"'\r\n]*\1/gi, '$1[protected path]$1')
 		.replace(/file:\/\/\S+/gi, '[protected path]')
+		.replace(/(\b(?:file|path)\s*[=:]\s*)(?![A-Za-z]+:\/\/)(?=\S*[\\/])\S+/gi, '$1[protected path]')
+		.replace(/(^|[\s'"(\[=])(?![A-Za-z]+:\/\/)(?=[^\s'"\)\]]*[\\/])[^\s'"\)\]]+/gi, '$1[protected path]')
 		.replace(/(^|[\s'"(\[=])(?:[A-Za-z]:[\\/]|~?\/|\.\.?\/|\\\\)[^\s'"\)\]]+/g, '$1[protected path]')
+		.replace(/(^|\s)(?!\S*[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?=\S*[\\/])\S+/g, '$1[protected path]')
 	if (translateChainTerm) sanitized = sanitized.replace(/canonical chain/gi, match => (match.startsWith('C') ? 'Blockchain history' : 'blockchain history'))
 	return sanitized.replace(/[.!?]+$/, '').slice(0, 500)
 }

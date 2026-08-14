@@ -42,6 +42,12 @@ describe('public poll failures', () => {
 		const pathFailure = publicPollFailure('State persistence failed while reading /var/lib/zoltar/private.json')
 		expect(pathFailure).toContain('State persistence failed while reading [protected path]')
 		expect(pathFailure).not.toContain('/var/lib/zoltar/private.json')
+		const websocketFailure = publicPollFailure('RPC wss://operator:protected-password@rpc.example/private failed')
+		expect(websocketFailure).toContain('RPC [redacted URL] failed')
+		expect(websocketFailure).not.toContain('protected-password')
+		const delimiterPathFailure = publicPollFailure('State persistence failed at (detail)state/operator-relative-secret.json')
+		expect(delimiterPathFailure).toContain('failed at [protected path]')
+		expect(delimiterPathFailure).not.toContain('operator-relative-secret')
 	})
 
 	test('redacts standard authorization, JSON secret, and quoted filesystem formats', () => {
@@ -69,6 +75,22 @@ describe('public poll failures', () => {
 			const pathFailure = publicPollFailure(`State persistence failed: open '${path}'`)
 			expect(pathFailure).toContain("open '[protected path]'")
 			expect(pathFailure).not.toContain('private state.json')
+		}
+		for (const path of ['.state/operator secrets.json', 'state/private.json']) {
+			const pathFailure = publicPollFailure(`State persistence failed: open '${path}'`)
+			expect(pathFailure).toContain("open '[protected path]'")
+			expect(pathFailure).not.toContain(path)
+		}
+		const relativeAssignedPathFailure = publicPollFailure('State persistence failed with path=state/private.json')
+		expect(relativeAssignedPathFailure).toContain('path=[protected path]')
+		expect(relativeAssignedPathFailure).not.toContain('state/private.json')
+		const unquotedRelativePathFailure = publicPollFailure('State persistence failed while reading state/operator-relative-secret.json')
+		expect(unquotedRelativePathFailure).toContain('while reading [protected path]')
+		expect(unquotedRelativePathFailure).not.toContain('operator-relative-secret')
+		for (const path of ['state/operator-relative-secret', 'state/operator-relative-secret.sqlite', 'cache/operator-relative-secret.db:12']) {
+			const pathFailure = publicPollFailure(`State persistence failed while reading ${path}`)
+			expect(pathFailure).toContain('while reading [protected path]')
+			expect(pathFailure).not.toContain('operator-relative-secret')
 		}
 	})
 

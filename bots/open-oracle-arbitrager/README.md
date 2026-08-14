@@ -79,9 +79,13 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 ## Requirements
 
 - Bun and this project's frozen dependencies.
-- An RPC endpoint for Ethereum mainnet or Sepolia. Approved-coordinator operation
-  uses current contract state and does not require historical log access. An
-  archive-capable endpoint is useful only for coordinator-free diagnostic mode when
+- An RPC endpoint for Ethereum mainnet or Sepolia. Approved-coordinator discovery
+  uses current contract state and does not require historical log access. Legacy
+  journals without a persisted dispute index are the bounded exception: after a
+  restart, replacement-credit recovery scans only that report's dispute logs from
+  its entry block until the immediate successor. Execution RPCs must therefore
+  retain log history back to the oldest open legacy position's entry block. Archive
+  access can also be useful for coordinator-free diagnostic mode when
   `runtime.lookbackBlocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every

@@ -1,15 +1,16 @@
-import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, type Address, type Hex } from '#ethereum'
+import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, toHex, type Address, type Hex } from '#ethereum'
 import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
-import type { ActiveReport } from '#monitoring/oracle-log-state'
+import { compareLogs, type ActiveReport } from '#monitoring/oracle-log-state'
+import { scanRanges } from '#monitoring/block-sync'
 import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '#monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
-import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n
@@ -110,6 +111,42 @@ export function immediateReplacementAmounts(position: Pick<PositionRecord, 'entr
 	const successor = report.steps[entryIndex + 1]
 	if (successor?.event !== 'disputed' || successor.amount1 === undefined || successor.amount2 === undefined) return undefined
 	return { amount1: BigInt(successor.amount1), amount2: BigInt(successor.amount2) }
+}
+
+const LEGACY_REPLACEMENT_LOG_SCAN_RANGE = 100n
+
+async function legacyReplacementAmounts(client: ReadClient, openOracle: Address, position: Pick<PositionRecord, 'entrySubmissionBlockNumber' | 'entryTransactionHash' | 'reportId'>, blockNumber: bigint) {
+	if (position.entrySubmissionBlockNumber === undefined) return undefined
+	const reportId = BigInt(position.reportId)
+	let foundEntry = false
+	for (const range of scanRanges({ nextBlock: BigInt(position.entrySubmissionBlockNumber) }, blockNumber, LEGACY_REPLACEMENT_LOG_SCAN_RANGE)) {
+		const logs = (await client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] })).sort(compareLogs)
+		for (const log of logs) {
+			if (!foundEntry) {
+				foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()
+				continue
+			}
+			const replacement = decodeOpenOracleStatePreimage(log.data, reportId)
+			return { amount1: replacement.game.currentAmount1, amount2: replacement.game.currentAmount2 }
+		}
+	}
+	return undefined
+}
+
+export async function legacyReplacementAmountsWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, position: Pick<PositionRecord, 'entrySubmissionBlockNumber' | 'entryTransactionHash' | 'reportId'>, blockNumber: bigint) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	return settledQuorumValue(
+		`legacy replacement transition for report ${position.reportId} at block ${blockNumber.toString()}`,
+		clients.map(async (client, index) => {
+			const blockBefore = await client.getBlock({ blockNumber })
+			if (blockBefore.hash === null || blockBefore.hash === undefined) throw new Error(`Legacy replacement block ${blockNumber.toString()} is missing its canonical hash before recovery`)
+			const amounts = await legacyReplacementAmounts(client, config.openOracle, position, blockNumber)
+			const blockAfter = await client.getBlock({ blockNumber })
+			if (blockAfter.hash === null || blockAfter.hash === undefined) throw new Error(`Legacy replacement block ${blockNumber.toString()} is missing its canonical hash after recovery`)
+			if (blockBefore.hash.toLowerCase() !== blockAfter.hash.toLowerCase()) throw new Error(`Canonical block ${blockNumber.toString()} changed during legacy replacement recovery`)
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { amounts, blockHash: blockAfter.hash } }
+		}),
+	)
 }
 
 export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {

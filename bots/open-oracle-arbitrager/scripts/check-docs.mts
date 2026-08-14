@@ -51,6 +51,8 @@ assert.match(guide, /Uniswap V3 remains the\s+reference and TWAP anchor/)
 assert.match(readme, /Uniswap V2, V3, or hookless V4/)
 assert.match(readme, /### Executor public surface/)
 assert.match(readme, /`dispute` is a lower-level, unhedged funding helper/)
+assert.match(readme, /Legacy\s+journals without a persisted dispute index are the bounded exception/)
+assert.match(readme, /retain log\s+history back to the oldest open legacy position's entry block/)
 
 await assertLocalLinksResolve(guidePath, guide)
 const fixturePath = path.join(projectRoot, 'docs', 'market-fixture.html')

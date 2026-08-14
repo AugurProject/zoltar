@@ -444,6 +444,24 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(alternateProtectedFailureState).toMatchObject({ lastError: "The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC credentials=[redacted] failed while opening path='[protected path]'. Automatic retry remains active." })
 	expect(JSON.stringify(alternateProtectedFailureState)).not.toContain(credentialMarker)
 	expect(JSON.stringify(alternateProtectedFailureState)).not.toContain(protectedSettingsFile)
+	const relativePathMarker = 'operator-relative-secret'
+	state.lastError = `RPC request failed while opening '.state/${relativePathMarker} secrets.json'`
+	const relativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(relativeProtectedFailureState).toMatchObject({ lastError: "The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while opening '[protected path]'. Automatic retry remains active." })
+	expect(JSON.stringify(relativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC request failed while reading state/${relativePathMarker}.json`
+	const unquotedRelativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(unquotedRelativeProtectedFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(unquotedRelativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC request failed while reading state/${relativePathMarker}.sqlite`
+	const alternateRelativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(alternateRelativeProtectedFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(alternateRelativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC wss://operator:${credentialMarker}@rpc.example/private failed while reading (detail)state/${relativePathMarker}`
+	const schemeAndDelimiterProtectedState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(schemeAndDelimiterProtectedState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC [redacted URL] failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(schemeAndDelimiterProtectedState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(schemeAndDelimiterProtectedState)).not.toContain(relativePathMarker)
 	state.lastError = `RPC api key=${credentialMarker} failed with auth='Basic ${endpointCredentialMarker} value'`
 	const labeledCredentialFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
 	expect(labeledCredentialFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC api key=[redacted] failed with auth=[redacted]. Automatic retry remains active.' })

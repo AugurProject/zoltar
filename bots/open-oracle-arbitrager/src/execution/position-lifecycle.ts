@@ -3,7 +3,6 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { attemptHasFinality, canonicalBlockHashWithQuorum, finalizeSubmittedLifecycleAttempt, guardedTransactionSubmission, journaledSubmission, lifecycleAllowanceMismatch, lifecycleAttemptNeedsRecovery, lifecycleLastValidBlockNumber, lifecycleWithdrawalMismatch } from '#execution/execution-orchestration'
-import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { replacementCredit } from '#core/position-accounting'
 import { parseDecimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
@@ -11,7 +10,7 @@ import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfigu
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
-import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, immediateReplacementAmounts, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
+import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, legacyReplacementAmountsWithQuorum, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
 import { operationalFailureDisposition } from '#monitoring/resilience'
 
@@ -25,7 +24,7 @@ export {
 	recoverPendingLifecycleWithQuorum,
 } from '#execution/position-recovery'
 
-export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, reportPath: ActiveReport | undefined, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
+export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
 	const account = wallet.account
 	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
@@ -121,8 +120,11 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			throw new Error(`Position ${activePosition.reportId} predates automatic replacement-credit accounting and requires manual reconciliation`)
 		}
 		let replacementAmounts: { amount1: bigint; amount2: bigint } | undefined
-		if (activePosition.reportDisputeIndex === undefined) replacementAmounts = immediateReplacementAmounts(activePosition, reportPath)
-		else {
+		if (activePosition.reportDisputeIndex === undefined) {
+			const replacement = await legacyReplacementAmountsWithQuorum(readClients, config, activePosition, blockNumber)
+			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Legacy replacement transition and report state use different canonical blocks')
+			replacementAmounts = replacement.amounts
+		} else {
 			const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
 			const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
 			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
