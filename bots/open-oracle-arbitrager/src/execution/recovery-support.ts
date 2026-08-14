@@ -115,6 +115,16 @@ export function immediateReplacementAmounts(position: Pick<PositionRecord, 'entr
 
 const LEGACY_REPLACEMENT_LOG_SCAN_RANGE = 100n
 
+async function canonicalBlockSnapshot<T>(client: ReadClient, blockNumber: bigint, label: string, read: () => Promise<T>) {
+	const blockBefore = await client.getBlock({ blockNumber })
+	if (blockBefore.hash === null || blockBefore.hash === undefined) throw new Error(`${label} block ${blockNumber.toString()} is missing its canonical hash before the read`)
+	const value = await read()
+	const blockAfter = await client.getBlock({ blockNumber })
+	if (blockAfter.hash === null || blockAfter.hash === undefined) throw new Error(`${label} block ${blockNumber.toString()} is missing its canonical hash after the read`)
+	if (blockBefore.hash.toLowerCase() !== blockAfter.hash.toLowerCase()) throw new Error(`Canonical block ${blockNumber.toString()} changed during ${label}`)
+	return { blockHash: blockAfter.hash, blockTimestamp: blockAfter.timestamp, value }
+}
+
 async function legacyReplacementAmounts(client: ReadClient, openOracle: Address, position: Pick<PositionRecord, 'entrySubmissionBlockNumber' | 'entryTransactionHash' | 'reportId'>, blockNumber: bigint) {
 	if (position.entrySubmissionBlockNumber === undefined) return undefined
 	const reportId = BigInt(position.reportId)
@@ -138,13 +148,8 @@ export async function legacyReplacementAmountsWithQuorum(clients: readonly ReadC
 	return settledQuorumValue(
 		`legacy replacement transition for report ${position.reportId} at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
-			const blockBefore = await client.getBlock({ blockNumber })
-			if (blockBefore.hash === null || blockBefore.hash === undefined) throw new Error(`Legacy replacement block ${blockNumber.toString()} is missing its canonical hash before recovery`)
-			const amounts = await legacyReplacementAmounts(client, config.openOracle, position, blockNumber)
-			const blockAfter = await client.getBlock({ blockNumber })
-			if (blockAfter.hash === null || blockAfter.hash === undefined) throw new Error(`Legacy replacement block ${blockNumber.toString()} is missing its canonical hash after recovery`)
-			if (blockBefore.hash.toLowerCase() !== blockAfter.hash.toLowerCase()) throw new Error(`Canonical block ${blockNumber.toString()} changed during legacy replacement recovery`)
-			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { amounts, blockHash: blockAfter.hash } }
+			const snapshot = await canonicalBlockSnapshot(client, blockNumber, 'legacy replacement recovery', () => legacyReplacementAmounts(client, config.openOracle, position, blockNumber))
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { amounts: snapshot.value, blockHash: snapshot.blockHash } }
 		}),
 	)
 }
@@ -242,9 +247,8 @@ export async function pendingCoordinatorReportsWithQuorum(clients: readonly Read
 	return settledQuorumValue(
 		`pending coordinator reports at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
-			const [block, reports] = await Promise.all([client.getBlock({ blockNumber }), pendingCoordinatorReports(client, config, blockNumber)])
-			if (block.hash === null || block.hash === undefined) throw new Error(`Pending coordinator report block ${blockNumber.toString()} is missing its canonical hash`)
-			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: block.hash, reports } }
+			const snapshot = await canonicalBlockSnapshot(client, blockNumber, 'pending coordinator report snapshot', () => pendingCoordinatorReports(client, config, blockNumber))
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: snapshot.blockHash, reports: snapshot.value } }
 		}),
 	).then(result => result.reports)
 }
@@ -264,9 +268,8 @@ export async function replacementDisputeAmountsWithQuorum(clients: readonly Read
 	return settledQuorumValue(
 		`replacement dispute ${disputeIndex.toString()} for report ${reportId.toString()} at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
-			const [block, record] = await Promise.all([client.getBlock({ blockNumber }), disputeRecord(client, config.openOracle, reportId, disputeIndex, blockNumber)])
-			if (block.hash === null || block.hash === undefined) throw new Error(`Replacement dispute block ${blockNumber.toString()} is missing its canonical hash`)
-			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: block.hash, record } }
+			const snapshot = await canonicalBlockSnapshot(client, blockNumber, 'replacement dispute snapshot', () => disputeRecord(client, config.openOracle, reportId, disputeIndex, blockNumber))
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: snapshot.blockHash, record: snapshot.value } }
 		}),
 	)
 }
@@ -276,14 +279,13 @@ export async function storedReportWithQuorum(clients: readonly ReadClient[], con
 	return settledQuorumValue(
 		`stored report ${id.toString()} at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
-			const [block, report] = await Promise.all([client.getBlock({ blockNumber }), storedReport(client, config.openOracle, id, blockNumber)])
-			if (block.hash === null || block.hash === undefined) throw new Error(`Stored report ${id.toString()} block is missing its canonical hash`)
+			const snapshot = await canonicalBlockSnapshot(client, blockNumber, `stored report ${id.toString()} snapshot`, () => storedReport(client, config.openOracle, id, blockNumber))
 			return {
 				endpoint: endpointLabel(endpoints[index] ?? ''),
 				value: {
-					blockHash: block.hash,
-					blockTimestamp: block.timestamp,
-					report,
+					blockHash: snapshot.blockHash,
+					blockTimestamp: snapshot.blockTimestamp,
+					report: snapshot.value,
 				},
 			}
 		}),
@@ -297,20 +299,21 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 	return settledQuorumValue(
 		`position lifecycle balances at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
-			const [block, rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = await Promise.all([
-				client.getBlock({ blockNumber }),
-				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
-				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
-				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
-				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
-				readContractAtBlock(client.transport, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
-			])
-			if (block.hash === null || block.hash === undefined) throw new Error(`Position lifecycle block ${blockNumber.toString()} is missing its canonical hash`)
+			const snapshot = await canonicalBlockSnapshot(client, blockNumber, 'position lifecycle balance snapshot', () =>
+				Promise.all([
+					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
+					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
+					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
+					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
+					readContractAtBlock(client.transport, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
+				]),
+			)
+			const [rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = snapshot.value
 			return {
 				endpoint: endpointLabel(endpoints[index] ?? ''),
 				value: {
-					blockHash: block.hash,
-					blockTimestamp: block.timestamp,
+					blockHash: snapshot.blockHash,
+					blockTimestamp: snapshot.blockTimestamp,
 					internalAllowanceToken: requiredBigint(rawAllowanceToken, 'OpenOracle token internal allowance'),
 					internalAllowanceAttoWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
 					holderToken: requiredBigint(rawHolderToken, 'OpenOracle token holder balance'),

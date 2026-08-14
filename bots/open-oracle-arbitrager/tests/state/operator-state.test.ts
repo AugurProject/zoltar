@@ -45,6 +45,10 @@ describe('public poll failures', () => {
 		const websocketFailure = publicPollFailure('RPC wss://operator:protected-password@rpc.example/private failed')
 		expect(websocketFailure).toContain('RPC [redacted URL] failed')
 		expect(websocketFailure).not.toContain('protected-password')
+		for (const url of ['https:operator:protected-password@rpc.example', 'ws:operator:protected-password@rpc.example']) {
+			const urlFailure = publicPollFailure(`RPC ${url} failed`)
+			expect(urlFailure).not.toContain('protected-password')
+		}
 		const delimiterPathFailure = publicPollFailure('State persistence failed at (detail)state/operator-relative-secret.json')
 		expect(delimiterPathFailure).toContain('failed at [protected path]')
 		expect(delimiterPathFailure).not.toContain('operator-relative-secret')

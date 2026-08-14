@@ -312,7 +312,7 @@ const GENERIC_PUBLIC_FAILURE = 'The operation returned an unexpected error. Auto
 function publicFailureDetail(error: string, translateChainTerm = true) {
 	const trimmed = error.trim()
 	if (trimmed === '') return undefined
-	const urlMatches = [...trimmed.matchAll(/[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+/g)]
+	const urlMatches = [...trimmed.matchAll(/(?![A-Za-z]:[\\/])\b[A-Za-z][A-Za-z0-9+.-]*:\S+/g)]
 	let sanitized = trimmed
 	for (const match of urlMatches.reverse()) {
 		if (match.index === undefined) return undefined
