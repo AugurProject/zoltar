@@ -119,7 +119,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 export const runtimeConfig = {
 	port: requirePositiveInteger(process.env['PORT'] ?? '3000', 'PORT'),
 	pollIntervalMs: requirePositiveInteger(process.env['POLL_INTERVAL_MS'] ?? '12000', 'POLL_INTERVAL_MS'),
-	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '2000', 'LOG_SCAN_RANGE_SIZE'),
+	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '10000', 'LOG_SCAN_RANGE_SIZE'),
 	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
 }

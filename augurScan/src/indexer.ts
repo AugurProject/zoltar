@@ -7,6 +7,7 @@ import {
 	type IndexedBlock,
 	type IndexerLease,
 	type LogScanCursor,
+	manifestContractSetChanged,
 	type RichListBalance,
 	type ScannerDatabase,
 	type StoredTransaction,
@@ -290,7 +291,14 @@ export const planManifestBackfill = async (
 ): Promise<bigint | undefined> => {
 	let replayStart: bigint | undefined
 	for (const [address, label, kind, configuredDeploymentBlock] of manifestContracts) {
-		const contract = contracts.get(address.toLowerCase()) ?? { address, label, kind, provenance: 'manifest' }
+		const storedContract = contracts.get(address.toLowerCase())
+		const contract = {
+			...storedContract,
+			address,
+			label,
+			kind,
+			provenance: 'manifest',
+		}
 		if (!requiresManifestHistoryCoverage(contract)) continue
 		const cursor = cursors.get(address.toLowerCase())
 		let deploymentBlock = configuredDeploymentBlock ?? contract.deploymentBlock
@@ -1295,10 +1303,66 @@ export const isProtocolActivitySource = (contract: ContractMetadata | undefined)
 	contract.kind !== 'weth' &&
 	contract.kind !== 'reputationToken' &&
 	contract.kind !== 'multicall3' &&
-	contract.kind !== 'proxyDeployer'
+	contract.kind !== 'proxyDeployer' &&
+	contract.kind !== 'scalarOutcomes'
 
 export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
 	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth'
+
+export const initialIndexStartBlock = async (
+	manifestContracts: readonly ManifestContract[],
+	configuredStartBlock: bigint,
+	observedHead: bigint,
+	findDeployment: (
+		address: Address,
+		startBlock: bigint,
+		checkpoint: bigint,
+		startBlockKnownAbsent: boolean,
+	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+): Promise<bigint> => {
+	if (observedHead < configuredStartBlock) return configuredStartBlock
+	const deployments = await mapLimit(manifestContracts, 4, async ([address, label, kind, configuredDeploymentBlock]) => {
+		if (!requiresManifestHistoryCoverage({ address, label, kind, provenance: 'manifest' })) return undefined
+		if (configuredDeploymentBlock !== undefined) return configuredDeploymentBlock <= observedHead ? configuredDeploymentBlock : undefined
+		return (await findDeployment(address, configuredStartBlock, observedHead, false))?.block
+	})
+	return (
+		deployments.reduce<bigint | undefined>((earliest, deployment) => {
+			if (deployment === undefined) return earliest
+			return earliest === undefined || deployment < earliest ? deployment : earliest
+		}, undefined) ?? observedHead + 1n
+	)
+}
+
+export const manifestReplayAncestor = (replayStart: bigint, storedStartBlock: bigint): bigint => {
+	if (replayStart < storedStartBlock)
+		throw new DatabaseConsistencyError(
+			`Newly tracked deployment block ${replayStart} predates the stored index start ${storedStartBlock}; rebuild the augurScan database to capture its complete history`,
+			{ code: 'manifest-history-before-start', replayStart, storedStartBlock },
+		)
+	return replayStart === storedStartBlock ? -1n : replayStart - 1n
+}
+
+export const manifestChangeRequiresFullReplay = async (
+	manifestContracts: readonly ManifestContract[],
+	storedContracts: ReadonlyMap<string, ContractMetadata>,
+	cursors: ReadonlyMap<string, LogScanCursor>,
+	checkpoint: bigint,
+	configuredStartBlock: bigint,
+	storedStartBlock: bigint,
+	findDeployment: (
+		address: Address,
+		startBlock: bigint,
+		indexedBoundary: bigint,
+		startBlockKnownAbsent: boolean,
+	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+): Promise<boolean> => {
+	const storedManifest = [...storedContracts.values()].filter(({ provenance }) => provenance === 'manifest')
+	if (!manifestContractSetChanged(manifestContracts, storedManifest)) return false
+	const replayStart = await planManifestBackfill(manifestContracts, storedContracts, cursors, checkpoint, configuredStartBlock, findDeployment)
+	if (replayStart !== undefined) manifestReplayAncestor(replayStart, storedStartBlock)
+	return true
+}
 
 export const isProtocolEvidenceEmitter = (contract: ContractMetadata | undefined): contract is ContractMetadata => contract !== undefined
 
@@ -1315,7 +1379,8 @@ const requireReceiptPosition = (receipt: TransactionReceipt, blockHash: Hash, bl
 }
 
 class NetworkIndexer {
-	readonly #network: NetworkConfig
+	#network: NetworkConfig
+	readonly #configuredStartBlock: bigint
 	readonly #database: ScannerDatabase
 	readonly #providers: readonly RpcProvider[]
 	readonly #verifiedProviders = new WeakSet<RpcProvider>()
@@ -1331,6 +1396,7 @@ class NetworkIndexer {
 
 	constructor(network: NetworkConfig, database: ScannerDatabase, signal: AbortSignal) {
 		this.#network = network
+		this.#configuredStartBlock = network.startBlock
 		this.#database = database
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
@@ -1355,7 +1421,7 @@ class NetworkIndexer {
 			networkId: this.#network.id,
 			onEvent: (event) => recordOwnershipEvent(this.#network.id, event),
 			acquire: () => this.#database.tryAcquireIndexerLock(this.#network.chainId),
-			seed: (lease) => this.#database.seedNetwork(this.#network, lease),
+			seed: (lease) => this.#seed(lease),
 			runOwned: async (lease) => {
 				this.#lease = lease
 				try {
@@ -1382,6 +1448,71 @@ class NetworkIndexer {
 			intervalMs: runtimeConfig.pollIntervalMs,
 			signal: this.#signal,
 		})
+	}
+
+	async #seed(lease: IndexerLease): Promise<void> {
+		const [checkpoint, storedStartBlock, storedBlockTip] = await Promise.all([
+			this.#database.checkpoint(this.#network.chainId, lease),
+			this.#database.networkStartBlock(this.#network.chainId, lease),
+			this.#database.storedBlockTip(this.#network.chainId, lease),
+		])
+		const retainedBoundary = checkpoint?.number ?? storedBlockTip
+		if (storedStartBlock !== undefined && retainedBoundary !== undefined) {
+			if (this.#configuredStartBlock > storedStartBlock) {
+				await this.#database.seedNetwork(this.#network, lease, true)
+				throw new Error('Stored history boundary validation unexpectedly succeeded')
+			}
+			this.#network = { ...this.#network, startBlock: storedStartBlock }
+			await this.#validateManifestChange(retainedBoundary, storedStartBlock, lease)
+			const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true)
+			if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
+			return
+		}
+		await this.#withProviderFailover(async () => {
+			const observedHead = await this.#client.getBlockNumber()
+			const startBlock = await initialIndexStartBlock(
+				this.#network.contracts,
+				this.#configuredStartBlock,
+				observedHead,
+				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
+					findManifestContractDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
+						this.#client.getBytecode({ address: candidate, blockNumber }),
+					),
+			)
+			this.#network = { ...this.#network, startBlock }
+			console.info(
+				`[${this.#network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`,
+			)
+		})
+		const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true)
+		if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
+	}
+
+	async #validateManifestChange(checkpoint: bigint, storedStartBlock: bigint, lease: IndexerLease): Promise<void> {
+		const [storedContracts, cursors] = await Promise.all([
+			this.#database.contracts(this.#network.chainId, lease),
+			this.#database.logScanCursors(this.#network.chainId, lease),
+		])
+		await this.#withProviderFailover(() =>
+			manifestChangeRequiresFullReplay(
+				this.#network.contracts,
+				storedContracts,
+				cursors,
+				checkpoint,
+				this.#configuredStartBlock,
+				storedStartBlock,
+				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
+					findManifestContractDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
+						this.#client.getBytecode({ address: candidate, blockNumber }),
+					),
+			),
+		)
+	}
+
+	#reportManifestReplay(checkpoint: { readonly number: bigint; readonly hash: Hash }): void {
+		console.info(
+			`[${this.#network.id}] canonical manifest changed at indexed block #${checkpoint.number}; discarded prior canonical history and replaying from block #${this.#network.startBlock}`,
+		)
 	}
 
 	async #withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
@@ -1473,14 +1604,14 @@ class NetworkIndexer {
 			storedContracts,
 			cursors,
 			checkpoint.number,
-			this.#network.startBlock,
+			this.#configuredStartBlock,
 			(address, startBlock, indexedBoundary, startBlockKnownAbsent) =>
 				findManifestContractDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
 					this.#client.getBytecode({ address: candidate, blockNumber }),
 				),
 		)
 		if (replayStart === undefined) return
-		const ancestor = replayStart <= this.#network.startBlock ? -1n : replayStart - 1n
+		const ancestor = manifestReplayAncestor(replayStart, this.#network.startBlock)
 		const ancestorHash = ancestor < 0n ? undefined : await this.#database.canonicalHash(this.#network.chainId, ancestor, this.#requireLease())
 		if (ancestor >= 0n && ancestorHash === undefined)
 			throw new DatabaseConsistencyError('Manifest backfill ancestor is unavailable', {

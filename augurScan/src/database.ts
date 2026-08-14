@@ -1,7 +1,7 @@
 import { type ReservedSQL, SQL, type TransactionSQL } from 'bun'
 import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
-import type { ContractMetadata, DecodedRecord, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
+import type { ContractMetadata, DecodedRecord, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { isSupportedUniswapV4Market } from './uniswap.ts'
 
 export type StoredTransaction = {
@@ -47,6 +47,17 @@ export type LogScanCursor = {
 	readonly contractAddress: Address
 	readonly startBlock: bigint
 	readonly lastRetrievedBlock: bigint
+}
+
+export const manifestContractSetChanged = (
+	configured: readonly ManifestContract[],
+	stored: readonly { readonly address: string; readonly label: string; readonly kind: string }[],
+): boolean => {
+	const identity = ({ address, label, kind }: { readonly address: string; readonly label: string; readonly kind: string }): string =>
+		`${address.toLowerCase()}\u0000${label}\u0000${kind}`
+	const configuredIdentities = configured.map(([address, label, kind]) => identity({ address, label, kind })).sort()
+	const storedIdentities = stored.map(identity).sort()
+	return configuredIdentities.length !== storedIdentities.length || configuredIdentities.some((value, index) => value !== storedIdentities[index])
 }
 
 export type AddressActivity = {
@@ -124,6 +135,8 @@ type DatabaseConsistencyDiagnostic =
 	| { readonly code: 'lease-release-failed'; readonly expectedBackendPid: number }
 	| { readonly code: 'checkpoint-before-start'; readonly indexedBlock: bigint; readonly storedStartBlock: bigint }
 	| { readonly code: 'manifest-backfill-ancestor-missing'; readonly ancestor: bigint }
+	| { readonly code: 'manifest-history-before-start'; readonly replayStart: bigint; readonly storedStartBlock: bigint }
+	| { readonly code: 'start-block-history-mismatch'; readonly configuredStartBlock: bigint; readonly storedStartBlock: bigint }
 	| {
 			readonly code: 'start-block-mismatch'
 			readonly configuredStartBlock: bigint
@@ -163,6 +176,14 @@ export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyE
 	if (diagnostic?.code === 'manifest-backfill-ancestor-missing') {
 		if (typeof diagnostic.ancestor !== 'bigint' || diagnostic.ancestor < 0n) return undefined
 		return `Manifest backfill cannot find canonical block ${diagnostic.ancestor}; rebuild the augurScan database from the configured start block`
+	}
+	if (diagnostic?.code === 'manifest-history-before-start') {
+		if (typeof diagnostic.replayStart !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint') return undefined
+		return `Newly tracked deployment block ${diagnostic.replayStart} predates the stored index start ${diagnostic.storedStartBlock}; rebuild the augurScan database to capture its complete history`
+	}
+	if (diagnostic?.code === 'start-block-history-mismatch') {
+		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint') return undefined
+		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while retained block history exists; rebuild the augurScan database from the new start block`
 	}
 	if (diagnostic?.code === 'start-block-mismatch') {
 		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint')
@@ -208,8 +229,14 @@ export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHa
 	if (block.parentHash !== checkpoint.indexedHash) throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
 }
 
-export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint): void => {
-	if (indexedBlock === undefined) return
+export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint, hasStoredBlocks = false): void => {
+	if (indexedBlock === undefined) {
+		if (!hasStoredBlocks || configuredStartBlock === storedStartBlock) return
+		throw new DatabaseConsistencyError(
+			`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while retained block history exists; rebuild the augurScan database from the new start block`,
+			{ code: 'start-block-history-mismatch', configuredStartBlock, storedStartBlock },
+		)
+	}
 	if (indexedBlock < storedStartBlock)
 		throw new DatabaseConsistencyError(
 			`Stored checkpoint ${indexedBlock} is below configured start block ${storedStartBlock}; rebuild the augurScan database from the configured start block`,
@@ -450,8 +477,8 @@ export class ScannerDatabase {
 		}
 	}
 
-	async seedNetwork(network: NetworkConfig, lease?: IndexerLease): Promise<void> {
-		const operation = async (transaction: TransactionSQL): Promise<void> => {
+	async seedNetwork(network: NetworkConfig, lease?: IndexerLease, resetCanonicalHistoryOnManifestChange = false): Promise<boolean> {
+		const operation = async (transaction: TransactionSQL): Promise<boolean> => {
 			const existingRows = await transaction`
 				SELECT start_block, indexed_block
 				FROM networks
@@ -459,11 +486,29 @@ export class ScannerDatabase {
 				FOR UPDATE
 			`
 			const existing = existingRows[0]
+			const hasStoredBlocks =
+				existing !== undefined &&
+				(await transaction`SELECT EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${network.chainId}) AS present`)[0]?.['present'] === true
+			const storedManifestRows =
+				existing === undefined
+					? []
+					: await transaction`SELECT address, label, kind FROM contracts WHERE chain_id = ${network.chainId} AND provenance = 'manifest' AND canonical`
+			const manifestChanged =
+				existing !== undefined &&
+				manifestContractSetChanged(
+					network.contracts,
+					storedManifestRows.map((row: Record<string, unknown>) => ({
+						address: String(row['address']),
+						label: String(row['label']),
+						kind: String(row['kind']),
+					})),
+				)
 			if (existing !== undefined) {
 				assertStartBlockCompatible(
 					network.startBlock,
 					BigInt(String(existing['start_block'])),
 					existing['indexed_block'] === null || existing['indexed_block'] === undefined ? undefined : BigInt(String(existing['indexed_block'])),
+					hasStoredBlocks,
 				)
 			}
 			await transaction`
@@ -498,9 +543,53 @@ export class ScannerDatabase {
 					AND contract.address = discovery.address
 					AND NOT contract.canonical
 			`
+			if (manifestChanged && resetCanonicalHistoryOnManifestChange && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
+				for (const table of [
+					'blocks',
+					'transactions',
+					'logs',
+					'contract_discoveries',
+					'questions',
+					'pools',
+					'pool_snapshots',
+					'pool_state_events',
+					'vault_snapshots',
+					'universe_events',
+					'amm_markets',
+					'amm_price_snapshots',
+					'rep_eth_price_snapshots',
+					'uniswap_rep_eth_markets',
+					'uniswap_rep_eth_price_observations',
+					'address_activity',
+					'address_balance_snapshots',
+					'token_metadata',
+				])
+					await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [network.chainId])
+				await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${network.chainId}`
+				await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${network.chainId}`
+				await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${network.chainId}`
+				await transaction`
+					UPDATE contracts SET deployment_block = NULL, deployment_timestamp = NULL,
+						deployment_block_exact = NULL, deployment_checked_block = NULL
+					WHERE chain_id = ${network.chainId}
+				`
+				await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance <> 'manifest'`
+				const previousBlock = BigInt(String(existing['indexed_block']))
+				await transaction`
+					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, phase = 'backfilling',
+						last_reorg_at = now(), last_reorg_depth = ${(previousBlock - network.startBlock + 1n).toString()}, updated_at = now()
+					WHERE chain_id = ${network.chainId}
+				`
+				await lockLiveEventWriter(transaction)
+				await transaction`
+					INSERT INTO live_events (event, payload)
+					VALUES ('reorg', ${JSON.stringify({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: (previousBlock - network.startBlock + 1n).toString() })}::jsonb)
+				`
+			}
+			return manifestChanged
 		}
-		if (lease === undefined) await this.sql.begin(operation)
-		else await withIndexerLease(lease, operation)
+		if (lease === undefined) return await this.sql.begin(operation)
+		return await withIndexerLease(lease, operation)
 	}
 
 	async upsertContract(chainId: number, contract: ContractMetadata, sql: SQL = this.sql): Promise<void> {
@@ -666,6 +755,29 @@ export class ScannerDatabase {
 			const row = rows[0]
 			if (row === undefined || row['indexed_block'] === null || row['indexed_hash'] === null) return undefined
 			return { number: BigInt(String(row['indexed_block'])), hash: String(row['indexed_hash']) as Hash }
+		})
+	}
+
+	async networkStartBlock(chainId: number, lease?: IndexerLease): Promise<bigint | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
+			const startBlock = rows[0]?.['start_block']
+			return startBlock === undefined ? undefined : BigInt(String(startBlock))
+		})
+	}
+
+	async hasStoredBlocks(chainId: number, lease?: IndexerLease): Promise<boolean> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${chainId}) AS present`
+			return rows[0]?.['present'] === true
+		})
+	}
+
+	async storedBlockTip(chainId: number, lease?: IndexerLease): Promise<bigint | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`SELECT max(number) AS number FROM blocks WHERE chain_id = ${chainId}`
+			const number = rows[0]?.['number']
+			return number === null || number === undefined ? undefined : BigInt(String(number))
 		})
 	}
 
