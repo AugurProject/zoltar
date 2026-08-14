@@ -1100,6 +1100,36 @@ describe('network indexer lifecycle', () => {
 			),
 		).rejects.toThrow('deployment block 50 predates the stored index start 75')
 		expect(searches).toEqual([{ start: 0n, knownAbsent: false }])
+		const promotedDiscovery = new Map([
+			[
+				address.toLowerCase(),
+				{
+					address,
+					label: 'Discovered pool',
+					kind: 'securityPool',
+					provenance: 'Factory.DeploySecurityPool',
+					deploymentBlock: 75n,
+					deploymentBlockExact: false,
+					deploymentCheckedBlock: 100n,
+				} satisfies ContractMetadata,
+			],
+		])
+		const promotionSearches: bigint[] = []
+		await expect(
+			manifestChangeRequiresFullReplay(
+				[[address, 'Promoted pool', 'securityPool']],
+				promotedDiscovery,
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
+				100n,
+				0n,
+				75n,
+				async (_candidate, start) => {
+					promotionSearches.push(start)
+					return { block: 50n, exact: true }
+				},
+			),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		expect(promotionSearches).toEqual([0n])
 	})
 
 	test('gives each manifest deployment search an independent read budget', async () => {

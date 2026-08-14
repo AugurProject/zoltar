@@ -278,7 +278,7 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow(
 			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
 		)
-		expect(() => assertStartBlockCompatible(100n, 75n, undefined, true)).toThrow('while retained block history exists')
+		expect(() => assertStartBlockCompatible(100n, 75n, undefined, true)).toThrow('while an effective index start is retained')
 	})
 
 	test('accepts only a prior canonical rewind target', () => {
@@ -356,6 +356,8 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			contracts: [[address, 'Manifest contract', 'zoltar']],
 		}
 		expect(await database.seedNetwork(network)).toBe(false)
+		expect(await database.networkStartBlock(chainId)).toBe(1n)
+		await expect(database.seedNetwork({ ...network, startBlock: 3n }, undefined, false, true)).rejects.toThrow('while an effective index start is retained')
 		expect(await database.networkStartBlock(chainId)).toBe(1n)
 		const contender = new ScannerDatabase(postgresUrl)
 		try {
@@ -1105,6 +1107,8 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect(await database.checkpoint(chainId)).toBeUndefined()
 		expect(await database.networkStartBlock(chainId)).toBe(1n)
 		expect(await database.hasStoredBlocks(chainId)).toBe(true)
+		const resetNetworkRows = await database.sql`SELECT finalized_block FROM networks WHERE chain_id = ${chainId}`
+		expect(resetNetworkRows[0]?.['finalized_block']).toBeNull()
 		const canonicalHistory = await database.sql`
 			SELECT
 				(SELECT count(*) FROM logs WHERE chain_id = ${chainId} AND canonical)::integer AS logs,
@@ -1115,7 +1119,9 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect([...(await database.contracts(chainId)).values()]).toEqual([{ address, label: 'Final manifest', kind: 'zoltar', provenance: 'manifest' }])
 		const retainedHistoryLease = await database.tryAcquireIndexerLock(chainId)
 		if (retainedHistoryLease === undefined) throw new Error('retained-history validation did not acquire its lock')
-		await expect(database.seedNetwork({ ...network, startBlock: 100n }, retainedHistoryLease, true)).rejects.toThrow('while retained block history exists')
+		await expect(database.seedNetwork({ ...network, startBlock: 100n }, retainedHistoryLease, true)).rejects.toThrow(
+			'while an effective index start is retained',
+		)
 		await retainedHistoryLease.release()
 		expect(await database.networkStartBlock(chainId)).toBe(1n)
 	} finally {

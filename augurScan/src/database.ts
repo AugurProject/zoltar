@@ -183,7 +183,7 @@ export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyE
 	}
 	if (diagnostic?.code === 'start-block-history-mismatch') {
 		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint') return undefined
-		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while retained block history exists; rebuild the augurScan database from the new start block`
+		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while an effective index start is retained; rebuild the augurScan database from the new start block`
 	}
 	if (diagnostic?.code === 'start-block-mismatch') {
 		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint')
@@ -233,7 +233,7 @@ export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedS
 	if (indexedBlock === undefined) {
 		if (!hasStoredBlocks || configuredStartBlock === storedStartBlock) return
 		throw new DatabaseConsistencyError(
-			`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while retained block history exists; rebuild the augurScan database from the new start block`,
+			`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while an effective index start is retained; rebuild the augurScan database from the new start block`,
 			{ code: 'start-block-history-mismatch', configuredStartBlock, storedStartBlock },
 		)
 	}
@@ -477,7 +477,12 @@ export class ScannerDatabase {
 		}
 	}
 
-	async seedNetwork(network: NetworkConfig, lease?: IndexerLease, resetCanonicalHistoryOnManifestChange = false): Promise<boolean> {
+	async seedNetwork(
+		network: NetworkConfig,
+		lease?: IndexerLease,
+		resetCanonicalHistoryOnManifestChange = false,
+		preserveStoredStart = false,
+	): Promise<boolean> {
 		const operation = async (transaction: TransactionSQL): Promise<boolean> => {
 			const existingRows = await transaction`
 				SELECT start_block, indexed_block
@@ -508,7 +513,7 @@ export class ScannerDatabase {
 					network.startBlock,
 					BigInt(String(existing['start_block'])),
 					existing['indexed_block'] === null || existing['indexed_block'] === undefined ? undefined : BigInt(String(existing['indexed_block'])),
-					hasStoredBlocks,
+					hasStoredBlocks || preserveStoredStart,
 				)
 			}
 			await transaction`
@@ -576,7 +581,7 @@ export class ScannerDatabase {
 				await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance <> 'manifest'`
 				const previousBlock = BigInt(String(existing['indexed_block']))
 				await transaction`
-					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, phase = 'backfilling',
+					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
 						last_reorg_at = now(), last_reorg_depth = ${(previousBlock - network.startBlock + 1n).toString()}, updated_at = now()
 					WHERE chain_id = ${network.chainId}
 				`

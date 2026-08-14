@@ -304,10 +304,16 @@ export const planManifestBackfill = async (
 		const requiresFreshDeploymentSearch =
 			configuredDeploymentBlock === undefined &&
 			storedContract !== undefined &&
-			!requiresManifestHistoryCoverage(storedContract) &&
-			storedContract.deploymentBlockExact !== true
+			storedContract.deploymentBlockExact !== true &&
+			(storedContract.provenance !== 'manifest' || !requiresManifestHistoryCoverage(storedContract))
 		let deploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch ? undefined : contract.deploymentBlock)
-		if (cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint && (deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)) continue
+		if (
+			!requiresFreshDeploymentSearch &&
+			cursor !== undefined &&
+			cursor.lastRetrievedBlock >= checkpoint &&
+			(deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)
+		)
+			continue
 		if (deploymentBlock === undefined) {
 			const searchStart = requiresFreshDeploymentSearch ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
 			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch) continue
@@ -1461,15 +1467,16 @@ class NetworkIndexer {
 			this.#database.networkStartBlock(this.#network.chainId, lease),
 			this.#database.storedBlockTip(this.#network.chainId, lease),
 		])
-		const retainedBoundary = checkpoint?.number ?? storedBlockTip
-		if (storedStartBlock !== undefined && retainedBoundary !== undefined) {
+		let retainedBoundary = checkpoint?.number ?? storedBlockTip
+		if (storedStartBlock !== undefined) {
 			if (this.#configuredStartBlock > storedStartBlock) {
-				await this.#database.seedNetwork(this.#network, lease, true)
+				await this.#database.seedNetwork(this.#network, lease, true, true)
 				throw new Error('Stored history boundary validation unexpectedly succeeded')
 			}
 			this.#network = { ...this.#network, startBlock: storedStartBlock }
+			if (retainedBoundary === undefined) retainedBoundary = await this.#withProviderFailover(() => this.#client.getBlockNumber())
 			await this.#validateManifestChange(retainedBoundary, storedStartBlock, lease)
-			const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true)
+			const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
 			if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
 			return
 		}
@@ -1489,7 +1496,7 @@ class NetworkIndexer {
 				`[${this.#network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`,
 			)
 		})
-		const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true)
+		const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
 		if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
 	}
 
