@@ -244,9 +244,37 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toMatchObject({ network: 'sepolia', restartRequired: true })
+		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' })
 		expect((await loadOperatorSettings(path))?.networkConfigured).toBe(true)
-		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
+		const noOpConfiguration = await waitForJson(origin, '/api/configuration')
+		const noOpSave = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(noOpConfiguration),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(noOpSave.status, await noOpSave.clone().text()).toBe(200)
+		let configuredState = await waitForJson(origin, '/api/state')
+		for (let attempt = 0; attempt < 100 && configuredState['networkConfigured'] !== true; attempt++) {
+			await Bun.sleep(20)
+			configuredState = await waitForJson(origin, '/api/state')
+		}
+		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
+		const rpcOrigin = new URL(rpcUrl).origin
+		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
+			await Bun.sleep(20)
+			configuredState = await waitForJson(origin, '/api/state')
+		}
+		expect(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').toContain(rpcOrigin)
+		const resume = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(resume.status, await resume.clone().text()).toBe(200)
+		expect(await resume.json()).toEqual({ paused: false })
+		const resumedState = await waitForJson(origin, '/api/state')
+		expect(resumedState['paused']).toBe(false)
+		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resumed', reason: 'Applied immediately and saved for future starts' })]))
 		const configuredContents = await Bun.file(path).text()
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet' }),

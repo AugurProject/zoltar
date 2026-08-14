@@ -186,7 +186,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
 		level: 'info',
 		message: config.networkConfigured ? 'Operator started' : 'Operator waiting for network configuration',
-		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard, then restart',
+		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard',
 		reportId: undefined,
 	})
 	console.log(

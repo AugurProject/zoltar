@@ -70,7 +70,7 @@ describe('dashboard exact ETH formatting', () => {
 		expect(pauseControlState({ connected: false, networkConfigured: false, paused: false, snapshotAvailable: false })).toEqual({ confirmDisabled: true, pauseDisabled: true })
 	})
 
-	test('loads focused chain and RPC fields from persisted restart settings', () => {
+	test('loads focused chain and RPC fields from persisted settings', () => {
 		expect(persistedConnectivity({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia' })).toEqual({
 			connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' },
 			network: 'sepolia',
@@ -78,11 +78,11 @@ describe('dashboard exact ETH formatting', () => {
 		expect(persistedConnectivity({ connectivity: { publicRpcUrls: [42], readRpcUrl: 'https://rpc.example/' }, network: 'mainnet' })).toBeUndefined()
 	})
 
-	test('keeps connectivity controls locked through refreshes and labels a saved restart target', () => {
+	test('keeps connectivity controls locked through refreshes and labels an applying network target', () => {
 		expect(connectivityControlsDisabled(true, true)).toBe(true)
 		expect(connectivityControlsDisabled(true, false)).toBe(false)
 		expect(connectivityControlsDisabled(false, false)).toBe(true)
-		expect(networkTargetStatus('mainnet', 'sepolia')).toBe('Saved for restart: sepolia. The active process remains on mainnet.')
+		expect(networkTargetStatus('mainnet', 'sepolia')).toBe('Applying sepolia; the last snapshot was mainnet.')
 		expect(networkTargetStatus('sepolia', 'sepolia')).toBeUndefined()
 	})
 
