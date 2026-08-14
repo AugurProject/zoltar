@@ -9,6 +9,7 @@ type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	hostname?: '0.0.0.0' | '127.0.0.1'
+	loopbackPublished?: boolean
 	password?: string | undefined
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => unknown | Promise<unknown>
@@ -122,7 +123,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
-	validateDashboardAuthentication(hostname, controller.password)
+	validateDashboardAuthentication(hostname, controller.password, controller.loopbackPublished)
 	let authority = ''
 	const server = Bun.serve({
 		hostname,
