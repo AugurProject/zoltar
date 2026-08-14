@@ -108,7 +108,9 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 	return { factory: factoryDeployed, router: routerDeployed }
 }
 
-export async function validateStoredTradingDeployment(client: Pick<PublicClient, 'getCode' | 'readContract'>, configuration: DeploymentConfiguration, coreDeployments: readonly CoreDeployment[]) {
+export async function validateStoredTradingDeployment(client: Pick<PublicClient, 'getChainId' | 'getCode' | 'readContract'>, configuration: DeploymentConfiguration, coreDeployments: readonly CoreDeployment[]) {
+	const rpcChainId = await client.getChainId()
+	if (rpcChainId !== configuration.chainId) throw new Error(`Stored trading deployment chain ${configuration.chainId.toString()} does not match RPC chain ${rpcChainId.toString()}`)
 	const core = coreDeployments.find(deployment => deployment.chainId === configuration.chainId)
 	if (core === undefined) throw new Error(`Stored trading deployment uses unsupported chain ${configuration.chainId.toString()}`)
 	if (core.securityPoolFactory !== configuration.securityPoolFactory) throw new Error('Stored trading deployment references a noncanonical SecurityPoolFactory')

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, validateStoredTradingDeployment } from '../protocol/deployment.ts'
+import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, validateStoredTradingDeployment } from '../protocol/deployment.ts'
 
 function examplePlan() {
 	return getTradingDeploymentPlan(
@@ -150,7 +150,12 @@ describe('wallet trading deployment plan', () => {
 	test('rejects getter-compatible stored addresses that are not current deterministic deployments', async () => {
 		const plan = examplePlan()
 		const client = createPublicClient({
-			transport: custom({ request: async () => '0x' }),
+			transport: custom({
+				request: async ({ method }) => {
+					if (method === 'eth_chainId') return '0xaa36a7'
+					return '0x'
+				},
+			}),
 		})
 		await expect(
 			validateStoredTradingDeployment(
@@ -167,5 +172,18 @@ describe('wallet trading deployment plan', () => {
 				[plan.core],
 			),
 		).rejects.toThrow('do not match the current deterministic contracts')
+	})
+
+	test('rejects stored deployment state served by a different RPC chain', async () => {
+		const plan = examplePlan()
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method }) => {
+					if (method === 'eth_chainId') return '0x1'
+					throw new Error(`Deployment state must not be read after wrong chain response: ${method}`)
+				},
+			}),
+		})
+		await expect(validateStoredTradingDeployment(client, deploymentConfigurationForPlan(plan, 'https://rpc.example/'), [plan.core])).rejects.toThrow('does not match RPC chain 1')
 	})
 })
