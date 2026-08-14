@@ -379,11 +379,13 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 					configurationError={liveConfigurationError}
 					onComplete={completeWalletDeployment}
 					onRetryConfiguration={retryDeployment}
+					onWorkflowLockChange={updateWorkflowLock}
 					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
 					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 				/>
 			)
-		else if (liveDeploymentStatus === 'unavailable') content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryConfiguration={retryDeployment} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
+		else if (liveDeploymentStatus === 'unavailable')
+			content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryConfiguration={retryDeployment} onWorkflowLockChange={updateWorkflowLock} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
 		else
 			content = (
 				<LiveTrading
