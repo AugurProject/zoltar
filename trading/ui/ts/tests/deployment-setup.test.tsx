@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
 import { App } from '../app/App.tsx'
 import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE } from '../protocol/deployment.ts'
+import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.ts'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
 const core = {
@@ -180,7 +180,7 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<App deploymentSetupServices={services} loadLiveDeployment={async () => await Promise.reject(new Error('No deployment configured'))} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => await Bun.sleep(0))
+		await waitForText('No deployment configured')
 		const select = rendered.container.querySelector<HTMLSelectElement>('.deployment-setup select')
 		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-setup input[type="url"]')
 		if (select === null || rpcInput === null) throw new Error('Deployment setup fields are unavailable')
@@ -207,5 +207,54 @@ describe('trading deployment setup', () => {
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
 		resolveDeployment()
 		await act(async () => await Bun.sleep(0))
+	})
+
+	test('hydrates the deploy route from asynchronously resolved configuration', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const plan = getTradingDeploymentPlan(core, 47)
+		const configuration = deploymentConfigurationForPlan(plan, 'https://rpc.example/')
+		let contractReadCount = 0
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return '0xaa36a7'
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if ([core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
+						return '0x'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount % 3 === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (contractReadCount % 3 === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		let resolveConfiguration: ((value: typeof configuration) => void) | undefined
+		const configurationPending = new Promise<typeof configuration>(resolve => {
+			resolveConfiguration = resolve
+		})
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => client,
+			loadCoreDeployments: async () => [core],
+			saveConfiguration: () => undefined,
+		}
+		const rendered = await renderIntoDocument(<App deploymentSetupServices={services} loadLiveDeployment={async () => await configurationPending} />)
+		cleanupRendered = rendered.cleanup
+		if (resolveConfiguration === undefined) throw new Error('Configuration resolver is unavailable')
+		resolveConfiguration(configuration)
+		await waitForText('Deployment complete')
+		const select = rendered.container.querySelector<HTMLSelectElement>('.deployment-setup select')
+		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-setup input[type="url"]')
+		const feeInput = rendered.container.querySelector<HTMLInputElement>('.deployment-setup .amount-input input')
+		expect(select?.value).toBe(core.chainId.toString())
+		expect(rpcInput?.value).toBe(configuration.rpcUrl)
+		expect(feeInput?.value).toBe('47')
+		expect(rendered.container.textContent).toContain('2 / 2')
 	})
 })
