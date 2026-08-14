@@ -71,7 +71,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			)
 				throw new Error('Invalid test connectivity')
 			connectivity = { publicRpcUrls: value.connectivity.publicRpcUrls.map(String), readRpcUrl: value.connectivity.readRpcUrl }
-			return { connectivity, network: value.network, restartRequired: false }
+			return { connectivity, network: value.network }
 		},
 		updateDeployment: value => {
 			if (typeof value !== 'object' || value === null || !('executor' in value)) throw new Error('Invalid test deployment')
@@ -263,7 +263,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		method: 'PUT',
 	})
 	expect(connectivityUpdate.status).toBe(200)
-	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet', restartRequired: false })
+	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
 	const mutationCredentialMarker = 'mutation-operator-secret'
 	connectivityFailure = new Error(`RPC https://operator:${mutationCredentialMarker}@rpc.example returned credential-bearing provider text`)

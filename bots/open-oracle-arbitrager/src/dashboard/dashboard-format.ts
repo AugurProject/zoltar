@@ -27,7 +27,7 @@ export function pauseControlState(state: { connected: boolean; networkConfigured
 }
 
 export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undefined, savedNetwork: 'mainnet' | 'sepolia' | undefined) {
-	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Saved for restart: ${savedNetwork}. The active process remains on ${activeNetwork}.`
+	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Applying ${savedNetwork}; the last snapshot was ${activeNetwork}.`
 }
 
 export function singleFlight<T>(operation: () => Promise<T>) {
