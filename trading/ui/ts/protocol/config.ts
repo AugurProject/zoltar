@@ -10,6 +10,9 @@ export type DeploymentConfiguration = Readonly<{
 	feeBps: number
 }>
 
+type ConfigurationStorage = Pick<Storage, 'getItem' | 'setItem'>
+const deploymentStorageKey = 'zoltar.trading.deployment.v1'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
@@ -37,6 +40,16 @@ function requiredRpcUrl(value: unknown) {
 	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('rpcUrl must use HTTPS or loopback HTTP')
 	if (parsed.username !== '' || parsed.password !== '') throw new Error('rpcUrl must not contain embedded credentials')
 	return parsed.toString()
+}
+
+export function parseDeploymentSetupInput(input: Readonly<{ chainId: string; feeBps: string; rpcUrl: string }>) {
+	if (!/^[1-9][0-9]*$/.test(input.chainId)) throw new Error('Chain ID must be a positive whole number')
+	const chainId = Number(input.chainId)
+	if (!Number.isSafeInteger(chainId)) throw new Error('Chain ID must be a positive safe integer')
+	if (!/^[0-9]+$/.test(input.feeBps)) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
+	const feeBps = Number(input.feeBps)
+	if (!Number.isSafeInteger(feeBps) || feeBps >= 10_000) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
+	return { chainId, feeBps, rpcUrl: requiredRpcUrl(input.rpcUrl) }
 }
 
 function requiredAddress(value: unknown, label: string) {
@@ -70,5 +83,17 @@ export async function loadDeploymentConfiguration(): Promise<DeploymentConfigura
 	if (response.status === 404) return undefined
 	if (!response.ok) throw new Error(`Deployment configuration failed with HTTP ${response.status}`)
 	const candidate: unknown = await response.json()
-	return candidate === null ? undefined : parseDeploymentConfiguration(candidate)
+	if (candidate !== null) return parseDeploymentConfiguration(candidate)
+	return typeof window === 'undefined' ? undefined : loadStoredDeploymentConfiguration(window.localStorage)
+}
+
+export function loadStoredDeploymentConfiguration(storage: Pick<ConfigurationStorage, 'getItem'>): DeploymentConfiguration | undefined {
+	const raw = storage.getItem(deploymentStorageKey)
+	if (raw === null) return undefined
+	const candidate: unknown = JSON.parse(raw)
+	return parseDeploymentConfiguration(candidate)
+}
+
+export function saveDeploymentConfiguration(configuration: DeploymentConfiguration, storage: Pick<ConfigurationStorage, 'setItem'> = window.localStorage) {
+	storage.setItem(deploymentStorageKey, JSON.stringify(configuration))
 }

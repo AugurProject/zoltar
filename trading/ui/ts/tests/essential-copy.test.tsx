@@ -66,12 +66,12 @@ describe('essential trading copy', () => {
 		expect(rendered.container.textContent).not.toContain('Fork continuation')
 	})
 
-	test('keeps deployment out of navigation and pool internals in the security pool view', async () => {
+	test('keeps wallet deployment available without exposing pool internals outside the security pool view', async () => {
 		const market = demoMarket('baseline')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Developer')
-		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deployment')
+		expect(rendered.container.querySelector('nav')?.textContent).toContain('Deploy')
 		expect(rendered.container.textContent).not.toContain('Outcome token IDs')
 		expect(rendered.container.textContent).not.toContain('System state')
 		expect(rendered.container.textContent).not.toContain('Security multiplier')

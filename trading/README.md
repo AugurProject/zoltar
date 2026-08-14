@@ -29,26 +29,17 @@ Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled 
 
 ### Docker
 
-The Docker image is live-configured by default and requires a reviewed deployment manifest. For a local deployment, first deploy Zoltar core to Anvil, then create the trading manifest:
-
-```bash
-cp .env.example .env
-ZOLTAR_DEPLOYMENT_MANIFEST=/absolute/path/to/core.json bun run deploy:local
-```
-
-`deploy:local` verifies that the configured core `SecurityPoolFactory` has bytecode on the selected chain, deploys a factory with an immutable fee and a router, and writes the default Docker input to `deployments/local.json`.
-
 Build and serve the standalone UI from this directory:
 
 ```bash
 docker compose up --build --force-recreate
 ```
 
-On Windows, run `start.bat` from this directory to start the same Compose command.
+On Windows, run `start.bat` from this directory to start the same Compose command. The image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests.
 
-Then open `http://localhost:4163/#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`. The build fails instead of producing a demo-only image when the manifest is missing.
+Then open `http://localhost:4163/#/markets`, select the core network and RPC URL, and connect a wallet. The UI uses the core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading. The final image runs as an unprivileged user and exposes a health check at `/`.
 
-To use a different reviewed project-local deployment manifest, set its path at build time. The path is relative to `trading/` inside the build context:
+To use an existing reviewed project-local trading deployment instead, set its path at build time. The path is relative to `trading/` inside the build context:
 
 ```bash
 TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
@@ -56,7 +47,7 @@ TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --forc
 
 ### Live deployment
 
-Without Docker, build with a reviewed deployment manifest and open the same routes without `?demo=1`:
+Without Docker, `bun run ui:build` includes the same wallet deployment setup. To use an existing reviewed deployment manifest instead:
 
 ```bash
 TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build

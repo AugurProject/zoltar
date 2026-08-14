@@ -88,6 +88,20 @@ const expandedWalletInFlowAssertion = `(() => { const panel = document.querySele
 const transactionStateLayoutAssertion = `(() => { const panel = document.querySelector('.trade-panel')?.getBoundingClientRect(); const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const status = document.querySelector('.transaction-message')?.getBoundingClientRect(); const hash = document.querySelector('.transaction-hash'); const hashBounds = hash?.getBoundingClientRect(); const hashCode = hash?.querySelector('code'); const hashFits = hash === null || (hashBounds !== undefined && hashBounds.left >= panel.left && hashBounds.right <= panel.right && hashCode?.textContent?.length === 66); return panel !== undefined && action !== undefined && status !== undefined && action.bottom <= status.top && hashFits && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
+		name: 'deployment-setup-desktop',
+		width: 1440,
+		height: 900,
+		path: '/#/deploy',
+		assertExpression: `document.querySelector('.deployment-setup select')?.options.length === 3 && document.querySelector('.deployment-setup input[type="url"]') !== null && [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deployment ready' && button.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'deployment-setup-mobile',
+		width: 390,
+		height: 844,
+		path: '/#/deploy',
+		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } }); const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+	},
+	{
 		name: 'disconnected-market-list',
 		width: 1440,
 		height: 900,

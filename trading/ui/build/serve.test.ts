@@ -4,7 +4,9 @@ import { serveTradingAsset } from './serve.mts'
 describe('trading UI asset server', () => {
 	test('protects responses and prevents stale deployment configuration', () => {
 		const deployment = serveTradingAsset(new Request('http://localhost:4163/deployment.json'))
+		const coreDeployments = serveTradingAsset(new Request('http://localhost:4163/core-deployments.json'))
 		expect(deployment.headers.get('cache-control')).toBe('no-store')
+		expect(coreDeployments.headers.get('cache-control')).toBe('no-store')
 		expect(deployment.headers.get('content-security-policy')).toContain("default-src 'self'")
 		expect(deployment.headers.get('x-content-type-options')).toBe('nosniff')
 
