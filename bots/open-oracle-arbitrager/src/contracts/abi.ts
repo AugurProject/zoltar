@@ -190,6 +190,7 @@ export const erc20Abi = [
 
 export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'openOracle', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'pendingReportId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
 	{ type: 'function', name: 'reputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48' }] },
@@ -253,6 +254,21 @@ const timingComponents = [
 
 export const openOracleAbi = [
 	{ type: 'function', name: 'oracleGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
+	{
+		type: 'function',
+		name: 'disputeHistory',
+		stateMutability: 'view',
+		inputs: [
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
+		],
+		outputs: [
+			{ name: 'amount1', type: 'uint128' },
+			{ name: 'amount2', type: 'uint128' },
+			{ name: 'baseFee', type: 'uint128' },
+			{ name: 'reportTimestamp', type: 'uint48' },
+		],
+	},
 	{ type: 'function', name: 'storedGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: gameComponents },
 	{
 		type: 'function',

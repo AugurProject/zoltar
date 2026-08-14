@@ -297,6 +297,7 @@ export async function executeDispute(
 		openedAt: new Date().toISOString(),
 		reportAmount1: newAmount1.toString(),
 		reportAmount2: newAmount2.toString(),
+		reportDisputeIndex: game.numReports.toString(),
 		reportFeePercentage: game.feePercentage.toString(),
 		realizedNetProfitEth: undefined,
 		reportId,
