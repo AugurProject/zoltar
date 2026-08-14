@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, keccak256, toHex } from '#ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, publicOperatorFailure, publicPollFailure, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
 
 const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -20,6 +20,13 @@ const pool = address(0x3000)
 const hash = transactionHash('open-oracle-documentation-fixture')
 const checkedAt = sampledAt(0)
 const protectedFailureMarker = 'operator-secret'
+const longProviderFailureDetail = ` ${'provider response detail '.repeat(30).trim()}`
+const rawRpcFailure = `Read RPC https://operator:${protectedFailureMarker}@rpc.example failed at block 23842152:${longProviderFailureDetail}`
+const rawRelayFailure = `Private relay https://operator:${protectedFailureMarker}@relay.example rejected the transaction:${longProviderFailureDetail}`
+const expectedRpcPollFailure = publicPollFailure(rawRpcFailure)
+const expectedRpcOperatorFailure = publicOperatorFailure(rawRpcFailure)
+const expectedRelayOperatorFailure = publicOperatorFailure(rawRelayFailure)
+const expectedStateUnavailableFailure = `${publicPollFailure('fixture state endpoint unavailable', 'load the latest operator state for the dashboard')} Use Refresh to retry now.`
 let fixtureStatus: OperatorSnapshot['status'] = 'running'
 let paused = false
 let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
@@ -740,6 +747,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									attentionText: attention?.textContent,
 									bodyScrollWidth: document.body.scrollWidth,
 									clientWidth: document.documentElement.clientWidth,
+									disputePathsEmptyText: document.querySelector('#dispute-paths-empty')?.textContent,
 									hash: window.location.hash,
 									label: badge?.textContent,
 									noticeCopy: document.querySelector('#notice-copy')?.textContent,
@@ -747,8 +755,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									endpointText: document.querySelector('#endpoint-checks')?.textContent,
 									noticeTitle: document.querySelector('#notice-title')?.textContent,
 									noticeTone: notice instanceof HTMLElement ? notice.dataset.tone : undefined,
+									operationDetailsWidth: document.querySelector('#operations-body td[data-label="Details"]')?.getBoundingClientRect().width,
+									operationReasonWidth: document.querySelector('#operations-body td[data-label="Why"]')?.getBoundingClientRect().width,
+									operationTableWidth: document.querySelector('#operations-body')?.closest('table')?.getBoundingClientRect().width,
 									operationText: document.querySelector('#operations-body')?.textContent,
 									status: badge instanceof HTMLElement ? badge.dataset.status : undefined,
+									transactionTableWidth: document.querySelector('#transactions-body')?.closest('table')?.getBoundingClientRect().width,
+									transactionTargetWidth: document.querySelector('#transactions-body td[data-label="Target results"]')?.getBoundingClientRect().width,
 									transactionText: document.querySelector('#transactions-body')?.textContent,
 								}
 							})()`,
@@ -758,6 +771,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					)
 					const value = typeof state === 'object' && state !== null && 'result' in state && typeof state.result === 'object' && state.result !== null && 'value' in state.result ? state.result.value : undefined
 					if (typeof value !== 'object' || value === null || !('status' in value) || value.status !== status) throw new Error(`Run badge did not render ${status}`)
+					if (!('disputePathsEmptyText' in value) || value.disputePathsEmptyText !== 'No historical dispute path is available. Configured coordinator mode reads current reports directly, while coordinator-free diagnostic mode reconstructs paths from its configured event lookback.') {
+						throw new Error('Empty dispute paths did not explain both discovery modes')
+					}
 					if (
 						status === 'error' &&
 						(!('attentionHref' in value) ||
@@ -773,18 +789,34 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							!('noticeTitle' in value) ||
 							value.noticeTitle !== 'Latest poll failed' ||
 							!('noticeCopy' in value) ||
-							value.noticeCopy !== 'The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 23842152. Automatic retry remains active.' ||
+							value.noticeCopy !== expectedRpcPollFailure ||
 							!('bodyContainsCredential' in value) ||
 							value.bodyContainsCredential !== false ||
 							!('endpointText' in value) ||
 							typeof value.endpointText !== 'string' ||
-							!value.endpointText.includes('The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 23842152. Automatic retry remains active.') ||
+							!value.endpointText.includes(expectedRpcOperatorFailure) ||
+							!('operationDetailsWidth' in value) ||
+							typeof value.operationDetailsWidth !== 'number' ||
+							value.operationDetailsWidth > 480 ||
+							!('operationReasonWidth' in value) ||
+							typeof value.operationReasonWidth !== 'number' ||
+							value.operationReasonWidth > 480 ||
+							!('operationTableWidth' in value) ||
+							typeof value.operationTableWidth !== 'number' ||
+							value.operationDetailsWidth > value.operationTableWidth ||
+							value.operationReasonWidth > value.operationTableWidth ||
 							!('operationText' in value) ||
 							typeof value.operationText !== 'string' ||
-							!value.operationText.includes('The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.') ||
+							!value.operationText.includes(expectedRelayOperatorFailure) ||
+							!('transactionTargetWidth' in value) ||
+							typeof value.transactionTargetWidth !== 'number' ||
+							value.transactionTargetWidth > 480 ||
+							!('transactionTableWidth' in value) ||
+							typeof value.transactionTableWidth !== 'number' ||
+							value.transactionTargetWidth > value.transactionTableWidth ||
 							!('transactionText' in value) ||
 							typeof value.transactionText !== 'string' ||
-							!value.transactionText.includes('The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.'))
+							!value.transactionText.includes(expectedRelayOperatorFailure))
 					)
 						throw new Error('Error state did not expose its attention and recovery context')
 					if (mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width) throw new Error(`${status} header overflows its ${width.toString()}px viewport`)
@@ -851,6 +883,10 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					initialFailure.mode !== 'Mode unavailable' ||
 					!('network' in initialFailure) ||
 					initialFailure.network !== 'Network unavailable' ||
+					!('noticeCopy' in initialFailure) ||
+					initialFailure.noticeCopy !== expectedStateUnavailableFailure ||
+					!('noticeTitle' in initialFailure) ||
+					initialFailure.noticeTitle !== 'Dashboard disconnected' ||
 					!('pauseDisabled' in initialFailure) ||
 					initialFailure.pauseDisabled !== true ||
 					!('runStatus' in initialFailure) ||
@@ -882,7 +918,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('network' in postSuccessFailure) ||
 					postSuccessFailure.network !== 'mainnet · 1 · last known' ||
 					!('noticeCopy' in postSuccessFailure) ||
-					postSuccessFailure.noticeCopy !== 'State polling failed. Automatic retry remains active; use Refresh to retry now.' ||
+					postSuccessFailure.noticeCopy !== expectedStateUnavailableFailure ||
+					!('noticeTitle' in postSuccessFailure) ||
+					postSuccessFailure.noticeTitle !== 'Dashboard disconnected' ||
 					!('pauseDisabled' in postSuccessFailure) ||
 					postSuccessFailure.pauseDisabled !== false ||
 					!('runStatus' in postSuccessFailure) ||
@@ -1485,8 +1523,6 @@ if (
 
 function currentFixtureSnapshot(): OperatorSnapshot {
 	const fixturePositions = fixtureAttention === 'recovery' ? snapshot.positions.map((position, index) => (index === 0 ? { ...position, status: 'recovery-required' as const } : position)) : snapshot.positions
-	const rawRpcFailure = `Read RPC https://operator:${protectedFailureMarker}@rpc.example failed at block 23842152`
-	const rawRelayFailure = `Private relay https://operator:${protectedFailureMarker}@relay.example rejected the transaction`
 	const fixtureTransactions = snapshot.transactionActivity.map((transaction, index) => {
 		if (index !== 0) return transaction
 		if (fixtureAttention === 'transaction') return { ...transaction, status: 'confirmation-unknown' as const }
