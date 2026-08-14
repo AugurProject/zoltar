@@ -10,6 +10,11 @@ export type DeploymentConfiguration = Readonly<{
 	feeBps: number
 }>
 
+export type LoadedDeploymentConfiguration = Readonly<{
+	configuration: DeploymentConfiguration
+	source: 'bundled' | 'stored'
+}>
+
 type ConfigurationStorage = Pick<Storage, 'getItem' | 'setItem'>
 const deploymentStorageKey = 'zoltar.trading.deployment.v1'
 
@@ -78,13 +83,16 @@ export function parseDeploymentConfiguration(candidate: unknown): DeploymentConf
 	}
 }
 
-export async function loadDeploymentConfiguration(): Promise<DeploymentConfiguration | undefined> {
+export async function loadDeploymentConfiguration(): Promise<LoadedDeploymentConfiguration | undefined> {
 	const response = await fetch('./deployment.json', { cache: 'no-store' })
-	if (response.status === 404) return undefined
-	if (!response.ok) throw new Error(`Deployment configuration failed with HTTP ${response.status}`)
-	const candidate: unknown = await response.json()
-	if (candidate !== null) return parseDeploymentConfiguration(candidate)
-	return typeof window === 'undefined' ? undefined : loadStoredDeploymentConfiguration(window.localStorage)
+	if (response.status !== 404) {
+		if (!response.ok) throw new Error(`Deployment configuration failed with HTTP ${response.status}`)
+		const candidate: unknown = await response.json()
+		if (candidate !== null) return { configuration: parseDeploymentConfiguration(candidate), source: 'bundled' }
+	}
+	if (typeof window === 'undefined') return undefined
+	const configuration = loadStoredDeploymentConfiguration(window.localStorage)
+	return configuration === undefined ? undefined : { configuration, source: 'stored' }
 }
 
 export function loadStoredDeploymentConfiguration(storage: Pick<ConfigurationStorage, 'getItem'>): DeploymentConfiguration | undefined {

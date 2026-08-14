@@ -5,6 +5,8 @@ import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
 import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import { loadCoreDeployments } from '../protocol/coreDeployments.ts'
+import { validateStoredTradingDeployment } from '../protocol/deployment.ts'
 import { createTradingPublicClient, publicErrorMessage, validateLiveDeployment } from '../protocol/live.ts'
 import { formatUnits, shortAddress } from './format.ts'
 
@@ -94,8 +96,10 @@ type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 async function resolveLiveDeployment() {
 	const loaded = await loadDeploymentConfiguration()
 	if (loaded === undefined) throw new Error('No bundled or wallet-deployed trading configuration was found.')
-	await validateLiveDeployment(createTradingPublicClient(loaded), loaded)
-	return loaded
+	const client = createTradingPublicClient(loaded.configuration)
+	if (loaded.source === 'stored') await validateStoredTradingDeployment(client, loaded.configuration, await loadCoreDeployments())
+	else await validateLiveDeployment(client, loaded.configuration)
+	return loaded.configuration
 }
 
 function networkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {

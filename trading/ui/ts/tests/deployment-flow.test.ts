@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep } from '../protocol/deployment.ts'
+import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, validateStoredTradingDeployment } from '../protocol/deployment.ts'
 
 function examplePlan() {
 	return getTradingDeploymentPlan(
@@ -145,5 +145,27 @@ describe('wallet trading deployment plan', () => {
 
 		await expect(deployTradingStep(walletClient, publicClient, plan, plan.factory, undefined, async () => await Promise.reject(new Error('Wallet context changed before deployment')))).rejects.toThrow('Wallet context changed before deployment')
 		expect(sendCount).toBe(0)
+	})
+
+	test('rejects getter-compatible stored addresses that are not current deterministic deployments', async () => {
+		const plan = examplePlan()
+		const client = createPublicClient({
+			transport: custom({ request: async () => '0x' }),
+		})
+		await expect(
+			validateStoredTradingDeployment(
+				client,
+				{
+					chainId: plan.core.chainId,
+					chainName: plan.core.chainName,
+					factory: getAddress(`0x${'56'.repeat(20)}`),
+					feeBps: plan.feeBps,
+					router: getAddress(`0x${'78'.repeat(20)}`),
+					rpcUrl: 'https://rpc.example/',
+					securityPoolFactory: plan.core.securityPoolFactory,
+				},
+				[plan.core],
+			),
+		).rejects.toThrow('do not match the current deterministic contracts')
 	})
 })
