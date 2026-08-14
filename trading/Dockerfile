@@ -14,8 +14,8 @@ RUN bun install --frozen-lockfile
 RUN bun run shared:build
 RUN cd trading && bun install --frozen-lockfile
 
-ARG TRADING_UI_DEPLOYMENT
-RUN cd trading && if [ -n "${TRADING_UI_DEPLOYMENT}" ]; then TRADING_UI_DEPLOYMENT="${TRADING_UI_DEPLOYMENT}" bun run ui:build; else bun run ui:build; fi
+ARG TRADING_UI_DEPLOYMENT=deployments/local.json
+RUN cd trading && if [ ! -f "${TRADING_UI_DEPLOYMENT}" ]; then echo "Trading deployment manifest not found: ${TRADING_UI_DEPLOYMENT}. Run bun run deploy:local or pass --build-arg TRADING_UI_DEPLOYMENT=<path>." >&2; exit 1; fi && TRADING_UI_DEPLOYMENT="${TRADING_UI_DEPLOYMENT}" bun run ui:build
 
 FROM oven/bun:${BUN_VERSION}-alpine AS runtime
 

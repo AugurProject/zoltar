@@ -29,7 +29,16 @@ Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled 
 
 ### Docker
 
-Build and serve the standalone demo UI from this directory:
+The Docker image is live-configured by default and requires a reviewed deployment manifest. For a local deployment, first deploy Zoltar core to Anvil, then create the trading manifest:
+
+```bash
+cp .env.example .env
+ZOLTAR_DEPLOYMENT_MANIFEST=/absolute/path/to/core.json bun run deploy:local
+```
+
+`deploy:local` verifies that the configured core `SecurityPoolFactory` has bytecode on the selected chain, deploys a factory with an immutable fee and a router, and writes the default Docker input to `deployments/local.json`.
+
+Build and serve the standalone UI from this directory:
 
 ```bash
 docker compose up --build --force-recreate
@@ -37,14 +46,12 @@ docker compose up --build --force-recreate
 
 On Windows, run `start.bat` from this directory to start the same Compose command.
 
-Then open `http://localhost:4163/?demo=1#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`.
+Then open `http://localhost:4163/#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`. The build fails instead of producing a demo-only image when the manifest is missing.
 
-Without a deployment build argument, the image contains `deployment.json` set to `null` and supports demo mode only. Live use requires a build with a reviewed manifest.
-
-For live use, include a reviewed project-local deployment manifest at build time. The path is relative to `trading/` inside the build context:
+To use a different reviewed project-local deployment manifest, set its path at build time. The path is relative to `trading/` inside the build context:
 
 ```bash
-TRADING_UI_DEPLOYMENT=deployments/local.json docker compose up --build --force-recreate
+TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
 ```
 
 ### Live deployment
@@ -56,15 +63,6 @@ TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run u
 ```
 
 The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
-
-For a local deployment, first deploy Zoltar core to Anvil, then:
-
-```bash
-cp .env.example .env
-ZOLTAR_DEPLOYMENT_MANIFEST=/absolute/path/to/core.json bun run deploy:local
-```
-
-The script verifies that the configured core `SecurityPoolFactory` has bytecode on the selected chain, deploys a factory with an immutable fee, deploys the router, and writes `deployments/local.json`.
 
 ## Commands
 
