@@ -19,6 +19,7 @@ import {
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
+	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
@@ -58,15 +59,6 @@ function element<T extends HTMLElement>(id: string) {
 function setText(id: string, value: string) {
 	const target = element(id)
 	if (target.textContent !== value) target.textContent = value
-}
-
-function publicPollFailure(error: string) {
-	const normalized = error.toLowerCase()
-	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
-	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
-	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
-	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
-	return 'The latest polling cycle returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
 }
 
 function prettyJson(value: unknown) {
@@ -1014,7 +1006,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	}
 	if (snapshot.lastError !== undefined) {
 		noticeTitle = 'Latest poll failed'
-		noticeCopy = publicPollFailure(snapshot.lastError)
+		noticeCopy = snapshot.lastError
 		noticeTone = 'danger'
 	}
 	setText('notice-title', noticeTitle)
@@ -1076,7 +1068,7 @@ const refresh = singleFlight(async () => {
 		headerNetworkBadge.className = 'badge badge-warning'
 		setText('status-value', statusLabels.status)
 		setText('notice-title', 'Dashboard disconnected')
-		setText('notice-copy', 'State polling failed. Automatic retry remains active; use Refresh to retry now.')
+		setText('notice-copy', statePollingFailureMessage(error))
 		element('notice').dataset['tone'] = 'danger'
 	}
 })

@@ -103,6 +103,7 @@ export type PositionRecord = {
 	openedAt: string
 	reportAmount1?: string | undefined
 	reportAmount2?: string | undefined
+	reportDisputeIndex?: string | undefined
 	reportFeePercentage?: string | undefined
 	realizedNetProfitEth: string | undefined
 	replacementCreditAmount?: string | undefined
@@ -324,6 +325,7 @@ function parsePosition(value: unknown): PositionRecord {
 	if (record['lifecycleKind'] !== undefined && record['lifecycleKind'] !== 'replacement-credit' && record['lifecycleKind'] !== 'settlement') throw new Error('Position journal lifecycle kind is invalid')
 	const reportAmount1 = optionalIntegerField(record, 'reportAmount1')
 	const reportAmount2 = optionalIntegerField(record, 'reportAmount2')
+	const reportDisputeIndex = optionalIntegerField(record, 'reportDisputeIndex')
 	const reportFeePercentage = optionalIntegerField(record, 'reportFeePercentage')
 	const reportAccountingFieldCount = [reportAmount1, reportAmount2, reportFeePercentage].filter(value => value !== undefined).length
 	if (reportAccountingFieldCount !== 0 && reportAccountingFieldCount !== 3) throw new Error('Position journal report accounting fields are incomplete')
@@ -400,6 +402,7 @@ function parsePosition(value: unknown): PositionRecord {
 		openedAt: record['openedAt'],
 		reportAmount1,
 		reportAmount2,
+		reportDisputeIndex,
 		reportFeePercentage,
 		realizedNetProfitEth: record['realizedNetProfitEth'],
 		replacementCreditAmount,

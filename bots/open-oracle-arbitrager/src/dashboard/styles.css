@@ -668,6 +668,15 @@ td {
 	white-space: nowrap;
 }
 
+#transactions-body td[data-label="Target results"],
+#operations-body td[data-label="Why"],
+#operations-body td[data-label="Details"] {
+	width: 30rem;
+	max-width: 30rem;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
 th {
 	color: var(--muted);
 	font-size: 0.67rem;
@@ -893,6 +902,13 @@ footer .mono {
 
 	.mobile-record-scroll {
 		overflow: visible;
+	}
+
+	#transactions-body td[data-label="Target results"],
+	#operations-body td[data-label="Why"],
+	#operations-body td[data-label="Details"] {
+		width: 100%;
+		max-width: 100%;
 	}
 
 	.mobile-record-table,
