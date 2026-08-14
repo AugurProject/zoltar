@@ -5,6 +5,7 @@ export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
+	loopbackPublished?: boolean
 	password?: string | undefined
 	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
 	setMarketConfiguration?: (value: unknown) => unknown | Promise<unknown>
@@ -189,7 +190,7 @@ function publicError(error: unknown, status: number, operation: string, fallback
 }
 
 export function startDashboardServer(port: number, controller: DashboardController) {
-	validateDashboardAuthentication(controller.hostname, controller.password)
+	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished)
 	const directory = import.meta.dir
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })

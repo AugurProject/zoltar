@@ -2,8 +2,8 @@ import { timingSafeEqual } from 'node:crypto'
 
 const MAXIMUM_DASHBOARD_JSON_BYTES = 1024 * 1024
 
-export function validateDashboardAuthentication(hostname: '0.0.0.0' | '127.0.0.1', password: string | undefined) {
-	if (hostname === '0.0.0.0' && (password === undefined || password.length < 16)) {
+export function validateDashboardAuthentication(hostname: '0.0.0.0' | '127.0.0.1', password: string | undefined, loopbackPublished = false) {
+	if (hostname === '0.0.0.0' && !loopbackPublished && (password === undefined || password.length < 16)) {
 		throw new Error('ZOLTAR_BOT_DASHBOARD_PASSWORD must contain at least 16 characters when the dashboard binds to 0.0.0.0')
 	}
 }
