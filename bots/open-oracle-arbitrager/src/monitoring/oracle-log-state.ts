@@ -60,6 +60,21 @@ export function applyLogs(reports: Map<bigint, ActiveReport>, logs: readonly Tra
 	}
 }
 
+export function applyCoordinatorReports(reports: Map<bigint, ActiveReport>, pendingReports: readonly OpenOracleStatePreimage[]) {
+	const pendingIds = new Set(pendingReports.map(report => report.helper.reportId))
+	for (const id of reports.keys()) {
+		if (!pendingIds.has(id)) reports.delete(id)
+	}
+	for (const latest of pendingReports) {
+		const previous = reports.get(latest.helper.reportId)
+		reports.set(latest.helper.reportId, {
+			latest,
+			settled: latest.game.settlementTimestamp !== 0n,
+			steps: previous?.steps ?? [],
+		})
+	}
+}
+
 export function compareLogs(left: TransactionLog, right: TransactionLog) {
 	const leftBlock = logBlockNumber(left)
 	const rightBlock = logBlockNumber(right)

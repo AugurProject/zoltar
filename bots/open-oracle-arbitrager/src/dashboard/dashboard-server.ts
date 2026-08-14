@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
-import { publicOperatorFailure, publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
+import { publicOperatorFailure, publicOperatorSnapshot, publicPollFailure, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
@@ -9,6 +9,7 @@ type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	hostname?: '0.0.0.0' | '127.0.0.1'
+	loopbackPublished?: boolean
 	password?: string | undefined
 	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => unknown | Promise<unknown>
@@ -122,7 +123,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
-	validateDashboardAuthentication(hostname, controller.password)
+	validateDashboardAuthentication(hostname, controller.password, controller.loopbackPublished)
 	let authority = ''
 	const server = Bun.serve({
 		hostname,
@@ -187,7 +188,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(publicOperatorSnapshot(await controller.getSnapshot()))
 				} catch (error) {
-					return publicError(error, 503, 'state-read', 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.', true)
+					const message = errorMessage(error)
+					console.error(`dashboardOperation=state-read failed=${message}`)
+					return json({ error: publicPollFailure(message, 'load the latest operator state for the dashboard') }, 503)
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/configuration') {

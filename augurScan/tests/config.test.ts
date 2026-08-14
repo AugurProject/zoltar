@@ -36,6 +36,19 @@ describe('network configuration', () => {
 		).toThrow('test.json contract 0 is invalid')
 	})
 
+	test('rejects duplicate manifest addresses regardless of casing or metadata', () => {
+		const first = ['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory']
+		expect(() => parseManifestValue({ contracts: [first, [...first]] }, 'test.json')).toThrow('contract 1 duplicates address')
+		expect(() =>
+			parseManifestValue(
+				{
+					contracts: [first, ['0x1000000000000000000000000000000000000001', 'Replacement', 'openOracle']],
+				},
+				'test.json',
+			),
+		).toThrow('contract 1 duplicates address')
+	})
+
 	test('uses public endpoints with historical state by default', async () => {
 		process.env['NETWORKS'] = 'mainnet,sepolia'
 		delete process.env['MAINNET_RPC_URL']

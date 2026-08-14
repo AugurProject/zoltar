@@ -4,10 +4,11 @@ import {
 	assertIndexerLeaseObservation,
 	assertIndexerLeaseReleaseObservation,
 	DatabaseConsistencyError,
+	manifestContractSetChanged,
 	runFencedIndexerTransaction,
 	type StoredTransaction,
 } from '../src/database.ts'
-import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, toHex } from '../src/ethereum.ts'
+import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, RpcError, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -24,11 +25,14 @@ import {
 	indexerProgressMessage,
 	indexerWaitingMessage,
 	indexingCompletion,
+	initialIndexStartBlock,
 	isLocalIndexerFailure,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
 	logScanCursorUpdates,
+	manifestChangeRequiresFullReplay,
+	manifestReplayAncestor,
 	nextIndexerOwnershipStatus,
 	ownershipFailureLogMessage,
 	planDeploymentAwareLogScan,
@@ -164,11 +168,14 @@ describe('network indexer lifecycle', () => {
 				'indexerProgressMessage',
 				'indexerWaitingMessage',
 				'indexingCompletion',
+				'initialIndexStartBlock',
 				'isLocalIndexerFailure',
 				'isProtocolActivitySource',
 				'isProtocolEvidenceEmitter',
 				'isSplittableLogRangeError',
 				'logScanCursorUpdates',
+				'manifestChangeRequiresFullReplay',
+				'manifestReplayAncestor',
 				'nextIndexerOwnershipStatus',
 				'ownershipFailureLogMessage',
 				'planDeploymentAwareLogScan',
@@ -200,6 +207,24 @@ describe('network indexer lifecycle', () => {
 				'withVerifiedProvider',
 			].sort(),
 		)
+	})
+
+	test('detects manifest contract replacements independently of ordering and address casing', () => {
+		const replacement = '0x2000000000000000000000000000000000000002' as const
+		expect(
+			manifestContractSetChanged(
+				[
+					[address, 'Zoltar', 'zoltar'],
+					[replacement, 'Oracle', 'openOracle'],
+				],
+				[
+					{ address: replacement.toUpperCase(), label: 'Oracle', kind: 'openOracle' },
+					{ address, label: 'Zoltar', kind: 'zoltar' },
+				],
+			),
+		).toBe(false)
+		expect(manifestContractSetChanged([[replacement, 'Zoltar', 'zoltar']], [{ address, label: 'Zoltar', kind: 'zoltar' }])).toBe(true)
+		expect(manifestContractSetChanged([[address, 'Zoltar v2', 'zoltar']], [{ address, label: 'Zoltar', kind: 'zoltar' }])).toBe(true)
 	})
 
 	test('queues RPC work above the configured concurrency limit', async () => {
@@ -835,7 +860,7 @@ describe('network indexer lifecycle', () => {
 		expect(checkedBlocks).not.toContain(49n)
 	})
 
-	test('falls back to complete scanning when deployment detection fails', async () => {
+	test('falls back to complete scanning when historical contract code is unavailable', async () => {
 		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const failures: unknown[] = []
 		const plan = await planDeploymentAwareLogScan(
@@ -851,6 +876,69 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('propagates rate limits instead of broadening the deployment-aware log scan', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const rateLimit = new Error('RPC method failed', { cause: new RpcError('HTTP 429 while calling eth_getCode', { code: 429 }) })
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => {
+					throw rateLimit
+				},
+				async () => new Date(0),
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(rateLimit)
+		expect(failures).toEqual([])
+	})
+
+	test('propagates unexpected deployment detection errors instead of hiding them with a broad scan', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		for (const failure of [new RpcError('Malformed JSON-RPC response while calling eth_getCode'), new RpcError('state data unavailable')]) {
+			const failures: unknown[] = []
+			await expect(
+				planDeploymentAwareLogScan(
+					[contract],
+					50n,
+					100n,
+					0n,
+					async () => {
+						throw failure
+					},
+					async () => new Date(0),
+					(_contract, error) => failures.push(error),
+				),
+			).rejects.toBe(failure)
+			expect(failures).toEqual([])
+		}
+	})
+
+	test('propagates deployment timestamp failures instead of treating them as code capability failures', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const timestampFailure = new Error('archive unavailable')
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => '0x01',
+				async () => {
+					throw timestampFailure
+				},
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(timestampFailure)
+		expect(failures).toEqual([])
 	})
 
 	test('propagates wrapped queue saturation instead of falling back during deployment detection', async () => {
@@ -904,6 +992,53 @@ describe('network indexer lifecycle', () => {
 		expect(detected).toEqual([0n, 100n])
 	})
 
+	test('starts a fresh index at the earliest tracked contract deployment', async () => {
+		const secondAddress = '0x2000000000000000000000000000000000000002' as const
+		const helperAddress = '0x3000000000000000000000000000000000000003' as const
+		const searches: Address[] = []
+		expect(
+			await initialIndexStartBlock(
+				[
+					[address, 'OpenOracle', 'openOracle'],
+					[secondAddress, 'Zoltar', 'zoltar'],
+					[helperAddress, 'Multicall3', 'multicall3'],
+				],
+				0n,
+				1_000n,
+				async (candidate) => {
+					searches.push(candidate)
+					return { block: candidate === address ? 750n : 800n, exact: true }
+				},
+			),
+		).toBe(750n)
+		expect(searches).toEqual([address, secondAddress])
+	})
+
+	test('does not let an earlier ScalarOutcomes helper widen fresh history', async () => {
+		const scalar = '0x2000000000000000000000000000000000000002' as const
+		expect(
+			await initialIndexStartBlock(
+				[
+					[scalar, 'Scalar outcomes', 'scalarOutcomes'],
+					[address, 'Zoltar', 'zoltar'],
+				],
+				0n,
+				1_000n,
+				async (candidate) => ({ block: candidate === scalar ? 100n : 750n, exact: true }),
+			),
+		).toBe(750n)
+	})
+
+	test('waits at the next block when no tracked contract is deployed yet', async () => {
+		expect(await initialIndexStartBlock([[address, 'OpenOracle', 'openOracle']], 0n, 1_000n, async () => undefined)).toBe(1_001n)
+	})
+
+	test('honors a configured future start without attempting deployment discovery', async () => {
+		const detection = mock(async () => ({ block: 750n, exact: true }))
+		expect(await initialIndexStartBlock([[address, 'OpenOracle', 'openOracle']], 1_001n, 1_000n, detection)).toBe(1_001n)
+		expect(detection).not.toHaveBeenCalled()
+	})
+
 	test('uses explicit manifest deployment blocks and resumes partial contract coverage', async () => {
 		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const contracts = new Map([[address.toLowerCase(), contract]])
@@ -948,6 +1083,116 @@ describe('network indexer lifecycle', () => {
 				mock(async () => undefined),
 			),
 		).toBe(70n)
+	})
+
+	test('requires a rebuild when newly tracked history predates the stored index start', () => {
+		expect(() => manifestReplayAncestor(50n, 75n)).toThrow('deployment block 50 predates the stored index start 75')
+		expect(manifestReplayAncestor(75n, 75n)).toBe(-1n)
+		expect(manifestReplayAncestor(80n, 75n)).toBe(79n)
+	})
+
+	test('validates newly added manifest history before allowing a canonical replay', async () => {
+		const replacement = '0x2000000000000000000000000000000000000002' as const
+		const storedContract = { address, label: 'Zoltar', kind: 'zoltar', provenance: 'manifest' } satisfies ContractMetadata
+		const storedContracts = new Map([[address.toLowerCase(), storedContract]])
+		const cursors = new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]])
+		await expect(
+			manifestChangeRequiresFullReplay(
+				[
+					[address, storedContract.label, storedContract.kind],
+					[replacement, 'OpenOracle v2', 'openOracle'],
+				],
+				storedContracts,
+				cursors,
+				100n,
+				0n,
+				75n,
+				async (candidate) => ({ block: candidate === replacement ? 50n : 75n, exact: true }),
+			),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		expect(
+			await manifestChangeRequiresFullReplay(
+				[
+					[address, storedContract.label, storedContract.kind],
+					[replacement, 'OpenOracle v2', 'openOracle'],
+				],
+				storedContracts,
+				cursors,
+				100n,
+				0n,
+				75n,
+				async (candidate) => ({ block: candidate === replacement ? 80n : 75n, exact: true }),
+			),
+		).toBe(true)
+		const storedHelper = new Map([
+			[address.toLowerCase(), { address, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' } satisfies ContractMetadata],
+		])
+		await expect(
+			manifestChangeRequiresFullReplay([[address, 'OpenOracle', 'openOracle']], storedHelper, new Map(), 100n, 0n, 75n, async () => ({
+				block: 50n,
+				exact: true,
+			})),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		const inexactStoredHelper = new Map([
+			[
+				address.toLowerCase(),
+				{
+					address,
+					label: 'Multicall3',
+					kind: 'multicall3',
+					provenance: 'manifest',
+					deploymentBlock: 75n,
+					deploymentBlockExact: false,
+					deploymentCheckedBlock: 100n,
+				} satisfies ContractMetadata,
+			],
+		])
+		const searches: Array<{ start: bigint; knownAbsent: boolean }> = []
+		await expect(
+			manifestChangeRequiresFullReplay(
+				[[address, 'OpenOracle', 'openOracle']],
+				inexactStoredHelper,
+				new Map(),
+				100n,
+				0n,
+				75n,
+				async (_candidate, start, _checkpoint, knownAbsent) => {
+					searches.push({ start, knownAbsent })
+					return { block: 50n, exact: true }
+				},
+			),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		expect(searches).toEqual([{ start: 0n, knownAbsent: false }])
+		const promotedDiscovery = new Map([
+			[
+				address.toLowerCase(),
+				{
+					address,
+					label: 'Discovered pool',
+					kind: 'securityPool',
+					provenance: 'Factory.DeploySecurityPool',
+					deploymentBlock: 75n,
+					deploymentBlockExact: false,
+					deploymentCheckedBlock: 100n,
+				} satisfies ContractMetadata,
+			],
+		])
+		const promotionSearches: bigint[] = []
+		await expect(
+			manifestChangeRequiresFullReplay(
+				[[address, 'Promoted pool', 'securityPool']],
+				promotedDiscovery,
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
+				100n,
+				0n,
+				75n,
+				async (_candidate, start) => {
+					promotionSearches.push(start)
+					return { block: 50n, exact: true }
+				},
+			),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		expect(promotionSearches).toEqual([0n])
 	})
 
 	test('gives each manifest deployment search an independent read budget', async () => {

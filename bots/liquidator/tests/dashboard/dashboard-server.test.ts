@@ -41,7 +41,18 @@ describe('liquidator dashboard server', () => {
 				},
 				operatorPath: protectedPath,
 				paused: false,
-				rpcEndpointHealth: [{ consecutiveFailures: 2, error: `RPC https://user:${rpcSecret}@rpc.example/private failed`, lastFailureAt: '2026-08-13T00:00:00.000Z', lastSuccessAt: undefined, latencyMilliseconds: undefined, nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: `https://user:${rpcSecret}@rpc.example/private?token=${rpcSecret}` }],
+				rpcEndpointHealth: [
+					{
+						consecutiveFailures: 2,
+						error: `RPC https://user:${rpcSecret}@rpc.example/private failed`,
+						lastFailureAt: '2026-08-13T00:00:00.000Z',
+						lastSuccessAt: undefined,
+						latencyMilliseconds: undefined,
+						nextRetryAt: '2026-08-13T00:01:00.000Z',
+						status: 'offline',
+						target: `https://user:${rpcSecret}@rpc.example/private?token=${rpcSecret}`,
+					},
+				],
 				pendingTransactions: [
 					{
 						hash: `0x${'12'.repeat(32)}`,
@@ -343,5 +354,21 @@ describe('liquidator dashboard server', () => {
 		})
 		expect(mutation.status).toBe(200)
 		expect(paused).toBe(true)
+	})
+
+	test('allows passwordless access through an explicitly loopback-published container port', async () => {
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => ({}),
+			hostname: '0.0.0.0',
+			loopbackPublished: true,
+			setApprovedUniverses: value => value,
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+		expect((await fetch(`http://127.0.0.1:${server.port}`)).status).toBe(200)
 	})
 })

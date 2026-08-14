@@ -11,6 +11,7 @@ import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-l
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { authenticatedExecutionToken } from '#config/runtime-deployment'
+import { networkConfiguration } from '#config/network'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
@@ -133,9 +134,11 @@ export function startOperatorControlPlane(parameters: {
 		},
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
 		hostname: config.uiHost,
+		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
+				const queuedConnectivity = pending.connectivity
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
@@ -149,7 +152,7 @@ export function startOperatorControlPlane(parameters: {
 					await checkSubmissionEndpoints(next.submission, expectedChainId)
 				}
 				const savedRevision = await persistSettings(next, value.revision)
-				pending.connectivity = undefined
+				pending.connectivity = queuedConnectivity
 				pending.deployment = undefined
 				pending.strategy = undefined
 				pending.submission = undefined
@@ -167,7 +170,7 @@ export function startOperatorControlPlane(parameters: {
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				state.paused = paused
 				state.status = operatorStatusAfterPause(paused, parameters.getCursor()?.initial === false, state.lastError !== undefined)
-				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
+				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Applied immediately and saved for future starts', reportId: undefined })
 			}),
 		updateConnectivity: async value => {
 			return queueSettingsUpdate(async () => {
@@ -188,18 +191,31 @@ export function startOperatorControlPlane(parameters: {
 					submission: latest.settings.submission,
 					value,
 				})
-				if (!next.restartRequired) {
-					pending.connectivity = next.connectivity
+				pending.connectivity = next.connectivity
+				if (next.restartRequired) {
+					const network = networkConfiguration(next.network, {
+						factory: latest.settings.deployment.uniswapFactory,
+						quoter: latest.settings.deployment.uniswapQuoter,
+						rep: latest.settings.deployment.rep,
+						weth: latest.settings.deployment.weth,
+					})
+					config.network = network
+					config.networkConfigured = true
+					config.centralizedMarkets = { ...config.centralizedMarkets, assetChainId: network.chain.id }
+					fixedState.expectedChainId = network.chain.id
+					fixedState.explorerUrl = network.explorerUrl
+					fixedState.network = network.name
+					fixedState.networkConfigured = true
 				}
 				recordOperation(state, {
 					category: 'configuration',
 					details: next.connectivity.publicRpcUrls.map(endpointLabel).join(', '),
 					level: 'info',
 					message: 'Network and RPC configuration verified and saved',
-					reason: next.restartRequired ? `Restart to apply ${next.network}` : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
+					reason: next.restartRequired ? `${next.network} will apply at the next scan boundary` : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
 					reportId: undefined,
 				})
-				return next
+				return { connectivity: next.connectivity, network: next.network }
 			})
 		},
 		updateDeployment: value => {

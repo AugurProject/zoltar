@@ -9,7 +9,7 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, selectBestExecution } from '#execution/execution-orchestration'
 import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
-import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
+import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -23,7 +23,7 @@ import { transactionLogLevel, type TrackTransaction } from '#execution/transacti
 import type { ExecutionCandidate } from '#core/operator-types'
 import { errorMessage, requiredBigint, requiredTuple } from '#core/rpc-validation'
 import { candidateRiskMismatch, poolsForToken } from '#monitoring/opportunity-evaluation'
-import { dateFromBlockTimestamp } from '#execution/recovery-support'
+import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
 import { reconcileExpiredAttemptsWithQuorum, processPositionLifecycle } from '#execution/position-lifecycle'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
@@ -186,7 +186,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
 		level: 'info',
 		message: config.networkConfigured ? 'Operator started' : 'Operator waiting for network configuration',
-		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard, then restart',
+		reason: config.networkConfigured ? `${config.network.name} chain ${config.network.chain.id.toString()}` : 'Set the chain and RPC endpoints in the dashboard',
 		reportId: undefined,
 	})
 	console.log(
@@ -246,6 +246,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							console.error(`historyPersistenceFailed=${message}`)
 						}
 					}
+					let fixedHeadNumber: bigint | undefined
 					if (config.execute) {
 						const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 						const settledHeads = await Promise.allSettled(readClients.map(async (readClient, index) => ({ endpoint: endpointLabel(endpoints[index] ?? ''), head: await readClient.getBlockNumber(), index })))
@@ -277,10 +278,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const selectedClient = selected === undefined ? undefined : readClients[selected.index]
 						if (selectedClient === undefined) throw new Error('Canonical head requires at least two available independent RPC endpoints')
 						client = selectedClient
+						fixedHeadNumber = sharedHead
 					}
 					const observedChainId = await client.getChainId()
 					if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
-					const block = await client.getBlock()
+					const block = fixedHeadNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber: fixedHeadNumber })
 					const blockNumber = block.number
 					if (blockNumber === undefined) throw new Error('Latest block is missing its number')
 					const blockHash = block.hash
@@ -315,7 +317,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
 							try {
-								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, reports.get(BigInt(position.reportId)), persistPosition, trackTransaction)
+								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction)
 								if (result === 'processed' || result === 'progressed') {
 									lifecycleProcessed = true
 									const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
@@ -354,7 +356,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						return config.once
 					}
 					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
-					cursor ??= initialCursor(blockNumber, config.lookbackBlocks)
+					const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
+					cursor ??= initialCursor(blockNumber, discoversReportsFromCoordinators ? 0n : config.lookbackBlocks)
 					const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
 						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber),
 					)
@@ -366,18 +369,24 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.blockTimestamp = block.timestamp.toString()
 						return config.once
 					}
-					const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
-					for (const range of ranges) {
-						const logs = await client.getLogs({
-							address: config.openOracle,
-							fromBlock: range.fromBlock,
-							toBlock: range.toBlock,
-							topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-						})
-						cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
-						reports.clear()
-						applyLogs(reports, cachedLogs)
-						cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
+					if (discoversReportsFromCoordinators) {
+						const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(readClients, config, blockNumber) : await pendingCoordinatorReports(client, config, blockNumber)
+						applyCoordinatorReports(reports, pendingReports)
+						cachedLogs = []
+					} else {
+						const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
+						for (const range of ranges) {
+							const logs = await client.getLogs({
+								address: config.openOracle,
+								fromBlock: range.fromBlock,
+								toBlock: range.toBlock,
+								topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+							})
+							cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
+							reports.clear()
+							applyLogs(reports, cachedLogs)
+							cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
+						}
 					}
 					if (replacedMarketHead) {
 						cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {})
@@ -389,7 +398,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.blockNumber = blockNumber.toString()
 						state.blockTimestamp = block.timestamp.toString()
 						state.lastPollAt = new Date().toISOString()
-						state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+						state.reportPaths = discoversReportsFromCoordinators ? [] : [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
 						recordOperation(state, {
 							category: 'decision',
 							details: `block=${blockNumber.toString()}`,
@@ -571,7 +580,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										config.network.rep,
 										config.network.chain.id,
 									)
-						state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+						state.reportPaths = discoversReportsFromCoordinators ? [] : [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
 						state.balances = balances?.snapshot
 						state.blockNumber = blockNumber.toString()
 						state.blockTimestamp = block.timestamp.toString()

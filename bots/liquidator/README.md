@@ -29,21 +29,17 @@ threshold.
 From this directory, build and start the bot:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
 On Windows, run `start.bat` from this directory to start the same Compose command.
 
 On first start, the container creates a paused, dry-run configuration in its named
-volume. Open `http://127.0.0.1:4183` and sign in as `operator` with the local-only
-default password `zoltar-local-dashboard`.
-
-For anything beyond local evaluation, create `.env` from `.env.example` and set a
-unique dashboard password of at least 16 characters before starting Compose:
-
-```bash
-install -m 600 .env.example .env
-```
+volume. Open `http://127.0.0.1:4183`; the dashboard does not require a username or
+password. Compose publishes the port only on host loopback, so connect from another
+machine through a trusted tunnel to the host rather than changing the port binding.
+Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that `127.0.0.1` mapping.
 
 Save the chain and RPCs in **Chain and RPC connectivity**, finish the remaining
 configuration, and resume only after reviewing the saved settings. Run
@@ -93,13 +89,15 @@ Compose service checks that endpoint and uses `restart: unless-stopped` if the b
 process exits unexpectedly. Contradictory chain, malformed response, or other safety
 validation failures stop startup instead of being treated as an outage.
 
-Native loopback dashboards need no password. If `runtime.uiHost` is `0.0.0.0`, set
-`ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. The
-browser's HTTP Basic prompt uses username `operator` and that password. Keep the
-listener on a trusted network or behind an authenticated TLS proxy: Basic
-authentication protects access but does not encrypt the private key or settings in
-transit. Mutable requests also retain same-origin and fixed-authority checks, and
-JSON request bodies are capped at 1 MiB.
+Native loopback dashboards and the supplied host-loopback Compose setup need no
+password. Outside that Compose setup, if `runtime.uiHost` is `0.0.0.0`, set
+`ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. For a
+custom network-bound container, remove `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED`
+and explicitly pass the password into the container. The browser's HTTP Basic prompt
+uses username `operator` and that password. Keep the listener on a trusted network
+or behind an authenticated TLS proxy: Basic authentication protects access but does
+not encrypt the private key or settings in transit. Mutable requests also retain
+same-origin and fixed-authority checks, and JSON request bodies are capped at 1 MiB.
 
 Keep `runtime.execute` false until the factory, WETH, signer, selected pools, RPC
 endpoints, gas limits, and REP limits have been reviewed. When execution is

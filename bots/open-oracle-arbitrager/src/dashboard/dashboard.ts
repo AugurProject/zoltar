@@ -19,6 +19,7 @@ import {
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
+	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
@@ -58,15 +59,6 @@ function element<T extends HTMLElement>(id: string) {
 function setText(id: string, value: string) {
 	const target = element(id)
 	if (target.textContent !== value) target.textContent = value
-}
-
-function publicPollFailure(error: string) {
-	const normalized = error.toLowerCase()
-	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
-	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
-	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
-	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
-	return 'The latest polling cycle returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
 }
 
 function prettyJson(value: unknown) {
@@ -979,13 +971,13 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', snapshot.networkConfigured ? `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.` : 'Set the chain and RPC endpoints in RPC connectivity, then restart before scanning.')
+	setText('chain-safety', snapshot.networkConfigured ? `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.` : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
 	renderSignerStatus(snapshot)
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
 		launchNotice.hidden = false
 		setText('launch-notice-title', 'Network setup required')
-		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. The bot remains paused until the saved network is applied on restart.')
+		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. They apply to the next scan; the bot remains paused until you resume it.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else if (snapshot.network === 'mainnet') {
 		launchNotice.hidden = true
@@ -1014,7 +1006,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	}
 	if (snapshot.lastError !== undefined) {
 		noticeTitle = 'Latest poll failed'
-		noticeCopy = publicPollFailure(snapshot.lastError)
+		noticeCopy = snapshot.lastError
 		noticeTone = 'danger'
 	}
 	setText('notice-title', noticeTitle)
@@ -1076,7 +1068,7 @@ const refresh = singleFlight(async () => {
 		headerNetworkBadge.className = 'badge badge-warning'
 		setText('status-value', statusLabels.status)
 		setText('notice-title', 'Dashboard disconnected')
-		setText('notice-copy', 'State polling failed. Automatic retry remains active; use Refresh to retry now.')
+		setText('notice-copy', statePollingFailureMessage(error))
 		element('notice').dataset['tone'] = 'danger'
 	}
 })
@@ -1353,7 +1345,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 				.filter(value => value !== ''),
 			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
 		}
-		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; restartRequired: boolean }>('/api/connectivity', {
+		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia' }>('/api/connectivity', {
 			body: JSON.stringify({ connectivity, network: selectedNetwork }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
@@ -1363,7 +1355,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		element<HTMLSelectElement>('network-name').disabled = true
 		persistedNetwork = response.network
 		updateNetworkTargetStatus()
-		setText('connectivity-status', response.restartRequired ? 'Chain and RPCs passed validation and were saved. Restart the bot to apply the selected chain.' : 'RPCs passed chain checks and were saved for the next scan and future restarts.')
+		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		await refresh()
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))

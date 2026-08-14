@@ -48,8 +48,9 @@ describe('Docker packaging', () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).not.toContain('LIQUIDATOR_UID')
 		expect(source).not.toContain('LIQUIDATOR_GID')
-		expect(source).toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:-')
-		expect(source).not.toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:?')
+		expect(source).not.toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
+		expect(source).toContain('127.0.0.1:4183:4183')
 	})
 
 	test('creates a private Compose-ready operator configuration on first start', async () => {

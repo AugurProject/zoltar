@@ -118,6 +118,43 @@ const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined =>
 	return firstCategory
 }
 
+export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if ('code' in current && current.code === -32601) return true
+		for (const description of preferredRpcDescriptions(current)) {
+			const normalized = classifiedRpcDescription(description)
+			if (
+				normalized.includes('missing trie node') ||
+				normalized.includes('archive unavailable') ||
+				normalized.includes('archive data unavailable') ||
+				normalized.includes('archival data unavailable') ||
+				normalized.includes('archive node required') ||
+				normalized.includes('requires an archive node') ||
+				normalized.includes('requires archive node') ||
+				normalized.includes('historical state unavailable') ||
+				normalized.includes('historical state is unavailable') ||
+				normalized.includes('historical state not available') ||
+				normalized.includes('historical state is not available') ||
+				normalized.includes('historical data unavailable') ||
+				normalized.includes('historical data is unavailable') ||
+				normalized.includes('historical data not available') ||
+				normalized.includes('historical data is not available') ||
+				normalized.includes('pruned historical state') ||
+				normalized.includes('historical state pruned') ||
+				normalized.includes('method not found') ||
+				normalized.includes('method not supported') ||
+				normalized.includes('unsupported method')
+			)
+				return true
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
+}
+
 export const isSplittableLogRangeError = (error: unknown): boolean => {
 	const category = rpcErrorCategory(error)
 	return category !== undefined && category !== 'rate-limit'
@@ -826,7 +863,8 @@ export const isProtocolActivitySource = (contract: ContractMetadata | undefined)
 	contract.kind !== 'weth' &&
 	contract.kind !== 'reputationToken' &&
 	contract.kind !== 'multicall3' &&
-	contract.kind !== 'proxyDeployer'
+	contract.kind !== 'proxyDeployer' &&
+	contract.kind !== 'scalarOutcomes'
 
 export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
 	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth'

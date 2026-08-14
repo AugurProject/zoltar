@@ -27,7 +27,7 @@ export function pauseControlState(state: { connected: boolean; networkConfigured
 }
 
 export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undefined, savedNetwork: 'mainnet' | 'sepolia' | undefined) {
-	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Saved for restart: ${savedNetwork}. The active process remains on ${activeNetwork}.`
+	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Applying ${savedNetwork}; the last snapshot was ${activeNetwork}.`
 }
 
 export function singleFlight<T>(operation: () => Promise<T>) {
@@ -197,6 +197,11 @@ export function requiredSignerPrivateKey(value: string) {
 	const privateKey = value.trim()
 	if (privateKey === '') throw new Error('Enter a private key before setting the signer.')
 	return privateKey
+}
+
+export function statePollingFailureMessage(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error)
+	return message.startsWith('The bot tried to ') ? `${message} Use Refresh to retry now.` : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active; use Refresh to retry now.`
 }
 
 export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWallet: boolean; privateKey: string; requestPending: boolean }) {

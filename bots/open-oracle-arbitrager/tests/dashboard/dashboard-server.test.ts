@@ -71,7 +71,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			)
 				throw new Error('Invalid test connectivity')
 			connectivity = { publicRpcUrls: value.connectivity.publicRpcUrls.map(String), readRpcUrl: value.connectivity.readRpcUrl }
-			return { connectivity, network: value.network, restartRequired: false }
+			return { connectivity, network: value.network }
 		},
 		updateDeployment: value => {
 			if (typeof value !== 'object' || value === null || !('executor' in value)) throw new Error('Invalid test deployment')
@@ -263,7 +263,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		method: 'PUT',
 	})
 	expect(connectivityUpdate.status).toBe(200)
-	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet', restartRequired: false })
+	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
 	const mutationCredentialMarker = 'mutation-operator-secret'
 	connectivityFailure = new Error(`RPC https://operator:${mutationCredentialMarker}@rpc.example returned credential-bearing provider text`)
@@ -426,14 +426,55 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(typeof publicOperations[0] === 'object' && publicOperations[0] !== null && Reflect.has(publicOperations[0], 'details')).toBe(false)
 	expect(publicOperations[1]).toMatchObject({ details: 'net 0.0158 ETH · 992 bps', reason: 'quote, TWAP, inventory, and risk checks passed' })
 	expect(publicOperations[2]).toMatchObject({
-		details: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.',
-		reason: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
+		details: 'The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.',
+		reason: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 100. Automatic retry remains active.',
 	})
 	expect(reloadedState).toMatchObject({
-		endpointChecks: [{ error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' }],
-		lastError: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.',
-		transactionActivity: [{ failedTargets: [{ error: 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.' }] }],
+		endpointChecks: [{ error: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 100. Automatic retry remains active.' }],
+		lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 100. Automatic retry remains active.',
+		transactionActivity: [{ failedTargets: [{ error: 'The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.' }] }],
 	})
+	state.lastError = `RPC Authorization: Basic ${credentialMarker} failed while opening '${protectedSettingsFile}'`
+	const protectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(protectedFailureState).toMatchObject({ lastError: "The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC Authorization: [redacted] failed while opening '[protected path]'. Automatic retry remains active." })
+	expect(JSON.stringify(protectedFailureState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(protectedFailureState)).not.toContain(protectedSettingsFile)
+	state.lastError = `RPC credentials=${credentialMarker} failed while opening path='${protectedSettingsFile} state.json'`
+	const alternateProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(alternateProtectedFailureState).toMatchObject({ lastError: "The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC credentials=[redacted] failed while opening path='[protected path]'. Automatic retry remains active." })
+	expect(JSON.stringify(alternateProtectedFailureState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(alternateProtectedFailureState)).not.toContain(protectedSettingsFile)
+	const relativePathMarker = 'operator-relative-secret'
+	state.lastError = `RPC request failed while opening '.state/${relativePathMarker} secrets.json'`
+	const relativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(relativeProtectedFailureState).toMatchObject({ lastError: "The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while opening '[protected path]'. Automatic retry remains active." })
+	expect(JSON.stringify(relativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC request failed while reading state/${relativePathMarker}.json`
+	const unquotedRelativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(unquotedRelativeProtectedFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(unquotedRelativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC request failed while reading state/${relativePathMarker}.sqlite`
+	const alternateRelativeProtectedFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(alternateRelativeProtectedFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC request failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(alternateRelativeProtectedFailureState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC wss://operator:${credentialMarker}@rpc.example/private failed while reading (detail)state/${relativePathMarker}`
+	const schemeAndDelimiterProtectedState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(schemeAndDelimiterProtectedState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC [redacted URL] failed while reading [protected path]. Automatic retry remains active.' })
+	expect(JSON.stringify(schemeAndDelimiterProtectedState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(schemeAndDelimiterProtectedState)).not.toContain(relativePathMarker)
+	state.lastError = `RPC ws:operator:${credentialMarker}@rpc.example failed`
+	const compactSchemeProtectedState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(JSON.stringify(compactSchemeProtectedState)).not.toContain(credentialMarker)
+	state.lastError = `RPC api key=${credentialMarker} failed with auth='Basic ${endpointCredentialMarker} value'`
+	const labeledCredentialFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(labeledCredentialFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC api key=[redacted] failed with auth=[redacted]. Automatic retry remains active.' })
+	expect(JSON.stringify(labeledCredentialFailureState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(labeledCredentialFailureState)).not.toContain(endpointCredentialMarker)
+	state.lastError = `RPC provider returned {"password":"${credentialMarker}'tail value","secret":"${endpointCredentialMarker}\\"tail value"}`
+	const quotedCredentialFailureState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(quotedCredentialFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC provider returned {"password":"[redacted]","secret":"[redacted]"}. Automatic retry remains active.' })
+	expect(JSON.stringify(quotedCredentialFailureState)).not.toContain(credentialMarker)
+	expect(JSON.stringify(quotedCredentialFailureState)).not.toContain(endpointCredentialMarker)
 	const forgetSigner = await fetch(`${origin}/api/signer`, {
 		body: JSON.stringify({ forgetSavedSigner: true }),
 		headers: { 'content-type': 'application/json', origin },
@@ -475,7 +516,7 @@ test('returns a structured unavailable response when the initial state read fail
 	servers.push(server)
 	const response = await fetch(`http://${server.hostname}:${server.port}/api/state`)
 	expect(response.status).toBe(503)
-	expect(await response.json()).toEqual({ error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' })
+	expect(await response.json()).toEqual({ error: 'The bot tried to load the latest operator state for the dashboard, but it failed: RPC unavailable. Automatic retry remains active.' })
 })
 
 test('supports a container bind while retaining loopback request authority', async () => {
@@ -528,4 +569,29 @@ test('supports a container bind while retaining loopback request authority', asy
 	const authorization = `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
 	const response = await fetch(origin, { headers: { authorization } })
 	expect(response.status).toBe(200)
+})
+
+test('allows passwordless access through an explicitly loopback-published container port', async () => {
+	const server = startDashboardServer(0, {
+		getSnapshot: () => {
+			throw new Error('Not needed')
+		},
+		hostname: '0.0.0.0',
+		loopbackPublished: true,
+		setPaused: () => undefined,
+		updateConnectivity: () => {
+			throw new Error('Not needed')
+		},
+		updateSigner: () => {
+			throw new Error('Not needed')
+		},
+		updateSubmission: () => {
+			throw new Error('Not needed')
+		},
+		updateStrategy: () => {
+			throw new Error('Not needed')
+		},
+	})
+	servers.push(server)
+	expect((await fetch(`http://127.0.0.1:${server.port}`)).status).toBe(200)
 })
