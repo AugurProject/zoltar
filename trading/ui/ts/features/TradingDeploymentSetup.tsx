@@ -51,7 +51,11 @@ function deploymentProgress(status: DeploymentStatus | undefined) {
 	return `${Number(status.factory) + Number(status.router)} / 2`
 }
 
-function inspectionPresentation(state: 'idle' | 'loading' | 'ready' | 'error') {
+function inspectionPresentation(state: 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; registryError: boolean; registryLoading: boolean }>) {
+	if (registryLoading) return { label: 'Loading networks', tone: 'neutral' as const }
+	if (registryError) return { label: 'Networks unavailable', tone: 'warn' as const }
+	if (busy) return { label: 'Deployment in progress', tone: 'neutral' as const }
+	if (deploymentComplete) return { label: 'Deployment complete', tone: 'good' as const }
 	if (state === 'loading') return { label: 'Checking network', tone: 'neutral' as const }
 	if (state === 'ready') return { label: 'Ready to deploy', tone: 'good' as const }
 	if (state === 'error') return { label: 'Configuration unavailable', tone: 'warn' as const }
@@ -81,6 +85,7 @@ export function TradingDeploymentSetup({
 	services?: TradingDeploymentSetupServices
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
+	const [registryLoading, setRegistryLoading] = useState(true)
 	const [registryError, setRegistryError] = useState<string>()
 	const [chainId, setChainId] = useState(initialQueryValue('chainId') || currentConfiguration?.chainId.toString() || '')
 	const [rpcUrl, setRpcUrl] = useState(initialQueryValue('rpcUrl') || currentConfiguration?.rpcUrl || '')
@@ -92,10 +97,17 @@ export function TradingDeploymentSetup({
 	const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus>()
 	const [busy, setBusy] = useState(false)
 	const [actionMessage, setActionMessage] = useState<string>()
-	const [submittedHash, setSubmittedHash] = useState<Hash>()
+	const [actionError, setActionError] = useState(false)
 	const [retryNonce, setRetryNonce] = useState(0)
 	const [inspectedRevision, setInspectedRevision] = useState<number>()
 	const inputRevision = useRef(0)
+	useEffect(() => {
+		if (busy || currentConfiguration === undefined) return
+		inputRevision.current += 1
+		setChainId(currentConfiguration.chainId.toString())
+		setRpcUrl(currentConfiguration.rpcUrl)
+		setFeeBps(currentConfiguration.feeBps.toString())
+	}, [busy, currentConfiguration])
 	const selectedCore = useMemo(() => coreDeployments.find(deployment => deployment.chainId.toString() === chainId), [chainId, coreDeployments])
 	let inputError: string | undefined
 	if (chainId !== '' && rpcUrl !== '' && feeBps !== '') {
@@ -108,17 +120,21 @@ export function TradingDeploymentSetup({
 
 	useEffect(() => {
 		let active = true
-		void services
-			.loadCoreDeployments()
-			.then(deployments => {
+		setRegistryLoading(true)
+		setRegistryError(undefined)
+		setCoreDeployments([])
+		void (async () => {
+			try {
+				const deployments = await services.loadCoreDeployments()
 				if (!active) return
 				setCoreDeployments(deployments)
-				setRegistryError(undefined)
-			})
-			.catch(error => {
+			} catch (error) {
 				if (!active) return
 				setRegistryError(publicErrorMessage(error, 'Unable to load canonical core deployments'))
-			})
+			} finally {
+				if (active) setRegistryLoading(false)
+			}
+		})()
 		return () => {
 			active = false
 		}
@@ -130,7 +146,7 @@ export function TradingDeploymentSetup({
 		setPublicClient(undefined)
 		setDeploymentStatus(undefined)
 		setActionMessage(undefined)
-		setSubmittedHash(undefined)
+		setActionError(false)
 		setInspectedRevision(undefined)
 		if (selectedCore === undefined || chainId === '' || rpcUrl === '' || feeBps === '' || inputError !== undefined) {
 			setInspectionState('idle')
@@ -171,14 +187,24 @@ export function TradingDeploymentSetup({
 	}, [chainId, feeBps, inputError, onComplete, retryNonce, rpcUrl, selectedCore, services])
 
 	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
+	const deploymentComplete = deploymentStatus?.factory === true && deploymentStatus.router
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
-	const inspection = inspectionPresentation(inspectionState)
+	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const retryConfiguration = !retryChecks && configurationError !== undefined && configurationError !== missingDeploymentConfigurationMessage && onRetryConfiguration !== undefined
 	let retryAction
 	if (retryChecks)
 		retryAction = (
-			<button class='secondary-action' type='button' disabled={busy || inspectionState === 'loading'} onClick={() => setRetryNonce(current => current + 1)}>
+			<button
+				class='secondary-action'
+				type='button'
+				disabled={busy || registryLoading || inspectionState === 'loading'}
+				onClick={() => {
+					setRegistryLoading(true)
+					setRegistryError(undefined)
+					setRetryNonce(current => current + 1)
+				}}
+			>
 				Retry checks
 			</button>
 		)
@@ -189,22 +215,20 @@ export function TradingDeploymentSetup({
 			</button>
 		)
 	async function deployNext() {
-		if (busy || inspectedRevision !== inputRevision.current || plan === undefined || publicClient === undefined || deploymentStatus === undefined || nextStep === undefined) return
+		if (busy || registryLoading || registryError !== undefined || inspectedRevision !== inputRevision.current || plan === undefined || publicClient === undefined || deploymentStatus === undefined || nextStep === undefined) return
 		setBusy(true)
 		onWorkflowLockChange(true)
 		setActionMessage(undefined)
-		setSubmittedHash(undefined)
+		setActionError(false)
 		let broadcastHash: Hash | undefined
 		try {
 			const deployStep = services.deployStep ?? defaultServices.deployStep
 			if (deployStep === undefined) throw new Error('Trading deployment service is unavailable')
 			await deployStep(publicClient, plan, nextStep, hash => {
 				broadcastHash = hash
-				setSubmittedHash(hash)
 			})
 			const status = await loadTradingDeploymentStatus(publicClient, plan)
 			setDeploymentStatus(status)
-			setSubmittedHash(undefined)
 			if (status.factory && status.router) {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
 				const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
@@ -214,12 +238,12 @@ export function TradingDeploymentSetup({
 			}
 			setActionMessage(`${nextStep.label} deployed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
 		} catch (error) {
-			const detail = publicErrorMessage(error, `Failed to deploy ${nextStep.label}`)
+			setActionError(true)
+			let detail = publicErrorMessage(error, `Failed to deploy ${nextStep.label}`)
 			try {
 				const status = await loadTradingDeploymentStatus(publicClient, plan)
 				setDeploymentStatus(status)
 				if (status[nextStep.id]) {
-					setSubmittedHash(undefined)
 					if (status.factory && status.router) {
 						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
 						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
@@ -227,11 +251,12 @@ export function TradingDeploymentSetup({
 						onComplete(configuration)
 						return
 					}
+					setActionError(false)
 					setActionMessage(`${nextStep.label} is already installed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
 					return
 				}
-			} catch {
-				// Preserve the original deployment error when recovery reads also fail.
+			} catch (recoveryError) {
+				detail = `${detail} Unable to verify deployment status: ${publicErrorMessage(recoveryError, 'Unknown recovery error')}`
 			}
 			setActionMessage(broadcastHash === undefined ? detail : `Transaction ${broadcastHash} was broadcast but setup did not finish. Verify it in your wallet before retrying. ${detail}`)
 		} finally {
@@ -260,7 +285,7 @@ export function TradingDeploymentSetup({
 						<span>Core network</span>
 						<select
 							value={chainId}
-							disabled={busy || coreDeployments.length === 0}
+							disabled={busy || registryLoading || coreDeployments.length === 0}
 							onChange={event => {
 								inputRevision.current += 1
 								setChainId(event.currentTarget.value)
@@ -332,7 +357,7 @@ export function TradingDeploymentSetup({
 						</div>
 					</dl>
 				)}
-				<div class='deployment-setup__status' aria-live='polite'>
+				<div class='deployment-setup__status' role='status' aria-live='polite'>
 					<div>
 						<span>Deployment progress</span>
 						<strong>{deploymentProgress(deploymentStatus)}</strong>
@@ -345,14 +370,16 @@ export function TradingDeploymentSetup({
 					</p>
 				)}
 				{actionMessage === undefined ? null : (
-					<p class={submittedHash === undefined ? undefined : 'error'} role={submittedHash === undefined ? 'status' : 'alert'}>
+					<p class={actionError ? 'error' : undefined} role={actionError ? 'alert' : 'status'}>
 						{actionMessage}
 					</p>
 				)}
 				<div class='deployment-setup__actions'>
-					<button class='primary-action' type='button' disabled={busy || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined} aria-busy={busy} onClick={() => void deployNext()}>
-						{deploymentActionLabel(busy, nextStep, deploymentStatus)}
-					</button>
+					{deploymentComplete ? null : (
+						<button class='primary-action' type='button' disabled={busy || registryLoading || registryError !== undefined || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined} aria-busy={busy} onClick={() => void deployNext()}>
+							{deploymentActionLabel(busy, nextStep, deploymentStatus)}
+						</button>
+					)}
 					{retryAction}
 				</div>
 			</section>

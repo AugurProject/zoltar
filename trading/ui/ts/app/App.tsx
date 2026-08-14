@@ -376,7 +376,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		else if (route === 'deploy')
 			content = (
 				<TradingDeploymentSetup
-					key={liveDeploymentStatus}
 					configurationError={liveConfigurationError}
 					onComplete={completeWalletDeployment}
 					onRetryConfiguration={retryDeployment}

@@ -102,6 +102,30 @@ const scenarios = [
 		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } }); const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
+		name: 'deployment-setup-pending-hydration-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?qaDeployment=pending#/deploy',
+		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluateWaitMs: 300,
+		clickSelector: '.deployment-setup .primary-action',
+		clickWaitMs: 800,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
+	},
+	{
+		name: 'deployment-setup-pending-hydration-mobile',
+		width: 390,
+		height: 844,
+		path: '/?qaDeployment=pending#/deploy',
+		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluateWaitMs: 300,
+		clickSelector: '.deployment-setup .primary-action',
+		clickWaitMs: 800,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollY: 420,
+		postScrollAssertExpression: `(() => { const action = document.querySelector('.deployment-setup .primary-action')?.getBoundingClientRect(); return action !== undefined && action.top >= 0 && action.bottom <= innerHeight && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
 		name: 'disconnected-market-list',
 		width: 1440,
 		height: 900,
@@ -519,7 +543,7 @@ try {
 			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true })
 			const result = evaluated.result
 			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}`)
-			await Bun.sleep(100)
+			await Bun.sleep('evaluateWaitMs' in scenario ? scenario.evaluateWaitMs : 100)
 		}
 		if ('clickSelector' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.clickSelector)})?.click()` })

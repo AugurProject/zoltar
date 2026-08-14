@@ -7,6 +7,7 @@ The root mainnet and Sepolia manifests describe planned deterministic addresses;
 From `trading/`, start the standalone UI:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
@@ -26,6 +27,7 @@ From the repository root, start the trading Docker UI:
 
 ```bash
 cd trading
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 

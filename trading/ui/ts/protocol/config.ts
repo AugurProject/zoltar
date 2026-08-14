@@ -33,17 +33,17 @@ function requiredNumber(value: unknown, label: string) {
 }
 
 function requiredRpcUrl(value: unknown) {
-	const rpcUrl = requiredString(value, 'rpcUrl')
+	const rpcUrl = requiredString(value, 'RPC URL')
 	let parsed: URL
 	try {
 		parsed = new URL(rpcUrl)
 	} catch (error) {
-		if (error instanceof TypeError) throw new Error('rpcUrl must be a valid URL')
+		if (error instanceof TypeError) throw new Error('RPC URL must be a valid URL')
 		throw error
 	}
 	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('rpcUrl must use HTTPS or loopback HTTP')
-	if (parsed.username !== '' || parsed.password !== '') throw new Error('rpcUrl must not contain embedded credentials')
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('RPC URL must use HTTPS or loopback HTTP')
+	if (parsed.username !== '' || parsed.password !== '') throw new Error('RPC URL must not contain embedded credentials')
 	return parsed.toString()
 }
 

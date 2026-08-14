@@ -25,9 +25,10 @@ describe('trading UI deployment configuration', () => {
 
 	test('rejects unsafe RPC URLs and nonpositive chain IDs', () => {
 		expect(() => parseDeploymentConfiguration({ chainId: 0, chainName: 'Zero', rpcUrl: 'https://example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('chainId must be positive')
-		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('HTTPS or loopback HTTP')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'not a URL', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('RPC URL must be a valid URL')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('RPC URL must use HTTPS or loopback HTTP')
 		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'http://[::1]:8545', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('HTTPS or loopback HTTP')
-		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'https://user:secret@example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('embedded credentials')
+		expect(() => parseDeploymentConfiguration({ chainId: 1, chainName: 'One', rpcUrl: 'https://user:secret@example.test', securityPoolFactory: core, factory, router, feeBps: 30 })).toThrow('RPC URL must not contain embedded credentials')
 	})
 
 	test('rejects an RPC chain that differs from the manifest', () => {

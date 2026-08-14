@@ -639,6 +639,9 @@ nav a[aria-current="page"] {
 	grid-template-columns: minmax(12rem, 1fr) minmax(16rem, 2fr) minmax(9rem, 0.7fr);
 	gap: 1rem;
 }
+.deployment-setup__fields .field {
+	margin: 0;
+}
 .deployment-setup__contracts {
 	margin: 0;
 }
