@@ -1070,6 +1070,36 @@ describe('network indexer lifecycle', () => {
 				exact: true,
 			})),
 		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		const inexactStoredHelper = new Map([
+			[
+				address.toLowerCase(),
+				{
+					address,
+					label: 'Multicall3',
+					kind: 'multicall3',
+					provenance: 'manifest',
+					deploymentBlock: 75n,
+					deploymentBlockExact: false,
+					deploymentCheckedBlock: 100n,
+				} satisfies ContractMetadata,
+			],
+		])
+		const searches: Array<{ start: bigint; knownAbsent: boolean }> = []
+		await expect(
+			manifestChangeRequiresFullReplay(
+				[[address, 'OpenOracle', 'openOracle']],
+				inexactStoredHelper,
+				new Map(),
+				100n,
+				0n,
+				75n,
+				async (_candidate, start, _checkpoint, knownAbsent) => {
+					searches.push({ start, knownAbsent })
+					return { block: 50n, exact: true }
+				},
+			),
+		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		expect(searches).toEqual([{ start: 0n, knownAbsent: false }])
 	})
 
 	test('gives each manifest deployment search an independent read budget', async () => {

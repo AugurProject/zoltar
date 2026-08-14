@@ -301,12 +301,17 @@ export const planManifestBackfill = async (
 		}
 		if (!requiresManifestHistoryCoverage(contract)) continue
 		const cursor = cursors.get(address.toLowerCase())
-		let deploymentBlock = configuredDeploymentBlock ?? contract.deploymentBlock
+		const requiresFreshDeploymentSearch =
+			configuredDeploymentBlock === undefined &&
+			storedContract !== undefined &&
+			!requiresManifestHistoryCoverage(storedContract) &&
+			storedContract.deploymentBlockExact !== true
+		let deploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch ? undefined : contract.deploymentBlock)
 		if (cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint && (deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)) continue
 		if (deploymentBlock === undefined) {
-			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
-			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined) continue
-			const deployment = await findDeployment(address, searchStart, checkpoint, contract.deploymentCheckedBlock !== undefined)
+			const searchStart = requiresFreshDeploymentSearch ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch) continue
+			const deployment = await findDeployment(address, searchStart, checkpoint, !requiresFreshDeploymentSearch && contract.deploymentCheckedBlock !== undefined)
 			if (deployment === undefined) continue
 			deploymentBlock = deployment.block
 		}
