@@ -55,9 +55,7 @@ describe('configured coordinator report discovery', () => {
 				if (to !== openOracle.toLowerCase()) throw new Error(`Unexpected contract ${to}`)
 				const decoded = decodeFunctionData({ abi: openOracleAbi, data })
 				if (decoded.functionName === 'storedGame') {
-					return Promise.resolve(
-						encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n]),
-					)
+					return Promise.resolve(encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n]))
 				}
 				if (decoded.functionName === 'storedHelper') {
 					return Promise.resolve(encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [activeCoordinator, 80n, 79n]))
