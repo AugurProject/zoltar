@@ -10,7 +10,7 @@ services:
     command:
       - --chain=sepolia
       - --datadir=/home/erigon/.local/share/erigon
-      - --prune.mode=archive
+      - --prune.mode=blocks
       - --persist.receipts=true
       - --http
       - --http.addr=0.0.0.0
