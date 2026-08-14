@@ -78,6 +78,7 @@ describe('wallet trading deployment plan', () => {
 		const plan = examplePlan()
 		const hash = `0x${'ab'.repeat(32)}` satisfies Hash
 		let factoryDeployed = false
+		let delayedFactoryCodeReads = 2
 		let contractReadCount = 0
 		const transactions: Array<Readonly<{ data: string; to: string }>> = []
 		const publicClient = createPublicClient({
@@ -88,7 +89,13 @@ describe('wallet trading deployment plan', () => {
 						if (typeof address !== 'string') throw new Error('Missing code address')
 						if (address.toLowerCase() === plan.core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
 						if (address.toLowerCase() === plan.core.securityPoolFactory.toLowerCase()) return '0x01'
-						if (address.toLowerCase() === plan.factory.address.toLowerCase() && factoryDeployed) return '0x01'
+						if (address.toLowerCase() === plan.factory.address.toLowerCase() && factoryDeployed) {
+							if (delayedFactoryCodeReads > 0) {
+								delayedFactoryCodeReads -= 1
+								return '0x'
+							}
+							return '0x01'
+						}
 						return '0x'
 					}
 					if (method === 'eth_call') {
@@ -111,7 +118,32 @@ describe('wallet trading deployment plan', () => {
 			},
 		}
 
-		expect(await deployTradingStep(walletClient, publicClient, plan, plan.factory)).toBe(hash)
+		expect(await deployTradingStep(walletClient, publicClient, plan, plan.factory, undefined, undefined, async () => undefined)).toBe(hash)
 		expect(transactions).toEqual([{ data: plan.factory.data, to: plan.core.proxyDeployer }])
+	})
+
+	test('aborts before broadcast when the wallet context changes during preflight', async () => {
+		const plan = examplePlan()
+		let sendCount = 0
+		const publicClient = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_getCode' || !Array.isArray(params)) throw new Error(`Unexpected RPC method ${method}`)
+					const address = params[0]
+					if (typeof address === 'string' && address.toLowerCase() === plan.core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+					return typeof address === 'string' && address.toLowerCase() === plan.core.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
+				},
+			}),
+		})
+		const walletClient = {
+			sendTransaction: async () => {
+				sendCount += 1
+				return `0x${'ab'.repeat(32)}` satisfies Hash
+			},
+			waitForTransactionReceipt: async () => ({ status: 'success' as const }),
+		}
+
+		await expect(deployTradingStep(walletClient, publicClient, plan, plan.factory, undefined, async () => await Promise.reject(new Error('Wallet context changed before deployment')))).rejects.toThrow('Wallet context changed before deployment')
+		expect(sendCount).toBe(0)
 	})
 })

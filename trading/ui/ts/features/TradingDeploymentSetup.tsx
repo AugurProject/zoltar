@@ -179,10 +179,19 @@ export function TradingDeploymentSetup({
 			if (currentChainId !== plan.core.chainId) throw new Error(`Wallet must use ${plan.core.chainName}`)
 			const account = await connectWallet(provider)
 			const walletClient = createTradingWalletClient(provider, account)
-			await deployTradingStep(walletClient, publicClient, plan, nextStep, hash => {
-				broadcastHash = hash
-				setSubmittedHash(hash)
-			})
+			await deployTradingStep(
+				walletClient,
+				publicClient,
+				plan,
+				nextStep,
+				hash => {
+					broadcastHash = hash
+					setSubmittedHash(hash)
+				},
+				async () => {
+					if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error('Wallet context changed before deployment; no transaction was submitted')
+				},
+			)
 			if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error('Wallet context changed during deployment; verify the transaction before continuing')
 			const status = await loadTradingDeploymentStatus(publicClient, plan)
 			setDeploymentStatus(status)
@@ -197,6 +206,24 @@ export function TradingDeploymentSetup({
 			setActionMessage(`${nextStep.label} deployed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
 		} catch (error) {
 			const detail = publicErrorMessage(error, `Failed to deploy ${nextStep.label}`)
+			try {
+				const status = await loadTradingDeploymentStatus(publicClient, plan)
+				setDeploymentStatus(status)
+				if (status[nextStep.id]) {
+					setSubmittedHash(undefined)
+					if (status.factory && status.router) {
+						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
+						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
+						services.saveConfiguration(configuration)
+						onComplete(configuration)
+						return
+					}
+					setActionMessage(`${nextStep.label} is already installed. Continue with ${nextTradingDeploymentStep(plan, status)?.label ?? 'the next contract'}.`)
+					return
+				}
+			} catch {
+				// Preserve the original deployment error when recovery reads also fail.
+			}
 			setActionMessage(broadcastHash === undefined ? detail : `Transaction ${broadcastHash} was broadcast but setup did not finish. Verify it in your wallet before retrying. ${detail}`)
 		} finally {
 			setBusy(false)
