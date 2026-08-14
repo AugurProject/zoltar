@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { Address } from '@zoltar/shared/ethereum'
 import { parseCoreDeploymentManifest, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from '../deploy/manifest.ts'
 
 describe('trading deployment manifest validation', () => {
@@ -7,6 +8,18 @@ describe('trading deployment manifest validation', () => {
 		expect(parsed.chainId).toBe(31_337n)
 		expect(() => requireMatchingChain(parsed.chainId, 1n)).toThrow('does not match RPC chain')
 		expect(requireMatchingChain(parsed.chainId, 31_337n)).toBeUndefined()
+	})
+
+	test('reads SecurityPoolFactory from the canonical root deployment steps', () => {
+		const securityPoolFactory = `0x${'34'.repeat(20)}` satisfies Address
+		const parsed = parseCoreDeploymentManifest({
+			network: { chainId: 1 },
+			deploymentSteps: [
+				{ id: 'proxyDeployer', address: `0x${'12'.repeat(20)}` },
+				{ id: 'securityPoolFactory', address: securityPoolFactory },
+			],
+		})
+		expect(parsed).toEqual({ chainId: 1n, securityPoolFactory })
 	})
 
 	test('rejects manifests without chain identity', () => {

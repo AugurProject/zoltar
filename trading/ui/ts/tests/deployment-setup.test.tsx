@@ -6,6 +6,44 @@ import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE } from '../protocol/deployment.ts'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
+const core = {
+	chainId: 11_155_111,
+	chainName: 'Sepolia',
+	id: 'sepolia',
+	proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
+	securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
+}
+
+function deploymentClient(rpcAvailable: () => boolean = () => true) {
+	return createPublicClient({
+		transport: custom(
+			{
+				request: async ({ method, params }) => {
+					if (!rpcAvailable()) throw new Error('RPC unavailable')
+					if (method === 'eth_chainId') return '0xaa36a7'
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						return typeof address === 'string' && address.toLowerCase() === core.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			},
+			{ retryCount: 0 },
+		),
+	})
+}
+
+async function waitForText(text: string) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		if (document.body.textContent?.includes(text)) return
+	}
+	throw new Error(`Timed out waiting for ${text}`)
+}
+
 describe('trading deployment setup', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
@@ -22,32 +60,13 @@ describe('trading deployment setup', () => {
 	})
 
 	test('automatically verifies selected network settings and exposes the first deployment step', async () => {
-		const core = {
-			chainId: 11_155_111,
-			chainName: 'Sepolia',
-			id: 'sepolia',
-			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
-			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
-		}
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return '0xaa36a7'
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
-						return typeof address === 'string' && address.toLowerCase() === core.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
+		const client = deploymentClient()
 		const services: TradingDeploymentSetupServices = {
 			createPublicClient: () => client,
 			loadCoreDeployments: async () => [core],
 			saveConfiguration: () => undefined,
 		}
-		const rendered = await renderIntoDocument(<TradingDeploymentSetup configurationError='No deployment configured' onComplete={() => undefined} onRetryManifest={() => undefined} services={services} />)
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup configurationError='No deployment configured' onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => {
 			await Bun.sleep(0)
@@ -65,7 +84,43 @@ describe('trading deployment setup', () => {
 			await Bun.sleep(30)
 		})
 		expect(rendered.container.textContent).toContain('Ready to deploy')
+		expect(rendered.container.textContent).toContain('Immutable trading fee')
 		expect(rendered.container.textContent).toContain('Deploy Two-way trading factory')
 		expect(rendered.container.textContent).toContain('0 / 2')
+	})
+
+	test('retries a failed automatic RPC inspection without losing the selected settings', async () => {
+		let rpcAvailable = false
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => deploymentClient(() => rpcAvailable),
+			loadCoreDeployments: async () => [core],
+			saveConfiguration: () => undefined,
+		}
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup configurationError={undefined} onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			await Bun.sleep(0)
+		})
+		const select = rendered.container.querySelector<HTMLSelectElement>('select')
+		const rpcInput = rendered.container.querySelector<HTMLInputElement>('input[type="url"]')
+		if (select === null || rpcInput === null) throw new Error('Deployment setup fields are unavailable')
+		await act(async () => {
+			select.value = core.chainId.toString()
+			select.dispatchEvent(new Event('change', { bubbles: true }))
+			rpcInput.value = 'https://rpc.example'
+			rpcInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		await waitForText('RPC unavailable')
+		expect(rendered.container.textContent).toContain('RPC unavailable')
+		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
+		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
+		rpcAvailable = true
+		await act(async () => {
+			retry.click()
+		})
+		await waitForText('Ready to deploy')
+		expect(select.value).toBe(core.chainId.toString())
+		expect(rpcInput.value).toBe('https://rpc.example')
+		expect(rendered.container.textContent).toContain('Ready to deploy')
 	})
 })

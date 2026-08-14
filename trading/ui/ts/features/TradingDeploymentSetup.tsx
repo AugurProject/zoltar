@@ -20,6 +20,8 @@ const defaultServices: TradingDeploymentSetupServices = {
 	saveConfiguration: configuration => saveDeploymentConfiguration(configuration),
 }
 
+const missingDeploymentConfigurationMessage = 'No bundled or wallet-deployed trading configuration was found.'
+
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
 function initialQueryValue(name: string) {
@@ -38,9 +40,10 @@ function inspectionPresentation(state: 'idle' | 'loading' | 'ready' | 'error') {
 	return { label: 'Enter network settings', tone: 'neutral' as const }
 }
 
-function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>) {
+function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
 	if (busy) return `Deploying ${nextStep?.label ?? 'contract'}…`
-	if (nextStep === undefined) return 'Deployment ready'
+	if (status?.factory === true && status.router) return 'Deployment complete'
+	if (nextStep === undefined) return 'Deploy trading contracts'
 	return `Deploy ${nextStep.label}`
 }
 
@@ -48,13 +51,13 @@ export function TradingDeploymentSetup({
 	configurationError,
 	currentConfiguration,
 	onComplete,
-	onRetryManifest,
+	onRetryConfiguration,
 	services = defaultServices,
 }: {
 	configurationError: string | undefined
 	currentConfiguration?: DeploymentConfiguration
 	onComplete(configuration: DeploymentConfiguration): void
-	onRetryManifest(): void
+	onRetryConfiguration?(): void
 	services?: TradingDeploymentSetupServices
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
@@ -70,6 +73,7 @@ export function TradingDeploymentSetup({
 	const [busy, setBusy] = useState(false)
 	const [actionMessage, setActionMessage] = useState<string>()
 	const [submittedHash, setSubmittedHash] = useState<Hash>()
+	const [retryNonce, setRetryNonce] = useState(0)
 	const selectedCore = useMemo(() => coreDeployments.find(deployment => deployment.chainId.toString() === chainId), [chainId, coreDeployments])
 	let inputError: string | undefined
 	if (chainId !== '' && rpcUrl !== '' && feeBps !== '') {
@@ -96,7 +100,7 @@ export function TradingDeploymentSetup({
 		return () => {
 			active = false
 		}
-	}, [services])
+	}, [retryNonce, services])
 
 	useEffect(() => {
 		setPlan(undefined)
@@ -139,10 +143,25 @@ export function TradingDeploymentSetup({
 		return () => {
 			active = false
 		}
-	}, [chainId, feeBps, inputError, onComplete, rpcUrl, selectedCore, services])
+	}, [chainId, feeBps, inputError, onComplete, retryNonce, rpcUrl, selectedCore, services])
 
 	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
 	const inspection = inspectionPresentation(inspectionState)
+	const retryChecks = registryError !== undefined || inspectionState === 'error'
+	const retryConfiguration = !retryChecks && configurationError !== undefined && configurationError !== missingDeploymentConfigurationMessage && onRetryConfiguration !== undefined
+	let retryAction
+	if (retryChecks)
+		retryAction = (
+			<button class='secondary-action' type='button' disabled={busy || inspectionState === 'loading'} onClick={() => setRetryNonce(current => current + 1)}>
+				Retry checks
+			</button>
+		)
+	else if (retryConfiguration)
+		retryAction = (
+			<button class='secondary-action' type='button' disabled={busy} onClick={onRetryConfiguration}>
+				Retry configuration
+			</button>
+		)
 	async function deployNext() {
 		if (busy || plan === undefined || publicClient === undefined || deploymentStatus === undefined || nextStep === undefined) return
 		setBusy(true)
@@ -216,7 +235,7 @@ export function TradingDeploymentSetup({
 						<input type='url' value={rpcUrl} disabled={busy} placeholder='https://…' spellcheck={false} onInput={event => setRpcUrl(event.currentTarget.value)} />
 					</label>
 					<label class='field'>
-						<span>Trading fee</span>
+						<span>Immutable trading fee</span>
 						<div class='amount-input'>
 							<input inputMode='numeric' value={feeBps} disabled={busy} onInput={event => setFeeBps(event.currentTarget.value)} />
 							<span>bps</span>
@@ -270,11 +289,9 @@ export function TradingDeploymentSetup({
 				)}
 				<div class='deployment-setup__actions'>
 					<button class='primary-action' type='button' disabled={busy || inspectionState !== 'ready' || nextStep === undefined} aria-busy={busy} onClick={() => void deployNext()}>
-						{deploymentActionLabel(busy, nextStep)}
+						{deploymentActionLabel(busy, nextStep, deploymentStatus)}
 					</button>
-					<button class='secondary-action' type='button' disabled={busy} onClick={onRetryManifest}>
-						Retry deployment
-					</button>
+					{retryAction}
 				</div>
 			</section>
 		</main>

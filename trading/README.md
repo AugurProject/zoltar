@@ -16,8 +16,19 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 
 ## Quick setup
 
+From this directory, build and start the live UI:
+
 ```bash
-cd trading
+docker compose up --build --force-recreate
+```
+
+Open `http://localhost:4163/#/markets`. Select a network whose canonical Zoltar core deployment is installed, enter its RPC URL, and connect a wallet. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code before it offers a trading deployment transaction.
+
+On Windows, run `start.bat` from this directory to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
+
+### Local development and demo
+
+```bash
 bun install --frozen-lockfile
 bun run compile
 bun run test
@@ -27,21 +38,12 @@ bun run ui:serve
 
 Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
 
-### Docker
+The Docker image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests. The live UI uses the installed core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading.
 
-Build and serve the standalone UI from this directory:
-
-```bash
-docker compose up --build --force-recreate
-```
-
-On Windows, run `start.bat` from this directory to start the same Compose command. The image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests.
-
-Then open `http://localhost:4163/#/markets`, select the core network and RPC URL, and connect a wallet. The UI uses the core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading. The final image runs as an unprivileged user and exposes a health check at `/`.
-
-To use an existing reviewed project-local trading deployment instead, set its path at build time. The path is relative to `trading/` inside the build context:
+To use an existing reviewed trading deployment instead, first copy its manifest into `trading/deployments/`. Then set its project-local path at build time:
 
 ```bash
+cp /absolute/path/to/reviewed.json deployments/reviewed.json
 TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
 ```
 

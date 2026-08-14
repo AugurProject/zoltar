@@ -304,7 +304,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	})
 	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
 	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
-	const showUniverseSelector = route !== 'deploy' && route !== 'help'
+	const showUniverseSelector = route !== 'deploy' && route !== 'help' && (demo || liveDeploymentStatus !== 'unavailable')
 	const walletSummary = demo ? demoWalletSummary(scenario, market.universeId, demoWalletRetrySucceeded) : walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		if (demo) setDemoWalletRetrySucceeded(true)
@@ -374,12 +374,12 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 				<TradingDeploymentSetup
 					configurationError={liveConfigurationError}
 					onComplete={completeWalletDeployment}
-					onRetryManifest={retryDeployment}
+					onRetryConfiguration={retryDeployment}
 					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
 					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 				/>
 			)
-		else if (liveDeploymentStatus === 'unavailable') content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryManifest={retryDeployment} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
+		else if (liveDeploymentStatus === 'unavailable') content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryConfiguration={retryDeployment} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
 		else
 			content = (
 				<LiveTrading
@@ -444,9 +444,11 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 						<a aria-current={route === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Portfolio
 						</a>
-						<a aria-current={route === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Deploy
-						</a>
+						{demo ? null : (
+							<a aria-current={route === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								Deploy
+							</a>
+						)}
 						<a aria-current={route === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Help
 						</a>
