@@ -13,6 +13,7 @@ import {
 	loadExecutionHistory,
 	operatorSnapshot,
 	parseSignedDecimalEth,
+	publicPollFailure,
 	updateStrategyFromRequest,
 	type ExecutionHistoryFilesystem,
 	type ExecutionRecord,
@@ -26,6 +27,84 @@ const address = '0x0000000000000000000000000000000000000001' as Address
 const submission = { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
+
+describe('public poll failures', () => {
+	test.each([',', ';', ')'])('redacts the complete RPC URL token when its path contains %s', delimiter => {
+		const message = publicPollFailure(`RPC https://operator:protected@rpc.example/v3/key${delimiter}protected-tail request timed out`)
+		expect(message).toContain('RPC https://rpc.example request timed out')
+		expect(message).not.toContain('protected')
+	})
+
+	test('retains the safe cause while redacting credentials and filesystem paths', () => {
+		const credentialFailure = publicPollFailure('RPC request timed out with token=protected-value')
+		expect(credentialFailure).toContain('RPC request timed out with token=[redacted]')
+		expect(credentialFailure).not.toContain('protected-value')
+		const pathFailure = publicPollFailure('State persistence failed while reading /var/lib/zoltar/private.json')
+		expect(pathFailure).toContain('State persistence failed while reading [protected path]')
+		expect(pathFailure).not.toContain('/var/lib/zoltar/private.json')
+	})
+
+	test('redacts standard authorization, JSON secret, and quoted filesystem formats', () => {
+		const authorizationFailure = publicPollFailure('RPC request failed with Authorization: Basic protected-credential')
+		expect(authorizationFailure).toContain('RPC request failed with Authorization: [redacted]')
+		expect(authorizationFailure).not.toContain('protected-credential')
+		const jsonFailure = publicPollFailure('RPC provider returned {"token":"protected value"} while reading the block')
+		expect(jsonFailure).toContain('{"token":"[redacted]"}')
+		expect(jsonFailure).not.toContain('protected value')
+		for (const path of ['/var/lib/zoltar/private.json', 'C:\\zoltar\\private.json']) {
+			const pathFailure = publicPollFailure(`State persistence failed: open '${path}'`)
+			expect(pathFailure).toContain("State persistence failed: open '[protected path]'")
+			expect(pathFailure).not.toContain(path)
+		}
+	})
+
+	test('redacts credential fields, assigned paths, and complete quoted paths containing spaces', () => {
+		const credentialsFailure = publicPollFailure('RPC request failed with credentials=protected-value')
+		expect(credentialsFailure).toContain('credentials=[redacted]')
+		expect(credentialsFailure).not.toContain('protected-value')
+		const assignedPathFailure = publicPollFailure('State persistence failed with path=/var/lib/zoltar/private.json')
+		expect(assignedPathFailure).toContain('path=[protected path]')
+		expect(assignedPathFailure).not.toContain('/var/lib/zoltar/private.json')
+		for (const path of ['/var/lib/zoltar/private state.json', '\\\\private-server\\zoltar\\private state.json']) {
+			const pathFailure = publicPollFailure(`State persistence failed: open '${path}'`)
+			expect(pathFailure).toContain("open '[protected path]'")
+			expect(pathFailure).not.toContain('private state.json')
+		}
+	})
+
+	test('redacts spaced and abbreviated credential labels', () => {
+		const apiKeyFailure = publicPollFailure('RPC request failed with api key=protected-value')
+		expect(apiKeyFailure).toContain('api key=[redacted]')
+		expect(apiKeyFailure).not.toContain('protected-value')
+		const authFailure = publicPollFailure('RPC provider returned {"auth":"Basic protected value"}')
+		expect(authFailure).toContain('{"auth":"[redacted]"}')
+		expect(authFailure).not.toContain('protected value')
+	})
+
+	test('redacts quoted credentials containing apostrophes and escaped quotes', () => {
+		const apostropheFailure = publicPollFailure('RPC provider returned {"password":"protected\'tail value"}')
+		expect(apostropheFailure).toContain('{"password":"[redacted]"}')
+		expect(apostropheFailure).not.toContain("protected'tail value")
+		const escapedQuoteFailure = publicPollFailure('RPC provider returned {"secret":"protected\\"tail value"}')
+		expect(escapedQuoteFailure).toContain('{"secret":"[redacted]"}')
+		expect(escapedQuoteFailure).not.toContain('protected')
+	})
+
+	test('translates internal chain terminology and retains automatic retry guidance for every poll category', () => {
+		const reorganization = publicPollFailure('Canonical chain reorganized deeper than the configured overlap at block 100')
+		expect(reorganization).toContain('tried to read blockchain data through an RPC endpoint')
+		expect(reorganization).toContain('Blockchain history reorganized deeper than the configured overlap at block 100')
+		expect(reorganization.toLowerCase()).not.toContain('canonical chain')
+		for (const error of ['Confirmed dispute history is not durable', 'Risk policy limit rejected the opportunity']) expect(publicPollFailure(error)).toContain('Automatic retry remains active.')
+	})
+
+	test('uses whole domain words and deliberate precedence to describe the attempted action', () => {
+		expect(publicPollFailure('Risk policy blocked the transaction')).toContain('tried to apply the active risk and execution limits')
+		expect(publicPollFailure('Transaction receipt failed at block 100')).toContain('tried to submit or confirm a transaction')
+		expect(publicPollFailure('Read RPC https://market.example/private failed')).toContain('tried to read blockchain data through an RPC endpoint')
+		expect(publicPollFailure('RPC request failed with token=transaction')).toContain('tried to read blockchain data through an RPC endpoint')
+	})
+})
 
 function strategy(): MutableStrategy {
 	return {

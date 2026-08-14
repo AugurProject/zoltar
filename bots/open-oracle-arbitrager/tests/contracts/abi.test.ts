@@ -24,7 +24,7 @@ test('custom dispute ABI matches the compiled OpenOracle contract', () => {
 })
 
 test('custom lifecycle ABI matches the compiled OpenOracle contract', () => {
-	for (const functionName of ['storedGame', 'storedHelper', 'tokenHolder', 'internalAllowance', 'settle', 'withdraw']) {
+	for (const functionName of ['disputeHistory', 'storedGame', 'storedHelper', 'tokenHolder', 'internalAllowance', 'settle', 'withdraw']) {
 		const custom = openOracleAbi.find(entry => entry.type === 'function' && entry.name === functionName)
 		const compiled = peripherals_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === functionName)
 		if (custom === undefined || custom.type !== 'function' || compiled === undefined || compiled.type !== 'function') throw new Error(`Lifecycle ABI is missing ${functionName}`)

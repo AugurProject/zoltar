@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, type Address, type Hex } from '#ethereum'
-import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
+import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
@@ -182,6 +182,56 @@ export async function storedReport(client: ReadClient, openOracle: Address, id: 
 			reportId: id,
 		},
 	}
+}
+
+type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls'>
+
+export async function pendingCoordinatorReports(client: ReadClient, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'openOracle'>, blockNumber: bigint) {
+	const reports = await Promise.all(
+		config.coordinatorAddresses.map(async coordinator => {
+			const rawReportId = await readContractAtBlock(client.transport, { address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' }, blockNumber)
+			const reportId = requiredBigint(rawReportId, `Coordinator ${coordinator} pending report id`)
+			if (reportId === 0n) return undefined
+			const report = await storedReport(client, config.openOracle, reportId, blockNumber)
+			if (report.helper.creator.toLowerCase() !== coordinator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} was created by ${report.helper.creator}`)
+			return report
+		}),
+	)
+	return reports.filter(report => report !== undefined)
+}
+
+export async function pendingCoordinatorReportsWithQuorum(clients: readonly ReadClient[], config: CoordinatorReportConfiguration, blockNumber: bigint) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	return settledQuorumValue(
+		`pending coordinator reports at block ${blockNumber.toString()}`,
+		clients.map(async (client, index) => {
+			const [block, reports] = await Promise.all([client.getBlock({ blockNumber }), pendingCoordinatorReports(client, config, blockNumber)])
+			if (block.hash === null || block.hash === undefined) throw new Error(`Pending coordinator report block ${blockNumber.toString()} is missing its canonical hash`)
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: block.hash, reports } }
+		}),
+	).then(result => result.reports)
+}
+
+export async function disputeRecord(client: ReadClient, openOracle: Address, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
+	const rawRecord = await readContractAtBlock(client.transport, { address: openOracle, abi: openOracleAbi, functionName: 'disputeHistory', args: [reportId, disputeIndex] }, blockNumber)
+	const record = requiredTuple(rawRecord, 4, `OpenOracle report ${reportId.toString()} dispute ${disputeIndex.toString()}`)
+	return {
+		amount1: requiredBigint(record[0], 'OpenOracle dispute amount1'),
+		amount2: requiredBigint(record[1], 'OpenOracle dispute amount2'),
+		reportTimestamp: requiredBigint(record[3], 'OpenOracle dispute timestamp'),
+	}
+}
+
+export async function replacementDisputeAmountsWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	return settledQuorumValue(
+		`replacement dispute ${disputeIndex.toString()} for report ${reportId.toString()} at block ${blockNumber.toString()}`,
+		clients.map(async (client, index) => {
+			const [block, record] = await Promise.all([client.getBlock({ blockNumber }), disputeRecord(client, config.openOracle, reportId, disputeIndex, blockNumber)])
+			if (block.hash === null || block.hash === undefined) throw new Error(`Replacement dispute block ${blockNumber.toString()} is missing its canonical hash`)
+			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: { blockHash: block.hash, record } }
+		}),
+	)
 }
 
 export async function storedReportWithQuorum(clients: readonly ReadClient[], config: Configuration, id: bigint, blockNumber: bigint) {

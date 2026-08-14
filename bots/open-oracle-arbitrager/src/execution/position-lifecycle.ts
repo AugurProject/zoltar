@@ -11,7 +11,7 @@ import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfigu
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
-import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, immediateReplacementAmounts, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
+import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, immediateReplacementAmounts, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
 import { operationalFailureDisposition } from '#monitoring/resilience'
 
@@ -120,8 +120,15 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Position ${activePosition.reportId} predates automatic replacement-credit accounting and requires manual reconciliation`)
 		}
-		const replacementAmounts = immediateReplacementAmounts(activePosition, reportPath)
-		if (replacementAmounts === undefined) throw new Error(`Position ${activePosition.reportId} replacement transition is not yet available in the canonical dispute path`)
+		let replacementAmounts: { amount1: bigint; amount2: bigint } | undefined
+		if (activePosition.reportDisputeIndex === undefined) replacementAmounts = immediateReplacementAmounts(activePosition, reportPath)
+		else {
+			const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
+			const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
+			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
+			if (replacement.record.reportTimestamp !== 0n) replacementAmounts = replacement.record
+		}
+		if (replacementAmounts === undefined) throw new Error(`Position ${activePosition.reportId} replacement transition is not yet available in stored OpenOracle dispute history`)
 		const credit = replacementCredit({
 			feePercentage: BigInt(activePosition.reportFeePercentage),
 			newAmount1: replacementAmounts.amount1,

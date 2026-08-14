@@ -19,12 +19,20 @@ import {
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
+	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
 	venueLabel,
 } from '#dashboard/dashboard-format'
 
 describe('dashboard exact ETH formatting', () => {
+	test('shows the server-sanitized poll cause and describes the attempted operation for local failures', () => {
+		expect(statePollingFailureMessage(new Error('The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active.'))).toBe(
+			'The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active. Use Refresh to retry now.',
+		)
+		expect(statePollingFailureMessage(new Error('Failed to fetch'))).toBe('The bot tried to load the latest operator state for the dashboard, but it failed: Failed to fetch. Automatic retry remains active; use Refresh to retry now.')
+	})
+
 	test('renders execution venue names without exposing snapshot slugs', () => {
 		expect(venueLabel('uniswap-v2')).toBe('Uniswap V2')
 		expect(venueLabel('uniswap-v3')).toBe('Uniswap V3')

@@ -79,7 +79,9 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 ## Requirements
 
 - Bun and this project's frozen dependencies.
-- An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
+- An RPC endpoint for Ethereum mainnet or Sepolia. Approved-coordinator operation
+  uses current contract state and does not require historical log access. An
+  archive-capable endpoint is useful only for coordinator-free diagnostic mode when
   `runtime.lookbackBlocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
@@ -267,36 +269,33 @@ available when RPC validation is temporarily unavailable, reports
 `connectivity-degraded`, and retries with bounded backoff. The bot checks the chain
 before every scan.
 
-Startup enters **Syncing** while the bot scans the configured historical lookback in
-100-block chunks. The deliberately bounded response size prevents permissionless
-OpenOracle event volume from turning one historical RPC response into an unbounded
-memory spike. Once caught up, it polls the latest head and covers every unseen
-height in the OpenOracle event-log query; if several blocks arrive between polls, no
-event-log height is skipped. Opportunity evaluation and pool sampling run once at
-the newest observed head, not once at every intermediate historical height. A
-12-block overlap is re-read and reconciled for shallow reorgs in event-derived
-report state. With no new head the bot remains **Running** without re-evaluating or
-writing duplicate price samples.
+With approved coordinators configured, startup discovers reports by reading each
+coordinator's `pendingReportId` at one fixed block and then reads the corresponding
+stored OpenOracle state. It repeats those current-state reads at each new head and
+does not query historical OpenOracle logs. Execution mode requires a quorum to agree
+on the block and report snapshot. Opportunity evaluation and pool sampling run once
+at the newest agreed head. With no new head the bot remains **Running** without
+re-evaluating or writing duplicate price samples.
+
+Coordinator-free diagnostic mode retains the historical fallback: startup scans
+`runtime.lookbackBlocks` in 100-block log-query chunks, then reads a 12-block overlap
+at each new head for shallow reorganization handling. The deliberately bounded
+response size prevents permissionless event volume from producing an unbounded RPC
+response.
 
 ### Data freshness and retention
 
-Startup lookback backfills OpenOracle events, but it does not backfill historical
-pool prices. The price file can retain a sample from a block displaced by a reorg;
-the 12-block reconciliation applies only to report events. The bot reads at most the
-latest 8 MiB, loads and charts the latest 2,000 valid price records, and atomically
-compacts the file to those records after it crosses 8 MiB. Approved-coordinator report
-paths are reconstructed in memory from the startup lookback plus events observed by
-the current process. Consequently a path can begin at a dispute when its submission
-predates the lookback, and a settlement-only report is not shown when no earlier
-event for that report was observed. For each active report, the scanner retains one
-pre-overlap state anchor plus every event in the 12-block reorg window; older dispute
-steps are compacted instead of replayed forever. Settled paths remain through that
-reorg window and are then removed from the live scanner; confirmed transaction
-history remains in the execution history file. Unapproved reports are not retained
-in the execution cache. In diagnostic mode without configured coordinators, at most
+The price file can retain a sample from a block displaced by a reorganization. The
+bot reads at most the latest 8 MiB, loads and charts the latest 2,000 valid price
+records, and atomically compacts the file to those records after it crosses 8 MiB.
+Approved-coordinator monitoring keeps the complete current state of each pending
+report but does not reconstruct its historical dispute path from logs. Reports that
+are no longer pending are removed from the live cache; confirmed bot transaction
+history remains in the execution history file. In coordinator-free diagnostic mode,
+the startup lookback backfills report events but not historical pool prices. At most
 256 reports and 64 permissionlessly observed tokens are retained so event spam
-cannot create ever-growing per-block work. Increase `runtime.lookbackBlocks` when
-complete active-game context is operationally important.
+cannot create ever-growing per-block work. Increase `runtime.lookbackBlocks` only
+when broader diagnostic event history is operationally important.
 
 ## Run on Sepolia
 
@@ -629,9 +628,8 @@ The dashboard shows:
 - Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
 - A local signer control, connected address, and its ETH/WETH/REP balances.
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
-- Native ETH stakes, WETH stakes, and ETH settler rewards locked in active games
-  observed within the configured event lookback. The combined figure treats 1 WETH
-  as 1 ETH and can undercount games created before that lookback.
+- Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently
+  pending on configured coordinators. The combined figure treats 1 WETH as 1 ETH.
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
   window, token-specific direction, pool, and decision.
 - Durable positions with actual hedge execution, entry and lifecycle gas, exact
@@ -657,8 +655,10 @@ The dashboard shows:
   address links to the selected-network explorer. The [market discovery section](#token-and-pool-discovery)
   owns the venue, price, and liquidity semantics. A token with no supported pool is
   explicitly labeled instead of disappearing.
-- The submitted/disputed/settled events observed for each OpenOracle report,
-  including blocks, reporters, raw locked amounts, and transaction links. See
+- In coordinator-free diagnostic mode, the submitted/disputed/settled events
+  observed for each OpenOracle report, including blocks, reporters, raw locked
+  amounts, and transaction links. Configured-coordinator mode shows current report
+  state without reconstructing these historical paths. See
   [data freshness and retention](#data-freshness-and-retention) for lookback limits.
 - A per-asset current-head price-history chart with one series per supported pool,
   axes, point tooltips, and a recent exact-value table. Samples persist across
@@ -1049,7 +1049,7 @@ scan. The same values live under `strategy` in the complete configuration:
 | TWAP window | `1800 seconds` | `twapSeconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `minimumRemainingSeconds` | Inclusion buffer for timestamp-based games. |
 | Remaining blocks | `3 blocks` | `minimumRemainingBlocks` | Inclusion buffer for block-based games. |
-| Head poll interval | `1000 ms` | `pollMilliseconds` | Delay between latest-head checks. Every unseen event-log height is queried. |
+| Head poll interval | `1000 ms` | `pollMilliseconds` | Delay between latest-head checks. Coordinator-free diagnostic mode queries every unseen event-log height. |
 
 Increasing profit thresholds reduces execution frequency. Increasing the TWAP
 window or remaining-time buffers is generally more conservative, while decreasing
@@ -1270,10 +1270,10 @@ entry from depending on wallet inventory already committed to recovery.
 - Private delivery reduces public-mempool exposure but does not guarantee
   confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
   multiple relays shares the signed payload with every listed operator.
-- A 12-block event overlap is replayed whenever a new head is processed to tolerate
-  short reorganizations. The retained pre-overlap block hash is checked on every
-  poll; a deeper reorganization stops execution and requires restart so the complete
-  lookback is rebuilt. Operators still need independent alerting.
+- Approved-coordinator reports are reread from a fixed block whenever a new head is
+  processed. A retained block hash is checked on every poll; a deeper reorganization
+  stops execution and requires restart. Coordinator-free diagnostic mode separately
+  replays a 12-block event overlap. Operators still need independent alerting.
 - Continuous mode retries transient poll failures with bounded exponential backoff.
   The dashboard exposes per-endpoint health and the latest error, `/healthz` supports
   container supervision, and Compose restarts an unexpectedly exited process.

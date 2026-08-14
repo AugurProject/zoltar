@@ -199,6 +199,11 @@ export function requiredSignerPrivateKey(value: string) {
 	return privateKey
 }
 
+export function statePollingFailureMessage(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error)
+	return message.startsWith('The bot tried to ') ? `${message} Use Refresh to retry now.` : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active; use Refresh to retry now.`
+}
+
 export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWallet: boolean; privateKey: string; requestPending: boolean }) {
 	return {
 		clearDisabled: parameters.requestPending || (!parameters.hasWallet && !parameters.hasQueuedSigner),

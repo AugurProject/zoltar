@@ -773,18 +773,18 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							!('noticeTitle' in value) ||
 							value.noticeTitle !== 'Latest poll failed' ||
 							!('noticeCopy' in value) ||
-							value.noticeCopy !== 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.' ||
+							value.noticeCopy !== 'The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 23842152. Automatic retry remains active.' ||
 							!('bodyContainsCredential' in value) ||
 							value.bodyContainsCredential !== false ||
 							!('endpointText' in value) ||
 							typeof value.endpointText !== 'string' ||
-							!value.endpointText.includes('RPC connectivity or canonical chain reads failed. Automatic retry remains active.') ||
+							!value.endpointText.includes('The bot tried to read blockchain data through an RPC endpoint, but it failed: Read RPC https://rpc.example failed at block 23842152. Automatic retry remains active.') ||
 							!('operationText' in value) ||
 							typeof value.operationText !== 'string' ||
-							!value.operationText.includes('Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.') ||
+							!value.operationText.includes('The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.') ||
 							!('transactionText' in value) ||
 							typeof value.transactionText !== 'string' ||
-							!value.transactionText.includes('Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'))
+							!value.transactionText.includes('The bot tried to submit or confirm a transaction, but it failed: Private relay https://relay.example rejected the transaction. Review transaction activity while automatic retry remains active.'))
 					)
 						throw new Error('Error state did not expose its attention and recovery context')
 					if (mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width) throw new Error(`${status} header overflows its ${width.toString()}px viewport`)
