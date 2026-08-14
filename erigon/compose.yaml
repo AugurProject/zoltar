@@ -1,0 +1,37 @@
+services:
+  erigon:
+    build:
+      context: ..
+      dockerfile: erigon/Dockerfile
+    image: zoltar/sepolia-erigon:v3.5.5
+    restart: unless-stopped
+    environment:
+      ERIGON_RPC_PUBLIC_PORT: ${ERIGON_RPC_PORT:-8545}
+    command:
+      - --chain=sepolia
+      - --datadir=/home/erigon/.local/share/erigon
+      - --prune.mode=archive
+      - --persist.receipts=true
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,erigon,web3,net,debug,trace,txpool
+      - --http.vhosts=localhost,erigon
+      - --ws
+      - --log.dir.path=/home/erigon/.local/share/erigon/logs
+      - --log.dir.prefix=sepolia
+      - --mcp.disable
+    ports:
+      - "127.0.0.1:${ERIGON_RPC_PORT:-8545}:8545"
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "4000:4000/udp"
+      - "4001:4001/tcp"
+      - "42069:42069/tcp"
+      - "42069:42069/udp"
+    volumes:
+      - erigon-sepolia-data:/home/erigon/.local/share/erigon
+    stop_grace_period: 2m
+
+volumes:
+  erigon-sepolia-data:
