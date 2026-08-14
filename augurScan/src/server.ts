@@ -15,7 +15,6 @@ const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)
 const liveDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2, 1)
 const networks = await loadNetworks()
-if (runtimeConfig.disableIndexer) for (const network of networks) await database.seedNetwork(network)
 
 const bus = new LiveBus(liveDatabase)
 let prunePromise: Promise<void> | undefined
