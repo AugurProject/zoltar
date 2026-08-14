@@ -10,3 +10,8 @@ services:
     image: zoltar-trading
     ports:
       - 127.0.0.1:4163:4163
+
+networks:
+  default:
+    name: zoltar
+    external: true

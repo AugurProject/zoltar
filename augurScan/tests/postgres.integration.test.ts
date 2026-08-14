@@ -278,6 +278,7 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow(
 			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
 		)
+		expect(() => assertStartBlockCompatible(100n, 75n, undefined, true)).toThrow('while an effective index start is retained')
 	})
 
 	test('accepts only a prior canonical rewind target', () => {
@@ -354,7 +355,16 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			confirmationDepth: 8n,
 			contracts: [[address, 'Manifest contract', 'zoltar']],
 		}
-		await database.seedNetwork(network)
+		expect(await database.seedNetwork(network)).toBe(false)
+		expect(await database.networkStartBlock(chainId)).toBe(1n)
+		await expect(database.seedNetwork({ ...network, startBlock: 3n }, undefined, false, true)).rejects.toThrow('while an effective index start is retained')
+		expect(await database.networkStartBlock(chainId)).toBe(1n)
+		const zeroBoundaryNetwork = { ...network, id: 'zero-boundary', chainId: chainId + 1, startBlock: 0n }
+		expect(await database.seedNetwork(zeroBoundaryNetwork)).toBe(false)
+		await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, undefined, false, true)).rejects.toThrow(
+			'while an effective index start is retained',
+		)
+		expect(await database.networkStartBlock(zeroBoundaryNetwork.chainId)).toBe(0n)
 		const contender = new ScannerDatabase(postgresUrl)
 		try {
 			const lease = await database.tryAcquireIndexerLock(chainId)
@@ -502,16 +512,18 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			],
 		}
 		await database.storeBlock(chainId, orphan, writeLease)
-		await database.seedNetwork(
-			{
-				...network,
-				contracts: [
-					[address, 'Corrected manifest contract', 'openOracle'],
-					[promotedAddress, 'Promoted manifest helper', 'securityPool'],
-				],
-			},
-			writeLease,
-		)
+		expect(
+			await database.seedNetwork(
+				{
+					...network,
+					contracts: [
+						[address, 'Corrected manifest contract', 'openOracle'],
+						[promotedAddress, 'Promoted manifest helper', 'securityPool'],
+					],
+				},
+				writeLease,
+			),
+		).toBe(true)
 		const seededContracts = await database.contracts(chainId)
 		expect(seededContracts.get(address.toLowerCase())).toMatchObject({ label: 'Corrected manifest contract', kind: 'openOracle', provenance: 'manifest' })
 		expect(seededContracts.get(promotedAddress.toLowerCase())).toEqual({
@@ -1093,6 +1105,47 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		if (largeBeyondEndResponse === undefined) throw new Error('large beyond-end rich-list page did not return a response')
 		const largeBeyondEnd = (await largeBeyondEndResponse.json()) as { items: unknown[]; total: number }
 		expect(largeBeyondEnd).toMatchObject({ items: [], total: 5001 })
+
+		const manifestResetLease = await database.tryAcquireIndexerLock(chainId)
+		if (manifestResetLease === undefined) throw new Error('manifest reset did not acquire its lock')
+		expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] }, manifestResetLease, true)).toBe(true)
+		await manifestResetLease.release()
+		expect(await database.checkpoint(chainId)).toBeUndefined()
+		expect(await database.networkStartBlock(chainId)).toBe(1n)
+		expect(await database.hasStoredBlocks(chainId)).toBe(true)
+		const resetNetworkRows = await database.sql`SELECT finalized_block FROM networks WHERE chain_id = ${chainId}`
+		expect(resetNetworkRows[0]?.['finalized_block']).toBeNull()
+		const canonicalHistory = await database.sql`
+			SELECT
+				(SELECT count(*) FROM logs WHERE chain_id = ${chainId} AND canonical)::integer AS logs,
+				(SELECT count(*) FROM pools WHERE chain_id = ${chainId} AND canonical)::integer AS pools,
+				(SELECT count(*) FROM address_activity WHERE chain_id = ${chainId} AND canonical)::integer AS activity
+		`
+		expect(canonicalHistory[0]).toMatchObject({ logs: 0, pools: 0, activity: 0 })
+		expect([...(await database.contracts(chainId)).values()]).toEqual([{ address, label: 'Final manifest', kind: 'zoltar', provenance: 'manifest' }])
+		const retiredManifestAddress = extraRepTokens[0]
+		if (retiredManifestAddress === undefined) throw new Error('retired manifest fixture is unavailable')
+		await database.upsertContract(chainId, {
+			address: retiredManifestAddress,
+			label: 'Rediscovered security pool',
+			kind: 'securityPool',
+			provenance: 'Factory.DeploySecurityPool',
+			discoveryBlock: 4n,
+			discoveryTxHash: transactionHash,
+		})
+		expect((await database.contracts(chainId)).get(retiredManifestAddress.toLowerCase())).toMatchObject({
+			label: 'Rediscovered security pool',
+			kind: 'securityPool',
+			provenance: 'Factory.DeploySecurityPool',
+		})
+		expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] })).toBe(false)
+		const retainedHistoryLease = await database.tryAcquireIndexerLock(chainId)
+		if (retainedHistoryLease === undefined) throw new Error('retained-history validation did not acquire its lock')
+		await expect(database.seedNetwork({ ...network, startBlock: 100n }, retainedHistoryLease, true)).rejects.toThrow(
+			'while an effective index start is retained',
+		)
+		await retainedHistoryLease.release()
+		expect(await database.networkStartBlock(chainId)).toBe(1n)
 	} finally {
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()

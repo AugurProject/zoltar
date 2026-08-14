@@ -23,3 +23,8 @@ services:
 
 volumes:
   arbitrager-state:
+
+networks:
+  default:
+    name: zoltar
+    external: true

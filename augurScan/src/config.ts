@@ -33,6 +33,7 @@ const requirePositiveInteger = (value: string, name: string, allowZero = false):
 
 export const parseManifestValue = (value: { contracts?: unknown }, filename: string): readonly ManifestContract[] => {
 	if (!Array.isArray(value.contracts)) throw new Error(`${filename} must contain a contracts array`)
+	const addresses = new Set<string>()
 	return value.contracts.map((entry, index) => {
 		if (
 			!Array.isArray(entry) ||
@@ -45,9 +46,11 @@ export const parseManifestValue = (value: { contracts?: unknown }, filename: str
 		) {
 			throw new Error(`${filename} contract ${index} is invalid`)
 		}
-		return entry[3] === undefined
-			? ([getAddress(entry[0]), entry[1], entry[2]] as const)
-			: ([getAddress(entry[0]), entry[1], entry[2], BigInt(entry[3])] as const)
+		const address = getAddress(entry[0])
+		const key = address.toLowerCase()
+		if (addresses.has(key)) throw new Error(`${filename} contract ${index} duplicates address ${address}`)
+		addresses.add(key)
+		return entry[3] === undefined ? ([address, entry[1], entry[2]] as const) : ([address, entry[1], entry[2], BigInt(entry[3])] as const)
 	})
 }
 
@@ -119,7 +122,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 export const runtimeConfig = {
 	port: requirePositiveInteger(process.env['PORT'] ?? '3000', 'PORT'),
 	pollIntervalMs: requirePositiveInteger(process.env['POLL_INTERVAL_MS'] ?? '12000', 'POLL_INTERVAL_MS'),
-	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '2000', 'LOG_SCAN_RANGE_SIZE'),
+	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '10000', 'LOG_SCAN_RANGE_SIZE'),
 	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
 }
