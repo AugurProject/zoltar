@@ -22,6 +22,10 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
+	test('resolves the root Ethereum package without generated JavaScript under Bun', () => {
+		expect(Bun.resolveSync('@zoltar/shared/ethereum', import.meta.dir)).toBe(join(import.meta.dir, '../../../shared/ts/ethereum.ts'))
+	})
+
 	test('keeps the Ethereum facade limited to the compatibility surface', async () => {
 		const facade = await import('../src/ethereum.ts')
 		expect(Object.keys(facade).sort()).toEqual(

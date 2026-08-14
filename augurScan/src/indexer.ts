@@ -107,7 +107,7 @@ import {
 	zeroAddress,
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
-import { unixSecondsToDate } from './time.ts'
+import { bigintToSafeNumber, unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
 
@@ -407,7 +407,7 @@ export const queryAdaptiveLogRange = async <T>(
 	if (!Number.isSafeInteger(maximumBlockCount) || maximumBlockCount <= 0) throw new Error('The maximum log range must be a positive safe integer')
 	if (fromBlock > maximumToBlock) throw new Error('The log range start must not exceed its end')
 	const remaining = maximumToBlock - fromBlock + 1n
-	let blockCount = remaining < BigInt(maximumBlockCount) ? Number(remaining) : maximumBlockCount
+	let blockCount = remaining < BigInt(maximumBlockCount) ? bigintToSafeNumber(remaining, 'Remaining log range') : maximumBlockCount
 	while (true) {
 		const toBlock = fromBlock + BigInt(blockCount - 1)
 		try {
@@ -647,7 +647,7 @@ class NetworkIndexer {
 		const previousSample = this.#progressSample
 		let blocksPerSecond = previousSample?.blocksPerSecond
 		if (previousSample !== undefined && endBlock > previousSample.block && now - previousSample.sampledAt >= 1_000) {
-			const observedRate = Number(endBlock - previousSample.block) / ((now - previousSample.sampledAt) / 1_000)
+			const observedRate = bigintToSafeNumber(endBlock - previousSample.block, 'Indexer progress block count') / ((now - previousSample.sampledAt) / 1_000)
 			blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
 			this.#progressSample = { block: endBlock, sampledAt: now, blocksPerSecond }
 		} else if (previousSample === undefined || endBlock < previousSample.block) {
@@ -773,7 +773,7 @@ class NetworkIndexer {
 						? undefined
 						: {
 								...deployment,
-								timestamp: new Date(Number((await readWithinBudget(() => this.#getBlockHeader(deployment.block))).timestamp) * 1_000),
+								timestamp: unixSecondsToDate((await readWithinBudget(() => this.#getBlockHeader(deployment.block))).timestamp, 'Deployment block timestamp'),
 							}
 			} catch (error) {
 				if (rpcQueueSaturationFrom(error) !== undefined) throw error
@@ -841,7 +841,10 @@ class NetworkIndexer {
 		let headers: readonly RpcBlockHeader[]
 		try {
 			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialContracts)
-			const blockNumbers = Array.from({ length: Number(segment.toBlock - nextBlock + 1n) }, (_, index) => nextBlock + BigInt(index))
+			const blockNumbers = Array.from(
+				{ length: bigintToSafeNumber(segment.toBlock - nextBlock + 1n, 'Log segment block count') },
+				(_, index) => nextBlock + BigInt(index),
+			)
 			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#getBlockHeader(blockNumber))
 			const endHeader = headers.at(-1)
 			if (endHeader === undefined) throw new Error(`RPC did not return block ${segment.toBlock}`)
@@ -876,7 +879,7 @@ class NetworkIndexer {
 			expectedParentHash = (await this.#getBlockHeader(nextBlock - 1n)).hash
 		}
 		while (nextBlock <= end && !this.#signal.aborted) {
-			const header = headers[Number(nextBlock - batchStart)]
+			const header = headers[bigintToSafeNumber(nextBlock - batchStart, 'Block header offset')]
 			if (header === undefined) throw new Error(`RPC did not return block ${nextBlock}`)
 			const contractsBeforeBlock = new Set(contracts.keys())
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
@@ -906,7 +909,7 @@ class NetworkIndexer {
 					this.#mergeLogs(
 						logsByBlock,
 						await this.#getAllLogs(nextBlock + 1n, end, additionalAddresses, indexed.contracts, (blockNumber) => {
-							const expected = headers[Number(blockNumber - batchStart)]
+							const expected = headers[bigintToSafeNumber(blockNumber - batchStart, 'Log block header offset')]
 							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
 							return expected.hash
 						}),
@@ -1044,7 +1047,7 @@ class NetworkIndexer {
 							rangeEnd,
 							this.#network.startBlock,
 							(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
-							async (blockNumber) => new Date(Number((await this.#getBlockHeader(blockNumber)).timestamp) * 1_000),
+							async (blockNumber) => unixSecondsToDate((await this.#getBlockHeader(blockNumber)).timestamp, 'Deployment scan block timestamp'),
 							(contract, error) =>
 								console.warn(
 									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${this.#rpcFailureReason(error)}`,
@@ -1171,8 +1174,7 @@ class NetworkIndexer {
 				if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
 				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined)
 					throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
-				const transactionIndex = Number(transaction.transactionIndex)
-				if (!Number.isSafeInteger(transactionIndex)) throw new Error(`Transaction ${transaction.hash} index exceeds the safe integer range`)
+				const transactionIndex = bigintToSafeNumber(transaction.transactionIndex, `Transaction ${transaction.hash} index`)
 				receipts.push(receipt)
 				receiptByHash.set(receipt.transactionHash, receipt)
 				transactionByHash.set(transaction.hash, { transaction, index: transactionIndex })

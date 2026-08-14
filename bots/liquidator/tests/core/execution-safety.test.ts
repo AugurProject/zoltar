@@ -142,11 +142,7 @@ describe('liquidator execution safety', () => {
 		}
 	})
 	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {
-		const observations = await Promise.allSettled([
-			Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }),
-			Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }),
-			Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] }),
-		])
+		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] })])
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }))).toThrow('RPC disagreement')
 	})
 	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {

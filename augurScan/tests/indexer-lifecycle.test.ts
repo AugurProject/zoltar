@@ -61,6 +61,7 @@ import {
 	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
+import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -850,7 +851,7 @@ describe('network indexer lifecycle', () => {
 				checkedBlocks.push(block)
 				return candidate === address && block >= 75n ? '0x01' : undefined
 			},
-			async (block) => new Date(Number(block) * 1_000),
+			async (block) => unixSecondsToDate(block),
 		)
 		expect(plan.inputs).toEqual([{ address, fromBlock: 75n, startBlock: 75n }])
 		expect(plan.observations).toEqual([

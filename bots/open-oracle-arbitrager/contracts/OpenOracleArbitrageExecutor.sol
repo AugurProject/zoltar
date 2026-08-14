@@ -615,10 +615,7 @@ contract OpenOracleArbitrageExecutor {
 		} else {
 			require(request.venue == 2, 'Unsupported hedge venue');
 		}
-		require(
-			result.hedgeAmountAttoWeth <= request.hedgeWethLimitAttoEth,
-			'Uniswap buy hedge exceeded maximum WETH'
-		);
+		require(result.hedgeAmountAttoWeth <= request.hedgeWethLimitAttoEth, 'Uniswap buy hedge exceeded maximum WETH');
 		if (request.venue != 2) _approveExact(token1, request.router, 0);
 		return result;
 	}
@@ -710,8 +707,7 @@ contract OpenOracleArbitrageExecutor {
 			'Uniswap V4 callback was not consumed'
 		);
 		hedgeAmountAttoWeth = abi.decode(encodedResult, (uint256));
-		uint256 expectedAttoEth =
-			buyToken ? request.hedgeWethLimitAttoEth - hedgeAmountAttoWeth : hedgeAmountAttoWeth;
+		uint256 expectedAttoEth = buyToken ? request.hedgeWethLimitAttoEth - hedgeAmountAttoWeth : hedgeAmountAttoWeth;
 		require(
 			address(this).balance == ethBalanceAttoEth + expectedAttoEth,
 			'Uniswap V4 native balance delta was not exact'

@@ -41,6 +41,7 @@ import {
 	type BalanceState,
 	type GuardedWalletWrite,
 	type PortfolioBalanceEntry,
+	type Quote,
 	type QuoteContext,
 	type TransactionState,
 	type WalletSummaryState,

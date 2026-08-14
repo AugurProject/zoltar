@@ -2,6 +2,7 @@ import { type AddressActivity, DatabaseConsistencyError, databaseConsistencyDiag
 import { errorChainIncludes } from './error-chain.ts'
 import { type Address, type Hash, type Log, type PublicClient, type TransactionReceipt, zeroAddress } from './ethereum.ts'
 import { RpcRequestMethodError, rpcQueueSaturationFrom } from './rpc-request-queue.ts'
+import { bigintToSafeNumber } from './time.ts'
 import type { ContractMetadata, StoredLog } from './types.ts'
 
 export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): Promise<void> =>
@@ -216,9 +217,8 @@ export const requireLogPosition = (log: Log): { transactionHash: Hash; transacti
 	) {
 		throw new Error('RPC returned a pending log while indexing a confirmed block')
 	}
-	const transactionIndex = Number(log.transactionIndex)
-	const logIndex = Number(log.logIndex)
-	if (!Number.isSafeInteger(transactionIndex) || !Number.isSafeInteger(logIndex)) throw new Error('RPC returned a log position outside the safe integer range')
+	const transactionIndex = bigintToSafeNumber(log.transactionIndex, 'RPC log transaction index')
+	const logIndex = bigintToSafeNumber(log.logIndex, 'RPC log index')
 	return {
 		transactionHash: log.transactionHash,
 		transactionIndex,
@@ -359,7 +359,7 @@ export const indexerProgressMessage = (
 	const progress =
 		state === 'live'
 			? 'caught up'
-			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(Number(completion.remainingBlocks) / blocksPerSecond)}`}`
+			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(bigintToSafeNumber(completion.remainingBlocks, 'Remaining block count') / blocksPerSecond)}`}`
 	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
 }
 
