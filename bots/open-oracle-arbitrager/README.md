@@ -132,7 +132,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   as realized.
 
 Do not use a key that controls unrelated protocol or treasury funds. By default, the
-dashboard binds to `127.0.0.1`; the protected-container exception is documented
+dashboard binds to `127.0.0.1`; the host-loopback container setup is documented
 under [Docker](#docker). The execution key still lives in the bot process and must
 be protected like any hot wallet.
 
@@ -218,15 +218,11 @@ lost, restore the complete bot state before resuming live execution with the sam
 signer. Do not reuse that signer from incomplete recovery state.
 
 On first start, the container creates a paused, dry-run configuration in its
-persistent volume. Open `http://127.0.0.1:4173` and sign in as `operator` with the
-local-only default password `zoltar-local-dashboard`.
-
-For anything beyond local evaluation, create `.env` from `.env.example` and set a
-unique dashboard password of at least 16 characters before starting Compose:
-
-```bash
-install -m 600 .env.example .env
-```
+persistent volume. Open `http://127.0.0.1:4173`; the dashboard does not require a
+username or password. Compose publishes the port only on host loopback, so connect
+from another machine through a trusted tunnel to the host rather than changing the
+port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
+`127.0.0.1` mapping.
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then
@@ -675,10 +671,14 @@ The UI is local-only by default. A private key entered there is sent over HTTP t
 loopback endpoint, immediately cleared from the input, and never echoed by the API
 or written to logs or transaction history. In the documented Docker setup, the
 process listens on the container interface while Docker publishes it only on host
-loopback. Binding to `0.0.0.0` requires `ZOLTAR_BOT_DASHBOARD_PASSWORD`; authenticate
-as `operator` in the browser's HTTP Basic prompt. This protects access but does not
-encrypt traffic, so keep that container network free of untrusted peers or terminate
-TLS at an authenticated proxy. JSON API bodies are capped at 1 MiB. The key is kept in memory unless
+loopback; this supplied Compose path does not require a password. Outside that
+explicit host-loopback setup, binding to `0.0.0.0` requires a
+`ZOLTAR_BOT_DASHBOARD_PASSWORD` of at least 16 characters. For a custom network-bound
+container, remove `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and explicitly pass the
+password into the container. Authenticate as `operator` in the browser's HTTP Basic
+prompt. Basic authentication protects access but does not encrypt traffic, so keep
+that network free of untrusted peers or terminate TLS at an authenticated proxy.
+JSON API bodies are capped at 1 MiB. The key is kept in memory unless
 **Save this new key in plaintext for future restarts** is selected. That explicit
 choice stores the key in the owner-only operator settings file; protect the host,
 backups, and settings path as wallet credentials. **Forget saved key** atomically
