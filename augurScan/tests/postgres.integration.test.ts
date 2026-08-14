@@ -359,6 +359,12 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		expect(await database.networkStartBlock(chainId)).toBe(1n)
 		await expect(database.seedNetwork({ ...network, startBlock: 3n }, undefined, false, true)).rejects.toThrow('while an effective index start is retained')
 		expect(await database.networkStartBlock(chainId)).toBe(1n)
+		const zeroBoundaryNetwork = { ...network, id: 'zero-boundary', chainId: chainId + 1, startBlock: 0n }
+		expect(await database.seedNetwork(zeroBoundaryNetwork)).toBe(false)
+		await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, undefined, false, true)).rejects.toThrow(
+			'while an effective index start is retained',
+		)
+		expect(await database.networkStartBlock(zeroBoundaryNetwork.chainId)).toBe(0n)
 		const contender = new ScannerDatabase(postgresUrl)
 		try {
 			const lease = await database.tryAcquireIndexerLock(chainId)
