@@ -36,10 +36,11 @@ describe('Docker entrypoint', () => {
 		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
 	})
 
-	test('provides a local-only dashboard password when .env is absent', async () => {
+	test('publishes the passwordless dashboard only on host loopback', async () => {
 		const source = await readFile(composeFile, 'utf8')
-		expect(source).toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:-')
-		expect(source).not.toContain('${ZOLTAR_BOT_DASHBOARD_PASSWORD:?')
+		expect(source).not.toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
+		expect(source).toContain('127.0.0.1:4173:4173')
 	})
 
 	test('installs production dependencies where shared bot sources can resolve them', async () => {

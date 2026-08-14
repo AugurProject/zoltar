@@ -133,6 +133,7 @@ export function startOperatorControlPlane(parameters: {
 		},
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
 		hostname: config.uiHost,
+		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {

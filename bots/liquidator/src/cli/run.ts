@@ -53,7 +53,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			: createWalletClient({
 					account: privateKeyToAccount(activePrivateKey),
 					chain,
-						transport: readPool.transport,
+					transport: readPool.transport,
 				})
 	const state = initialRuntimeState(settings.paused, wallet?.account.address)
 	const durable = await loadDurableState(settings.runtime.stateFile)
@@ -88,6 +88,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					return operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings))
 				},
 				hostname: settings.runtime.uiHost,
+				loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 				reconcileTransaction: value =>
 					configurationMutationGate.run(async () => {
@@ -324,7 +325,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 											: createWalletClient({
 													account: privateKeyToAccount(activePrivateKey),
 													chain,
-											transport: readPool.transport,
+													transport: readPool.transport,
 												})
 									state.wallet = wallet?.account.address
 								},
@@ -415,14 +416,14 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet) }
 						}),
 					)
-						const available = availableExecutionObservations('liquidation execution snapshot', settled, observation => ({
-							endpoint: observation.endpoint,
-							value: {
-								pools: observation.scan.pools,
-								universes: observation.scan.universes,
-								walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
-							},
-						}))
+					const available = availableExecutionObservations('liquidation execution snapshot', settled, observation => ({
+						endpoint: observation.endpoint,
+						value: {
+							pools: observation.scan.pools,
+							universes: observation.scan.universes,
+							walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
+						},
+					}))
 					const selected = available[0]
 					if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
 					client = selected.client
