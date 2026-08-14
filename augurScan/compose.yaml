@@ -47,3 +47,8 @@ services:
 
 volumes:
   augurscan-data:
+
+networks:
+  default:
+    name: zoltar
+    external: true

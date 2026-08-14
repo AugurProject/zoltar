@@ -29,6 +29,7 @@ threshold.
 From this directory, build and start the bot:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 

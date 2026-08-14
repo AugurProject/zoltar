@@ -35,3 +35,8 @@ services:
 
 volumes:
   erigon-sepolia-data:
+
+networks:
+  default:
+    name: zoltar
+    external: true

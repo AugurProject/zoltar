@@ -13,12 +13,15 @@ Every visible route refreshes automatically after a committed block notification
 From this directory:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
 On Windows, run `start.bat` from this directory to start the same Compose command.
 
 Open <http://localhost:3000>. PostgreSQL is included and stored in the `augurscan-data` named volume. The website is available while historical backfill is running and reports the indexed block, its timestamp/age, observed head, lag, percentage complete, estimated time remaining, and network errors. Completion is measured from the effective start block stored for the index to the latest observed head. The ETA appears after the indexer or browser has observed enough forward progress to measure throughput.
+
+The Compose services join the shared external `zoltar` network. When this repository's Erigon Compose project is running, set `SEPOLIA_RPC_URL=http://erigon:8545` to use it without exposing RPC beyond the host.
 
 Set private or higher-capacity RPC endpoints in `.env` for reliable historical indexing. The included public defaults are convenient for evaluation but can rate-limit large backfills. On a fresh database, augurScan searches from `MAINNET_START_BLOCK` or `SEPOLIA_START_BLOCK` through the observed head for the earliest deployment whose history it tracks, then begins indexing at that deployment instead of walking earlier empty blocks. If none of those contracts is deployed yet, indexing waits at the block after the observed head. The conservative default floor of block `0` cannot omit protocol history; a later verified floor reduces historical bytecode reads. Before accepting a manifest change, augurScan verifies that every newly tracked deployment is within the stored index range. An earlier deployment stops with a rebuild error and leaves the current canonical index unchanged. An accepted address, label, or kind change resets that network to its stored effective start and durably replays the current manifest.
 
@@ -43,7 +46,7 @@ bun test
 bun run dev
 ```
 
-Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving. Migration 005 introduces range-index dataset cursors and rejects an older database if it has an indexed network checkpoint or any block row. No legacy checkpoint or activity compatibility is retained. For the Compose setup, run `docker compose down --volumes` to delete the old database, then `docker compose up --build` to rebuild it from each network's automatically discovered effective start. A database without a checkpoint or block row migrates in place.
+Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving. Migration 005 introduces range-index dataset cursors and rejects an older database if it has an indexed network checkpoint or any block row. No legacy checkpoint or activity compatibility is retained. For the Compose setup, first run the shared-network command under **Start with Docker**. Then run `docker compose down --volumes` to delete the old database and `docker compose up --build` to rebuild it from each network's automatically discovered effective start. A database without a checkpoint or block row migrates in place.
 
 `POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
 

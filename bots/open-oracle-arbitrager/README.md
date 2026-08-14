@@ -207,6 +207,7 @@ Docker Compose builds the image, keeps bot state in a named volume, publishes th
 dashboard only on host loopback, and starts the bot. From this directory, run:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 

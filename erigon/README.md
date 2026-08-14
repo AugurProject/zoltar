@@ -9,6 +9,7 @@ Erigon also writes its own process logs under `/home/erigon/.local/share/erigon/
 From this directory, run:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build -d
 docker compose logs -f erigon
 ```
@@ -21,7 +22,7 @@ The first startup lines print the RPC addresses. With the defaults, applications
 http://localhost:8545
 ```
 
-Other services added to this Compose project connect to `http://erigon:8545`. WebSockets use the same addresses with the `ws://` scheme. The host RPC binding is deliberately restricted to `127.0.0.1`; use a reverse proxy with authentication and TLS instead of exposing the debug and trace APIs directly to the internet.
+Other repository Compose services connect to `http://erigon:8545` through the shared external `zoltar` network. WebSockets use the same addresses with the `ws://` scheme. The host RPC binding is deliberately restricted to `127.0.0.1`; use a reverse proxy with authentication and TLS instead of exposing the debug and trace APIs directly to the internet.
 
 To use another host port, create an `.env` file beside `compose.yaml`:
 
