@@ -1123,6 +1123,22 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		`
 		expect(canonicalHistory[0]).toMatchObject({ logs: 0, pools: 0, activity: 0 })
 		expect([...(await database.contracts(chainId)).values()]).toEqual([{ address, label: 'Final manifest', kind: 'zoltar', provenance: 'manifest' }])
+		const retiredManifestAddress = extraRepTokens[0]
+		if (retiredManifestAddress === undefined) throw new Error('retired manifest fixture is unavailable')
+		await database.upsertContract(chainId, {
+			address: retiredManifestAddress,
+			label: 'Rediscovered security pool',
+			kind: 'securityPool',
+			provenance: 'Factory.DeploySecurityPool',
+			discoveryBlock: 4n,
+			discoveryTxHash: transactionHash,
+		})
+		expect((await database.contracts(chainId)).get(retiredManifestAddress.toLowerCase())).toMatchObject({
+			label: 'Rediscovered security pool',
+			kind: 'securityPool',
+			provenance: 'Factory.DeploySecurityPool',
+		})
+		expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] })).toBe(false)
 		const retainedHistoryLease = await database.tryAcquireIndexerLock(chainId)
 		if (retainedHistoryLease === undefined) throw new Error('retained-history validation did not acquire its lock')
 		await expect(database.seedNetwork({ ...network, startBlock: 100n }, retainedHistoryLease, true)).rejects.toThrow(

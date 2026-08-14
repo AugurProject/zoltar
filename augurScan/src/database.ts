@@ -548,6 +548,10 @@ export class ScannerDatabase {
 					AND contract.address = discovery.address
 					AND NOT contract.canonical
 			`
+			await transaction`
+				UPDATE contracts SET provenance = 'retired-manifest'
+				WHERE chain_id = ${network.chainId} AND provenance = 'manifest' AND NOT canonical
+			`
 			if (manifestChanged && resetCanonicalHistoryOnManifestChange && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
 				for (const table of [
 					'blocks',
