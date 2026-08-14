@@ -13,6 +13,8 @@ docker compose up --build -d
 docker compose logs -f erigon
 ```
 
+On Windows, run `start.bat` from this directory. It starts the same Compose project in the foreground and keeps the window open when Docker exits so that errors remain visible.
+
 The first startup lines print the RPC addresses. With the defaults, applications on the host connect to:
 
 ```text
