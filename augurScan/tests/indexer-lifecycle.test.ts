@@ -142,6 +142,66 @@ const parseRpcRequestBody = (value: unknown): { readonly id: number | string | n
 }
 
 describe('network indexer lifecycle', () => {
+	test('keeps extracted internals out of the public indexer facade', async () => {
+		const indexerFacade = await import('../src/indexer.ts')
+		expect(Object.keys(indexerFacade).sort()).toEqual(
+			[
+				'IndexerOwnershipStageError',
+				'RpcQueueSaturatedError',
+				'addressActivityFrom',
+				'boundedDeploymentRead',
+				'commitCanonicalRead',
+				'compactIndexerDuration',
+				'confirmCanonicalBlock',
+				'contractDeploymentScanDue',
+				'createRpcDiagnosticContext',
+				'createRpcRequestQueue',
+				'deploymentReadBudget',
+				'findContractDeploymentBlock',
+				'findManifestContractDeployment',
+				'indexerOperationFailureReason',
+				'indexerOwnershipStatuses',
+				'indexerProgressMessage',
+				'indexerWaitingMessage',
+				'indexingCompletion',
+				'isLocalIndexerFailure',
+				'isProtocolActivitySource',
+				'isProtocolEvidenceEmitter',
+				'isSplittableLogRangeError',
+				'logScanCursorUpdates',
+				'nextIndexerOwnershipStatus',
+				'ownershipFailureLogMessage',
+				'planDeploymentAwareLogScan',
+				'planManifestBackfill',
+				'queryAdaptiveLogRange',
+				'queryCanonicalLogRange',
+				'readTokenMetadata',
+				'reorgSearchFloor',
+				'requiresManifestHistoryCoverage',
+				'requiresParentLookup',
+				'retryDelayMs',
+				'rpcEndpointLabel',
+				'rpcFailureLogMessage',
+				'rpcIndexerFailureReason',
+				'rpcLogAddressGroups',
+				'rpcLogQueryGroups',
+				'rpcProviderLabel',
+				'runIndexerOwnershipLifecycle',
+				'runIndexerTask',
+				'runNetworkLifecycle',
+				'runOwnedNetworkLifecycle',
+				'safeIndexerFailure',
+				'safeIndexerFailureReason',
+				'startIndexers',
+				'tokenMetadataNeedsRead',
+				'uniswapV4PoolIds',
+				'waitForIndexerDelay',
+				'withRpcRequestQueue',
+				'withVerifiedProvider',
+			].sort(),
+		)
+	})
+
 	test('queues RPC work above the configured concurrency limit', async () => {
 		const queue = createRpcRequestQueue(5)
 		let active = 0

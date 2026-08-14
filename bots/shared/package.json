@@ -27,9 +27,8 @@
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@noble/hashes": "2.2.0",
-		"ccxt": "4.5.70",
-		"micro-eth-signer": "0.18.1"
+		"@zoltar/shared": "file:../../shared",
+		"ccxt": "4.5.70"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

@@ -1,5 +1,5 @@
 import type { Address, Hex } from '../ethereum.ts'
-import { bigintToSafeNumber, keccak256 } from '../ethereum/codec.ts'
+import { bigintToSafeNumber, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
