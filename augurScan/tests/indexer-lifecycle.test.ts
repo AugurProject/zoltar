@@ -7,7 +7,7 @@ import {
 	runFencedIndexerTransaction,
 	type StoredTransaction,
 } from '../src/database.ts'
-import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, toHex } from '../src/ethereum.ts'
+import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, RpcError, toHex } from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -775,7 +775,7 @@ describe('network indexer lifecycle', () => {
 		expect(checkedBlocks).not.toContain(49n)
 	})
 
-	test('falls back to complete scanning when deployment detection fails', async () => {
+	test('falls back to complete scanning when historical contract code is unavailable', async () => {
 		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const failures: unknown[] = []
 		const plan = await planDeploymentAwareLogScan(
@@ -791,6 +791,69 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('propagates rate limits instead of broadening the deployment-aware log scan', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const rateLimit = new Error('RPC method failed', { cause: new RpcError('HTTP 429 while calling eth_getCode', { code: 429 }) })
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => {
+					throw rateLimit
+				},
+				async () => new Date(0),
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(rateLimit)
+		expect(failures).toEqual([])
+	})
+
+	test('propagates unexpected deployment detection errors instead of hiding them with a broad scan', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		for (const failure of [new RpcError('Malformed JSON-RPC response while calling eth_getCode'), new RpcError('state data unavailable')]) {
+			const failures: unknown[] = []
+			await expect(
+				planDeploymentAwareLogScan(
+					[contract],
+					50n,
+					100n,
+					0n,
+					async () => {
+						throw failure
+					},
+					async () => new Date(0),
+					(_contract, error) => failures.push(error),
+				),
+			).rejects.toBe(failure)
+			expect(failures).toEqual([])
+		}
+	})
+
+	test('propagates deployment timestamp failures instead of treating them as code capability failures', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const timestampFailure = new Error('archive unavailable')
+		const failures: unknown[] = []
+
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				50n,
+				100n,
+				0n,
+				async () => '0x01',
+				async () => {
+					throw timestampFailure
+				},
+				(_contract, error) => failures.push(error),
+			),
+		).rejects.toBe(timestampFailure)
+		expect(failures).toEqual([])
 	})
 
 	test('propagates wrapped queue saturation instead of falling back during deployment detection', async () => {

@@ -386,40 +386,39 @@ export const planDeploymentAwareLogScan = async (
 				observations: [],
 			}
 		}
+		let deployment: { readonly block: bigint; readonly exact: boolean } | undefined
 		try {
 			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
-			const deployment = await findContractDeploymentBlock(
+			deployment = await findContractDeploymentBlock(
 				searchStart,
 				toBlock,
 				(block) => codeAt(contract.address, block),
 				contract.deploymentCheckedBlock !== undefined,
 			)
-			if (deployment === undefined) {
-				return { inputs: [], observations: [{ contractAddress: contract.address, checkedBlock: toBlock }] }
-			}
-			const observation: ContractDeploymentObservation = {
-				contractAddress: contract.address,
-				checkedBlock: toBlock,
-				deployment: { ...deployment, timestamp: await blockTimestamp(deployment.block) },
-			}
-			return {
-				inputs: [
-					{
-						address: contract.address,
-						fromBlock: deployment.block > fromBlock ? deployment.block : fromBlock,
-						startBlock: deployment.block,
-					},
-				],
-				observations: [observation],
-			}
 		} catch (error) {
-			if (rpcQueueSaturationFrom(error) !== undefined) throw error
+			if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
 			onDetectionFailure(contract, error)
 			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
 			return {
 				inputs: [{ address: contract.address, fromBlock, startBlock: fallbackStart }],
 				observations: [],
 			}
+		}
+		if (deployment === undefined) return { inputs: [], observations: [{ contractAddress: contract.address, checkedBlock: toBlock }] }
+		const observation: ContractDeploymentObservation = {
+			contractAddress: contract.address,
+			checkedBlock: toBlock,
+			deployment: { ...deployment, timestamp: await blockTimestamp(deployment.block) },
+		}
+		return {
+			inputs: [
+				{
+					address: contract.address,
+					fromBlock: deployment.block > fromBlock ? deployment.block : fromBlock,
+					startBlock: deployment.block,
+				},
+			],
+			observations: [observation],
 		}
 	})
 	return { inputs: planned.flatMap(({ inputs }) => inputs), observations: planned.flatMap(({ observations }) => observations) }
@@ -549,6 +548,43 @@ const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined =>
 		current = 'cause' in current ? current.cause : undefined
 	}
 	return firstCategory
+}
+
+const isPermanentHistoricalCodeError = (error: unknown): boolean => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if ('code' in current && current.code === -32601) return true
+		for (const description of preferredRpcDescriptions(current)) {
+			const normalized = classifiedRpcDescription(description)
+			if (
+				normalized.includes('missing trie node') ||
+				normalized.includes('archive unavailable') ||
+				normalized.includes('archive data unavailable') ||
+				normalized.includes('archival data unavailable') ||
+				normalized.includes('archive node required') ||
+				normalized.includes('requires an archive node') ||
+				normalized.includes('requires archive node') ||
+				normalized.includes('historical state unavailable') ||
+				normalized.includes('historical state is unavailable') ||
+				normalized.includes('historical state not available') ||
+				normalized.includes('historical state is not available') ||
+				normalized.includes('historical data unavailable') ||
+				normalized.includes('historical data is unavailable') ||
+				normalized.includes('historical data not available') ||
+				normalized.includes('historical data is not available') ||
+				normalized.includes('pruned historical state') ||
+				normalized.includes('historical state pruned') ||
+				normalized.includes('method not found') ||
+				normalized.includes('method not supported') ||
+				normalized.includes('unsupported method')
+			)
+				return true
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
 }
 
 export const isSplittableLogRangeError = (error: unknown): boolean => {
