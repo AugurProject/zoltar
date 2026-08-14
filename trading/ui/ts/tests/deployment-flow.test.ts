@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep } from '../protocol/deployment.ts'
 
 function examplePlan() {
@@ -63,10 +63,14 @@ describe('wallet trading deployment plan', () => {
 
 	test('rejects a network without the exact canonical proxy deployer runtime', async () => {
 		const plan = examplePlan()
-		const client = {
-			getCode: async ({ address }: { address: Address }) => (address === plan.core.securityPoolFactory ? '0x01' : '0x02'),
-			readContract: async () => 0n,
-		}
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_getCode' || !Array.isArray(params)) throw new Error(`Unexpected RPC method ${method}`)
+					return typeof params[0] === 'string' && params[0].toLowerCase() === plan.core.securityPoolFactory.toLowerCase() ? '0x01' : '0x02'
+				},
+			}),
+		})
 		await expect(loadTradingDeploymentStatus(client, plan)).rejects.toThrow('Canonical proxy deployer has unexpected code')
 	})
 
@@ -74,20 +78,27 @@ describe('wallet trading deployment plan', () => {
 		const plan = examplePlan()
 		const hash = `0x${'ab'.repeat(32)}` satisfies Hash
 		let factoryDeployed = false
-		const transactions: Array<Readonly<{ data: string; to: Address }>> = []
-		const publicClient = {
-			getCode: async ({ address }: { address: Address }) => {
-				if (address === plan.core.proxyDeployer) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
-				if (address === plan.core.securityPoolFactory) return '0x01'
-				if (address === plan.factory.address && factoryDeployed) return '0x01'
-				return '0x'
-			},
-			readContract: async ({ functionName }: { functionName: string }) => {
-				if (functionName === 'securityPoolFactory') return plan.core.securityPoolFactory
-				if (functionName === 'feeBps') return BigInt(plan.feeBps)
-				throw new Error(`Unexpected read ${functionName}`)
-			},
-		}
+		let contractReadCount = 0
+		const transactions: Array<Readonly<{ data: string; to: string }>> = []
+		const publicClient = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === plan.core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if (address.toLowerCase() === plan.core.securityPoolFactory.toLowerCase()) return '0x01'
+						if (address.toLowerCase() === plan.factory.address.toLowerCase() && factoryDeployed) return '0x01'
+						return '0x'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						return contractReadCount % 2 === 1 ? encodeAbiParameters([{ type: 'address' }], [plan.core.securityPoolFactory]) : encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
 		const walletClient = {
 			sendTransaction: async (transaction: Readonly<{ data?: string; to?: Address }>) => {
 				if (transaction.data === undefined || transaction.to === undefined) throw new Error('Missing deployment transaction fields')

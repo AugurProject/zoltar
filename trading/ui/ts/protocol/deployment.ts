@@ -1,4 +1,4 @@
-import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.ts'
 import type { DeploymentConfiguration } from './config.ts'
 
@@ -25,6 +25,11 @@ export type TradingDeploymentPlan = Readonly<{
 	factory: TradingDeploymentStep
 	feeBps: number
 	router: TradingDeploymentStep
+}>
+
+type TradingDeploymentWallet = Readonly<{
+	sendTransaction(transaction: Readonly<{ data: Hex; to: Address }>): Promise<Hash>
+	waitForTransactionReceipt(parameters: Readonly<{ hash: Hash }>): Promise<Readonly<{ status: 'success' | 'reverted' }>>
 }>
 
 const factoryContract = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
@@ -108,7 +113,7 @@ export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: R
 	return undefined
 }
 
-export async function deployTradingStep(walletClient: Pick<WalletClient, 'sendTransaction' | 'waitForTransactionReceipt'>, publicClient: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan, step: TradingDeploymentStep, onSubmitted: (hash: Hash) => void = () => undefined): Promise<Hash> {
+export async function deployTradingStep(walletClient: TradingDeploymentWallet, publicClient: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan, step: TradingDeploymentStep, onSubmitted: (hash: Hash) => void = () => undefined): Promise<Hash> {
 	const status = await loadTradingDeploymentStatus(publicClient, plan)
 	if (status[step.id]) throw new Error(`${step.label} is already deployed`)
 	for (const dependency of step.dependencies) {
