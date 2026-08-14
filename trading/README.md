@@ -32,6 +32,7 @@ Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled 
 Build and serve the standalone demo UI from this directory:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
@@ -44,6 +45,7 @@ Without a deployment build argument, the image contains `deployment.json` set to
 For live use, include a reviewed project-local deployment manifest at build time. The path is relative to `trading/` inside the build context:
 
 ```bash
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 TRADING_UI_DEPLOYMENT=deployments/local.json docker compose up --build --force-recreate
 ```
 
