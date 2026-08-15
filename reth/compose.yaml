@@ -1,0 +1,91 @@
+services:
+  jwt-init:
+    image: busybox:1.37.0
+    command:
+      - sh
+      - -ec
+      - |
+        if [ ! -s /jwt/jwt.hex ]; then
+          umask 077
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /jwt/jwt.hex
+        fi
+    volumes:
+      - engine-jwt:/jwt
+    restart: "no"
+
+  reth:
+    image: ghcr.io/paradigmxyz/reth:v2.2.0
+    restart: unless-stopped
+    depends_on:
+      jwt-init:
+        condition: service_completed_successfully
+    command:
+      - node
+      - --chain=sepolia
+      - --datadir=/data
+      - --prune.sender-recovery.full
+      - --prune.transaction-lookup.before=${RETH_RECEIPTS_START_BLOCK:?Set RETH_RECEIPTS_START_BLOCK in reth/.env}
+      - --prune.receipts.before=${RETH_RECEIPTS_START_BLOCK:?Set RETH_RECEIPTS_START_BLOCK in reth/.env}
+      - --prune.account-history.distance=10064
+      - --prune.storage-history.distance=10064
+      - --prune.bodies.before=${RETH_RECEIPTS_START_BLOCK:?Set RETH_RECEIPTS_START_BLOCK in reth/.env}
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,web3,net,debug,trace,txpool
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.api=eth,web3,net,debug,trace,txpool
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.jwtsecret=/jwt/jwt.hex
+      - --log.file.directory=/data/logs
+      - --log.file.name=sepolia.log
+    ports:
+      - "127.0.0.1:${RETH_RPC_PORT:-8545}:8545"
+      - "127.0.0.1:${RETH_WS_PORT:-8546}:8546"
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "9200:9200/udp"
+    volumes:
+      - reth-sepolia-data:/data
+      - engine-jwt:/jwt:ro
+    stop_grace_period: 2m
+
+  lighthouse:
+    image: sigp/lighthouse:v8.2.1
+    restart: unless-stopped
+    depends_on:
+      jwt-init:
+        condition: service_completed_successfully
+      reth:
+        condition: service_started
+    command:
+      - lighthouse
+      - bn
+      - --network=sepolia
+      - --datadir=/data
+      - --execution-endpoint=http://reth:8551
+      - --execution-jwt=/jwt/jwt.hex
+      - --checkpoint-sync-url=https://sepolia.checkpoint-sync.ethpandaops.io
+      - --http
+      - --http-address=0.0.0.0
+    ports:
+      - "9000:9000/tcp"
+      - "9000:9000/udp"
+      - "9001:9001/udp"
+    volumes:
+      - lighthouse-sepolia-data:/data
+      - engine-jwt:/jwt:ro
+    stop_grace_period: 2m
+
+volumes:
+  engine-jwt:
+  lighthouse-sepolia-data:
+  reth-sepolia-data:
+
+networks:
+  default:
+    name: zoltar
+    external: true
