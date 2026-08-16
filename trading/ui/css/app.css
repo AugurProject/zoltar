@@ -611,6 +611,7 @@ nav a[aria-current="page"] {
 .field > input,
 .field > select {
 	width: 100%;
+	min-height: 44px;
 	min-width: 0;
 	border: 1px solid var(--line-strong);
 	padding: 0.75rem 0.85rem;
@@ -624,6 +625,47 @@ nav a[aria-current="page"] {
 .field > select:focus {
 	border-color: var(--accent);
 	outline: 2px solid transparent;
+}
+.deployment-setup {
+	display: grid;
+	gap: 1.25rem;
+}
+.deployment-setup__notice {
+	margin: 0;
+	color: var(--muted);
+}
+.deployment-setup__fields {
+	display: grid;
+	grid-template-columns: minmax(12rem, 1fr) minmax(16rem, 2fr) minmax(9rem, 0.7fr);
+	gap: 1rem;
+}
+.deployment-setup__fields .field {
+	margin: 0;
+}
+.deployment-setup__contracts {
+	margin: 0;
+}
+.deployment-setup__status {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--line);
+	background: var(--surface-raised);
+}
+.deployment-setup__status > div {
+	display: grid;
+	gap: 0.25rem;
+}
+.deployment-setup__status span:first-child {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+.deployment-setup__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
 }
 .error {
 	color: var(--bad);
@@ -1416,6 +1458,9 @@ footer {
 	}
 	.security-pool-link {
 		height: 44px;
+	}
+	.deployment-setup__fields {
+		grid-template-columns: 1fr;
 	}
 	details:not(.wallet-summary) > summary::after {
 		margin-left: 0.45rem;

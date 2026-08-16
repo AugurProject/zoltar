@@ -88,18 +88,56 @@ const expandedWalletInFlowAssertion = `(() => { const panel = document.querySele
 const transactionStateLayoutAssertion = `(() => { const panel = document.querySelector('.trade-panel')?.getBoundingClientRect(); const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const status = document.querySelector('.transaction-message')?.getBoundingClientRect(); const hash = document.querySelector('.transaction-hash'); const hashBounds = hash?.getBoundingClientRect(); const hashCode = hash?.querySelector('code'); const hashFits = hash === null || (hashBounds !== undefined && hashBounds.left >= panel.left && hashBounds.right <= panel.right && hashCode?.textContent?.length === 66); return panel !== undefined && action !== undefined && status !== undefined && action.bottom <= status.top && hashFits && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
+		name: 'deployment-setup-desktop',
+		width: 1440,
+		height: 900,
+		path: '/#/deploy',
+		assertExpression: `document.querySelector('.deployment-setup select')?.options.length === 3 && document.querySelector('.deployment-setup input[type="url"]') !== null && document.body.textContent?.includes('Immutable trading fee') === true && [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+	},
+	{
+		name: 'deployment-setup-mobile',
+		width: 390,
+		height: 844,
+		path: '/#/deploy',
+		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } }); const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+	},
+	{
+		name: 'deployment-setup-pending-hydration-desktop',
+		width: 1440,
+		height: 900,
+		path: '/?qaDeployment=pending#/deploy',
+		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluateWaitMs: 300,
+		clickSelector: '.deployment-setup .primary-action',
+		clickWaitMs: 800,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
+	},
+	{
+		name: 'deployment-setup-pending-hydration-mobile',
+		width: 390,
+		height: 844,
+		path: '/?qaDeployment=pending#/deploy',
+		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluateWaitMs: 300,
+		clickSelector: '.deployment-setup .primary-action',
+		clickWaitMs: 800,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollY: 420,
+		postScrollAssertExpression: `(() => { const action = document.querySelector('.deployment-setup .primary-action')?.getBoundingClientRect(); return action !== undefined && action.top >= 0 && action.bottom <= innerHeight && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
+	},
+	{
 		name: 'disconnected-market-list',
 		width: 1440,
 		height: 900,
 		path: '/#/markets',
-		assertExpression: `document.querySelector('.wallet-status') === null && document.body.textContent?.includes('Connect in market view') !== true && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Retry deployment')`,
+		assertExpression: `document.querySelector('.wallet-status') === null && document.querySelector('.universe-selector') === null && document.body.textContent?.includes('Connect in market view') !== true && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled)`,
 	},
 	{
 		name: 'disconnected-market-list-mobile',
 		width: 390,
 		height: 844,
 		path: '/#/markets',
-		assertExpression: `[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Retry deployment' && button.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `document.querySelector('.universe-selector') === null && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled && button.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth` },
 	{
@@ -107,7 +145,7 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const checks = { poolInternalsHidden: ${poolInternalsHiddenAssertion}, removedCopy: ${removedCopyAssertion}, universeSelector: ${universeSelectorAssertion}, walletSummary: ${genesisWalletSummaryAssertion} }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(() => { const checks = { deployHidden: document.querySelector('a[href="#/deploy"]') === null, poolInternalsHidden: ${poolInternalsHiddenAssertion}, removedCopy: ${removedCopyAssertion}, universeSelector: ${universeSelectorAssertion}, walletSummary: ${genesisWalletSummaryAssertion} }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{ name: 'market-list-1280', width: 1280, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{ name: 'market-list-1181', width: 1181, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
@@ -250,7 +288,7 @@ const scenarios = [
 		width: 390,
 		height: 844,
 		path: '/?demo=1&scenario=baseline#/markets',
-		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'Security pool' && fact.querySelector('.security-pool-link')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const poolLinkHeights = [...document.querySelectorAll('.security-pool-link')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const poolInternalsHidden = ${poolInternalsHiddenAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!exactPoolVisible || !poolInternalsHidden || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 180 || rowActionHeights.some(height => height < 44) || poolLinkHeights.some(height => height < 44)) throw new Error(JSON.stringify({ exactPoolVisible, poolInternalsHidden, walletSummaryVisible, selectorBounds, rowActionHeights, poolLinkHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
+		assertExpression: `(() => { const poolFacts = [...document.querySelectorAll('.market-row__pool div')]; const exactPoolVisible = poolFacts.some(fact => fact.querySelector('dt')?.textContent === 'Security pool' && fact.querySelector('.security-pool-link')?.textContent === '0x3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a'); const rowActionHeights = [...document.querySelectorAll('.row-action')].map(control => control.getBoundingClientRect().height); const poolLinkHeights = [...document.querySelectorAll('.security-pool-link')].map(control => control.getBoundingClientRect().height); const selectorBounds = document.querySelector('.universe-selector select')?.getBoundingClientRect(); const deployHidden = document.querySelector('a[href="#/deploy"]') === null; const poolInternalsHidden = ${poolInternalsHiddenAssertion}; const walletSummaryVisible = ${genesisWalletSummaryAssertion}; if (!deployHidden || !exactPoolVisible || !poolInternalsHidden || !walletSummaryVisible || !(${removedCopyAssertion}) || selectorBounds === undefined || selectorBounds.height < 44 || selectorBounds.width < 180 || rowActionHeights.some(height => height < 44) || poolLinkHeights.some(height => height < 44)) throw new Error(JSON.stringify({ deployHidden, exactPoolVisible, poolInternalsHidden, walletSummaryVisible, selectorBounds, rowActionHeights, poolLinkHeights, bodyText: document.body.textContent?.slice(0, 500) })); return true })()`,
 	},
 	{ name: 'wrong-network-market', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/market', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, scrollY: 500 },
 	{ name: 'wrong-network-market-mobile', width: 390, height: 844, path: '/?demo=1&scenario=wrong-network#/market', scrollY: 650 },
@@ -505,7 +543,7 @@ try {
 			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true })
 			const result = evaluated.result
 			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}`)
-			await Bun.sleep(100)
+			await Bun.sleep('evaluateWaitMs' in scenario ? scenario.evaluateWaitMs : 100)
 		}
 		if ('clickSelector' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.clickSelector)})?.click()` })
