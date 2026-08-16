@@ -1,14 +1,31 @@
 ARG BUN_VERSION=1.3.14
 
+FROM oven/bun:${BUN_VERSION}-alpine AS shared-builder
+
+RUN apk add --no-cache git
+WORKDIR /source
+RUN git init
+
+COPY package.json bun.lock ./
+COPY scripts/ ./scripts/
+COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
+COPY shared/ts/ ./shared/ts/
+RUN mkdir -p shared/js \
+	&& bun install --frozen-lockfile \
+	&& bun run shared:build
+
 FROM oven/bun:${BUN_VERSION}-alpine
 
 ENV BUN_ENV=production
 WORKDIR /app
 
+COPY --from=shared-builder /source/shared/ ./shared/
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
-RUN cd bots/shared \
+RUN cd shared \
+	&& bun install --frozen-lockfile --production \
+	&& cd ../bots/shared \
 	&& bun install --frozen-lockfile --production \
 	&& cd ../liquidator \
 	&& bun install --frozen-lockfile --production

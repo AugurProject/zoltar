@@ -11,7 +11,7 @@ import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction
 import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
-import { bigintToSafeNumber } from '../src/ethereum/codec.ts'
+import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
 import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
 
@@ -22,6 +22,60 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
+	test('resolves the root Ethereum package without generated JavaScript under Bun', () => {
+		expect(Bun.resolveSync('@zoltar/shared/ethereum', import.meta.dir)).toBe(join(import.meta.dir, '../../../shared/ts/ethereum.ts'))
+	})
+
+	test('keeps the Ethereum facade limited to the compatibility surface', async () => {
+		const facade = await import('../src/ethereum.ts')
+		expect(Object.keys(facade).sort()).toEqual(
+			[
+				'RpcEndpointPoolFailure',
+				'RpcError',
+				'bigintToSafeNumber',
+				'bytesToHex',
+				'concatHex',
+				'createPublicClient',
+				'createRpcEndpointPool',
+				'createWalletClient',
+				'custom',
+				'decodeEventLog',
+				'decodeFunctionData',
+				'defineChain',
+				'encodeAbiParameters',
+				'encodeDeployData',
+				'encodeEventTopics',
+				'encodeFunctionData',
+				'formatEther',
+				'formatUnits',
+				'getAddress',
+				'getBalanceAtBlock',
+				'getCreate2Address',
+				'getCreateAddress',
+				'getTransactionCountAtBlock',
+				'hexToBytes',
+				'http',
+				'isAddress',
+				'isHex',
+				'keccak256',
+				'mainnet',
+				'maxUint256',
+				'numberToBytes',
+				'parseAbiItem',
+				'parseAbiParameters',
+				'parseTransaction',
+				'parseUnits',
+				'privateKeyToAccount',
+				'publicActions',
+				'readContractAtBlock',
+				'recoverTransactionAddress',
+				'toHex',
+				'zeroAddress',
+				'zeroHash',
+			].sort(),
+		)
+	})
+
 	test('converts bigint values only inside the safe integer range', () => {
 		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
 		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
@@ -308,7 +362,7 @@ describe('shared bot primitives', () => {
 			if (malformed.port === undefined || healthy.port === undefined) throw new Error('RPC pool test servers did not expose ports')
 			const pool = createRpcEndpointPool([`http://127.0.0.1:${malformed.port.toString()}`, `http://127.0.0.1:${healthy.port.toString()}`])
 			const client = createPublicClient({ transport: pool.transport })
-			await expect(client.getChainId()).rejects.toThrow('Invalid JSON-RPC envelope')
+			await expect(client.getChainId()).rejects.toThrow('Malformed JSON-RPC response')
 			expect(healthyRequests).toBe(0)
 		} finally {
 			malformed.stop(true)
@@ -398,7 +452,7 @@ describe('shared bot primitives', () => {
 		try {
 			if (server.port === undefined) throw new Error('Malformed RPC did not expose a port')
 			const client = createPublicClient({ transport: http(`http://127.0.0.1:${server.port.toString()}`) })
-			await expect(client.getChainId()).rejects.toThrow('Invalid JSON-RPC envelope')
+			await expect(client.getChainId()).rejects.toThrow('Malformed JSON-RPC response')
 		} finally {
 			server.stop(true)
 		}

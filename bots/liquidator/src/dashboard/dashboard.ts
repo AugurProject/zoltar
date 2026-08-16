@@ -947,7 +947,10 @@ function render(snapshot: Snapshot) {
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(snapshot.error === undefined ? undefined : snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`, 'Scan failed')
+	setGlobalError(
+		snapshot.error === undefined ? undefined : snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
+		'Scan failed',
+	)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)

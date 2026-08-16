@@ -36,9 +36,12 @@ describe('Docker packaging', () => {
 		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
 	})
 
-	test('installs production dependencies where shared bot sources can resolve them', async () => {
+	test('builds and installs both shared packages where bot sources can resolve them', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		expect(source).toContain('cd bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).toContain('-alpine AS shared-builder')
+		expect(source).toContain('&& bun run shared:build')
+		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
+		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production \\\n\t&& cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
 	})
 
 	test('starts without host UID, GID, or .env configuration', async () => {

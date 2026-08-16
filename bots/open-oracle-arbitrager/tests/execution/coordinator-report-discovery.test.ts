@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, mainnet, toHex, type EIP1193Provider, type Hex } from '#ethereum'
+import { bytesToHex, createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, hexToBytes, isHex, mainnet, toHex, type EIP1193Provider, type Hex } from '#ethereum'
 import { openOracleAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { disputeRecord, legacyReplacementAmountsWithQuorum, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum, replacementDisputeAmountsWithQuorum } from '#execution/recovery-support'
 import { applyCoordinatorReports, type ActiveReport } from '#monitoring/oracle-log-state'
@@ -12,6 +12,12 @@ const openOracle = getAddress('0x0000000000000000000000000000000000000003')
 const reporter = getAddress('0x0000000000000000000000000000000000000004')
 const weth = getAddress('0x0000000000000000000000000000000000000005')
 const rep = getAddress('0x0000000000000000000000000000000000000006')
+
+function requiredHex(value: unknown) {
+	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('Expected hex RPC request data')
+	return bytesToHex(hexToBytes(value))
+}
+
 const gameOutputs = [
 	{ type: 'uint128' },
 	{ type: 'uint128' },
@@ -75,7 +81,7 @@ describe('configured coordinator report discovery', () => {
 				if (typeof request !== 'object' || request === null || !('to' in request) || !('data' in request)) throw new Error('Malformed contract read')
 				blockTags.push(parameters.params[1])
 				const to = String(request.to).toLowerCase()
-				const data = String(request.data)
+				const data = requiredHex(request.data)
 				if (to === activeCoordinator.toLowerCase() || to === idleCoordinator.toLowerCase()) {
 					const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
 					if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
@@ -146,7 +152,7 @@ describe('configured coordinator report discovery', () => {
 					const request = parameters.params[0]
 					if (typeof request !== 'object' || request === null || !('to' in request) || !('data' in request)) throw new Error('Malformed contract read')
 					const to = String(request.to).toLowerCase()
-					const data = String(request.data)
+					const data = requiredHex(request.data)
 					if (to === activeCoordinator.toLowerCase()) {
 						const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
 						if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
@@ -162,7 +168,7 @@ describe('configured coordinator report discovery', () => {
 			}
 		}
 		const client = (reportId: bigint, unavailable = false, reorg = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg)) })
-		const config = { connectivity: { readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
+		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
 
 		const reports = await pendingCoordinatorReportsWithQuorum([client(7n), client(7n), client(7n, true)], config, 100n)
 
@@ -238,7 +244,7 @@ describe('configured coordinator report discovery', () => {
 		})
 		const clients = [createPublicClient({ chain: mainnet, transport: custom(provider(0)) }), createPublicClient({ chain: mainnet, transport: custom(provider(1)) })]
 
-		const replacement = await legacyReplacementAmountsWithQuorum(clients, { connectivity: { readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: ['https://secondary.example'] }, { entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' }, 250n)
+		const replacement = await legacyReplacementAmountsWithQuorum(clients, { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: ['https://secondary.example'] }, { entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' }, 250n)
 
 		expect(replacement).toEqual({ amounts: { amount1: 1_400n, amount2: 2_300n }, blockHash })
 		const logCalls = calls.filter(call => call.method === 'eth_getLogs')
@@ -270,8 +276,8 @@ describe('configured coordinator report discovery', () => {
 			}
 		}
 		const reorgClients = [createPublicClient({ chain: mainnet, transport: custom(reorgProvider()) }), createPublicClient({ chain: mainnet, transport: custom(reorgProvider()) })]
-		await expect(legacyReplacementAmountsWithQuorum(reorgClients, { connectivity: { readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: ['https://secondary.example'] }, { entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' }, 250n)).rejects.toThrow(
-			'changed during legacy replacement recovery',
-		)
+		await expect(
+			legacyReplacementAmountsWithQuorum(reorgClients, { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: ['https://secondary.example'] }, { entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' }, 250n),
+		).rejects.toThrow('changed during legacy replacement recovery')
 	})
 })

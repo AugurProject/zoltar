@@ -21,26 +21,10 @@ export type {
 	TransactionReceipt,
 	TransactionReplacement,
 	Transport,
-} from './ethereum/types'
-export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
-export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
+} from '@zoltar/shared/ethereum'
 export {
-	createPublicClient,
-	createWalletClient,
-	custom,
-	defineChain,
-	getBalanceAtBlock,
-	getTransactionCountAtBlock,
-	http,
-	mainnet,
-	publicActions,
-	readContractAtBlock,
-	RpcError,
-} from './ethereum/client'
-export { createRpcEndpointPool, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
-export {
-	bytesToHex,
 	bigintToSafeNumber,
+	bytesToHex,
 	concatHex,
 	decodeEventLog,
 	decodeFunctionData,
@@ -68,4 +52,20 @@ export {
 	toHex,
 	zeroAddress,
 	zeroHash,
-} from './ethereum/codec'
+} from '@zoltar/shared/ethereum'
+export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
+export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
+export {
+	createPublicClient,
+	createWalletClient,
+	custom,
+	defineChain,
+	getBalanceAtBlock,
+	getTransactionCountAtBlock,
+	http,
+	mainnet,
+	publicActions,
+	readContractAtBlock,
+	RpcError,
+} from './ethereum/client'
+export { createRpcEndpointPool, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'

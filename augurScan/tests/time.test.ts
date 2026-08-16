@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { unixSecondsToDate } from '../src/time.ts'
+import { bigintToSafeNumber, unixSecondsToDate } from '../src/time.ts'
+
+describe('bigintToSafeNumber', () => {
+	test('preserves safe integer bounds and rejects values outside them', () => {
+		expect(bigintToSafeNumber(BigInt(Number.MIN_SAFE_INTEGER), 'Value')).toBe(Number.MIN_SAFE_INTEGER)
+		expect(bigintToSafeNumber(BigInt(Number.MAX_SAFE_INTEGER), 'Value')).toBe(Number.MAX_SAFE_INTEGER)
+		expect(() => bigintToSafeNumber(BigInt(Number.MIN_SAFE_INTEGER) - 1n, 'Block count')).toThrow('Block count is outside the safe integer range')
+		expect(() => bigintToSafeNumber(BigInt(Number.MAX_SAFE_INTEGER) + 1n, 'Block count')).toThrow('Block count is outside the safe integer range')
+	})
+})
 
 describe('unixSecondsToDate', () => {
 	test('preserves exact whole-second timestamps', () => {

@@ -1,6 +1,6 @@
 import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
-import { addr, amounts, Transaction as MicroTransaction } from 'micro-eth-signer'
+import { addr, amounts, eip191Signer, Transaction as MicroTransaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
 
 export type Hex = `0x${string}`
@@ -276,10 +276,11 @@ export type TransactionReplacement = {
 	transactionReceipt: TransactionReceipt
 }
 
-type WaitForTransactionReceiptParameters = {
+export type WaitForTransactionReceiptParameters = {
 	hash: Hash
 	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
 	pollingInterval?: number | undefined
+	transaction?: BlockTransaction | undefined
 	timeout?: number | undefined
 }
 
@@ -318,6 +319,7 @@ export type RpcLog<TArgs = unknown, TEventName extends string = string> = Transa
 
 export type Account = {
 	address: Address
+	signMessage?: (message: string | Uint8Array) => Promise<Hex>
 	signTransaction?: (parameters: SignTransactionParameters) => Promise<Hex>
 	type: 'json-rpc' | 'local' | string
 }
@@ -349,6 +351,7 @@ export type ParsedTransaction = {
 
 export type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
 export type RpcFetchFn = (input: string | URL | Request, init?: RequestInit | undefined) => Promise<Response>
+export type RpcResponseParser = (response: Response, method: string) => Promise<unknown>
 
 type TransportRetryOptions = {
 	batch?: unknown
@@ -360,6 +363,7 @@ type TransportRetryOptions = {
 export type HttpTransportOptions = TransportRetryOptions & {
 	fetchFn?: RpcFetchFn | undefined
 	requestTimeout?: number | undefined
+	responseParser?: RpcResponseParser | undefined
 }
 
 type TypedTransport =
@@ -375,6 +379,7 @@ type TypedTransport =
 			fetchFn?: RpcFetchFn | undefined
 			requestTimeout: number
 			requestScheduler?: RpcRequestScheduler | undefined
+			responseParser?: RpcResponseParser | undefined
 			retryCount: number
 			retryDelay: number
 			url: string
@@ -450,7 +455,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getBytecode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getGasPrice: () => Promise<bigint>
-	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
+	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: {
 		address?: Address | readonly Address[] | undefined
 		args?: Readonly<Record<string, unknown>> | undefined
@@ -1135,7 +1140,7 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 			})
 		}
 
-		const payload: unknown = await response.json()
+		const payload: unknown = transport.responseParser === undefined ? await response.json() : await transport.responseParser(response, parameters.method)
 		if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
 		const envelope = payload as Record<string, unknown>
 		const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
@@ -1184,6 +1189,10 @@ async function requestTransport<TValue>(transport: Transport, parameters: Client
 		retryCount: transport.retryCount,
 		retryDelay: transport.retryDelay,
 	})
+}
+
+export async function requestRpc<TValue>(transport: Transport, parameters: { method: string; params?: unknown }) {
+	return await requestTransport<TValue>(transport, parameters)
 }
 
 function toRpcError(error: unknown, fallbackMessage: string) {
@@ -1470,7 +1479,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_getTransactionCount',
-					params: [getAddress(parameters.address), parameters.blockTag ?? 'latest'],
+					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
 			),
 		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
@@ -1613,9 +1622,9 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					startTime,
 					timeout: timeoutMilliseconds,
 				})
-			let originalTransaction: BlockTransaction | undefined
+			let originalTransaction = parameters.transaction
 			let lastScannedReplacementBlock: bigint | undefined
-			if (parameters.onReplaced !== undefined) {
+			if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 				try {
 					originalTransaction = await retryReceiptRateLimited(
 						async () =>
@@ -1883,7 +1892,12 @@ function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
 function normalizeHttpTransportOptions(options: HttpTransportOptions = {}) {
 	const requestTimeout = options.requestTimeout ?? 30_000
 	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
-	return { ...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }), ...normalizeTransportRetryOptions(options), requestTimeout }
+	return {
+		...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }),
+		...(options.responseParser === undefined ? {} : { responseParser: options.responseParser }),
+		...normalizeTransportRetryOptions(options),
+		requestTimeout,
+	}
 }
 
 export function http(url: string, options?: HttpTransportOptions) {
@@ -2060,6 +2074,9 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 	}
 }
 
+type EncodedEventTopic<TArgs> = TArgs extends readonly unknown[] ? (Extract<TArgs[number], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : TArgs extends Readonly<Record<string, unknown>> ? (Extract<TArgs[keyof TArgs], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : Hex
+
+export function encodeEventTopics<const TArgs extends readonly unknown[] | Record<string, unknown> | undefined = undefined>(parameters: { abi: Abi; args?: TArgs; eventName: string }): readonly (EncodedEventTopic<TArgs> | null)[]
 export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }): readonly (Hex | readonly Hex[] | null)[] {
 	const eventAbi = getNamedEventAbi(parameters.abi, parameters.eventName)
 	const decoder = getEventDecoder(eventAbi)
@@ -2121,6 +2138,7 @@ export async function recoverTransactionAddress(parameters: { serializedTransact
 export function privateKeyToAccount(privateKey: Hex) {
 	return {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
+		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
 			const transaction = MicroTransaction.prepare({

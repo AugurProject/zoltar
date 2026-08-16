@@ -1,4 +1,14 @@
 **
+!package.json
+!bun.lock
+!scripts/
+!scripts/**
+!shared/
+!shared/package.json
+!shared/bun.lock
+!shared/tsconfig.json
+!shared/ts/
+!shared/ts/**
 !bots/shared/package.json
 !bots/shared/bun.lock
 !bots/shared/src/**
