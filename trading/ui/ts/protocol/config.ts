@@ -10,6 +10,14 @@ export type DeploymentConfiguration = Readonly<{
 	feeBps: number
 }>
 
+export type LoadedDeploymentConfiguration = Readonly<{
+	configuration: DeploymentConfiguration
+	source: 'bundled' | 'stored'
+}>
+
+type ConfigurationStorage = Pick<Storage, 'getItem' | 'setItem'>
+const deploymentStorageKey = 'zoltar.trading.deployment.v1'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
@@ -25,18 +33,28 @@ function requiredNumber(value: unknown, label: string) {
 }
 
 function requiredRpcUrl(value: unknown) {
-	const rpcUrl = requiredString(value, 'rpcUrl')
+	const rpcUrl = requiredString(value, 'RPC URL')
 	let parsed: URL
 	try {
 		parsed = new URL(rpcUrl)
 	} catch (error) {
-		if (error instanceof TypeError) throw new Error('rpcUrl must be a valid URL')
+		if (error instanceof TypeError) throw new Error('RPC URL must be a valid URL')
 		throw error
 	}
 	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('rpcUrl must use HTTPS or loopback HTTP')
-	if (parsed.username !== '' || parsed.password !== '') throw new Error('rpcUrl must not contain embedded credentials')
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('RPC URL must use HTTPS or loopback HTTP')
+	if (parsed.username !== '' || parsed.password !== '') throw new Error('RPC URL must not contain embedded credentials')
 	return parsed.toString()
+}
+
+export function parseDeploymentSetupInput(input: Readonly<{ chainId: string; feeBps: string; rpcUrl: string }>) {
+	if (!/^[1-9][0-9]*$/.test(input.chainId)) throw new Error('Chain ID must be a positive whole number')
+	const chainId = Number(input.chainId)
+	if (!Number.isSafeInteger(chainId)) throw new Error('Chain ID must be a positive safe integer')
+	if (!/^[0-9]+$/.test(input.feeBps)) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
+	const feeBps = Number(input.feeBps)
+	if (!Number.isSafeInteger(feeBps) || feeBps >= 10_000) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
+	return { chainId, feeBps, rpcUrl: requiredRpcUrl(input.rpcUrl) }
 }
 
 function requiredAddress(value: unknown, label: string) {
@@ -65,10 +83,25 @@ export function parseDeploymentConfiguration(candidate: unknown): DeploymentConf
 	}
 }
 
-export async function loadDeploymentConfiguration(): Promise<DeploymentConfiguration | undefined> {
+export async function loadDeploymentConfiguration(): Promise<LoadedDeploymentConfiguration | undefined> {
 	const response = await fetch('./deployment.json', { cache: 'no-store' })
-	if (response.status === 404) return undefined
-	if (!response.ok) throw new Error(`Deployment configuration failed with HTTP ${response.status}`)
-	const candidate: unknown = await response.json()
-	return candidate === null ? undefined : parseDeploymentConfiguration(candidate)
+	if (response.status !== 404) {
+		if (!response.ok) throw new Error(`Deployment configuration failed with HTTP ${response.status}`)
+		const candidate: unknown = await response.json()
+		if (candidate !== null) return { configuration: parseDeploymentConfiguration(candidate), source: 'bundled' }
+	}
+	if (typeof window === 'undefined') return undefined
+	const configuration = loadStoredDeploymentConfiguration(window.localStorage)
+	return configuration === undefined ? undefined : { configuration, source: 'stored' }
+}
+
+export function loadStoredDeploymentConfiguration(storage: Pick<ConfigurationStorage, 'getItem'>): DeploymentConfiguration | undefined {
+	const raw = storage.getItem(deploymentStorageKey)
+	if (raw === null) return undefined
+	const candidate: unknown = JSON.parse(raw)
+	return parseDeploymentConfiguration(candidate)
+}
+
+export function saveDeploymentConfiguration(configuration: DeploymentConfiguration, storage: Pick<ConfigurationStorage, 'setItem'> = window.localStorage) {
+	storage.setItem(deploymentStorageKey, JSON.stringify(configuration))
 }

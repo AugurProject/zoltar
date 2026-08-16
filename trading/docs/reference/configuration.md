@@ -10,3 +10,5 @@ Environment variables used by local deployment:
 | `TRADING_FEE_BPS` | Immutable AMM fee | `30` |
 
 The live UI directly accepts the nested `deploy:local` manifest. It also accepts a flat JSON schema with numeric `chainId` and `feeBps`, string `chainName` and `rpcUrl`, and addresses `securityPoolFactory`, `factory`, and `router`. Set `TRADING_UI_DEPLOYMENT` while building to copy a reviewed manifest to untracked `ui/dist/deployment.json`; see [UI configuration](../how-to/configure-ui.md). Secrets do not belong in manifests or `.env.example`.
+
+Without `TRADING_UI_DEPLOYMENT`, the build writes `deployment.json` as `null` and writes `core-deployments.json` from the root mainnet and Sepolia deployment manifests. The live setup screen accepts a supported chain, an HTTPS or loopback HTTP RPC URL, and an immutable fee from 0 to 9999 basis points. It computes the trading factory and router through the core deployment's canonical CREATE2 proxy, verifies or deploys each contract through the wallet, and stores the completed configuration under `zoltar.trading.deployment.v1` in browser local storage.

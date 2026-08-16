@@ -20,6 +20,11 @@ function readManifestChainId(manifest: Record<string, unknown>) {
 function readSecurityPoolFactory(manifest: Record<string, unknown>) {
 	const direct = manifest.securityPoolFactory
 	if (direct !== undefined) return requireAddress(direct, 'securityPoolFactory')
+	const deploymentSteps = manifest.deploymentSteps
+	if (Array.isArray(deploymentSteps)) {
+		const factoryStep = deploymentSteps.find(step => isRecord(step) && step.id === 'securityPoolFactory')
+		if (isRecord(factoryStep)) return requireAddress(factoryStep.address, 'deploymentSteps.securityPoolFactory.address')
+	}
 	const contracts = manifest.contracts
 	if (isRecord(contracts)) {
 		const candidate = contracts.SecurityPoolFactory ?? contracts.securityPoolFactory

@@ -1,0 +1,45 @@
+import { getAddress, isAddress } from '@zoltar/shared/ethereum'
+import type { CoreDeployment } from './deployment.ts'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function requiredString(value: unknown, label: string) {
+	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} is required`)
+	return value
+}
+
+function requiredAddress(value: unknown, label: string) {
+	const address = requiredString(value, label)
+	if (!isAddress(address)) throw new Error(`${label} must be a valid address`)
+	return getAddress(address)
+}
+
+export function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
+	if (!Array.isArray(candidate) || candidate.length === 0) throw new Error('Core deployment registry must contain at least one network')
+	const deployments = candidate.map((value, index) => {
+		if (!isRecord(value)) throw new Error(`Core deployment ${index.toString()} must be an object`)
+		if (typeof value.chainId !== 'number' || !Number.isSafeInteger(value.chainId) || value.chainId <= 0) throw new Error(`Core deployment ${index.toString()} chainId must be a positive safe integer`)
+		return {
+			chainId: value.chainId,
+			chainName: requiredString(value.chainName, `Core deployment ${index.toString()} chainName`),
+			id: requiredString(value.id, `Core deployment ${index.toString()} id`),
+			proxyDeployer: requiredAddress(value.proxyDeployer, `Core deployment ${index.toString()} proxyDeployer`),
+			securityPoolFactory: requiredAddress(value.securityPoolFactory, `Core deployment ${index.toString()} securityPoolFactory`),
+		}
+	})
+	const chainIds = new Set<number>()
+	for (const deployment of deployments) {
+		if (chainIds.has(deployment.chainId)) throw new Error(`Core deployment registry repeats chain ${deployment.chainId.toString()}`)
+		chainIds.add(deployment.chainId)
+	}
+	return deployments
+}
+
+export async function loadCoreDeployments() {
+	const response = await fetch('./core-deployments.json', { cache: 'no-store' })
+	if (!response.ok) throw new Error(`Core deployment registry failed with HTTP ${response.status.toString()}`)
+	const candidate: unknown = await response.json()
+	return parseCoreDeployments(candidate)
+}

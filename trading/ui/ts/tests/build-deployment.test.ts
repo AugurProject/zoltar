@@ -3,7 +3,7 @@ import path from 'node:path'
 import { resolveDeploymentSource } from '../../build/deployment.mts'
 
 describe('trading UI build deployment', () => {
-	test('uses demo mode when the deployment environment variable is empty', () => {
+	test('uses browser wallet setup when the deployment environment variable is empty', () => {
 		expect(resolveDeploymentSource(undefined)).toBeUndefined()
 		expect(resolveDeploymentSource('')).toBeUndefined()
 		expect(resolveDeploymentSource('  ')).toBeUndefined()

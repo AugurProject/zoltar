@@ -12,6 +12,9 @@
 !solidity/
 !solidity/contracts/
 !solidity/contracts/**
+!docs/
+!docs/mainnet-deployment-addresses.json
+!docs/sepolia-deployment-addresses.json
 !trading/
 !trading/package.json
 !trading/bun.lock
