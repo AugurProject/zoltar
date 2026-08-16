@@ -25,6 +25,7 @@
 		},
 		"./ethereum": {
 			"types": "./ts/ethereum.ts",
+			"bun": "./ts/ethereum.ts",
 			"default": "./js/ethereum.js"
 		},
 		"./protocolConfig": {

@@ -3,11 +3,14 @@ import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoR
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
+import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import { loadCoreDeployments } from '../protocol/coreDeployments.ts'
+import { validateStoredTradingDeployment } from '../protocol/deployment.ts'
 import { createTradingPublicClient, publicErrorMessage, validateLiveDeployment } from '../protocol/live.ts'
 import { formatUnits, shortAddress } from './format.ts'
 
-const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'help'] as const
+const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'deploy', 'help'] as const
 type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
 
 export function currentRoute(): TradingRoute {
@@ -92,9 +95,11 @@ type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
 async function resolveLiveDeployment() {
 	const loaded = await loadDeploymentConfiguration()
-	if (loaded === undefined) throw new Error('Missing deployment.json. Build with a reviewed trading deployment manifest.')
-	await validateLiveDeployment(createTradingPublicClient(loaded), loaded)
-	return loaded
+	if (loaded === undefined) throw new Error('No bundled or wallet-deployed trading configuration was found.')
+	const client = createTradingPublicClient(loaded.configuration)
+	if (loaded.source === 'stored') await validateStoredTradingDeployment(client, loaded.configuration, await loadCoreDeployments())
+	else await validateLiveDeployment(client, loaded.configuration)
+	return loaded.configuration
 }
 
 function networkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
@@ -219,7 +224,7 @@ export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUn
 }
 
 function routeOwnsLiveWallet(route: string) {
-	return route !== 'help'
+	return route !== 'deploy' && route !== 'help'
 }
 
 export function walletSummaryAfterRouteChange(summary: WalletSummaryState, previousRoute: string, nextRoute: string, selectedUniverseId: string | undefined): WalletSummaryState {
@@ -260,7 +265,7 @@ function demoUniverseLabel(market: ReturnType<typeof demoMarket>, compactId: str
 	return `Universe ${compactId}`
 }
 
-export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
+export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveDeployment }: { deploymentSetupServices?: TradingDeploymentSetupServices; loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
 	const scenario = query.get('scenario') ?? 'baseline'
@@ -303,7 +308,7 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	})
 	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
 	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
-	const showUniverseSelector = route !== 'help'
+	const showUniverseSelector = route !== 'deploy' && route !== 'help' && (demo || liveDeploymentStatus !== 'unavailable')
 	const walletSummary = demo ? demoWalletSummary(scenario, market.universeId, demoWalletRetrySucceeded) : walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		if (demo) setDemoWalletRetrySucceeded(true)
@@ -318,6 +323,11 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 		setLiveDeploymentStatus('loading')
 		setDeploymentRetryNonce(current => current + 1)
 	}
+	const completeWalletDeployment = useCallback((configuration: DeploymentConfiguration) => {
+		setLiveConfiguration(configuration)
+		setLiveConfigurationError(undefined)
+		setLiveDeploymentStatus('verified')
+	}, [])
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
@@ -363,6 +373,19 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 	if (!demo) {
 		if (route === 'not-found') content = resolvedContent
 		else if (route === 'help') content = <Help />
+		else if (route === 'deploy')
+			content = (
+				<TradingDeploymentSetup
+					configurationError={liveConfigurationError}
+					onComplete={completeWalletDeployment}
+					onRetryConfiguration={retryDeployment}
+					onWorkflowLockChange={updateWorkflowLock}
+					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
+					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
+				/>
+			)
+		else if (liveDeploymentStatus === 'unavailable')
+			content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryConfiguration={retryDeployment} onWorkflowLockChange={updateWorkflowLock} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
 		else
 			content = (
 				<LiveTrading
@@ -427,6 +450,11 @@ export function App({ loadLiveDeployment = resolveLiveDeployment }: { loadLiveDe
 						<a aria-current={route === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Portfolio
 						</a>
+						{demo ? null : (
+							<a aria-current={route === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								Deploy
+							</a>
+						)}
 						<a aria-current={route === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Help
 						</a>

@@ -57,12 +57,15 @@ elsewhere.
 
 ### Bun
 
-From `bots/liquidator`:
+From the monorepo root, install the root package before entering the liquidator
+project. The root package provides the shared Ethereum runtime used by the bot:
 
 ```bash
+bun install --frozen-lockfile
+cd bots/liquidator
+bun install --frozen-lockfile
 install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
-bun install --frozen-lockfile
 bun run run
 ```
 

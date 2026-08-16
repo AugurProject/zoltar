@@ -111,15 +111,15 @@ async function verifyDocumentedFixture() {
 	const expected: Record<string, bigint> = {
 		baseFeeAttoEthPerGas: fixture.baseFeeAttoEthPerGas,
 		blockNumber: fixture.blockNumber,
-		buyProfitAttoWeth: buy.profitBeforeGasAttoWeth,
+		buyProfitWethAttoEth: buy.profitBeforeGasAttoWeth,
 		buyReportAttoRep: fixture.expensiveRepAmount,
-		gasCostAttoWeth: fixture.gasCostAttoWeth,
+		gasCostWethAttoEth: fixture.gasCostAttoWeth,
 		midReportAttoRep: fixture.midReportRep,
 		minimumWethReportAttoEth: minimumWeth,
 		protocolFee: fixture.protocolFee,
 		reportDeviationBps: fixture.reportDeviationBps,
 		reporterFee: fixture.feePercentage,
-		sellProfitAttoWeth: sell.profitBeforeGasAttoWeth,
+		sellProfitWethAttoEth: sell.profitBeforeGasAttoWeth,
 		sellReportAttoRep: fixture.cheapRepAmount,
 		uniswapPoolFee: fixture.poolFee,
 	}

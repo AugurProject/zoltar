@@ -34,9 +34,7 @@ function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transp
 export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
 	const readers = recoveryReaders(settings, wallet, pool)
 	const result = await settledQuorumValue<{
-		evidence:
-			| { blockHash: Hex; blockNumber: bigint; hash: Hex; logs: { address: `0x${string}`; data: Hex; topics: readonly Hex[] }[]; status: 'reverted' | 'success' }
-			| undefined
+		evidence: { blockHash: Hex; blockNumber: bigint; hash: Hex; logs: { address: `0x${string}`; data: Hex; topics: readonly Hex[] }[]; status: 'reverted' | 'success' } | undefined
 		receipt: TransactionReceipt | undefined
 	}>(
 		`receipt ${hash}`,

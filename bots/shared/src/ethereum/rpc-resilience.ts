@@ -52,6 +52,7 @@ function safeErrorMessage(error: unknown, url: string, target: string) {
 function retryableRpcFailure(error: unknown) {
 	if (error instanceof RpcEndpointPoolFailure) return true
 	if (error instanceof RpcError) {
+		if (typeof error.code === 'number') return error.code === 408 || error.code === 425 || error.code === 429 || error.code >= 500
 		if (error.code !== undefined) return false
 		const message = error.message.toLowerCase()
 		return message.includes('timed out') || /^http (408|425|429|5\d\d)\b/.test(message)
@@ -133,9 +134,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			const failures: { error: string; target: string }[] = []
 			const candidates = orderedEndpoints(now())
 			if (candidates.length === 0) {
-				throw new RpcEndpointPoolFailure(
-					endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target })),
-				)
+				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target })))
 			}
 			for (const endpoint of candidates) {
 				try {

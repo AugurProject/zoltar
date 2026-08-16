@@ -61,6 +61,7 @@ import {
 	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
+import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -146,6 +147,69 @@ const parseRpcRequestBody = (value: unknown): { readonly id: number | string | n
 }
 
 describe('network indexer lifecycle', () => {
+	test('keeps extracted internals out of the public indexer facade', async () => {
+		const indexerFacade = await import('../src/indexer.ts')
+		expect(Object.keys(indexerFacade).sort()).toEqual(
+			[
+				'IndexerOwnershipStageError',
+				'RpcQueueSaturatedError',
+				'addressActivityFrom',
+				'boundedDeploymentRead',
+				'commitCanonicalRead',
+				'compactIndexerDuration',
+				'confirmCanonicalBlock',
+				'contractDeploymentScanDue',
+				'createRpcDiagnosticContext',
+				'createRpcRequestQueue',
+				'deploymentReadBudget',
+				'findContractDeploymentBlock',
+				'findManifestContractDeployment',
+				'indexerOperationFailureReason',
+				'indexerOwnershipStatuses',
+				'indexerProgressMessage',
+				'indexerWaitingMessage',
+				'indexingCompletion',
+				'initialIndexStartBlock',
+				'isLocalIndexerFailure',
+				'isProtocolActivitySource',
+				'isProtocolEvidenceEmitter',
+				'isSplittableLogRangeError',
+				'logScanCursorUpdates',
+				'manifestChangeRequiresFullReplay',
+				'manifestReplayAncestor',
+				'nextIndexerOwnershipStatus',
+				'ownershipFailureLogMessage',
+				'planDeploymentAwareLogScan',
+				'planManifestBackfill',
+				'queryAdaptiveLogRange',
+				'queryCanonicalLogRange',
+				'readTokenMetadata',
+				'reorgSearchFloor',
+				'requiresManifestHistoryCoverage',
+				'requiresParentLookup',
+				'retryDelayMs',
+				'rpcEndpointLabel',
+				'rpcFailureLogMessage',
+				'rpcIndexerFailureReason',
+				'rpcLogAddressGroups',
+				'rpcLogQueryGroups',
+				'rpcProviderLabel',
+				'runIndexerOwnershipLifecycle',
+				'runIndexerTask',
+				'runNetworkLifecycle',
+				'runOwnedNetworkLifecycle',
+				'safeIndexerFailure',
+				'safeIndexerFailureReason',
+				'startIndexers',
+				'tokenMetadataNeedsRead',
+				'uniswapV4PoolIds',
+				'waitForIndexerDelay',
+				'withRpcRequestQueue',
+				'withVerifiedProvider',
+			].sort(),
+		)
+	})
+
 	test('detects manifest contract replacements independently of ordering and address casing', () => {
 		const replacement = '0x2000000000000000000000000000000000000002' as const
 		expect(
@@ -787,7 +851,7 @@ describe('network indexer lifecycle', () => {
 				checkedBlocks.push(block)
 				return candidate === address && block >= 75n ? '0x01' : undefined
 			},
-			async (block) => new Date(Number(block) * 1_000),
+			async (block) => unixSecondsToDate(block),
 		)
 		expect(plan.inputs).toEqual([{ address, fromBlock: 75n, startBlock: 75n }])
 		expect(plan.observations).toEqual([

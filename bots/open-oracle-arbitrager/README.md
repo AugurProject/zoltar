@@ -179,9 +179,11 @@ end-user release. The commands below remain experimental operator references:
 
 ## Install
 
-From the monorepo root, enter the arbitrager project:
+From the monorepo root, install the root package before entering the arbitrager
+project. The root package provides the shared Ethereum runtime used by the bot:
 
 ```bash
+bun install --frozen-lockfile
 cd bots/open-oracle-arbitrager
 bun install --frozen-lockfile
 ```

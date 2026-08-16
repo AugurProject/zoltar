@@ -16,8 +16,20 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 
 ## Quick setup
 
+From this directory, build and start the live UI:
+
 ```bash
-cd trading
+docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
+docker compose up --build --force-recreate
+```
+
+Open `http://localhost:4163/#/markets`. Select a network whose canonical Zoltar core deployment is installed, enter its RPC URL, and connect a wallet. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code before it offers a trading deployment transaction.
+
+On Windows, run `start.bat` from this directory to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
+
+### Local development and demo
+
+```bash
 bun install --frozen-lockfile
 bun run compile
 bun run test
@@ -27,46 +39,25 @@ bun run ui:serve
 
 Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
 
-### Docker
+The Docker image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests. The live UI uses the installed core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading.
 
-Build and serve the standalone demo UI from this directory:
-
-```bash
-docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
-docker compose up --build --force-recreate
-```
-
-On Windows, run `start.bat` from this directory to start the same Compose command.
-
-Then open `http://localhost:4163/?demo=1#/markets`. The final image runs as an unprivileged user and exposes a health check at `/`.
-
-Without a deployment build argument, the image contains `deployment.json` set to `null` and supports demo mode only. Live use requires a build with a reviewed manifest.
-
-For live use, include a reviewed project-local deployment manifest at build time. The path is relative to `trading/` inside the build context:
+To use an existing reviewed trading deployment instead, first copy its manifest into `trading/deployments/`. Then set its project-local path at build time:
 
 ```bash
+cp /absolute/path/to/reviewed.json deployments/reviewed.json
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
-TRADING_UI_DEPLOYMENT=deployments/local.json docker compose up --build --force-recreate
+TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
 ```
 
 ### Live deployment
 
-Without Docker, build with a reviewed deployment manifest and open the same routes without `?demo=1`:
+Without Docker, `bun run ui:build` includes the same wallet deployment setup. To use an existing reviewed deployment manifest instead:
 
 ```bash
 TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
 ```
 
 The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
-
-For a local deployment, first deploy Zoltar core to Anvil, then:
-
-```bash
-cp .env.example .env
-ZOLTAR_DEPLOYMENT_MANIFEST=/absolute/path/to/core.json bun run deploy:local
-```
-
-The script verifies that the configured core `SecurityPoolFactory` has bytecode on the selected chain, deploys a factory with an immutable fee, deploys the router, and writes `deployments/local.json`.
 
 ## Commands
 

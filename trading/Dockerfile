@@ -9,6 +9,7 @@ COPY package.json bun.lock ./
 COPY scripts ./scripts
 COPY shared ./shared
 COPY solidity/contracts ./solidity/contracts
+COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY trading ./trading
 RUN bun install --frozen-lockfile
 RUN bun run shared:build
