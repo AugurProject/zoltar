@@ -17,6 +17,7 @@ import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/con
 import { loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
+import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
@@ -251,9 +252,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 						const settledHeads = await Promise.allSettled(readClients.map(async (readClient, index) => ({ endpoint: endpointLabel(endpoints[index] ?? ''), head: await readClient.getBlockNumber(), index })))
 						const availableHeads = availableSettledValues(settledHeads)
-						if (availableHeads.length < 2) {
+						const quorumRequirement = rpcQuorumRequirement()
+						if (availableHeads.length < quorumRequirement) {
 							const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-							throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+							throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
 						}
 						const sharedHead = availableHeads.reduce((minimum, observation) => (observation.head < minimum ? observation.head : minimum), availableHeads[0]?.head ?? 0n)
 						const settledBlocks = await Promise.allSettled(
@@ -266,17 +268,18 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							}),
 						)
 						const availableBlocks = availableSettledValues(settledBlocks)
-						if (availableBlocks.length < 2) {
+						if (availableBlocks.length < quorumRequirement) {
 							const failures = settledBlocks.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-							throw new ConnectivityDegradedError(`Canonical head requires at least two available independent RPC endpoints: ${failures.join('; ')}`)
+							throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
 						}
 						quorumValue(
 							`canonical head ${sharedHead.toString()}`,
 							availableBlocks.map(observation => ({ endpoint: observation.endpoint, value: observation.block.hash })),
+							quorumRequirement,
 						)
 						const selected = availableBlocks[0]
 						const selectedClient = selected === undefined ? undefined : readClients[selected.index]
-						if (selectedClient === undefined) throw new Error('Canonical head requires at least two available independent RPC endpoints')
+						if (selectedClient === undefined) throw new Error('Canonical head does not satisfy the configured RPC quorum requirement')
 						client = selectedClient
 						fixedHeadNumber = sharedHead
 					}

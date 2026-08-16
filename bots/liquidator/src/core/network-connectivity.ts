@@ -1,4 +1,5 @@
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, validateConnectivitySettings, validateIndependentReadRpcUrls } from '@zoltar/bot-shared/monitoring/connectivity'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import type { OperatorSettings } from '#config/settings'
 
 type ConnectivityChecks = {
@@ -22,7 +23,7 @@ export async function updateNetworkConnectivity(parameters: { apply: (settings: 
 	const quorumRpcUrls = validateIndependentReadRpcUrls(connectivity.readRpcUrl, rawQuorumRpcUrls.map(String))
 	const network: OperatorSettings['network'] = networkName === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: networkName } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: networkName }
 	if (settings.networkConfigured && network.chainId !== settings.network.chainId) throw new Error('Use a separate operator configuration and durable state file to change chains')
-	if (settings.runtime.execute && quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (settings.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	const checks = parameters.checks ?? defaultChecks
 	await checks.checkConnectivity(connectivity, network.chainId)
 	for (const rpcUrl of quorumRpcUrls) {

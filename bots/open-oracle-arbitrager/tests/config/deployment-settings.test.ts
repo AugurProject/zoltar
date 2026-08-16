@@ -39,7 +39,7 @@ test('rejects insecure or credential-bearing quorum RPC URLs', () => {
 		uniswapV4Quoter: undefined,
 		weth: address('5'),
 	}
-	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['http://quorum.example'] })).toThrow('HTTPS or loopback HTTP')
+	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['http://quorum.example'] })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
 	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['https://user:secret@quorum.example'] })).toThrow('embedded credentials')
 })
 

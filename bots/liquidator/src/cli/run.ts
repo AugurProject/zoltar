@@ -5,6 +5,7 @@ import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { availableExecutionObservations } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
@@ -128,7 +129,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							currentHeads: async () => {
 								const settled = await Promise.allSettled(endpoints.map(async endpoint => await createPublicClient({ chain, transport: readPool.transportFor(endpoint) }).getBlockNumber()))
 								const heads = availableSettledValues(settled)
-								if (heads.length < 2) throw new ConnectivityDegradedError('Replacement reconciliation requires at least two available independent RPC endpoints')
+								if (heads.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError('Replacement reconciliation does not satisfy the configured RPC quorum requirement')
 								return heads
 							},
 							replacement: async () => replacementEvidence,

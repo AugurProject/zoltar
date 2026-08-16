@@ -7,6 +7,7 @@ const testnetworkRoot = join(import.meta.dir, '..', 'testnetwork')
 const composeFile = join(testnetworkRoot, 'compose.yaml')
 const dockerfile = join(testnetworkRoot, 'Dockerfile')
 const windowsLauncher = join(testnetworkRoot, 'start.bat')
+const botComposeFiles = [join(import.meta.dir, '..', 'bots', 'liquidator', 'compose.yaml'), join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')]
 
 describe('local test network packaging', () => {
 	test('builds a pinned Anvil image on the shared Zoltar network', async () => {
@@ -23,7 +24,7 @@ describe('local test network packaging', () => {
 
 		expect(image).toContain('FROM ghcr.io/foundry-rs/foundry:v1.5.1')
 		expect(image).toContain('ENTRYPOINT ["anvil"]')
-		for (const argument of ['"--host", "0.0.0.0"', '"--port", "8545"', '"--chain-id", "11155111"', '"--hardfork", "osaka"', '"--block-base-fee-per-gas", "0"', '"--gas-price", "0"', '"--no-priority-fee"']) {
+		for (const argument of ['"--host", "0.0.0.0"', '"--port", "8545"', '"--chain-id", "11155111"', '"--hardfork", "osaka"', '"--block-time", "1"', '"--block-base-fee-per-gas", "0"', '"--gas-price", "0"', '"--no-priority-fee"']) {
 			expect(image).toContain(argument)
 		}
 	})
@@ -41,5 +42,9 @@ describe('local test network packaging', () => {
 			readRpcUrl: 'http://anvil:8545/',
 		})
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
+	})
+
+	test('passes a secure-by-default configurable quorum policy to both bots', async () => {
+		for (const file of botComposeFiles) expect(await readFile(file, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-2}')
 	})
 })

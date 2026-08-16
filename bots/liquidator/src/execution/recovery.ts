@@ -5,6 +5,7 @@ import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/ca
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
+import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
@@ -115,7 +116,7 @@ export async function recoverPendingTransactions(settings: OperatorSettings, wal
 		}
 		const settledBlocks = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
 		const blocks = availableSettledValues(settledBlocks)
-		if (blocks.length < 2) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery requires at least two available independent RPC endpoints`)
+		if (blocks.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery does not satisfy the configured RPC quorum requirement`)
 		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
 		if (recoveryAction === 'expire-private') {
 			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS, pool)
@@ -150,7 +151,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 	for (const pending of [...state.pendingStagedOperations]) {
 		const settledHeads = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
 		const heads = availableSettledValues(settledHeads)
-		if (heads.length < 2) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery requires at least two available independent RPC endpoints`)
+		if (heads.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery does not satisfy the configured RPC quorum requirement`)
 		const toBlock = heads.reduce((minimum, head) => (head < minimum ? head : minimum))
 		let outcome: (NonNullable<ReturnType<typeof stagedOperationOutcome>> & { blockHash: Hex; blockNumber: bigint; transactionHash: Hex }) | undefined
 		for (const range of stagedOperationRecoveryRanges(pending.queuedBlock, toBlock)) {

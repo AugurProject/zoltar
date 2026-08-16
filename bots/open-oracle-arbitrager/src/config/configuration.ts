@@ -8,6 +8,7 @@ import type { RiskLimits } from '#core/safety-controls'
 import { loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -65,7 +66,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	})
 	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
 	const quorumRpcUrls = [...savedQuorumRpcUrls]
-	if (saved.runtime.execute && quorumRpcUrls.length < 2) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
+	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
 	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')

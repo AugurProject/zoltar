@@ -92,7 +92,7 @@ describe('operator connectivity', () => {
 
 	test('does not include rejected RPC endpoint secrets in validation errors', () => {
 		expect(() => validateReadRpcUrls(['not-a-url?token=RPC_SECRET'])).toThrow(/^Invalid RPC URL$/)
-		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS or loopback HTTP$/)
+		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS, loopback HTTP, or the local Anvil service$/)
 	})
 
 	test('checks the configured chain and sends raw transactions', async () => {

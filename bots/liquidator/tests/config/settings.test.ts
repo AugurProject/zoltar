@@ -119,6 +119,17 @@ describe('liquidator settings', () => {
 		).toThrow('name and chainId must identify the same supported chain')
 	})
 
+	test('rejects an explicitly empty RPC quorum policy during settings parsing', () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = ''
+			expect(() => parseSettings(settings)).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
+	})
+
 	test('requires independent quorum reads for live execution', () => {
 		expect(() =>
 			parseSettings({

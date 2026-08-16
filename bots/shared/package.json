@@ -17,6 +17,7 @@
 		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
+		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts"
 	},
 	"scripts": {
