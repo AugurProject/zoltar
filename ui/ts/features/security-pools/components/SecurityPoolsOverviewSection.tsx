@@ -17,6 +17,7 @@ import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccor
 import { Question, getQuestionTitle } from '../../markets/components/Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
+import { WarningSurface } from '../../../components/WarningSurface.js'
 import { getWalletScopedAccountAddress } from '../../../lib/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '../../../lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
@@ -24,9 +25,22 @@ import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
+import { formatUniverseIdHex } from '../../universes/lib/universe.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
-export function SecurityPoolsOverviewSection({ accountState, environmentRefreshKey, hasLoadedSecurityPoolPage, loadingSecurityPoolPage, onCreateSecurityPool, onLoadSecurityPoolPage, onSelectSecurityPool, securityPoolBrowseCount, securityPoolPage, securityPoolOverviewError }: SecurityPoolsOverviewSectionProps) {
+export function SecurityPoolsOverviewSection({
+	accountState,
+	activeUniverseId,
+	environmentRefreshKey,
+	hasLoadedSecurityPoolPage,
+	loadingSecurityPoolPage,
+	onCreateSecurityPool,
+	onLoadSecurityPoolPage,
+	onSelectSecurityPool,
+	securityPoolBrowseCount,
+	securityPoolPage,
+	securityPoolOverviewError,
+}: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
@@ -192,62 +206,69 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 								return 'warning'
 							})()
 							return (
-								<ComparisonRecord
-									key={pool.securityPoolAddress}
-									title={getQuestionTitle(pool.marketDetails)}
-									badge={
-										<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
-											{statusBadgeLabel}
-										</Badge>
-									}
-									action={
-										onSelectSecurityPool === undefined ? undefined : (
-											<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
-												{securityPoolCopy.openPool}
-											</button>
-										)
-									}
-									metrics={[
-										{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
-										{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
-										{
-											label: commonCopy.openOraclePrice,
-											value: <OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />,
-										},
-										{
-											label: securityPoolCopy.openInterestMinted,
-											value: (
-												<span className='comparison-record-value-stack'>
-													<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
-													<span className='detail'>
-														{securityPoolCopy.maxLead}
-														{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
+								<div className='security-pool-overview-record' key={pool.securityPoolAddress}>
+									{pool.universeId === activeUniverseId ? undefined : (
+										<WarningSurface role='alert' variant='compact'>
+											<strong>{securityPoolCopy.universeMismatch}</strong>
+											<p>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId), formatUniverseIdHex(activeUniverseId))}</p>
+										</WarningSurface>
+									)}
+									<ComparisonRecord
+										title={getQuestionTitle(pool.marketDetails)}
+										badge={
+											<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
+												{statusBadgeLabel}
+											</Badge>
+										}
+										action={
+											onSelectSecurityPool === undefined ? undefined : (
+												<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
+													{securityPoolCopy.openPool}
+												</button>
+											)
+										}
+										metrics={[
+											{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
+											{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
+											{
+												label: commonCopy.openOraclePrice,
+												value: <OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />,
+											},
+											{
+												label: securityPoolCopy.openInterestMinted,
+												value: (
+													<span className='comparison-record-value-stack'>
+														<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
+														<span className='detail'>
+															{securityPoolCopy.maxLead}
+															{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
+														</span>
 													</span>
-												</span>
-											),
-										},
-									]}
-								>
-									<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-										<div className='comparison-record-expanded'>
-											<Question question={pool.marketDetails} showTitle={false} variant='preview' />
-											<div className='security-pool-detail-rail security-pool-card-inline-details'>
-												<MetricField label={securityPoolCopy.annualFee}>
-													<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
-												</MetricField>
-												<MetricField label={securityPoolCopy.poolAddress}>
-													<AddressValue address={pool.securityPoolAddress} />
-												</MetricField>
-												<MetricField label={securityPoolCopy.managerAddress}>
-													<AddressValue address={pool.managerAddress} />
-												</MetricField>
-												<MetricField label={commonCopy.questionId}>
-													<IdentifierValue value={pool.questionId} />
-												</MetricField>
+												),
+											},
+										]}
+									>
+										<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+											<div className='comparison-record-expanded'>
+												<Question question={pool.marketDetails} showTitle={false} variant='preview' />
+												<div className='security-pool-detail-rail security-pool-card-inline-details'>
+													<MetricField label={securityPoolCopy.annualFee}>
+														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
+													</MetricField>
+													<MetricField label={securityPoolCopy.poolAddress}>
+														<AddressValue address={pool.securityPoolAddress} />
+													</MetricField>
+													<MetricField label={securityPoolCopy.managerAddress}>
+														<AddressValue address={pool.managerAddress} />
+													</MetricField>
+													<MetricField label={commonCopy.questionId}>
+														<IdentifierValue value={pool.questionId} />
+													</MetricField>
+												</div>
 											</div>
-										</div>
-									</ReadOnlyDetailAccordion>
-								</ComparisonRecord>
+										</ReadOnlyDetailAccordion>
+									</ComparisonRecord>
+								</div>
 							)
 						})}
 					</div>

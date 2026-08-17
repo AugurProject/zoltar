@@ -303,6 +303,7 @@ type LiquidationModalStateProps = {
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	environmentRefreshKey: number
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean

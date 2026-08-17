@@ -785,6 +785,11 @@ button .loading-value {
 
 .copy-feedback,
 .currency-value-number-unit {
+	display: block;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -890,9 +895,9 @@ button.currency-value.copyable {
 	cursor: copy;
 	text-align: inherit;
 	touch-action: manipulation;
-	overflow: visible;
-	text-overflow: clip;
-	white-space: normal;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 button.currency-value.copyable:hover:not(:disabled) {
@@ -2113,6 +2118,11 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .comparison-record-list {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.security-pool-overview-record {
 	display: grid;
 	gap: var(--space-2);
 }

@@ -175,6 +175,14 @@ export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: big
 	return `${formatRelativeDuration(-delta)} ago`
 }
 
+export function getWallClockTimestamp() {
+	return BigInt(Math.floor(Date.now() / 1_000))
+}
+
+export function formatTimestampWithRelative(timestamp: bigint, currentTimestamp = getWallClockTimestamp()) {
+	return `${formatTimestamp(timestamp)} (${formatRelativeTimestamp(timestamp, currentTimestamp)})`
+}
+
 export function formatDuration(seconds: bigint) {
 	if (seconds <= 0n) return '0m'
 	if (seconds < SECONDS_PER_MINUTE) return 'less than a minute'

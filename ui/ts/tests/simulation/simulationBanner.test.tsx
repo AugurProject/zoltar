@@ -907,6 +907,8 @@ describe('SimulationBanner', () => {
 
 	test('shows the delete control only for custom saved states', async () => {
 		const domEnvironment = installDomEnvironment()
+		const originalDateNow = Date.now
+		Date.now = () => Date.parse('2026-06-04T12:34:56.000Z')
 		const onRefresh = mock(async () => undefined)
 		const builtInController = createSimulationController()
 		const customController = createSimulationController({
@@ -926,7 +928,9 @@ describe('SimulationBanner', () => {
 			const customAdvancedControls = openAdvancedControls(customRendered.container)
 			expect(within(builtInAdvancedControls).queryByRole('button', { name: 'Delete save' })).toBeNull()
 			expect(within(customAdvancedControls).getByRole('button', { name: 'Delete save' })).toBeTruthy()
+			expect(customRendered.container.textContent).toContain('Saved 2026-06-02 12:34:56 UTC (2d 0h 0m ago).')
 		} finally {
+			Date.now = originalDateNow
 			await builtInRendered.cleanup()
 			await customRendered.cleanup()
 			domEnvironment.cleanup()

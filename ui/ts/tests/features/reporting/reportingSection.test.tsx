@@ -268,6 +268,16 @@ describe('ReportingSection', () => {
 		expect(message).not.toContain("this pool's market ends")
 	})
 
+	test('uses wall-clock relative timing when the chain timestamp is unavailable', () => {
+		const originalDateNow = Date.now
+		Date.now = () => 50_000
+		try {
+			expect(getReportingLockedUntilMessage(100n, undefined)).toContain('(in less than a minute)')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup

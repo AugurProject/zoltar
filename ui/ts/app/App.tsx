@@ -586,6 +586,7 @@ export function App() {
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		overview: {
 			accountState,
+			activeUniverseId,
 			environmentRefreshKey: activeEnvironmentNonce,
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,

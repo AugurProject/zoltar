@@ -7,8 +7,8 @@ import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../../types.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
-import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseDecimalInput } from '../../../lib/decimal.js'
+import { formatScalarDisplayValue, getScalarDisplayValue, getScalarTickIndexForDisplayValue } from '@zoltar/shared/scalarOutcome'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
@@ -21,9 +21,9 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 	const resolvedSelectedTick = selectedTickValue.toString()
 	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
 	const [exactTickInputValue, setExactTickInputValue] = useState(resolvedSelectedTick)
-	const scalarIncrement = details.displayValueMin === undefined || details.displayValueMax === undefined ? undefined : (details.displayValueMax - details.displayValueMin) / details.numTicks
-	const selectedScalarValue = details.displayValueMin === undefined || scalarIncrement === undefined ? undefined : details.displayValueMin + selectedTickValue * scalarIncrement
-	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatCurrencyInputBalance(selectedScalarValue)
+	const scalarQuestionDetails = details.displayValueMin === undefined || details.displayValueMax === undefined ? undefined : { answerUnit: details.answerUnit ?? '', displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, numTicks: details.numTicks }
+	const selectedScalarValue = scalarQuestionDetails === undefined ? undefined : getScalarDisplayValue(scalarQuestionDetails, selectedTickValue)
+	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatScalarDisplayValue(selectedScalarValue)
 	const [scalarValueInput, setScalarValueInput] = useState(resolvedScalarValueInput ?? '')
 	const [scalarValueError, setScalarValueError] = useState<string | undefined>(undefined)
 	useEffect(() => {
@@ -37,17 +37,17 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 	const updateScalarValue = (value: string) => {
 		setScalarValueInput(value)
 		const parsedValue = tryParseDecimalInput(value)
-		if (parsedValue === undefined || details.displayValueMin === undefined || details.displayValueMax === undefined || scalarIncrement === undefined || scalarIncrement <= 0n || parsedValue < details.displayValueMin || parsedValue > details.displayValueMax) {
+		if (parsedValue === undefined || scalarQuestionDetails === undefined) {
 			setScalarValueError(marketCopy.scalarValueInvalid)
 			return
 		}
-		const offset = parsedValue - details.displayValueMin
-		if (offset % scalarIncrement !== 0n) {
+		const tickIndex = getScalarTickIndexForDisplayValue(scalarQuestionDetails, parsedValue)
+		if (tickIndex === undefined) {
 			setScalarValueError(marketCopy.scalarValueInvalid)
 			return
 		}
 		setScalarValueError(undefined)
-		onSelectedTickChange((offset / scalarIncrement).toString())
+		onSelectedTickChange(tickIndex.toString())
 	}
 
 	return (

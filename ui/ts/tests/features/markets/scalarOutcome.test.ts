@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES, combineScalarParityOutcomeIndex, describeScalarParityOutcomeIndex, formatScalarParityOutcomeName, getScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
-import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, isValidScalarOutcomeIndex, parseScalarFormInputs } from '../../../features/markets/lib/scalarOutcome.js'
+import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarDisplayValue, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, getScalarTickIndexForDisplayValue, isValidScalarOutcomeIndex, parseScalarFormInputs } from '../../../features/markets/lib/scalarOutcome.js'
 
 const scalarQuestion = {
 	answerUnit: 'km',
@@ -36,6 +36,24 @@ void describe('scalar outcome helpers', () => {
 			displayValueMin: 1n * 10n ** 18n,
 			numTicks: 90n,
 		})
+	})
+
+	void test('round-trips canonical non-divisible and negative scalar display values', () => {
+		const nonDivisibleQuestion = { answerUnit: '', displayValueMin: 0n, displayValueMax: 10n, numTicks: 3n }
+		expect([0n, 1n, 2n, 3n].map(tick => getScalarDisplayValue(nonDivisibleQuestion, tick))).toEqual([0n, 3n, 6n, 10n])
+		expect([0n, 3n, 6n, 10n].map(value => getScalarTickIndexForDisplayValue(nonDivisibleQuestion, value))).toEqual([0n, 1n, 2n, 3n])
+		expect(getScalarTickIndexForDisplayValue(nonDivisibleQuestion, 9n)).toBeUndefined()
+
+		const negativeQuestion = { ...nonDivisibleQuestion, displayValueMin: -5n, displayValueMax: 5n }
+		expect([0n, 1n, 2n, 3n].map(tick => getScalarDisplayValue(negativeQuestion, tick))).toEqual([-5n, -2n, 1n, 5n])
+		expect([5n, -5n, -2n, 1n].map(value => getScalarTickIndexForDisplayValue(negativeQuestion, value))).toEqual([3n, 0n, 1n, 2n])
+	})
+
+	void test('finds canonical endpoints when tick count exceeds both the range and safe integers', () => {
+		const hugeTickQuestion = { answerUnit: '', displayValueMin: 0n, displayValueMax: 1n, numTicks: BigInt(Number.MAX_SAFE_INTEGER) + 10n }
+		expect(getScalarTickIndexForDisplayValue(hugeTickQuestion, 0n)).toBe(0n)
+		expect(getScalarTickIndexForDisplayValue(hugeTickQuestion, 1n)).toBe(hugeTickQuestion.numTicks)
+		expect(getScalarDisplayValue(hugeTickQuestion, hugeTickQuestion.numTicks)).toBe(1n)
 	})
 
 	void test('describes valid, invalid, and malformed scalar outcome indexes', () => {

@@ -41,7 +41,7 @@ function ExactScalarOutcomePickerHarness() {
 
 	return (
 		<ScalarOutcomePicker
-			details={{ maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
+			details={{ answerUnit: '', displayValueMax: 1n, displayValueMin: 0n, maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
 			isInvalid={false}
 			label='Select exact scalar target'
 			onInvalidChange={() => undefined}
@@ -130,19 +130,56 @@ describe('ScalarOutcomePicker', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
+		const scalarValueInput = within(document.body).getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
 		expect(within(document.body).queryByRole('slider')).toBeNull()
 		expect(exactInput.value).toBe(UNSAFE_TICK_COUNT.toString())
+		expect(scalarValueInput.value).toBe('0.000000000000000001')
 
 		await act(() => {
 			fireEvent.input(exactInput, { target: { value: '-' } })
 		})
 		expect(exactInput.value).toBe('-')
-		expect(within(document.body).getByText(`Tick ${UNSAFE_TICK_COUNT.toString()}`)).not.toBeNull()
+		expect(scalarValueInput.value).toBe('0.000000000000000001')
 
 		await act(() => {
 			fireEvent.input(exactInput, { target: { value: (UNSAFE_TICK_COUNT - 1n).toString() } })
 		})
 		expect(exactInput.value).toBe((UNSAFE_TICK_COUNT - 1n).toString())
-		expect(within(document.body).getByText(`Tick ${(UNSAFE_TICK_COUNT - 1n).toString()}`)).not.toBeNull()
+		expect(scalarValueInput.value).toBe('0')
+	})
+
+	test('maps both endpoints of a non-divisible scalar range to canonical ticks', async () => {
+		function NonDivisibleHarness() {
+			const [selectedTick, setSelectedTick] = useState('0')
+			return (
+				<ScalarOutcomePicker
+					details={{ answerUnit: '', displayValueMax: 10n * 10n ** 18n, displayValueMin: 0n, maxValueLabel: '10', minValueLabel: '0', numTicks: 3n }}
+					isInvalid={false}
+					label='Select non-divisible scalar target'
+					onInvalidChange={() => undefined}
+					onSelectedTickChange={setSelectedTick}
+					selectedOutcomeLabel={`Tick ${selectedTick}`}
+					selectedTick={selectedTick}
+					selectedTickLabel={`${selectedTick} / 3`}
+				/>
+			)
+		}
+
+		const renderedComponent = await renderIntoDocument(<NonDivisibleHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const slider = documentQueries.getByRole('slider', { name: 'Select non-divisible scalar target' }) as HTMLInputElement
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '10' } })
+		})
+		expect(slider.value).toBe('3')
+		expect(scalarValueInput.value).toBe('10')
+
+		await act(() => {
+			fireEvent.input(slider, { target: { value: '1' } })
+		})
+		expect(scalarValueInput.value).toBe('3.333333333333333333')
 	})
 })

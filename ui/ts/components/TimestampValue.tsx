@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
-import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime } from '../lib/formatters.js'
+import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime, getWallClockTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -15,7 +15,7 @@ type TimestampValueProps = {
 
 export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
-	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? BigInt(Math.floor(Date.now() / 1_000))
+	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
 	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
 

@@ -2,7 +2,18 @@ import { parseDecimalInput } from '../../../lib/decimal.js'
 import { getVisualRatio } from '../../../lib/visualMetrics.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'
 
-export { clampScalarTickIndex, formatScalarDisplayValue, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, isValidScalarOutcomeIndex, MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'
+export {
+	clampScalarTickIndex,
+	formatScalarDisplayValue,
+	formatScalarOutcomeIndexLabel,
+	formatScalarOutcomeLabel,
+	getScalarDisplayValue,
+	getScalarOutcomeIndex,
+	getScalarOutcomeIndexDescriptor,
+	getScalarTickIndexForDisplayValue,
+	isValidScalarOutcomeIndex,
+	MAX_PRECISE_SCALAR_TICK_COUNT,
+} from '@zoltar/shared/scalarOutcome'
 
 type ScalarFormInputs = {
 	scalarIncrement: string

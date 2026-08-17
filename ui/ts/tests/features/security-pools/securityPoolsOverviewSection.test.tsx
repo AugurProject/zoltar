@@ -124,6 +124,7 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 				}
 	return {
 		accountState,
+		activeUniverseId: 1n,
 		hasLoadedSecurityPoolPage: true,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
@@ -180,6 +181,19 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const identifier = within(document.body).getByRole('button', { name: `Copy identifier ${questionId}` })
 		expect(identifier.textContent).toBe(questionId)
+	})
+
+	test('warns only when a browsed pool differs from the header universe', async () => {
+		const sameUniversePool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Same universe pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000001', universeId: 1n })
+		const mismatchedPool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Mismatched pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 11n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ activeUniverseId: 1n, securityPools: [sameUniversePool, mismatchedPool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const alerts = within(document.body).getAllByRole('alert')
+		expect(alerts).toHaveLength(1)
+		expect(alerts[0]?.textContent).toContain('Universe Mismatch')
+		expect(alerts[0]?.textContent).toContain('This pool belongs to 0xb, while the header shows 0x1.')
+		expect(getSecurityPoolCard('Same universe pool').textContent).not.toContain('Universe Mismatch')
 	})
 
 	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
