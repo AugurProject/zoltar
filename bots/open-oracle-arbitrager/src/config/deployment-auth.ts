@@ -72,13 +72,21 @@ export async function authenticateDeploymentManifest(
 		required: readonly { address: Address; role: DeploymentRole }[]
 	},
 ) {
-	if (manifest.chainId !== parameters.chainId || manifest.network !== parameters.network) throw new Error(`Deployment manifest targets ${manifest.network} chain ${manifest.chainId.toString()}`)
+	validateDeploymentManifestRequirements(manifest, parameters)
 	for (const requirement of parameters.required) {
 		const entry = manifest.contracts.find(candidate => candidate.role === requirement.role && candidate.address.toLowerCase() === requirement.address.toLowerCase())
 		if (entry === undefined) throw new Error(`Deployment manifest is missing ${requirement.role} ${requirement.address}`)
 		const code = await parameters.readCode(requirement.address)
 		if (code === undefined || code === '0x') throw new Error(`Authenticated ${requirement.role} ${requirement.address} has no runtime bytecode`)
 		if (keccak256(code).toLowerCase() !== entry.runtimeCodeHash.toLowerCase()) throw new Error(`Authenticated ${requirement.role} ${requirement.address} runtime bytecode hash does not match the manifest`)
+	}
+}
+
+export function validateDeploymentManifestRequirements(manifest: DeploymentManifest, parameters: { chainId: number; network: DeploymentManifest['network']; required: readonly { address: Address; role: DeploymentRole }[] }) {
+	if (manifest.chainId !== parameters.chainId || manifest.network !== parameters.network) throw new Error(`Deployment manifest targets ${manifest.network} chain ${manifest.chainId.toString()}`)
+	for (const requirement of parameters.required) {
+		const entry = manifest.contracts.find(candidate => candidate.role === requirement.role && candidate.address.toLowerCase() === requirement.address.toLowerCase())
+		if (entry === undefined) throw new Error(`Deployment manifest is missing ${requirement.role} ${requirement.address}`)
 	}
 }
 

@@ -2,7 +2,7 @@ import { rpcFailureWithContext, type Address, type TransactionLog } from '#ether
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/shared/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
-import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
+import { authenticateDeploymentManifest, validateDeploymentManifestRequirements, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
@@ -100,6 +100,7 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 	const manifest = config.deploymentManifest
 	if (manifest === undefined) throw new Error('Execution requires an authenticated deployment manifest')
 	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
+	validateDeploymentManifestRequirements(manifest, { chainId: config.network.chain.id, network: config.network.name, required })
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	await requireManifestAuthenticationQuorum(
 		clients.map(async (client, index) => {

@@ -138,7 +138,7 @@ describe('configured coordinator report discovery', () => {
 			transactionsRoot: `0x${'ff'.repeat(32)}`,
 			uncles: [],
 		}
-		const provider = (reportId: bigint, unavailable = false, reorg = false): EIP1193Provider => {
+		const provider = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false): EIP1193Provider => {
 			let blockReads = 0
 			return {
 				request: parameters => {
@@ -146,7 +146,7 @@ describe('configured coordinator report discovery', () => {
 					if (unavailable) throw new ConnectivityDegradedError('RPC connection unavailable')
 					if (parameters.method === 'eth_getBlockByNumber') {
 						blockReads += 1
-						return Promise.resolve({ ...rawBlock, hash: reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
+						return Promise.resolve({ ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
 					}
 					if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
 					const request = parameters.params[0]
@@ -167,7 +167,7 @@ describe('configured coordinator report discovery', () => {
 				},
 			}
 		}
-		const client = (reportId: bigint, unavailable = false, reorg = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg)) })
+		const client = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg, missingBlockHash)) })
 		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
 
 		const reports = await pendingCoordinatorReportsWithQuorum([client(7n), client(7n), client(7n, true)], config, 100n)
@@ -175,6 +175,7 @@ describe('configured coordinator report discovery', () => {
 		expect(reports.map(report => report.helper.reportId)).toEqual([7n])
 		expect(methods).not.toContain('eth_getLogs')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n), client(8n)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('RPC disagreement')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [] }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending coordinator report snapshot block 100 is missing its canonical hash before the read')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, true), client(7n, false, true)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('changed during pending coordinator report snapshot')
 		await expect(replacementDisputeAmountsWithQuorum([client(7n, false, true), client(7n, false, true)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'] }, 7n, 2n, 100n)).rejects.toThrow('changed during replacement dispute snapshot')
 	})
