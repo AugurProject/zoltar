@@ -2447,13 +2447,19 @@ button.wallet-asset-action-pending:disabled {
 
 .scalar-value-editor {
 	display: grid;
+	max-width: 100%;
+	min-width: 0;
 	gap: var(--space-1);
 }
 
 .scalar-value-input-row {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+	width: 100%;
 }
 
 .scalar-value-input-row .form-input {
@@ -2468,7 +2474,11 @@ button.wallet-asset-action-pending:disabled {
 	color: var(--text);
 }
 
-.scalar-value-input-row > span {
+.scalar-value-input-row > .scalar-value-unit {
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 

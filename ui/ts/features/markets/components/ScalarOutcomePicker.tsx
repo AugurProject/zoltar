@@ -119,9 +119,9 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 									onInput={event => updateScalarValue(event.currentTarget.value)}
 									value={scalarValueInput}
 								/>
-								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span>{details.answerUnit}</span>}
+								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span className='scalar-value-unit'>{details.answerUnit}</span>}
 							</span>
-							<span className='field-help'>{marketCopy.scalarValueHelpText}</span>
+							{scalarValueError === undefined ? <span className='field-help'>{marketCopy.scalarValueHelpText}</span> : undefined}
 							{scalarValueError === undefined ? undefined : (
 								<span className='field-error' id={scalarValueErrorId}>
 									{scalarValueError}

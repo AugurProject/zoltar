@@ -123,6 +123,7 @@ describe('ScalarOutcomePicker', () => {
 		})
 		expect(slider.value).toBe('7')
 		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
+		expect(documentQueries.queryByText('Enter a value on an increment.')).toBeNull()
 	})
 
 	test('restores the canonical scalar value after leaving invalid mode', async () => {
