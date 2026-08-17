@@ -424,24 +424,36 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 
 test('warns when a caught-up chain head is more than one minute old', () => {
 	const now = Date.parse('2026-08-17T12:00:00.000Z')
-	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z' }, now)).toEqual({ stale: false })
-	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:00.000Z' }, now)).toEqual({ stale: false })
-	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:58:59.000Z' }, now)).toEqual({
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:00.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' }, now)).toEqual({
 		stale: true,
 		ageMs: 61_000,
 	})
-	expect(indexerHeadFreshness({ indexed_block: '41', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z' }, now)).toEqual({ stale: false })
+	expect(indexerHeadFreshness({ indexed_block: '41', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'backfilling' }, now)).toEqual(
+		{
+			stale: false,
+		},
+	)
 	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: null }, now)).toEqual({ stale: false })
 })
 
 test('schedules the stale-head transition without waiting for another network response', () => {
-	const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z' }
+	const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z', phase: 'live' }
 	const now = Date.parse('2026-08-17T12:00:00.000Z')
 	expect(indexerHeadFreshnessTransitionDelay(network, now)).toBe(1_001)
 	expect(indexerHeadFreshness(network, now + 1_000)).toEqual({ stale: false })
 	expect(indexerHeadFreshness(network, now + 1_001)).toEqual({ stale: true, ageMs: 60_001 })
 	expect(indexerHeadFreshnessTransitionDelay(network, now + 1_001)).toBeUndefined()
 	expect(indexerHeadFreshnessTransitionDelay({ ...network, indexed_block: '41' }, now)).toBeUndefined()
+	expect(indexerHeadFreshnessTransitionDelay({ ...network, phase: 'backfilling' }, now)).toBeUndefined()
 })
 
 test('describes verified, absent, and pending contract deployments', () => {

@@ -166,6 +166,7 @@ export const indexerWaitingForStart = (network) => {
 const chainHeadFreshnessThresholdMs = 60_000
 
 export const indexerHeadFreshness = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return { stale: false }
 	const indexedBlock = decimalBlock(network?.indexed_block)
 	const observedBlock = decimalBlock(network?.observed_block)
 	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return { stale: false }
@@ -176,6 +177,7 @@ export const indexerHeadFreshness = (network, now = Date.now()) => {
 }
 
 export const indexerHeadFreshnessTransitionDelay = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return undefined
 	const indexedBlock = decimalBlock(network?.indexed_block)
 	const observedBlock = decimalBlock(network?.observed_block)
 	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return undefined
