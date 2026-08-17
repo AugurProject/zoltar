@@ -1651,7 +1651,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			moreButton.hidden = true
 		} else {
 			feedState.hidden = false
-			const message = element('span', '', `Activity unavailable: ${error.message}`)
+			const message = element('span', '', hadRows ? `Showing last known activity: ${error.message}` : `Activity unavailable: ${error.message}`)
 			$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : ''
 			const retry = element('button', 'state-retry', 'Retry')
 			retry.type = 'button'
