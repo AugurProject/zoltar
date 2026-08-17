@@ -947,6 +947,7 @@ export function useLiveTradingController({
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
+			setWalletConnectionFeedback(undefined)
 			setMessage(undefined)
 			setState('idle')
 			await refresh(configuration)

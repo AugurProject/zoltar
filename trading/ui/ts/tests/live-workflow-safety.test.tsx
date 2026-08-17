@@ -396,11 +396,16 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Reconnect before simulating or submitting')
+		await act(() => render(<LiveTrading route={`security-pool/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
 		const summariesBeforeChainRefresh = walletSummaries.length
 		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
 		await settleAsyncWorkflow()
 		expect(walletSummaries.length).toBeGreaterThan(summariesBeforeChainRefresh)
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
+		expect(document.body.textContent).not.toContain('Refreshing wallet context')
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
 
 		const callsBeforeProviderReplacement = approveRouterCalls
 		Reflect.set(window, 'ethereum', { ...injectedProvider })
