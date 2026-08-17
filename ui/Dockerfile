@@ -92,24 +92,13 @@ RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_ha
 # Print the hash for visibility
 RUN cat ipfs_hash.txt
 
-# --------------------------------------------------------
-# Publish Script: when run, publishes to IPFS running on docker host.
-# --------------------------------------------------------
+# The default entrypoint publishes to a host IPFS node. The local launcher uses
+# the serving entrypoint and publishes the gateway port instead.
+COPY --chmod=755 ./ui/scripts/docker-entrypoint.sh /entrypoint.sh
+COPY --chmod=755 ./ui/scripts/docker-serve-ui.sh /serve-ui.sh
+
+EXPOSE 8080
 
 WORKDIR /temp
-COPY <<'EOF' /entrypoint.sh
-#!/bin/sh
-set -e
-
-echo "Build Hash: $(cat /ipfs_hash.txt)"
-
-IPFS_IP4_ADDRESS=$(getent ahostsv4 host.docker.internal | grep STREAM | head -n 1 | cut -d ' ' -f 1)
-
-echo "Adding files to docker running IPFS at $IPFS_IP4_ADDRESS"
-IPFS_HASH=$(ipfs add --api /ip4/$IPFS_IP4_ADDRESS/tcp/5001 --cid-version 1 --quieter -r /export)
-echo "Uploaded Hash: $IPFS_HASH"
-EOF
-
-RUN chmod u+x /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
