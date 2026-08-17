@@ -771,8 +771,7 @@ export function SecurityPoolWorkflowSection({
 			/>
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
-					<details className='selected-pool-change-control'>
-						<summary>{securityPoolCopy.changePool}</summary>
+					<div className='selected-pool-change-control'>
 						<div className='selected-pool-context-lookup'>
 							<LookupFieldRow
 								label={commonCopy.securityPoolAddress}
@@ -786,7 +785,7 @@ export function SecurityPoolWorkflowSection({
 								}
 							/>
 						</div>
-					</details>
+					</div>
 				</div>
 				{selectedPoolSummaryContent === undefined ? undefined : (
 					<details className='selected-pool-context-details'>
@@ -867,8 +866,6 @@ export function SecurityPoolWorkflowSection({
 												value={selectedVaultOwnerInput}
 												onInput={selectedVaultOwner => securityVault.onSecurityVaultFormChange({ selectedVaultOwner })}
 												placeholder={commonCopy.hexValuePlaceholder}
-												resolvedValue={selectedVaultDetails === undefined ? undefined : <AddressValue address={selectedVaultDetails.vaultAddress} />}
-												resolvedValueLabel={securityPoolCopy.selectedVault}
 												action={
 													<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
 														{securityVault.loadingSecurityVault ? <LoadingText>{securityPoolCopy.refreshing}</LoadingText> : commonCopy.refresh}
