@@ -23,7 +23,7 @@ import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction
 import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
 import { parseAddressInput, parseBytes32Input, tryParseAddressInput } from '../../../lib/inputs.js'
 import { parseBigIntInput, parseEthAmountInput } from '../../markets/lib/marketForm.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance } from '../../../lib/formatters.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
@@ -536,10 +536,11 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						liquidationFundingPreview.value = fundingPreview
 						liquidationFundingPreviewResolvedKey.value = fundingPreviewKey
 					}
-					if (fundingPreview.currentRepBalanceAttoRep < fundingPreview.initialReportRepRequiredAttoRep) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.initialReportRepRequiredAttoRep - fundingPreview.currentRepBalanceAttoRep)} more REP in this wallet to fund the initial report.`)
+					if (fundingPreview.currentRepBalanceAttoRep < fundingPreview.initialReportRepRequiredAttoRep) throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingPreview.initialReportRepRequiredAttoRep - fundingPreview.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 					const walletBalanceAttoEth = fundingPreview.totalWalletEthRequiredAttoEth === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					ensureFundingContextIsCurrent()
-					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.totalWalletEthRequiredAttoEth - walletBalanceAttoEth)} more ETH in this wallet to fund the initial report and queue this liquidation.`)
+					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth)
+						throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingPreview.totalWalletEthRequiredAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and queue this liquidation.`)
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
 					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
 					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')

@@ -8,10 +8,11 @@ import { LoadingText } from '../../../components/LoadingText.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
+import { WarningSurface } from '../../../components/WarningSurface.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
-import { UniverseLink } from '../../universes/components/UniverseLink.js'
+import { formatUniverseIdHex } from '../../universes/lib/universe.js'
 import { getSecurityPoolStatusBadgeLabel } from '../../security-pools/lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState } from '../../security-pools/lib/securityPoolState.js'
 import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
@@ -24,6 +25,7 @@ function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: n
 }
 
 type MarketQuestionsSectionProps = {
+	activeUniverseId: bigint
 	environmentRefreshKey: number
 	hasForked: boolean
 	hasLoadedSecurityPools: boolean
@@ -44,6 +46,7 @@ type MarketQuestionsSectionProps = {
 	zoltarQuestionsError: string | undefined
 }
 export function MarketQuestionsSection({
+	activeUniverseId,
 	environmentRefreshKey,
 	hasForked,
 	hasLoadedSecurityPools,
@@ -250,11 +253,14 @@ export function MarketQuestionsSection({
 												const statusLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, lifecycleState, questionOutcome: pool.questionOutcome })
 												return (
 													<div className='market-linked-pool' key={pool.securityPoolAddress}>
+														{pool.universeId === activeUniverseId ? undefined : (
+															<WarningSurface className='market-linked-pool-universe-warning' role='alert' variant='compact'>
+																<strong>{marketCopy.universeMismatch}</strong>
+																<p>{marketCopy.formatLinkedPoolUniverseMismatch(formatUniverseIdHex(pool.universeId), formatUniverseIdHex(activeUniverseId))}</p>
+															</WarningSurface>
+														)}
 														<div className='market-linked-pool-summary'>
 															<Badge tone={lifecycleState === 'operational' ? 'ok' : 'warning'}>{statusLabel}</Badge>
-															<span>
-																{commonCopy.universe}: <UniverseLink universeId={pool.universeId} />
-															</span>
 															<span>
 																<strong>{marketCopy.openInterest}</strong>: <CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
 															</span>

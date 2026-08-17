@@ -53,7 +53,7 @@ function getDisplayedOutcomes(question: MarketDetails) {
 
 function getDisplayRange(question: MarketDetails) {
 	const displayRange = `${formatScalarDisplayValue(question.displayValueMin)} to ${formatScalarDisplayValue(question.displayValueMax)}`
-	return question.answerUnit === '' ? displayRange : `${displayRange} ${question.answerUnit}`
+	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {

@@ -6,8 +6,7 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
-import { UniverseLink } from './universes/components/UniverseLink.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '../lib/formatters.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from './markets/lib/marketType.js'
@@ -59,11 +58,7 @@ type MarketCreationTransactionContext = {
 }
 
 function getMarketCreationTransactionRows(context: MarketCreationTransactionContext) {
-	return [
-		...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]),
-		{ label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) },
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-	]
+	return [...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]), { label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) }]
 }
 
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
@@ -72,6 +67,7 @@ export function createMarketCreationTransactionIntent(context: MarketCreationTra
 		rows: getMarketCreationTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: transactionCopy.creatingQuestion,
+		universeId: context.universeId,
 	})
 }
 
@@ -81,6 +77,7 @@ export function createMarketCreationSuccessPresentation(result: MarketCreationRe
 		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }, ...getMarketCreationTransactionRows({ ...context, marketType: result.marketType })],
 		title: transactionCopy.questionCreated,
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 
@@ -95,10 +92,7 @@ type QuestionUniverseTransactionContext = {
 
 function getQuestionUniverseTransactionRows(context: QuestionUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-	]
+	return [...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }])]
 }
 
 export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork', context?: QuestionUniverseTransactionContext) {
@@ -107,6 +101,7 @@ export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork'
 		rows: getQuestionUniverseTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar,
+		universeId: context?.universeId,
 	})
 }
 
@@ -114,12 +109,10 @@ export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResu
 	const title = result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted
 	return buildPresentation({
 		hash: result.hash,
-		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-		],
+		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }],
 		title,
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -134,7 +127,7 @@ type ChildUniverseTransactionContext = {
 
 function getChildUniverseTransactionRows(context: ChildUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]), ...(context.outcomeIndex === undefined ? [] : [{ label: commonCopy.outcomeIndex, value: context.outcomeIndex.toString() }])]
+	return context.outcomeIndex === undefined ? [] : [{ label: commonCopy.outcomeIndex, value: context.outcomeIndex.toString() }]
 }
 
 export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'zoltar', context?: ChildUniverseTransactionContext) {
@@ -143,18 +136,17 @@ export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'z
 		rows: getChildUniverseTransactionRows(context),
 		source,
 		submittedTitle: transactionCopy.deployingChildUniverse,
+		universeId: context?.universeId,
 	})
 }
 
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
 	return buildPresentation({
 		hash: result.hash,
-		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() },
-		],
+		rows: [{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() }],
 		title: transactionCopy.childUniverseDeployed,
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -171,8 +163,7 @@ type ZoltarMigrationTransactionContext = {
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: `${context.amount.trim()} ${commonCopy.rep}` }]),
+		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: formatValueWithUnit(context.amount.trim(), commonCopy.rep) }]),
 		...(context.outcomeIndexes === undefined || context.outcomeIndexes.trim() === '' ? [] : [{ label: transactionCopy.outcomeIndexes, value: context.outcomeIndexes.trim() }]),
 	]
 }
@@ -183,6 +174,7 @@ export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | '
 		rows: getZoltarMigrationTransactionRows(context),
 		source: 'zoltar',
 		submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep,
+		universeId: context?.universeId,
 	})
 }
 
@@ -191,12 +183,12 @@ export function createZoltarMigrationSuccessPresentation(result: ZoltarMigration
 		detail: result.action === 'addRepToMigrationBalance' ? transactionCopy.migrationRepPreparationSuccessDetail : transactionCopy.repSplitSuccessDetail,
 		hash: result.hash,
 		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amountAttoRep)} ${commonCopy.rep}` },
+			{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(result.amountAttoRep, commonCopy.rep) },
 			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
 		],
 		title: result.action === 'addRepToMigrationBalance' ? transactionCopy.repPrepared : transactionCopy.repSplit,
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -208,12 +200,13 @@ type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeGwei?: string | undefined
 	questionId?: string | undefined
 	statoblastSecurityMultiplierBps?: bigint | undefined
+	universeId?: bigint | undefined
 }
 
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: `${context.initialReportPriorityFeeGwei.trim()} gwei` }]),
+		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeGwei.trim(), commonCopy.gwei) }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
 	]
@@ -225,6 +218,7 @@ export function createSecurityPoolCreationTransactionIntent(context?: SecurityPo
 		rows: getSecurityPoolCreationTransactionRows(context),
 		source: 'security-pools',
 		submittedTitle: transactionCopy.creatingSecurityPool,
+		universeId: context?.universeId,
 	})
 }
 
@@ -234,13 +228,13 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		hash: result.deployPoolHash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
-			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeAttoEthPerGas, 9)} gwei` },
+			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9) },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -250,6 +244,7 @@ export function createSecurityPoolCreationWarningPresentation(result: SecurityPo
 
 type SecurityVaultTransactionContext = {
 	securityPoolAddress?: string | undefined
+	universeId?: bigint | undefined
 	vaultAddress?: string | undefined
 }
 
@@ -273,6 +268,7 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 		rows: getSecurityVaultTransactionRows(context),
 		source: 'security-vault',
 		submittedTitle: getSecurityVaultActionTitle(actionName),
+		universeId: context?.universeId,
 	})
 }
 
@@ -287,6 +283,7 @@ export function createSecurityVaultSuccessPresentation(result: SecurityVaultActi
 		rows: [...(getSecurityVaultTransactionRows(context) ?? []), ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: getSecurityVaultActionTitle(result.action),
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 
@@ -301,10 +298,7 @@ type PoolUniverseTransactionContext = {
 
 function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [
-		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]),
-		...(context.universeId === undefined ? [] : [{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-	]
+	return [...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }])]
 }
 
 type TradingTransactionContext = PoolUniverseTransactionContext & {
@@ -321,6 +315,7 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 		rows: getTradingTransactionRows(context),
 		source: 'trading',
 		submittedTitle: humanizeAction(actionName),
+		universeId: context?.universeId,
 	})
 }
 
@@ -336,12 +331,12 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		hash: result.hash,
 		rows: [
 			{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -363,6 +358,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 		rows: getReportingTransactionRows(context),
 		source: 'reporting',
 		submittedTitle: humanizeAction(actionName),
+		universeId: context?.universeId,
 	})
 }
 
@@ -373,11 +369,11 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		hash: result.hash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 
@@ -394,7 +390,7 @@ function getLiquidationTransactionRows(context: LiquidationTransactionContext | 
 	return [
 		...(getPoolUniverseTransactionRows(context) ?? []),
 		...(context?.targetVault === undefined || context.targetVault.trim() === '' ? [] : [{ label: commonCopy.targetVault, value: <AddressValue address={context.targetVault} /> }]),
-		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: `${context.amount.trim()} ${commonCopy.eth}` }]),
+		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: formatValueWithUnit(context.amount.trim(), commonCopy.eth) }]),
 	]
 }
 
@@ -404,6 +400,7 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 		rows: getLiquidationTransactionRows(context),
 		source: 'security-pools',
 		submittedTitle: transactionCopy.submittingLiquidation,
+		universeId: context?.universeId,
 	})
 }
 
@@ -418,6 +415,7 @@ export function createLiquidationSuccessPresentation(result: SecurityPoolOvervie
 		rows: [...getLiquidationTransactionRows({ ...context, securityPoolAddress: result.securityPoolAddress }), ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: result.stagedExecution?.success === true ? commonCopy.liquidationExecuted : commonCopy.liquidationSubmitted,
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 
@@ -428,6 +426,7 @@ export function createLiquidationFailurePresentation(result: SecurityPoolOvervie
 		rows: [...getLiquidationTransactionRows({ ...context, securityPoolAddress: result.securityPoolAddress }), ...(result.stagedExecution === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.stagedExecution.operationId.toString()}` }])],
 		title: commonCopy.liquidationFailed,
 		tone: 'error',
+		universeId: context?.universeId,
 	})
 }
 
@@ -438,6 +437,7 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 type PoolOracleTransactionContext = {
 	managerAddress: string
 	securityPoolAddress?: string | undefined
+	universeId?: bigint | undefined
 }
 
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
@@ -455,6 +455,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 		rows: getPoolOracleTransactionRows(context),
 		source: 'pool-oracle',
 		submittedTitle,
+		universeId: context?.universeId,
 	})
 }
 
@@ -468,6 +469,7 @@ export function createPoolOracleSuccessPresentation(result: OpenOracleActionResu
 		rows: getPoolOracleTransactionRows(context),
 		title,
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 
@@ -549,6 +551,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 		rows: getPoolUniverseTransactionRows(context),
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
+		universeId: context?.universeId,
 	})
 }
 
@@ -602,12 +605,10 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 	return buildPresentation({
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
-		rows: [
-			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-		],
+		rows: [{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> }],
 		title,
 		tone: 'success',
+		universeId: result.universeId,
 	})
 }
 

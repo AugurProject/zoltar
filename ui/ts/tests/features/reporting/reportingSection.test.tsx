@@ -268,6 +268,16 @@ describe('ReportingSection', () => {
 		expect(message).not.toContain("this pool's market ends")
 	})
 
+	test('uses wall-clock relative timing when the chain timestamp is unavailable', () => {
+		const originalDateNow = Date.now
+		Date.now = () => 50_000
+		try {
+			expect(getReportingLockedUntilMessage(100n, undefined)).toContain('(in less than a minute)')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
@@ -324,7 +334,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
 		const transactionContext = document.body.querySelector('.transaction-object-context')
 		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected reporting transaction context')
-		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
 		expect(transactionContext.textContent?.includes('Source Vault')).toBe(false)
 		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(false)
 	})

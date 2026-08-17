@@ -21,7 +21,7 @@ export function getTransactionButtonState(scope: HTMLElement, label: string): Bu
 export function expectTransactionButtonDisabled(scope: HTMLElement, label: string, reason?: string) {
 	const state = getTransactionButtonState(scope, label)
 	expect(state.disabled).toBe(true)
-	if (reason !== undefined) expect(state.reason).toBe(reason)
+	if (reason !== undefined) expect(state.reason?.replaceAll('\u00a0', ' ')).toBe(reason.replaceAll('\u00a0', ' '))
 }
 
 export function expectTransactionButtonEnabled(scope: HTMLElement, label: string) {

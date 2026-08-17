@@ -333,7 +333,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction(),
 				walletBalanceAttoEth: 10n * 10n ** 18n,
 			}),
-		).toBe('Bid must be at least 1 ETH.')
+		).toBe('Bid must be at least 1\u00a0ETH.')
 
 		expect(
 			getTruthAuctionBidGuardMessage({
@@ -344,7 +344,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction({ minBidSizeAttoEth: 2n * 10n ** 18n }),
 				walletBalanceAttoEth: 1n * 10n ** 18n,
 			}),
-		).toBe('Need 1 more ETH in this wallet to bid the selected amount.')
+		).toBe('Need 1\u00a0more\u00a0ETH in this wallet to bid the selected amount.')
 		expect(
 			getTruthAuctionBidGuardMessage({
 				accountAddress: zeroAddress,
@@ -898,11 +898,11 @@ void describe('fork auction helpers', () => {
 		expect(rowsViewModel.rows.map(row => row.statusLabel)).toEqual(['Refunded', 'Winning', 'Winning'])
 		expect(rowsViewModel.rows[0]?.settlementControl?.disabled).toBe(true)
 		expect(rowsViewModel.rows[1]?.settlementControl).toEqual({
-			ariaLabel: 'Select winning bid 2: 1 ETH at 1.001100550165033004 ETH/REP',
+			ariaLabel: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
 			bidKey: winningBidKey,
 			checked: true,
 			disabled: false,
-			title: 'Select winning bid 2: 1 ETH at 1.001100550165033004 ETH/REP',
+			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
 		})
 		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], winningBidKey, true)).toEqual([winningBidKey])

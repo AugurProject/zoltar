@@ -385,7 +385,7 @@ export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemStat
 }
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
 	if (lastSettlementTimestamp === 0n) return '-'
-	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
+	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)}\u00a0REP / ETH`
 }
 export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
 	if (lastSettlementTimestamp === 0n) return undefined

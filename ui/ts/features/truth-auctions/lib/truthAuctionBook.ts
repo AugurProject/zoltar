@@ -1,7 +1,7 @@
 import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_MIN_SUPPORTED_TICK } from '../../../protocol/truthAuctionMath.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../../markets/lib/marketForm.js'
 
@@ -516,8 +516,8 @@ export function getTruthAuctionBidGuardMessage({
 	if (bidAmount === undefined) return 'Enter a valid bid amount.'
 
 	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'
-	if (bidAmount < truthAuction.minBidSizeAttoEth) return `Bid must be at least ${formatCurrencyBalance(truthAuction.minBidSizeAttoEth)} ETH.`
+	if (bidAmount < truthAuction.minBidSizeAttoEth) return `Bid must be at least ${formatCurrencyBalanceWithUnit(truthAuction.minBidSizeAttoEth, 'ETH')}.`
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (bidAmount > walletBalanceAttoEth) return `Need ${formatCurrencyBalance(bidAmount - walletBalanceAttoEth)} more ETH in this wallet to bid the selected amount.`
+	if (bidAmount > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(bidAmount - walletBalanceAttoEth, 'ETH')} in this wallet to bid the selected amount.`
 	return undefined
 }

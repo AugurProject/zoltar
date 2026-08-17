@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatCompactCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCompactCurrencyBalance, formatCurrencyBalanceWithUnit, formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp, formatValueWithUnit } from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
@@ -19,6 +19,12 @@ void describe('formatting helpers', () => {
 
 	void test('formatCurrencyInputBalance returns a compact decimal string without grouped separators', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
+	})
+
+	void test('keeps formatted values and units together with nonbreaking spaces', () => {
+		expect(formatValueWithUnit('9 000 000.00', 'REP')).toBe('9 000 000.00\u00a0REP')
+		expect(formatCurrencyBalanceWithUnit(2n * 10n ** 18n, 'REP')).toBe('2\u00a0REP')
+		expect(formatAdditionalCurrencyBalance(2n * 10n ** 18n, 'REP')).toBe('2\u00a0more\u00a0REP')
 	})
 
 	void describe('formatCompactCurrencyBalance', () => {

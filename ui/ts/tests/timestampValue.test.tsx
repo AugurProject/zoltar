@@ -46,12 +46,12 @@ describe('TimestampValue', () => {
 		expect(document.body.textContent?.includes('(in 2m)')).toBe(true)
 	})
 
-	test('omits relative time when no chain timestamp is available', async () => {
+	test('uses wall-clock relative time when no chain timestamp is available', async () => {
 		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={840n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes(formatTimestamp(840n))).toBe(true)
-		expect(document.body.querySelector('.timestamp-value-relative')).toBeNull()
+		expect(document.body.querySelector('.timestamp-value-relative')?.textContent).toContain('ago')
 	})
 
 	test('renders loading timestamps with an accessible spinner', async () => {

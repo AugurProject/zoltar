@@ -14,7 +14,6 @@ import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { assertNever } from '../../../lib/assert.js'
@@ -603,10 +602,7 @@ export function ReportingSection({
 						</p>
 					)}
 					<TransactionReview
-						context={[
-							{ label: commonCopy.question, value: marketDetails?.title ?? commonCopy.unavailable },
-							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={effectiveReportingDetails?.universeId} /> },
-						]}
+						context={[{ label: commonCopy.question, value: marketDetails?.title ?? commonCopy.unavailable }]}
 						primary={[
 							{ label: reportingCopy.disputeStakedRepAfterReport, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },

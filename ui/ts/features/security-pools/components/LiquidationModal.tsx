@@ -14,15 +14,15 @@ import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { TransactionStatusCard } from '../../../components/TransactionStatusCard.js'
+import { TimestampValue } from '../../../components/TimestampValue.js'
 import { assertNever } from '../../../lib/assert.js'
 import { sameAddress } from '../../../lib/address.js'
 import { tryParseAddressInput } from '../../../lib/inputs.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
-import { formatCurrencyInputBalance, formatDuration, formatTimestamp } from '../../../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput, tryParseEthAmountInput } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -583,8 +583,12 @@ export function LiquidationModal({
 						<MetricField label={liquidationCopy.totalApprovalLimit}>
 							<CurrencyValue value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
-						<MetricField label={liquidationCopy.approvalValidAfter}>{formatTimestamp(liquidationApprovalDetails.params.validAfter)}</MetricField>
-						<MetricField label={liquidationCopy.approvalExpiration}>{formatTimestamp(liquidationApprovalDetails.params.validUntil)}</MetricField>
+						<MetricField label={liquidationCopy.approvalValidAfter}>
+							<TimestampValue timestamp={liquidationApprovalDetails.params.validAfter} />
+						</MetricField>
+						<MetricField label={liquidationCopy.approvalExpiration}>
+							<TimestampValue timestamp={liquidationApprovalDetails.params.validUntil} />
+						</MetricField>
 						<MetricField label={liquidationCopy.minimumPostLiquidationHealth}>{formatHealthFactorBps(liquidationApprovalDetails.params.minPostLiquidationHealthFactorBps)}</MetricField>
 						<MetricField label={liquidationCopy.approvalStatus}>{getApprovalStatus(liquidationApprovalDetails.revoked, approvalNonceInvalidated, liquidationApprovalDetails.params.validAfter, liquidationApprovalDetails.params.validUntil, currentTimestamp)}</MetricField>
 					</DataGrid>
@@ -598,10 +602,7 @@ export function LiquidationModal({
 					</div>
 				)}
 				<TransactionReview
-					context={[
-						{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable },
-						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
-					]}
+					context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
 					primary={[
 						{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },

@@ -35,7 +35,7 @@ describe('RouteSubNavigation', () => {
 				options: [
 					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
 					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
-					{ disabled: true, label: 'Migrate REP', reason: 'Available after this universe forks.', value: 'migrate' },
+					{ disabled: true, label: 'Migrate REP', value: 'migrate' },
 				],
 				value: 'questions',
 			}),
@@ -60,9 +60,9 @@ describe('RouteSubNavigation', () => {
 		expect(questionsTab.getAttribute('aria-current')).toBe('page')
 		const migrateRepTab = documentQueries.getByRole('button', { name: 'Migrate REP' }) as HTMLButtonElement
 		expect(migrateRepTab.disabled).toBe(true)
-		expect(migrateRepTab.title).toBe('Available after this universe forks.')
-		expect(migrateRepTab.getAttribute('aria-description')).toBe('Available after this universe forks.')
-		expect(documentQueries.getByText('Available after this universe forks.')).not.toBeNull()
+		expect(migrateRepTab.title).toBe('')
+		expect(migrateRepTab.getAttribute('aria-description')).toBeNull()
+		expect(documentQueries.queryByText('Available after this universe forks.')).toBeNull()
 
 		const createQuestionTab = documentQueries.getByRole('link', { name: 'Create Question' })
 		const locationBeforeClicks = window.location.href

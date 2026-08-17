@@ -575,7 +575,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
-		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
 		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
 		expect(
 			within(transactionContext)

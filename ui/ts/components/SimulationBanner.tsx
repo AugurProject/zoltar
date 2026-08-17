@@ -6,7 +6,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
-import { formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatTimestampWithRelative } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
@@ -334,7 +334,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 
 	let scenarioDetail = bootstrapError.value
 	if (scenarioDetail === undefined) {
-		scenarioDetail = currentSource.value.kind === 'saved-state' ? simulationCopy.formatSavedStateDetail(currentSource.value.name, getSimulationScenarioLabel(currentSource.value.baseScenario), new Date(currentSource.value.savedAt).toLocaleString()) : getSimulationScenarioDescription(currentScenario.value)
+		const savedAtMilliseconds = currentSource.value.kind === 'saved-state' ? Date.parse(currentSource.value.savedAt) : undefined
+		const savedAtTimestamp = savedAtMilliseconds === undefined || Number.isNaN(savedAtMilliseconds) ? undefined : BigInt(Math.floor(savedAtMilliseconds / 1_000))
+		scenarioDetail =
+			currentSource.value.kind === 'saved-state' && savedAtTimestamp !== undefined ? simulationCopy.formatSavedStateDetail(currentSource.value.name, getSimulationScenarioLabel(currentSource.value.baseScenario), formatTimestampWithRelative(savedAtTimestamp)) : getSimulationScenarioDescription(currentScenario.value)
 	}
 	const scenarioStatus = getScenarioStatus({
 		bootstrapError: bootstrapError.value,
