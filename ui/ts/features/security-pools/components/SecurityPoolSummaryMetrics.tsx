@@ -7,7 +7,6 @@ import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
-import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
@@ -23,11 +22,10 @@ type SecurityPoolSummaryMetricsProps = {
 	pool: ListedSecurityPool
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
-	showUniverse?: boolean
 	variant?: 'embedded' | 'hero'
 }
 
-export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, showUniverse = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	if (variant === 'embedded')
 		return (
@@ -35,11 +33,6 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 				{showPoolAddress ? (
 					<MetricField label={securityPoolCopy.poolAddress}>
 						<AddressValue address={pool.securityPoolAddress} />
-					</MetricField>
-				) : undefined}
-				{showUniverse ? (
-					<MetricField label={commonCopy.universe}>
-						<UniverseLink universeId={pool.universeId} />
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
@@ -113,16 +106,11 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 					/>
 				</div>
 			</div>
-			{showPoolAddress || showUniverse || children === undefined ? (
+			{showPoolAddress || children === undefined ? (
 				<div className='security-pool-secondary-facts'>
 					{showPoolAddress ? (
 						<MetricField label={securityPoolCopy.poolAddress}>
 							<AddressValue address={pool.securityPoolAddress} />
-						</MetricField>
-					) : null}
-					{showUniverse ? (
-						<MetricField label={commonCopy.universe}>
-							<UniverseLink universeId={pool.universeId} />
 						</MetricField>
 					) : null}
 					{children}

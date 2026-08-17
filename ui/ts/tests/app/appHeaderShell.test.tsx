@@ -17,7 +17,6 @@ function createOverviewProps(): OverviewPanelsProps {
 			ethBalanceAttoEth: undefined,
 			wethBalanceAttoEth: undefined,
 		},
-		activeUniverseId: 0n,
 		isConnectingWallet: false,
 		isManagingWallet: false,
 		isLoadingRepPrices: false,
@@ -30,7 +29,6 @@ function createOverviewProps(): OverviewPanelsProps {
 		onGoToGenesisUniverse: () => undefined,
 		onRefreshRepPrices: () => undefined,
 		onSwitchNetwork: () => undefined,
-		parentUniverseId: undefined,
 		readBackendStatus: {
 			blockNumber: undefined,
 			blockTimestamp: undefined,

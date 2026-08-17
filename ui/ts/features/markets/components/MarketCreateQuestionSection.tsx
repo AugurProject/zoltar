@@ -26,6 +26,8 @@ import type { MarketCreationResult, MarketDetails } from '../../../types/contrac
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkMessage } from '../../../lib/network.js'
 import * as transactionReviewCopy from '../../../copy/transactionReview.js'
+import { TimestampValue } from '../../../components/TimestampValue.js'
+import { tryParseTimestampInput } from '../lib/marketForm.js'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: marketCopy.binary },
@@ -58,12 +60,6 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 		answerUnit: marketForm.answerUnit.trim(),
 		...parseScalarFormInputs(marketForm),
 	}
-}
-
-function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
-	if (marketType === 'binary') return undefined
-	if (marketType === 'categorical') return marketCopy.categoricalPoolCompatibilityDetail
-	return marketCopy.scalarPoolCompatibilityDetail
 }
 
 function getFieldErrorId(field: MarketFormFieldName) {
@@ -168,9 +164,13 @@ export function MarketCreateQuestionSection({
 	const startTimeError = timingRelationshipError ?? getVisibleFieldError('startTime')
 	const endTimeError = timingRelationshipError ?? getVisibleFieldError('endTime')
 	const timingRelationshipErrorId = 'market-create-timing-error'
-	const hasVisibleValidationError = timingRelationshipError !== undefined || Array.from(touchedFields).some(field => marketFormValidation.fieldErrors[field] !== undefined)
 	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !marketCreating && marketFormValidation.isValid
 	const showEndedQuestionWarning = marketFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(marketForm, currentTimestamp)
+	const renderDraftTimestamp = (value: string, emptyValue: string) => {
+		if (value.trim() === '') return emptyValue
+		const timestamp = tryParseTimestampInput(value)
+		return timestamp === undefined ? value : <TimestampValue timestamp={timestamp} />
+	}
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
@@ -241,7 +241,6 @@ export function MarketCreateQuestionSection({
 						<MetricField label={marketCopy.creationTransactionHash}>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
-						{getPoolEligibilityMessage(marketResult.marketType) === undefined ? undefined : <p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>}
 					</div>
 				</EntityCard>
 			)}
@@ -333,7 +332,6 @@ export function MarketCreateQuestionSection({
 								</p>
 							)}
 							<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
-							{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
 							{marketForm.marketType === 'categorical' ? (
 								<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
@@ -458,11 +456,11 @@ export function MarketCreateQuestionSection({
 									<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
 										<div className='question-draft-preview-meta-item' role='listitem'>
 											<span>{commonCopy.starts}</span>
-											<strong>{marketForm.startTime.trim() === '' ? marketCopy.immediatelyAfterCreation : marketForm.startTime}</strong>
+											<strong>{renderDraftTimestamp(marketForm.startTime, marketCopy.immediatelyAfterCreation)}</strong>
 										</div>
 										<div className='question-draft-preview-meta-item' role='listitem'>
 											<span>{commonCopy.ends}</span>
-											<strong>{marketForm.endTime.trim() === '' ? marketCopy.endTimeRequired : marketForm.endTime}</strong>
+											<strong>{renderDraftTimestamp(marketForm.endTime, marketCopy.endTimeRequired)}</strong>
 										</div>
 									</div>
 								</div>
@@ -488,7 +486,7 @@ export function MarketCreateQuestionSection({
 								primary={[
 									{ label: commonCopy.question, value: draftTitle },
 									{ label: marketCopy.outcomes, value: getDraftOutcomeLabels(marketForm, marketFormValidation.fieldErrors.categoricalOutcomes).join(' / ') },
-									{ label: marketCopy.endTime, value: marketForm.endTime },
+									{ label: marketCopy.endTime, value: renderDraftTimestamp(marketForm.endTime, marketCopy.endTimeRequired) },
 								]}
 								risks={[marketCopy.questionCreationConsequence, ...(showEndedQuestionWarning ? [marketCopy.endedQuestionWarning] : [])]}
 							/>
@@ -513,7 +511,7 @@ export function MarketCreateQuestionSection({
 
 										if (marketFormValidation.isValid) return undefined
 										if (timingRelationshipError !== undefined) return marketCopy.formatInvalidQuestionFieldsReason(timingRelationshipError)
-										return hasVisibleValidationError ? (marketFormValidation.notice ?? marketCopy.completeRequiredQuestionFields) : marketCopy.completeRequiredQuestionFields
+										return marketFormValidation.notice
 									})(),
 								}}
 							/>

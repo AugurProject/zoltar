@@ -13,7 +13,6 @@ import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
-import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
@@ -155,12 +154,6 @@ export function SecurityPoolSection({
 						<span>{commonCopy.initialReportPriorityFee}</span>
 						<strong>
 							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, 9)} {commonCopy.gwei}
-						</strong>
-					</li>
-					<li>
-						<span>{commonCopy.universe}</span>
-						<strong>
-							<UniverseLink universeId={securityPoolResult.universeId} />
 						</strong>
 					</li>
 					<li>

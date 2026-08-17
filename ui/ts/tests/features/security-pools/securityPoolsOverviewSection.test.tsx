@@ -978,7 +978,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
+		expect(poolCardQueries.queryByRole('link', { name: '0x1' })).toBeNull()
 		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
 		expect(poolCardQueries.queryByRole('button', { name: 'Review liquidation' })).toBeNull()
 		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()

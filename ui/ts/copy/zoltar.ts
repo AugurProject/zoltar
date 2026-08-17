@@ -6,7 +6,6 @@ export const viewForkDetailsTitle = 'View Fork Details'
 export const migrateRep = 'Migrate REP'
 export const prepareRep = 'Prepare REP'
 export const splitRep = 'Split REP'
-export const migrationNotForkedReason = 'Available after this universe forks.'
 export const migrationAmountAlreadySplitDetail = 'This amount is already fully split across the selected universes.'
 export const alreadyForkedReason = 'This universe has already forked.'
 export const formatAddMigrationRepDetail = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount} REP to your migration balance from this universe, then split it across the selected universes.`
@@ -37,7 +36,6 @@ export const outcomeBalancesLoading = 'Loading outcome universe balances…'
 export const formatSplitCapacityDetail = (remainingCapacity: CopyTemplateValue) => `The selected universes only have ${remainingCapacity} REP of room left for this amount. Reduce the amount or choose different universes.`
 export const formatMigrationBalanceExceeded = (availableRep: CopyTemplateValue, migrationBalance: CopyTemplateValue, walletBalance: CopyTemplateValue) => `You only have ${availableRep} REP available for migration in this universe (${migrationBalance} in your migration balance and ${walletBalance} wallet REP).`
 export const migrationRepBalance = 'Migration REP Balance'
-export const universeDataLoading = 'Loading universe data'
 export const migrationAmount = 'Migration Amount'
 export const preparingCurrentAmountLabel = 'preparing the current amount'
 export const preparingRepPending = 'Preparing REP…'

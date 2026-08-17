@@ -86,7 +86,7 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report Settled')
 	})
 
-	test('keeps pool, universe, and action context in trading and reporting intents', () => {
+	test('keeps pool and action context in trading and reporting intents', () => {
 		const context = {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
 			universeId: 7n,
@@ -101,10 +101,10 @@ describe('transaction presentations', () => {
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Share Outcome'])
-		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'universe', 'outcome'])
-		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'universe', 'outcome'])
-		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share Outcome'])
+		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
+		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
+		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
 	})
 
 	test('reuses liquidation identity and submitted values in completion presentations', () => {
@@ -124,13 +124,13 @@ describe('transaction presentations', () => {
 			context,
 		)
 
-		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Target Vault', 'Requested liquidation debt'])
-		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Target Vault', 'Requested liquidation debt'])
+		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
+		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
 		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5 ETH' })
 		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5 ETH' })
 	})
 
-	test('uses the same pool and universe grammar in intent and success presentations', () => {
+	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
 		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
 		const context = { securityPoolAddress, universeId: 7n }
 		const cases = [
@@ -145,8 +145,10 @@ describe('transaction presentations', () => {
 		]
 
 		for (const { intent, presentation } of cases) {
-			expect(intent.rows?.slice(0, 2).map(row => row.label)).toEqual(['Pool', 'Universe'])
-			expect(presentation.rows?.slice(0, 2).map(row => row.label)).toEqual(['Pool', 'Universe'])
+			expect(intent.rows?.[0]?.label).toBe('Pool')
+			expect(presentation.rows?.[0]?.label).toBe('Pool')
+			expect(intent.rows?.map(row => row.label)).not.toContain('Universe')
+			expect(presentation.rows?.map(row => row.label)).not.toContain('Universe')
 		}
 	})
 
@@ -173,7 +175,7 @@ describe('transaction presentations', () => {
 
 			for (const state of [requested, prepared, submitted, failed]) {
 				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
-				expect(state.active?.rows?.map(row => row.label)).toContain('Universe')
+				expect(state.active?.rows?.map(row => row.label)).not.toContain('Universe')
 			}
 			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
 			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')

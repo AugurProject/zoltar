@@ -75,6 +75,9 @@ export type CollateralizationCircleProps = {
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
 	details: {
+		answerUnit?: string
+		displayValueMax?: bigint
+		displayValueMin?: bigint
 		maxValueLabel?: ComponentChildren
 		minValueLabel?: ComponentChildren
 		numTicks: bigint
@@ -129,12 +132,10 @@ export type DeploymentSectionProps = {
 }
 
 export type OverviewPanelsProps = {
-	activeUniverseId: bigint
 	accountState: AccountState
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
 	walletBootstrapComplete: boolean
-	parentUniverseId: bigint | undefined
 	universeRepBalanceAttoRep: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeForkTime?: bigint | undefined

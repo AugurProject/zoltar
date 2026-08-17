@@ -110,7 +110,7 @@ describe('ZoltarMigrationSection', () => {
 
 		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Prepare REP', '3. Split REP'])
 		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
-		expectTransactionButtonDisabled(document.body, 'Split REP', 'Available after this universe forks.')
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP preparation is unavailable because this universe has not forked.')
 	})
 
 	test('labels the irreversible migration amount and requires an explicit destination', async () => {
@@ -213,7 +213,8 @@ describe('ZoltarMigrationSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Yes · Universe 0x2')
+		expect(review.textContent).toContain('Yes')
+		expect(review.textContent).not.toContain('Universe 0x2')
 		expect(review.textContent).toContain('Child-Universe REP Received')
 		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
 		expect(review.textContent?.match(/Selected Destinations/g)).toHaveLength(1)

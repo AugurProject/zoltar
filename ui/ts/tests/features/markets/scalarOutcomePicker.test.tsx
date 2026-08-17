@@ -15,6 +15,9 @@ function ScalarOutcomePickerHarness() {
 	return (
 		<ScalarOutcomePicker
 			details={{
+				answerUnit: 'USD',
+				displayValueMax: 100n * 10n ** 18n,
+				displayValueMin: 0n,
 				maxValueLabel: '100 USD',
 				minValueLabel: '0 USD',
 				numTicks: 10n,
@@ -96,6 +99,30 @@ describe('ScalarOutcomePicker', () => {
 		expect(invalidToggle.checked).toBe(true)
 		expect(slider.disabled).toBe(true)
 		expect(documentQueries.getAllByText('Invalid').length).toBeGreaterThan(0)
+	})
+
+	test('keeps direct scalar value entry synchronized with the slider', async () => {
+		const renderedComponent = await renderIntoDocument(<ScalarOutcomePickerHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const slider = documentQueries.getByRole('slider', { name: 'Select scalar target' }) as HTMLInputElement
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		expect(scalarValueInput.value).toBe('20')
+		expect(scalarValueInput.closest('strong')).toBeNull()
+		expect(documentQueries.getByText('Enter a value on an increment.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '70' } })
+		})
+		expect(slider.value).toBe('7')
+		expect(scalarValueInput.value).toBe('70')
+
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '75' } })
+		})
+		expect(slider.value).toBe('7')
+		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
 	})
 
 	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {

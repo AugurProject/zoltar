@@ -17,7 +17,6 @@ import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccor
 import { Question, getQuestionTitle } from '../../markets/components/Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
-import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { getWalletScopedAccountAddress } from '../../../lib/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '../../../lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
@@ -255,9 +254,6 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 												</MetricField>
 												<MetricField label={commonCopy.questionId}>
 													<IdentifierValue value={pool.questionId} />
-												</MetricField>
-												<MetricField label={commonCopy.universe}>
-													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>
 											</div>
 										</div>

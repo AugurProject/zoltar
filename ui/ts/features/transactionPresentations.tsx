@@ -6,7 +6,6 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
-import { UniverseLink } from './universes/components/UniverseLink.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
@@ -59,11 +58,7 @@ type MarketCreationTransactionContext = {
 }
 
 function getMarketCreationTransactionRows(context: MarketCreationTransactionContext) {
-	return [
-		...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]),
-		{ label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) },
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-	]
+	return [...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]), { label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) }]
 }
 
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
@@ -95,10 +90,7 @@ type QuestionUniverseTransactionContext = {
 
 function getQuestionUniverseTransactionRows(context: QuestionUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-	]
+	return [...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }])]
 }
 
 export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork', context?: QuestionUniverseTransactionContext) {
@@ -114,10 +106,7 @@ export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResu
 	const title = result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted
 	return buildPresentation({
 		hash: result.hash,
-		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-		],
+		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }],
 		title,
 		tone: 'success',
 	})
@@ -134,7 +123,7 @@ type ChildUniverseTransactionContext = {
 
 function getChildUniverseTransactionRows(context: ChildUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]), ...(context.outcomeIndex === undefined ? [] : [{ label: commonCopy.outcomeIndex, value: context.outcomeIndex.toString() }])]
+	return context.outcomeIndex === undefined ? [] : [{ label: commonCopy.outcomeIndex, value: context.outcomeIndex.toString() }]
 }
 
 export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'zoltar', context?: ChildUniverseTransactionContext) {
@@ -149,10 +138,7 @@ export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'z
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
 	return buildPresentation({
 		hash: result.hash,
-		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() },
-		],
+		rows: [{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() }],
 		title: transactionCopy.childUniverseDeployed,
 		tone: 'success',
 	})
@@ -171,7 +157,6 @@ type ZoltarMigrationTransactionContext = {
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
 		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: `${context.amount.trim()} ${commonCopy.rep}` }]),
 		...(context.outcomeIndexes === undefined || context.outcomeIndexes.trim() === '' ? [] : [{ label: transactionCopy.outcomeIndexes, value: context.outcomeIndexes.trim() }]),
 	]
@@ -191,7 +176,6 @@ export function createZoltarMigrationSuccessPresentation(result: ZoltarMigration
 		detail: result.action === 'addRepToMigrationBalance' ? transactionCopy.migrationRepPreparationSuccessDetail : transactionCopy.repSplitSuccessDetail,
 		hash: result.hash,
 		rows: [
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amountAttoRep)} ${commonCopy.rep}` },
 			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
 		],
@@ -234,7 +218,6 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		hash: result.deployPoolHash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
 			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeAttoEthPerGas, 9)} gwei` },
@@ -301,10 +284,7 @@ type PoolUniverseTransactionContext = {
 
 function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [
-		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]),
-		...(context.universeId === undefined ? [] : [{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
-	]
+	return [...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }])]
 }
 
 type TradingTransactionContext = PoolUniverseTransactionContext & {
@@ -336,7 +316,6 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		hash: result.hash,
 		rows: [
 			{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
@@ -373,7 +352,6 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		hash: result.hash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title: humanizeAction(result.action),
@@ -602,10 +580,7 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 	return buildPresentation({
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
-		rows: [
-			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-		],
+		rows: [{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> }],
 		title,
 		tone: 'success',
 	})

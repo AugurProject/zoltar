@@ -15,7 +15,7 @@ type TimestampValueProps = {
 
 export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
-	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
+	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? BigInt(Math.floor(Date.now() / 1_000))
 
 	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
 
@@ -37,17 +37,11 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 			</span>
 		)
 
-	const relativeTimestamp = resolvedCurrentTimestamp === undefined ? undefined : formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
+	const relativeTimestamp = formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
 
 	return (
 		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={absoluteTimestamp}>
-			{absoluteTimestamp}
-			{relativeTimestamp === undefined ? null : (
-				<>
-					{' '}
-					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
-				</>
-			)}
+			{absoluteTimestamp} <span className='timestamp-value-relative'>({relativeTimestamp})</span>
 		</time>
 	)
 }

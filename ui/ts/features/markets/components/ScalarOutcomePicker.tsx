@@ -7,6 +7,8 @@ import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../../types.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
+import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
+import { tryParseDecimalInput } from '../../../lib/decimal.js'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
@@ -14,13 +16,39 @@ function getSafeSelectedTickValue(selectedTick: string) {
 
 export function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
 	const sliderLabelId = useId()
+	const scalarValueErrorId = useId()
 	const selectedTickValue = clampScalarTickIndex(getSafeSelectedTickValue(selectedTick), details.numTicks)
 	const resolvedSelectedTick = selectedTickValue.toString()
 	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
 	const [exactTickInputValue, setExactTickInputValue] = useState(resolvedSelectedTick)
+	const scalarIncrement = details.displayValueMin === undefined || details.displayValueMax === undefined ? undefined : (details.displayValueMax - details.displayValueMin) / details.numTicks
+	const selectedScalarValue = details.displayValueMin === undefined || scalarIncrement === undefined ? undefined : details.displayValueMin + selectedTickValue * scalarIncrement
+	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatCurrencyInputBalance(selectedScalarValue)
+	const [scalarValueInput, setScalarValueInput] = useState(resolvedScalarValueInput ?? '')
+	const [scalarValueError, setScalarValueError] = useState<string | undefined>(undefined)
 	useEffect(() => {
 		setExactTickInputValue(resolvedSelectedTick)
 	}, [resolvedSelectedTick])
+	useEffect(() => {
+		if (resolvedScalarValueInput === undefined) return
+		setScalarValueInput(resolvedScalarValueInput)
+		setScalarValueError(undefined)
+	}, [resolvedScalarValueInput])
+	const updateScalarValue = (value: string) => {
+		setScalarValueInput(value)
+		const parsedValue = tryParseDecimalInput(value)
+		if (parsedValue === undefined || details.displayValueMin === undefined || details.displayValueMax === undefined || scalarIncrement === undefined || scalarIncrement <= 0n || parsedValue < details.displayValueMin || parsedValue > details.displayValueMax) {
+			setScalarValueError(marketCopy.scalarValueInvalid)
+			return
+		}
+		const offset = parsedValue - details.displayValueMin
+		if (offset % scalarIncrement !== 0n) {
+			setScalarValueError(marketCopy.scalarValueInvalid)
+			return
+		}
+		setScalarValueError(undefined)
+		onSelectedTickChange((offset / scalarIncrement).toString())
+	}
 
 	return (
 		<div className='market-scalar-deploy workflow-subsection'>
@@ -72,7 +100,36 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 			<DataGrid className='scalar-slider-stats'>
 				{showMinMax ? <MetricField label={marketCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
 				<MetricField label={marketCopy.selectedTick}>{selectedTickLabel}</MetricField>
-				<MetricField label={showMinMax ? marketCopy.selectedOutcome : marketCopy.currentValue}>{selectedOutcomeLabel}</MetricField>
+				<MetricField label={showMinMax ? marketCopy.selectedOutcome : marketCopy.currentValue} valueTagName='span'>
+					{resolvedScalarValueInput === undefined ? (
+						selectedOutcomeLabel
+					) : (
+						<span className='scalar-value-editor'>
+							<span className='scalar-value-input-row'>
+								<FormInput
+									aria-label={marketCopy.scalarValue}
+									aria-describedby={scalarValueError === undefined ? undefined : scalarValueErrorId}
+									disabled={disabled || isInvalid}
+									inputMode='decimal'
+									invalid={scalarValueError !== undefined}
+									onBlur={() => {
+										setScalarValueInput(resolvedScalarValueInput)
+										setScalarValueError(undefined)
+									}}
+									onInput={event => updateScalarValue(event.currentTarget.value)}
+									value={scalarValueInput}
+								/>
+								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span>{details.answerUnit}</span>}
+							</span>
+							<span className='field-help'>{marketCopy.scalarValueHelpText}</span>
+							{scalarValueError === undefined ? undefined : (
+								<span className='field-error' id={scalarValueErrorId}>
+									{scalarValueError}
+								</span>
+							)}
+						</span>
+					)}
+				</MetricField>
 				{showMinMax ? <MetricField label={marketCopy.maxValue}>{details.maxValueLabel}</MetricField> : undefined}
 			</DataGrid>
 			{action === undefined ? undefined : <div className='actions'>{action}</div>}

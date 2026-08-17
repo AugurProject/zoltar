@@ -59,7 +59,6 @@ export const formatShowLaterNavigationItems = (navigationLabel: string) => `Show
 export const connected = 'Connected'
 export const notConnected = 'Not connected'
 export const operations = 'Operations'
-export const parentUniverse = 'Parent Universe'
 export const readOnly = 'Read-only'
 export const repUsdc = 'REP/USDC'
 export const refreshingRepPrices = 'Refreshing REP prices…'

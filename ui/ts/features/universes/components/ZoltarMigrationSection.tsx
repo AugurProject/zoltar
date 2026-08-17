@@ -18,8 +18,6 @@ import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccor
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
-import { TransactionUniverseValue } from './TransactionUniverseValue.js'
-import { UniverseLink } from './UniverseLink.js'
 import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
@@ -28,7 +26,6 @@ import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { tryParseRepAmountInput as parseMigrationAmountInput } from '../../markets/lib/marketForm.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
-import { formatUniverseLabel } from '../lib/universe.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
@@ -143,7 +140,7 @@ export function ZoltarMigrationSection({
 			: selectedChildUniverses.map((child, index) => (
 					<span key={child.universeId.toString()}>
 						{index === 0 ? undefined : ', '}
-						{child.outcomeLabel} · <UniverseLink universeId={child.universeId} />
+						{child.outcomeLabel}
 					</span>
 				))
 	const approvalGuardMessage = (() => {
@@ -166,7 +163,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()
 	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (!hasPreparedBalance) return zoltarCopy.formatMigrationPreparationRequired(formatCurrencyBalance(missingPreparationAmount ?? 0n))
@@ -177,7 +174,7 @@ export function ZoltarMigrationSection({
 		return undefined
 	})()
 	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableAttoRep), formatCurrencyBalance(zoltarMigrationPreparedRepBalanceAttoRep ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))
@@ -232,15 +229,6 @@ export function ZoltarMigrationSection({
 					</MetricField>
 					<MetricField label={zoltarCopy.migrationRepBalance}>
 						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
-					<MetricField label={commonCopy.universe}>
-						{rootUniverse === undefined ? (
-							<span className='loading-value' role='status' aria-label={zoltarCopy.universeDataLoading}>
-								<span className='spinner' aria-hidden='true' />
-							</span>
-						) : (
-							<UniverseLink universeId={rootUniverse.universeId} />
-						)}
 					</MetricField>
 				</DataGrid>
 				<div className='form-grid'>
@@ -298,7 +286,7 @@ export function ZoltarMigrationSection({
 							<DataGrid dense>
 								{heldChildUniverses.map(child => (
 									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${child.outcomeLabel} ${commonCopy.rep}`} />
 									</MetricField>
 								))}
 							</DataGrid>
@@ -308,7 +296,6 @@ export function ZoltarMigrationSection({
 					<TransactionReview
 						context={[
 							{ label: commonCopy.question, value: rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable },
-							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={rootUniverse?.universeId} /> },
 							{ label: zoltarCopy.selectedDestinations, value: selectedDestinationsContent },
 						]}
 						primary={[

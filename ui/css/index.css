@@ -783,6 +783,11 @@ button .loading-value {
 	vertical-align: bottom;
 }
 
+.copy-feedback,
+.currency-value-number-unit {
+	white-space: nowrap;
+}
+
 .copy-error-recovery-wrap {
 	display: block;
 	max-width: 100%;
@@ -2430,6 +2435,33 @@ button.wallet-asset-action-pending:disabled {
 	gap: 0.65rem 0.9rem;
 }
 
+.scalar-value-editor {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.scalar-value-input-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.scalar-value-input-row .form-input {
+	min-width: 0;
+	width: min(12rem, 100%);
+	min-height: 2.75rem;
+	border: 1px solid var(--input-border);
+	border-radius: var(--radius-control);
+	padding: 0.8rem 0.95rem;
+	font: inherit;
+	background-color: rgba(6, 12, 20, 0.88);
+	color: var(--text);
+}
+
+.scalar-value-input-row > span {
+	white-space: nowrap;
+}
+
 .entity-card-subsection-header {
 	display: flex;
 	align-items: center;
@@ -2495,6 +2527,10 @@ button.wallet-asset-action-pending:disabled {
 
 .market-linked-pool:last-child {
 	border-bottom: 0;
+}
+
+.market-linked-pool-universe-warning {
+	grid-column: 1 / -1;
 }
 
 .market-linked-pool-summary {

@@ -1,7 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as marketCopy from '../copy/market.js'
-import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -362,7 +361,6 @@ export function App() {
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const overviewProps = {
-		activeUniverseId,
 		accountState,
 		isConnectingWallet,
 		isManagingWallet,
@@ -375,7 +373,6 @@ export function App() {
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		onRefreshRepPrices: refreshRepPrices,
 		onSwitchNetwork: () => void switchNetwork(),
-		parentUniverseId: zoltarUniverse?.parentUniverseId,
 		repPerEthFailure,
 		repPerEthPrice,
 		repPerEthSource,
@@ -819,7 +816,7 @@ export function App() {
 						label: marketCopy.repMigration,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : {}),
 					},
 				]}
 			/>

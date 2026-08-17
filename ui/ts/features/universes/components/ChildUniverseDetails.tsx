@@ -4,7 +4,6 @@ import { TimestampValue } from '../../../components/TimestampValue.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import type { Address } from '@zoltar/shared/ethereum'
-import { formatUniverseLabel } from '../lib/universe.js'
 import type { ZoltarChildUniverseSummary } from '../../../types/contracts.js'
 
 type ChildUniverseDetailsProps = {
@@ -21,7 +20,7 @@ export function ChildUniverseDetails({ accountAddress, child, isSupportedChain, 
 			{showOutcomeIndex ? <MetricField label={commonCopy.outcomeIndex}>{child.outcomeIndex.toString()}</MetricField> : undefined}
 			{child.exists ? (
 				<MetricField label={commonCopy.reputationToken}>
-					<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isSupportedChain} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
+					<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isSupportedChain} tokenLabel={`${child.outcomeLabel} ${commonCopy.rep}`} />
 				</MetricField>
 			) : undefined}
 			{child.forkTime !== 0n ? (

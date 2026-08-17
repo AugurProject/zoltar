@@ -114,7 +114,7 @@ function requireHookState(state: UseForkAuctionOperationsState | undefined) {
 	return state
 }
 
-function getTransactionRowValueProp(state: ReturnType<typeof createInitialTransactionTrayState>, label: string, propName: 'address' | 'universeId') {
+function getTransactionRowValueProp(state: ReturnType<typeof createInitialTransactionTrayState>, label: string, propName: 'address') {
 	const value = state.active?.rows?.find(row => row.label === label)?.value
 	if (typeof value !== 'object' || value === null || !('props' in value)) throw new Error(`${label} transaction row is not a component`)
 	const props = value.props
@@ -1042,7 +1042,7 @@ describe('useForkAuctionOperations', () => {
 
 		for (const state of [requested, prepared, submitted, failed]) {
 			expect(getTransactionRowValueProp(state, 'Pool', 'address')).toBe(childPoolAddress)
-			expect(getTransactionRowValueProp(state, 'Universe', 'universeId')).toBe(childUniverseId)
+			expect(state.active?.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(getTransactionRowValueProp(state, 'Pool', 'address')).not.toBe(parentPoolAddress)
 		}
 		expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')

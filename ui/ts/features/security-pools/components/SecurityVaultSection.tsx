@@ -21,7 +21,6 @@ import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
-import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
@@ -337,7 +336,6 @@ export function SecurityVaultSection({
 	const vaultTransactionContext = [
 		...(selectedMarketTitle === undefined ? [] : [{ label: commonCopy.question, value: selectedMarketTitle }]),
 		{ label: commonCopy.securityPoolAddress, value: <AddressValue address={currentSelectedVaultDetails?.securityPoolAddress ?? normalizedSecurityVaultForm.securityPoolAddress} /> },
-		...(currentSelectedVaultDetails?.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={currentSelectedVaultDetails.universeId} /> }]),
 		{ label: securityPoolCopy.vault, value: <AddressValue address={selectedVaultOwner === '' ? undefined : selectedVaultOwner} /> },
 		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 	]
