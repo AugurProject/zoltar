@@ -282,7 +282,7 @@ function PairInitializationAction({ market }: { market: LiveMarket }) {
 	)
 }
 
-export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean }) {
+export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked, connectionMessage }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean; connectionMessage?: string | undefined }) {
 	const hasLoadedDetails = market.loadError === undefined
 	let refreshMessage: string | undefined
 	if (refreshing) refreshMessage = hasLoadedDetails ? 'Refreshing security pool; showing the last successful result.' : 'Retrying security pool details…'
@@ -301,6 +301,11 @@ export function LiveSecurityPoolDetails({ market, refreshError, refreshing = fal
 				</div>
 				{market.loadError === undefined ? null : <Status tone='warn'>Pool data unavailable</Status>}
 			</header>
+			{connectionMessage === undefined ? null : (
+				<p class='error' role='alert'>
+					{connectionMessage}
+				</p>
+			)}
 			<section class='section' aria-busy={refreshing}>
 				{refreshMessage === undefined ? null : <p role='status'>{refreshMessage}</p>}
 				{errorMessage === undefined ? null : (
@@ -537,7 +542,7 @@ export function LiveTrading({
 			)
 	}
 	if (routePool !== undefined) {
-		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} />
+		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={message} />
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -548,6 +553,11 @@ export function LiveTrading({
 						<h1>Security pool</h1>
 					</div>
 				</header>
+				{message === undefined ? null : (
+					<p class='error' role='alert'>
+						{message}
+					</p>
+				)}
 				<section class='section' aria-busy={discoveryState === 'loading'}>
 					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
 				</section>

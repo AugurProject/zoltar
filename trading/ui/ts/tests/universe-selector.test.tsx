@@ -99,6 +99,31 @@ describe('universe selector', () => {
 		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
 	})
 
+	test('shows wallet connection failures on live security-pool routes', async () => {
+		window.history.replaceState(undefined, '', `/#/security-pool/0x${'44'.repeat(20)}`)
+		const configuration: DeploymentConfiguration = {
+			chainId: 31_337,
+			chainName: 'Local',
+			rpcUrl: 'http://127.0.0.1:1',
+			securityPoolFactory: `0x${'11'.repeat(20)}`,
+			factory: `0x${'22'.repeat(20)}`,
+			router: `0x${'33'.repeat(20)}`,
+			feeBps: 30,
+		}
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.header-actions .wallet-button')
+		expect(walletButton?.textContent).toBe('Connect wallet')
+		await act(async () => {
+			walletButton?.click()
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
+	})
+
 	test('keeps only markets minted in the selected universe', () => {
 		const first = { universeId: 1n } as LiveMarket
 		const second = { universeId: 2n } as LiveMarket
