@@ -1,13 +1,13 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { OutcomeSelectionList } from '../../markets/components/OutcomeSelectionList.js'
-import { ScalarOutcomePicker } from '../../markets/components/ScalarOutcomePicker.js'
-import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
-import { LoadingText } from '../../../components/LoadingText.js'
-import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '../../markets/lib/scalarOutcome.js'
-import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../../../types/contracts.js'
+import { OutcomeSelectionList } from '@zoltar/ui-statoblast/features/markets/components/OutcomeSelectionList.js'
+import { ScalarOutcomePicker } from '@zoltar/ui-statoblast/features/markets/components/ScalarOutcomePicker.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-statoblast/features/markets/lib/scalarOutcome.js'
+import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {
 	disabled: boolean

@@ -23,7 +23,7 @@ import {
 	settleOracleReport,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
-} from '../protocol/index.js'
+} from '@zoltar/ui-zoltar/protocol/index.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'

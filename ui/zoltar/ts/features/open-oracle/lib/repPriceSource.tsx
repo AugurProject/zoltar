@@ -1,6 +1,6 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as pricingCopy from '../../../copy/pricing.js'
-import { assertNever } from '../../../lib/assert.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 export type RepPriceSource = 'v4' | 'v3' | 'mock'
 

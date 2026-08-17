@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { MetricField } from '../../../components/MetricField.js'
-import { SectionBlock } from '../../../components/SectionBlock.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { normalizeAddress } from '../../../lib/address.js'
+import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ForkWorkflowSelectionStage, SelectedPoolView } from '../../security-pools/lib/securityPoolWorkflow.js'
 
 type UseForkWorkflowSelectionStateParameters = {

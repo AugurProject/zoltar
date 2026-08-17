@@ -1,5 +1,5 @@
-import { getErrorDetail } from '../lib/errors.js'
-import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
+import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n

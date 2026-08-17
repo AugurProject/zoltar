@@ -8,16 +8,16 @@ import {
 	peripherals_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 } from '../contractArtifact.js'
-import { isIgnorableLogDecodeError } from '../lib/errors.js'
-import { deriveHasForkActivity } from './forkActivity.js'
-import { sameAddress } from '../lib/address.js'
-import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
-import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
-import { requireForkDataView } from './forkData.js'
-import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from './helpers.js'
-import { getDeploymentSteps } from './deployment.js'
-import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
-import { loadMarketDetails } from './zoltar.js'
+import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { deriveHasForkActivity } from '@zoltar/ui-zoltar/protocol/forkActivity.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar/protocol/core.js'
+import { requireForkDataView } from '@zoltar/ui-zoltar/protocol/forkData.js'
+import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from '@zoltar/ui-zoltar/protocol/helpers.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js'
+import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
+import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
 
 const QUESTION_OUTCOME_ABI = [
 	{

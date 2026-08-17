@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { sameAddress } from '../../../lib/address.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import type { ReportingOutcomeKey } from '../../../types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type PendingParentEscalationClaimSelection = {
 	depositIndexes: bigint[]

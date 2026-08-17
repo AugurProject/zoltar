@@ -1,7 +1,7 @@
-import * as liquidationCopy from '../../../copy/liquidation.js'
+import * as liquidationCopy from '@zoltar/ui-zoltar/copy/liquidation.js'
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/shared/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth
 const DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n

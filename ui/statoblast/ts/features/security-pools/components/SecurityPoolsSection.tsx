@@ -1,7 +1,7 @@
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
-import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
+import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../../types.js'
 
 export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {

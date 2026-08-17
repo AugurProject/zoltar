@@ -1,10 +1,10 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../../../lib/pagination.js'
-import type { EscalationDeposit } from '../../../types/contracts.js'
-import { PaginationControls } from '../../../components/PaginationControls.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
+import type { EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
+import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 
 const ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE = 25
 

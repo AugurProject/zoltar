@@ -1,4 +1,4 @@
-import type { CopyTemplateValue } from './types.js'
+import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const annualFee = 'Annual Fee'
 export const badDebt = 'Bad Debt'

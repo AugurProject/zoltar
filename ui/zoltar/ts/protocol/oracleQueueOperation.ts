@@ -1,5 +1,5 @@
-import { assertNever } from '../lib/assert.js'
-import type { OracleQueueOperation } from '../types/contracts.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import type { OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export const LIQUIDATION_OPERATION_TYPE = 0
 export const WITHDRAW_REP_OPERATION_TYPE = 1

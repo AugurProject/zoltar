@@ -1,5 +1,5 @@
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../../../lib/routing.js'
-import { readUniverseQueryParam, writeUniverseQueryParam } from '../../../lib/urlParams.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtocolAddresses.js'
 
 export { getGenesisReputationTokenAddress }

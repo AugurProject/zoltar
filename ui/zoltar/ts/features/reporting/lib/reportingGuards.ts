@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { ReportingOutcomeKey } from '../../../types/contracts.js'
-import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 

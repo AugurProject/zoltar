@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { normalizeAddress, sameAddress } from '../../../lib/address.js'
+import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 
 export type SelectedVaultView = 'browse-vaults' | 'selected-vault'

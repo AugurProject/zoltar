@@ -1,8 +1,8 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { OracleManagerDetails } from '../../../types/contracts.js'
-import type { SecurityVaultDetails } from '../../../types/contracts.js'
-import { sameAddress } from '../../../lib/address.js'
-import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../protocol/oracleTiming.js'
+import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-zoltar/protocol/oracleTiming.js'
 
 export { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS }
 

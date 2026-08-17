@@ -1,7 +1,7 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getMulticall3Address } from './deploymentHelpers.js'
-import type { ReadClient, WriteClient } from '../types/contracts.js'
-import type { TransactionRequestPreview } from '../lib/chainBackend.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { getContractLabel } from './contractLabels.js'
 
 const RPC_STATE_RETRY_DELAYS_MILLISECONDS = [250, 500, 1_000, 2_000, 4_000] as const

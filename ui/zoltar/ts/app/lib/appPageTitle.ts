@@ -1,5 +1,5 @@
-import * as appCopy from '../../copy/app.js'
-import * as commonCopy from '../../copy/common.js'
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../copy/market.js'
 import * as zoltarCopy from '../../copy/zoltar.js'
 import type { Route } from '../../types/app.js'

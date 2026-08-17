@@ -1,12 +1,12 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { ComponentChildren } from 'preact'
-import { Badge } from '../../../components/Badge.js'
-import { EntityCard } from '../../../components/EntityCard.js'
-import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
-import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { ActionAvailability } from '../../types.js'
-import type { ZoltarChildUniverseSummary } from '../../../types/contracts.js'
+import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ChildUniverseAction = {
 	availability?: ActionAvailability

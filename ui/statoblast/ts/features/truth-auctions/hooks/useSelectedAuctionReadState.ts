@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '../../../protocol/index.js'
-import { sameAddress } from '../../../lib/address.js'
-import { createConnectedReadClient } from '../../../lib/clients.js'
-import { getErrorMessage } from '../../../lib/errors.js'
+import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '@zoltar/ui-zoltar/protocol/index.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCurrentSelectedPoolForkAuctionDetails, shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey } from '../../../types/contracts.js'
+import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
 

@@ -1,8 +1,8 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
-import type { MarketDetails } from '../../../types/contracts.js'
-import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { tryParseDecimalInput } from '../../../lib/decimal.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 
 export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier: string) {

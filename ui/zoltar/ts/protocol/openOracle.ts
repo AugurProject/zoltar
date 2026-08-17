@@ -1,8 +1,8 @@
 import { bigintToSafeNumber, decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { ABIS } from '../abis.js'
-import { sameAddress } from '../lib/address.js'
-import { isIgnorableLogDecodeError } from '../lib/errors.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer, getOpenOracleDisputeSwapTokenKey } from './openOracleMath.js'
@@ -11,7 +11,7 @@ import { getOpenOracleCreateParameterValidationMessage } from './openOracleValid
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
 import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
+import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
@@ -198,8 +198,8 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
-	let pendingOperation: import('../types/contracts.js').StagedOracleOperation | undefined
-	let stagedOperations: import('../types/contracts.js').StagedOracleOperation[] = []
+	let pendingOperation: import('@zoltar/ui-core-shared/types/contracts.js').StagedOracleOperation | undefined
+	let stagedOperations: import('@zoltar/ui-core-shared/types/contracts.js').StagedOracleOperation[] = []
 	let token1: Address | undefined
 	let token2: Address | undefined
 	if (activeStagedOperationCount > 0n) {
@@ -294,7 +294,7 @@ function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
 	return amount2 === 0n ? 0n : (amount1 * 10n ** OPEN_ORACLE_PRICE_UNITS) / amount2
 }
 
-export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('../types/contracts.js').OpenOracleReportDetails> {
+export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('@zoltar/ui-core-shared/types/contracts.js').OpenOracleReportDetails> {
 	const [eventState, stateHash, block] = await Promise.all([
 		loadOpenOracleEventState(client, openOracleAddress, reportId).catch(error => {
 			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)

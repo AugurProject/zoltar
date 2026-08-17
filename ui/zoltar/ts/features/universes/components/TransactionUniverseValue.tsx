@@ -1,4 +1,4 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 
 type TransactionUniverseValueProps = {

@@ -1,8 +1,8 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { MetricField } from '../../../components/MetricField.js'
-import { TimestampValue } from '../../../components/TimestampValue.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import type { VaultMetricGridProps } from '../../types.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {

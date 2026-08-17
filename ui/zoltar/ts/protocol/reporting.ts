@@ -1,12 +1,12 @@
 import { bigintToSafeNumber, concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
 import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
-import { sameAddress } from '../lib/address.js'
-import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getEscalationSideLabel, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp, requireSecurityVaultTupleArray } from './helpers.js'
-import { executeForkAuctionAction, readSecurityPoolUniverseId } from './securityPoolActions.js'
+import { executeForkAuctionAction, readSecurityPoolUniverseId } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
 import { loadMarketDetails } from './zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n

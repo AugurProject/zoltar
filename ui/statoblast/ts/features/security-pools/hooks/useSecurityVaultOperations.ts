@@ -1,10 +1,10 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { useErc20AllowanceLoader, useErc20BalanceLoader } from '../../../hooks/useErc20Loader.js'
-import { useFormState } from '../../../hooks/useFormState.js'
-import { useLoadController } from '../../../hooks/useLoadController.js'
+import { useErc20AllowanceLoader, useErc20BalanceLoader } from '@zoltar/ui-core-shared/hooks/useErc20Loader.js'
+import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
+import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/ethereum'
-import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
+import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
 import {
 	approveErc20,
 	depositRepToVaultToSecurityPool,
@@ -16,25 +16,25 @@ import {
 	redeemRepFromVaultFromSecurityPool,
 	redeemSecurityVaultFees,
 	updateSecurityVaultFees,
-} from '../../../protocol/index.js'
-import { assertNever } from '../../../lib/assert.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
-import { normalizeAddress, sameAddress } from '../../../lib/address.js'
-import { getErrorMessage, isRecoverableContractReadError } from '../../../lib/errors.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
-import type { ActionFeedback } from '../../../lib/actionFeedback.js'
-import { parseAddressInput } from '../../../lib/inputs.js'
+} from '@zoltar/ui-zoltar/protocol/index.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import { parseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseBigIntInput, parseRepAmountInput } from '../../markets/lib/marketForm.js'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
-import { requireDefined } from '../../../lib/required.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar/features/open-oracle/lib/oracleRequestEth.js'
+import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
-import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction.js'
-import { useRequestGuard } from '../../../lib/requestGuard.js'
-import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
+import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/lib/writeAction.js'
+import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../../../types/app.js'
-import type { SecurityVaultActionResult, SecurityVaultDetails } from '../../../types/contracts.js'
+import type { SecurityVaultActionResult, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean

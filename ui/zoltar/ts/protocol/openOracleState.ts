@@ -1,6 +1,6 @@
 import { decodeOpenOracleStatePreimage, hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, getOpenOracleReportIdFromTopic, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import type { Address, Hex, TransactionLog } from '@zoltar/shared/ethereum'
-import type { ReadClient } from '../types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type OpenOracleEventState = {
 	initial: OpenOracleStatePreimage

@@ -1,8 +1,8 @@
 import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.js'
-import type { DeploymentStatus, QuestionData } from '../../../types/contracts.js'
-import { assertNever } from '../../../lib/assert.js'
-import { parseDecimalInput } from '../../../lib/decimal.js'
+import type { DeploymentStatus, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { parseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { parseStatoblastSecurityMultiplierBpsInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>

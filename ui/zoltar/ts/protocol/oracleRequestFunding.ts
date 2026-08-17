@@ -1,4 +1,4 @@
-import type { OracleManagerDetails } from '../types/contracts.js'
+import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function resolveOracleOperationEthFunding({ managerDetails, priceUsable }: { managerDetails: OracleManagerDetails | undefined; priceUsable?: boolean | undefined }) {
 	if (managerDetails === undefined) return undefined

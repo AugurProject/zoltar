@@ -1,4 +1,4 @@
-import type { CopyTemplateValue } from './types.js'
+import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const bidAmountEth = 'Bid Amount (ETH)'
 export const scrollableAuctionBidHistory = 'Scrollable auction bid history'

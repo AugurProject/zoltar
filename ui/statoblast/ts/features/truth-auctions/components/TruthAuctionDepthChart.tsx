@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
 import { useRef } from 'preact/hooks'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../../../lib/formatters.js'
-import { getVisualRatio } from '../../../lib/visualMetrics.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import type { TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
 
 type TruthAuctionDepthChartProps = {

@@ -1,4 +1,4 @@
-import { getRuntimeNetworkProfile } from '../lib/networkProfile.js'
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 
 export function getGenesisReputationTokenAddress() {
 	return getRuntimeNetworkProfile().genesisRepTokenAddress

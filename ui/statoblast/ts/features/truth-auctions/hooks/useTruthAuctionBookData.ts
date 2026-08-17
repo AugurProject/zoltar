@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { type Address, zeroAddress } from '@zoltar/shared/ethereum'
-import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/index.js'
-import { createConnectedReadClient } from '../../../lib/clients.js'
-import { getErrorMessage } from '../../../lib/errors.js'
+import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '@zoltar/ui-zoltar/protocol/index.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sortTruthAuctionBidsByPriority, sortTruthAuctionTickSummariesDescending } from '../lib/truthAuctionBook.js'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import type { ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '../../../types/contracts.js'
+import type { ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useTruthAuctionPaginationState } from './useTruthAuctionPaginationState.js'
 
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25

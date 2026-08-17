@@ -30,19 +30,19 @@ import type {
 	TradingActionResult,
 	TradingDetails,
 	ZoltarUniverseSummary,
-} from '../types/contracts.js'
-import type { ActionAvailability, ReadinessAction } from '../types/components.js'
-import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
-import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
+} from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActionAvailability, ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
+import type { SecurityPoolLifecycleState } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolState.js'
+import type { ForkAuctionStageView } from '@zoltar/ui-statoblast/features/truth-auctions/lib/forkAuction.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
-import type { LoadableValueState } from '../lib/loadState.js'
-import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
-import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
-import type { TokenApprovalState } from '../lib/tokenApproval.js'
-import type { UserMessagePresentation } from '../lib/userCopy.js'
-import type { ReadBackendStatus } from '../lib/chainBackend.js'
+import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
+import type { SecurityPoolStateModel } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolState.js'
+import type { ForkWorkflowSelectionStage } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolWorkflow.js'
+import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
+import type { ReadBackendStatus } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 
-export type * from '../types/components.js'
+export type * from '@zoltar/ui-core-shared/types/components.js'
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined

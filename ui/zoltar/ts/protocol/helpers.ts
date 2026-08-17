@@ -1,5 +1,5 @@
 import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
+import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type IntegerLike = bigint | number
 

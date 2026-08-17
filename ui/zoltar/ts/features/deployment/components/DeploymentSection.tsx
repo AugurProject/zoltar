@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { BadgeTone, DeploymentSectionProps } from '../../types.js'
-import { Badge } from '../../../components/Badge.js'
-import { SectionBlock } from '../../../components/SectionBlock.js'
-import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 
 type StepStatus = {

@@ -1,6 +1,6 @@
-import { sameAddress } from '../../../lib/address.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
-import type { OracleManagerDetails, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
+import type { OracleManagerDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type LiquidationNoticeState = 'failed' | 'queued' | 'submitted' | 'successful'
 

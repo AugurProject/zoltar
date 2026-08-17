@@ -1,8 +1,8 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import type { ReadClient } from '../lib/clients.js'
-import { getActiveNetworkProfile, getActiveSimulationController } from '../lib/activeEnvironment.js'
-import { isRecoverableContractReadError, isRecoverableQuoteError } from '../lib/errors.js'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS } from '../lib/networkProfile.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { isRecoverableContractReadError, isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 
 export { getWethAddress }

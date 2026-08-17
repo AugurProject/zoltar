@@ -1,6 +1,6 @@
-import type { ReportingOutcomeKey } from '../../../types/contracts.js'
-import { assertNever } from '../../../lib/assert.js'
-import { formatRelativeTimestamp, formatTimestamp } from '../../../lib/formatters.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
 	{ key: 'invalid', label: 'Invalid' },

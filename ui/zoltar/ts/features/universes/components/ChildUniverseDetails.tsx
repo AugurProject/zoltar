@@ -1,11 +1,11 @@
-import * as commonCopy from '../../../copy/common.js'
-import { DataGrid } from '../../../components/DataGrid.js'
-import { TimestampValue } from '../../../components/TimestampValue.js'
-import { MetricField } from '../../../components/MetricField.js'
-import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { formatUniverseLabel } from '../lib/universe.js'
-import type { ZoltarChildUniverseSummary } from '../../../types/contracts.js'
+import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ChildUniverseDetailsProps = {
 	accountAddress: Address | undefined

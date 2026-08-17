@@ -1,7 +1,7 @@
-import type { MarketType, ReportingOutcomeKey } from './contracts.js'
+import type { MarketType, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
-import type { TransactionRequestPreview } from '../lib/chainBackend.js'
+import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 
 export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
 

@@ -1,7 +1,7 @@
 import { type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
-import type { OpenOracleActionResult, SecurityVaultActionResult, WriteClient, ZoltarForkActionResult } from '../types/contracts.js'
-import { writeContractAndWait } from './core.js'
+import type { OpenOracleActionResult, SecurityVaultActionResult, WriteClient, ZoltarForkActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import { writeContractAndWait } from '@zoltar/ui-zoltar/protocol/core.js'
 
 export async function approveErc20<Action extends SecurityVaultActionResult['action'] | OpenOracleActionResult['action'] | ZoltarForkActionResult['action']>(client: WriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: Action) {
 	const hash = await writeContractAndWait(client, () => ({

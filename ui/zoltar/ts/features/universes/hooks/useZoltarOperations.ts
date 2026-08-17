@@ -1,7 +1,7 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { useCallback, useMemo } from 'preact/hooks'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import type { DeploymentStatus, ZoltarUniverseSummary } from '../../../types/contracts.js'
+import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
 import { useZoltarUniverse } from './useZoltarUniverse.js'

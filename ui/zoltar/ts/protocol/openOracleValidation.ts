@@ -1,4 +1,4 @@
-import { sameAddress } from '../lib/address.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 
 export const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n

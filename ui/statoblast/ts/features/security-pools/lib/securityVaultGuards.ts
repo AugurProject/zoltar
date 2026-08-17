@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
-import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getOracleRequestEthGuardMessage } from '@zoltar/ui-zoltar/features/open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
 
 export function getTargetHealthFactorGuardMessage(targetHealthFactor: string) {

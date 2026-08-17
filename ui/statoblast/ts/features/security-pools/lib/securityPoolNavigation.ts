@@ -1,5 +1,5 @@
-import { buildRouteHref, getRouteHashSearch, getTopLevelRouteSearch, SECURITY_POOLS_ROUTE } from '../../../lib/routing.js'
-import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '../../../lib/urlParams.js'
+import { buildRouteHref, getRouteHashSearch, getTopLevelRouteSearch, SECURITY_POOLS_ROUTE } from '@zoltar/ui-core-shared/lib/routing.js'
+import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 
 export function getUseQuestionForPoolState(questionId: string) {
 	return {

@@ -1,19 +1,19 @@
-import * as commonCopy from '../copy/common.js'
-import * as transactionCopy from '../copy/transaction.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../copy/market.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { AddressValue } from '../components/AddressValue.js'
-import { IdentifierValue } from '../components/IdentifierValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { UniverseLink } from './universes/components/UniverseLink.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '@zoltar/ui-statoblast/features/truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
-import { getMarketTypeLabel } from './markets/lib/marketType.js'
-import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
-import { buildIntent, buildPresentation, withWarning } from '../lib/transactionPresentations.js'
-import type { TransactionIntent } from '../types/components.js'
+import { getMarketTypeLabel } from '@zoltar/ui-statoblast/features/markets/lib/marketType.js'
+import { formatStatoblastSecurityMultiplier } from '@zoltar/ui-statoblast/features/markets/lib/trading.js'
+import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type {
 	ForkAuctionActionResult,
 	MarketCreationResult,
@@ -26,7 +26,7 @@ import type {
 	ZoltarChildUniverseActionResult,
 	ZoltarForkActionResult,
 	ZoltarMigrationActionResult,
-} from '../types/contracts.js'
+} from '@zoltar/ui-core-shared/types/contracts.js'
 function humanizeAction(action: string) {
 	return action
 		.replace(/([A-Z])/g, ' $1')

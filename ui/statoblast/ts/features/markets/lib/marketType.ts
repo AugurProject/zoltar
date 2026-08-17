@@ -1,6 +1,6 @@
-import * as marketCopy from '../../../copy/market.js'
-import { assertNever } from '../../../lib/assert.js'
-import type { MarketType } from '../../../types/contracts.js'
+import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import type { MarketType } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function getMarketTypeLabel(marketType: MarketType) {
 	switch (marketType) {

@@ -1,4 +1,4 @@
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
 import { resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
 

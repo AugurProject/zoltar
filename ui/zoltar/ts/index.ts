@@ -1,3 +1,3 @@
-import { mountApp } from './app/appRoot.js'
+import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 
 void mountApp()

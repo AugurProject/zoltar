@@ -1,4 +1,4 @@
-import type { CopyTemplateValue } from './types.js'
+import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const forkZoltar = 'Fork Universe'
 export const viewForkDetails = 'View fork details'

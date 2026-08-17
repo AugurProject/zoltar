@@ -1,8 +1,8 @@
-import { assertNever } from '../../../../lib/assert.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { ForkAuctionStageView } from '../../../truth-auctions/lib/forkAuction.js'
-import { getEscalationPhase, isPoolQuestionFinalized } from '../../../reporting/lib/reportingDomain.js'
+import { getEscalationPhase, isPoolQuestionFinalized } from '@zoltar/ui-zoltar/features/reporting/lib/reportingDomain.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
-import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../../../../types/contracts.js'
+import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function isSecurityPoolEnded({
 	hasForkActivity,

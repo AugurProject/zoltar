@@ -1,9 +1,9 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '../../features/deployment/components/DeploymentRouteContent.js'
-import { MarketSection } from '../../features/markets/components/MarketSection.js'
-import { NotFoundSection } from './NotFoundSection.js'
+import { MarketSection } from '@zoltar/ui-statoblast/features/markets/components/MarketSection.js'
+import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
 import { OpenOracleSection } from '../../features/open-oracle/components/OpenOracleSection.js'
-import { SecurityPoolsSection } from '../../features/security-pools/components/SecurityPoolsSection.js'
+import { SecurityPoolsSection } from '@zoltar/ui-statoblast/features/security-pools/components/SecurityPoolsSection.js'
 
 type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'
 

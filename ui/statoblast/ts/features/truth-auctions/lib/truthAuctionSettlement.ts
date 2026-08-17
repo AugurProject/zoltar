@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { TruthAuctionBidView, TruthAuctionMetrics } from '../../../types/contracts.js'
-import { sameAddress } from '../../../lib/address.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, getTruthAuctionWinningThresholdPrice, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
 
 export type TruthAuctionSettlementBidRow = {

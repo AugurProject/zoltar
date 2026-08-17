@@ -1,10 +1,10 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
-import { sameAddress } from '../../../lib/address.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
-import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
-import type { TruthAuctionBidView, TruthAuctionMetrics } from '../../../types/contracts.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type LocalSettlementBidStatus = 'claimed' | 'refunded'
 

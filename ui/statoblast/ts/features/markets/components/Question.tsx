@@ -1,15 +1,15 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as marketCopy from '../../../copy/market.js'
-import { LoadingText } from '../../../components/LoadingText.js'
-import { IdentifierValue } from '../../../components/IdentifierValue.js'
-import { MetricGrid } from '../../../components/MetricGrid.js'
-import { MetricField } from '../../../components/MetricField.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
-import { TimestampValue } from '../../../components/TimestampValue.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import { getMarketTypeLabel } from '../lib/marketType.js'
 import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
-import type { MarketDetails } from '../../../types/contracts.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type QuestionProps = {
 	className?: string

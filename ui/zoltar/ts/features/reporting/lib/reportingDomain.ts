@@ -6,10 +6,10 @@ import {
 	projectEscalationDeposit,
 	type EscalationBalanceTuple,
 } from '@zoltar/shared/escalationMath'
-import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../../../types/contracts.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
-import { requireDefined } from '../../../lib/required.js'
-import { getTimeRemaining } from '../../../lib/time.js'
+import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
+import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined

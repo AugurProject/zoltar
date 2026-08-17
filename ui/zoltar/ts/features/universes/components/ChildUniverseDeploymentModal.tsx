@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
-import { OperationModal } from '../../../components/OperationModal.js'
-import { RequirementsChecklist } from '../../../components/RequirementsChecklist.js'
-import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { RequirementsChecklist } from '@zoltar/ui-core-shared/components/RequirementsChecklist.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import type { ActionAvailability, ReadinessBlocker } from '../../types.js'
 
 type ChildUniverseDeploymentModalProps = {

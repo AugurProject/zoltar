@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
-import { useFormState } from '../../../hooks/useFormState.js'
-import { useLoadController } from '../../../hooks/useLoadController.js'
+import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
+import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import {
 	createChildUniverseFromSecurityPool,
@@ -20,22 +20,22 @@ import {
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 	withdrawForkedEscalationDeposits,
-} from '../../../protocol/index.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { getErrorMessage } from '../../../lib/errors.js'
+} from '@zoltar/ui-zoltar/protocol/index.js'
+import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
-import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../../../lib/inputs.js'
-import { normalizeAddress } from '../../../lib/address.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
-import type { ActionFeedback } from '../../../lib/actionFeedback.js'
-import { requireDefined } from '../../../lib/required.js'
+import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
+import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
 import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation } from '../../transactionPresentations.js'
-import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction.js'
-import { useRequestGuard } from '../../../lib/requestGuard.js'
+import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/lib/writeAction.js'
+import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput, parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../../markets/lib/marketForm.js'
-import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
+import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../../../types/app.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '../../../types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SettlementSelectedBid } from '../../types.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters & {

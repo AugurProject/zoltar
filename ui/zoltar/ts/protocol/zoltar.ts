@@ -1,6 +1,6 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
-import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'

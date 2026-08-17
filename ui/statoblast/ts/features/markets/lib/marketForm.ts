@@ -1,8 +1,8 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../../../types/app.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
-import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
-import { parseBigIntInput, tryParseBigIntInput } from '../../../lib/integerInput.js'
-import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
+import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 export { parseBigIntInput, tryParseBigIntInput }
 

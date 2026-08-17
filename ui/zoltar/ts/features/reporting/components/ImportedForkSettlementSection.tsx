@@ -1,13 +1,13 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { PaginationControls } from '../../../components/PaginationControls.js'
-import { SectionBlock } from '../../../components/SectionBlock.js'
-import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../../../lib/pagination.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getImportedEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
-import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '../../../types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const IMPORTED_FORK_SETTLEMENT_PAGE_SIZE = 25
 

@@ -1,13 +1,13 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { LoadingText } from '../../../components/LoadingText.js'
-import { PaginationControls } from '../../../components/PaginationControls.js'
-import { SectionBlock } from '../../../components/SectionBlock.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
 import { getTruthAuctionDispositionClassName, type TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
-import { getVisualRatio } from '../../../lib/visualMetrics.js'
+import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 
 type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined

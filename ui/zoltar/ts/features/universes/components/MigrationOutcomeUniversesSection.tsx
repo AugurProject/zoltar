@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { OutcomeSelectionList } from '../../markets/components/OutcomeSelectionList.js'
-import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
-import type { ZoltarChildUniverseSummary } from '../../../types/contracts.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { OutcomeSelectionList } from '@zoltar/ui-statoblast/features/markets/components/OutcomeSelectionList.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type MigrationOutcomeUniversesSectionProps = {
 	childUniverses: ZoltarChildUniverseSummary[]

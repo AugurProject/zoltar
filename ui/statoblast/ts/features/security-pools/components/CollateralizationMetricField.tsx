@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
-import * as pricingCopy from '../../../copy/pricing.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as pricingCopy from '@zoltar/ui-zoltar/copy/pricing.js'
 import type { ComponentChildren } from 'preact'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { MetricField } from '../../../components/MetricField.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../../open-oracle/lib/repPriceSource.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-zoltar/features/open-oracle/lib/repPriceSource.js'
 import { getCollateralizationDisplayState, getCollateralizationTone } from '../../markets/lib/trading.js'
 type CollateralizationMetricFieldProps = {
 	className?: string | undefined

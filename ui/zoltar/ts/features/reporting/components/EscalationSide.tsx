@@ -1,9 +1,9 @@
-import * as commonCopy from '../../../copy/common.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { JSX } from 'preact'
-import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { Badge } from '../../../components/Badge.js'
-import type { EscalationDeposit } from '../../../types/contracts.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import type { EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type EscalationSideDisplay = {
 	balance: bigint | undefined

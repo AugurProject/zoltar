@@ -19,7 +19,7 @@ import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
-import { getRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 
 export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 
