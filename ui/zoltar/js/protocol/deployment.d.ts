@@ -24,7 +24,7 @@ export declare const ATOMIC_FUNDING_SOURCE = "pragma solidity 0.8.17;\ncontract 
 export declare const ATOMIC_FUNDING_BYTECODE = "0x608060405260405161016e38038061016e83398101604081905261002291610103565b816001600160a01b03163b6000036100e8576001600160a01b03831631818110156100e65760006001600160a01b03851661005d8385610146565b604051600081818185875af1925050503d8060008114610099576040519150601f19603f3d011682016040523d82523d6000602084013e61009e565b606091505b50509050806100e45760405162461bcd60e51b815260206004820152600e60248201526d119d5b991a5b99c819985a5b195960921b604482015260640160405180910390fd5b505b505b33ff5b6001600160a01b038116811461010057600080fd5b50565b60008060006060848603121561011857600080fd5b8351610123816100eb565b6020850151909350610134816100eb565b80925050604084015190509250925092565b8181038181111561016757634e487b7160e01b600052601160045260246000fd5b9291505056fe";
 export declare function getProxyDeployerFundingShortfall(client: Pick<ReadClient, 'getBalance'>): Promise<bigint>;
 export declare function getProxyDeployerActivity(client: Pick<ReadClient, 'getBalance' | 'getTransactionCount'>): Promise<{
-    confirmedNonce: bigint;
+    confirmedNonce: any;
     deploymentPending: boolean;
     fundingPending: boolean;
     pending: boolean;
@@ -38,7 +38,7 @@ export declare function fundCanonicalDeployerSigner(client: WriteClient, paramet
     signer: Address;
 }): Promise<{
     hash: Hash;
-    receipt: import("@zoltar/shared/ethereum").TransactionReceipt;
+    receipt: Pick<import("@zoltar/shared/ethereum").TransactionReceipt, "status">;
 }>;
 export declare function getDeploymentSteps(profile?: NetworkProfile, wait?: RpcStateRetryWait): DeploymentStep[];
 export declare function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence'>, code: Hex | undefined): boolean;

@@ -3,7 +3,7 @@ import { bigintToSafeNumber, zeroAddress, type Abi, type Address, type Hash } fr
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import { ABIS } from '../../../abis.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, isOpenOracleReportMissingError, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, readOptionalMulticall, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/index.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'

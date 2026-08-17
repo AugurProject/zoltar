@@ -1,8 +1,8 @@
 import type { ActionAvailability } from '../../types.js';
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js';
 type DeploymentStepAvailabilityState = Pick<DeploymentStatus, 'id' | 'deployed' | 'dependencies' | 'label'>;
-export declare function getPrerequisiteLabel(steps: DeploymentStatus[], index: number): string | undefined;
-export declare function findNextDeployableStep(steps: DeploymentStatus[]): DeploymentStatus | undefined;
+export declare function getPrerequisiteLabel(steps: DeploymentStatus[], index: number): any;
+export declare function findNextDeployableStep(steps: DeploymentStatus[]): any;
 export declare function getDeploymentStepAvailability({ accountAddress, busyStepId, isOnActiveAppChain, prerequisiteLabel, step, }: {
     accountAddress: string | undefined;
     busyStepId: DeploymentStatus['id'] | undefined;

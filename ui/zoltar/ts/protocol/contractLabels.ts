@@ -1,4 +1,4 @@
-import { ABIS } from '../abis.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import {
 	ZoltarQuestionData_ZoltarQuestionData,
 	Zoltar_Zoltar,
@@ -9,7 +9,7 @@ import {
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
-} from '../contractArtifact.js'
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([
 	[ABIS.mainnet.erc20, 'ERC-20 Token'],

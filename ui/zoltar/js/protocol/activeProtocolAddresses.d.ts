@@ -1,3 +1,3 @@
-export declare function getGenesisReputationTokenAddress(): `0x${string}`;
-export declare function getWethAddress(): `0x${string}`;
+export declare function getGenesisReputationTokenAddress(): any;
+export declare function getWethAddress(): any;
 //# sourceMappingURL=activeProtocolAddresses.d.ts.map

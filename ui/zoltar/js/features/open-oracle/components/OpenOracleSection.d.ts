@@ -18,6 +18,6 @@ export declare function renderSelectedReportActionSection({ actionMode, disputeS
     openOracleReportDetails?: OpenOracleReportDetails;
     token1Symbol: string;
     token2Symbol: string;
-}): import("preact").JSX.Element;
+}): any;
 export declare function OpenOracleSection({ activeView, accountState, environmentReady, environmentRefreshKey, loadBrowseReports, onApproveToken1, onApproveToken2, onCancelOpenOracleWithdrawalBalanceCheck, onCreateOpenOracleGame, onDisputeReport, onLoadOracleReport, onOpenOracleCreateFormChange, onOpenOracleFormChange, onSettleReport, onWithdrawOpenOracleBalance, loadingOpenOracleCreate, openOracleActiveAction, openOracleActiveWithdrawalBalance, openOracleCreateForm, openOracleCreateFieldErrors, openOracleDisputeSubmission, openOracleError, openOracleForm, openOracleReportLookupState, openOracleWithdrawalBalanceChecking, openOracleWithdrawalReviewMessage, openOracleTokenAccessState, openOracleReportDetails, openOracleResult, openOracleWithdrawableBalances, openOracleWithdrawableBalancesError, openOracleWithdrawableBalancesLoading, onActiveViewChange, }: OpenOracleSectionProps): import("preact").JSX.Element;
 //# sourceMappingURL=OpenOracleSection.d.ts.map

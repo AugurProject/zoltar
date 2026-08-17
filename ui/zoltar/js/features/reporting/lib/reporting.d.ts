@@ -3,7 +3,7 @@ export declare const REPORTING_OUTCOME_DROPDOWN_OPTIONS: {
     value: ReportingOutcomeKey;
     label: string;
 }[];
-export declare function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none'): "Invalid" | "No" | "Yes" | "Unresolved";
+export declare function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none'): any;
 export declare function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp: bigint | undefined): string;
 export declare function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined): boolean | undefined;
 export type ReportingStage = 'preOpen' | 'notStarted' | 'activeLocked' | 'activeWithdrawable' | 'resolved' | 'forkTriggered' | 'timedOut';

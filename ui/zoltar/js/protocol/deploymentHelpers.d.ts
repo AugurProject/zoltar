@@ -6,10 +6,10 @@ export declare const ZERO_SALT: `0x${string}`;
 export declare const MULTICALL3_BYTECODE: `0x${any}`;
 export declare const getShareTokenFactoryByteCode: (zoltarAddress: Address) => `0x${string}`;
 export declare const getEscalationGameFactoryByteCode: (claimDelegate: Address) => `0x${string}`;
-export declare const getPriceOracleManagerAndOperatorQueuerFactoryByteCode: (wethAddress?: `0x${string}`) => `0x${string}`;
+export declare const getPriceOracleManagerAndOperatorQueuerFactoryByteCode: (wethAddress?: any) => `0x${string}`;
 export declare const getZoltarQuestionDataByteCode: () => `0x${string}`;
 export declare const getSecurityPoolForkerByteCode: (zoltarAddress: Address) => `0x${string}`;
-export declare const getZoltarInitCode: (zoltarQuestionDataAddress: Address, genesisReputationTokenAddress?: `0x${string}`) => Hex;
+export declare const getZoltarInitCode: (zoltarQuestionDataAddress: Address, genesisReputationTokenAddress?: any) => Hex;
 export declare const getSecurityPoolFactoryByteCode: ({ escalationGameFactory, openOracle, priceOracleManagerAndOperatorQueuerFactory, securityPoolForker, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, zoltar, zoltarQuestionData, }: {
     escalationGameFactory: Address;
     openOracle: Address;

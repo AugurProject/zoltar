@@ -1,6 +1,4 @@
 import { type Address, type Hash } from '@zoltar/shared/ethereum';
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js';
-import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js';
 import type { WriteOperationsParameters } from '../../../types/app.js';
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
 type UseZoltarForkParameters = {
@@ -43,15 +41,15 @@ export declare function useZoltarFork({ accountAddress, activeUniverseId, enviro
     approveZoltarForkRep: (amount?: bigint) => Promise<void>;
     forkZoltar: () => Promise<void>;
     loadZoltarForkAccess: (universe?: ZoltarUniverseSummary | undefined) => Promise<void>;
-    loadingZoltarForkAccess: boolean;
-    zoltarForkActiveAction: "approve" | "fork" | undefined;
-    zoltarForkApproval: TokenApprovalState;
+    loadingZoltarForkAccess: any;
+    zoltarForkActiveAction: "fork" | "approve" | undefined;
+    zoltarForkApproval: any;
     zoltarForkError: string | undefined;
-    zoltarForkFeedback: ActionFeedback<"approveForkRep" | "forkZoltar"> | undefined;
+    zoltarForkFeedback: any;
     zoltarForkPending: boolean;
     zoltarForkQuestionId: string;
     zoltarForkRepBalanceAttoRep: bigint | undefined;
-    zoltarForkResult: ZoltarForkActionResult | undefined;
+    zoltarForkResult: any;
     zoltarMigrationChildRepBalancesAttoRep: Record<string, bigint | undefined>;
     zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined;
     setZoltarForkQuestionId: (questionId: string) => void;

@@ -8,7 +8,7 @@ import { getActiveBackend } from '../../lib/activeEnvironment.js'
 import { getNetworkSwitchTarget, getPublicNetworkProfileForChainId } from '../../lib/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
-import type { DeploymentStatus, ReadClient } from '../../types/contracts.js'
+import type { DeploymentStatus, DeploymentStep, ReadClient } from '../../types/contracts.js'
 import { useLoadController } from '../../hooks/useLoadController.js'
 import { sameChainId } from '../../lib/chainId.js'
 
@@ -157,7 +157,7 @@ type UseOnchainStateOptions = {
 }
 
 export type UseOnchainStateDependencies = {
-	getDeploymentSteps: () => ReadonlyArray<DeploymentStatus>
+	getDeploymentSteps: () => ReadonlyArray<DeploymentStep>
 	getWethAddress: () => Address
 	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ augurStatoblastDeployed: boolean; deploymentStatuses: DeploymentStatus[] }>
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>

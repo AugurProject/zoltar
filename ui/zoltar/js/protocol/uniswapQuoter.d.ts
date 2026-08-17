@@ -2,9 +2,9 @@ import { type Address, type Hex } from '@zoltar/shared/ethereum';
 import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js';
 import { getWethAddress } from './activeProtocolAddresses.js';
 export { getWethAddress };
-export declare const UNISWAP_V4_QUOTER_ADDRESS: `0x${string}`;
+export declare const UNISWAP_V4_QUOTER_ADDRESS: any;
 export declare const REP_ADDRESS: Address;
-export declare const USDC_ADDRESS: `0x${string}`;
+export declare const USDC_ADDRESS: any;
 export declare const WETH_ADDRESS: Address;
 export declare const ETH_ADDRESS: Address;
 type PoolConfig = {
@@ -30,7 +30,7 @@ type MockQuoteSource = {
     protocol: 'mock';
 };
 export declare const DEFAULT_POOL_CONFIG: PoolConfig;
-export declare function getRepAddress(): `0x${string}`;
+export declare function getRepAddress(): any;
 export declare function isRepPricingEnabled(): boolean;
 export declare function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex;
 export declare function buildUniswapV4PoolUrl(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): string;

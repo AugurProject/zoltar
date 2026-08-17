@@ -17,7 +17,7 @@ import {
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
-} from '../contractArtifact.js'
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 

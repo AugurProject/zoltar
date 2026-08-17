@@ -50,7 +50,7 @@ export declare function getQuestionIdHex(questionId: bigint): string;
 export declare function getReportingOutcomeValue(outcome: ReportingOutcomeKey): 0 | 1 | 2;
 export declare function getReportingOutcomeKey(outcome: bigint | number): ReportingOutcomeKey | 'none';
 export declare function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey;
-export declare function getEscalationSideLabel(key: ReportingOutcomeKey): "Invalid" | "No" | "Yes";
+export declare function getEscalationSideLabel(key: ReportingOutcomeKey): "Invalid" | "Yes" | "No";
 export declare function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState;
 export declare function getMarketType(questionData: QuestionData, outcomeLabels: string[]): MarketType;
 export {};

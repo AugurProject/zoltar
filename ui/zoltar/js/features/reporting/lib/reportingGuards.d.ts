@@ -13,11 +13,11 @@ export declare function getReportingReportGuardMessage({ actualDepositAmount, ac
     selectedAmount: bigint | undefined;
     viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined;
     viewerVaultExists: boolean;
-}): string | undefined;
+}): any;
 export declare function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, reportingStatus }: {
     accountAddress: Address | undefined;
     isOnActiveAppChain: boolean;
     reportingStatus: ReportingStatus;
-}): string | undefined;
+}): any;
 export {};
 //# sourceMappingURL=reportingGuards.d.ts.map

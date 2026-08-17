@@ -1,6 +1,5 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum';
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js';
-import type { WriteOperationsParameters, ZoltarMigrationFormState } from '../../../types/app.js';
+import type { WriteOperationsParameters } from '../../../types/app.js';
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
 type UseZoltarMigrationParameters = {
     accountAddress: Address | undefined;
@@ -21,11 +20,11 @@ type UseZoltarMigrationParameters = {
 export declare function useZoltarMigration({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse, zoltarForkRepBalanceAttoRep, zoltarMigrationPreparedRepBalanceAttoRep, }: UseZoltarMigrationParameters): {
     migrateInternalRep: () => Promise<void>;
     prepareRepForMigration: () => Promise<void>;
-    setZoltarMigrationForm: (updater: (current: ZoltarMigrationFormState) => ZoltarMigrationFormState) => void;
-    zoltarMigrationActiveAction: "split" | "prepare" | undefined;
+    setZoltarMigrationForm: any;
+    zoltarMigrationActiveAction: "prepare" | "split" | undefined;
     zoltarMigrationError: string | undefined;
-    zoltarMigrationFeedback: ActionFeedback<"addRepToMigrationBalance" | "splitMigrationRep"> | undefined;
-    zoltarMigrationForm: ZoltarMigrationFormState;
+    zoltarMigrationFeedback: any;
+    zoltarMigrationForm: any;
     zoltarMigrationPending: boolean;
 };
 export {};

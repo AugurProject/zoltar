@@ -5,6 +5,9 @@
 		"paths": {
 			"@zoltar/shared/*": [
 				"../../shared/js/*"
+			],
+			"@zoltar/ui-core-shared/*": [
+				"../coreShared/js/*"
 			]
 		},
 		"rootDir": "./ts",

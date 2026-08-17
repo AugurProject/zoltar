@@ -4,6 +4,6 @@ type OpenOraclePriceValueProps = {
     lastSettlementTimestamp: bigint;
     priceValidUntilTimestamp: bigint | undefined;
 };
-export declare function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }: OpenOraclePriceValueProps): "Unavailable" | import("preact").JSX.Element;
+export declare function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }: OpenOraclePriceValueProps): any;
 export {};
 //# sourceMappingURL=OpenOraclePriceValue.d.ts.map

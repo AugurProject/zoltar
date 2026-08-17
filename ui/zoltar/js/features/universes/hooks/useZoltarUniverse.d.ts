@@ -1,9 +1,8 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum';
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/index.js';
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js';
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js';
 import type { WriteOperationsParameters } from '../../../types/app.js';
-import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
+import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
 type UseZoltarUniverseParameters = {
     accountAddress: Address | undefined;
     activeUniverseId: bigint;
@@ -31,28 +30,28 @@ export declare function useZoltarUniverse({ accountAddress, activeUniverseId, au
     createChildUniverse: (outcomeIndex: bigint) => Promise<void>;
     ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>;
     hasLoadedZoltarQuestions: boolean;
-    loadingZoltarQuestionCount: boolean;
-    loadingZoltarQuestion: boolean;
-    loadingZoltarQuestions: boolean;
-    loadingZoltarUniverse: boolean;
+    loadingZoltarQuestionCount: any;
+    loadingZoltarQuestion: any;
+    loadingZoltarQuestions: any;
+    loadingZoltarUniverse: any;
     loadZoltarQuestionCount: () => Promise<void>;
     loadZoltarQuestion: (questionId: string) => Promise<void>;
     loadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>;
     loadZoltarQuestions: () => Promise<void>;
     loadZoltarUniverse: (options?: {
         clearCurrentState?: boolean;
-    }) => Promise<ZoltarUniverseSummary | undefined>;
-    zoltarChildUniverseFeedback: ActionFeedback<"createChildUniverse"> | undefined;
-    refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>;
+    }) => Promise<any>;
+    zoltarChildUniverseFeedback: any;
+    refreshZoltarUniverse: () => Promise<any>;
     zoltarChildUniverseError: string | undefined;
     zoltarChildUniversePendingOutcomeIndex: bigint | undefined;
-    zoltarQuestionPage: MarketDetailsPage | undefined;
+    zoltarQuestionPage: any;
     zoltarQuestionCount: bigint | undefined;
     zoltarQuestionLookupError: string | undefined;
     zoltarQuestionLookupId: string | undefined;
     zoltarQuestions: MarketDetails[];
     zoltarQuestionsError: string | undefined;
-    zoltarUniverse: ZoltarUniverseSummary | undefined;
+    zoltarUniverse: any;
     zoltarUniverseError: string | undefined;
     zoltarUniverseLoadedId: bigint | undefined;
     zoltarUniverseResolvedId: bigint | undefined;

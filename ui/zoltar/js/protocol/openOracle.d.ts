@@ -1,7 +1,7 @@
 import { type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum';
 import { type OpenOracleStatePreimage } from '@zoltar/shared/openOracle';
 import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js';
-import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js';
+import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummaryPage, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js';
 import { type WriteContractClient } from './core.js';
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0];
 export declare function createOpenOracleReportMissingError(reportId: bigint): Error;
@@ -23,11 +23,8 @@ export declare function createOpenOracleReportInstance(client: WriteClient, para
     settlerRewardAttoEth: bigint;
     token1Address: Address;
     token2Address: Address;
-}): Promise<{
-    action: "createReportInstance";
-    hash: `0x${string}`;
-}>;
-export declare function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address): Promise<bigint>;
+}): Promise<OpenOracleActionResult>;
+export declare function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address): Promise<any>;
 export declare function loadCoordinatorInitialReportFundingRequirement(client: CoordinatorInitialReportClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth?: bigint): Promise<{
     currentRepBalanceAttoRep: any;
     currentWethBalanceAttoEth: any;
@@ -39,27 +36,14 @@ export declare function loadCoordinatorInitialReportFundingRequirement(client: C
     requestedInitialAttoWeth: bigint;
     wethShortfallAttoEth: bigint;
 }>;
-export declare function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth?: bigint, reviewedRequestValueAttoEth?: bigint): Promise<{
-    action: "requestPrice";
-    hash: `0x${string}`;
-}>;
-export declare function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint): Promise<{
-    stagedExecution?: StagedOracleExecutionResult;
-    action: "executeStagedOperation";
-    hash: `0x${string}`;
-}>;
-export declare function wrapWeth(client: WriteClient, amountAttoEth: bigint): Promise<{
-    action: "wrapWeth";
-    hash: `0x${string}`;
-}>;
+export declare function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth?: bigint, reviewedRequestValueAttoEth?: bigint): Promise<OpenOracleActionResult>;
+export declare function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint): Promise<OpenOracleActionResult>;
+export declare function wrapWeth(client: WriteClient, amountAttoEth: bigint): Promise<OpenOracleActionResult>;
 export declare function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient, 'readContract'>, openOracleAddress: Address, holder: Address, token1: Address, token2: Address): Promise<OpenOracleWithdrawableBalances>;
 export declare function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address): Promise<OpenOracleActionResult>;
 export declare function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleActionResult>;
 export declare function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>;
-export declare function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex): Promise<{
-    action: "dispute";
-    hash: `0x${string}`;
-}>;
+export declare function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex): Promise<OpenOracleActionResult>;
 export type LiquidationApprovalParams = {
     securityPool: Address;
     receiverVault: Address;
@@ -79,15 +63,10 @@ export declare function permitLiquidationApproval(client: WriteClient, registryA
 export declare function revokeLiquidationApproval(client: WriteClient, registryAddress: Address, approvalId: Hex): Promise<`0x${string}`>;
 export declare function invalidateLiquidationApprovalNonce(client: WriteClient, registryAddress: Address, newNonce: bigint): Promise<`0x${string}`>;
 export declare function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth?: bigint, receiverVault?: Address, approvalId?: Hex): Promise<{
-    stagedExecution?: StagedOracleExecutionResult;
-    queuedOperation?: StagedOracleQueuedResult;
+    stagedExecution?: any;
+    queuedOperation?: any;
     hash: `0x${string}`;
 }>;
-export declare function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth?: bigint): Promise<{
-    stagedExecution?: StagedOracleExecutionResult;
-    queuedOperation?: StagedOracleQueuedResult;
-    action: "queueOperation";
-    hash: `0x${string}`;
-}>;
+export declare function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth?: bigint): Promise<OpenOracleActionResult>;
 export {};
 //# sourceMappingURL=openOracle.d.ts.map

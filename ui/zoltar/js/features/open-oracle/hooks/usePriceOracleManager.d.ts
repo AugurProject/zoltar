@@ -1,7 +1,6 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum';
 import { loadCoordinatorInitialReportFundingRequirement } from '../../../protocol/index.js';
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js';
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js';
 import type { WriteOperationsParameters } from '../../../types/app.js';
 import type { OpenOracleActionResult, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js';
 type UsePriceOracleManagerParameters = {
@@ -27,14 +26,14 @@ export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProducti
 };
 declare function usePriceOracleManagerWithDependencies<TWriteClient>({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters, dependencies: UsePriceOracleManagerDependencies<TWriteClient>): {
     executePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress?: Address) => Promise<void>;
-    loadingPoolOracleManager: boolean;
+    loadingPoolOracleManager: any;
     loadPoolOracleManager: (managerAddress: Address) => Promise<void>;
-    poolOracleActiveAction: "approveToken1" | "approveToken2" | "createReportInstance" | "dispute" | "executeStagedOperation" | "queueOperation" | "requestPrice" | "settle" | "withdrawBalance" | "wrapWeth" | undefined;
-    poolOracleFeedback: ActionFeedback<"approveToken1" | "approveToken2" | "createReportInstance" | "dispute" | "executeStagedOperation" | "queueOperation" | "requestPrice" | "settle" | "withdrawBalance" | "wrapWeth"> | undefined;
-    poolOracleManagerDetails: OracleManagerDetails | undefined;
+    poolOracleActiveAction: any;
+    poolOracleFeedback: any;
+    poolOracleManagerDetails: any;
     poolOracleManagerError: string | undefined;
     poolOracleManagerErrorAddress: `0x${string}` | undefined;
-    poolPriceOracleResult: OpenOracleActionResult | undefined;
+    poolPriceOracleResult: any;
     requestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => Promise<void>;
 };
 export declare function usePriceOracleManager(parameters: UsePriceOracleManagerParameters): ReturnType<typeof usePriceOracleManagerWithDependencies<PriceOracleProductionWriteClient>>;

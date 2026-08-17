@@ -8,9 +8,5 @@ export declare function createMarket(client: WriteClient, parameters: {
     marketType: MarketType;
     outcomeLabels: string[];
     questionData: QuestionData;
-}): Promise<{
-    questionId: string;
-    createQuestionHash: `0x${string}`;
-    marketType: MarketType;
-}>;
+}): Promise<MarketCreationResult>;
 //# sourceMappingURL=zoltar.d.ts.map

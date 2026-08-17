@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum';
 import type { ReadBackendStatus } from '../../lib/chainBackend.js';
 import type { AccountState, RefreshStateOptions } from '../../types/app.js';
-import type { DeploymentStatus, ReadClient } from '../../types/contracts.js';
+import type { DeploymentStatus, DeploymentStep, ReadClient } from '../../types/contracts.js';
 type LoadWalletStateParameters = {
     chainIdPromise: Promise<string> | undefined;
     connectedAddress: Address | undefined;
@@ -23,7 +23,7 @@ type UseOnchainStateOptions = {
     onSupportedNetworkChange?: (chainId: string) => void;
 };
 export type UseOnchainStateDependencies = {
-    getDeploymentSteps: () => ReadonlyArray<DeploymentStatus>;
+    getDeploymentSteps: () => ReadonlyArray<DeploymentStep>;
     getWethAddress: () => Address;
     loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{
         augurStatoblastDeployed: boolean;

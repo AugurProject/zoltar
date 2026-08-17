@@ -1,5 +1,5 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
-import { ABIS } from '../abis.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
@@ -11,7 +11,7 @@ import {
 	peripherals_WETH9_WETH9,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
-} from '../contractArtifact.js'
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
 	MULTICALL3_BYTECODE,
 	PROXY_DEPLOYER_ADDRESS,
