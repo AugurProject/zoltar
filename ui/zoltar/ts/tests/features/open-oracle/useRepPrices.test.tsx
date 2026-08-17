@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import type { Address } from '@zoltar/shared/ethereum'
 import { createPublicClient, http } from '@zoltar/shared/ethereum'
 import { act } from 'preact/test-utils'
@@ -10,11 +10,11 @@ import type { SimulationController } from '@zoltar/ui-core-shared/simulation/con
 import { resetRepPriceCacheForTesting, useRepPrices } from '../../../features/open-oracle/hooks/useRepPrices.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend, ReadClient } from '@zoltar/ui-core-shared/lib/chainBackend.js'
-import { createFakeBackend, createFakeSimulationProfile } from '../../testUtils/fakeBackend.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 function createSimulationController(): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address

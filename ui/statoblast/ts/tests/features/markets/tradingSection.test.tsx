@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
@@ -14,8 +14,8 @@ import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar/types/app
 import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar/features/types.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 function createMarketDetails(): MarketDetails {
 	return {

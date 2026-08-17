@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -11,8 +11,8 @@ import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/fork
 import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar/features/types.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {

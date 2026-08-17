@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/shared/ethereum'
-import type { Route } from './app.js'
 
 export type ActionAvailability = {
 	disabled: boolean
@@ -224,13 +223,10 @@ export type OperationModalProps = {
 	title: ComponentChildren
 }
 
-export type TabNavigationProps = {
-	route: Route
-	showDeployTab?: boolean
-	augurStatoblastDeployed: boolean
-	deployRoute: string
-	marketRoute: string
-	openOracleRoute: string
-	securityPoolsRoute: string
-	onRouteChange: (route: Exclude<Route, 'not-found'>) => void
+export type RouteTabDefinition = {
+	disabled?: boolean
+	disabledReason?: string
+	hash: string
+	label: string
+	route: string
 }

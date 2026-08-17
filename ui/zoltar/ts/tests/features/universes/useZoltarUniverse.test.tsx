@@ -7,10 +7,10 @@ import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@z
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '../../../features/universes/hooks/useZoltarUniverse.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
-import { waitFor } from '../../testUtils/queries.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 
 type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 

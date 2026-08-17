@@ -2,9 +2,9 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { TransactionUniverseValue } from '../../../features/universes/components/TransactionUniverseValue.js'
-import { within } from '../../testUtils/queries.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('TransactionUniverseValue', () => {
 	let restoreDomEnvironment: (() => void) | undefined

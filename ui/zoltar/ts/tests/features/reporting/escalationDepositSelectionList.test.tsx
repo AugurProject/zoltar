@@ -1,13 +1,13 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent } from '../../testUtils/queries'
+import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { EscalationDepositSelectionList } from '../../../features/reporting/components/EscalationDepositSelectionList.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('EscalationDepositSelectionList', () => {
 	let restoreDomEnvironment: (() => void) | undefined

@@ -10,10 +10,10 @@ import { createInitialTransactionTrayState, markTransactionCanceled, markTransac
 import { useTradingOperations, type UseTradingOperationsDependencies } from '../../../features/markets/hooks/useTradingOperations.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar/features/types.js'
 import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
-import { waitFor } from '../../testUtils/queries'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 
 type UseTradingOperations = typeof useTradingOperations
 type UseTradingOperationsState = ReturnType<UseTradingOperations>

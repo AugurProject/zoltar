@@ -8,10 +8,10 @@ import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { waitFor } from '../../testUtils/queries'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>

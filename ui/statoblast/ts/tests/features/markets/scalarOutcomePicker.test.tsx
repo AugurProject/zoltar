@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { ScalarOutcomePicker } from '../../../features/markets/components/ScalarOutcomePicker.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 function ScalarOutcomePickerHarness() {
 	const [selectedTick, setSelectedTick] = useState('2')

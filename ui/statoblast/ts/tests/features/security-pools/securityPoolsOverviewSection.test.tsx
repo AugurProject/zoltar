@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '../../../features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
@@ -9,8 +9,8 @@ import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/lib/networ
 import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar/features/types.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 

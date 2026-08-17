@@ -1,15 +1,15 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../../testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
 import { getChromiumPath, withChromiumTestLock } from '@zoltar/ui-core-shared-build/chromiumPath.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type GaugeFitResult = {
 	clientWidth: number

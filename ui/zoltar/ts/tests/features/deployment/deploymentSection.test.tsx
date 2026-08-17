@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { DeploymentSection } from '../../../features/deployment/components/DeploymentSection.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 

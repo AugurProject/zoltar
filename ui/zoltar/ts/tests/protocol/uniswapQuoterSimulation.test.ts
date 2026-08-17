@@ -7,7 +7,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
-import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()

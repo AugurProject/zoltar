@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../../testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { readFileSync } from 'node:fs'
 import { CollateralizationMetricField } from '../../../features/security-pools/components/CollateralizationMetricField.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('CollateralizationMetricField', () => {
 	let restoreDomEnvironment: (() => void) | undefined

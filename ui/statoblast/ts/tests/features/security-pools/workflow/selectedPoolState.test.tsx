@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createSelectedPoolStateFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
-import { getTransactionButtonState } from '../../../testUtils/transactionActionButton.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
 describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	const testDom = useSecurityPoolWorkflowSectionTestDom()

@@ -2,12 +2,12 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { waitFor } from '../../testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UseSecurityPoolCreation = typeof import('../../../features/security-pools/hooks/useSecurityPoolCreation.js')['useSecurityPoolCreation']

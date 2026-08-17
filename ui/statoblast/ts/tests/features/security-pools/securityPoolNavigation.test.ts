@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { getSecurityPoolLinkHref, getUseQuestionForPoolHref } from '../../../features/security-pools/lib/securityPoolNavigation.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 
 describe('securityPoolNavigation', () => {
 	let restoreDomEnvironment: (() => void) | undefined

@@ -2,10 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { within } from '../../testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { LifecycleStageBanner } from '../../../features/security-pools/components/LifecycleStageBanner.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('LifecycleStageBanner', () => {
 	let restoreDomEnvironment: (() => void) | undefined

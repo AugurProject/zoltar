@@ -14,11 +14,11 @@ import type { OpenOracleSectionProps } from '../../../features/types.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { fireEvent, within } from '../../testUtils/queries.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
 	props: Record<string, unknown>

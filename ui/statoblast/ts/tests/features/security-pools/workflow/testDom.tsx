@@ -4,8 +4,8 @@ import { afterEach, beforeEach } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { SecurityPoolWorkflowSection } from '../../../../features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar/features/types.js'
-import { installDomEnvironment } from '../../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createSecurityPoolWorkflowProps, createSelectedPool } from './builders.js'
 
 export function useSecurityPoolWorkflowSectionTestDom() {

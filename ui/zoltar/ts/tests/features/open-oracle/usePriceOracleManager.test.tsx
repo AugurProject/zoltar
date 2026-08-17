@@ -6,9 +6,9 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '../../../features/open-oracle/hooks/usePriceOracleManager.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createFakeBackend } from '../../testUtils/fakeBackend.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 type TestWriteClient = { kind: 'price-oracle-write-client' }

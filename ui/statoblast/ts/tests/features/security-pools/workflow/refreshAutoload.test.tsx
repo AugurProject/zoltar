@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { createRefreshAutoloadFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: refresh and autoload', () => {

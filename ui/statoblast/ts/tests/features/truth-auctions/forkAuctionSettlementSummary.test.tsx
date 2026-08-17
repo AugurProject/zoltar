@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from '@zoltar/shared/ethereum'
@@ -10,8 +10,8 @@ import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionStat
 import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const actualContracts = await import('@zoltar/ui-zoltar/protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')

@@ -11,9 +11,9 @@ import type { TruthAuctionBidDisposition } from '../../../features/truth-auction
 import { getTruthAuctionSettlementBidKey, type TruthAuctionSettlementBidRow } from '../../../features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { ForkAuctionActionResult, ReadClient, TruthAuctionBidView } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SettlementSelectedBid } from '@zoltar/ui-zoltar/features/types.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
-import { waitFor } from '../../testUtils/queries.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'

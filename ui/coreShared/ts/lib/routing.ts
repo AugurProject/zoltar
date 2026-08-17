@@ -1,29 +1,53 @@
-import type { Route } from '../types/app.js'
+export type AppRoute = string
 
-export const DEPLOY_ROUTE = '#/deploy'
-export const ZOLTAR_ROUTE = '#/zoltar'
-export const SECURITY_POOLS_ROUTE = '#/security-pools'
-export const OPEN_ORACLE_ROUTE = '#/open-oracle'
-const DEFAULT_ROUTE: Exclude<Route, 'not-found'> = 'zoltar'
-const ROUTE_NAMES: Exclude<Route, 'not-found'>[] = ['deploy', 'zoltar', 'security-pools', 'open-oracle']
-const ROUTE_HASHES: Record<Exclude<Route, 'not-found'>, string> = {
-	deploy: DEPLOY_ROUTE,
-	zoltar: ZOLTAR_ROUTE,
-	'security-pools': SECURITY_POOLS_ROUTE,
-	'open-oracle': OPEN_ORACLE_ROUTE,
+export type RouteDefinition = {
+	readonly hash: string
+	readonly name: AppRoute
+	readonly queryParameters?: ReadonlySet<string>
 }
+
+export type RoutingConfig = {
+	readonly defaultRoute: AppRoute
+	readonly routes: readonly RouteDefinition[]
+}
+
 const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['network', 'rpcUrl', 'simScenario', 'simState', 'simulate', 'universe'])
-const ROUTE_QUERY_PARAMETERS: Record<Exclude<Route, 'not-found'>, ReadonlySet<string>> = {
-	deploy: new Set(),
-	zoltar: new Set(['zoltarView']),
-	'security-pools': new Set(['questionId', 'securityPool', 'securityPoolsView', 'selectedPoolView']),
-	'open-oracle': new Set(['openOracleReportId', 'openOracleView']),
+
+type RoutingState = {
+	readonly config: RoutingConfig
+	readonly routeByHash: Readonly<Record<string, AppRoute>>
+	readonly hashByRoute: Readonly<Record<string, string>>
+	readonly queryParametersByRoute: Readonly<Record<string, ReadonlySet<string>>>
 }
 
-const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeByHash, route) => {
-	routeByHash[ROUTE_HASHES[route]] = route
-	return routeByHash
-}, {})
+function buildRoutingState(config: RoutingConfig): RoutingState {
+	const routeByHash: Record<string, AppRoute> = {}
+	const hashByRoute: Record<string, string> = {}
+	const queryParametersByRoute: Record<string, ReadonlySet<string>> = {}
+	for (const route of config.routes) {
+		routeByHash[route.hash] = route.name
+		hashByRoute[route.name] = route.hash
+		queryParametersByRoute[route.name] = route.queryParameters ?? new Set()
+	}
+	return { config, routeByHash, hashByRoute, queryParametersByRoute }
+}
+
+let activeRouting: RoutingState | undefined
+
+export function installRouting(config: RoutingConfig) {
+	activeRouting = buildRoutingState(config)
+}
+
+function requireRouting(): RoutingState {
+	if (activeRouting === undefined) throw new Error('Routing has not been installed. Call installRouting() during application bootstrap before reading routes.')
+	return activeRouting
+}
+
+export function getRouteHashForName(route: AppRoute) {
+	const hash = requireRouting().hashByRoute[route]
+	if (hash === undefined) throw new Error(`Unknown route: ${route}`)
+	return hash
+}
 
 function splitRouteHash(hash: string) {
 	const queryIndex = hash.indexOf('?')
@@ -40,24 +64,27 @@ function splitRouteHash(hash: string) {
 }
 
 export function ensureRouteHash() {
-	if (window.location.hash === '') window.location.hash = ROUTE_HASHES[DEFAULT_ROUTE]
+	const routing = requireRouting()
+	if (window.location.hash === '') window.location.hash = routing.hashByRoute[routing.config.defaultRoute] ?? ''
 }
 
-export function getCurrentRoute() {
+export function getCurrentRoute(): AppRoute | 'not-found' {
+	const routing = requireRouting()
 	const { routeHash } = splitRouteHash(window.location.hash)
-	return ROUTE_BY_HASH[routeHash] ?? (routeHash === '' ? DEFAULT_ROUTE : 'not-found')
+	return routing.routeByHash[routeHash] ?? (routeHash === '' ? routing.config.defaultRoute : 'not-found')
 }
 
-export function getRouteHash(route: Exclude<Route, 'not-found'>) {
-	return ROUTE_HASHES[route]
+export function getRouteHash(route: AppRoute) {
+	return getRouteHashForName(route)
 }
 
 export function getRouteHashSearch(hash = window.location.hash) {
 	return splitRouteHash(hash).search
 }
 
-export function getTopLevelRouteSearch(nextRoute: Exclude<Route, 'not-found'>, search = getRouteHashSearch(), preservedParameters: ReadonlySet<string> = new Set()) {
-	const destinationParameters = ROUTE_QUERY_PARAMETERS[nextRoute]
+export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHashSearch(), preservedParameters: ReadonlySet<string> = new Set()) {
+	const routing = requireRouting()
+	const destinationParameters = routing.queryParametersByRoute[nextRoute] ?? new Set<string>()
 	const sourceParameters = new URLSearchParams(search)
 	const destinationSearch = new URLSearchParams()
 	for (const [key, value] of sourceParameters) {
@@ -68,8 +95,9 @@ export function getTopLevelRouteSearch(nextRoute: Exclude<Route, 'not-found'>, s
 }
 
 export function getCurrentRouteHash() {
+	const routing = requireRouting()
 	const { routeHash } = splitRouteHash(window.location.hash)
-	return routeHash === '' ? ROUTE_HASHES[DEFAULT_ROUTE] : routeHash
+	return routeHash === '' ? routing.hashByRoute[routing.config.defaultRoute] ?? '' : routeHash
 }
 
 export function buildRouteHref(routeHash: string, search: string) {

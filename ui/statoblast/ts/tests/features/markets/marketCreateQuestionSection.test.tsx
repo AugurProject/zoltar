@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketCreateQuestionSection } from '../../../features/markets/components/MarketCreateQuestionSection.js'
@@ -9,9 +9,9 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp
 import { createMarketParameters } from '../../../features/markets/lib/marketCreation.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled } from '../../testUtils/transactionActionButton.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
 function createMarketForm(overrides: Partial<MarketFormState> = {}): MarketFormState {
 	return {

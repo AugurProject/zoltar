@@ -1,15 +1,15 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../../../features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.js'
 import type { AccountState, ForkAuctionFormState, ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 

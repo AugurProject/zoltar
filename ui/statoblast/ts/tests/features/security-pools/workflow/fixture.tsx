@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from '../../../testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
@@ -8,8 +8,8 @@ import { pickFixtureProperties } from '@zoltar/shared/testing/pickFixturePropert
 import { SecurityPoolWorkflowSection } from '../../../../features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getReportingLockedUntilMessage } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
-import { renderIntoDocument } from '../../../testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '../../../testUtils/transactionActionButton.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import {
 	createAccountState,
 	createForkAuctionDetails,

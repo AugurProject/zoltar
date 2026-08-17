@@ -3,8 +3,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getGenesisReputationTokenAddress, formatUniverseCollectionLabel, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '../../../features/universes/lib/universe.js'
-import { createFakeBackend, createFakeSimulationProfile } from '../../testUtils/fakeBackend.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 
 void describe('universe helpers', () => {
 	let cleanup: (() => void) | undefined

@@ -5,8 +5,8 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
 import { useForkAuctionInteractionState } from '../../../features/truth-auctions/hooks/useForkAuctionInteractionState.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type InteractionProps = Parameters<typeof useForkAuctionInteractionState>[0]
 type InteractionState = ReturnType<typeof useForkAuctionInteractionState>

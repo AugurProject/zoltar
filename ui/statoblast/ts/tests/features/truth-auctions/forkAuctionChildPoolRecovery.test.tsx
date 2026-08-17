@@ -1,16 +1,16 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from '@zoltar/shared/ethereum'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.js'
 import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
-import { expectTransactionButtonEnabled } from '../../testUtils/transactionActionButton.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
 const actualContracts = await import('@zoltar/ui-zoltar/protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
