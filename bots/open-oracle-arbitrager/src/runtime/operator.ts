@@ -8,7 +8,7 @@ import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, selectBestExecution } from '#execution/execution-orchestration'
-import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
+import { appendExecutionHistoryIfMissing, clearPollFailureMetadata, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -36,6 +36,15 @@ import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-exec
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 100n
+
+type SuccessfulPollState = Pick<OperatorState, 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
+
+export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: string | undefined, stopAfterPoll: boolean) {
+	clearPollFailureMetadata(state)
+	state.lastError = nextError
+	state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+	return stopAfterPoll
+}
 
 export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined) {
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
@@ -84,6 +93,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 		lastError: undefined,
 		lastPollAt: undefined,
+		lastPollFailureAt: undefined,
+		lastRetryAt: undefined,
+		nextRetryAt: undefined,
+		retryInProgress: false,
 		opportunities: [],
 		positions,
 		operationLog: [],
@@ -197,9 +210,12 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	)
 	try {
 		await pollUntilStopped(
-			async () => {
+			async consecutiveFailures => {
 				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorDeploymentIntentPath(config.settingsFile))
-				if (scanIntentLock === undefined) return false
+				if (scanIntentLock === undefined) return 'deferred'
+				state.nextRetryAt = undefined
+				state.retryInProgress = consecutiveFailures > 0
+				if (state.retryInProgress) state.lastRetryAt = new Date().toISOString()
 				try {
 					state.rpcEndpointHealth = readPool.snapshot()
 					applyQueuedExecutionSettings(config, state, pending)
@@ -353,10 +369,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 					}
 					if (lifecycleProcessed) {
-						state.lastError = nextError
 						state.lastPollAt = new Date().toISOString()
-						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-						return config.once
+						return completeSuccessfulPoll(state, nextError, config.once)
 					}
 					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
 					const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
@@ -366,11 +380,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					)
 					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 					if (scanCursor === undefined) {
-						state.lastError = nextError
-						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
 						state.blockNumber = blockNumber.toString()
 						state.blockTimestamp = block.timestamp.toString()
-						return config.once
+						return completeSuccessfulPoll(state, nextError, config.once)
 					}
 					if (discoversReportsFromCoordinators) {
 						const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(readClients, config, blockNumber) : await pendingCoordinatorReports(client, config, blockNumber)
@@ -410,9 +422,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							reason: 'DEX evidence from the replaced block was discarded; price-dependent evaluation resumes on the next poll',
 							reportId: undefined,
 						})
-						state.lastError = nextError
-						state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-						return config.once
+						return completeSuccessfulPoll(state, nextError, config.once)
 					}
 					let completedOpportunityCount = 0
 					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
@@ -668,10 +678,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						for (const id of settledReportIds) reports.delete(id)
 						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
-					state.lastError = nextError
-					state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
 					recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
-					return config.once
+					return completeSuccessfulPoll(state, nextError, config.once)
 				} finally {
 					try {
 						signerOperationGate.release('scan')
@@ -680,12 +688,19 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					}
 				}
 			},
-			consecutiveFailures => Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)),
+			consecutiveFailures => {
+				state.retryInProgress = false
+				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)
+				if (consecutiveFailures > 0) state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()
+				return Bun.sleep(delayMilliseconds)
+			},
 			config.once,
 			error => {
 				const message = errorMessage(error)
 				state.rpcEndpointHealth = readPool.snapshot()
 				state.lastError = message
+				state.lastPollFailureAt = new Date().toISOString()
+				state.retryInProgress = false
 				state.status = operationalFailureDisposition(error) === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
 				recordOperation(state, { category: 'scan', details: undefined, level: 'error', message: 'Scan failed', reason: message, reportId: undefined })
 				console.error(`pollFailed=${message}`)

@@ -49,6 +49,12 @@ function safeErrorMessage(error: unknown, url: string, target: string) {
 	return errorMessage(error).split(url).join(target)
 }
 
+function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
+	const detail = safeErrorMessage(error, endpoint.url, endpoint.target)
+	const message = detail.startsWith('HTTP ') && detail.endsWith(` while calling ${method}`) ? `RPC ${endpoint.target} returned ${detail}` : `RPC ${endpoint.target} failed while calling ${method}: ${detail}`
+	return new Error(message, { cause: error })
+}
+
 function retryableRpcFailure(error: unknown) {
 	if (error instanceof RpcEndpointPoolFailure) return true
 	if (error instanceof RpcError) {
@@ -142,7 +148,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					preferredIndex = endpoints.indexOf(endpoint)
 					return value
 				} catch (error) {
-					if (!retryableRpcFailure(error)) throw error
+					if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
 					failures.push({ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target })
 				}
 			}
@@ -168,7 +174,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 						try {
 							return await requestEndpoint(endpoint, method, params)
 						} catch (error) {
-							if (!retryableRpcFailure(error)) throw error
+							if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
 							throw new RpcEndpointPoolFailure([{ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target }])
 						}
 					},

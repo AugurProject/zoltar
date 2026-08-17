@@ -839,6 +839,45 @@ footer .mono {
 		flex: 1;
 	}
 
+	#mode-badge {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	#run-status-badge {
+		grid-column: 2;
+		grid-row: 1;
+	}
+
+	.header-actions[data-retry-active] #run-status-badge {
+		display: none;
+	}
+
+	#header-network-badge {
+		grid-column: 3;
+		grid-row: 1;
+	}
+
+	#attention-badge {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	#refresh-button {
+		grid-column: 2;
+		grid-row: 2;
+	}
+
+	#pause-button {
+		grid-column: 3;
+		grid-row: 2;
+	}
+
+	#retry-status-badge {
+		grid-column: 2;
+		grid-row: 1;
+	}
+
 	.notice {
 		align-items: flex-start;
 		flex-direction: column;

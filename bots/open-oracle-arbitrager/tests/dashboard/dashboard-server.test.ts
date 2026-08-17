@@ -117,6 +117,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).not.toContain('>Starting<')
 	expect(pageSource).toContain('id="mode-badge" class="badge">Mode —</span>')
 	expect(pageSource).toContain('id="run-status-badge" class="badge">Run —</span>')
+	expect(pageSource).toContain('id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>')
 	expect(pageSource).toContain('id="status-value">—</strong>')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
 	expect(pageSource).toContain('id="resume-dialog"')
@@ -363,6 +364,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [credentialEndpoint] }
 	deployment = { ...deployment, quorumRpcUrls: [credentialEndpoint] }
 	state.lastError = rawRpcFailure
+	state.lastPollFailureAt = new Date(1_000).toISOString()
+	state.lastRetryAt = new Date(2_000).toISOString()
+	state.nextRetryAt = new Date(3_000).toISOString()
+	state.retryInProgress = false
 	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: credentialEndpoint }]
 	state.rpcEndpointHealth = [{ consecutiveFailures: 2, error: rawRpcFailure, lastFailureAt: new Date(0).toISOString(), lastSuccessAt: undefined, latencyMilliseconds: undefined, nextRetryAt: new Date(1_000).toISOString(), status: 'offline', target: credentialEndpoint }]
 	state.operationLog = [
@@ -395,6 +400,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const serializedState = JSON.stringify(reloadedState)
 	for (const protectedMarker of [credentialMarker, endpointCredentialMarker, endpointPathMarker, entryCalldataMarker, lifecycleCalldataMarker, protectedSettingsFile]) expect(serializedState).not.toContain(protectedMarker)
 	expect(reloadedState).toMatchObject({ rpcEndpointHealth: [{ consecutiveFailures: 2, status: 'offline', target: 'https://rpc.example' }] })
+	expect(reloadedState).toMatchObject({ lastPollFailureAt: new Date(1_000).toISOString(), lastRetryAt: new Date(2_000).toISOString(), nextRetryAt: new Date(3_000).toISOString(), retryInProgress: false })
 	if (typeof reloadedState !== 'object' || reloadedState === null || Array.isArray(reloadedState)) throw new Error('Expected public dashboard state')
 	for (const configurationField of ['connectivity', 'deployment', 'settings']) expect(configurationField in reloadedState).toBe(false)
 	expect(reloadedState).toMatchObject({

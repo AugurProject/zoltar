@@ -6,6 +6,7 @@ import type { Address, Hex } from '#ethereum'
 import {
 	appendExecutionHistory,
 	appendExecutionHistoryIfMissing,
+	clearPollFailureMetadata,
 	clearWalletDerivedState,
 	decimalSignedEth,
 	ensureExecutionHistoryWritable,
@@ -29,6 +30,18 @@ const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'htt
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
 
 describe('public poll failures', () => {
+	test('clears stale retry timing after recovery before retaining a non-poll warning', () => {
+		const state: { lastPollFailureAt: string | undefined; lastRetryAt: string | undefined; nextRetryAt: string | undefined; retryInProgress: boolean } = {
+			lastPollFailureAt: '2026-08-17T12:00:00.000Z',
+			lastRetryAt: '2026-08-17T12:00:05.000Z',
+			nextRetryAt: '2026-08-17T12:00:10.000Z',
+			retryInProgress: true,
+		}
+		clearPollFailureMetadata(state)
+		const recoveredState = { ...state, lastError: 'Report execution needs operator attention' }
+		expect(recoveredState).toEqual({ lastError: 'Report execution needs operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, retryInProgress: false })
+	})
+
 	test.each([',', ';', ')'])('redacts the complete RPC URL token when its path contains %s', delimiter => {
 		const message = publicPollFailure(`RPC https://operator:protected@rpc.example/v3/key${delimiter}protected-tail request timed out`)
 		expect(message).toContain('RPC https://rpc.example request timed out')
@@ -52,6 +65,14 @@ describe('public poll failures', () => {
 		const delimiterPathFailure = publicPollFailure('State persistence failed at (detail)state/operator-relative-secret.json')
 		expect(delimiterPathFailure).toContain('failed at [protected path]')
 		expect(delimiterPathFailure).not.toContain('operator-relative-secret')
+	})
+
+	test('bounds long provider detail at a readable word boundary', () => {
+		const message = publicPollFailure(`RPC https://rpc.example returned HTTP 400 while calling eth_getLogs: ${'provider response detail '.repeat(30)}`)
+		expect(message).toContain('RPC https://rpc.example returned HTTP 400 while calling eth_getLogs')
+		expect(message).toContain('detail… Automatic retry remains active.')
+		expect(message).not.toContain('provid…')
+		expect(message.length).toBeLessThan(450)
 	})
 
 	test('redacts standard authorization, JSON secret, and quoted filesystem formats', () => {
@@ -129,6 +150,12 @@ describe('public poll failures', () => {
 		expect(publicPollFailure('Transaction receipt failed at block 100')).toContain('tried to submit or confirm a transaction')
 		expect(publicPollFailure('Read RPC https://market.example/private failed')).toContain('tried to read blockchain data through an RPC endpoint')
 		expect(publicPollFailure('RPC request failed with token=transaction')).toContain('tried to read blockchain data through an RPC endpoint')
+	})
+
+	test('retains the safe RPC origin and method in a polling failure', () => {
+		const message = publicPollFailure('RPC https://rpc.example returned HTTP 400 while calling eth_getLogs')
+		expect(message).toContain('RPC https://rpc.example returned HTTP 400 while calling eth_getLogs')
+		expect(message.match(/eth_getLogs/g)).toHaveLength(1)
 	})
 })
 

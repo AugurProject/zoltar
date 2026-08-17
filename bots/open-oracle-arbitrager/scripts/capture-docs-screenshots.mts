@@ -21,15 +21,20 @@ const hash = transactionHash('open-oracle-documentation-fixture')
 const checkedAt = sampledAt(0)
 const protectedFailureMarker = 'operator-secret'
 const longProviderFailureDetail = ` ${'provider response detail '.repeat(30).trim()}`
-const rawRpcFailure = `Read RPC https://operator:${protectedFailureMarker}@rpc.example failed at block 23842152:${longProviderFailureDetail}`
+const rawRpcFailure = `RPC https://operator:${protectedFailureMarker}@rpc.example/private/provider-key returned HTTP 400 while calling eth_getLogs:${longProviderFailureDetail}`
 const rawRelayFailure = `Private relay https://operator:${protectedFailureMarker}@relay.example rejected the transaction:${longProviderFailureDetail}`
+const rawNonPollFailure = 'Risk policy requires operator attention'
 const expectedRpcPollFailure = publicPollFailure(rawRpcFailure)
 const expectedRpcOperatorFailure = publicOperatorFailure(rawRpcFailure)
 const expectedRelayOperatorFailure = publicOperatorFailure(rawRelayFailure)
+const expectedNonPollFailure = publicOperatorFailure(rawNonPollFailure)
 const expectedStateUnavailableFailure = `${publicPollFailure('fixture state endpoint unavailable', 'load the latest operator state for the dashboard')} Use Refresh to retry now.`
 let fixtureStatus: OperatorSnapshot['status'] = 'running'
 let paused = false
 let fixtureAttention: 'error' | 'none' | 'recovery' | 'transaction' = 'none'
+let fixturePollFailureMetadata = true
+let fixtureRetryInProgress = false
+let fixtureNextRetryAt: string | undefined
 let fixtureStateUnavailable = false
 let fixtureStateHanging = false
 let fixtureConnectivityFailure = false
@@ -96,7 +101,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await command('Page.enable', {}, sessionId)
 				await command('Runtime.enable', {}, sessionId)
 				await command('Log.enable', {}, sessionId)
-				await command('Page.addScriptToEvaluateOnNewDocument', { source: `window.setInterval = () => 0` }, sessionId)
+				await command('Page.addScriptToEvaluateOnNewDocument', { source: `const nativeSetInterval = window.setInterval; window.setInterval = (callback, timeout, ...args) => location.search.includes('allowIntervals=1') ? nativeSetInterval(callback, timeout, ...args) : 0` }, sessionId)
 			}
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
 			await command('Emulation.setVisibleSize', { height, width }, sessionId)
@@ -751,6 +756,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									hash: window.location.hash,
 									label: badge?.textContent,
 									noticeCopy: document.querySelector('#notice-copy')?.textContent,
+									retryLabel: document.querySelector('#retry-status-badge')?.textContent,
+									retryLive: document.querySelector('#retry-status-badge')?.getAttribute('aria-live'),
+									retryVisible: document.querySelector('#retry-status-badge')?.getBoundingClientRect().height !== 0,
 									bodyContainsCredential: document.body.textContent?.includes('operator-secret') === true,
 									endpointText: document.querySelector('#endpoint-checks')?.textContent,
 									noticeTitle: document.querySelector('#notice-title')?.textContent,
@@ -789,7 +797,19 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							!('noticeTitle' in value) ||
 							value.noticeTitle !== 'Latest poll failed' ||
 							!('noticeCopy' in value) ||
-							value.noticeCopy !== expectedRpcPollFailure ||
+							typeof value.noticeCopy !== 'string' ||
+							!value.noticeCopy.startsWith(expectedRpcPollFailure.replace(/ Automatic retry remains active\.$/, '')) ||
+							!value.noticeCopy.includes('returned HTTP 400 while calling eth_getLogs') ||
+							value.noticeCopy.match(/eth_getLogs/g)?.length !== 1 ||
+							!value.noticeCopy.includes('Poll failed at ') ||
+							!value.noticeCopy.includes('Next automatic retry is scheduled for ') ||
+							!('retryLabel' in value) ||
+							typeof value.retryLabel !== 'string' ||
+							!value.retryLabel.startsWith('Retry in ') ||
+							!('retryVisible' in value) ||
+							value.retryVisible !== true ||
+							!('retryLive' in value) ||
+							value.retryLive !== null ||
 							!('bodyContainsCredential' in value) ||
 							value.bodyContainsCredential !== false ||
 							!('endpointText' in value) ||
@@ -819,11 +839,171 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							!value.transactionText.includes(expectedRelayOperatorFailure))
 					)
 						throw new Error('Error state did not expose its attention and recovery context')
+					if (status !== 'error' && (!('retryVisible' in value) || value.retryVisible !== false)) throw new Error(`${status} state displayed a retry badge without an active retry`)
 					if (mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width) throw new Error(`${status} header overflows its ${width.toString()}px viewport`)
+					if (status === 'error') {
+						await replacePage(`${origin}/?status=error-${mobile ? 'mobile' : 'desktop'}-capture`, width, height)
+						await Bun.sleep(750)
+						await command('Runtime.evaluate', { expression: `window.scrollTo(0, 0)` }, sessionId)
+						await settlePaint()
+						const captureLayout = await command(
+							'Runtime.evaluate',
+							{
+								expression: `(() => {
+									const visibleInViewport = element => {
+										if (!(element instanceof HTMLElement) || getComputedStyle(element).display === 'none') return false
+										const rect = element.getBoundingClientRect()
+										return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+									}
+									const title = document.querySelector('h1')
+									const navigation = document.querySelector('.section-nav')
+									const safetyControls = [...document.querySelectorAll('.operator-safety > :not([hidden])')].filter(element => getComputedStyle(element).display !== 'none')
+									return { navigationVisible: visibleInViewport(navigation), safetyVisible: safetyControls.length > 0 && safetyControls.every(visibleInViewport), titleVisible: visibleInViewport(title) }
+								})()`,
+								returnByValue: true,
+							},
+							sessionId,
+						)
+						const captureLayoutValue = typeof captureLayout === 'object' && captureLayout !== null && 'result' in captureLayout && typeof captureLayout.result === 'object' && captureLayout.result !== null && 'value' in captureLayout.result ? captureLayout.result.value : undefined
+						if (
+							typeof captureLayoutValue !== 'object' ||
+							captureLayoutValue === null ||
+							!('navigationVisible' in captureLayoutValue) ||
+							captureLayoutValue.navigationVisible !== true ||
+							!('safetyVisible' in captureLayoutValue) ||
+							captureLayoutValue.safetyVisible !== true ||
+							!('titleVisible' in captureLayoutValue) ||
+							captureLayoutValue.titleVisible !== true
+						) {
+							throw new Error(`Error-state capture did not preserve its complete safety header at ${width.toString()}px`)
+						}
+					}
 					const name = `status-${status}-${mobile ? 'mobile' : 'desktop'}.png`
 					await capturePng(name)
 				}
 			}
+			fixturePollFailureMetadata = false
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				await replacePage(`${origin}/?status=operator-attention-${mobile ? 'mobile' : 'desktop'}`, width, mobile ? 844 : 900)
+				await Bun.sleep(750)
+				const attentionState = await command(
+					'Runtime.evaluate',
+					{ expression: `({ copy: document.querySelector('#notice-copy')?.textContent, retryVisible: document.querySelector('#retry-status-badge')?.getBoundingClientRect().height !== 0, title: document.querySelector('#notice-title')?.textContent })`, returnByValue: true },
+					sessionId,
+				)
+				const attentionValue = typeof attentionState === 'object' && attentionState !== null && 'result' in attentionState && typeof attentionState.result === 'object' && attentionState.result !== null && 'value' in attentionState.result ? attentionState.result.value : undefined
+				if (
+					typeof attentionValue !== 'object' ||
+					attentionValue === null ||
+					!('copy' in attentionValue) ||
+					attentionValue.copy !== expectedNonPollFailure ||
+					!('retryVisible' in attentionValue) ||
+					attentionValue.retryVisible !== false ||
+					!('title' in attentionValue) ||
+					attentionValue.title !== 'Operator attention required'
+				) {
+					throw new Error(`Recovered poll metadata leaked into an operator warning at ${width.toString()}px`)
+				}
+				await capturePng(`status-operator-attention-${mobile ? 'mobile' : 'desktop'}.png`)
+			}
+			fixturePollFailureMetadata = true
+			fixtureRetryInProgress = true
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				await replacePage(`${origin}/?status=retrying-${mobile ? 'mobile' : 'desktop'}`, width, mobile ? 844 : 900)
+				await Bun.sleep(750)
+				const retryingState = await command(
+					'Runtime.evaluate',
+					{
+						expression: `({ badge: document.querySelector('#retry-status-badge')?.textContent, live: document.querySelector('#retry-status-badge')?.getAttribute('aria-live'), notice: document.querySelector('#notice-title')?.textContent, noticeCopy: document.querySelector('#notice-copy')?.textContent, scrollWidth: document.body.scrollWidth })`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const value = typeof retryingState === 'object' && retryingState !== null && 'result' in retryingState && typeof retryingState.result === 'object' && retryingState.result !== null && 'value' in retryingState.result ? retryingState.result.value : undefined
+				if (
+					typeof value !== 'object' ||
+					value === null ||
+					!('badge' in value) ||
+					value.badge !== 'Retrying now' ||
+					!('live' in value) ||
+					value.live !== null ||
+					!('notice' in value) ||
+					value.notice !== 'Automatic retry in progress' ||
+					!('noticeCopy' in value) ||
+					typeof value.noticeCopy !== 'string' ||
+					!value.noticeCopy.includes('Poll failed at ') ||
+					!value.noticeCopy.includes('Automatic retry started at ') ||
+					!('scrollWidth' in value) ||
+					value.scrollWidth !== width
+				) {
+					throw new Error(`Retry-in-progress state was not visible at ${width.toString()}px`)
+				}
+				await capturePng(`status-retrying-${mobile ? 'mobile' : 'desktop'}.png`)
+			}
+			fixtureRetryInProgress = false
+			for (const mobile of [false, true]) {
+				const width = mobile ? 390 : 1440
+				fixtureNextRetryAt = new Date(Date.now() + 700).toISOString()
+				await replacePage(`${origin}/?status=retry-boundary-${mobile ? 'mobile' : 'desktop'}&allowIntervals=1`, width, mobile ? 844 : 900)
+				await Bun.sleep(400)
+				const scheduledLabel = await command('Runtime.evaluate', { expression: `document.querySelector('#retry-status-badge')?.textContent`, returnByValue: true }, sessionId)
+				const scheduledValue = typeof scheduledLabel === 'object' && scheduledLabel !== null && 'result' in scheduledLabel && typeof scheduledLabel.result === 'object' && scheduledLabel.result !== null && 'value' in scheduledLabel.result ? scheduledLabel.result.value : undefined
+				if (typeof scheduledValue !== 'string' || !scheduledValue.startsWith('Retry in ')) throw new Error(`Retry boundary did not begin in its scheduled state at ${width.toString()}px`)
+				await Bun.sleep(1_800)
+				const boundaryLabel = await command('Runtime.evaluate', { expression: `({ badge: document.querySelector('#retry-status-badge')?.textContent, notice: document.querySelector('#notice-copy')?.textContent })`, returnByValue: true }, sessionId)
+				const boundaryValue = typeof boundaryLabel === 'object' && boundaryLabel !== null && 'result' in boundaryLabel && typeof boundaryLabel.result === 'object' && boundaryLabel.result !== null && 'value' in boundaryLabel.result ? boundaryLabel.result.value : undefined
+				if (
+					typeof boundaryValue !== 'object' ||
+					boundaryValue === null ||
+					!('badge' in boundaryValue) ||
+					boundaryValue.badge !== 'Retry due' ||
+					!('notice' in boundaryValue) ||
+					typeof boundaryValue.notice !== 'string' ||
+					!boundaryValue.notice.includes('Automatic retry became due at ') ||
+					boundaryValue.notice.includes('Automatic retry started at ')
+				) {
+					throw new Error(`Retry boundary did not advance without claiming an unconfirmed attempt at ${width.toString()}px: ${JSON.stringify(boundaryValue)}`)
+				}
+				await capturePng(`status-retry-due-${mobile ? 'mobile' : 'desktop'}.png`)
+			}
+			fixtureNextRetryAt = undefined
+			for (const retrying of [false, true]) {
+				fixtureRetryInProgress = retrying
+				for (const mobile of [false, true]) {
+					const width = mobile ? 390 : 1440
+					await replacePage(`${origin}/?status=${retrying ? 'retrying' : 'scheduled'}-disconnect-${mobile ? 'mobile' : 'desktop'}`, width, mobile ? 844 : 900)
+					await Bun.sleep(350)
+					fixtureStateUnavailable = true
+					await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
+					await Bun.sleep(250)
+					const disconnectedState = await command(
+						'Runtime.evaluate',
+						{
+							expression: `({ retryActive: document.querySelector('#retry-status-badge')?.parentElement?.hasAttribute('data-retry-active'), retryVisible: document.querySelector('#retry-status-badge')?.getBoundingClientRect().height !== 0, runStatus: document.querySelector('#run-status-badge')?.textContent })`,
+							returnByValue: true,
+						},
+						sessionId,
+					)
+					const disconnectedValue = typeof disconnectedState === 'object' && disconnectedState !== null && 'result' in disconnectedState && typeof disconnectedState.result === 'object' && disconnectedState.result !== null && 'value' in disconnectedState.result ? disconnectedState.result.value : undefined
+					if (
+						typeof disconnectedValue !== 'object' ||
+						disconnectedValue === null ||
+						!('retryActive' in disconnectedValue) ||
+						disconnectedValue.retryActive !== false ||
+						!('retryVisible' in disconnectedValue) ||
+						disconnectedValue.retryVisible !== false ||
+						!('runStatus' in disconnectedValue) ||
+						disconnectedValue.runStatus !== 'Disconnected'
+					) {
+						throw new Error(`${retrying ? 'Active' : 'Scheduled'} retry remained visible after disconnect at ${width.toString()}px`)
+					}
+					fixtureStateUnavailable = false
+				}
+			}
+			runtimeDiagnostics.length = 0
+			fixtureRetryInProgress = false
 			fixtureStatus = 'running'
 			paused = false
 			fixtureAttention = 'none'
@@ -839,6 +1019,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						'Runtime.evaluate',
 						{
 							expression: `(() => {
+								const refresh = document.querySelector('#refresh-button')
+								const pause = document.querySelector('#pause-button')
+								const refreshBounds = refresh?.getBoundingClientRect()
+								const pauseBounds = pause?.getBoundingClientRect()
+								const refreshTextRange = document.createRange()
+								if (refresh !== null) refreshTextRange.selectNodeContents(refresh)
+								const refreshTextBounds = refreshTextRange.getBoundingClientRect()
 								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].every(id => {
 									const target = document.getElementById(id)
 									if (!(target instanceof HTMLElement)) return false
@@ -857,6 +1044,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									pauseDisabled: document.querySelector('#pause-button')?.disabled,
 									refreshBusy: document.querySelector('#refresh-button')?.getAttribute('aria-busy'),
 									refreshDisabled: document.querySelector('#refresh-button')?.disabled,
+									refreshTextFits: refreshBounds !== undefined && refreshTextBounds.left >= refreshBounds.left && refreshTextBounds.right <= refreshBounds.right,
+									refreshDoesNotOverlapPause: refreshBounds !== undefined && pauseBounds !== undefined && refreshBounds.right <= pauseBounds.left,
 									refreshText: document.querySelector('#refresh-button')?.textContent,
 									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
 									runStatus: document.querySelector('#run-status-badge')?.textContent,
@@ -974,7 +1163,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('refreshDisabled' in pendingRefresh) ||
 					pendingRefresh.refreshDisabled !== true ||
 					!('refreshText' in pendingRefresh) ||
-					pendingRefresh.refreshText !== 'Refreshing…'
+					pendingRefresh.refreshText !== 'Refreshing…' ||
+					!('refreshTextFits' in pendingRefresh) ||
+					pendingRefresh.refreshTextFits !== true ||
+					!('refreshDoesNotOverlapPause' in pendingRefresh) ||
+					pendingRefresh.refreshDoesNotOverlapPause !== true
 				) {
 					throw new Error(`Manual Refresh did not expose a busy control: ${JSON.stringify(pendingRefresh)}`)
 				}
@@ -1533,7 +1726,11 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		...snapshot,
 		networkConfigured: fixtureNetworkConfigured,
 		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
-		lastError: fixtureAttention === 'error' ? rawRpcFailure : undefined,
+		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
+		lastPollFailureAt: fixtureAttention === 'error' && fixturePollFailureMetadata ? new Date(Date.now() - 2_000).toISOString() : undefined,
+		lastRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && fixtureRetryInProgress ? new Date(Date.now() - 1_000).toISOString() : undefined,
+		nextRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && !fixtureRetryInProgress ? (fixtureNextRetryAt ?? new Date(Date.now() + 10_000).toISOString()) : undefined,
+		retryInProgress: fixtureRetryInProgress,
 		operationLog: fixtureAttention === 'error' ? [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '816', timestamp: sampledAt(0) }, ...snapshot.operationLog] : snapshot.operationLog,
 		paused,
 		positions: fixturePositions,

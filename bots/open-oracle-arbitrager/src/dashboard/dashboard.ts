@@ -14,6 +14,7 @@ import {
 	opportunityDecisionReason,
 	pauseControlState,
 	persistedConnectivity,
+	pollRetryStatus,
 	requiredSignerPrivateKey,
 	requestWithTimeout,
 	selectedTokenPriceHistory,
@@ -941,6 +942,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	runStatusBadge.dataset['status'] = runStatus
 	runStatusBadge.textContent = statusLabels.status
 	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
+	renderPollRetry(snapshot)
 	const headerNetworkBadge = element('header-network-badge')
 	headerNetworkBadge.textContent = snapshot.networkConfigured ? `${snapshot.network} · ${snapshot.expectedChainId.toString()}` : 'Network setup'
 	headerNetworkBadge.className = `badge${snapshot.networkConfigured ? '' : ' badge-warning'}`
@@ -1005,8 +1007,14 @@ function render(snapshot: PublicOperatorSnapshot) {
 		noticeTone = 'warning'
 	}
 	if (snapshot.lastError !== undefined) {
-		noticeTitle = 'Latest poll failed'
-		noticeCopy = snapshot.lastError
+		const retry = pollRetryStatus(snapshot)
+		noticeTitle = snapshot.retryInProgress ? 'Automatic retry in progress' : retry?.state === 'due' ? 'Automatic retry due' : snapshot.lastPollFailureAt === undefined ? 'Operator attention required' : 'Latest poll failed'
+		const failure = retry === undefined ? snapshot.lastError : snapshot.lastError.replace(/ Automatic retry remains active\.$/, '')
+		const failureTime = snapshot.lastPollFailureAt === undefined ? '' : ` Poll failed at ${new Date(snapshot.lastPollFailureAt).toLocaleTimeString()}.`
+		const nextRetry = retry?.state === 'scheduled' && snapshot.nextRetryAt !== undefined ? ` Next automatic retry is scheduled for ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
+		const retryDue = retry?.state === 'due' && snapshot.nextRetryAt !== undefined ? ` Automatic retry became due at ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
+		const lastRetry = snapshot.lastRetryAt === undefined ? '' : ` ${snapshot.retryInProgress ? 'Automatic retry' : 'Last automatic retry'} started at ${new Date(snapshot.lastRetryAt).toLocaleTimeString()}.`
+		noticeCopy = `${failure}${failureTime}${nextRetry}${retryDue}${lastRetry}`
 		noticeTone = 'danger'
 	}
 	setText('notice-title', noticeTitle)
@@ -1038,6 +1046,23 @@ function render(snapshot: PublicOperatorSnapshot) {
 	}
 }
 
+function renderPollRetry(snapshot: PublicOperatorSnapshot) {
+	const badge = element('retry-status-badge')
+	const retry = pollRetryStatus(snapshot)
+	badge.parentElement?.toggleAttribute('data-retry-active', retry !== undefined)
+	badge.hidden = retry === undefined
+	badge.textContent = retry?.label ?? 'Retry —'
+	badge.className = `badge ${retry?.state === 'retrying' ? 'badge-danger' : 'badge-warning'}`
+}
+
+function clearPollRetry() {
+	const badge = element('retry-status-badge')
+	badge.parentElement?.removeAttribute('data-retry-active')
+	badge.hidden = true
+	badge.textContent = 'Retry —'
+	badge.className = 'badge badge-warning'
+}
+
 const refresh = singleFlight(async () => {
 	try {
 		const value: unknown = await requestWithTimeout(signal => api<unknown>('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
@@ -1046,6 +1071,7 @@ const refresh = singleFlight(async () => {
 	} catch (error) {
 		void error
 		setControlsEnabled(false)
+		clearPollRetry()
 		const modeBadge = element('mode-badge')
 		const statusLabels = botStatusLabels(undefined)
 		delete modeBadge.dataset['mode']
@@ -1499,3 +1525,6 @@ element<HTMLInputElement>('private-key').addEventListener('input', () => {
 void refresh()
 void loadCompleteConfiguration()
 window.setInterval(() => void refresh(), 2_000)
+window.setInterval(() => {
+	if (connected && latestSnapshot !== undefined) renderPollRetry(latestSnapshot)
+}, 1_000)

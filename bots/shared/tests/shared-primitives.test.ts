@@ -394,6 +394,44 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('identifies the RPC origin and method for non-retryable HTTP failures', async () => {
+		let healthyRequests = 0
+		const rejected = Bun.serve({ port: 0, fetch: () => new Response('invalid request', { status: 400 }) })
+		const healthy = Bun.serve({
+			port: 0,
+			fetch: () => {
+				healthyRequests += 1
+				return Response.json({ id: 1, jsonrpc: '2.0', result: [] })
+			},
+		})
+		try {
+			if (rejected.port === undefined || healthy.port === undefined) throw new Error('RPC diagnostic test servers did not expose ports')
+			const rejectedUrl = `http://127.0.0.1:${rejected.port.toString()}/private/provider-key`
+			const pool = createRpcEndpointPool([rejectedUrl, `http://127.0.0.1:${healthy.port.toString()}`])
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: pool.transport }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message).toContain(`RPC ${new URL(rejectedUrl).origin} returned HTTP 400 while calling eth_getLogs`)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+			let boundFailure: unknown
+			try {
+				await createPublicClient({ transport: pool.transportFor(rejectedUrl) }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				boundFailure = error
+			}
+			expect(boundFailure instanceof Error ? boundFailure.message : String(boundFailure)).toContain(`RPC ${new URL(rejectedUrl).origin} returned HTTP 400 while calling eth_getLogs`)
+			expect(healthyRequests).toBe(0)
+		} finally {
+			rejected.stop(true)
+			healthy.stop(true)
+		}
+	})
+
 	test('tracks independent live-mode transports in one endpoint-health snapshot', async () => {
 		const offline = Bun.serve({ port: 0, fetch: () => new Response('unavailable', { status: 503 }) })
 		const healthy = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })

@@ -93,12 +93,15 @@ export function retryDelayMilliseconds(baseMilliseconds: number, consecutiveFail
 	return Math.min(300_000, Math.round(exponential * (1 + Math.max(0, Math.min(1, random())) * 0.2)))
 }
 
-export async function pollUntilStopped(poll: () => Promise<boolean>, wait: (consecutiveFailures: number) => Promise<void>, once: boolean, onError: (error: unknown) => void) {
+export type PollResult = boolean | 'deferred'
+
+export async function pollUntilStopped(poll: (consecutiveFailures: number) => Promise<PollResult>, wait: (consecutiveFailures: number) => Promise<void>, once: boolean, onError: (error: unknown) => void) {
 	let consecutiveFailures = 0
 	for (;;) {
 		try {
-			if (await poll()) return
-			consecutiveFailures = 0
+			const result = await poll(consecutiveFailures)
+			if (result === true) return
+			if (result === false) consecutiveFailures = 0
 		} catch (error) {
 			if (once) throw error
 			consecutiveFailures += 1
