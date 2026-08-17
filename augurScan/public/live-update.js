@@ -51,6 +51,13 @@ export const retainedPaginationAvailable = (hasContinuation, canonicalRefreshReq
 
 export const paginationRequestAllowed = (append, canonicalRefreshRequired) => !append || !canonicalRefreshRequired
 
+export const queuedPaginationPresentation = (canonicalRefreshRequired) => ({
+	hidden: canonicalRefreshRequired,
+	disabled: true,
+	busy: !canonicalRefreshRequired,
+	label: canonicalRefreshRequired ? 'Show more' : 'Loading more…',
+})
+
 export const transactionRetryMode = (appendFailure, hasLoadedTransactions) => ({
 	append: appendFailure,
 	liveRefresh: !appendFailure && hasLoadedTransactions,

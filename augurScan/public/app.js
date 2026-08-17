@@ -20,6 +20,7 @@ import {
 	mergeUniqueRecords,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
+	queuedPaginationPresentation,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
@@ -79,6 +80,7 @@ let demoTransactionAppendErrorConsumed = false
 let demoNetworkFallbackErrorConsumed = false
 let demoRouteRefreshErrorConsumed = false
 let logsRequestVersion = 0
+let activityPaginationIntentVersion = 0
 let detailRequestVersion = 0
 let detailContextVersion = 0
 let pendingBlockUpdates = 0
@@ -105,6 +107,7 @@ let canonicalDataGeneration = 0
 let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
+let richListPaginationIntentVersion = 0
 let contractItems = []
 let contractRequestVersion = 0
 let selectedContractAddress
@@ -1097,6 +1100,21 @@ const api = async (path, { signal } = {}) => {
 		}
 		if (path.startsWith('/api/v1/richlist')) {
 			demoRichListRequests++
+			const request = new URL(path, location.origin)
+			if (
+				pageUrl.searchParams.get('richRouteRefreshDelayAfterLoad') === '1' &&
+				demoRichListRequests > 1 &&
+				Number(request.searchParams.get('offset') ?? 0) === 0
+			) {
+				demoRouteRequestsInFlight++
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				try {
+					await new Promise((resolve) => setTimeout(resolve, 1_500))
+				} finally {
+					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				}
+			}
 			const richRefreshErrorRequest = Number(pageUrl.searchParams.get('routeRefreshErrorRequest'))
 			if (
 				((pageUrl.searchParams.get('routeRefreshErrorAfterLoad') === '1' && demoRichListRequests > 1) ||
@@ -1110,7 +1128,6 @@ const api = async (path, { signal } = {}) => {
 				demoCanonicalRouteRefreshErrorConsumed = true
 				throw new Error('The account state could not be refreshed')
 			}
-			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const offset = Number(request.searchParams.get('offset') ?? 0)
@@ -1216,13 +1233,25 @@ const api = async (path, { signal } = {}) => {
 				demoRouteRequestsInFlight++
 				demoMaxRouteRequestsInFlight = Math.max(demoMaxRouteRequestsInFlight, demoRouteRequestsInFlight)
 				window.__demoMaxRouteRequestsInFlight = demoMaxRouteRequestsInFlight
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
 				try {
 					await new Promise((resolve) => setTimeout(resolve, 800))
 				} finally {
 					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
 				}
 			}
 			const request = new URL(path, location.origin)
+			if (pageUrl.searchParams.get('logRouteRefreshDelayAfterLoad') === '1' && demoLogRequests > 1 && !request.searchParams.has('cursor')) {
+				demoRouteRequestsInFlight++
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				try {
+					await new Promise((resolve) => setTimeout(resolve, 1_500))
+				} finally {
+					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				}
+			}
 			const chainId = request.searchParams.get('chainId')
 			const event = request.searchParams.get('event')?.toLowerCase()
 			const address = request.searchParams.get('address')?.toLowerCase()
@@ -1696,6 +1725,18 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 
 const loadLogs = (options = {}) => {
 	const contextVersion = viewContextVersion
+	const paginationIntentVersion = options.append === true ? ++activityPaginationIntentVersion : undefined
+	if (paginationIntentVersion !== undefined) {
+		const more = $('#more')
+		const presentation = queuedPaginationPresentation(canonicalRefreshRequired)
+		more.hidden = presentation.hidden
+		more.disabled = presentation.disabled
+		more.textContent = presentation.label
+		if (presentation.busy) more.setAttribute('aria-busy', 'true')
+		else more.removeAttribute('aria-busy')
+		$('#activity-more-status').hidden = true
+		$('#activity-more-status').replaceChildren()
+	}
 	const operation = () => {
 		const { retainVisibleDepth, ...loadOptions } = options
 		const replaceDepth = retainVisibleDepth
@@ -1703,7 +1744,19 @@ const loadLogs = (options = {}) => {
 			: loadOptions.replaceDepth
 		return performLoadLogs({ ...loadOptions, replaceDepth, contextVersion })
 	}
-	return options.live === true ? logRefreshGate.runBackground(operation) : logRefreshGate.runForeground(operation)
+	const request = options.live === true ? logRefreshGate.runBackground(operation) : logRefreshGate.runForeground(operation)
+	if (paginationIntentVersion !== undefined) {
+		const clearPending = () => {
+			if (paginationIntentVersion !== activityPaginationIntentVersion || contextVersion !== viewContextVersion) return
+			const more = $('#more')
+			more.removeAttribute('aria-busy')
+			more.textContent = 'Show more'
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) more.hidden = true
+		}
+		void request.then(clearPending, clearPending)
+	}
+	return request
 }
 
 const detailCard = (term, description, wide = false) => {
@@ -3126,8 +3179,37 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 
 const loadRichList = (options = {}) => {
 	const contextVersion = viewContextVersion
+	const paginationIntentVersion = options.append === true ? ++richListPaginationIntentVersion : undefined
+	if (paginationIntentVersion !== undefined) {
+		const more = $('#richlist-more')
+		const presentation = queuedPaginationPresentation(canonicalRefreshRequired)
+		more.hidden = presentation.hidden
+		more.disabled = presentation.disabled
+		more.textContent = presentation.label
+		if (presentation.busy) more.setAttribute('aria-busy', 'true')
+		else more.removeAttribute('aria-busy')
+		const paginationStatus = $('#richlist-more-status')
+		paginationStatus.hidden = !presentation.busy
+		paginationStatus.className = 'system-status sr-only'
+		paginationStatus.textContent = presentation.busy ? 'Loading more known addresses…' : ''
+	}
 	const operation = () => performLoadRichList({ ...options, contextVersion })
-	return options.live === true && options.append !== true ? richListRefreshGate.runBackground(operation) : richListRefreshGate.runForeground(operation)
+	const request = options.live === true && options.append !== true ? richListRefreshGate.runBackground(operation) : richListRefreshGate.runForeground(operation)
+	if (paginationIntentVersion !== undefined) {
+		const clearPending = () => {
+			if (paginationIntentVersion !== richListPaginationIntentVersion || contextVersion !== viewContextVersion) return
+			const more = $('#richlist-more')
+			more.removeAttribute('aria-busy')
+			more.textContent = 'Show more'
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) {
+				$('#richlist-more-status').hidden = true
+				$('#richlist-more-status').replaceChildren()
+			}
+		}
+		void request.then(clearPending, clearPending)
+	}
+	return request
 }
 
 const renderAddressProfile = (item, transactions, interactions, { live = false } = {}) => {
@@ -4656,3 +4738,4 @@ if (isRichList && accountDeepLink !== null) {
 		history.replaceState(null, '', url)
 	}
 }
+if (isDemo && pageUrl.searchParams.get('queuedPaginationDemo') === '1') window.setTimeout(() => void requestRouteRefresh(1), 100)

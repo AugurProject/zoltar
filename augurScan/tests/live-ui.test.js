@@ -21,6 +21,7 @@ import {
 	mergeUniqueRecords,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
+	queuedPaginationPresentation,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
@@ -94,6 +95,26 @@ test('rejects activity and rich-list pagination queued during canonical recovery
 		expect(appendRequests, surface).toBe(0)
 		expect(retainedPaginationAvailable(true, canonicalRefreshRequired), surface).toBe(false)
 	}
+})
+
+test('shows local pagination feedback before activity and rich-list work enters a busy gate', async () => {
+	for (const surface of ['activity', 'rich list']) {
+		const gate = createForegroundRefreshGate()
+		let releaseRefresh
+		const refresh = gate.runBackground(
+			() =>
+				new Promise((resolve) => {
+					releaseRefresh = resolve
+				}),
+		)
+		const presentation = queuedPaginationPresentation(false)
+		const append = gate.runForeground(async () => true)
+		expect(presentation, surface).toEqual({ hidden: false, disabled: true, busy: true, label: 'Loading more…' })
+		releaseRefresh()
+		await refresh
+		expect(await append, surface).toBe(true)
+	}
+	expect(queuedPaginationPresentation(true)).toEqual({ hidden: true, disabled: true, busy: false, label: 'Show more' })
 })
 
 test('drops in-flight activity, account, and rich-list appends from an older canonical generation', async () => {
