@@ -469,11 +469,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
 						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
-							const [token0, token1, reserves] = await Promise.all([
-								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
-								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
-								readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
-							])
+							const [token0, token1, reserves] = await contextualRpcRead('eth_call', () =>
+								Promise.all([
+									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
+									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
+									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
+								]),
+							)
 							const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
 							return {
 								blockHash,
@@ -520,7 +522,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.priceHistory = [...state.priceHistory, ...samples]
 						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
 						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
-						const balances = await loadBalances(client, wallet, config, pools, discoveredTokens)
+						const balances = await contextualRpcRead('eth_call', () => loadBalances(client, wallet, config, pools, discoveredTokens))
 						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
 						const opportunities: OpportunitySnapshot[] = []
 						const candidates: ExecutionCandidate[] = []

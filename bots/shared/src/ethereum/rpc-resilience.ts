@@ -38,8 +38,9 @@ export class RpcEndpointPoolFailure extends Error {
 }
 
 export function rpcFailureWithContext(error: unknown, target: string, method: string) {
+	if (error instanceof RpcEndpointPoolFailure) return error
 	const detail = errorMessage(error)
-	if (detail.includes(method) && /\bRPC https?:\/\//.test(detail)) return error instanceof Error ? error : new Error(detail)
+	if (/\bRPC https?:\/\//.test(detail) && /\beth_[A-Za-z0-9_]+\b/.test(detail)) return error instanceof Error ? error : new Error(detail)
 	const targetPrefix = `RPC ${target} `
 	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
 	return new Error(normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`, { cause: error })

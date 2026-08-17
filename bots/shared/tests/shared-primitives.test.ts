@@ -439,11 +439,22 @@ describe('shared bot primitives', () => {
 		expect(wrongChain.message).toBe('RPC https://rpc.example failed while calling eth_chainId: Read RPC chain mismatch: expected 1, received 2')
 		const malformedBlock = rpcFailureWithContext(new Error('RPC returned an invalid block'), target, 'eth_getBlockByNumber')
 		expect(malformedBlock.message).toBe('RPC https://rpc.example failed while calling eth_getBlockByNumber: RPC returned an invalid block')
+		const undecodableCall = rpcFailureWithContext(new Error('ABI return data is empty'), target, 'eth_call')
+		expect(undecodableCall.message).toBe('RPC https://rpc.example failed while calling eth_call: ABI return data is empty')
 		const alreadyContextual = rpcFailureWithContext(new Error('RPC https://rpc.example eth_getLogs not supported'), target, 'eth_getLogs')
 		expect(alreadyContextual.message.match(/https:\/\/rpc\.example/g)).toHaveLength(1)
 		expect(alreadyContextual.message.match(/eth_getLogs/g)).toHaveLength(1)
 		const attemptedElsewhere = rpcFailureWithContext(new Error('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs'), target, 'eth_getLogs')
 		expect(attemptedElsewhere.message).toBe('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs')
+		const poolFailure = new RpcEndpointPoolFailure([
+			{ error: 'failed while calling eth_getLogs: fetch failed', target: 'https://first.example' },
+			{ error: 'cooling down until the next retry window before calling eth_getLogs', target: 'https://second.example' },
+		])
+		const preservedPoolFailure = rpcFailureWithContext(poolFailure, 'https://stale.example', 'eth_getLogs')
+		expect(preservedPoolFailure).toBe(poolFailure)
+		expect(preservedPoolFailure.message.match(/https:\/\/first\.example/g)).toHaveLength(1)
+		expect(preservedPoolFailure.message.match(/https:\/\/second\.example/g)).toHaveLength(1)
+		expect(preservedPoolFailure.message).not.toContain('stale.example')
 
 		const rejected = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_601, message: 'eth_getLogs not supported' }, id: 1, jsonrpc: '2.0' }) })
 		try {
