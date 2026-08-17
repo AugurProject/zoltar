@@ -557,6 +557,8 @@ describe('SecurityPoolSection', () => {
 		})
 
 		const warning = within(document.body).getByRole('alert')
+		expect(warning.classList.contains('flat')).toBe(true)
+		expect(warning.classList.contains('compact')).toBe(true)
 		expect(warning.textContent).toContain('Universe Mismatch')
 		expect(warning.textContent).toContain('This pool belongs to 0x1, while the header shows 0x2.')
 	})

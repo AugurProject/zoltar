@@ -119,7 +119,7 @@ export function SecurityPoolSection({
 		securityPoolResult === undefined ? undefined : (
 			<>
 				{securityPoolResult.universeId === activeUniverseId ? undefined : (
-					<WarningSurface role='alert'>
+					<WarningSurface role='alert' surface='flat' variant='compact'>
 						<strong>{securityPoolCopy.universeMismatch}</strong>
 						<p>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId), formatUniverseIdHex(activeUniverseId))}</p>
 					</WarningSurface>
