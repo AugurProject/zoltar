@@ -432,6 +432,48 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('identifies the RPC origin and method for retryable transport failures and cooldowns', async () => {
+		let now = 1_000
+		const unavailableUrl = 'http://operator:provider-secret@127.0.0.1:1/private/provider-key?token=query-secret'
+		const pool = createRpcEndpointPool([unavailableUrl], {
+			baseCooldownMilliseconds: 100,
+			now: () => now,
+			random: () => 0,
+			timeoutMilliseconds: 100,
+		})
+		const clients = [createPublicClient({ transport: pool.transport }), createPublicClient({ transport: pool.transportFor(unavailableUrl) })]
+		for (const [index, client] of clients.entries()) {
+			let failure: unknown
+			try {
+				await client.getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message).toContain(new URL(unavailableUrl).origin)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message).not.toContain('operator')
+			expect(message).not.toContain('provider-secret')
+			expect(message).not.toContain('provider-key')
+			expect(message).not.toContain('query-secret')
+			if (index === 0) now += 101
+		}
+
+		let cooldownFailure: unknown
+		try {
+			await clients[1]?.getLogs({ fromBlock: 1n, toBlock: 1n })
+		} catch (error) {
+			cooldownFailure = error
+		}
+		const cooldownMessage = cooldownFailure instanceof Error ? cooldownFailure.message : String(cooldownFailure)
+		expect(cooldownMessage).toContain(new URL(unavailableUrl).origin)
+		expect(cooldownMessage).toContain('cooling down until')
+		expect(cooldownMessage.match(/eth_getLogs/g)).toHaveLength(1)
+		expect(cooldownMessage).not.toContain('provider-secret')
+		expect(cooldownMessage).not.toContain('provider-key')
+		expect(cooldownMessage).not.toContain('query-secret')
+	})
+
 	test('tracks independent live-mode transports in one endpoint-health snapshot', async () => {
 		const offline = Bun.serve({ port: 0, fetch: () => new Response('unavailable', { status: 503 }) })
 		const healthy = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })

@@ -49,10 +49,13 @@ function safeErrorMessage(error: unknown, url: string, target: string) {
 	return errorMessage(error).split(url).join(target)
 }
 
-function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
+function endpointRequestFailureDetail(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
 	const detail = safeErrorMessage(error, endpoint.url, endpoint.target)
-	const message = detail.startsWith('HTTP ') && detail.endsWith(` while calling ${method}`) ? `RPC ${endpoint.target} returned ${detail}` : `RPC ${endpoint.target} failed while calling ${method}: ${detail}`
-	return new Error(message, { cause: error })
+	return detail.startsWith('HTTP ') && detail.endsWith(` while calling ${method}`) ? `returned ${detail}` : `failed while calling ${method}: ${detail}`
+}
+
+function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
+	return new Error(`RPC ${endpoint.target} ${endpointRequestFailureDetail(error, endpoint, method)}`, { cause: error })
 }
 
 function retryableRpcFailure(error: unknown) {
@@ -140,7 +143,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			const failures: { error: string; target: string }[] = []
 			const candidates = orderedEndpoints(now())
 			if (candidates.length === 0) {
-				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target })))
+				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target })))
 			}
 			for (const endpoint of candidates) {
 				try {
@@ -149,7 +152,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					return value
 				} catch (error) {
 					if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
-					failures.push({ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target })
+					failures.push({ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target })
 				}
 			}
 			throw new RpcEndpointPoolFailure(failures)
@@ -170,12 +173,12 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			return custom(
 				{
 					request: async ({ method, params }) => {
-						if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target }])
+						if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target }])
 						try {
 							return await requestEndpoint(endpoint, method, params)
 						} catch (error) {
 							if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
-							throw new RpcEndpointPoolFailure([{ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target }])
+							throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
 						}
 					},
 				},
