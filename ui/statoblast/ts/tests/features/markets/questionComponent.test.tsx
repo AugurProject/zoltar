@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { Question } from '../../../features/markets/components/Question.js'
+import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

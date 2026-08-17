@@ -159,7 +159,7 @@ type UseOnchainStateOptions = {
 export type UseOnchainStateDependencies = {
 	getDeploymentSteps: () => ReadonlyArray<DeploymentStatus>
 	getWethAddress: () => Address
-	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ deployed: boolean }>
+	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ augurStatoblastDeployed: boolean; deploymentStatuses: DeploymentStatus[] }>
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
 

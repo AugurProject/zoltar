@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import type { LifecycleStagePresentation } from '../../types.js'
+import type { LifecycleStagePresentation } from '../types/components.js'
 import { LoadingAwareText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 

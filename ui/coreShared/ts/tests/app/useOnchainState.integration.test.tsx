@@ -8,12 +8,25 @@ import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
 import { getAddress } from '@zoltar/shared/ethereum'
 import type { ChainBackend, ReadClient } from '../../lib/chainBackend.js'
-import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/index.js'
 import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile } from '../../lib/networkProfile.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import type { DeploymentStep } from '../../types/contracts.js'
 import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
+
+const FAKE_WETH_ADDRESS = '0x0000000000000000000000000000000000000ee1' as const
+
+function getDeploymentSteps() {
+	return [
+		{ address: '0x00000000000000000000000000000000000000d1', dependencies: [], deploy: async () => '0x00000000000000000000000000000000000000000000000000000000000000d1', id: 'zoltar', label: 'Zoltar' },
+	] as const satisfies ReadonlyArray<DeploymentStep>
+}
+
+function getWethAddress() {
+	return FAKE_WETH_ADDRESS
+}
+
 
 type UseOnchainStateState = ReturnType<typeof useOnchainState>
 type UseOnchainStateOptions = Parameters<typeof useOnchainState>[0]
@@ -138,6 +151,7 @@ function createBackend({
 function createOnchainStateDependencies(overrides: Partial<UseOnchainStateDependencies> = {}): UseOnchainStateDependencies {
 	return {
 		getDeploymentSteps,
+		getWethAddress,
 		loadDeploymentStatusOracleSnapshot: mock(async () => ({
 			augurStatoblastDeployed: false,
 			deploymentStatuses: getDeploymentSteps().map(step => ({

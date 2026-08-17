@@ -12,7 +12,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { LifecycleStageBanner } from '@zoltar/ui-statoblast/features/security-pools/components/LifecycleStageBanner.js'
+import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'

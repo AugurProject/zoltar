@@ -230,3 +230,43 @@ export type RouteTabDefinition = {
 	label: string
 	route: string
 }
+
+export type OutcomeChipRowProps = {
+	className?: string
+	items: Array<{
+		key: string
+		label: ComponentChildren
+		tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
+	}>
+}
+
+export type ScalarOutcomePickerProps = {
+	action?: ComponentChildren
+	details: {
+		maxValueLabel?: ComponentChildren
+		minValueLabel?: ComponentChildren
+		numTicks: bigint
+	}
+	disabled?: boolean
+	isInvalid: boolean
+	label: ComponentChildren
+	onInvalidChange: (invalid: boolean) => void
+	onSelectedTickChange: (tick: string) => void
+	selectedOutcomeLabel: ComponentChildren
+	selectedTick: string
+	selectedTickLabel: ComponentChildren
+	showMinMax?: boolean
+}
+
+export type OutcomeSelectionListProps = {
+	className?: string
+	emptyMessage?: ComponentChildren
+	items: Array<{
+		key: string
+		label: ComponentChildren
+		details?: ComponentChildren
+		disabled?: boolean
+		selected: boolean
+		onSelect: () => void
+	}>
+}

@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
 import { useEffect, useState } from 'preact/hooks'
-import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
+import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 
 export type ScalarCreatePreviewDetails = {

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getQuestionSummaryFields, getQuestionTitle } from '../../../features/markets/components/Question.js'
+import { getQuestionSummaryFields, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 
 const questionBase = {
 	answerUnit: '',

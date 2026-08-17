@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
+
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -8,6 +8,7 @@ import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
+import * as marketTypeCopy from '@zoltar/ui-core-shared/copy/marketType.js'
 import { formatScalarDisplayValue } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -37,7 +38,7 @@ type QuestionSummaryField =
 	  }
 
 export function getQuestionTitle(question: MarketDetails) {
-	return question.title.trim() === '' ? marketCopy.untitledQuestion : question.title
+	return question.title.trim() === '' ? commonCopy.untitledQuestion : question.title
 }
 
 function getQuestionDescription(question: MarketDetails) {
@@ -47,7 +48,7 @@ function getQuestionDescription(question: MarketDetails) {
 }
 
 function getDisplayedOutcomes(question: MarketDetails) {
-	const outcomes = question.outcomeLabels.length === 0 ? [marketCopy.scalar] : question.outcomeLabels
+	const outcomes = question.outcomeLabels.length === 0 ? [marketTypeCopy.scalar] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
@@ -58,15 +59,15 @@ function getDisplayRange(question: MarketDetails) {
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
-		{ kind: 'text', label: marketCopy.questionType, value: getMarketTypeLabel(question.marketType) },
+		{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) },
 		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },
-		{ kind: 'timestamp', label: marketCopy.created, value: question.createdAt },
-		{ kind: 'timestamp', label: marketCopy.endTime, value: question.endTime },
-		{ kind: 'text', label: marketCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') },
+		{ kind: 'timestamp', label: commonCopy.created, value: question.createdAt },
+		{ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime },
+		{ kind: 'text', label: commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') },
 	]
 
 	if (question.marketType === 'scalar')
-		fields.push({ kind: 'text', label: marketCopy.ticks, value: question.numTicks.toString() }, { kind: 'text', label: marketCopy.displayRange, value: getDisplayRange(question) }, { kind: 'text', label: marketCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
+		fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() }, { kind: 'text', label: commonCopy.displayRange, value: getDisplayRange(question) }, { kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
 
 	return fields
 }
@@ -97,7 +98,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 		return (
 			<div className={`question-summary ${className}`}>
 				<p className='detail'>
-					<LoadingText>{marketCopy.questionDetailsLoadingLabel}</LoadingText>
+					<LoadingText>{commonCopy.questionDetailsLoadingLabel}</LoadingText>
 				</p>
 			</div>
 		)
@@ -117,11 +118,11 @@ export function Question({ className = '', loading = false, question, showTitle 
 			? []
 			: [
 					{
-						label: marketCopy.ticks,
+						label: commonCopy.ticks,
 						value: question.numTicks.toString(),
 					},
 					{
-						label: marketCopy.displayRange,
+						label: commonCopy.displayRange,
 						value: getDisplayRange(question),
 					},
 				]
@@ -136,15 +137,15 @@ export function Question({ className = '', loading = false, question, showTitle 
 					</div>
 				)}
 				<OutcomeChipRow items={outcomeItems} />
-				<div className='question-preview-timeline' role='list' aria-label={marketCopy.questionTimeline}>
+				<div className='question-preview-timeline' role='list' aria-label={commonCopy.questionTimeline}>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>{marketCopy.created}</span>
+						<span className='question-preview-timeline-label'>{commonCopy.created}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.createdAt} />
 						</strong>
 					</div>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>{marketCopy.endTime}</span>
+						<span className='question-preview-timeline-label'>{commonCopy.endTime}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.endTime} />
 						</strong>

@@ -8,7 +8,7 @@ import { ChildUniverseDetails } from '@zoltar/ui-zoltar/features/universes/compo
 import { ChildUniverseDeploymentModal } from '@zoltar/ui-zoltar/features/universes/components/ChildUniverseDeploymentModal.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
+import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'

@@ -1,16 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getSelectedVaultOwnerForRoutePoolChange, shouldLoadMarketSecurityPools, shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '@zoltar/ui-zoltar/app/hooks/useAppRouteEffects.js'
+import { getSelectedVaultOwnerForRoutePoolChange, shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '../../app/useAppRouteEffects.js'
 
 describe('app route effects', () => {
-	test('loads linked security pools while browsing market questions', () => {
-		expect(shouldLoadMarketSecurityPools({ activeZoltarView: 'questions', environmentReady: true, route: 'zoltar', walletBootstrapComplete: true })).toBe(true)
-		expect(shouldLoadMarketSecurityPools({ activeZoltarView: 'create', environmentReady: true, route: 'zoltar', walletBootstrapComplete: true })).toBe(false)
-		expect(shouldLoadMarketSecurityPools({ activeZoltarView: 'questions', environmentReady: false, route: 'zoltar', walletBootstrapComplete: true })).toBe(false)
-		expect(shouldLoadMarketSecurityPools({ activeZoltarView: 'questions', environmentReady: true, route: 'security-pools', walletBootstrapComplete: true })).toBe(false)
-	})
-
 	test('loads the open oracle report from the URL only on the open-oracle route', () => {
 		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: true, route: 'open-oracle', urlOpenOracleReportId: '1' })).toBe(true)
 		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: false, route: 'open-oracle', urlOpenOracleReportId: '1' })).toBe(false)

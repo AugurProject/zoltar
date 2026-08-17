@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '../testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
-import { AppPageHeading } from '../../app/components/AppPageHeading.js'
+import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '@zoltar/ui-zoltar/app/lib/appPageTitle.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const baseInput: AppPageTitleInput = {
 	activeOpenOracleView: 'browse',

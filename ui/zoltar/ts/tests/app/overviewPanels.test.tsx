@@ -1,14 +1,14 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
-import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
-import { SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
-import { createFakeBackend } from '../testUtils/fakeBackend.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 describe('OverviewPanels', () => {
 	type MetricElement = {

@@ -13,9 +13,6 @@ type MarketFormValidation = {
 	isValid: boolean
 	notice: string | undefined
 }
-export function hasDeployedStep(steps: DeploymentStatus[], stepId: DeploymentStatus['id']) {
-	return steps.some(step => step.id === stepId && step.deployed)
-}
 function getScalarQuestionData(form: MarketFormState) {
 	return {
 		answerUnit: form.answerUnit.trim(),

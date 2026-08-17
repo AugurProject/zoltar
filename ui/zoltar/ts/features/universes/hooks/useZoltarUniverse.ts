@@ -8,7 +8,7 @@ import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } f
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation } from '../../transactionPresentations.js'
-import { hasDeployedStep } from '@zoltar/ui-statoblast/features/markets/lib/marketCreation.js'
+import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { requireWallet } from '@zoltar/ui-core-shared/lib/requireWalletConnection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'

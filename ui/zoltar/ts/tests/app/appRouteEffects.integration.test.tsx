@@ -1,14 +1,14 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '@zoltar/ui-zoltar/app/hooks/useAppRouteEffects.js'
-import { useUrlState } from '../../app/hooks/useUrlState.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 

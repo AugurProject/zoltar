@@ -6,7 +6,7 @@ import { EscalationDepositSelectionList } from './EscalationDepositSelectionList
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
-import { LifecycleStageBanner } from '@zoltar/ui-statoblast/features/security-pools/components/LifecycleStageBanner.js'
+import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'

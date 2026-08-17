@@ -4,67 +4,10 @@ import { describe, expect, mock, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import type { SimulationController } from '../../simulation/controller.js'
-import type { OverviewPanelsProps, TabNavigationProps } from '@zoltar/ui-zoltar/features/types.js'
+
 import { fireEvent, within } from '../testUtils/queries'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
-
-function createOverviewProps(): OverviewPanelsProps {
-	return {
-		accountState: {
-			address: undefined,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		},
-		activeUniverseId: 0n,
-		isConnectingWallet: false,
-		isManagingWallet: false,
-		isLoadingRepPrices: false,
-		isRefreshingRepPrices: false,
-		isLoadingUniverseRepBalance: false,
-		isRefreshing: false,
-		onConnect: () => undefined,
-		onChangeWallet: () => undefined,
-		onDisconnectWallet: () => undefined,
-		onGoToGenesisUniverse: () => undefined,
-		onRefreshRepPrices: () => undefined,
-		onSwitchNetwork: () => undefined,
-		parentUniverseId: undefined,
-		readBackendStatus: {
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			rpcSource: 'default',
-			rpcUrl: 'browser-simulation',
-			transportMode: 'rpc',
-		},
-		repPerEthFailure: undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		repUsdcFailure: undefined,
-		repUsdcPrice: undefined,
-		repUsdcSource: undefined,
-		repUsdcSourceUrl: undefined,
-		universeHasForked: false,
-		universeLabel: 'Genesis',
-		universePresentation: undefined,
-		universeRepBalanceAttoRep: undefined,
-		walletBootstrapComplete: true,
-	}
-}
-
-function createTabNavigationProps(): TabNavigationProps {
-	return {
-		augurStatoblastDeployed: true,
-		deployRoute: '#/deploy',
-		marketRoute: '#/zoltar',
-		onRouteChange: () => undefined,
-		openOracleRoute: '#/open-oracle',
-		route: 'zoltar',
-		securityPoolsRoute: '#/security-pools',
-	}
-}
 
 function createSimulationController(): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address
@@ -113,8 +56,8 @@ describe('AppHeaderShell', () => {
 		appContent.tabIndex = -1
 		document.body.appendChild(appContent)
 
-		const overview = createOverviewProps()
-		const tabNavigation = createTabNavigationProps()
+		const overview = <div>Overview</div>
+		const tabNavigation = { onRouteChange: () => undefined, route: 'zoltar', tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }
 		const onRefresh = mock(async () => undefined)
 		const withoutSimulation = await renderIntoDocument(<AppHeaderShell overview={overview} simulationController={undefined} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
 

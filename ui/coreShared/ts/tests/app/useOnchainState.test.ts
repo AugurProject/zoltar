@@ -8,10 +8,19 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { loadWalletState, useOnchainState } from '../../app/hooks/useOnchainState.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { createLoadController } from '../../lib/loadState.js'
-import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import type { AccountState } from '../../types/app.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { createFakeBackend } from '../testUtils/fakeBackend.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import type { UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
+
+const fakeOnchainStateDependencies: UseOnchainStateDependencies = {
+	getDeploymentSteps: () => [],
+	getWethAddress: () => '0x0000000000000000000000000000000000000ee1' as const,
+	loadDeploymentStatusOracleSnapshot: async () => ({ augurStatoblastDeployed: false, deploymentStatuses: [] }),
+	loadErc20Balance: async () => 0n,
+}
+
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -457,7 +466,7 @@ void describe('useOnchainState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	function OnchainStateHarness() {
-		const { connectWallet, errorMessage } = useOnchainState()
+		const { connectWallet, errorMessage } = useOnchainState({}, fakeOnchainStateDependencies)
 
 		return h('div', {}, [
 			h(

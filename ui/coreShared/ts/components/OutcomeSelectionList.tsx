@@ -1,4 +1,4 @@
-import type { OutcomeSelectionListProps } from '../../types.js'
+import type { OutcomeSelectionListProps } from '../types/components.js'
 
 export function OutcomeSelectionList({ className = '', emptyMessage, items }: OutcomeSelectionListProps) {
 	if (items.length === 0) return emptyMessage === undefined ? undefined : <p className='detail'>{emptyMessage}</p>

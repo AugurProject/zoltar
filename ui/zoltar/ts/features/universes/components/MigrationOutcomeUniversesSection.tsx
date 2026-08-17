@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { OutcomeSelectionList } from '@zoltar/ui-statoblast/features/markets/components/OutcomeSelectionList.js'
+import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

@@ -1,4 +1,4 @@
-import type { OutcomeChipRowProps } from '../../types.js'
+import type { OutcomeChipRowProps } from '../types/components.js'
 
 export function OutcomeChipRow({ className = '', items }: OutcomeChipRowProps) {
 	return (

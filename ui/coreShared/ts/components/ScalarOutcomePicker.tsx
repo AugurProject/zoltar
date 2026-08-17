@@ -1,10 +1,10 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
+
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
-import type { ScalarOutcomePickerProps } from '../../types.js'
+import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 
@@ -62,7 +62,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 							}}
 						/>
 					)}
-					<span className='scalar-or-divider'>{marketCopy.or}</span>
+					<span className='scalar-or-divider'>{commonCopy.or}</span>
 					<label className='scalar-invalid-toggle'>
 						<input type='checkbox' disabled={disabled} checked={isInvalid} onChange={event => onInvalidChange(event.currentTarget.checked)} />
 						<span>{commonCopy.invalid}</span>
@@ -70,10 +70,10 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 				</div>
 			</div>
 			<DataGrid className='scalar-slider-stats'>
-				{showMinMax ? <MetricField label={marketCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
-				<MetricField label={marketCopy.selectedTick}>{selectedTickLabel}</MetricField>
-				<MetricField label={showMinMax ? marketCopy.selectedOutcome : marketCopy.currentValue}>{selectedOutcomeLabel}</MetricField>
-				{showMinMax ? <MetricField label={marketCopy.maxValue}>{details.maxValueLabel}</MetricField> : undefined}
+				{showMinMax ? <MetricField label={commonCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
+				<MetricField label={commonCopy.selectedTick}>{selectedTickLabel}</MetricField>
+				<MetricField label={showMinMax ? commonCopy.selectedOutcome : commonCopy.currentValue}>{selectedOutcomeLabel}</MetricField>
+				{showMinMax ? <MetricField label={commonCopy.maxValue}>{details.maxValueLabel}</MetricField> : undefined}
 			</DataGrid>
 			{action === undefined ? undefined : <div className='actions'>{action}</div>}
 		</div>

@@ -139,3 +139,19 @@ export const formatAddTokenToWallet = (tokenLabel: CopyTemplateValue) => `Add ${
 export const formatOpeningWalletForToken = (tokenLabel: CopyTemplateValue) => `Opening wallet to add ${tokenLabel}`
 export const formatRetryWalletAssetRequest = (tokenLabel: CopyTemplateValue) => `Retry adding ${tokenLabel} to wallet`
 export const formatWalletAssetRequestAccepted = (tokenLabel: CopyTemplateValue) => `${tokenLabel} wallet request accepted`
+export const answerUnit = 'Answer Unit'
+export const created = 'Created'
+export const currentValue = 'Current Value'
+export const displayRange = 'Display Range'
+export const endTime = 'End Time'
+export const maxValue = 'Max Value'
+export const minValue = 'Min Value'
+export const or = 'or'
+export const outcomes = 'Outcomes'
+export const questionDetailsLoadingLabel = 'Loading question details…'
+export const questionTimeline = 'Question timeline'
+export const questionType = 'Question Type'
+export const selectedOutcome = 'Selected Outcome'
+export const selectedTick = 'Selected Tick'
+export const ticks = 'Ticks'
+export const untitledQuestion = 'Untitled question'
