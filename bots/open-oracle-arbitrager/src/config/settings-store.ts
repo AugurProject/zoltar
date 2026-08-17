@@ -9,7 +9,7 @@ import { validateSubmissionSettings, type SubmissionSettings } from '#execution/
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { RiskLimits } from '#core/safety-controls'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -36,6 +36,7 @@ export type PersistedOperatorSettings = {
 	networkConfigured: boolean
 	paused: boolean
 	privateKey: Hex | undefined
+	rpcQuorum: RpcQuorumRequirement
 	runtime: RuntimeSettings
 	strategy: MutableStrategy
 	submission: SubmissionSettings
@@ -103,6 +104,7 @@ export type StoredOperatorSettings = {
 	network?: NetworkName | undefined
 	paused: boolean
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
+	rpcQuorum?: RpcQuorumRequirement | undefined
 	runtime: StoredRuntimeSettings
 	strategy: StrategySettings
 	submission: SubmissionSettings
@@ -116,7 +118,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'paused', 'privateKey', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -187,7 +189,6 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 }
 
 export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex): PersistedOperatorSettings {
-	rpcQuorumRequirement()
 	const record = requiredRecord(value)
 	validatedKeys(record)
 	if (record['version'] !== 4) throw new Error('Operator configuration uses an unsupported version; expected version 4')
@@ -207,6 +208,8 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	updateStrategyFromRequest(strategy, record['strategy'])
 	const privateKeyValue = record['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : record['privateKey']
 	const candidate = signerCandidate(privateKeyValue ?? null)
+	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : 2
+	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Operator rpcQuorum must be 1 or 2')
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const deployment = validateDeploymentSettings(record['deployment'])
 	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
@@ -218,7 +221,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const submission = validateSubmissionSettings(record['submission'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
-	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	return {
 		centralizedMarkets,
 		connectivity,
@@ -227,6 +230,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		networkConfigured,
 		paused: record['paused'],
 		privateKey: candidate.privateKey,
+		rpcQuorum,
 		runtime,
 		strategy,
 		submission,
@@ -242,6 +246,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		network: settings.networkConfigured ? settings.network : undefined,
 		paused: settings.paused,
 		privateKey: redactPrivateKey && settings.privateKey !== undefined ? PRESERVE_PRIVATE_KEY : settings.privateKey,
+		rpcQuorum: settings.rpcQuorum,
 		runtime: {
 			execute: settings.runtime.execute,
 			historyFile: settings.runtime.historyFile,

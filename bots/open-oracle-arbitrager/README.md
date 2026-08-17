@@ -233,12 +233,12 @@ from another machine through a trusted tunnel to the host rather than changing t
 port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
 `127.0.0.1` mapping.
 
-Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `2`. This production
-policy requires two agreeing readers and two independent quorum RPC URLs in addition
-to the primary reader so one endpoint may be unavailable. For an isolated local
-development chain only, put `ZOLTAR_BOT_RPC_QUORUM=1` in this directory's `.env`
-before starting Compose. That setting permits the primary reader to operate alone
-and removes independent RPC corroboration. Values other than `1` or `2` stop startup.
+The saved RPC agreement requirement defaults to `2`. This production policy requires
+two agreeing readers and two independent quorum RPC URLs in addition to the primary
+reader so one endpoint may be unavailable. For an isolated local development chain
+only, select **1 reader · isolated development only** in **Chain and RPC
+connectivity**. That setting permits the primary reader to operate alone and removes
+independent RPC corroboration. Restart the bot after changing the requirement.
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then
@@ -349,11 +349,12 @@ chain where the canonical CREATE2 proxy and executor init code are identical:
 PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-For the isolated Anvil network only, use the development quorum policy and omit
-independent quorum URLs:
+For the isolated Anvil network only, first save the one-reader development policy in
+the dashboard and restart. The command reads that saved policy, so independent quorum
+URLs can be omitted:
 
 ```bash
-ZOLTAR_BOT_RPC_QUORUM=1 PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 Under the default quorum policy, the three read RPCs must use independent origins. Before broadcasting, the command
@@ -715,9 +716,8 @@ security.
 ## Persistent operator settings
 
 `.state/operator.json` is the source of persisted bot settings. The bot accepts no
-command-line arguments and does not read chain or RPC URL settings from environment
-variables. The separate `ZOLTAR_BOT_RPC_QUORUM` safety policy is described in
-[Docker](#docker). Copy the example before first startup:
+command-line arguments and does not read chain, RPC URL, or quorum settings from
+environment variables. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
@@ -728,11 +728,11 @@ install -m 600 config/operator.example.json .state/operator.json
 any value inside the document. This locator is useful for service managers and
 tests. Select the chain and enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
-saved. Initial chain selection applies after restart; an RPC-only change on the
-active chain applies at the next scan boundary. To operate another chain, follow
+saved. Initial chain selection and quorum changes apply after restart; an RPC-only
+change on the active chain applies at the next scan boundary. To operate another chain, follow
 the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
-by `ZOLTAR_BOT_RPC_QUORUM` with the deployment controls before enabling execution.
-The default policy requires independent quorum readers.
+by the saved RPC agreement requirement with the deployment controls before enabling
+execution. The default policy requires independent quorum readers.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the

@@ -329,6 +329,7 @@ test('passes every effective public RPC from the dashboard deployment path', asy
 			connectivity: { publicRpcUrls, readRpcUrl: primaryRpcUrl },
 			privateKey: `0x${'11'.repeat(32)}`,
 			quorumRpcUrls: ['https://quorum-a.example/', 'https://quorum-b.example/'],
+			rpcQuorum: 2,
 			salt: `0x${'22'.repeat(32)}`,
 		},
 		async parameters => {

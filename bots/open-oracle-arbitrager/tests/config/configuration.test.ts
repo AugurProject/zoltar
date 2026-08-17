@@ -67,6 +67,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 		networkConfigured: true,
 		paused: false,
 		privateKey,
+		rpcQuorum: 2,
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
@@ -133,14 +134,12 @@ async function waitForJson(origin: string, path: string) {
 }
 
 describe('file-only startup configuration', () => {
-	test('documents the default and isolated-development executor RPC policies', async () => {
-		for (const quorum of ['1', '2']) {
-			const child = Bun.spawn([executable, deployExecutorSource, '--help'], { env: { ...process.env, ZOLTAR_BOT_RPC_QUORUM: quorum }, stderr: 'pipe', stdout: 'pipe' })
-			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
-			expect(exitCode, stderr).toBe(0)
-			expect(stdout).toContain('Repeat twice by default with independent origins')
-			expect(stdout).toContain('ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network')
-		}
+	test('documents the saved dashboard executor RPC policy', async () => {
+		const child = Bun.spawn([executable, deployExecutorSource, '--help'], { env: { ...process.env }, stderr: 'pipe', stdout: 'pipe' })
+		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+		expect(exitCode, stderr).toBe(0)
+		expect(stdout).toContain('Repeat as required by the saved dashboard policy')
+		expect(stdout).toContain('isolated development network')
 	})
 
 	test('rejects an operator file reused as a runtime persistence file', () => {
@@ -166,7 +165,7 @@ describe('file-only startup configuration', () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')
 		await saveOperatorSettings(path, settings('https://saved.example/', 4173))
-		const child = Bun.spawn([executable, '-e', "const { loadConfiguration } = await import('./src/config/configuration.ts'); const value = await loadConfiguration(); console.log(JSON.stringify({ connectivity: value.connectivity, quorumRpcUrls: value.quorumRpcUrls }))"], {
+		const child = Bun.spawn([executable, '-e', "const { loadConfiguration } = await import('./src/config/configuration.ts'); const value = await loadConfiguration(); console.log(JSON.stringify({ connectivity: value.connectivity, quorumRpcUrls: value.quorumRpcUrls, rpcQuorum: value.rpcQuorum }))"], {
 			cwd: join(import.meta.dir, '..', '..'),
 			env: { OPEN_ORACLE_ARBITRAGER_CONFIG: path, PATH: process.env['PATH'] },
 			stderr: 'pipe',
@@ -180,7 +179,63 @@ describe('file-only startup configuration', () => {
 				readRpcUrl: 'https://saved.example/',
 			},
 			quorumRpcUrls: [],
+			rpcQuorum: 2,
 		})
+	})
+
+	test('makes the saved quorum authoritative for runtime reads despite a conflicting environment', async () => {
+		const directory = await temporaryDirectory()
+		for (const [rpcQuorum, environmentQuorum, expectedStatus] of [
+			[1, '2', 'resolved'],
+			[2, '1', 'rejected'],
+		] as const) {
+			const path = join(directory, `operator-${rpcQuorum.toString()}.json`)
+			await saveOperatorSettings(path, { ...settings('https://saved.example/', 4173), rpcQuorum })
+			const child = Bun.spawn(
+				[
+					executable,
+					'-e',
+					"const { loadConfiguration } = await import('./src/config/configuration.ts'); const { settledQuorumValue } = await import('@zoltar/bot-shared/monitoring/read-quorum'); await loadConfiguration(); try { const value = await settledQuorumValue('saved quorum', [Promise.resolve({ endpoint: 'one', value: 7 })]); console.log(JSON.stringify({ status: 'resolved', value })) } catch (error) { console.log(JSON.stringify({ status: 'rejected', message: error instanceof Error ? error.message : String(error) })) }",
+				],
+				{
+					cwd: join(import.meta.dir, '..', '..'),
+					env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, ZOLTAR_BOT_RPC_QUORUM: environmentQuorum },
+					stderr: 'pipe',
+					stdout: 'pipe',
+				},
+			)
+			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+			expect(exitCode, stderr).toBe(0)
+			const result = JSON.parse(stdout) as { message?: string; status: string }
+			expect(result.status).toBe(expectedStatus)
+			if (rpcQuorum === 2) expect(result.message).toContain('two available independent RPC endpoints')
+		}
+	})
+
+	test('makes the saved quorum authoritative for deploy-executor endpoint validation', async () => {
+		const directory = await temporaryDirectory()
+		for (const [rpcQuorum, environmentQuorum] of [
+			[1, '2'],
+			[2, '1'],
+		] as const) {
+			const path = join(directory, `deploy-${rpcQuorum.toString()}.json`)
+			await saveOperatorSettings(path, { ...settings('http://127.0.0.1:1/', 4173), rpcQuorum })
+			const child = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
+				env: {
+					...process.env,
+					OPEN_ORACLE_ARBITRAGER_CONFIG: path,
+					PRIVATE_KEY: `0x${'11'.repeat(32)}`,
+					ZOLTAR_BOT_RPC_QUORUM: environmentQuorum,
+				},
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
+			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+			const output = `${stdout}${stderr}`
+			expect(exitCode).toBe(1)
+			if (rpcQuorum === 1) expect(output).not.toContain('does not satisfy the saved RPC agreement requirement')
+			else expect(output).toContain('does not satisfy the saved RPC agreement requirement')
+		}
 	})
 
 	test('rejects invalid file settings before RPC activity', async () => {
@@ -250,13 +305,25 @@ describe('file-only startup configuration', () => {
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 		const response = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' })
-		expect((await loadOperatorSettings(path))?.networkConfigured).toBe(true)
+		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', restartRequired: true, rpcQuorum: 1 })
+		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ networkConfigured: false, status: 'paused' })
+		const prematureResume = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(prematureResume.status).toBe(400)
+		child.kill()
+		await child.exited
+		children.splice(children.indexOf(child), 1)
+		const restartedChild = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(restartedChild)
 		const noOpConfiguration = await waitForJson(origin, '/api/configuration')
 		const noOpSave = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(noOpConfiguration),
@@ -269,7 +336,7 @@ describe('file-only startup configuration', () => {
 			await Bun.sleep(20)
 			configuredState = await waitForJson(origin, '/api/state')
 		}
-		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
+		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		const rpcOrigin = new URL(rpcUrl).origin
 		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
 			await Bun.sleep(20)
@@ -288,7 +355,7 @@ describe('file-only startup configuration', () => {
 		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resumed', reason: 'Applied immediately and saved for future starts' })]))
 		const configuredContents = await Bun.file(path).text()
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
@@ -357,6 +424,22 @@ describe('file-only startup configuration', () => {
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
 		const snapshot = await waitForJson(origin, '/api/state')
 		expect(snapshot['wallet']).toBe(privateKeyToAccount(savedPrivateKey).address)
+		const activeRpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
+		const developmentQuorumResponse = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 1 }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(developmentQuorumResponse.status, await developmentQuorumResponse.clone().text()).toBe(200)
+		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', restartRequired: true, rpcQuorum: 1 })
+		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(1)
+		const restoreProductionQuorumResponse = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(restoreProductionQuorumResponse.status, await restoreProductionQuorumResponse.clone().text()).toBe(200)
+		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(2)
 		const staleEnvelope = await waitForJson(origin, '/api/configuration')
 		const configuration = staleEnvelope['configuration']
 		if (typeof configuration !== 'object' || configuration === null || Array.isArray(configuration)) throw new Error('Configuration document is missing')
@@ -479,7 +562,7 @@ describe('file-only startup configuration', () => {
 		const executeSavedEnvelope = (await executeResponse.json()) as Record<string, unknown>
 		const beforePersistedLiveSwitch = await Bun.file(path).text()
 		const persistedLiveSwitchResponse = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
@@ -551,7 +634,7 @@ describe('file-only startup configuration', () => {
 		rpcChainId = '0xaa36a7'
 		const beforeRelayBlockedSwitch = await Bun.file(path).text()
 		const relayBlockedSwitch = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
@@ -565,7 +648,7 @@ describe('file-only startup configuration', () => {
 		expect(publicSubmissionResponse.status, await publicSubmissionResponse.clone().text()).toBe(200)
 		const beforeDryRunSwitch = await Bun.file(path).text()
 		const networkResponse = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia' }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
