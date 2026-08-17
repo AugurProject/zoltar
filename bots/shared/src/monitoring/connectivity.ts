@@ -34,6 +34,15 @@ function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | '
 	return 'safety-paused'
 }
 
+function endpointMethodFailure(error: unknown, url: string, method: string) {
+	const target = endpointLabel(url)
+	const detail = (error instanceof Error ? error.message : String(error)).split(url).join(target)
+	const message = detail.includes(method) ? `RPC ${target} ${detail}` : `RPC ${target} failed while calling ${method}: ${detail}`
+	if (error instanceof EndpointTransportError) return new EndpointTransportError(message, { cause: error })
+	if (error instanceof EndpointSafetyError) return new EndpointSafetyError(message, { cause: error })
+	return new Error(message, { cause: error })
+}
+
 type JsonRpcResponse = {
 	error?: {
 		code?: number
@@ -101,7 +110,7 @@ export function validateConnectivitySettings(value: unknown): ConnectivitySettin
 	return { publicRpcUrls, readRpcUrl }
 }
 
-async function rpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {
+async function rawRpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {
 	const response = await fetch(url, {
 		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }),
 		headers: { 'content-type': 'application/json' },
@@ -123,6 +132,14 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 	}
 	if (value.error !== undefined) throw new EndpointSafetyError(`RPC ${value.error.code?.toString() ?? 'error'}: ${value.error.message ?? 'Unknown error'}`)
 	return value.result
+}
+
+async function rpcRequest(url: string, method: string, params: readonly unknown[], timeoutMilliseconds: number) {
+	try {
+		return await rawRpcRequest(url, method, params, timeoutMilliseconds)
+	} catch (error) {
+		throw endpointMethodFailure(error, url, method)
+	}
 }
 
 export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
@@ -182,7 +199,7 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	}
 }
 
-async function assertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds = 5_000) {
+async function rawAssertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds: number) {
 	const response = await fetch(url, {
 		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params: [] }),
 		headers: { 'content-type': 'application/json' },
@@ -218,6 +235,14 @@ async function assertRelayMethodCapability(url: string, method: 'eth_callBundle'
 	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
 	if (!recognizedCapabilityEvidence) {
 		throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
+	}
+}
+
+async function assertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds = 5_000) {
+	try {
+		await rawAssertRelayMethodCapability(url, method, timeoutMilliseconds)
+	} catch (error) {
+		throw endpointMethodFailure(error, url, method)
 	}
 }
 
