@@ -3,7 +3,7 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, as
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
@@ -14,6 +14,11 @@ import { tmpdir } from 'node:os'
 test('rejects executor deployment while a different network is saved for restart', () => {
 	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Restart to apply the saved network')
 	expect(() => requireActivePersistedNetwork('mainnet', 'mainnet')).not.toThrow()
+})
+
+test('rejects executor deployment while a different RPC quorum is saved for restart', () => {
+	expect(() => requireActivePersistedRpcQuorum(1, 2)).toThrow('Restart to apply the saved RPC agreement requirement')
+	expect(() => requireActivePersistedRpcQuorum(2, 2)).not.toThrow()
 })
 
 test('rechecks execution pause immediately before executor deployment', () => {
@@ -307,7 +312,7 @@ test('syncs every newly created intent directory entry before opening the journa
 	expect(events.at(-1)).toBe('sync:/durable/a/operator')
 })
 
-test('requires three distinct read RPC origins inside the deployment primitive', async () => {
+test('requires three distinct read RPC origins inside the deployment primitive under the explicit quorum policy', async () => {
 	const common = {
 		chain: mainnet,
 		persistIntent: async () => undefined,
@@ -315,8 +320,15 @@ test('requires three distinct read RPC origins inside the deployment primitive',
 		rpcUrls: ['https://submit.example'],
 		salt: `0x${'22'.repeat(32)}`,
 	}
-	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
-	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+	try {
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+	} finally {
+		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+	}
 })
 
 test('passes every effective public RPC from the dashboard deployment path', async () => {
