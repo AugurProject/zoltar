@@ -107,9 +107,9 @@ describe('shared bot primitives', () => {
 
 	test('keeps RPC quorum secure by default and permits an explicit single-node development policy', () => {
 		expect(rpcQuorumRequirement({})).toBe(2)
-		expect(configuredReadRpcEndpointMinimum({})).toBe(3)
+		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({}))).toBe(3)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
-		expect(configuredReadRpcEndpointMinimum({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
+		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' }))).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '2' })).toBe(2)
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '' })).toThrow('must be 1 or 2')
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '0' })).toThrow('must be 1 or 2')
