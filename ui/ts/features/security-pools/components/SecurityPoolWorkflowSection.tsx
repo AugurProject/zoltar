@@ -1081,7 +1081,7 @@ export function SecurityPoolWorkflowSection({
 													pendingLabel={securityPoolCopy.executingStagedOperationLabel}
 													onClick={() => {
 														if (resolvedPendingOperationId === undefined) return
-														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress)
+														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress, loadedSelectedPool.universeId)
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
@@ -1186,7 +1186,7 @@ export function SecurityPoolWorkflowSection({
 						pendingLabel={securityPoolCopy.requestingNewPrice}
 						onClick={() => {
 							if (requestPriceReview === undefined) return
-							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.requestValueAttoEth)
+							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.requestValueAttoEth, requestPriceReview.universeId)
 						}}
 						pending={poolOracleActiveAction === 'requestPrice'}
 						availability={{

@@ -668,12 +668,12 @@ export function App() {
 				refreshSelectedPoolData(selectedSecurityPoolAddress)
 			},
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
-			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, selectedPool?.universeId),
+			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
 			loadingPoolOracleManager,
 			loadingLiquidationFundingPreview,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, selectedPool?.universeId),
+			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
