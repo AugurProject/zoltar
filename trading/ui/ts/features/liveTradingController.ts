@@ -889,7 +889,7 @@ export function useLiveTradingController({
 			setMessage(undefined)
 			await refresh(configuration)
 		} catch (error) {
-			if (!connectionRequests.isCurrent(request)) return
+			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
 			invalidateWalletIdentity(publicErrorMessage(error, 'Wallet connection failed'))
 		}
 	}
@@ -955,7 +955,7 @@ export function useLiveTradingController({
 			setState('idle')
 			await refresh(configuration)
 		} catch (error) {
-			if (!connectionRequests.isCurrent(request)) return
+			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
 			invalidateWalletIdentity(`${contextLabel}: ${publicErrorMessage(error, 'wallet refresh failed')}`)
 			setState('error')
 		}

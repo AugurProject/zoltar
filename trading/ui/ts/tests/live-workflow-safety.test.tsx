@@ -282,8 +282,25 @@ describe('live workflow safety boundary', () => {
 		expect(walletListeners.size).toBe(0)
 		deferredWalletChainRead = undefined
 		walletChainReadStarted = undefined
-		rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
+		const poolRoute = `security-pool/${pool}`
+		deferredWalletChainRead = deferred<number>()
+		walletChainReadStarted = deferred<undefined>()
+		rendered = await renderIntoDocument(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={0} />)
 		cleanupRendered = rendered.cleanup
+		await flush()
+		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await walletChainReadStarted.promise
+		await act(() => render(<LiveTrading route='markets' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
+		deferredWalletChainRead = undefined
+		walletChainReadStarted = undefined
+		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
 		await flush()
 		deferredWalletChainRead = deferred<number>()
 		walletChainReadStarted = deferred<undefined>()
