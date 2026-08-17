@@ -42,6 +42,65 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
+export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
+	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined
+	return walletEthBalanceAttoEth < remainingMintCapacityAttoEth ? walletEthBalanceAttoEth : remainingMintCapacityAttoEth
+}
+
+function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
+	let result = exponent % 2n !== 0n ? value : baseUnit
+	let squaredValue = value
+	for (let remainingExponent = exponent / 2n; remainingExponent !== 0n; remainingExponent /= 2n) {
+		squaredValue = (squaredValue * squaredValue) / baseUnit
+		if (remainingExponent % 2n !== 0n) result = (result * squaredValue) / baseUnit
+	}
+	return result
+}
+
+export function estimateMintCheckpoint({
+	currentRetentionRate,
+	currentTimestamp,
+	feeEligibleCapacityOwnershipAttoRep,
+	feeEndTimestamp,
+	feeIndexRemainder,
+	lastUpdatedFeeAccumulator,
+	settlementCollateralAttoEth,
+	totalFeesOwedRemainder,
+}: {
+	currentRetentionRate: bigint | undefined
+	currentTimestamp: bigint | undefined
+	feeEligibleCapacityOwnershipAttoRep: bigint | undefined
+	feeEndTimestamp: bigint | undefined
+	feeIndexRemainder: bigint | undefined
+	lastUpdatedFeeAccumulator: bigint | undefined
+	settlementCollateralAttoEth: bigint | undefined
+	totalFeesOwedRemainder: bigint | undefined
+}) {
+	if (
+		currentRetentionRate === undefined ||
+		currentTimestamp === undefined ||
+		feeEligibleCapacityOwnershipAttoRep === undefined ||
+		feeEndTimestamp === undefined ||
+		feeIndexRemainder === undefined ||
+		lastUpdatedFeeAccumulator === undefined ||
+		settlementCollateralAttoEth === undefined ||
+		totalFeesOwedRemainder === undefined
+	)
+		return undefined
+	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
+	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleCapacityOwnershipAttoRep === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
+	const timeDelta = checkpointTimestamp - lastUpdatedFeeAccumulator
+	const retainedCollateralAttoEth = (settlementCollateralAttoEth * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
+	const scaledFeeDelta = (settlementCollateralAttoEth - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
+	const feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep
+	const feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + totalFeesOwedRemainder
+	const estimatedRetentionFeeAttoEth = feesOwedDelta / PRICE_PRECISION
+	return {
+		estimatedRetentionFeeAttoEth,
+		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
+	}
+}
+
 function getCollateralizationPercent(qualifyingRepBackingAttoRep: bigint | undefined, capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
 	if (qualifyingRepBackingAttoRep === undefined || capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || repPerEthPrice === 0n || capacityOwnershipAttoRep === 0n) return undefined
 	return (qualifyingRepBackingAttoRep * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (capacityOwnershipAttoRep * repPerEthPrice)
@@ -113,6 +172,13 @@ export function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bi
 		return amountAttoEth
 	}
 	return divideRoundedUp(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
+}
+
+export function convertMintSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
+	if (shareTokenSupplyAttoShares === 0n) return settlementCollateralAttoEth === 0n ? amountAttoEth * PRICE_PRECISION : undefined
+	if (settlementCollateralAttoEth === 0n) return undefined
+	return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth
 }
 
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {

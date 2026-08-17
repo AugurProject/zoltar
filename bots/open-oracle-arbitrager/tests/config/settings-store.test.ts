@@ -53,6 +53,7 @@ function settings(privateKeyValue: Hex | undefined) {
 		networkConfigured: true,
 		paused: true,
 		privateKey: privateKeyValue,
+		rpcQuorum: 2 as const,
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
@@ -91,15 +92,16 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
-	test('rejects an explicitly empty RPC quorum policy during settings parsing', () => {
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-		try {
-			process.env['ZOLTAR_BOT_RPC_QUORUM'] = ''
-			expect(() => parseOperatorSettings(serializeOperatorSettings(settings(undefined)))).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-		}
+	test('defaults existing configuration files to the production RPC quorum', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		delete serialized.rpcQuorum
+		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(2)
+	})
+
+	test('validates and persists the dashboard RPC quorum policy', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		for (const rpcQuorum of [null, '1', 0, 3]) expect(() => parseOperatorSettings({ ...serialized, rpcQuorum })).toThrow('rpcQuorum must be 1 or 2')
+		expect(parseOperatorSettings({ ...serialized, rpcQuorum: 1 }).rpcQuorum).toBe(1)
 	})
 
 	test('requires three independent read endpoints for live execution', () => {

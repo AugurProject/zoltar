@@ -1092,11 +1092,6 @@ export function ForkAuctionSection({
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
 					]}
 					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCapacityOwnershipRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
-						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions'>
 					{renderStageActionButton({

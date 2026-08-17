@@ -4,7 +4,6 @@ import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useMemo } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { AddressValue } from '../../../components/AddressValue.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -16,7 +15,6 @@ import { TransactionActionButton } from '../../../components/TransactionActionBu
 import { TransactionReview } from '../../../components/TransactionReview.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
@@ -303,11 +301,6 @@ export function ZoltarMigrationSection({
 							needsAdditionalPreparation ? { label: zoltarCopy.repMovedToMigrationCustody, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.childUniverseRepReceived, value: <CurrencyValue value={splitRepReceivedAttoRep} suffix={commonCopy.rep} /> },
 						]}
 						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
-						technicalDetails={[
-							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
-							{ label: transactionReviewCopy.contract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
-							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-						]}
 					/>
 
 					<ReadOnlyDetailAccordion title={zoltarCopy.balanceChanges}>

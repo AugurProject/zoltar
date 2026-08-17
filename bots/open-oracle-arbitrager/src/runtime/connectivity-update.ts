@@ -3,6 +3,7 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 import type { PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, updateConnectivityEndpointChecks, validateConnectivitySettingsForQuorum, validateIndependentReadRpcUrls, type EndpointCheck, type NetworkName } from '#monitoring/connectivity'
+import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export async function checkIndependentRpcChains(rpcUrls: readonly string[], expectedChainId: number, readChainId: typeof readRpcChainId = readRpcChainId) {
 	for (const rpcUrl of rpcUrls) {
@@ -13,6 +14,7 @@ export async function checkIndependentRpcChains(rpcUrls: readonly string[], expe
 
 export async function updateOperatorConnectivity(parameters: {
 	activeNetwork: NetworkName | undefined
+	activeRpcQuorum: RpcQuorumRequirement
 	check?: typeof checkConnectivity
 	deployment: DeploymentSettings
 	endpointState: { endpointChecks: EndpointCheck[] }
@@ -23,7 +25,9 @@ export async function updateOperatorConnectivity(parameters: {
 	value: unknown
 }) {
 	const { value } = parameters
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('connectivity' in value) || !('network' in value) || typeof value.network !== 'string') throw new Error('Network and RPC settings are required')
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 3 || !('connectivity' in value) || !('network' in value) || !('rpcQuorum' in value) || typeof value.network !== 'string') throw new Error('Network, RPC, and quorum settings are required')
+	if (value.rpcQuorum !== 1 && value.rpcQuorum !== 2) throw new Error('RPC quorum must be 1 or 2')
+	const rpcQuorum = value.rpcQuorum
 	const networkName = parseNetworkName(value.network)
 	const restartRequired = parameters.activeNetwork === undefined || networkName !== parameters.activeNetwork
 	if (parameters.activeNetwork !== undefined && restartRequired) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
@@ -34,14 +38,16 @@ export async function updateOperatorConnectivity(parameters: {
 		weth: parameters.deployment.weth,
 	})
 	const connectivity = validateConnectivitySettingsForQuorum(value.connectivity, parameters.deployment.quorumRpcUrls)
+	if (parameters.execute && parameters.deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	const runCheck = () => (parameters.check ?? checkConnectivity)(connectivity, selectedNetwork.chain.id)
-	if (restartRequired) await runCheck()
+	const rpcQuorumRestartRequired = rpcQuorum !== parameters.activeRpcQuorum
+	if (restartRequired || rpcQuorumRestartRequired) await runCheck()
 	else await updateConnectivityEndpointChecks(parameters.endpointState, runCheck)
 	await checkIndependentRpcChains(parameters.deployment.quorumRpcUrls, selectedNetwork.chain.id, parameters.readChainId ?? readRpcChainId)
 	await checkSubmissionEndpoints(parameters.submission, selectedNetwork.chain.id)
 	await parameters.persist(settings => {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
-		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true }
+		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
 	})
-	return { connectivity, network: networkName, restartRequired }
+	return { connectivity, network: networkName, restartRequired, rpcQuorum, rpcQuorumRestartRequired }
 }

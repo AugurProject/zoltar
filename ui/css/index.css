@@ -173,14 +173,6 @@ h4 {
 	font-weight: 700;
 }
 
-.fork-readiness-list {
-	display: grid;
-	gap: var(--space-2);
-	margin: 0;
-	padding-left: 1.25rem;
-	color: var(--text-muted);
-}
-
 button {
 	max-width: 100%;
 	border: 1px solid var(--interactive-border);
@@ -3605,13 +3597,21 @@ strong.metric-value-danger {
 	align-items: flex-start;
 	gap: 1rem;
 	position: sticky;
-	top: -1.25rem;
+	top: 0;
 	z-index: 10;
 	margin: -1.25rem -1.25rem 0;
 	padding: 0.9rem 1.25rem 0.85rem;
 	border-bottom: 1px solid var(--border-default);
 	background: var(--surface-modal-opaque);
 	box-shadow: 0 0.75rem 1rem var(--shadow-color-soft);
+}
+
+.modal-header::before {
+	content: "";
+	position: absolute;
+	inset: -1.25rem 0 auto;
+	height: 1.25rem;
+	background: var(--surface-modal-opaque);
 }
 
 .modal-header-title {
@@ -3777,6 +3777,28 @@ strong.metric-value-danger {
 	font-size: var(--font-value);
 	font-weight: 600;
 	overflow-wrap: anywhere;
+}
+
+.trading-minted-outcomes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.75rem;
+}
+
+.trading-minted-outcome {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.3rem;
+	white-space: nowrap;
+}
+
+.trading-minted-outcome .currency-value.copyable {
+	white-space: nowrap;
+}
+
+.trading-minted-outcome:not(:first-child)::before {
+	content: "·";
+	margin-right: 0.45rem;
 }
 
 .transaction-review-details {

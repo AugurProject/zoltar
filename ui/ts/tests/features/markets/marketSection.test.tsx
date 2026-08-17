@@ -5,6 +5,7 @@ import { fireEvent, waitFor, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketSection } from '../../../features/markets/components/MarketSection.js'
 import { getDefaultMarketFormState, getDefaultZoltarMigrationFormState } from '../../../features/markets/lib/marketForm.js'
@@ -14,6 +15,9 @@ import type { ListedSecurityPool, ZoltarUniverseSummary } from '../../../types/c
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from '../../testUtils/transactionActionButton.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
+
+const ATTO_REP = 10n ** 18n
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -113,6 +117,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		loadingZoltarForkAccess: false,
 		zoltarForkActiveAction: undefined,
 		loadingZoltarQuestionCount: false,
+		loadingZoltarQuestion: false,
 		loadingZoltarQuestions: false,
 		loadingZoltarUniverse: false,
 		loadingSecurityPools: false,
@@ -126,6 +131,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		onCreateMarket: () => undefined,
 		onForkZoltar: () => undefined,
 		onLoadZoltarQuestionPage: async () => undefined,
+		onLoadZoltarQuestion: async () => undefined,
 		onLoadZoltarQuestions: async () => undefined,
 		onLoadSecurityPools: () => undefined,
 		onMarketFormChange: () => undefined,
@@ -154,6 +160,8 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarMigrationPending: false,
 		zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 		zoltarQuestionCount: 0n,
+		zoltarQuestionLookupError: undefined,
+		zoltarQuestionLookupId: undefined,
 		zoltarQuestionPage: undefined,
 		zoltarQuestions: [],
 		zoltarQuestionsError: undefined,
@@ -925,6 +933,7 @@ describe('MarketSection', () => {
 				createMarketSectionProps({
 					activeView: 'fork',
 					zoltarQuestionCount: 2n,
+					zoltarUniverse: createZoltarUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP }),
 				}),
 			),
 		)
@@ -932,8 +941,10 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
-		expect(documentQueries.getByText('Forking selects one existing question to split the active universe into outcome-specific child universes. This protocol action cannot be undone.')).not.toBeNull()
-		expect(documentQueries.getByText('The connected wallet must hold and approve enough REP to meet the fork threshold.')).not.toBeNull()
+		expect(document.body.textContent).toContain('Fork Threshold≈ 100.00 REP')
+		expect(document.body.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
+		expect(document.body.textContent).not.toContain('Forking selects one existing question')
+		expect(document.body.textContent).not.toContain('question creation in this universe stops')
 		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		await act(() => {
 			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
@@ -941,7 +952,7 @@ describe('MarketSection', () => {
 		const modal = documentQueries.getByRole('dialog')
 		expect(modal).not.toBeNull()
 		expect(documentQueries.getAllByText('Fork Universe').length > 0).toBe(true)
-		expect(within(modal as HTMLElement).getByText('Confirm transaction context')).not.toBeNull()
+		expect(within(modal as HTMLElement).queryByText('Confirm transaction context')).toBeNull()
 		expect(modal.textContent).toContain('QuestionNone selected')
 		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Universe', 'Select a valid fork question to continue.')
 	})
@@ -962,12 +973,20 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(document.body.textContent).not.toContain('Permanent REP Burn')
+		expect(document.body.textContent).not.toContain('Fork Threshold')
 		const launcher = documentQueries.getByRole('button', { name: 'View fork details' })
 		await act(() => {
 			fireEvent.click(launcher)
 		})
 
-		expect(documentQueries.getByRole('dialog', { name: 'View Fork Details' })).not.toBeNull()
+		const modal = documentQueries.getByRole('dialog', { name: 'View Fork Details' })
+		const modalQueries = within(modal as HTMLElement)
+		expect(modal.textContent).not.toContain('Fork Threshold')
+		expect(modal.textContent).not.toContain('You Pay')
+		expect(modal.textContent).not.toContain('Migration Custody Credit')
+		expect(modal.textContent).not.toContain('Permanent REP Burn')
+		expect(modalQueries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 	})
 
 	test('keeps the selected fork question understandable before transaction review', async () => {
@@ -1119,7 +1138,8 @@ describe('MarketSection', () => {
 		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${questionId}` })).not.toBeNull()
 	})
 
-	test('guides users to create a question instead of opening an empty fork dialog', async () => {
+	test('allows entering an existing question ID without requiring question creation', async () => {
+		const onZoltarForkQuestionIdChange = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
@@ -1128,6 +1148,7 @@ describe('MarketSection', () => {
 					hasLoadedZoltarQuestions: true,
 					loadingZoltarQuestionCount: false,
 					loadingZoltarQuestions: false,
+					onZoltarForkQuestionIdChange,
 					zoltarQuestionCount: 0n,
 					zoltarQuestions: [],
 				}),
@@ -1137,15 +1158,88 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' }) as HTMLButtonElement
-		expect(forkButton.disabled).toBe(true)
-		expect(forkButton.title).toBe('Create a question before starting a fork.')
-		expect(documentQueries.getByText('Create a question before starting a fork.')).not.toBeNull()
+		expect(forkButton.disabled).toBe(false)
+		expect(documentQueries.queryByRole('button', { name: 'Create question' })).toBeNull()
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
+			fireEvent.click(forkButton)
 		})
-		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		const modal = documentQueries.getByRole('dialog')
+		const questionIdInput = within(modal as HTMLElement).getByLabelText('Fork Question ID') as HTMLInputElement
+		expect(questionIdInput.disabled).toBe(false)
+		fireEvent.input(questionIdInput, { target: { value: '0x99' } })
+		expect(onZoltarForkQuestionIdChange).toHaveBeenCalledWith('0x99')
+		expect(questionIdInput.value).toBe('0x99')
+	})
+
+	test('loads fork metadata for an exact question ID from an initially empty question list', async () => {
+		const question = { ...createBinaryForkQuestion(), questionId: '0x99', title: 'Directly loaded fork question' }
+		const loadCalls: string[] = []
+		function Harness() {
+			const [questionId, setQuestionId] = useState('')
+			const [questions, setQuestions] = useState<ReturnType<typeof createBinaryForkQuestion>[]>([])
+			const [lookupId, setLookupId] = useState<string | undefined>(undefined)
+			const [lookupError, setLookupError] = useState<string | undefined>(undefined)
+			return (
+				<ChainTimestampContext.Provider value={3n}>
+					<MarketSection
+						{...createMarketSectionProps({
+							activeView: 'fork',
+							hasLoadedZoltarQuestions: false,
+							onLoadZoltarQuestion: async id => {
+								loadCalls.push(id)
+								setLookupId(id)
+								if (loadCalls.length === 1) {
+									setLookupError('Question lookup temporarily failed')
+									return
+								}
+								setLookupError(undefined)
+								setQuestions([question])
+							},
+							onZoltarForkQuestionIdChange: setQuestionId,
+							zoltarForkQuestionId: questionId,
+							zoltarForkApproval: { error: undefined, loading: false, value: 100n },
+							zoltarForkRepBalanceAttoRep: 100n,
+							zoltarQuestionCount: 1n,
+							zoltarQuestionLookupError: lookupError,
+							zoltarQuestionLookupId: lookupId,
+							zoltarQuestions: questions,
+							zoltarUniverse: createZoltarUniverse({ forkBurnDivisor: 5n, zoltarAddress: '0x00000000000000000000000000000000000000a1' }),
+						})}
+					/>
+				</ChainTimestampContext.Provider>
+			)
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Fork Universe' }))
+		})
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		await act(() => {
+			fireEvent.input(modalQueries.getByLabelText('Fork Question ID'), { target: { value: '0x099' } })
+		})
+
+		await waitFor(() => {
+			expect(loadCalls).toEqual(['0x99'])
+			expect(modalQueries.getByText('Question lookup temporarily failed')).not.toBeNull()
+		})
+		await act(() => {
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Retry' }))
+		})
+		await waitFor(() => {
+			expect(loadCalls).toEqual(['0x99', '0x99'])
+			expect(modalQueries.getByText('Directly loaded fork question')).not.toBeNull()
+		})
+		const confirmationInput = modalQueries.getByLabelText('Type FORK to confirm') as HTMLInputElement
+		expect(confirmationInput.disabled).toBe(false)
+		await act(() => {
+			fireEvent.input(confirmationInput, { target: { value: 'FORK' } })
+		})
+		expect((modalQueries.getByRole('button', { name: 'Fork Universe' }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {

@@ -20,7 +20,7 @@ type TransactionReviewProps = {
 	}>
 	primary: TransactionReviewRow[]
 	risks?: ComponentChildren[]
-	technicalDetails?: TransactionReviewRow[]
+	variant?: 'card' | 'inline'
 }
 
 function renderDetailRows(rows: TransactionReviewRow[]) {
@@ -36,14 +36,11 @@ function renderDetailRows(rows: TransactionReviewRow[]) {
 	)
 }
 
-export function TransactionReview({ className = '', context = [], details = [], disclosures = [], primary, risks = [], technicalDetails = [] }: TransactionReviewProps) {
+export function TransactionReview({ className = '', context = [], details = [], disclosures = [], primary, risks = [], variant = 'card' }: TransactionReviewProps) {
 	const titleId = useId()
-	return (
-		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
+	const contents = (
+		<>
 			<TransactionObjectContext items={context} />
-			<div className='transaction-review-header'>
-				<h4 id={titleId}>{transactionReviewCopy.transactionReview}</h4>
-			</div>
 			<div className='transaction-review-primary' role='list'>
 				{primary.map((row, index) => (
 					<div className='transaction-review-row' key={`${index}`} role='listitem'>
@@ -68,7 +65,15 @@ export function TransactionReview({ className = '', context = [], details = [], 
 					{renderDetailRows(disclosure.rows)}
 				</ReadOnlyDetailAccordion>
 			))}
-			{technicalDetails.length === 0 ? undefined : <ReadOnlyDetailAccordion title={transactionReviewCopy.technicalDetails}>{renderDetailRows(technicalDetails)}</ReadOnlyDetailAccordion>}
+		</>
+	)
+	if (variant === 'inline') return contents
+	return (
+		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
+			<div className='transaction-review-header'>
+				<h4 id={titleId}>{transactionReviewCopy.transactionReview}</h4>
+			</div>
+			{contents}
 		</section>
 	)
 }

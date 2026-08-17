@@ -519,7 +519,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Submit bid' })).not.toBeNull()
 		})
 
 		await act(() => {
@@ -534,7 +534,6 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await waitFor(() => {
 			const submitBidButton = documentQueries.getByRole('button', { name: 'Loading truth auction…' })
 			expect(submitBidButton.hasAttribute('disabled')).toBe(true)
-			expect(documentQueries.queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
 		})
 
 		await act(async () => {
@@ -542,7 +541,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 			await noDetails.promise
 		})
 		await waitFor(() => {
-			expect(documentQueries.getByRole('button', { name: `Copy address ${NO_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Submit bid' })).not.toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Loading truth auction…' })).toBeNull()
 		})
 	})
