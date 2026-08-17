@@ -6,6 +6,7 @@ import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -256,6 +257,7 @@ function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
 }
 
 export function parseSettings(value: unknown): OperatorSettings {
+	rpcQuorumRequirement()
 	const root = record(value, 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const deployment = record(root['deployment'], 'deployment')
@@ -331,7 +333,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
-	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
 	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')

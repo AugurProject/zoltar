@@ -9,6 +9,7 @@ import { validateSubmissionSettings, type SubmissionSettings } from '#execution/
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { RiskLimits } from '#core/safety-controls'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -186,6 +187,7 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 }
 
 export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex): PersistedOperatorSettings {
+	rpcQuorumRequirement()
 	const record = requiredRecord(value)
 	validatedKeys(record)
 	if (record['version'] !== 4) throw new Error('Operator configuration uses an unsupported version; expected version 4')
@@ -216,7 +218,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const submission = validateSubmissionSettings(record['submission'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
-	if (runtime.execute && deployment.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	return {
 		centralizedMarkets,
 		connectivity,

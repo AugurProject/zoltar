@@ -7,6 +7,7 @@ import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 function option(name: string) {
 	const prefix = `--${name}=`
@@ -25,8 +26,10 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...
-  --quorum-rpc-url=https://... Repeat twice with independent origins
+  --quorum-rpc-url=https://... Repeat twice by default with independent origins
   --salt=0x...                  32-byte CREATE2 salt; defaults to zero
+
+ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network.
 
 The command predicts and deploys the stateless executor through the canonical
 CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
@@ -39,7 +42,7 @@ const networkName = parseNetworkName(option('network'))
 const network = networkConfiguration(networkName, { rep: networkName === 'sepolia' ? zeroAddress : undefined })
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const quorumRpcUrls = options('quorum-rpc-url')
-if (quorumRpcUrls.length !== 2) throw new Error('Executor deployment requires exactly two --quorum-rpc-url values in addition to --rpc-url')
+if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Executor deployment requires exactly two --quorum-rpc-url values in addition to --rpc-url')
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)

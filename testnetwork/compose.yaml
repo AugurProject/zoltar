@@ -1,0 +1,16 @@
+name: zoltar-testnetwork
+
+services:
+  anvil:
+    build:
+      context: ..
+      dockerfile: testnetwork/Dockerfile
+    image: zoltar-testnetwork
+    init: true
+    ports:
+      - "127.0.0.1:${ANVIL_RPC_PORT:-8545}:8545"
+
+networks:
+  default:
+    name: zoltar
+    external: true

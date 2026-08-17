@@ -91,6 +91,17 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
+	test('rejects an explicitly empty RPC quorum policy during settings parsing', () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = ''
+			expect(() => parseOperatorSettings(serializeOperatorSettings(settings(undefined)))).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
+	})
+
 	test('requires three independent read endpoints for live execution', () => {
 		const value = settings(privateKey)
 		const serialized = serializeOperatorSettings(value)

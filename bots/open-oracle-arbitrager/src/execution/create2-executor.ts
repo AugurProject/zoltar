@@ -7,6 +7,7 @@ import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/ca
 import { settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError } from '#monitoring/resilience'
 import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { configuredReadRpcEndpointMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export const deterministicDeploymentProxy = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as Address
 export const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as Hex
@@ -127,7 +128,7 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)
 	const readRpcUrls = parameters.readRpcUrls ?? parameters.rpcUrls
-	if (readRpcUrls.length < 3 || new Set(readRpcUrls.map(url => new URL(url).origin)).size !== readRpcUrls.length) throw new Error('Executor deployment requires three independent read RPC origins')
+	if (readRpcUrls.length < configuredReadRpcEndpointMinimum() || new Set(readRpcUrls.map(url => new URL(url).origin)).size !== readRpcUrls.length) throw new Error('Executor deployment requires three independent read RPC origins')
 	const readPool = createRpcEndpointPool(readRpcUrls)
 	const clients = readRpcUrls.map(rpcUrl => ({ client: createPublicClient({ chain: parameters.chain, transport: readPool.transportFor(rpcUrl) }), rpcUrl }))
 	const environment = await settledQuorumValue(

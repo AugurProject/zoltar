@@ -17,6 +17,7 @@ import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-syn
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
+import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export type PendingOperatorUpdates = {
 	connectivity: ConnectivitySettings | undefined
@@ -44,7 +45,7 @@ export async function deployExecutorFromConnectivity(
 ) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
 	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
-	if (readRpcUrls.length < 3) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
+	if (readRpcUrls.length < configuredReadRpcEndpointMinimum()) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
 	return await deploy({ chain: parameters.chain, existingIntent: parameters.existingIntent, persistIntent: parameters.persistIntent, privateKey: parameters.privateKey, readRpcUrls, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
 }
 
@@ -223,7 +224,7 @@ export function startOperatorControlPlane(parameters: {
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
-				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < 2) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
 				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111

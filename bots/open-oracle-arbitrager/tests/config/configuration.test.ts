@@ -8,6 +8,7 @@ import { assertDistinctPersistentPaths } from '#config/configuration'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
+const deployExecutorSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'deploy-executor.ts')
 const temporaryDirectories: string[] = []
 const children: Bun.Subprocess[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -132,6 +133,16 @@ async function waitForJson(origin: string, path: string) {
 }
 
 describe('file-only startup configuration', () => {
+	test('documents the default and isolated-development executor RPC policies', async () => {
+		for (const quorum of ['1', '2']) {
+			const child = Bun.spawn([executable, deployExecutorSource, '--help'], { env: { ...process.env, ZOLTAR_BOT_RPC_QUORUM: quorum }, stderr: 'pipe', stdout: 'pipe' })
+			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+			expect(exitCode, stderr).toBe(0)
+			expect(stdout).toContain('Repeat twice by default with independent origins')
+			expect(stdout).toContain('ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network')
+		}
+	})
+
 	test('rejects an operator file reused as a runtime persistence file', () => {
 		expect(() => assertDistinctPersistentPaths('/state/operator.json', { historyFile: '/state/history.jsonl', positionFile: '/state/positions.json', priceHistoryFile: '/state/nested/../operator.json' })).toThrow('must use distinct paths')
 	})

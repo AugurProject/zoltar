@@ -14,6 +14,7 @@ describe('canonical test discovery', () => {
 		const weightedPaths = weightedFiles.map(file => file.filePath).sort((left, right) => left.localeCompare(right))
 
 		expect(weightedPaths).toEqual(canonicalFiles)
+		expect(canonicalFiles).toContain('scripts/testnetwork.test.ts')
 		expect(canonicalFiles).toContain('shared/ts/ethereum.test.ts')
 		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)

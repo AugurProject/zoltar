@@ -9,6 +9,7 @@ import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDis
 import type { ReadClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
 import { settledQuorumValue } from '#monitoring/read-quorum'
+import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 const REORG_OVERLAP_BLOCKS = 12n
@@ -89,7 +90,8 @@ export async function requireManifestAuthenticationQuorum(attempts: readonly Pro
 	const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason] : []))
 	const safetyFailure = failures.find(error => operationalFailureDisposition(error) === 'safety-paused')
 	if (safetyFailure !== undefined) throw safetyFailure
-	if (settled.filter(result => result.status === 'fulfilled').length < 2) throw new ConnectivityDegradedError(`Deployment authentication requires at least two available independent RPC endpoints: ${failures.map(errorMessage).join('; ')}`)
+	const requirement = rpcQuorumRequirement()
+	if (settled.filter(result => result.status === 'fulfilled').length < requirement) throw new ConnectivityDegradedError(`Deployment authentication requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}: ${failures.map(errorMessage).join('; ')}`)
 }
 
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {

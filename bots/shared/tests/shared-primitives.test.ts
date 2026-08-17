@@ -14,6 +14,7 @@ import { ConnectivityDegradedError, operationalFailureDisposition } from '../src
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
 import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
+import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '../src/monitoring/rpc-quorum-policy.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -102,6 +103,29 @@ describe('shared bot primitives', () => {
 				{ endpoint: 'https://two.example', value: 2n },
 			]),
 		).toThrow('RPC disagreement')
+	})
+
+	test('keeps RPC quorum secure by default and permits an explicit single-node development policy', () => {
+		expect(rpcQuorumRequirement({})).toBe(2)
+		expect(configuredReadRpcEndpointMinimum({})).toBe(3)
+		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
+		expect(configuredReadRpcEndpointMinimum({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
+		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '2' })).toBe(2)
+		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '' })).toThrow('must be 1 or 2')
+		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '0' })).toThrow('must be 1 or 2')
+		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: 'invalid' })).toThrow('must be 1 or 2')
+	})
+
+	test('supports explicitly configured single-endpoint quorum reads and finality', async () => {
+		expect(quorumValue('local head', [{ endpoint: 'http://anvil:8545', value: 1n }], 1)).toBe(1n)
+		await expect(settledQuorumValue('local head', [Promise.resolve({ endpoint: 'http://anvil:8545', value: 1n })], 1)).resolves.toBe(1n)
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const descendantHash = `0x${'22'.repeat(32)}` as const
+		const reader = {
+			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: blockNumber === 100n ? receiptHash : descendantHash }),
+			getBlockNumber: async () => 112n,
+		}
+		await expect(confirmCanonicalReceiptFinality([reader], ['http://anvil:8545'], 'local receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 1)).resolves.toBe(true)
 	})
 
 	test('keeps transport-only quorum loss classified as degraded connectivity', async () => {
