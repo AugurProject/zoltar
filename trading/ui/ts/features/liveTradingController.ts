@@ -685,7 +685,10 @@ export function useLiveTradingController({
 		setPositionReceiptWarning(undefined)
 		setState('idle')
 		setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
-		if (previousRoute.current !== route) void refresh(configuration, 0n)
+		if (previousRoute.current !== route) {
+			setMessage(undefined)
+			void refresh(configuration, 0n)
+		}
 		previousRoute.current = route
 	}, [route])
 

@@ -123,7 +123,7 @@ describe('universe selector', () => {
 		})
 		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
 		await act(async () => {
-			window.history.replaceState(undefined, '', `/#/security-pool/0x${'55'.repeat(20)}`)
+			window.history.replaceState(undefined, '', '/#/markets')
 			window.dispatchEvent(new Event('hashchange'))
 			await Bun.sleep(10)
 		})
