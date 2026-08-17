@@ -9,8 +9,8 @@ async function exampleSettings() {
 	return settings
 }
 
-function request(network: 'mainnet' | 'sepolia', rpcUrl = 'https://rpc.example/') {
-	return { connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network }
+function request(network: 'mainnet' | 'sepolia', rpcUrl = 'https://rpc.example/', rpcQuorum: 1 | 2 = 2) {
+	return { connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network, rpcQuorum }
 }
 
 function relayCheck(): EndpointCheck {
@@ -18,11 +18,31 @@ function relayCheck(): EndpointCheck {
 }
 
 describe('operator connectivity updates', () => {
+	test('persists a dashboard switch to the isolated-development quorum for restart', async () => {
+		let settings = await exampleSettings()
+		const result = await updateOperatorConnectivity({
+			activeNetwork: 'mainnet',
+			activeRpcQuorum: 2,
+			check: async () => [{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
+			deployment: settings.deployment,
+			endpointState: { endpointChecks: [] },
+			execute: false,
+			persist: async update => {
+				settings = update(settings)
+			},
+			submission: settings.submission,
+			value: request('mainnet', 'https://rpc.example/', 1),
+		})
+		expect(result).toMatchObject({ rpcQuorum: 1, rpcQuorumRestartRequired: true })
+		expect(settings.rpcQuorum).toBe(1)
+	})
+
 	test('preserves private relay health when applying same-chain RPC checks', async () => {
 		let settings = await exampleSettings()
 		const state = { endpointChecks: [relayCheck()] }
 		await updateOperatorConnectivity({
 			activeNetwork: 'mainnet',
+			activeRpcQuorum: 2,
 			check: async () => [
 				{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' },
 				{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'public-rpc', status: 'healthy', target: 'rpc.example' },
@@ -57,6 +77,7 @@ describe('operator connectivity updates', () => {
 			await expect(
 				updateOperatorConnectivity({
 					activeNetwork: 'mainnet',
+					activeRpcQuorum: 2,
 					deployment: settings.deployment,
 					endpointState: state,
 					execute: false,
@@ -83,6 +104,7 @@ describe('operator connectivity updates', () => {
 		await expect(
 			updateOperatorConnectivity({
 				activeNetwork: 'mainnet',
+				activeRpcQuorum: 2,
 				check: async () => {
 					checked = true
 					return [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }]
@@ -109,6 +131,7 @@ describe('operator connectivity updates', () => {
 		await expect(
 			updateOperatorConnectivity({
 				activeNetwork: 'mainnet',
+				activeRpcQuorum: 2,
 				check: async () => [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
 				deployment: settings.deployment,
 				endpointState: { endpointChecks: [relayCheck()] },

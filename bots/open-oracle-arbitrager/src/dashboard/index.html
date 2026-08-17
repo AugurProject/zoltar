@@ -374,9 +374,15 @@
 											<option value="mainnet">Ethereum mainnet · chain 1</option>
 											<option value="sepolia">Sepolia · chain 11155111</option>
 										</select></label
+									><label
+										><span>RPC agreement requirement</span
+										><select id="rpc-quorum" required>
+											<option value="2">2 agreeing readers · production</option>
+											<option value="1">1 reader · isolated development only</option>
+										</select></label
 									><label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label><label><span>Public submission RPC URLs · one per line, up to 8</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
 								</div>
-								<div class="form-actions"><span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button class="button" type="submit">Check &amp; apply network</button></div>
+								<div class="form-actions"><span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain. Quorum changes apply after restart.</span><button class="button" type="submit">Check &amp; apply network</button></div>
 							</fieldset>
 						</form>
 						<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
