@@ -48,6 +48,7 @@ RUN bun run ui:vendor
 # UI TypeScript source
 COPY ./ui/index.html /source/ui/index.html
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
+COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.json /source/ui/tsconfig.json
 COPY ./ui/css/ /source/ui/css/
 COPY ./ui/ts/ /source/ui/ts/
