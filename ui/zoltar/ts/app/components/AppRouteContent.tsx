@@ -1,19 +1,17 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '../../features/deployment/components/DeploymentRouteContent.js'
-import { MarketSection } from '@zoltar/ui-statoblast/features/markets/components/MarketSection.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
 import { OpenOracleSection } from '../../features/open-oracle/components/OpenOracleSection.js'
-import { SecurityPoolsSection } from '@zoltar/ui-statoblast/features/security-pools/components/SecurityPoolsSection.js'
+import { ZoltarSection } from '../../features/zoltarSurface/components/ZoltarSection.js'
 
-type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'
+type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'zoltar'
 
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
-	market: ComponentProps<typeof MarketSection>
+	zoltar: ComponentProps<typeof ZoltarSection>
 	openOracle: ComponentProps<typeof OpenOracleSection>
 	readBackendMessage: string | undefined
 	route: AppRoute
-	securityPools: ComponentProps<typeof SecurityPoolsSection>
 }
 
 export function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
@@ -21,16 +19,14 @@ export function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Pro
 	return true
 }
 
-export function AppRouteContent({ deploy, market, openOracle, readBackendMessage, route, securityPools }: Props) {
+export function AppRouteContent({ deploy, zoltar, openOracle, readBackendMessage, route }: Props) {
 	if (!shouldRenderRouteContent({ readBackendMessage, route })) return null
 
 	switch (route) {
 		case 'deploy':
 			return <DeploymentRouteContent {...deploy} />
 		case 'zoltar':
-			return <MarketSection {...market} />
-		case 'security-pools':
-			return <SecurityPoolsSection {...securityPools} />
+			return <ZoltarSection {...zoltar} />
 		case 'open-oracle':
 			return <OpenOracleSection {...openOracle} />
 		case 'not-found':
