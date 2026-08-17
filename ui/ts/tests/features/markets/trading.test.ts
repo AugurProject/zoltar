@@ -8,6 +8,8 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 	calculateMintingCapacityAttoEth,
+	estimateMintCheckpoint,
+	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
@@ -15,6 +17,7 @@ import {
 	getCollateralizationTone,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaxRedeemableCompleteSets,
+	getMaximumMintAmount,
 	getPoolCollateralizationPercent,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
@@ -135,6 +138,28 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('limits the maximum mint amount by both wallet ETH and remaining capacity', () => {
+		expect(getMaximumMintAmount(3n, 5n)).toBe(3n)
+		expect(getMaximumMintAmount(7n, 5n)).toBe(5n)
+		expect(getMaximumMintAmount(undefined, 5n)).toBeUndefined()
+		expect(getMaximumMintAmount(7n, undefined)).toBeUndefined()
+	})
+
+	void test('estimates the exact fee checkpoint that runs before minting', () => {
+		expect(
+			estimateMintCheckpoint({
+				currentRetentionRate: 900_000_000_000_000_000n,
+				currentTimestamp: 2n,
+				feeEligibleCapacityOwnershipAttoRep: 5n * TOKEN_PRECISION,
+				feeEndTimestamp: 10n,
+				feeIndexRemainder: 0n,
+				lastUpdatedFeeAccumulator: 1n,
+				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
+				totalFeesOwedRemainder: 0n,
+			}),
+		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
 	})
 
 	void test('converts REP capacity ownership into live ETH minting capacity', () => {
@@ -491,6 +516,8 @@ void describe('trading helpers', () => {
 		const firstMintShareAmount = TOKEN_PRECISION * TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
 		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
+		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 0n, 0n)).toBe(firstMintShareAmount)
+		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 9n * TOKEN_PRECISION, 10n * TOKEN_PRECISION)).toBe(1_111_111_111_111_111_111n)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',

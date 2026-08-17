@@ -1,9 +1,11 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { IdentifierValue } from '../../../components/IdentifierValue.js'
+import { MetricField } from '../../../components/MetricField.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
@@ -16,6 +18,7 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
 import { isActiveAppChain } from '../../../lib/network.js'
+import { normalizeQuestionId } from '../../../lib/questionId.js'
 import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketSectionProps } from '../../types.js'
 
@@ -29,6 +32,7 @@ export function MarketSection({
 	loadingZoltarForkAccess,
 	zoltarForkActiveAction,
 	loadingZoltarQuestionCount,
+	loadingZoltarQuestion,
 	loadingZoltarQuestions,
 	loadingZoltarUniverse,
 	loadingSecurityPools,
@@ -42,6 +46,7 @@ export function MarketSection({
 	onCreateMarket,
 	onForkZoltar,
 	onLoadZoltarQuestions,
+	onLoadZoltarQuestion,
 	onLoadZoltarQuestionPage,
 	onLoadSecurityPools,
 	onMarketFormChange,
@@ -66,6 +71,8 @@ export function MarketSection({
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalanceAttoRep,
 	zoltarQuestionCount,
+	zoltarQuestionLookupError,
+	zoltarQuestionLookupId,
 	zoltarQuestionPage,
 	zoltarQuestions,
 	zoltarQuestionsError,
@@ -78,20 +85,20 @@ export function MarketSection({
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
+	const requestedForkQuestionId = useRef<string | undefined>(undefined)
 	const localForkQuestionId = zoltarForkQuestionId.trim()
 	const canonicalForkQuestion = zoltarUniverse?.forkQuestionDetails
 	const selectedForkQuestionId = hasForked ? canonicalForkQuestion?.questionId : localForkQuestionId || canonicalForkQuestion?.questionId
+	const normalizedSelectedForkQuestionId = selectedForkQuestionId === undefined ? undefined : normalizeQuestionId(selectedForkQuestionId)
 	const selectedForkQuestion =
-		selectedForkQuestionId === undefined ? undefined : (zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase()) ?? (canonicalForkQuestion?.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase() ? canonicalForkQuestion : undefined))
-	const forkQuestionMetadataFallback = loadingZoltarQuestions ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
+		normalizedSelectedForkQuestionId === undefined
+			? undefined
+			: (zoltarQuestions.find(question => normalizeQuestionId(question.questionId) === normalizedSelectedForkQuestionId) ?? (canonicalForkQuestion !== undefined && normalizeQuestionId(canonicalForkQuestion.questionId) === normalizedSelectedForkQuestionId ? canonicalForkQuestion : undefined))
+	const isSelectedForkQuestionLookup = normalizedSelectedForkQuestionId !== undefined && zoltarQuestionLookupId === normalizedSelectedForkQuestionId
+	const forkQuestionLookupLoading = selectedForkQuestion === undefined && (loadingZoltarQuestions || (isSelectedForkQuestionLookup && loadingZoltarQuestion))
+	const forkQuestionMetadataFallback = forkQuestionLookupLoading ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
 	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetailsTitle : zoltarCopy.forkZoltar
-	const forkQuestionAvailable = selectedForkQuestion !== undefined || (zoltarQuestionCount !== undefined && zoltarQuestionCount > 0n)
-	const forkLauncherDisabledReason = (() => {
-		if (hasForked) return undefined
-		if (loadingZoltarQuestions || loadingZoltarQuestionCount || zoltarQuestionCount === undefined) return marketCopy.loadingQuestions
-		if (!forkQuestionAvailable) return marketCopy.forkQuestionUnavailableReason
-		return undefined
-	})()
+	const permanentRepBurn = zoltarUniverse?.forkBurnDivisor === undefined || zoltarUniverse.forkBurnDivisor <= 1n ? undefined : zoltarUniverse.forkThresholdAttoRep / zoltarUniverse.forkBurnDivisor
 	const forkContext = [
 		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? selectedForkQuestionId ?? commonCopy.noneSelected },
 		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
@@ -103,6 +110,20 @@ export function MarketSection({
 		if (hasForked) return
 		onActiveViewChange('questions')
 	}, [hasForked, onActiveViewChange, view, zoltarUniverse])
+
+	useEffect(() => {
+		if (!forkModalOpen) {
+			requestedForkQuestionId.current = undefined
+			return
+		}
+		if (hasForked || selectedForkQuestion !== undefined || normalizedSelectedForkQuestionId === undefined) return
+		if (requestedForkQuestionId.current === normalizedSelectedForkQuestionId) return
+		const timeoutId = window.setTimeout(() => {
+			requestedForkQuestionId.current = normalizedSelectedForkQuestionId
+			void onLoadZoltarQuestion(normalizedSelectedForkQuestionId)
+		}, 250)
+		return () => window.clearTimeout(timeoutId)
+	}, [forkModalOpen, hasForked, normalizedSelectedForkQuestionId, onLoadZoltarQuestion, selectedForkQuestion])
 
 	return (
 		<div className='route-view-flow'>
@@ -192,19 +213,19 @@ export function MarketSection({
 
 				{view === 'fork' ? (
 					<>
-						<SectionBlock title={marketCopy.fork} description={marketCopy.forkIntroduction}>
-							<ul className='fork-readiness-list'>
-								<li>{marketCopy.forkQuestionRequirement}</li>
-								<li>{marketCopy.forkRepRequirement}</li>
-								<li>{marketCopy.forkConsequence}</li>
-							</ul>
+						<SectionBlock title={marketCopy.fork}>
+							{hasForked ? undefined : (
+								<DataGrid>
+									<MetricField label={commonCopy.forkThresholdAttoRep}>
+										<CurrencyValue loading={loadingZoltarUniverse} value={zoltarUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
+									</MetricField>
+									<MetricField label={zoltarCopy.permanentRepBurn}>
+										<CurrencyValue loading={loadingZoltarUniverse} value={permanentRepBurn} suffix={commonCopy.rep} />
+									</MetricField>
+								</DataGrid>
+							)}
 							<div className='actions'>
-								<ActionLauncherButton availability={{ disabled: forkLauncherDisabledReason !== undefined, reason: forkLauncherDisabledReason }} idleLabel={hasForked ? zoltarCopy.viewForkDetails : forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} showDisabledReason />
-								{forkLauncherDisabledReason === marketCopy.forkQuestionUnavailableReason ? (
-									<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
-										{commonCopy.createQuestionAction}
-									</button>
-								) : undefined}
+								<ActionLauncherButton availability={{ disabled: false, reason: undefined }} idleLabel={hasForked ? zoltarCopy.viewForkDetails : forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} />
 							</div>
 							{selectedForkQuestionId === undefined ? undefined : (
 								<section aria-label={marketCopy.selectedForkQuestionSummary} className='selected-fork-question-summary'>
@@ -260,9 +281,15 @@ export function MarketSection({
 								hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
 								isOnActiveAppChain={isOnActiveAppChain}
 								loadingZoltarForkAccess={loadingZoltarForkAccess}
+								loadingZoltarQuestion={isSelectedForkQuestionLookup && loadingZoltarQuestion}
 								loadingZoltarQuestions={loadingZoltarQuestions || loadingZoltarQuestionCount}
 								onApproveZoltarForkRep={onApproveZoltarForkRep}
 								onForkZoltar={onForkZoltar}
+								onRetryZoltarQuestion={() => {
+									if (normalizedSelectedForkQuestionId === undefined) return
+									requestedForkQuestionId.current = normalizedSelectedForkQuestionId
+									void onLoadZoltarQuestion(normalizedSelectedForkQuestionId)
+								}}
 								onZoltarForkQuestionIdChange={onZoltarForkQuestionIdChange}
 								zoltarForkActiveAction={zoltarForkActiveAction}
 								zoltarForkApproval={zoltarForkApproval}
@@ -270,6 +297,8 @@ export function MarketSection({
 								zoltarForkPending={zoltarForkPending}
 								zoltarForkQuestionId={selectedForkQuestionId ?? ''}
 								zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+								zoltarQuestionLookupError={isSelectedForkQuestionLookup ? zoltarQuestionLookupError : undefined}
+								zoltarQuestionLookupId={zoltarQuestionLookupId}
 								zoltarQuestions={zoltarQuestions}
 								zoltarUniverse={zoltarUniverse}
 								zoltarUniverseState={zoltarUniverseState}

@@ -11,7 +11,6 @@ import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-l
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { authenticatedExecutionToken } from '#config/runtime-deployment'
-import { networkConfiguration } from '#config/network'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
@@ -39,13 +38,14 @@ export async function deployExecutorFromConnectivity(
 		persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
 		privateKey: Hex
 		quorumRpcUrls: readonly string[]
+		rpcQuorum: Configuration['rpcQuorum']
 		salt: unknown
 	},
 	deploy: typeof deployExecutorCreate2 = deployExecutorCreate2,
 ) {
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
 	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
-	if (readRpcUrls.length < configuredReadRpcEndpointMinimum()) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
+	if (readRpcUrls.length < configuredReadRpcEndpointMinimum(parameters.rpcQuorum)) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
 	return await deploy({ chain: parameters.chain, existingIntent: parameters.existingIntent, persistIntent: parameters.persistIntent, privateKey: parameters.privateKey, readRpcUrls, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
 }
 
@@ -183,6 +183,7 @@ export function startOperatorControlPlane(parameters: {
 				}
 				const next = await updateOperatorConnectivity({
 					activeNetwork: config.networkConfigured ? config.network.name : undefined,
+					activeRpcQuorum: config.rpcQuorum,
 					deployment: latest.settings.deployment,
 					endpointState: state,
 					execute: config.execute || latest.settings.runtime.execute,
@@ -192,31 +193,17 @@ export function startOperatorControlPlane(parameters: {
 					submission: latest.settings.submission,
 					value,
 				})
-				pending.connectivity = next.connectivity
-				if (next.restartRequired) {
-					const network = networkConfiguration(next.network, {
-						factory: latest.settings.deployment.uniswapFactory,
-						quoter: latest.settings.deployment.uniswapQuoter,
-						rep: latest.settings.deployment.rep,
-						weth: latest.settings.deployment.weth,
-					})
-					config.network = network
-					config.networkConfigured = true
-					config.centralizedMarkets = { ...config.centralizedMarkets, assetChainId: network.chain.id }
-					fixedState.expectedChainId = network.chain.id
-					fixedState.explorerUrl = network.explorerUrl
-					fixedState.network = network.name
-					fixedState.networkConfigured = true
-				}
+				const restartRequired = next.restartRequired || next.rpcQuorumRestartRequired
+				pending.connectivity = restartRequired ? pending.connectivity : next.connectivity
 				recordOperation(state, {
 					category: 'configuration',
 					details: next.connectivity.publicRpcUrls.map(endpointLabel).join(', '),
 					level: 'info',
 					message: 'Network and RPC configuration verified and saved',
-					reason: next.restartRequired ? `${next.network} will apply at the next scan boundary` : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
+					reason: restartRequired ? 'Saved settings apply after restart' : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
 					reportId: undefined,
 				})
-				return { connectivity: next.connectivity, network: next.network }
+				return { connectivity: next.connectivity, network: next.network, rpcQuorum: next.rpcQuorum, restartRequired }
 			})
 		},
 		updateDeployment: value => {
@@ -224,7 +211,7 @@ export function startOperatorControlPlane(parameters: {
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
-				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(latest.settings.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
 				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
@@ -274,6 +261,7 @@ export function startOperatorControlPlane(parameters: {
 						persistIntent: intent => persistExecutorDeploymentIntentForRecovery(intentPath, intent, parameters.deploymentRecovery),
 						privateKey,
 						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
+						rpcQuorum: latest.settings.rpcQuorum,
 						salt: plan.salt,
 					})
 					const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }

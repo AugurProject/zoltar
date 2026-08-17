@@ -107,9 +107,9 @@ describe('shared bot primitives', () => {
 
 	test('uses one RPC by default and permits an explicit independent-reader quorum policy', () => {
 		expect(rpcQuorumRequirement({})).toBe(1)
-		expect(configuredReadRpcEndpointMinimum({})).toBe(1)
+		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({}))).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
-		expect(configuredReadRpcEndpointMinimum({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
+		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' }))).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '2' })).toBe(2)
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '' })).toThrow('must be 1 or 2')
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '0' })).toThrow('must be 1 or 2')

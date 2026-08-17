@@ -53,6 +53,7 @@ function settings(privateKeyValue: Hex | undefined) {
 		networkConfigured: true,
 		paused: true,
 		privateKey: privateKeyValue,
+		rpcQuorum: 2 as const,
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
@@ -91,35 +92,29 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
-	test('rejects an explicitly empty RPC quorum policy during settings parsing', () => {
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-		try {
-			process.env['ZOLTAR_BOT_RPC_QUORUM'] = ''
-			expect(() => parseOperatorSettings(serializeOperatorSettings(settings(undefined)))).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-		}
+	test('defaults existing configuration files to the primary-reader RPC policy', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		delete serialized.rpcQuorum
+		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
+	})
+
+	test('validates and persists the dashboard RPC quorum policy', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		for (const rpcQuorum of [null, '1', 0, 3]) expect(() => parseOperatorSettings({ ...serialized, rpcQuorum })).toThrow('rpcQuorum must be 1 or 2')
+		expect(parseOperatorSettings({ ...serialized, rpcQuorum: 1 }).rpcQuorum).toBe(1)
 	})
 
 	test('permits live execution with only the primary read RPC by default', () => {
 		const value = settings(privateKey)
-		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] } })
+		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 1 })
 		const parsed = parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })
 		expect(parsed.deployment.quorumRpcUrls).toEqual([])
 	})
 
 	test('requires independent readers when the two-reader policy is explicitly enabled', () => {
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-		try {
-			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-			const value = settings(privateKey)
-			const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] } })
-			expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-		}
+		const value = settings(privateKey)
+		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 2 })
+		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
 	})
 
 	test('syncs settings contents and the parent directory before returning success', async () => {

@@ -1,4 +1,3 @@
-import * as transactionReviewCopy from '../copy/transactionReview.js'
 import { useId } from 'preact/hooks'
 import type { TransactionContextItem } from '../types/components.js'
 
@@ -8,13 +7,13 @@ type TransactionObjectContextProps = {
 	title?: string
 }
 
-export function TransactionObjectContext({ className = '', items, title = transactionReviewCopy.confirmContext }: TransactionObjectContextProps) {
+export function TransactionObjectContext({ className = '', items, title }: TransactionObjectContextProps) {
 	const titleId = useId()
 	if (items.length === 0) return undefined
 
 	return (
-		<section className={`transaction-object-context ${className}`.trim()} aria-labelledby={titleId}>
-			<strong id={titleId}>{title}</strong>
+		<section className={`transaction-object-context ${className}`.trim()} {...(title === undefined ? {} : { 'aria-labelledby': titleId })}>
+			{title === undefined ? undefined : <strong id={titleId}>{title}</strong>}
 			<dl>
 				{items.map((item, index) => (
 					<div key={`${index}`}>

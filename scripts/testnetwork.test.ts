@@ -7,7 +7,9 @@ const testnetworkRoot = join(import.meta.dir, '..', 'testnetwork')
 const composeFile = join(testnetworkRoot, 'compose.yaml')
 const dockerfile = join(testnetworkRoot, 'Dockerfile')
 const windowsLauncher = join(testnetworkRoot, 'start.bat')
-const botComposeFiles = [join(import.meta.dir, '..', 'bots', 'liquidator', 'compose.yaml'), join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')]
+const liquidatorComposeFile = join(import.meta.dir, '..', 'bots', 'liquidator', 'compose.yaml')
+const arbitragerComposeFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')
+const arbitragerExampleFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'config', 'operator.example.json')
 
 describe('local test network packaging', () => {
 	test('builds a pinned Anvil image on the shared Zoltar network', async () => {
@@ -44,7 +46,9 @@ describe('local test network packaging', () => {
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
 	})
 
-	test('passes the configurable one-reader default quorum policy to both bots', async () => {
-		for (const file of botComposeFiles) expect(await readFile(file, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}')
+	test('defaults both bots to one reader while the arbitrager owns its policy in saved settings', async () => {
+		expect(await readFile(liquidatorComposeFile, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}')
+		expect(await readFile(arbitragerComposeFile, 'utf8')).not.toContain('ZOLTAR_BOT_RPC_QUORUM')
+		expect(JSON.parse(await readFile(arbitragerExampleFile, 'utf8'))).toMatchObject({ rpcQuorum: 1 })
 	})
 })
