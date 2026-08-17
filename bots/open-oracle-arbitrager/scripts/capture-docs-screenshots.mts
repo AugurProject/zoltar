@@ -235,15 +235,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		] as const) {
 			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
 			const fragment =
-				section === undefined
-					? 'overview'
-					: section === 'operations'
-						? 'operations'
-						: section === 'token-market-title'
-							? 'markets'
-							: section === 'network-connectivity' || section === 'settings' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration'
-								? 'settings'
-								: 'overview'
+				section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'network-connectivity' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
 			await replacePage(`${origin}/`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
