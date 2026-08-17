@@ -443,6 +443,7 @@ export function LiveTrading({
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
+	walletConnectRequestNonce,
 	onDeploymentRetry = () => undefined,
 }: {
 	route: string
@@ -453,6 +454,7 @@ export function LiveTrading({
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
+	walletConnectRequestNonce?: number
 	onDeploymentRetry?(): void
 }) {
 	const { wallet, balances, discovery, position, workflow } = useLiveTradingController({
@@ -472,6 +474,13 @@ export function LiveTrading({
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, approve, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
+	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
+	useEffect(() => {
+		if (walletConnectRequestNonce === undefined) return
+		if (previousWalletConnectRequestNonce.current === walletConnectRequestNonce) return
+		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
+		void connect()
+	}, [connect, walletConnectRequestNonce])
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
@@ -554,9 +563,11 @@ export function LiveTrading({
 						<h1>Portfolio</h1>
 						<p>{configuration.chainName}</p>
 					</div>
-					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-						{account === undefined ? 'Connect wallet' : shortAddress(account)}
-					</button>
+					{walletConnectRequestNonce === undefined ? (
+						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+							{account === undefined ? 'Connect wallet' : shortAddress(account)}
+						</button>
+					) : null}
 				</header>
 				{message === undefined ? null : (
 					<p class='error' role='alert'>
@@ -588,9 +599,11 @@ export function LiveTrading({
 					<h1>Two-way markets</h1>
 					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
-				<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-					{account === undefined ? 'Connect wallet' : shortAddress(account)}
-				</button>
+				{walletConnectRequestNonce === undefined ? (
+					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+						{account === undefined ? 'Connect wallet' : shortAddress(account)}
+					</button>
+				) : null}
 			</header>
 			{message === undefined && parsedAmount.error === undefined ? null : (
 				<p class='error' role='alert'>

@@ -1511,12 +1511,12 @@ footer {
 	}
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1200px) {
 	.header-actions {
 		grid-row: 2;
 		grid-column: 1 / -1;
 		display: grid;
-		grid-template-columns: auto 1fr auto;
+		grid-template-columns: auto 1fr auto auto;
 		width: 100%;
 	}
 	.header-actions .network-pill {
@@ -1524,6 +1524,9 @@ footer {
 	}
 	.header-actions .universe-selector {
 		grid-column: 3;
+	}
+	.header-actions .wallet-button {
+		grid-column: 4;
 	}
 	.wallet-summary {
 		grid-row: 2;
@@ -1565,20 +1568,23 @@ footer {
 		backdrop-filter: none;
 	}
 	.header-actions .wallet-button {
+		grid-row: 1;
+		grid-column: 2;
+		justify-self: end;
 		padding: 0.55rem;
 	}
 	.header-actions {
 		display: contents;
 	}
 	.header-actions .network-pill {
-		grid-row: 1;
-		grid-column: 2;
-		justify-self: end;
-	}
-	.header-actions .wallet-summary {
 		grid-row: 2;
 		grid-column: 1;
-		width: min(100%, 155px);
+		justify-self: start;
+	}
+	.header-actions .wallet-summary {
+		grid-row: 3;
+		grid-column: 1 / -1;
+		width: 100%;
 	}
 	.header-actions .wallet-summary[open] {
 		grid-row: 3;
@@ -1669,7 +1675,7 @@ footer {
 		border-top: 1px solid var(--line);
 	}
 	.site-header nav {
-		grid-row: 3;
+		grid-row: 4;
 	}
 	.site-header:has(.wallet-summary[open]) nav {
 		grid-row: 4;
