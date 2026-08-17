@@ -11,7 +11,6 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 
 const baseInput: AppPageTitleInput = {
 	activeOpenOracleView: 'browse',
-	activeSecurityPoolsView: 'browse',
 	activeZoltarView: 'questions',
 	route: 'zoltar',
 }
@@ -39,9 +38,6 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Universe' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
-			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'browse' }, title: 'Security Pools' },
-			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'create' }, title: 'Create Security Pool' },
-			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'operate' }, title: 'Manage Security Pool' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Open Oracle' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Open Oracle Report' },
 			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Open Oracle Report Details' },
@@ -54,11 +50,11 @@ describe('app page titles', () => {
 	})
 
 	test('renders the hidden page heading and updates the document title', async () => {
-		const renderedComponent = await renderIntoDocument(<AppPageHeading pageTitle='Security Pools' />)
+		const renderedComponent = await renderIntoDocument(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.title).toBe(formatAppDocumentTitle('Security Pools'))
-		const heading = within(document.body).getByRole('heading', { level: 1, name: 'Security Pools' })
+		expect(document.title).toBe(formatAppDocumentTitle('Questions'))
+		const heading = within(document.body).getByRole('heading', { level: 1, name: 'Questions' })
 		expect(heading.classList.contains('visually-hidden')).toBe(true)
 	})
 
@@ -72,8 +68,8 @@ describe('app page titles', () => {
 		try {
 			const renderedComponent = await renderIntoDocument(
 				<>
-					<AppPageHeading pageTitle='Security Pools' />
-					<div id='app-content'>Pool content</div>
+					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
+					<div id='app-content'>Question content</div>
 				</>,
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
@@ -81,14 +77,14 @@ describe('app page titles', () => {
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading pageTitle='Create Security Pool' />
-						<div id='app-content'>Create pool content</div>
+						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create Question' />
+						<div id='app-content'>Create question content</div>
 					</>,
 					renderedComponent.container,
 				)
 			})
 
-			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Create Security Pool' })
+			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Create Question' })
 			expect(document.activeElement).toBe(heading)
 			expect(heading.getAttribute('tabindex')).toBe('-1')
 			expect(scrollIntoViewCalls).toBe(1)
@@ -105,22 +101,22 @@ describe('app page titles', () => {
 		}
 
 		try {
-			window.history.replaceState({}, '', '#/security-pools?selectedPoolView=vaults')
+			window.history.replaceState({}, '', '#/zoltar?view=questions')
 			const renderedComponent = await renderIntoDocument(
 				<>
-					<AppPageHeading pageTitle='Manage Security Pool' />
-					<div id='app-content'>Pool content</div>
+					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
+					<div id='app-content'>Question content</div>
 				</>,
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
 
-			window.history.pushState({}, '', '#/security-pools?selectedPoolView=reporting')
+			window.history.pushState({}, '', '#/zoltar?view=create')
 			window.dispatchEvent(new Event('popstate'))
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading pageTitle='Manage Security Pool' />
-						<div id='app-content'>Reporting content</div>
+						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
+						<div id='app-content'>Create content</div>
 					</>,
 					renderedComponent.container,
 				)
@@ -130,7 +126,7 @@ describe('app page titles', () => {
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading pageTitle='Open Oracle' />
+						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Open Oracle' />
 						<div id='app-content'>Oracle content</div>
 					</>,
 					renderedComponent.container,

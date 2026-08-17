@@ -35,7 +35,7 @@ type ForkZoltarSectionProps = {
 	loadingZoltarQuestions: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onForkZoltar: () => void
-	onRetryZoltarQuestion?: () => void
+	onRetryZoltarQuestion?: (() => void) | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	zoltarForkApproval: TokenApprovalState

@@ -41,6 +41,7 @@ import { formatUniverseCollectionLabel } from '../features/universes/lib/univers
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
+import type { Route } from '../types/app.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 
 export function App() {
@@ -92,6 +93,7 @@ export function App() {
 		void supportedNetworkChangeCoordinator.handleTransactionFinished()
 	}
 	const { navigate, route } = useHashRoute()
+	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
 	const {
 		accountState,
 		augurStatoblastDeployed,
@@ -151,7 +153,6 @@ export function App() {
 		createChildUniverse,
 		forkZoltar,
 		hasLoadedZoltarQuestions,
-		loadZoltarForkAccess,
 		loadingZoltarForkAccess,
 		loadingZoltarQuestionCount,
 		loadingZoltarQuestion,
@@ -189,7 +190,6 @@ export function App() {
 		zoltarUniverseError,
 		zoltarUniverseMissing,
 	} = useZoltarOperations({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
-	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const {
 		approveToken1,
 		approveToken2,
@@ -249,14 +249,14 @@ export function App() {
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
-	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeZoltarView, route })
+	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
 		augurStatoblastDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		navigate,
-		route,
+		route: activeRoute,
 		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
 		urlOpenOracleReportId,
 	})
@@ -479,7 +479,7 @@ export function App() {
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
 								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} />
+									<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
 								</fieldset>
 							</TransactionActionButtonLockProvider>
 						</div>

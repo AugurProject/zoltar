@@ -3,7 +3,6 @@ import type { AccountState, OpenOracleCreateFormState, OpenOracleFormState, Repo
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
-	ListedSecurityPool,
 	MarketDetails,
 	MarketDetailsPage,
 	OpenOracleActionResult,
@@ -97,11 +96,6 @@ export type MarketRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
 	activeView: ZoltarView
-	securityPools?: ListedSecurityPool[]
-	hasLoadedSecurityPools: boolean
-	loadingSecurityPools: boolean
-	onLoadSecurityPools: () => void
-	securityPoolsLoadError: string | undefined
 	environmentRefreshKey: number
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void

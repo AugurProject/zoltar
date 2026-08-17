@@ -9,7 +9,7 @@ import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { buildRouteHref, getTopLevelRouteSearch, ZOLTAR_ROUTE } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHash, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
@@ -20,7 +20,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentS
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
 	const deploymentComplete = deploymentStateReady && !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount
-	const questionsHref = buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
+	const questionsHref = buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
 	const deployNextAvailability = deploymentStateReady
 		? getDeployNextMissingAvailability({
 				accountAddress,
