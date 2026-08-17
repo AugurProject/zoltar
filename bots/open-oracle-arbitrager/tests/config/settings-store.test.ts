@@ -102,10 +102,24 @@ describe('operator settings persistence', () => {
 		}
 	})
 
-	test('requires three independent read endpoints for live execution', () => {
+	test('permits live execution with only the primary read RPC by default', () => {
 		const value = settings(privateKey)
-		const serialized = serializeOperatorSettings(value)
-		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
+		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] } })
+		const parsed = parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })
+		expect(parsed.deployment.quorumRpcUrls).toEqual([])
+	})
+
+	test('requires independent readers when the two-reader policy is explicitly enabled', () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			const value = settings(privateKey)
+			const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] } })
+			expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
 	})
 
 	test('syncs settings contents and the parent directory before returning success', async () => {

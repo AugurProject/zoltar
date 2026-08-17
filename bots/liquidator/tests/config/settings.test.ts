@@ -130,15 +130,35 @@ describe('liquidator settings', () => {
 		}
 	})
 
-	test('requires independent quorum reads for live execution', () => {
-		expect(() =>
-			parseSettings({
-				...settings,
-				connectivity: { ...settings.connectivity, quorumRpcUrls: ['https://quorum.example'] },
-				privateKey: `0x${'11'.repeat(32)}`,
-				runtime: { ...settings.runtime, execute: true },
-			}),
-		).toThrow('at least two independent quorum RPCs')
+	test('permits live execution with only the primary read RPC by default', () => {
+		const parsed = parseSettings({
+			...settings,
+			deployment: {
+				securityPoolFactory: '0x0000000000000000000000000000000000000001',
+				weth: '0x0000000000000000000000000000000000000002',
+				zoltar: '0x0000000000000000000000000000000000000003',
+			},
+			privateKey: `0x${'11'.repeat(32)}`,
+			runtime: { ...settings.runtime, execute: true },
+		})
+		expect(parsed.connectivity.quorumRpcUrls).toEqual([])
+	})
+
+	test('requires independent readers when the two-reader policy is explicitly enabled', () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			expect(() =>
+				parseSettings({
+					...settings,
+					privateKey: `0x${'11'.repeat(32)}`,
+					runtime: { ...settings.runtime, execute: true },
+				}),
+			).toThrow('at least two independent quorum RPCs')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
 	})
 
 	test('requires a deployed WETH contract for live execution', () => {

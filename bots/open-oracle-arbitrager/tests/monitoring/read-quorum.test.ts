@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { quorumValue, readWithQuorum } from '#monitoring/read-quorum'
 
 describe('independent read quorum', () => {
-	test('requires at least two independent endpoints and exact agreement', () => {
-		expect(() => quorumValue('state hash', [{ endpoint: 'primary', value: 1n }])).toThrow('at least two')
+	test('accepts one endpoint by default and enforces exact agreement for an explicit quorum', () => {
+		expect(quorumValue('state hash', [{ endpoint: 'primary', value: 1n }])).toBe(1n)
+		expect(() => quorumValue('state hash', [{ endpoint: 'primary', value: 1n }], 2)).toThrow('at least two')
 		expect(
 			quorumValue('state hash', [
 				{ endpoint: 'primary', value: { block: 10n, hash: '0xabc' } },

@@ -53,10 +53,17 @@ describe('deployment authentication', () => {
 		expect(parseDeploymentRole('uniswap-v4-quoter')).toBe('uniswap-v4-quoter')
 	})
 
-	test('tolerates one unavailable manifest reader but never a safety mismatch', async () => {
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new TypeError('fetch failed'))])).resolves.toBeUndefined()
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.reject(new TypeError('fetch failed')), Promise.reject(new TypeError('fetch failed'))])).rejects.toThrow('at least two available independent RPC endpoints')
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new Error('runtime bytecode hash mismatch'))])).rejects.toThrow('runtime bytecode hash mismatch')
+	test('tolerates one unavailable manifest reader but never a safety mismatch under the explicit quorum policy', async () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new TypeError('fetch failed'))])).resolves.toBeUndefined()
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.reject(new TypeError('fetch failed')), Promise.reject(new TypeError('fetch failed'))])).rejects.toThrow('at least two available independent RPC endpoints')
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new Error('runtime bytecode hash mismatch'))])).rejects.toThrow('runtime bytecode hash mismatch')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

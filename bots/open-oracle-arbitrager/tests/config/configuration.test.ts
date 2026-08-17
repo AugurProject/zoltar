@@ -133,13 +133,13 @@ async function waitForJson(origin: string, path: string) {
 }
 
 describe('file-only startup configuration', () => {
-	test('documents the default and isolated-development executor RPC policies', async () => {
+	test('documents the default and opt-in executor RPC policies', async () => {
 		for (const quorum of ['1', '2']) {
 			const child = Bun.spawn([executable, deployExecutorSource, '--help'], { env: { ...process.env, ZOLTAR_BOT_RPC_QUORUM: quorum }, stderr: 'pipe', stdout: 'pipe' })
 			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 			expect(exitCode, stderr).toBe(0)
-			expect(stdout).toContain('Repeat twice by default with independent origins')
-			expect(stdout).toContain('ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network')
+			expect(stdout).toContain('Optional; ZOLTAR_BOT_RPC_QUORUM=2 requires two')
+			expect(stdout).toContain('The default accepts the primary RPC alone')
 		}
 	})
 

@@ -44,7 +44,7 @@ describe('local test network packaging', () => {
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
 	})
 
-	test('passes a secure-by-default configurable quorum policy to both bots', async () => {
-		for (const file of botComposeFiles) expect(await readFile(file, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-2}')
+	test('passes the configurable one-reader default quorum policy to both bots', async () => {
+		for (const file of botComposeFiles) expect(await readFile(file, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}')
 	})
 })

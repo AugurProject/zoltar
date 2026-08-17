@@ -125,20 +125,27 @@ describe('liquidator execution safety', () => {
 		expect(() => availableExecutionObservations('liquidation snapshot', malformedSettled, observation => ({ endpoint: observation.endpoint, value: observation.state }))).toThrow('malformed state')
 	})
 
-	test('classifies insufficient transport-only scan observations as degraded connectivity', () => {
+	test('classifies insufficient transport-only scan observations as degraded connectivity under the explicit quorum policy', () => {
 		const unavailable = new TypeError('fetch failed')
 		const settled: PromiseSettledResult<{ endpoint: string; value: bigint }>[] = [
 			{ status: 'fulfilled', value: { endpoint: 'rpc-a', value: 1n } },
 			{ reason: unavailable, status: 'rejected' },
 			{ reason: unavailable, status: 'rejected' },
 		]
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
 		try {
-			availableExecutionObservations('scan', settled, value => value)
-			throw new Error('Expected an insufficient transport quorum')
-		} catch (error) {
-			expect(error).toBeInstanceOf(Error)
-			if (!(error instanceof Error)) throw error
-			expect(error.name).toBe('ConnectivityDegradedError')
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			try {
+				availableExecutionObservations('scan', settled, value => value)
+				throw new Error('Expected an insufficient transport quorum')
+			} catch (error) {
+				expect(error).toBeInstanceOf(Error)
+				if (!(error instanceof Error)) throw error
+				expect(error.name).toBe('ConnectivityDegradedError')
+			}
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
 		}
 	})
 	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {

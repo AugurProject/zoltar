@@ -53,9 +53,9 @@ executor, which swaps the required inventory atomically and submits the OpenOrac
 dispute while preserving the wallet as the replacement reporter. After the dispute
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
-exact asset recovery pass the finality quorum through 12 canonical descendants. Under
-the default quorum policy, the finality quorum requires at least two available
-readers, and every available reader must agree. If a later reporter replaces
+exact asset recovery pass the finality policy through 12 canonical descendants. By
+default the primary reader is sufficient. When `ZOLTAR_BOT_RPC_QUORUM=2`, at least
+two readers must be available and every available reader must agree. If a later reporter replaces
 the bot, it derives the exact one-token credit from the authenticated old and new
 report amounts, withdraws only that amount through a parent-bound executor call,
 and verifies the `ReplacementCreditWithdrawn` event through the same receipt and
@@ -102,13 +102,14 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
-  bytecode hash for every contract and executable token. Under the default quorum
-  policy, at least two available read RPCs authenticate every manifest entry before
-  the bot can sign; a contradictory authentication result fails closed.
-- Under the default quorum policy, at least three independently operated read RPCs:
-  one primary plus two or more quorum endpoints. Only a retryable transport failure
-  makes a reader unavailable. Live execution requires at least two responses, and every responding reader must
-  agree exactly. One transport-unavailable reader is reported as degraded without
+  bytecode hash for every contract and executable token. The primary read RPC
+  authenticates every manifest entry by default. With `ZOLTAR_BOT_RPC_QUORUM=2`,
+  at least two available readers must authenticate every entry before the bot can
+  sign. A contradictory authentication result fails closed.
+- One primary read RPC. Optional independent quorum RPCs add corroboration; when
+  `ZOLTAR_BOT_RPC_QUORUM=2`, configure two or more in addition to the primary. Only a retryable transport failure
+  makes a reader unavailable. Live execution requires the configured number of responses, and every responding reader must
+  agree exactly. Under the opt-in two-reader policy, one transport-unavailable reader is reported as degraded without
   stopping an otherwise healthy quorum; a malformed or contradictory response is a
   safety fault and fails closed. Execution also requires exact
   quote-block agreement on OpenOracle state, pool state, quotes, confirmed nonce,
@@ -233,12 +234,11 @@ from another machine through a trusted tunnel to the host rather than changing t
 port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
 `127.0.0.1` mapping.
 
-Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `2`. This production
-policy requires two agreeing readers and two independent quorum RPC URLs in addition
-to the primary reader so one endpoint may be unavailable. For an isolated local
-development chain only, put `ZOLTAR_BOT_RPC_QUORUM=1` in this directory's `.env`
-before starting Compose. That setting permits the primary reader to operate alone
-and removes independent RPC corroboration. Values other than `1` or `2` stop startup.
+Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `1`, so the primary read
+RPC is sufficient and independent quorum RPCs are optional. To require two agreeing
+readers, put `ZOLTAR_BOT_RPC_QUORUM=2` in this directory's `.env` before starting
+Compose and configure two independent quorum RPC URLs in addition to the primary
+reader so one endpoint may be unavailable. Values other than `1` or `2` stop startup.
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then
@@ -349,14 +349,13 @@ chain where the canonical CREATE2 proxy and executor init code are identical:
 PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-For the isolated Anvil network only, use the development quorum policy and omit
-independent quorum URLs:
+The default policy permits the primary Anvil RPC without independent quorum URLs:
 
 ```bash
-ZOLTAR_BOT_RPC_QUORUM=1 PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
+PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-Under the default quorum policy, the three read RPCs must use independent origins. Before broadcasting, the command
+When `ZOLTAR_BOT_RPC_QUORUM=2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
 configuration as `<operator-config>.executor-deployment.json`. It also holds the same
@@ -732,7 +731,8 @@ saved. Initial chain selection applies after restart; an RPC-only change on the
 active chain applies at the next scan boundary. To operate another chain, follow
 the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
 by `ZOLTAR_BOT_RPC_QUORUM` with the deployment controls before enabling execution.
-The default policy requires independent quorum readers.
+The default policy uses the primary reader alone. Independent quorum readers are
+required only when `ZOLTAR_BOT_RPC_QUORUM=2`.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
@@ -900,7 +900,7 @@ signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
 token input and returned token delta are negative, while the native output delta is
 positive and cannot fall below the signed minimum WETH output.
 
-Under the default quorum policy, at least two available read RPCs must return the
+When `ZOLTAR_BOT_RPC_QUORUM=2`, at least two available read RPCs must return the
 same quote at the exact quorum block, and every available response must agree. The executor
 calls the authenticated PoolManager directly, requires those signed deltas to match
 the requested input or output, settles only those deltas, and converts native ETH
@@ -1167,7 +1167,7 @@ separate. Exact successful evidence first moves the record to
 `closed-pending-finality`. The bot retains the risk slot and transaction evidence
 until the exact lifecycle evidence passes the finality quorum; it then
 realizes profit, or removes provisional withdrawal and gas accounting and reopens
-the position if the receipt was reorged out. Under the default quorum policy, fewer than two available agreeing RPCs
+the position if the receipt was reorged out. Under the opt-in two-reader policy, fewer than two available agreeing RPCs
 therefore delays closure rather than releasing the slot from the primary RPC's head.
 
 When another report replaces the bot, the durable entry already contains the exact
@@ -1272,13 +1272,13 @@ entry from depending on wallet inventory already committed to recovery.
 	  `deployment.uniswapV4Quoter` are configured, but only against standard-fee,
   hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
   Identities remain operator-supplied, but
-  under the default quorum policy, live mode authenticates every address and runtime
+  under the opt-in two-reader policy, live mode authenticates every address and runtime
   bytecode hash against the reviewed deployment manifest through at least two available read RPCs. Every
   available authentication result must agree; the manifest itself remains an
   operator trust root.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
-- Under the default quorum policy, live execution uses the exact read-quorum rule
+- Under the opt-in two-reader policy, live execution uses the exact read-quorum rule
   above at one canonical block: only retryable transport failures omit a reader, at least two readers must
   respond, and every response must agree exactly. Signed entry values come from
   that agreed snapshot, and an

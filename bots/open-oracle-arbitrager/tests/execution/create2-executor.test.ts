@@ -307,7 +307,7 @@ test('syncs every newly created intent directory entry before opening the journa
 	expect(events.at(-1)).toBe('sync:/durable/a/operator')
 })
 
-test('requires three distinct read RPC origins inside the deployment primitive', async () => {
+test('requires three distinct read RPC origins inside the deployment primitive under the explicit quorum policy', async () => {
 	const common = {
 		chain: mainnet,
 		persistIntent: async () => undefined,
@@ -315,8 +315,15 @@ test('requires three distinct read RPC origins inside the deployment primitive',
 		rpcUrls: ['https://submit.example'],
 		salt: `0x${'22'.repeat(32)}`,
 	}
-	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
-	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+	try {
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
+	} finally {
+		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+	}
 })
 
 test('passes every effective public RPC from the dashboard deployment path', async () => {

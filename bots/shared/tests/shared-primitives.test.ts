@@ -105,9 +105,9 @@ describe('shared bot primitives', () => {
 		).toThrow('RPC disagreement')
 	})
 
-	test('keeps RPC quorum secure by default and permits an explicit single-node development policy', () => {
-		expect(rpcQuorumRequirement({})).toBe(2)
-		expect(configuredReadRpcEndpointMinimum({})).toBe(3)
+	test('uses one RPC by default and permits an explicit independent-reader quorum policy', () => {
+		expect(rpcQuorumRequirement({})).toBe(1)
+		expect(configuredReadRpcEndpointMinimum({})).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
 		expect(configuredReadRpcEndpointMinimum({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '2' })).toBe(2)
@@ -130,7 +130,7 @@ describe('shared bot primitives', () => {
 
 	test('keeps transport-only quorum loss classified as degraded connectivity', async () => {
 		const unavailable = new RpcEndpointPoolFailure([{ error: 'cooling down until 2026-08-13T00:00:00.000Z', target: 'https://offline.example' }])
-		const result = settledQuorumValue('head', [Promise.resolve({ endpoint: 'one', value: 1n }), Promise.reject(unavailable), Promise.reject(unavailable)])
+		const result = settledQuorumValue('head', [Promise.resolve({ endpoint: 'one', value: 1n }), Promise.reject(unavailable), Promise.reject(unavailable)], 2)
 		await expect(result).rejects.toThrow('at least two available')
 		await result.catch(error => expect(operationalFailureDisposition(error)).toBe('connectivity-degraded'))
 	})
@@ -188,7 +188,7 @@ describe('shared bot primitives', () => {
 			},
 			getBlockNumber: async () => 112n,
 		})
-		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n), reader(112n), reader(112n)], ['one', 'two', 'three', 'four'], 'disjoint receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('requires at least two available independent RPC endpoints')
+		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n), reader(112n), reader(112n)], ['one', 'two', 'three', 'four'], 'disjoint receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('requires at least two available independent RPC endpoints')
 	})
 
 	test('never omits semantic failures from canonical finality evidence', async () => {

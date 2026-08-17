@@ -26,10 +26,11 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...
-  --quorum-rpc-url=https://... Repeat twice by default with independent origins
+  --quorum-rpc-url=https://... Optional; ZOLTAR_BOT_RPC_QUORUM=2 requires two
   --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
-ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network.
+The default accepts the primary RPC alone. Set ZOLTAR_BOT_RPC_QUORUM=2 to require
+two agreeing readers backed by two additional independent RPC origins.
 
 The command predicts and deploys the stateless executor through the canonical
 CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)

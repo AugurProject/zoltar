@@ -754,6 +754,8 @@ describe('atomic lifecycle crash recovery', () => {
 	})
 
 	test('classifies fewer than two available finality descendants as degraded connectivity', async () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
 		const position = {
 			...confirmedPosition(),
 			lifecycleSubmissionBlockNumber: '99',
@@ -764,8 +766,13 @@ describe('atomic lifecycle crash recovery', () => {
 			lifecycleTransactionHashes: [lifecycleTransactionHash],
 			status: 'withdrawing' as const,
 		}
-		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
-		expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), recoveryConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+		try {
+			const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+			await expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), recoveryConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
 	})
 
 	test('finalizes successful lifecycle evidence when two readers agree and a third is offline', async () => {
