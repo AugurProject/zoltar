@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, mainnet } from '@zoltar/shared/ethereum'
-import { resolveAnvilBinary } from '../../../../solidity/ts/testSupport/simulator/anvilNode'
+import { resolveAnvilBinary } from '../../../../../solidity/ts/testSupport/simulator/anvilNode'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEthV3 } from '../../protocol/uniswapQuoter.js'
 
 const PINNED_MAINNET_BLOCK = 22_000_000n

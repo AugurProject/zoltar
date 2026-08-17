@@ -5,7 +5,7 @@ import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } f
 import { depositRepToVaultToSecurityPool, finalizeSecurityPoolTruthAuction, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
 import { getForkOutcomeKey } from '../../protocol/helpers.js'
 import { peripherals_tokens_ShareToken_ShareToken } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
+import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')

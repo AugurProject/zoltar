@@ -8,16 +8,16 @@ import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.j
 import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../../../protocol/index.js'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '../../../protocol/deploymentHelpers.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
+import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
+import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
+import { TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import {
 	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE as SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
 	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS as SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE as SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-} from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
-import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+} from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'

@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar/protocol/index.js'
 import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js'
-import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from './testUtils.js'
+import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from './simulationTestUtils.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 

@@ -16,7 +16,6 @@
 		"@noble/curves": "2.2.0",
 		"@noble/hashes": "2.2.0",
 		"@zoltar/shared": "file:../../shared",
-		
 		"buffer": "6.0.3",
 		"micro-eth-signer": "0.18.1",
 		"micro-packed": "0.8.0",
@@ -31,5 +30,10 @@
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
 		"ws": "8.21.0"
+	},
+	"scripts": {
+		"generate": "bun ./build/projectArtifacts.mts && bun ./build/vendor.mts zoltar && bun ./build/vendor.mts statoblast",
+		"tsc": "bun x tsc --project tsconfig.json",
+		"build:workers": "bun ./build/workers.mts zoltar && bun ./build/workers.mts statoblast"
 	}
 }

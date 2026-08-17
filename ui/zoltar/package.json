@@ -31,5 +31,15 @@
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
 		"ws": "8.21.0"
+	},
+	"scripts": {
+		"generate": "bun ../coreShared/build/projectArtifacts.mts && bun ../coreShared/build/vendor.mts zoltar",
+		"vendor": "bun ../coreShared/build/vendor.mts zoltar",
+		"build:workers": "bun ../coreShared/build/workers.mts zoltar",
+		"build:tests": "bun ../coreShared/build/tests.mts zoltar",
+		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
+		"build:prod": "bun run generate && bun ../coreShared/build/production.mts zoltar",
+		"watch": "bun ../coreShared/build/watch.mts zoltar",
+		"serve": "bun ../coreShared/dev-server.ts zoltar"
 	}
 }
