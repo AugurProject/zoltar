@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as pricingCopy from '../../../copy/pricing.js'
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 export type RepPriceSource = 'v4' | 'v3' | 'mock'
