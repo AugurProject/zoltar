@@ -6,11 +6,14 @@ import {
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
+	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
 	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerHeadFreshness,
+	indexerHeadFreshnessTransitionDelay,
 	indexerLagLabel,
 	indexerProgressEstimate,
 	isCurrentCanonicalGeneration,
@@ -47,6 +50,7 @@ const usesDemoConnectionLabel = isDemo && connectionDemo !== 'indexer' && connec
 const demoState = pageUrl.searchParams.get('state')
 const priceDemo = pageUrl.searchParams.get('priceDemo')
 const detailState = pageUrl.searchParams.get('detailState')
+const deploymentState = pageUrl.searchParams.get('deploymentState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
 const isContracts = location.pathname === '/contracts'
@@ -85,6 +89,7 @@ let detailRequestVersion = 0
 let detailContextVersion = 0
 let pendingBlockUpdates = 0
 let blockRefreshTimer
+let headFreshnessTimer
 let streamHasOpened = false
 let stateData
 let activeStateType = 'pools'
@@ -275,6 +280,13 @@ const demoNetworks = [
 ]
 const demoNetworkItems = () => {
 	if (networkState === 'stale') return demoNetworks.map((network) => ({ ...network, last_success_at: new Date(Date.now() - 120_000).toISOString() }))
+	if (networkState === 'stale-head')
+		return demoNetworks.map((network) => ({
+			...network,
+			indexed_block: network.observed_block,
+			indexed_timestamp: new Date(Date.now() - 120_000).toISOString(),
+			phase: 'live',
+		}))
 	if (networkState !== 'future-start') return demoNetworks
 	return demoNetworks.map((network) => ({
 		...network,
@@ -915,7 +927,17 @@ const api = async (path, { signal } = {}) => {
 		}
 		if (path.startsWith('/api/v1/contracts')) {
 			const chainId = new URL(path, location.origin).searchParams.get('chainId')
-			return { items: demoContracts.filter((contract) => contract.chain_id === chainId) }
+			const items = demoContracts.filter((contract) => contract.chain_id === chainId)
+			if (deploymentState === 'bounded' && items[0] !== undefined)
+				items[0] = {
+					...items[0],
+					deployment_block: '0',
+					deployment_block_exact: false,
+					deployment_timestamp: '2021-10-03T13:24:41.000Z',
+				}
+			if (deploymentState === 'absent' && items[0] !== undefined)
+				items[0] = { ...items[0], deployment_block: null, deployment_block_exact: null, deployment_timestamp: null, deployment_checked_block: '0' }
+			return { items }
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
@@ -1322,8 +1344,11 @@ const renderNetworks = (networks) => {
 	}
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
-	for (const network of networks.filter((item) => String(item.chain_id) === selectedChainId())) {
-		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)))
+	const currentTime = Date.now() + serverClockOffsetMs
+	const selectedNetwork = networks.find((item) => String(item.chain_id) === selectedChainId())
+	for (const network of selectedNetwork === undefined ? [] : [selectedNetwork]) {
+		const headFreshness = indexerHeadFreshness(network, currentTime)
+		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)), currentTime)
 		if (progress.sample !== undefined) indexerProgressSamples.set(String(network.chain_id), progress.sample)
 		const card = setLiveRecord(element('article', 'network-card'), String(network.chain_id), {
 			indexedBlock: network.indexed_block,
@@ -1334,8 +1359,9 @@ const renderNetworks = (networks) => {
 			failures: network.consecutive_failures,
 		})
 		card.dataset.phase = network.phase
+		card.dataset.headFreshness = headFreshness.stale ? 'stale' : 'current'
 		const title = element('div', 'network-title')
-		const badge = element('span', 'badge', network.phase)
+		const badge = element('span', 'badge', headFreshness.stale ? 'stale head' : network.phase)
 		title.append(badge)
 		const block = element(
 			network.indexed_block && network.explorer_base_url ? 'a' : 'p',
@@ -1361,7 +1387,11 @@ const renderNetworks = (networks) => {
 		ageNode.title = exactTimestamp(network.indexed_timestamp)
 		const lag = indexerLagLabel(network)
 		meta.append(indexedTime, ageNode, element('span', '', lag))
-		const progressLabel = progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`
+		const progressLabel = headFreshness.stale
+			? `${progress.percentage ?? '100.00'}% indexed · RPC head ${age(network.indexed_timestamp).replace(/ ago$/, '')} old (limit 1m)`
+			: progress.percentage === undefined
+				? progress.eta
+				: `${progress.percentage}% complete · ${progress.eta}`
 		card.append(title, block, meta, element('p', 'network-progress', progressLabel))
 		if (Number(network.consecutive_failures) > 0) {
 			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
@@ -1369,6 +1399,21 @@ const renderNetworks = (networks) => {
 		}
 		if (network.last_error) card.append(element('p', 'network-error', network.last_error))
 		networkCards.append(card)
+	}
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
+	if (selectedNetwork !== undefined) {
+		const transitionDelay = indexerHeadFreshnessTransitionDelay(selectedNetwork, currentTime)
+		if (transitionDelay !== undefined) {
+			headFreshnessTimer = window.setTimeout(
+				() => {
+					headFreshnessTimer = undefined
+					renderNetworks(latestNetworks)
+					updateFreshness()
+				},
+				Math.min(transitionDelay, 2_147_483_647),
+			)
+		}
 	}
 	networkCards.setAttribute('aria-busy', 'false')
 	updateConnectionStatus()
@@ -1391,6 +1436,17 @@ const updateFreshness = () => {
 		retryCanonical.hidden = true
 		$('#freshness-title').textContent = 'Status API unavailable'
 		$('#freshness-detail').textContent = 'Showing the last committed data already on screen; automatic retries continue.'
+		return
+	}
+	const staleHead = latestNetworks
+		.filter((network) => String(network.chain_id) === selectedChainId())
+		.find((network) => indexerHeadFreshness(network, Date.now() + serverClockOffsetMs).stale)
+	if (staleHead !== undefined) {
+		const banner = $('#freshness-banner')
+		banner.hidden = false
+		retryCanonical.hidden = true
+		$('#freshness-title').textContent = 'RPC chain head is stale'
+		$('#freshness-detail').textContent = `Newest observed block is ${age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`
 		return
 	}
 	const stale = latestNetworks
@@ -2773,7 +2829,7 @@ const renderContractDetail = (contract) => {
 			'Deployment block',
 			contract.deployment_block === null || contract.deployment_block === undefined
 				? 'Not observed'
-				: `${contract.deployment_block_exact === false ? 'At or before ' : ''}#${number(contract.deployment_block)}`,
+				: `${contract.deployment_block_exact === false ? 'Search boundary ' : ''}#${number(contract.deployment_block)}`,
 		),
 		detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
 		detailCard('First protocol discovery block', contract.discovery_block ? `#${number(contract.discovery_block)}` : 'Configured contract', true),
@@ -2785,7 +2841,7 @@ const renderContractDetail = (contract) => {
 	openContract.dataset.contractAction = 'open-contract'
 	actions.append(copyAddress, openContract)
 	if (contract.deployment_block) {
-		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, 'Open deployment block ↗')
+		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, contractDeploymentBlockActionLabel(contract))
 		openDeployment.dataset.contractAction = 'open-deployment'
 		actions.append(openDeployment)
 	}
@@ -4323,6 +4379,8 @@ const resetSelectedNetworkContext = () => {
 	hideCanonicalDialogStatus()
 	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
 	blockRefreshTimer = undefined
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 	if (isActivity) {
 		logsAbortController?.abort()
@@ -4651,6 +4709,8 @@ addEventListener('pagehide', () => {
 	streamHasOpened = false
 	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
 	blockRefreshTimer = undefined
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 })
 addEventListener('pageshow', async (event) => {
