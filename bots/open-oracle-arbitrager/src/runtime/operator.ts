@@ -304,6 +304,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					const block = fixedHeadNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber: fixedHeadNumber })
 					const blockNumber = block.number
 					if (blockNumber === undefined) throw new Error('Latest block is missing its number')
+					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
 					if (blockHash === undefined) throw new Error('Latest block is missing its hash')
 					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {

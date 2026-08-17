@@ -2,6 +2,7 @@
 
 import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
+import { loadOperatorSettings } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
@@ -26,10 +27,11 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...
-  --quorum-rpc-url=https://... Repeat twice by default with independent origins
+  --quorum-rpc-url=https://... Repeat as required by the saved dashboard policy
   --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
-ZOLTAR_BOT_RPC_QUORUM=1 permits none only on an isolated development network.
+The saved RPC agreement requirement permits none only when set to one reader for
+an isolated development network.
 
 The command predicts and deploys the stateless executor through the canonical
 CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
@@ -42,11 +44,14 @@ const networkName = parseNetworkName(option('network'))
 const network = networkConfiguration(networkName, { rep: networkName === 'sepolia' ? zeroAddress : undefined })
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const quorumRpcUrls = options('quorum-rpc-url')
-if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Executor deployment requires exactly two --quorum-rpc-url values in addition to --rpc-url')
+const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
+const savedSettings = await loadOperatorSettings(settingsFile)
+const rpcQuorum = savedSettings?.rpcQuorum ?? 2
+process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
+if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)
-const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 const intentPath = executorDeploymentIntentPath(settingsFile)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
 const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)

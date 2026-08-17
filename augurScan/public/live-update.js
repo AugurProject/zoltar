@@ -14,10 +14,116 @@ export const mergeUniqueRecords = (primary, retained, keyFor) => {
 	})
 }
 
+export const canonicalPageLimit = (targetCount, loadedCount, pageSize) => (targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize)
+
+export const collectCanonicalPages = async (fetchPage, targetCount, keyFor) => {
+	let cursor
+	let items = []
+	do {
+		const remaining = targetCount > 0 ? canonicalPageLimit(targetCount, items.length, 100) : undefined
+		const page = await fetchPage(cursor, remaining)
+		items = mergeUniqueRecords(items, page.items, keyFor)
+		cursor = page.nextCursor
+	} while (cursor !== undefined && items.length < targetCount)
+	return { items: targetCount > 0 ? items.slice(0, targetCount) : items, nextCursor: cursor }
+}
+
 export const reconcilePaginatedTotal = (currentTotal, responseTotal, append) => (append ? Math.max(currentTotal, responseTotal) : responseTotal)
+
+export const paginatedSnapshotWasReplaced = (loadedCount, responseTotal) => responseTotal < loadedCount
+
+export const refreshPresentation = ({ live, append = false }) => {
+	const visible = !live || append
+	return { busy: visible, loadingState: visible }
+}
+
+export const resolveActivityRefreshDepth = (...depths) => {
+	const targetDepth = Math.max(0, ...depths.filter((depth) => Number.isInteger(depth) && depth > 0))
+	return targetDepth > 0 ? targetDepth : undefined
+}
+
+export const activityRefreshRetention = (canonicalRefreshRequired, canonicalDepth, visibleDepth) => ({
+	replaceDepth: resolveActivityRefreshDepth(canonicalRefreshRequired ? canonicalDepth : undefined, visibleDepth),
+	retainVisibleDepth: true,
+})
+
+export const retainedPaginationAvailable = (hasContinuation, canonicalRefreshRequired) => hasContinuation && !canonicalRefreshRequired
+
+export const paginationRequestAllowed = (append, canonicalRefreshRequired) => !append || !canonicalRefreshRequired
+
+export const queuedPaginationPresentation = (canonicalRefreshRequired) => ({
+	hidden: canonicalRefreshRequired,
+	disabled: true,
+	busy: !canonicalRefreshRequired,
+	label: canonicalRefreshRequired ? 'Show more' : 'Loading more…',
+})
+
+export const transactionRetryMode = (appendFailure, hasLoadedTransactions) => ({
+	append: appendFailure,
+	liveRefresh: !appendFailure && hasLoadedTransactions,
+})
+
+export const accountStateDuringStagedRefresh = (committedState, stagedState, stagedRefresh) => (stagedRefresh ? committedState : stagedState)
+
+export const createForegroundRefreshGate = () => {
+	let active
+	const run = (operation) => {
+		let request
+		if (active === undefined) {
+			try {
+				request = Promise.resolve(operation())
+			} catch (error) {
+				request = Promise.reject(error)
+			}
+		} else {
+			request = active.then(
+				() => operation(),
+				() => operation(),
+			)
+		}
+		active = request
+		const clear = () => {
+			if (active === request) active = undefined
+		}
+		void request.then(clear, clear)
+		return request
+	}
+	const reserve = () => {
+		let markReady
+		let releaseOperation
+		const ready = new Promise((resolve) => {
+			markReady = resolve
+		})
+		const completed = run(
+			() =>
+				new Promise((resolve) => {
+					releaseOperation = resolve
+					markReady()
+				}),
+		)
+		return { ready, release: () => releaseOperation(), completed }
+	}
+	return { runBackground: run, runForeground: run, reserve }
+}
+
+export const runWithForegroundReservation = async (gate, operation) => {
+	const reservation = gate.reserve()
+	try {
+		await reservation.ready
+		return await operation()
+	} finally {
+		reservation.release()
+		await reservation.completed
+	}
+}
 
 export const isCurrentLiveRequest = (requestVersion, currentVersion, responseChainId, selectedChainId) =>
 	requestVersion === currentVersion && String(responseChainId) === String(selectedChainId)
+
+export const isCurrentContextRequest = (requestContext, currentContext, requestVersion, currentVersion) =>
+	requestContext === currentContext && requestVersion === currentVersion
+
+export const isCurrentCanonicalGeneration = (requestGeneration, currentGeneration) => requestGeneration === currentGeneration
 
 export const isNoncanonicalDetailFailure = (canonicalRecovery, status) => canonicalRecovery && status === 404
 
@@ -55,6 +161,30 @@ export const indexerWaitingForStart = (network) => {
 	const startBlock = decimalBlock(network.start_block)
 	const observedBlock = decimalBlock(network.observed_block)
 	return startBlock !== undefined && observedBlock !== undefined && observedBlock < startBlock
+}
+
+const chainHeadFreshnessThresholdMs = 60_000
+
+export const indexerHeadFreshness = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return { stale: false }
+	const indexedBlock = decimalBlock(network?.indexed_block)
+	const observedBlock = decimalBlock(network?.observed_block)
+	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return { stale: false }
+	const timestamp = new Date(network.indexed_timestamp).getTime()
+	if (!Number.isFinite(timestamp)) return { stale: false }
+	const ageMs = Math.max(0, now - timestamp)
+	return ageMs > chainHeadFreshnessThresholdMs ? { stale: true, ageMs } : { stale: false }
+}
+
+export const indexerHeadFreshnessTransitionDelay = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return undefined
+	const indexedBlock = decimalBlock(network?.indexed_block)
+	const observedBlock = decimalBlock(network?.observed_block)
+	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return undefined
+	const timestamp = new Date(network.indexed_timestamp).getTime()
+	if (!Number.isFinite(timestamp)) return undefined
+	const delayMs = timestamp + chainHeadFreshnessThresholdMs + 1 - now
+	return delayMs > 0 ? delayMs : undefined
 }
 
 export const indexerLagLabel = (network) => {
@@ -111,7 +241,7 @@ export const indexerProgressEstimate = (network, previousSample, sampledAt = Dat
 	const roundedHundredths = (exactCompletedBlocks * 10_000n + exactTotalBlocks / 2n) / exactTotalBlocks
 	const hundredths = remainingBlocks > 0 && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
 	const percentage = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`
-	if (remainingBlocks === 0) return { percentage: '100.00', eta: 'Caught up' }
+	if (remainingBlocks === 0) return { percentage: '100.00', eta: indexerHeadFreshness(network, sampledAt).stale ? 'RPC head stale' : 'Caught up' }
 	let blocksPerSecond = previousSample?.blocksPerSecond
 	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
 		const observedRate = (boundedIndexed - previousSample.indexedBlock) / ((sampledAt - previousSample.sampledAt) / 1_000)
@@ -135,14 +265,17 @@ export const indexerProgressEstimate = (network, previousSample, sampledAt = Dat
 export const contractDeploymentStatus = (contract) => {
 	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
 		return contract.deployment_block_exact === false
-			? { label: `Deployed by #${contract.deployment_block}`, tone: 'live' }
+			? { label: `Code present at #${contract.deployment_block}`, tone: 'live' }
 			: { label: 'Deployed', tone: 'live' }
 	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
-		return { label: `Not deployed at #${contract.deployment_checked_block}`, tone: 'error' }
+		return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
 	return { label: 'Checking deployment', tone: 'pending' }
 }
 
-export const contractDeploymentTimestampLabel = (contract) => (contract.deployment_block_exact === false ? 'Code present by' : 'Deployed at')
+export const contractDeploymentTimestampLabel = (contract) => (contract.deployment_block_exact === false ? 'Code present at' : 'Deployed at')
+
+export const contractDeploymentBlockActionLabel = (contract) =>
+	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'
 
 export const reconcileTransactionDialogSnapshot = (snapshot, availableKeys) => ({
 	...snapshot,

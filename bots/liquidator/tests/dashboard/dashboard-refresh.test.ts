@@ -76,12 +76,14 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 	}
 }
 
-function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = [], options: { execute?: boolean; paused?: boolean; pendingTransactions?: PendingTransaction[]; universes?: DashboardUniverse[] } = {}) {
+function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = [], options: { execute?: boolean; lastScannedBlock?: string; lastScannedTimestamp?: string; paused?: boolean; pendingTransactions?: PendingTransaction[]; universes?: DashboardUniverse[] } = {}) {
 	return {
 		activities: [],
 		alerts,
 		error,
 		execute: options.execute ?? false,
+		lastScannedBlock: options.lastScannedBlock,
+		lastScannedTimestamp: options.lastScannedTimestamp,
 		metrics: {
 			approvedUniverseCount: 1,
 			assumedOpenInterestEth: '0',
@@ -147,12 +149,14 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
 	const window = page.mainFrame.window
 	Reflect.set(window, 'Boolean', Boolean)
+	Reflect.set(window, 'Date', Date)
 	Reflect.set(window, 'AbortController', AbortController)
 	Reflect.set(window, 'Map', Map)
 	Reflect.set(window, 'Set', Set)
 	Reflect.set(window, 'JSON', JSON)
 	Reflect.set(window, 'Error', Error)
 	Reflect.set(window, 'Math', Math)
+	Reflect.set(window, 'Number', Number)
 	Reflect.set(window, 'Object', Object)
 	Reflect.set(window, 'Promise', Promise)
 	Reflect.set(window, 'Reflect', Reflect)
@@ -248,7 +252,10 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	await page.waitUntilComplete()
 	const refresh = refreshCallbacks[0]
 	if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
+	const blockTick = refreshCallbacks[1]
+	if (blockTick === undefined) throw new Error('Dashboard did not register its block-age interval')
 	return {
+		blockTick,
 		refresh: async () => {
 			await refresh()
 			await page.waitUntilComplete()
@@ -310,6 +317,14 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 }
 
 describe('liquidator dashboard refresh behavior', () => {
+	test('shows the current block and when it appeared', async () => {
+		const nowSeconds = Math.floor(Date.now() / 1_000)
+		const page = await dashboard(configuration(), state(undefined, [], { lastScannedBlock: '12345678', lastScannedTimestamp: (nowSeconds - 12).toString() }))
+		await page.refresh()
+		await page.blockTick()
+		expect(page.window.document.getElementById('block-status')?.textContent).toMatch(/^Block 12345678 · seen 1[23]s ago$/)
+	})
+
 	test('provides a durable manual refresh action across success and failure', async () => {
 		const page = await dashboard()
 		const refreshButton = page.window.document.getElementById('refresh-button')

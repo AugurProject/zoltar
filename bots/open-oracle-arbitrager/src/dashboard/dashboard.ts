@@ -150,6 +150,9 @@ function updateNetworkTargetStatus() {
 }
 
 function synchronizePersistedConnectivity(configuration: unknown) {
+	const rpcQuorum = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'rpcQuorum') : undefined
+	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Bot returned an invalid RPC quorum setting')
+	element<HTMLSelectElement>('rpc-quorum').value = rpcQuorum.toString()
 	const focused = persistedConnectivity(configuration)
 	if (focused === undefined) {
 		element<HTMLInputElement>('read-rpc-url').value = ''
@@ -897,6 +900,10 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
 }
 
+function renderBlockStatus(snapshot = latestSnapshot) {
+	setText('block-value', snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+}
+
 function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
 	const body = element<HTMLTableSectionElement>('transactions-body')
 	body.replaceChildren()
@@ -957,7 +964,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
-	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+	renderBlockStatus(snapshot)
 	setText('profit-value', exactAmount(snapshot.totalRealizedNetProfitEth, 'ETH'))
 	setText('open-profit-value', exactAmount(snapshot.totalOpenHedgedNetProfitEth, 'ETH'))
 	setText('hedged-profit-value', exactAmount(snapshot.totalHedgedProfitBeforeGasEth, 'ETH'))
@@ -1371,8 +1378,9 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 				.filter(value => value !== ''),
 			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
 		}
-		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia' }>('/api/connectivity', {
-			body: JSON.stringify({ connectivity, network: selectedNetwork }),
+		const rpcQuorum = Number(element<HTMLSelectElement>('rpc-quorum').value)
+		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; restartRequired: boolean; rpcQuorum: 1 | 2 }>('/api/connectivity', {
+			body: JSON.stringify({ connectivity, network: selectedNetwork, rpcQuorum }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
@@ -1380,8 +1388,9 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		element<HTMLSelectElement>('network-name').value = response.network
 		element<HTMLSelectElement>('network-name').disabled = true
 		persistedNetwork = response.network
+		element<HTMLSelectElement>('rpc-quorum').value = response.rpcQuorum.toString()
 		updateNetworkTargetStatus()
-		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
+		setText('connectivity-status', response.restartRequired ? 'Chain, RPCs, and quorum passed validation and were saved. Restart the bot to apply them.' : 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		await refresh()
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
@@ -1528,3 +1537,4 @@ window.setInterval(() => void refresh(), 2_000)
 window.setInterval(() => {
 	if (connected && latestSnapshot !== undefined) renderPollRetry(latestSnapshot)
 }, 1_000)
+window.setInterval(renderBlockStatus, 1_000)

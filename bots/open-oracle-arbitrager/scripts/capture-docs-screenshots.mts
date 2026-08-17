@@ -228,8 +228,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				: []),
 			...(process.env['OPEN_ORACLE_CAPTURE_SETTINGS'] === '1'
 				? ([
-						['settings-desktop.png', 'settings'],
-						['settings-mobile.png', 'settings'],
+						['settings-desktop.png', 'network-connectivity'],
+						['settings-mobile.png', 'network-connectivity'],
 					] as const)
 				: []),
 		] as const) {
@@ -392,7 +392,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				sessionId,
 			)
 			const recoveryValue = typeof connectivityRecovery === 'object' && connectivityRecovery !== null && 'result' in connectivityRecovery && typeof connectivityRecovery.result === 'object' && connectivityRecovery.result !== null && 'value' in connectivityRecovery.result ? connectivityRecovery.result.value : undefined
-			if (typeof recoveryValue !== 'object' || recoveryValue === null || !('fieldsetDisabled' in recoveryValue) || recoveryValue.fieldsetDisabled !== false || !('status' in recoveryValue) || recoveryValue.status !== 'RPCs passed chain checks and were saved for the next scan and future restarts.') {
+			if (typeof recoveryValue !== 'object' || recoveryValue === null || !('fieldsetDisabled' in recoveryValue) || recoveryValue.fieldsetDisabled !== false || !('status' in recoveryValue) || recoveryValue.status !== 'Chain and RPCs passed validation, were saved, and apply to the next scan.') {
 				throw new Error(`Connectivity mutation did not recover after retry: ${JSON.stringify(recoveryValue)}`)
 			}
 		}
@@ -1761,7 +1761,7 @@ const server = startDashboardServer(0, {
 	updateConnectivity: async () => {
 		while (fixtureConnectivityHanging) await Bun.sleep(10)
 		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)
-		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, restartRequired: false }
+		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, restartRequired: false, rpcQuorum: 2 as const }
 	},
 	updateConfiguration: value => value,
 	updateSigner: () => ({ wallet }),

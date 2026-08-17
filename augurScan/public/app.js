@@ -1,20 +1,38 @@
 import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.js'
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.js'
 import {
+	accountStateDuringStagedRefresh,
+	activityRefreshRetention,
+	canonicalPageLimit,
 	classifyLiveRecords,
+	collectCanonicalPages,
+	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
+	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerHeadFreshness,
+	indexerHeadFreshnessTransitionDelay,
 	indexerLagLabel,
 	indexerProgressEstimate,
+	isCurrentCanonicalGeneration,
+	isCurrentContextRequest,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
+	paginatedSnapshotWasReplaced,
+	paginationRequestAllowed,
+	queuedPaginationPresentation,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
+	refreshPresentation,
+	resolveActivityRefreshDepth,
+	retainedPaginationAvailable,
+	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
+	transactionRetryMode,
 } from './live-update.js'
 
 const $ = (selector) => document.querySelector(selector)
@@ -32,6 +50,7 @@ const usesDemoConnectionLabel = isDemo && connectionDemo !== 'indexer' && connec
 const demoState = pageUrl.searchParams.get('state')
 const priceDemo = pageUrl.searchParams.get('priceDemo')
 const detailState = pageUrl.searchParams.get('detailState')
+const deploymentState = pageUrl.searchParams.get('deploymentState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
 const isContracts = location.pathname === '/contracts'
@@ -51,6 +70,8 @@ let demoDetailErrorConsumed = false
 let demoStateDetailRequests = 0
 let demoTransactionRequests = 0
 let demoLogRequests = 0
+let demoRichListRequests = 0
+let demoNetworkRequests = 0
 let demoRouteRequestsInFlight = 0
 let demoMaxRouteRequestsInFlight = 0
 let demoReorgObserved = false
@@ -59,16 +80,23 @@ let demoReorgRefreshErrorConsumed = false
 let demoTransactionSnapshotInvalidated = false
 let demoCanonicalRouteRefreshErrorConsumed = false
 let demoTransactionRestoreErrorConsumed = false
+let demoTransactionAppendErrorConsumed = false
+let demoNetworkFallbackErrorConsumed = false
+let demoRouteRefreshErrorConsumed = false
 let logsRequestVersion = 0
+let activityPaginationIntentVersion = 0
 let detailRequestVersion = 0
+let detailContextVersion = 0
 let pendingBlockUpdates = 0
 let blockRefreshTimer
+let headFreshnessTimer
 let streamHasOpened = false
 let stateData
 let activeStateType = 'pools'
 let selectedEntityKey
 let catalogRequestVersion = 0
 let stateDetailRequestVersion = 0
+let stateDetailContextVersion = 0
 let stream
 let networkLoadPromise
 let networkFollowUpPromise
@@ -80,24 +108,67 @@ let networkFreshnessThresholdMs = 48_000
 let lastNetworkRequestFailed = false
 let activeReorgRecovery
 let canonicalRefreshRequired = false
+let canonicalDataGeneration = 0
 let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
+let richListPaginationIntentVersion = 0
 let contractItems = []
 let contractRequestVersion = 0
 let selectedContractAddress
 let activeLog
 let pendingCanonicalLog
+let pendingCanonicalActivityCount
 let activeAccount
 let activeAccountTransactions
+let activeAccountLoadMore
 let pendingCanonicalAccount
 let pendingAccountDialogSnapshot
 let preservePendingOnDialogClose = false
 let addressProfileRequestVersion = 0
+let viewContextVersion = 0
 let currentAddressProfile
 const addressIdentityCache = new Map()
 let polledReorgRefreshTimer
 let requestRouteRefresh
+const logRefreshGate = createForegroundRefreshGate()
+const contractRefreshGate = createForegroundRefreshGate()
+const richListRefreshGate = createForegroundRefreshGate()
+const addressProfileRefreshGate = createForegroundRefreshGate()
+const systemStateRefreshGate = createForegroundRefreshGate()
+const systemDetailRefreshGate = createForegroundRefreshGate()
+const detailRefreshGate = createForegroundRefreshGate()
+const accountPageRefreshGate = createForegroundRefreshGate()
+const canonicalIncompleteTitle = 'Chain update refresh incomplete'
+const canonicalIncompleteDetail = 'Showing the prior details. Retry the chain update refresh to confirm the current state.'
+
+const showCanonicalDialogStatus = (title, detail) => {
+	if (!dialog.open) return
+	$('#detail-canonical-title').textContent = title
+	$('#detail-canonical-detail').textContent = detail
+	$('#detail-canonical-retry').hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
+	$('#detail-canonical-status').hidden = false
+}
+
+const hideCanonicalDialogStatus = () => {
+	$('#detail-canonical-status').hidden = true
+}
+
+const syncCanonicalDialogStatus = () => {
+	if (!dialog.open) {
+		hideCanonicalDialogStatus()
+		return
+	}
+	if (activeReorgRecovery !== undefined) {
+		showCanonicalDialogStatus(activeReorgRecovery.title, activeReorgRecovery.detail)
+		return
+	}
+	if (canonicalRefreshRequired) {
+		showCanonicalDialogStatus(canonicalIncompleteTitle, canonicalIncompleteDetail)
+		return
+	}
+	hideCanonicalDialogStatus()
+}
 
 const updateConnectionStatus = () => {
 	if (usesDemoConnectionLabel) {
@@ -129,6 +200,15 @@ const setLiveRecord = (node, key, value) => {
 }
 
 const retryCanonicalViewOr = (fallback) => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : fallback())
+
+const renderRetryStatus = (status, message, retryAction) => {
+	status.hidden = false
+	status.className = 'system-status error'
+	const retry = element('button', '', 'Retry')
+	retry.type = 'button'
+	retry.addEventListener('click', retryAction)
+	status.replaceChildren(element('span', '', message), retry)
+}
 
 const animateLiveNode = (node, className) => {
 	node.classList.remove('live-added', 'live-changed', className)
@@ -200,6 +280,13 @@ const demoNetworks = [
 ]
 const demoNetworkItems = () => {
 	if (networkState === 'stale') return demoNetworks.map((network) => ({ ...network, last_success_at: new Date(Date.now() - 120_000).toISOString() }))
+	if (networkState === 'stale-head')
+		return demoNetworks.map((network) => ({
+			...network,
+			indexed_block: network.observed_block,
+			indexed_timestamp: new Date(Date.now() - 120_000).toISOString(),
+			phase: 'live',
+		}))
 	if (networkState !== 'future-start') return demoNetworks
 	return demoNetworks.map((network) => ({
 		...network,
@@ -831,11 +918,26 @@ const api = async (path, { signal } = {}) => {
 	if (isDemo) {
 		if (path.startsWith('/api/v1/networks')) {
 			if (networkState === 'error') throw new Error('Network status could not be refreshed')
-			return { items: demoNetworkItems() }
+			demoNetworkRequests++
+			const items = demoNetworkItems()
+			return {
+				items:
+					pageUrl.searchParams.get('networkFallbackAfterLoad') === '1' && demoNetworkRequests > 1 ? items.filter((network) => network.chain_id !== '1') : items,
+			}
 		}
 		if (path.startsWith('/api/v1/contracts')) {
 			const chainId = new URL(path, location.origin).searchParams.get('chainId')
-			return { items: demoContracts.filter((contract) => contract.chain_id === chainId) }
+			const items = demoContracts.filter((contract) => contract.chain_id === chainId)
+			if (deploymentState === 'bounded' && items[0] !== undefined)
+				items[0] = {
+					...items[0],
+					deployment_block: '0',
+					deployment_block_exact: false,
+					deployment_timestamp: '2021-10-03T13:24:41.000Z',
+				}
+			if (deploymentState === 'absent' && items[0] !== undefined)
+				items[0] = { ...items[0], deployment_block: null, deployment_block_exact: null, deployment_timestamp: null, deployment_checked_block: '0' }
+			return { items }
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
@@ -869,7 +971,20 @@ const api = async (path, { signal } = {}) => {
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const cursor = request.searchParams.get('cursor')
 			demoTransactionRequests++
-			if (pageUrl.searchParams.get('transactionRestoreDelay') === '1' && demoReorgObserved && cursor === null && demoTransactionRequests > 1)
+			window.__demoTransactionRequests = demoTransactionRequests
+			if (pageUrl.searchParams.get('transactionAppendDelay') === '1' && cursor !== null) await new Promise((resolve) => setTimeout(resolve, 1_500))
+			if (pageUrl.searchParams.get('transactionAppendErrorOnce') === '1' && cursor !== null && !demoTransactionAppendErrorConsumed) {
+				demoTransactionAppendErrorConsumed = true
+				throw new Error('The next transaction page could not be read')
+			}
+			if (
+				(pageUrl.searchParams.get('transactionLiveRefreshDelay') === '1' || pageUrl.searchParams.get('transactionLiveRefreshDelayLong') === '1') &&
+				!canonicalRefreshRequired &&
+				cursor === null &&
+				demoTransactionRequests > 1
+			)
+				await new Promise((resolve) => setTimeout(resolve, pageUrl.searchParams.get('transactionLiveRefreshDelayLong') === '1' ? 3_500 : 800))
+			if (pageUrl.searchParams.get('transactionRestoreDelay') === '1' && canonicalRefreshRequired && cursor === null && demoTransactionRequests > 1)
 				await new Promise((resolve) => setTimeout(resolve, 800))
 			if (
 				pageUrl.searchParams.get('transactionRestoreErrorOnce') === '1' &&
@@ -880,14 +995,19 @@ const api = async (path, { signal } = {}) => {
 				demoTransactionRestoreErrorConsumed = true
 				throw new Error('The account transactions could not be restored')
 			}
-			if (pageUrl.searchParams.get('transactionCursor409') === '1' && cursor !== null && !demoTransactionSnapshotInvalidated) {
-				demoTransactionSnapshotInvalidated = true
+			if (
+				cursor !== null &&
+				((pageUrl.searchParams.get('transactionCursor409') === '1' && !demoTransactionSnapshotInvalidated) ||
+					pageUrl.searchParams.get('transactionCursor409Always') === '1')
+			) {
+				if (pageUrl.searchParams.get('transactionCursor409Always') !== '1') demoTransactionSnapshotInvalidated = true
 				const error = new Error('The transaction snapshot changed after a chain update')
 				error.status = 409
 				throw error
 			}
 			if (pageUrl.searchParams.get('transactionRefreshError') === '1' && cursor === null && demoTransactionRequests > 1)
 				throw new Error('The newest account transactions could not be read')
+			if (demoReorgObserved && pageUrl.searchParams.get('evictTransactionOnReorg') === '1') demoTransactionSnapshotInvalidated = true
 			const offset = cursor ? Number(JSON.parse(atob(cursor))) : 0
 			const limit = Number(request.searchParams.get('limit') ?? 50)
 			const owner = demoRichList.find((item) => item.chain_id === chainId && item.address.toLowerCase() === address)
@@ -1001,22 +1121,56 @@ const api = async (path, { signal } = {}) => {
 			}
 		}
 		if (path.startsWith('/api/v1/richlist')) {
+			demoRichListRequests++
+			const request = new URL(path, location.origin)
+			if (
+				pageUrl.searchParams.get('richRouteRefreshDelayAfterLoad') === '1' &&
+				demoRichListRequests > 1 &&
+				Number(request.searchParams.get('offset') ?? 0) === 0
+			) {
+				demoRouteRequestsInFlight++
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				try {
+					await new Promise((resolve) => setTimeout(resolve, 1_500))
+				} finally {
+					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				}
+			}
+			const richRefreshErrorRequest = Number(pageUrl.searchParams.get('routeRefreshErrorRequest'))
+			if (
+				((pageUrl.searchParams.get('routeRefreshErrorAfterLoad') === '1' && demoRichListRequests > 1) ||
+					(Number.isInteger(richRefreshErrorRequest) && richRefreshErrorRequest > 0 && demoRichListRequests === richRefreshErrorRequest)) &&
+				!demoRouteRefreshErrorConsumed
+			) {
+				demoRouteRefreshErrorConsumed = true
+				throw new Error('The newest account rankings could not be read')
+			}
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
 				demoCanonicalRouteRefreshErrorConsumed = true
 				throw new Error('The account state could not be refreshed')
 			}
-			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const offset = Number(request.searchParams.get('offset') ?? 0)
 			const limit = Number(request.searchParams.get('limit') ?? 50)
+			if (pageUrl.searchParams.get('richAppendDelay') === '1' && offset > 0) await new Promise((resolve) => setTimeout(resolve, 1_500))
 			const filtered = demoRichList.filter(
 				(item) =>
 					(!chainId || item.chain_id === chainId) &&
 					(!address || item.address.toLowerCase() === address) &&
 					!(demoReorgObserved && pageUrl.searchParams.get('evictAccountOnReorg') === '1' && item.address.toLowerCase() === demoEvictedAddress),
 			)
-			return { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset }
+			const ranked =
+				pageUrl.searchParams.get('richPaginationDemo') === '1' && address === undefined && filtered.length > 0
+					? Array.from({ length: 120 }, (_, index) => ({
+							...filtered[index % filtered.length],
+							address: `0x${BigInt(index + 1)
+								.toString(16)
+								.padStart(40, '0')}`,
+						}))
+					: filtered
+			return { items: ranked.slice(offset, offset + limit), total: ranked.length, limit, offset }
 		}
 		if (path.startsWith('/api/v1/logs/') && path.split('/').length > 7) {
 			if (detailState === 'error' && !demoDetailErrorConsumed) {
@@ -1075,6 +1229,19 @@ const api = async (path, { signal } = {}) => {
 		}
 		if (path.startsWith('/api/v1/logs')) {
 			demoLogRequests++
+			const activityRefreshErrorRequest = Number(pageUrl.searchParams.get('routeRefreshErrorRequest'))
+			if (
+				((pageUrl.searchParams.get('routeRefreshErrorAfterLoad') === '1' && demoLogRequests > 1) ||
+					(Number.isInteger(activityRefreshErrorRequest) && activityRefreshErrorRequest > 0 && demoLogRequests === activityRefreshErrorRequest)) &&
+				!demoRouteRefreshErrorConsumed
+			) {
+				demoRouteRefreshErrorConsumed = true
+				throw new Error('The newest activity could not be read')
+			}
+			if (pageUrl.searchParams.get('networkFallbackRouteError') === '1' && selectedChainId() !== '1' && !demoNetworkFallbackErrorConsumed) {
+				demoNetworkFallbackErrorConsumed = true
+				throw new Error('Activity could not be loaded for the fallback network')
+			}
 			if (pageUrl.searchParams.get('reorgRefreshError') === '1' && demoLogRequests > 1 && !demoReorgRefreshErrorConsumed) {
 				demoReorgRefreshErrorConsumed = true
 				throw new Error('Activity could not be refreshed after the chain changed')
@@ -1088,28 +1255,60 @@ const api = async (path, { signal } = {}) => {
 				demoRouteRequestsInFlight++
 				demoMaxRouteRequestsInFlight = Math.max(demoMaxRouteRequestsInFlight, demoRouteRequestsInFlight)
 				window.__demoMaxRouteRequestsInFlight = demoMaxRouteRequestsInFlight
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
 				try {
 					await new Promise((resolve) => setTimeout(resolve, 800))
 				} finally {
 					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
 				}
 			}
 			const request = new URL(path, location.origin)
+			if (pageUrl.searchParams.get('logRouteRefreshDelayAfterLoad') === '1' && demoLogRequests > 1 && !request.searchParams.has('cursor')) {
+				demoRouteRequestsInFlight++
+				window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				try {
+					await new Promise((resolve) => setTimeout(resolve, 1_500))
+				} finally {
+					demoRouteRequestsInFlight--
+					window.__demoRouteRequestsInFlight = demoRouteRequestsInFlight
+				}
+			}
 			const chainId = request.searchParams.get('chainId')
 			const event = request.searchParams.get('event')?.toLowerCase()
 			const address = request.searchParams.get('address')?.toLowerCase()
+			if (pageUrl.searchParams.get('logAppendDelay') === '1' && request.searchParams.has('cursor')) await new Promise((resolve) => setTimeout(resolve, 3_500))
 			if (address && !/^0x[0-9a-f]{40}$/.test(address)) throw new Error('Address filter is invalid')
-			return {
-				items:
-					demoState === 'empty'
-						? []
-						: demoLogs.filter(
-								(item) =>
-									(!chainId || item.chain_id === chainId) &&
-									(!event || item.event_name?.toLowerCase().includes(event)) &&
-									(!address || [item.emitter_address, item.origin_address].some((candidate) => candidate?.toLowerCase() === address)),
-							),
-			}
+			const filtered =
+				demoState === 'empty'
+					? []
+					: demoLogs.filter(
+							(item) =>
+								(!chainId || item.chain_id === chainId) &&
+								(!event || item.event_name?.toLowerCase().includes(event)) &&
+								(!address || [item.emitter_address, item.origin_address].some((candidate) => candidate?.toLowerCase() === address)),
+						)
+			if (pageUrl.searchParams.get('logPaginationDemo') !== '1' || filtered.length === 0) return { items: filtered }
+			const expanded = Array.from({ length: 220 }, (_, index) => {
+				const ordinal = demoReorgObserved ? (index === 0 ? 10_000 : index - 1) : index
+				const template = filtered[ordinal % filtered.length]
+				return {
+					...template,
+					block_number: String(23_184_711 - Math.min(ordinal, 219)),
+					block_hash: `0x${BigInt(50_000 + ordinal)
+						.toString(16)
+						.padStart(64, '0')}`,
+					tx_hash: `0x${BigInt(100_000 + ordinal)
+						.toString(16)
+						.padStart(64, '0')}`,
+					log_index: ordinal,
+					summary: ordinal === 10_000 ? 'Canonical replacement after chain reorganization' : template.summary,
+				}
+			})
+			const offset = request.searchParams.get('cursor') ? Number(JSON.parse(atob(request.searchParams.get('cursor')))) : 0
+			const limit = Number(request.searchParams.get('limit') ?? 100)
+			const nextOffset = offset + limit
+			return { items: expanded.slice(offset, nextOffset), nextCursor: nextOffset < expanded.length ? btoa(JSON.stringify(nextOffset)) : undefined }
 		}
 	}
 	const timeout = AbortSignal.timeout(15_000)
@@ -1145,8 +1344,11 @@ const renderNetworks = (networks) => {
 	}
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
-	for (const network of networks.filter((item) => String(item.chain_id) === selectedChainId())) {
-		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)))
+	const currentTime = Date.now() + serverClockOffsetMs
+	const selectedNetwork = networks.find((item) => String(item.chain_id) === selectedChainId())
+	for (const network of selectedNetwork === undefined ? [] : [selectedNetwork]) {
+		const headFreshness = indexerHeadFreshness(network, currentTime)
+		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)), currentTime)
 		if (progress.sample !== undefined) indexerProgressSamples.set(String(network.chain_id), progress.sample)
 		const card = setLiveRecord(element('article', 'network-card'), String(network.chain_id), {
 			indexedBlock: network.indexed_block,
@@ -1157,8 +1359,9 @@ const renderNetworks = (networks) => {
 			failures: network.consecutive_failures,
 		})
 		card.dataset.phase = network.phase
+		card.dataset.headFreshness = headFreshness.stale ? 'stale' : 'current'
 		const title = element('div', 'network-title')
-		const badge = element('span', 'badge', network.phase)
+		const badge = element('span', 'badge', headFreshness.stale ? 'stale head' : network.phase)
 		title.append(badge)
 		const block = element(
 			network.indexed_block && network.explorer_base_url ? 'a' : 'p',
@@ -1184,7 +1387,11 @@ const renderNetworks = (networks) => {
 		ageNode.title = exactTimestamp(network.indexed_timestamp)
 		const lag = indexerLagLabel(network)
 		meta.append(indexedTime, ageNode, element('span', '', lag))
-		const progressLabel = progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`
+		const progressLabel = headFreshness.stale
+			? `${progress.percentage ?? '100.00'}% indexed · RPC head ${age(network.indexed_timestamp).replace(/ ago$/, '')} old (limit 1m)`
+			: progress.percentage === undefined
+				? progress.eta
+				: `${progress.percentage}% complete · ${progress.eta}`
 		card.append(title, block, meta, element('p', 'network-progress', progressLabel))
 		if (Number(network.consecutive_failures) > 0) {
 			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
@@ -1192,6 +1399,21 @@ const renderNetworks = (networks) => {
 		}
 		if (network.last_error) card.append(element('p', 'network-error', network.last_error))
 		networkCards.append(card)
+	}
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
+	if (selectedNetwork !== undefined) {
+		const transitionDelay = indexerHeadFreshnessTransitionDelay(selectedNetwork, currentTime)
+		if (transitionDelay !== undefined) {
+			headFreshnessTimer = window.setTimeout(
+				() => {
+					headFreshnessTimer = undefined
+					renderNetworks(latestNetworks)
+					updateFreshness()
+				},
+				Math.min(transitionDelay, 2_147_483_647),
+			)
+		}
 	}
 	networkCards.setAttribute('aria-busy', 'false')
 	updateConnectionStatus()
@@ -1216,6 +1438,17 @@ const updateFreshness = () => {
 		$('#freshness-detail').textContent = 'Showing the last committed data already on screen; automatic retries continue.'
 		return
 	}
+	const staleHead = latestNetworks
+		.filter((network) => String(network.chain_id) === selectedChainId())
+		.find((network) => indexerHeadFreshness(network, Date.now() + serverClockOffsetMs).stale)
+	if (staleHead !== undefined) {
+		const banner = $('#freshness-banner')
+		banner.hidden = false
+		retryCanonical.hidden = true
+		$('#freshness-title').textContent = 'RPC chain head is stale'
+		$('#freshness-detail').textContent = `Newest observed block is ${age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`
+		return
+	}
 	const stale = latestNetworks
 		.filter((network) => String(network.chain_id) === selectedChainId())
 		.filter(
@@ -1230,6 +1463,27 @@ const updateFreshness = () => {
 	banner.hidden = false
 	$('#freshness-title').textContent = 'Selected network is not updating'
 	$('#freshness-detail').textContent = 'Showing the last committed database state.'
+}
+
+const completeCanonicalRefresh = () => {
+	canonicalRefreshRequired = false
+	pendingCanonicalActivityCount = undefined
+	if (isActivity) {
+		$('#more').hidden = nextCursor === undefined
+		$('#more').disabled = false
+	}
+	if (isRichList) {
+		$('#richlist-more').hidden = richListItems.length >= richListTotal
+		$('#richlist-more').disabled = false
+	}
+	const accountMore = detailContent.querySelector('.account-transactions-more')
+	if (accountMore !== null && activeAccountTransactions !== undefined) {
+		accountMore.hidden =
+			activeAccountTransactions.nextPageCursor === undefined || (activeAccountTransactions.pageError !== undefined && activeAccountTransactions.pageErrorAppend)
+		accountMore.disabled = false
+	}
+	hideCanonicalDialogStatus()
+	updateFreshness()
 }
 
 const selectedChainId = () => (globalNetworkFilter.dataset.restored === 'true' ? globalNetworkFilter.value : initialChainId)
@@ -1284,13 +1538,16 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 		if (refreshAfterCurrent) networkFollowUpPromise = followUp
 		return await followUp
 	}
+	const canonicalGeneration = canonicalDataGeneration
 	const run = (async () => {
 		try {
 			const { items, serverTime, freshnessThresholdMs } = await api('/api/v1/networks')
+			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
 			if (Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousNetwork = selectedChainId()
 			reconcileNetworkOptions(items)
+			if (previousNetwork !== selectedChainId()) resetSelectedNetworkContext()
 			renderNetworks(items)
 			lastNetworkRequestFailed = false
 			updateFreshness()
@@ -1304,6 +1561,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			if (isAddress && synchronizeActivity && previousNetwork !== selectedChainId()) await loadAddressProfile()
 			return true
 		} catch (error) {
+			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
 			lastNetworkRequestFailed = true
 			updateConnectionStatus()
@@ -1320,8 +1578,10 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 	await tracked
 }
 
+const logKeyFor = (log) => `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`
+
 const rowFor = (log) => {
-	const key = `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`
+	const key = logKeyFor(log)
 	const row = setLiveRecord(element('article', 'log-row'), key, {
 		contractLabel: log.contract_label,
 		eventName: log.event_name,
@@ -1361,8 +1621,8 @@ const rowFor = (log) => {
 	return row
 }
 
-const queryPath = (cursor) => {
-	const params = new URLSearchParams({ limit: '100' })
+const queryPath = (cursor, limit = 100) => {
+	const params = new URLSearchParams({ limit: String(limit) })
 	params.set('chainId', requiredChainId())
 	if (appliedActivityFilters.event) params.set('event', appliedActivityFilters.event)
 	if (appliedActivityFilters.address) params.set('address', appliedActivityFilters.address)
@@ -1412,36 +1672,52 @@ const setLogControlsBusy = (busy) => {
 	$('#clear-filters').disabled = busy || !hasActivityFilters()
 }
 
-const loadLogs = async ({ append = false, live = false, preserveHistory = false } = {}) => {
-	if (!append) {
-		logsAbortController?.abort()
-		logsAbortController = new AbortController()
+const performLoadLogs = async ({ append = false, live = false, replaceDepth, contextVersion } = {}) => {
+	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
+	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
+		$('#more').hidden = true
+		$('#more').disabled = true
+		return false
 	}
+	logsAbortController?.abort()
+	logsAbortController = new AbortController()
 	const requestSignal = logsAbortController?.signal
 	const requestVersion = ++logsRequestVersion
 	const moreButton = $('#more')
+	const paginationStatus = $('#activity-more-status')
 	const hadRows = feed.querySelector('.log-row') !== null
 	const previousRows = liveSnapshot(feed, '.log-row[data-live-key]')
-	const previousRowNodes = [...feed.querySelectorAll('.log-row[data-live-key]')]
+	const presentation = refreshPresentation({ live, append })
 	const anchor =
 		live && window.scrollY >= 420 ? [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.getBoundingClientRect().bottom > 0) : undefined
 	const anchorKey = anchor?.dataset.liveKey
 	const anchorTop = anchor?.getBoundingClientRect().top
-	feed.setAttribute('aria-busy', 'true')
-	setLogControlsBusy(true)
+	feed.setAttribute('aria-busy', String(presentation.busy))
+	setLogControlsBusy(presentation.busy)
 	if (append) {
+		paginationStatus.hidden = true
+		paginationStatus.replaceChildren()
+		moreButton.hidden = false
 		moreButton.setAttribute('aria-busy', 'true')
 		moreButton.textContent = 'Loading more…'
 	}
 	if (!append && !hadRows) $('#more').hidden = true
-	if (!live || !hadRows || append) {
+	if (presentation.loadingState && !append) {
 		feedState.hidden = false
-		feedState.textContent = append ? 'Loading more activity…' : hadRows ? 'Refreshing indexed activity…' : 'Loading indexed activity…'
+		feedState.textContent = hadRows ? 'Refreshing indexed activity…' : 'Loading indexed activity…'
 	}
-	if (!append && !hadRows) feed.replaceChildren(...Array.from({ length: 6 }, () => element('div', 'loading-line')))
+	if (presentation.loadingState && !append && !hadRows) feed.replaceChildren(...Array.from({ length: 6 }, () => element('div', 'loading-line')))
 	try {
-		const payload = await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
-		if (requestVersion !== logsRequestVersion) return
+		const payload =
+			!append && replaceDepth !== undefined
+				? await collectCanonicalPages((cursor, limit) => api(queryPath(cursor, limit), { signal: requestSignal }), replaceDepth, logKeyFor)
+				: await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (!append) feed.replaceChildren()
 		const refreshedKeys = new Set(append ? [...feed.querySelectorAll('.log-row[data-live-key]')].map((row) => row.dataset.liveKey) : [])
 		for (const log of payload.items) {
@@ -1450,14 +1726,15 @@ const loadLogs = async ({ append = false, live = false, preserveHistory = false 
 			refreshedKeys.add(row.dataset.liveKey)
 			feed.append(row)
 		}
-		if (!append && preserveHistory) for (const row of previousRowNodes) if (!refreshedKeys.has(row.dataset.liveKey)) feed.append(row)
 		applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
 		if (anchorKey !== undefined && anchorTop !== undefined) {
 			const currentAnchor = [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.dataset.liveKey === anchorKey)
 			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 		}
 		nextCursor = payload.nextCursor
-		$('#more').hidden = !nextCursor
+		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
+		paginationStatus.hidden = true
+		paginationStatus.replaceChildren()
 		feedState.hidden = feed.childElementCount > 0
 		if (feed.childElementCount === 0) feedState.textContent = 'No project logs match these filters yet.'
 		$('#activity-summary').textContent =
@@ -1465,25 +1742,77 @@ const loadLogs = async ({ append = false, live = false, preserveHistory = false 
 		return true
 	} catch (error) {
 		if (error.name === 'AbortError') return false
-		if (requestVersion !== logsRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (!append && !hadRows) feed.replaceChildren()
-		$('#more').hidden = !nextCursor
-		feedState.hidden = false
-		const message = element('span', '', `Activity unavailable: ${error.message}`)
-		$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : 'Activity unavailable'
-		const retry = element('button', 'state-retry', 'Retry')
-		retry.type = 'button'
-		retry.addEventListener('click', () => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : loadLogs()))
-		feedState.replaceChildren(message, retry)
+		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
+		const retryAction = () => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : loadLogs({ append }))
+		if (append) {
+			feedState.hidden = feed.childElementCount > 0
+			$('#activity-summary').textContent = `${feed.childElementCount} logs shown · could not load more`
+			renderRetryStatus(paginationStatus, `Could not load more activity; showing indexed logs: ${error.message}`, retryAction)
+			moreButton.hidden = true
+		} else {
+			feedState.hidden = false
+			const message = element('span', '', hadRows ? `Showing last known activity: ${error.message}` : `Activity unavailable: ${error.message}`)
+			$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : ''
+			const retry = element('button', 'state-retry', 'Retry')
+			retry.type = 'button'
+			retry.addEventListener('click', retryAction)
+			feedState.replaceChildren(message, retry)
+		}
 		return false
 	} finally {
-		if (requestVersion === logsRequestVersion) {
+		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion)) {
 			feed.setAttribute('aria-busy', 'false')
 			setLogControlsBusy(false)
+			if (canonicalRefreshRequired) {
+				moreButton.hidden = true
+				moreButton.disabled = true
+			}
 			moreButton.removeAttribute('aria-busy')
 			moreButton.textContent = 'Show more'
 		}
 	}
+}
+
+const loadLogs = (options = {}) => {
+	const contextVersion = viewContextVersion
+	const paginationIntentVersion = options.append === true ? ++activityPaginationIntentVersion : undefined
+	if (paginationIntentVersion !== undefined) {
+		const more = $('#more')
+		const presentation = queuedPaginationPresentation(canonicalRefreshRequired)
+		more.hidden = presentation.hidden
+		more.disabled = presentation.disabled
+		more.textContent = presentation.label
+		if (presentation.busy) more.setAttribute('aria-busy', 'true')
+		else more.removeAttribute('aria-busy')
+		$('#activity-more-status').hidden = true
+		$('#activity-more-status').replaceChildren()
+	}
+	const operation = () => {
+		const { retainVisibleDepth, ...loadOptions } = options
+		const replaceDepth = retainVisibleDepth
+			? resolveActivityRefreshDepth(loadOptions.replaceDepth, pendingCanonicalActivityCount, feed.querySelectorAll('.log-row').length)
+			: loadOptions.replaceDepth
+		return performLoadLogs({ ...loadOptions, replaceDepth, contextVersion })
+	}
+	const request = options.live === true ? logRefreshGate.runBackground(operation) : logRefreshGate.runForeground(operation)
+	if (paginationIntentVersion !== undefined) {
+		const clearPending = () => {
+			if (paginationIntentVersion !== activityPaginationIntentVersion || contextVersion !== viewContextVersion) return
+			const more = $('#more')
+			more.removeAttribute('aria-busy')
+			more.textContent = 'Show more'
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) more.hidden = true
+		}
+		void request.then(clearPending, clearPending)
+	}
+	return request
 }
 
 const detailCard = (term, description, wide = false) => {
@@ -1663,19 +1992,29 @@ const restoreDetailContext = (snapshot) => {
 	nextFocus.focus({ preventScroll: true })
 }
 
-const openDetail = async (log, { live = false, canonicalRecovery = false } = {}) => {
+const performOpenDetail = async (log, { live = false, canonicalRecovery = false, contextVersion } = {}) => {
+	if (contextVersion !== detailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++detailRequestVersion
 	const previousContext = live ? captureDetailContext() : undefined
 	activeLog = log
-	if (!canonicalRecovery) pendingCanonicalLog = undefined
+	if (!canonicalRecovery) {
+		pendingCanonicalLog = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : log
+		if (activeReorgRecovery !== undefined) {
+			activeReorgRecovery.logToRefresh = log
+			activeReorgRecovery.accountToRefresh = undefined
+		}
+	}
 	pendingCanonicalAccount = undefined
 	pendingAccountDialogSnapshot = undefined
 	activeAccount = undefined
 	activeAccountTransactions = undefined
+	activeAccountLoadMore = undefined
 	if (!dialog.open) dialog.showModal()
+	syncCanonicalDialogStatus()
 	$('#detail-eyebrow').textContent = 'Log evidence'
 	$('#detail-title').textContent = 'Event details'
-	detailContent.setAttribute('aria-busy', 'true')
+	detailContent.setAttribute('aria-busy', String(refreshPresentation({ live }).busy))
 	if (!live) {
 		const loading = element('p', 'detail-status', 'Loading event details…')
 		loading.setAttribute('role', 'status')
@@ -1687,7 +2026,11 @@ const openDetail = async (log, { live = false, canonicalRecovery = false } = {})
 	history.replaceState(null, '', url)
 	try {
 		const detail = await api(`/api/v1/logs/${log.chain_id}/${log.block_hash}/${log.tx_hash}/${log.log_index}`)
-		if (requestVersion !== detailRequestVersion) return
+		if (
+			!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
@@ -1745,8 +2088,17 @@ const openDetail = async (log, { live = false, canonicalRecovery = false } = {})
 		if (canonicalRecovery) pendingCanonicalLog = undefined
 		return true
 	} catch (error) {
-		if (requestVersion !== detailRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error.status)
+		if (canonicalRecovery && !noncanonical && canonicalRefreshRequired) {
+			detailContent.querySelector('.detail-refresh-error')?.remove()
+			if (previousContext) restoreDetailContext(previousContext)
+			return false
+		}
 		const alert = element('div', `detail-error${live ? ' detail-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
 		alert.append(element('p', '', noncanonical ? 'This log was replaced after the chain changed.' : `Could not open log: ${error.message}`))
@@ -1762,8 +2114,18 @@ const openDetail = async (log, { live = false, canonicalRecovery = false } = {})
 		if (noncanonical) pendingCanonicalLog = undefined
 		return noncanonical
 	} finally {
-		if (requestVersion === detailRequestVersion) detailContent.setAttribute('aria-busy', 'false')
+		if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) detailContent.setAttribute('aria-busy', 'false')
 	}
+}
+
+const openDetail = (log, options = {}) => {
+	if (options.live !== true && options.canonicalRecovery !== true) {
+		detailContextVersion++
+		detailRequestVersion++
+	}
+	const contextVersion = detailContextVersion
+	const operation = () => performOpenDetail(log, { ...options, contextVersion })
+	return options.live === true ? detailRefreshGate.runBackground(operation) : detailRefreshGate.runForeground(operation)
 }
 
 const restorePendingCanonicalLog = async () => {
@@ -1814,16 +2176,38 @@ const restoreAccountDialogSnapshot = (snapshot) => {
 	}
 }
 
-const openAccountTransactions = async (account, { live = false, restoreSnapshot } = {}) => {
-	const requestVersion = ++detailRequestVersion
+const performOpenAccountTransactions = async (account, { live = false, restoreSnapshot, canonicalRecovery = false, contextVersion } = {}) => {
+	if (contextVersion !== detailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
+	const pageReservation = accountPageRefreshGate.reserve()
+	await pageReservation.ready
+	if (contextVersion !== detailContextVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) {
+		pageReservation.release()
+		await pageReservation.completed
+		return false
+	}
+	const previousState = activeAccountTransactions
+	const previousLoadMore = activeAccountLoadMore
+	const stateKey = `${account.chain_id}:${account.address.toLowerCase()}`
+	const previousMatches = previousState?.key === stateKey
+	const requestVersion = live && previousMatches ? detailRequestVersion : ++detailRequestVersion
+	const stagedLiveRefresh = !canonicalRecovery && live && previousMatches
+	const stagedRefresh = canonicalRecovery || stagedLiveRefresh
+	const stagedSnapshot = canonicalRecovery ? restoreSnapshot : stagedLiveRefresh ? captureAccountDialogSnapshot() : undefined
+	const refreshPrevious = stagedRefresh ? liveSnapshot(detailContent, '.account-transaction[data-live-key]') : undefined
 	activeLog = undefined
 	pendingCanonicalLog = undefined
 	if (restoreSnapshot === undefined && !live) {
-		pendingCanonicalAccount = undefined
+		pendingCanonicalAccount = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : account
 		pendingAccountDialogSnapshot = undefined
+		if (activeReorgRecovery !== undefined) {
+			activeReorgRecovery.logToRefresh = undefined
+			activeReorgRecovery.accountToRefresh = account
+		}
 	}
 	activeAccount = account
 	if (!dialog.open) dialog.showModal()
+	syncCanonicalDialogStatus()
 	$('#detail-eyebrow').textContent = 'Account activity'
 	$('#detail-title').textContent = 'Sent transactions'
 	const url = new URL(location.href)
@@ -1831,14 +2215,21 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 	if (isRichList) url.searchParams.set('account', `${account.chain_id}:${account.address}`)
 	else url.searchParams.delete('account')
 	history.replaceState(null, '', url)
-	const stateKey = `${account.chain_id}:${account.address.toLowerCase()}`
 	const state =
-		live && activeAccountTransactions?.key === stateKey
-			? activeAccountTransactions
-			: { key: stateKey, account, loaded: [], total: 0, nextPageCursor: undefined, pageLoading: false, pageError: undefined }
+		!stagedRefresh && live && previousMatches
+			? previousState
+			: {
+					key: stateKey,
+					account,
+					loaded: [],
+					total: 0,
+					nextPageCursor: undefined,
+					pageLoading: false,
+					pageError: undefined,
+					pageErrorAppend: false,
+				}
 	state.account = account
-	state.pageLoading = false
-	activeAccountTransactions = state
+	activeAccountTransactions = accountStateDuringStagedRefresh(previousState, state, stagedRefresh)
 	const render = ({ previous = new Map(), highlight = false } = {}) => {
 		const focusedCard = document.activeElement?.closest('.account-transaction[data-live-key]')
 		const focusedTransactionKey = focusedCard?.dataset.liveKey
@@ -1916,23 +2307,28 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 		const more = element('button', 'secondary account-transactions-more', state.pageLoading ? 'Loading more transactions…' : 'Show more transactions')
 		more.type = 'button'
 		more.dataset.liveFocus = 'show-more-transactions'
-		more.hidden = state.nextPageCursor === undefined
-		more.disabled = state.pageLoading
-		more.addEventListener('click', () => loadPage(true))
+		more.hidden = canonicalRefreshRequired || state.nextPageCursor === undefined || (state.pageError !== undefined && state.pageErrorAppend)
+		more.disabled = canonicalRefreshRequired || state.pageLoading
+		more.addEventListener('click', () => activeAccountLoadMore?.())
 		const content = [header]
+		let transactionError
 		if (state.pageError) {
-			const alert = element('div', 'detail-error account-transactions-error')
-			alert.setAttribute('role', 'alert')
-			alert.append(element('p', '', state.pageError))
+			transactionError = element('div', `detail-error account-transactions-error${state.pageErrorAppend ? ' append-error' : ''}`)
+			transactionError.setAttribute('role', 'alert')
+			transactionError.append(element('p', '', state.pageError))
 			const retry = element('button', 'state-retry', 'Retry loading transactions')
 			retry.type = 'button'
-			retry.addEventListener('click', () =>
-				pendingCanonicalAccount && pendingAccountDialogSnapshot ? restorePendingCanonicalAccount() : loadPage(false, { liveRefresh: state.loaded.length > 0 }),
-			)
-			alert.append(retry)
-			content.push(alert)
+			retry.addEventListener('click', () => {
+				if (pendingCanonicalAccount && pendingAccountDialogSnapshot) return restorePendingCanonicalAccount()
+				const retryMode = transactionRetryMode(state.pageErrorAppend, state.loaded.length > 0)
+				return loadPage(retryMode.append, { liveRefresh: retryMode.liveRefresh })
+			})
+			transactionError.append(retry)
+			if (!state.pageErrorAppend) content.push(transactionError)
 		}
-		content.push(list, more)
+		content.push(list)
+		if (transactionError && state.pageErrorAppend) content.push(transactionError)
+		content.push(more)
 		detailContent.replaceChildren(...content)
 		const nextAnchor = anchorKey ? detailContent.querySelector(`[data-live-key="${CSS.escape(anchorKey)}"]`) : undefined
 		if (nextAnchor && anchorTop !== undefined) dialog.scrollTop += nextAnchor.getBoundingClientRect().top - anchorTop
@@ -1945,28 +2341,48 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 		}
 		applyLiveChanges(list, previous, { live: highlight, selector: '.account-transaction[data-live-key]' })
 	}
-	const loadPage = async (append = false, { liveRefresh = false } = {}) => {
-		if (state.pageLoading) return
+	const performLoadPage = async (
+		append = false,
+		{ liveRefresh = false, background = false, stageOnly = false, limit = 50, restartInvalidSnapshot = true } = {},
+	) => {
+		if (state.pageLoading) return false
+		if (!stageOnly && !paginationRequestAllowed(append, canonicalRefreshRequired)) {
+			const more = detailContent.querySelector('.account-transactions-more')
+			if (more !== null) {
+				more.hidden = true
+				more.disabled = true
+			}
+			return false
+		}
 		state.pageLoading = true
 		state.pageError = undefined
-		detailContent.setAttribute('aria-busy', 'true')
+		state.pageErrorAppend = false
+		detailContent.setAttribute('aria-busy', String(refreshPresentation({ live: background, append }).busy))
 		const previous = liveSnapshot(detailContent, '.account-transaction[data-live-key]')
 		const previousLoaded = state.loaded
+		const previousTotal = state.total
 		const previousCursor = state.nextPageCursor
-		if (!append && !liveRefresh && state.loaded.length === 0) {
+		if (!append && !liveRefresh && !stageOnly && state.loaded.length === 0) {
 			const loading = element('p', 'detail-status', 'Loading sent transactions…')
 			loading.setAttribute('role', 'status')
 			detailContent.replaceChildren(loading, element('div', 'loading-line'))
-		} else if (append) render()
+		} else if (append && !stageOnly) render()
 		try {
 			const query = new URLSearchParams({
 				chainId: String(state.account.chain_id),
 				address: state.account.address,
-				limit: '50',
+				limit: String(limit),
 			})
 			if (append && state.nextPageCursor) query.set('cursor', state.nextPageCursor)
 			const result = await api(`/api/v1/address-transactions?${query}`)
-			if (!isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId())) return false
+			if (
+				contextVersion !== detailContextVersion ||
+				!isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId()) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			) {
+				state.pageLoading = false
+				return false
+			}
 			const retained = append ? previousLoaded : liveRefresh ? previousLoaded : []
 			state.loaded = mergeUniqueRecords(
 				append ? retained : result.items,
@@ -1977,41 +2393,178 @@ const openAccountTransactions = async (account, { live = false, restoreSnapshot 
 			state.nextPageCursor = liveRefresh && previousCursor !== undefined ? previousCursor : result.nextCursor
 			if (state.loaded.length >= state.total) state.nextPageCursor = undefined
 			state.pageLoading = false
-			render({ previous, highlight: liveRefresh })
+			if (!stageOnly) render({ previous, highlight: liveRefresh })
 			return true
 		} catch (error) {
-			if (requestVersion !== detailRequestVersion) return false
-			if (error.status === 409) {
+			if (
+				!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			) {
 				state.pageLoading = false
+				return false
+			}
+			if (error.status === 409 && restartInvalidSnapshot) {
+				state.pageLoading = false
+				const targetCount = previousLoaded.length + (append ? limit : 0)
 				state.loaded = []
 				state.total = 0
 				state.nextPageCursor = undefined
-				return await loadPage()
+				let recovered = await performLoadPage(false, {
+					background,
+					stageOnly: true,
+					limit: canonicalPageLimit(targetCount, 0, 50),
+					restartInvalidSnapshot: false,
+				})
+				while (shouldContinueTransactionRestore(recovered, state.loaded.length, targetCount, state.nextPageCursor))
+					recovered = await performLoadPage(true, {
+						background,
+						stageOnly: true,
+						limit: canonicalPageLimit(targetCount, state.loaded.length, 50),
+						restartInvalidSnapshot: false,
+					})
+				if (recovered) {
+					if (!stageOnly) render({ previous, highlight: true })
+					return true
+				}
+				const recoveryError = state.pageError
+				state.loaded = previousLoaded
+				state.total = previousTotal
+				state.nextPageCursor = previousCursor
+				state.pageLoading = false
+				state.pageErrorAppend = append
+				state.pageError = append
+					? `Could not load more transactions; showing the last known activity: ${recoveryError ?? error.message}`
+					: `Could not refresh sent transactions; showing the last known activity: ${recoveryError ?? error.message}`
+				if (!stageOnly) render()
+				return false
 			}
 			state.pageLoading = false
+			state.pageErrorAppend = append
 			state.pageError =
 				state.loaded.length > 0
-					? `Could not refresh sent transactions; showing the last known activity: ${error.message}`
+					? append
+						? `Could not load more transactions; showing the last known activity: ${error.message}`
+						: `Could not refresh sent transactions; showing the last known activity: ${error.message}`
 					: `Could not load sent transactions: ${error.message}`
-			render()
+			if (!stageOnly) render()
 			return false
 		} finally {
-			if (requestVersion === detailRequestVersion) detailContent.setAttribute('aria-busy', 'false')
+			if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) detailContent.setAttribute('aria-busy', 'false')
 		}
 	}
-	let loaded = await loadPage(false, { liveRefresh: live && state.loaded.length > 0 })
-	while (restoreSnapshot && shouldContinueTransactionRestore(loaded, state.loaded.length, restoreSnapshot.loadedCount, state.nextPageCursor))
-		loaded = await loadPage(true)
-	if (loaded && restoreSnapshot) restoreAccountDialogSnapshot(restoreSnapshot)
+	const loadPage = (append = false, options = {}) => {
+		if (append && options.background !== true) {
+			const more = detailContent.querySelector('.account-transactions-more')
+			if (more !== null) {
+				more.disabled = true
+				more.setAttribute('aria-busy', 'true')
+				more.textContent = 'Loading more transactions…'
+			}
+			detailContent.setAttribute('aria-busy', 'true')
+		}
+		return options.background === true
+			? accountPageRefreshGate.runBackground(() => performLoadPage(append, options))
+			: accountPageRefreshGate.runForeground(() => performLoadPage(append, options))
+	}
+	const loadMore = () => loadPage(true)
+	let releaseStagedRefresh
+	const stagedRefreshCompleted = stagedRefresh
+		? new Promise((resolve) => {
+				releaseStagedRefresh = resolve
+			})
+		: undefined
+	const queuedLoadMore = async () => {
+		const more = detailContent.querySelector('.account-transactions-more')
+		if (more !== null) {
+			more.disabled = true
+			more.setAttribute('aria-busy', 'true')
+			more.textContent = 'Loading more transactions…'
+		}
+		await stagedRefreshCompleted
+		return activeAccountLoadMore === queuedLoadMore ? false : await activeAccountLoadMore?.()
+	}
+	activeAccountLoadMore = stagedRefresh ? queuedLoadMore : loadMore
+	let loadRequest
+	if (stagedRefresh) {
+		loadRequest = accountPageRefreshGate.runBackground(async () => {
+			const targetCount = stagedSnapshot?.loadedCount ?? 0
+			let staged = await performLoadPage(false, {
+				background: true,
+				stageOnly: true,
+				limit: canonicalPageLimit(targetCount, 0, 50),
+			})
+			while (stagedSnapshot && shouldContinueTransactionRestore(staged, state.loaded.length, stagedSnapshot.loadedCount, state.nextPageCursor))
+				staged = await performLoadPage(true, {
+					background: true,
+					stageOnly: true,
+					limit: canonicalPageLimit(stagedSnapshot.loadedCount, state.loaded.length, 50),
+				})
+			return staged
+		})
+	} else {
+		loadRequest = loadPage(false, { liveRefresh: live && state.loaded.length > 0, background: live })
+	}
+	pageReservation.release()
+	await pageReservation.completed
+	let loaded = await loadRequest
+	if (!stagedRefresh) {
+		while (restoreSnapshot && shouldContinueTransactionRestore(loaded, state.loaded.length, restoreSnapshot.loadedCount, state.nextPageCursor))
+			loaded = await loadPage(true)
+	}
+	if (
+		!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+		!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+	) {
+		releaseStagedRefresh?.()
+		return false
+	}
+	if (stagedRefresh) {
+		if (!loaded) {
+			if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) && dialog.open) {
+				activeAccountTransactions = previousState
+				activeAccountLoadMore = previousLoadMore
+				detailContent.querySelector('.account-transactions-error')?.remove()
+				if (!canonicalRecovery) {
+					const alert = element('div', 'detail-error account-transactions-error')
+					alert.setAttribute('role', 'alert')
+					alert.append(element('p', '', state.pageError ?? 'Could not refresh sent transactions; showing the last known activity.'))
+					const retry = element('button', 'state-retry', 'Retry loading transactions')
+					retry.type = 'button'
+					retry.addEventListener('click', () => openAccountTransactions(account, { live: true }))
+					alert.append(retry)
+					detailContent.prepend(alert)
+				}
+			}
+			releaseStagedRefresh()
+			return false
+		}
+		activeAccountTransactions = state
+		activeAccountLoadMore = loadMore
+		render({ previous: refreshPrevious, highlight: true })
+		releaseStagedRefresh()
+	}
+	if (loaded && stagedSnapshot) restoreAccountDialogSnapshot(stagedSnapshot)
 	if (
 		loaded &&
+		canonicalRecovery &&
 		pendingCanonicalAccount &&
 		String(pendingCanonicalAccount.chain_id) === String(state.account.chain_id) &&
 		pendingCanonicalAccount.address.toLowerCase() === state.account.address.toLowerCase()
 	)
 		pendingCanonicalAccount = undefined
+	if (loaded && !canonicalRecovery && canonicalRefreshRequired) pendingAccountDialogSnapshot = captureAccountDialogSnapshot()
 	if (loaded && pendingCanonicalAccount === undefined) pendingAccountDialogSnapshot = undefined
 	return loaded
+}
+
+const openAccountTransactions = (account, options = {}) => {
+	if (options.live !== true && options.canonicalRecovery !== true) {
+		detailContextVersion++
+		detailRequestVersion++
+	}
+	const contextVersion = detailContextVersion
+	const operation = () => performOpenAccountTransactions(account, { ...options, contextVersion })
+	return options.live === true ? detailRefreshGate.runBackground(operation) : detailRefreshGate.runForeground(operation)
 }
 
 const restorePendingCanonicalAccount = async () => {
@@ -2022,14 +2575,22 @@ const restorePendingCanonicalAccount = async () => {
 		const current = richListItems.find(
 			(item) => String(item.chain_id) === String(pending.chain_id) && item.address.toLowerCase() === pending.address.toLowerCase(),
 		)
-		restored = await openAccountTransactions(current ?? pending, { restoreSnapshot: pendingAccountDialogSnapshot })
+		restored = await openAccountTransactions(current ?? pending, {
+			live: dialog.open,
+			restoreSnapshot: pendingAccountDialogSnapshot,
+			canonicalRecovery: true,
+		})
 	} else if (
 		isAddress &&
 		currentAddressProfile &&
 		String(currentAddressProfile.chain_id) === String(pending.chain_id) &&
 		currentAddressProfile.address.toLowerCase() === pending.address.toLowerCase()
 	)
-		restored = await openAccountTransactions(currentAddressProfile, { restoreSnapshot: pendingAccountDialogSnapshot })
+		restored = await openAccountTransactions(currentAddressProfile, {
+			live: dialog.open,
+			restoreSnapshot: pendingAccountDialogSnapshot,
+			canonicalRecovery: true,
+		})
 	if (restored) {
 		pendingCanonicalAccount = undefined
 		pendingAccountDialogSnapshot = undefined
@@ -2038,10 +2599,17 @@ const restorePendingCanonicalAccount = async () => {
 }
 
 const closeDetail = ({ preservePendingCanonicalAccount = false, preservePendingCanonicalLog = false } = {}) => {
+	detailContextVersion++
 	detailRequestVersion++
 	activeLog = undefined
 	activeAccount = undefined
 	activeAccountTransactions = undefined
+	activeAccountLoadMore = undefined
+	if (activeReorgRecovery !== undefined) {
+		activeReorgRecovery.logToRefresh = undefined
+		activeReorgRecovery.accountToRefresh = undefined
+	}
+	hideCanonicalDialogStatus()
 	preservePendingOnDialogClose = preservePendingCanonicalAccount || preservePendingCanonicalLog
 	if (!preservePendingCanonicalAccount) {
 		pendingCanonicalAccount = undefined
@@ -2261,7 +2829,7 @@ const renderContractDetail = (contract) => {
 			'Deployment block',
 			contract.deployment_block === null || contract.deployment_block === undefined
 				? 'Not observed'
-				: `${contract.deployment_block_exact === false ? 'At or before ' : ''}#${number(contract.deployment_block)}`,
+				: `${contract.deployment_block_exact === false ? 'Search boundary ' : ''}#${number(contract.deployment_block)}`,
 		),
 		detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
 		detailCard('First protocol discovery block', contract.discovery_block ? `#${number(contract.discovery_block)}` : 'Configured contract', true),
@@ -2273,7 +2841,7 @@ const renderContractDetail = (contract) => {
 	openContract.dataset.contractAction = 'open-contract'
 	actions.append(copyAddress, openContract)
 	if (contract.deployment_block) {
-		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, 'Open deployment block ↗')
+		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, contractDeploymentBlockActionLabel(contract))
 		openDeployment.dataset.contractAction = 'open-deployment'
 		actions.append(openDeployment)
 	}
@@ -2335,29 +2903,52 @@ const renderContracts = () => {
 	list.setAttribute('aria-busy', 'false')
 }
 
-const loadContracts = async () => {
+const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
+	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++contractRequestVersion
 	const status = $('#contracts-status')
-	status.hidden = false
-	status.className = contractItems.length === 0 ? 'system-status' : 'system-status sr-only'
-	status.textContent = contractItems.length === 0 ? 'Loading system contracts…' : 'Refreshing system contracts…'
-	$('#contract-list').setAttribute('aria-busy', 'true')
+	const presentation = refreshPresentation({ live })
+	if (presentation.loadingState) {
+		status.hidden = false
+		status.className = contractItems.length === 0 ? 'system-status' : 'system-status sr-only'
+		status.textContent = contractItems.length === 0 ? 'Loading system contracts…' : 'Refreshing system contracts…'
+	}
+	$('#contract-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
 		const result = await api(`/api/v1/contracts?${new URLSearchParams({ chainId: requiredChainId() })}`)
-		if (requestVersion !== contractRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		contractItems = result.items
 		renderContracts()
-		status.className = 'system-status sr-only'
-		status.textContent = 'System contracts updated.'
+		if (presentation.loadingState) {
+			status.className = 'system-status sr-only'
+			status.textContent = 'System contracts updated.'
+		} else status.hidden = true
 		return true
 	} catch (error) {
-		if (requestVersion !== contractRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		$('#contract-list').setAttribute('aria-busy', 'false')
-		status.className = 'system-status error'
-		status.textContent =
-			contractItems.length === 0 ? `Contract registry unavailable: ${error.message}` : `Refresh failed; showing the last registry: ${error.message}`
+		renderRetryStatus(
+			status,
+			contractItems.length === 0 ? `Contract registry unavailable: ${error.message}` : `Refresh failed; showing the last registry: ${error.message}`,
+			() => retryCanonicalViewOr(loadContracts),
+		)
 		return false
 	}
+}
+
+const loadContracts = (options = {}) => {
+	const contextVersion = viewContextVersion
+	const operation = () => performLoadContracts({ ...options, contextVersion })
+	return options.live === true ? contractRefreshGate.runBackground(operation) : contractRefreshGate.runForeground(operation)
 }
 
 const renderRichList = ({ live = false } = {}) => {
@@ -2539,55 +3130,142 @@ const renderRichList = ({ live = false } = {}) => {
 	applyLiveChanges(rows, previousRows, { live, selector: '.rich-row[data-live-key]' })
 	rows.setAttribute('aria-busy', 'false')
 	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
-	$('#richlist-more').hidden = richListItems.length >= richListTotal
+	$('#richlist-more').hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
 }
 
-const loadRichList = async ({ append = false, live = false } = {}) => {
+const performLoadRichList = async ({ append = false, live = false, contextVersion } = {}) => {
+	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
+	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
+		$('#richlist-more').hidden = true
+		$('#richlist-more').disabled = true
+		return false
+	}
 	const requestVersion = ++richListRequestVersion
 	const status = $('#richlist-status')
+	const paginationStatus = $('#richlist-more-status')
 	const more = $('#richlist-more')
 	const nextOffset = append ? richListItems.length : 0
-	if (!live || richListItems.length === 0 || append) {
-		status.hidden = false
-		status.textContent = append ? 'Loading more known addresses…' : richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
+	const presentation = refreshPresentation({ live, append })
+	if (presentation.loadingState) {
+		if (append) {
+			paginationStatus.hidden = false
+			paginationStatus.className = 'system-status sr-only'
+			paginationStatus.textContent = 'Loading more known addresses…'
+			more.hidden = false
+			more.setAttribute('aria-busy', 'true')
+			more.textContent = 'Loading more…'
+		} else {
+			status.hidden = false
+			status.textContent = richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
+		}
 	}
-	more.disabled = true
-	$('#richlist-rows').setAttribute('aria-busy', 'true')
+	more.disabled = presentation.busy
+	$('#rich-sort').disabled = presentation.busy
+	$('#richlist-rows').setAttribute('aria-busy', String(presentation.busy))
 	try {
 		const fetchPage = async (offset, limit) => {
 			const query = new URLSearchParams({ sort: $('#rich-sort').value, offset: String(offset), limit: String(limit) })
 			query.set('chainId', requiredChainId())
 			return await api(`/api/v1/richlist?${query}`)
 		}
-		let result
-		if (append) result = await fetchPage(nextOffset, 50)
-		else {
-			const requestedCount = Math.max(50, richListItems.length)
+		const fetchSnapshot = async (requestedCount) => {
 			const firstLimit = Math.min(100, requestedCount)
 			const firstPage = await fetchPage(0, firstLimit)
 			const targetCount = Math.min(requestedCount, firstPage.total)
 			const remainingOffsets = []
 			for (let offset = firstLimit; offset < targetCount; offset += 100) remainingOffsets.push(offset)
 			const remainingPages = await Promise.all(remainingOffsets.map((offset) => fetchPage(offset, Math.min(100, targetCount - offset))))
-			result = { ...firstPage, items: [firstPage, ...remainingPages].flatMap((page) => page.items).slice(0, targetCount) }
+			return { ...firstPage, items: [firstPage, ...remainingPages].flatMap((page) => page.items).slice(0, targetCount) }
 		}
-		if (requestVersion !== richListRequestVersion) return false
-		if (append && result.total < richListItems.length) return await loadRichList()
-		richListItems = append ? [...richListItems, ...result.items] : result.items
+		let replace = !append
+		let result = append ? await fetchPage(nextOffset, 50) : await fetchSnapshot(Math.max(50, richListItems.length))
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
+		if (append && paginatedSnapshotWasReplaced(richListItems.length, result.total)) {
+			result = await fetchSnapshot(Math.max(1, richListItems.length))
+			if (
+				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			)
+				return false
+			replace = true
+		}
+		richListItems = replace ? result.items : [...richListItems, ...result.items]
 		richListTotal = result.total
 		renderRichList({ live })
 		status.hidden = true
+		paginationStatus.hidden = true
+		paginationStatus.replaceChildren()
 		return true
 	} catch (error) {
-		if (requestVersion !== richListRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		$('#richlist-rows').setAttribute('aria-busy', 'false')
-		status.hidden = false
-		status.textContent =
-			richListItems.length === 0 ? `Rich list unavailable: ${error.message}` : `Refresh failed; showing last known rankings: ${error.message}`
+		const failureStatus = append ? paginationStatus : status
+		renderRetryStatus(
+			failureStatus,
+			append
+				? `Could not load more; showing known rankings: ${error.message}`
+				: richListItems.length === 0
+					? `Rich list unavailable: ${error.message}`
+					: `Refresh failed; showing last known rankings: ${error.message}`,
+			() => retryCanonicalViewOr(() => loadRichList({ append })),
+		)
+		more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
+		if (append) more.hidden = true
+		if (richListItems.length === 0) $('#richlist-summary').textContent = ''
 		return false
 	} finally {
-		if (requestVersion === richListRequestVersion) more.disabled = false
+		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion)) {
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) more.hidden = true
+			$('#rich-sort').disabled = false
+			more.removeAttribute('aria-busy')
+			more.textContent = 'Show more'
+		}
 	}
+}
+
+const loadRichList = (options = {}) => {
+	const contextVersion = viewContextVersion
+	const paginationIntentVersion = options.append === true ? ++richListPaginationIntentVersion : undefined
+	if (paginationIntentVersion !== undefined) {
+		const more = $('#richlist-more')
+		const presentation = queuedPaginationPresentation(canonicalRefreshRequired)
+		more.hidden = presentation.hidden
+		more.disabled = presentation.disabled
+		more.textContent = presentation.label
+		if (presentation.busy) more.setAttribute('aria-busy', 'true')
+		else more.removeAttribute('aria-busy')
+		const paginationStatus = $('#richlist-more-status')
+		paginationStatus.hidden = !presentation.busy
+		paginationStatus.className = 'system-status sr-only'
+		paginationStatus.textContent = presentation.busy ? 'Loading more known addresses…' : ''
+	}
+	const operation = () => performLoadRichList({ ...options, contextVersion })
+	const request = options.live === true && options.append !== true ? richListRefreshGate.runBackground(operation) : richListRefreshGate.runForeground(operation)
+	if (paginationIntentVersion !== undefined) {
+		const clearPending = () => {
+			if (paginationIntentVersion !== richListPaginationIntentVersion || contextVersion !== viewContextVersion) return
+			const more = $('#richlist-more')
+			more.removeAttribute('aria-busy')
+			more.textContent = 'Show more'
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) {
+				$('#richlist-more-status').hidden = true
+				$('#richlist-more-status').replaceChildren()
+			}
+		}
+		void request.then(clearPending, clearPending)
+	}
+	return request
 }
 
 const renderAddressProfile = (item, transactions, interactions, { live = false } = {}) => {
@@ -2756,7 +3434,9 @@ const renderAddressProfile = (item, transactions, interactions, { live = false }
 	content.setAttribute('aria-busy', 'false')
 }
 
-const loadAddressProfile = async ({ live = false } = {}) => {
+const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) => {
+	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++addressProfileRequestVersion
 	const content = $('#address-profile-content')
 	const hadProfile = content.querySelector('[data-live-key]') !== null
@@ -2769,9 +3449,11 @@ const loadAddressProfile = async ({ live = false } = {}) => {
 		content.setAttribute('aria-busy', 'false')
 		return false
 	}
-	content.setAttribute('aria-busy', 'true')
-	content.querySelector('.address-refresh-error')?.remove()
-	if (!hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
+	const presentation = refreshPresentation({ live })
+	content.setAttribute('aria-busy', String(presentation.busy))
+	if (presentation.loadingState) content.querySelector('.address-refresh-error')?.remove()
+	if (presentation.loadingState && !hadProfile)
+		content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 	try {
 		const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '1' })
 		const [profile, identity, transactions, interactions] = await Promise.all([
@@ -2780,7 +3462,11 @@ const loadAddressProfile = async ({ live = false } = {}) => {
 			api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
 			api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
 		])
-		if (requestVersion !== addressProfileRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === selectedChainId())
 		const profileItem = profile.items[0]
 		const item = profileItem
@@ -2804,7 +3490,16 @@ const loadAddressProfile = async ({ live = false } = {}) => {
 		currentAddressProfile = item
 		return true
 	} catch (error) {
-		if (requestVersion !== addressProfileRequestVersion) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
+		if (hadProfile && canonicalRefreshRequired) {
+			content.querySelector('.address-refresh-error')?.remove()
+			content.setAttribute('aria-busy', 'false')
+			return false
+		}
 		const alert = element('div', `detail-error${hadProfile ? ' address-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
 		alert.append(
@@ -2814,16 +3509,31 @@ const loadAddressProfile = async ({ live = false } = {}) => {
 		retry.type = 'button'
 		retry.addEventListener('click', () => retryCanonicalViewOr(loadAddressProfile))
 		alert.append(retry)
-		if (hadProfile) content.prepend(alert)
-		else content.replaceChildren(alert)
+		if (hadProfile) {
+			content.querySelector('.address-refresh-error')?.remove()
+			content.prepend(alert)
+		} else content.replaceChildren(alert)
 		content.setAttribute('aria-busy', 'false')
 		return false
 	}
 }
 
-const renderPoolDetail = async (poolItem, requestVersion) => {
-	const history = await api(`/api/v1/state/pools/${poolItem.chain_id}/${poolItem.pool_address}`)
-	if (requestVersion !== stateDetailRequestVersion) return
+const loadAddressProfile = (options = {}) => {
+	const contextVersion = viewContextVersion
+	const operation = () => performLoadAddressProfile({ ...options, contextVersion })
+	return options.live === true ? addressProfileRefreshGate.runBackground(operation) : addressProfileRefreshGate.runForeground(operation)
+}
+
+const fetchEntityHistory = async (type, item) => {
+	if (type === 'pools') return await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}`)
+	if (type === 'vaults') return await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}`)
+	if (type === 'questions') return await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}`)
+	return await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}`)
+}
+
+const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, suppliedHistory) => {
+	const history = suppliedHistory ?? (await fetchEntityHistory('pools', poolItem))
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const poolNativeSymbol = nativeSymbol(poolItem.chain_id)
 	const ammPrices = history.ammPrices ?? []
 	const repEthPrices = history.repEthPrices ?? []
@@ -2968,9 +3678,9 @@ const renderPoolDetail = async (poolItem, requestVersion) => {
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const renderVaultDetail = async (vaultItem, requestVersion) => {
-	const history = await api(`/api/v1/state/vaults/${vaultItem.chain_id}/${vaultItem.pool_address}/${vaultItem.vault_address}`)
-	if (requestVersion !== stateDetailRequestVersion) return
+const renderVaultDetail = async (vaultItem, requestVersion, canonicalGeneration, suppliedHistory) => {
+	const history = suppliedHistory ?? (await fetchEntityHistory('vaults', vaultItem))
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest indexed'))
@@ -3019,9 +3729,9 @@ const questionStatus = (question) => {
 	return 'Ended'
 }
 
-const renderQuestionDetail = async (question, requestVersion) => {
-	const history = await api(`/api/v1/state/questions/${question.chain_id}/${question.question_id}`)
-	if (requestVersion !== stateDetailRequestVersion) return
+const renderQuestionDetail = async (question, requestVersion, canonicalGeneration, suppliedHistory) => {
+	const history = suppliedHistory ?? (await fetchEntityHistory('questions', question))
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · ${questionStatus(question)}`))
@@ -3150,9 +3860,9 @@ const renderLineage = (universes, selected) => {
 	return svg
 }
 
-const renderUniverseDetail = async (universe, requestVersion) => {
-	const history = await api(`/api/v1/state/universes/${universe.chain_id}/${universe.universe_id}`)
-	if (requestVersion !== stateDetailRequestVersion) return
+const renderUniverseDetail = async (universe, requestVersion, canonicalGeneration, suppliedHistory) => {
+	const history = suppliedHistory ?? (await fetchEntityHistory('universes', universe))
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const fragment = document.createDocumentFragment()
 	const title = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 12, 8)}`
 	fragment.append(
@@ -3226,15 +3936,19 @@ const entityCopy = (type, item) => {
 	]
 }
 
-const selectEntity = async (item, { preserveDetail = false, quiet = false } = {}) => {
+const performSelectEntity = async (item, { preserveDetail = false, quiet = false, contextVersion, suppliedHistory } = {}) => {
+	if (contextVersion !== stateDetailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	selectedEntityKey = entityKey(activeStateType, item)
 	for (const row of document.querySelectorAll('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
 	const requestVersion = ++stateDetailRequestVersion
 	const detail = $('#state-detail')
-	detail.setAttribute('aria-busy', 'true')
-	const replaceWithLoading = !preserveDetail || detail.childElementCount === 0
-	detail.querySelector('.detail-refresh-status')?.remove()
-	let refreshStatus
+	const presentation = refreshPresentation({ live: quiet })
+	detail.setAttribute('aria-busy', String(presentation.busy))
+	const replaceWithLoading = presentation.loadingState && (!preserveDetail || detail.childElementCount === 0)
+	const existingRefreshStatus = detail.querySelector('.detail-refresh-status')
+	if (presentation.loadingState) existingRefreshStatus?.remove()
+	let refreshStatus = presentation.loadingState ? undefined : existingRefreshStatus
 	if (replaceWithLoading) detail.replaceChildren(element('div', 'state-placeholder', 'Loading historical checkpoints…'))
 	else if (!quiet) {
 		refreshStatus = element('div', 'system-status detail-refresh-status', 'Refreshing historical checkpoints…')
@@ -3246,13 +3960,19 @@ const selectEntity = async (item, { preserveDetail = false, quiet = false } = {}
 	url.searchParams.set('entity', selectedEntityKey)
 	history.replaceState(null, '', url)
 	try {
-		if (activeStateType === 'pools') await renderPoolDetail(item, requestVersion)
-		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion)
-		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion)
-		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion)
-		return requestVersion === stateDetailRequestVersion
+		if (activeStateType === 'pools') await renderPoolDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		return (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
 	} catch (error) {
-		if (requestVersion === stateDetailRequestVersion) {
+		if (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			if (replaceWithLoading) {
 				const failure = element('div', 'state-error')
 				failure.append(element('span', '', `State history unavailable: ${error.message}`))
@@ -3275,11 +3995,33 @@ const selectEntity = async (item, { preserveDetail = false, quiet = false } = {}
 		}
 		return false
 	} finally {
-		if (requestVersion === stateDetailRequestVersion) $('#state-detail').setAttribute('aria-busy', 'false')
+		if (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			$('#state-detail').setAttribute('aria-busy', 'false')
 	}
 }
 
-const renderEntityList = async ({ refreshSelected = false, live = false } = {}) => {
+const selectEntity = (item, options = {}) => {
+	if (options.quiet !== true) {
+		stateDetailContextVersion++
+		stateDetailRequestVersion++
+	}
+	const contextVersion = stateDetailContextVersion
+	const operation = () => performSelectEntity(item, { ...options, contextVersion })
+	return options.quiet === true ? systemDetailRefreshGate.runBackground(operation) : systemDetailRefreshGate.runForeground(operation)
+}
+
+const selectEntityWhileReserved = (item, options = {}) => {
+	if (options.quiet !== true) {
+		stateDetailContextVersion++
+		stateDetailRequestVersion++
+	}
+	return performSelectEntity(item, { ...options, contextVersion: stateDetailContextVersion })
+}
+
+const renderEntityList = async ({ refreshSelected = false, live = false, selectedHistory, detailGateReserved = false } = {}) => {
 	const query = $('#entity-search').value.trim().toLowerCase()
 	const catalogItems = stateData[activeStateType]
 	const items = catalogItems.filter((item) => !query || entityCopy(activeStateType, item).join(' ').toLowerCase().includes(query))
@@ -3304,11 +4046,17 @@ const renderEntityList = async ({ refreshSelected = false, live = false } = {}) 
 	list.setAttribute('aria-busy', 'false')
 	const selected = items.find((item) => entityKey(activeStateType, item) === selectedEntityKey)
 	if (selected !== undefined) {
-		if (refreshSelected) return await selectEntity(selected, { preserveDetail: true, quiet: live })
+		if (refreshSelected) {
+			const select = detailGateReserved ? selectEntityWhileReserved : selectEntity
+			return await select(selected, { preserveDetail: true, quiet: live, suppliedHistory: selectedHistory })
+		}
 		return true
 	}
-	if (items[0] !== undefined) return await selectEntity(items[0])
-	else {
+	if (items[0] !== undefined) {
+		const select = detailGateReserved ? selectEntityWhileReserved : selectEntity
+		return await select(items[0], { preserveDetail: live, quiet: live, suppliedHistory: selectedHistory })
+	} else {
+		stateDetailContextVersion++
 		stateDetailRequestVersion++
 		selectedEntityKey = undefined
 		$('#state-detail').setAttribute('aria-busy', 'false')
@@ -3341,56 +4089,110 @@ const setSystemControlsDisabled = (disabled) => {
 	for (const row of document.querySelectorAll('.entity-row')) row.disabled = disabled
 }
 
-const loadSystemState = async ({ live = false } = {}) => {
+const performLoadSystemState = async ({ live = false, contextVersion } = {}) => {
+	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++catalogRequestVersion
 	const alert = $('#system-alert')
 	const status = $('#system-status')
 	const hadData = stateData !== undefined
 	const previousDetail = $('#state-detail').textContent
-	alert.hidden = true
-	alert.replaceChildren()
-	if (!live || !hadData) {
+	const presentation = refreshPresentation({ live })
+	if (presentation.loadingState) {
+		alert.hidden = true
+		alert.replaceChildren()
 		status.hidden = false
 		status.textContent = hadData ? 'Refreshing indexed registry…' : 'Loading indexed registry…'
 	}
-	setSystemControlsDisabled(true)
-	$('#state-stats').setAttribute('aria-busy', 'true')
-	$('#entity-list').setAttribute('aria-busy', 'true')
+	setSystemControlsDisabled(presentation.busy)
+	$('#state-stats').setAttribute('aria-busy', String(presentation.busy))
+	$('#entity-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
 		const nextStateData = await api(`/api/v1/state/catalog?chainId=${requiredChainId()}`)
-		if (requestVersion !== catalogRequestVersion) return false
-		stateData = nextStateData
-		for (const poolItem of stateData.pools) poolItem.current_state = {}
-		const orderedPoolStates = stateData.poolStates.toSorted(
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
+		for (const poolItem of nextStateData.pools) poolItem.current_state = {}
+		const orderedPoolStates = nextStateData.poolStates.toSorted(
 			(left, right) => Number(left.block_number) - Number(right.block_number) || Number(left.log_index) - Number(right.log_index),
 		)
 		for (const state of orderedPoolStates) {
-			const poolItem = stateData.pools.find(
+			const poolItem = nextStateData.pools.find(
 				(candidate) => String(candidate.chain_id) === String(state.chain_id) && candidate.pool_address === state.pool_address,
 			)
 			if (poolItem !== undefined) Object.assign(poolItem.current_state, state.state)
 		}
-		renderStateStats({ live })
-		const detailRefreshed = await renderEntityList({ refreshSelected: true, live })
-		if (requestVersion !== catalogRequestVersion) return false
-		if (live && previousDetail !== $('#state-detail').textContent) {
-			animateLiveNode($('#state-detail'), 'live-changed')
-		}
-		status.hidden = true
-		const truncated = Object.entries(stateData.truncated ?? {})
-			.filter(([, value]) => value)
-			.map(([name]) => name)
-		if (truncated.length > 0) {
-			alert.hidden = false
-			alert.append(element('span', '', `Large registry: showing ${stateData.limit} ${truncated.join(', ')} records for this network.`))
-		}
-		return detailRefreshed
+		const stagedStateType = activeStateType
+		const stagedDetailContext = stateDetailContextVersion
+		const query = $('#entity-search').value.trim().toLowerCase()
+		const visibleItems = nextStateData[stagedStateType].filter((item) => !query || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(query))
+		const selectedItem = visibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? visibleItems[0]
+		const stagedSelectedKey = selectedItem === undefined ? undefined : entityKey(stagedStateType, selectedItem)
+		const selectedHistory = selectedItem === undefined ? undefined : await fetchEntityHistory(stagedStateType, selectedItem)
+		const currentQuery = $('#entity-search').value.trim().toLowerCase()
+		const currentVisibleItems = nextStateData[stagedStateType].filter(
+			(item) => !currentQuery || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(currentQuery),
+		)
+		const currentSelectedItem = currentVisibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? currentVisibleItems[0]
+		const currentSelectedKey = currentSelectedItem === undefined ? undefined : entityKey(stagedStateType, currentSelectedItem)
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration) ||
+			stagedDetailContext !== stateDetailContextVersion ||
+			stagedStateType !== activeStateType ||
+			query !== currentQuery ||
+			stagedSelectedKey !== currentSelectedKey
+		)
+			return false
+		return await runWithForegroundReservation(systemDetailRefreshGate, async () => {
+			const reservedQuery = $('#entity-search').value.trim().toLowerCase()
+			const reservedVisibleItems = nextStateData[stagedStateType].filter(
+				(item) => !reservedQuery || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(reservedQuery),
+			)
+			const reservedSelectedItem = reservedVisibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? reservedVisibleItems[0]
+			const reservedSelectedKey = reservedSelectedItem === undefined ? undefined : entityKey(stagedStateType, reservedSelectedItem)
+			if (
+				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration) ||
+				stagedDetailContext !== stateDetailContextVersion ||
+				stagedStateType !== activeStateType ||
+				query !== reservedQuery ||
+				stagedSelectedKey !== reservedSelectedKey
+			)
+				return false
+			stateData = nextStateData
+			renderStateStats({ live })
+			const detailRefreshed = await renderEntityList({ refreshSelected: true, live, selectedHistory, detailGateReserved: true })
+			if (
+				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			)
+				return false
+			if (live && previousDetail !== $('#state-detail').textContent) animateLiveNode($('#state-detail'), 'live-changed')
+			status.hidden = true
+			alert.hidden = true
+			alert.replaceChildren()
+			const truncated = Object.entries(stateData.truncated ?? {})
+				.filter(([, value]) => value)
+				.map(([name]) => name)
+			if (truncated.length > 0) {
+				alert.hidden = false
+				alert.append(element('span', '', `Large registry: showing ${stateData.limit} ${truncated.join(', ')} records for this network.`))
+			}
+			return detailRefreshed
+		})
 	} catch (error) {
-		if (requestVersion === catalogRequestVersion) {
+		if (
+			isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
 			$('#entity-list').setAttribute('aria-busy', 'false')
 			$('#state-detail').setAttribute('aria-busy', 'false')
 			alert.hidden = false
+			alert.replaceChildren()
 			status.hidden = true
 			alert.append(element('span', '', hadData ? `Refresh failed; showing last known state: ${error.message}` : `System state unavailable: ${error.message}`))
 			const retry = element('button', '', 'Retry')
@@ -3406,7 +4208,10 @@ const loadSystemState = async ({ live = false } = {}) => {
 		}
 		return false
 	} finally {
-		if (requestVersion === catalogRequestVersion) {
+		if (
+			isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
 			$('#entity-list').setAttribute('aria-busy', 'false')
 			setSystemControlsDisabled(false)
@@ -3414,7 +4219,14 @@ const loadSystemState = async ({ live = false } = {}) => {
 	}
 }
 
+const loadSystemState = (options = {}) => {
+	const contextVersion = viewContextVersion
+	const operation = () => performLoadSystemState({ ...options, contextVersion })
+	return options.live === true ? systemStateRefreshGate.runBackground(operation) : systemStateRefreshGate.runForeground(operation)
+}
+
 const setStateTab = (type) => {
+	stateDetailContextVersion++
 	stateDetailRequestVersion++
 	activeStateType = type
 	selectedEntityKey = undefined
@@ -3428,11 +4240,28 @@ const setStateTab = (type) => {
 	if (stateData !== undefined) renderEntityList()
 }
 
+const resetActivityFilterContext = () => {
+	feed.replaceChildren()
+	feed.setAttribute('aria-busy', 'true')
+	nextCursor = undefined
+	$('#activity-summary').textContent = ''
+	feedState.hidden = false
+	feedState.textContent = 'Loading indexed activity…'
+	$('#more').hidden = true
+	$('#activity-more-status').hidden = true
+	$('#activity-more-status').replaceChildren()
+	setLogControlsBusy(true)
+}
+
 $('#filters').addEventListener('submit', (event) => {
 	event.preventDefault()
 	if (!validateAddressFilter(true)) return
 	appliedActivityFilters = activityFilterValues()
 	syncActivityFilterUrl()
+	viewContextVersion++
+	logsAbortController?.abort()
+	logsRequestVersion++
+	resetActivityFilterContext()
 	loadLogs()
 })
 $('#clear-filters').addEventListener('click', () => {
@@ -3441,14 +4270,17 @@ $('#clear-filters').addEventListener('click', () => {
 	validateAddressFilter()
 	appliedActivityFilters = activityFilterValues()
 	syncActivityFilterUrl()
+	viewContextVersion++
+	logsAbortController?.abort()
+	logsRequestVersion++
+	resetActivityFilterContext()
 	loadLogs()
 })
 $('#address-filter').addEventListener('input', validateAddressFilter)
 $('#filters').addEventListener('input', () => {
 	$('#clear-filters').disabled = !hasActivityFilters()
 })
-$('#refresh-stale').addEventListener('click', async () => {
-	const button = $('#refresh-stale')
+const retryCanonicalRefresh = async (button) => {
 	if (button.disabled) return
 	button.disabled = true
 	button.setAttribute('aria-busy', 'true')
@@ -3456,8 +4288,8 @@ $('#refresh-stale').addEventListener('click', async () => {
 	try {
 		if (canonicalRefreshRequired) {
 			const refreshed = await requestRouteRefresh(1, true)
-			if (refreshed) canonicalRefreshRequired = false
-			updateFreshness()
+			if (refreshed) completeCanonicalRefresh()
+			else updateFreshness()
 		} else {
 			await loadNetworks({ refreshAfterCurrent: true })
 			if (isSystem) await loadSystemState()
@@ -3471,7 +4303,9 @@ $('#refresh-stale').addEventListener('click', async () => {
 		button.removeAttribute('aria-busy')
 		button.textContent = 'Retry now'
 	}
-})
+}
+$('#refresh-stale').addEventListener('click', () => retryCanonicalRefresh($('#refresh-stale')))
+$('#detail-canonical-retry').addEventListener('click', () => retryCanonicalRefresh($('#detail-canonical-retry')))
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
 $('#close-detail').addEventListener('click', closeDetail)
 dialog.addEventListener('click', (event) => {
@@ -3489,6 +4323,7 @@ dialog.addEventListener('close', () => {
 		pendingAccountDialogSnapshot = undefined
 		activeAccount = undefined
 		activeAccountTransactions = undefined
+		activeAccountLoadMore = undefined
 		detailRequestVersion++
 	}
 	preservePendingOnDialogClose = false
@@ -3512,23 +4347,40 @@ for (const tab of stateTabs) {
 	})
 }
 $('#entity-search').addEventListener('input', () => {
+	stateDetailContextVersion++
+	stateDetailRequestVersion++
 	if (stateData !== undefined) renderEntityList()
 })
 $('#entity-search').addEventListener('keydown', (event) => {
 	if (event.key !== 'Escape' || event.currentTarget.value === '') return
 	event.preventDefault()
 	event.currentTarget.value = ''
+	stateDetailContextVersion++
+	stateDetailRequestVersion++
 	if (stateData !== undefined) renderEntityList()
 })
-globalNetworkFilter.addEventListener('change', async () => {
+
+const resetSelectedNetworkContext = () => {
+	viewContextVersion++
+	detailContextVersion++
+	stateDetailContextVersion++
+	contractRequestVersion++
+	richListRequestVersion++
+	addressProfileRequestVersion++
+	catalogRequestVersion++
+	stateDetailRequestVersion++
 	activeReorgRecovery = undefined
 	activeLog = undefined
 	pendingCanonicalLog = undefined
+	pendingCanonicalActivityCount = undefined
 	pendingCanonicalAccount = undefined
 	pendingAccountDialogSnapshot = undefined
 	canonicalRefreshRequired = false
+	hideCanonicalDialogStatus()
 	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
 	blockRefreshTimer = undefined
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 	if (isActivity) {
 		logsAbortController?.abort()
@@ -3536,6 +4388,8 @@ globalNetworkFilter.addEventListener('change', async () => {
 		logsRequestVersion++
 		feed.replaceChildren()
 		nextCursor = undefined
+		$('#activity-summary').textContent = 'No logs shown'
+		$('#more').hidden = true
 	}
 	if (dialog.open) closeDetail({ preservePendingCanonicalAccount: true })
 	const url = new URL(location.href)
@@ -3544,28 +4398,42 @@ globalNetworkFilter.addEventListener('change', async () => {
 	url.searchParams.delete('account')
 	url.searchParams.delete('contract')
 	history.replaceState(null, '', url)
-	syncNetworkUrl()
-	updateNetworkLabels()
-	renderNetworks(latestNetworks)
-	updateFreshness()
 	if (isSystem) {
 		stateDetailRequestVersion++
 		stateData = undefined
 		selectedEntityKey = undefined
 		$('#state-stats').replaceChildren()
 		$('#entity-list').replaceChildren()
+		$('#entity-count').textContent = '—'
 		$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system state…'))
-		await loadSystemState()
 	} else if (isContracts) {
 		contractItems = []
 		selectedContractAddress = undefined
 		$('#contract-list').replaceChildren()
 		$('#contract-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system contracts…'))
-		await loadContracts()
 	} else if (isRichList) {
 		richListItems = []
 		richListTotal = 0
 		$('#richlist-rows').replaceChildren()
+		$('#richlist-summary').textContent = '0 of 0 known addresses'
+		$('#richlist-more').hidden = true
+	} else if (isAddress) {
+		currentAddressProfile = undefined
+		$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
+	}
+}
+
+globalNetworkFilter.addEventListener('change', async () => {
+	resetSelectedNetworkContext()
+	syncNetworkUrl()
+	updateNetworkLabels()
+	renderNetworks(latestNetworks)
+	updateFreshness()
+	if (isSystem) {
+		await loadSystemState()
+	} else if (isContracts) {
+		await loadContracts()
+	} else if (isRichList) {
 		await loadRichList()
 	} else if (isAddress) {
 		await loadAddressProfile()
@@ -3573,7 +4441,24 @@ globalNetworkFilter.addEventListener('change', async () => {
 		await loadLogs()
 	}
 })
-$('#rich-sort').addEventListener('change', () => loadRichList())
+$('#rich-sort').addEventListener('change', () => {
+	viewContextVersion++
+	richListRequestVersion++
+	richListItems = []
+	richListTotal = 0
+	$('#richlist-rows').replaceChildren()
+	$('#richlist-rows').setAttribute('aria-busy', 'true')
+	$('#richlist-summary').textContent = ''
+	$('#richlist-status').hidden = false
+	$('#richlist-status').className = 'system-status'
+	$('#richlist-status').textContent = 'Loading known addresses…'
+	$('#rich-sort').disabled = true
+	$('#richlist-more').hidden = true
+	$('#richlist-more').disabled = true
+	$('#richlist-more-status').hidden = true
+	$('#richlist-more-status').replaceChildren()
+	loadRichList()
+})
 $('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
 const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recovery) => {
@@ -3581,39 +4466,34 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
-		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
-			canonicalRefreshRequired = false
-			updateFreshness()
-		}
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isContracts) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadContracts()])
-		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
-			canonicalRefreshRequired = false
-			updateFreshness()
-		}
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadContracts({ live: true })])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isRichList) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList({ live: true })])
-		if (contentRefreshed && activeAccount && dialog.open) {
+		if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalAccount === undefined && activeAccount && dialog.open) {
 			const refreshedAccount = richListItems.find(
 				(item) => String(item.chain_id) === String(activeAccount.chain_id) && item.address.toLowerCase() === activeAccount.address.toLowerCase(),
 			)
 			await openAccountTransactions(refreshedAccount ?? activeAccount, { live: true })
 		}
-		if (contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined) await restorePendingCanonicalAccount()
-		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
-			canonicalRefreshRequired = false
-			updateFreshness()
-		}
-		return contentRefreshed
+		const canonicalDetailRefreshed =
+			contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined ? await restorePendingCanonicalAccount() : true
+		const fullyRefreshed = contentRefreshed && canonicalDetailRefreshed
+		if (fullyRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
+		return fullyRefreshed
 	}
 	if (isAddress) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile({ live: true })])
 		if (
 			contentRefreshed &&
+			activeReorgRecovery === undefined &&
+			pendingCanonicalAccount === undefined &&
 			activeAccount &&
 			dialog.open &&
 			currentAddressProfile &&
@@ -3621,42 +4501,55 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 			currentAddressProfile.address.toLowerCase() === activeAccount.address.toLowerCase()
 		)
 			await openAccountTransactions(currentAddressProfile, { live: true })
-		if (contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined) await restorePendingCanonicalAccount()
-		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
-			canonicalRefreshRequired = false
-			updateFreshness()
-		}
-		return contentRefreshed
+		const canonicalDetailRefreshed =
+			contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined ? await restorePendingCanonicalAccount() : true
+		const fullyRefreshed = contentRefreshed && canonicalDetailRefreshed
+		if (fullyRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
+		return fullyRefreshed
 	}
+	const activityRetention = activityRefreshRetention(canonicalRefreshRequired, pendingCanonicalActivityCount, feed.querySelectorAll('.log-row').length)
 	const [, contentRefreshed] = await Promise.all([
 		networkRefresh,
-		loadLogs({ live: true, preserveHistory: !_forceContentRefresh && !canonicalRefreshRequired }),
+		loadLogs({
+			live: true,
+			...activityRetention,
+		}),
 	])
-	if (contentRefreshed && activeLog && dialog.open) await openDetail(activeLog, { live: true })
-	if (contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined) await restorePendingCanonicalLog()
-	if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) {
-		canonicalRefreshRequired = false
-		updateFreshness()
-	}
-	return contentRefreshed
+	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && dialog.open)
+		await openDetail(activeLog, { live: true })
+	const canonicalDetailRefreshed = contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined ? await restorePendingCanonicalLog() : true
+	const fullyRefreshed = contentRefreshed && canonicalDetailRefreshed
+	if (fullyRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
+	return fullyRefreshed
 }
 requestRouteRefresh = createLiveRouteRefreshCoordinator(refreshAfterUpdates, () => activeReorgRecovery)
 
 const refreshCanonicalViews = (title, detail) => {
+	canonicalDataGeneration++
 	if (activeReorgRecovery !== undefined) {
 		activeReorgRecovery.pendingRefresh = true
+		if (isActivity) {
+			const visibleCount = feed.querySelectorAll('.log-row').length
+			pendingCanonicalActivityCount = Math.max(pendingCanonicalActivityCount ?? 0, visibleCount)
+		}
+		activeReorgRecovery.title = title
+		activeReorgRecovery.detail = detail
 		$('#freshness-title').textContent = title
 		$('#freshness-detail').textContent = detail
+		showCanonicalDialogStatus(title, detail)
 		return activeReorgRecovery.promise
 	}
 	const recovery = {
 		chainId: requiredChainId(),
+		title,
+		detail,
 		logToRefresh: activeLog && dialog.open ? activeLog : undefined,
 		accountToRefresh: activeAccount && dialog.open ? activeAccount : undefined,
 		accountDialogSnapshot: activeAccount && dialog.open ? captureAccountDialogSnapshot() : undefined,
 		pendingRefresh: false,
 		promise: undefined,
 	}
+	if (isActivity) pendingCanonicalActivityCount = feed.querySelectorAll('.log-row').length
 	if (recovery.logToRefresh) pendingCanonicalLog = recovery.logToRefresh
 	if (recovery.accountToRefresh) {
 		pendingCanonicalAccount = recovery.accountToRefresh
@@ -3665,45 +4558,52 @@ const refreshCanonicalViews = (title, detail) => {
 	activeReorgRecovery = recovery
 	canonicalRefreshRequired = true
 	if (isActivity) {
-		logsAbortController?.abort()
-		logsAbortController = undefined
-		logsRequestVersion++
-		feed.replaceChildren()
-		nextCursor = undefined
 		$('#more').hidden = true
-		feedState.hidden = false
-		feedState.textContent = 'Refreshing activity after the chain changed…'
-		$('#activity-summary').textContent = 'Activity is refreshing'
+		$('#more').disabled = true
 	}
-	if (dialog.open)
-		closeDetail({ preservePendingCanonicalAccount: recovery.accountToRefresh !== undefined, preservePendingCanonicalLog: recovery.logToRefresh !== undefined })
+	if (isRichList) {
+		$('#richlist-more').hidden = true
+		$('#richlist-more').disabled = true
+	}
+	const accountMore = detailContent.querySelector('.account-transactions-more')
+	if (accountMore !== null) {
+		accountMore.hidden = true
+		accountMore.disabled = true
+	}
 	const banner = $('#freshness-banner')
 	banner.hidden = false
 	$('#freshness-title').textContent = title
 	$('#freshness-detail').textContent = detail
+	showCanonicalDialogStatus(title, detail)
 	recovery.promise = (async () => {
 		try {
 			while (true) {
 				recovery.pendingRefresh = false
 				const refreshed = await requestRouteRefresh(1, true)
-				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId || !refreshed) return false
+				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId) return false
 				if (recovery.pendingRefresh) continue
-				if (recovery.logToRefresh) await restorePendingCanonicalLog()
-				if (recovery.accountToRefresh) await restorePendingCanonicalAccount()
-				if (recovery.pendingRefresh) {
-					if (dialog.open)
-						closeDetail({
-							preservePendingCanonicalAccount: recovery.accountToRefresh !== undefined,
-							preservePendingCanonicalLog: recovery.logToRefresh !== undefined,
-						})
-					continue
+				if (!refreshed) return false
+				let detailRefreshed = true
+				if (recovery.logToRefresh && dialog.open) {
+					pendingCanonicalLog = recovery.logToRefresh
+					const restored = await restorePendingCanonicalLog()
+					detailRefreshed = restored || !dialog.open || recovery.logToRefresh === undefined
 				}
-				canonicalRefreshRequired = false
+				if (recovery.accountToRefresh && dialog.open) {
+					pendingCanonicalAccount = recovery.accountToRefresh
+					pendingAccountDialogSnapshot = captureAccountDialogSnapshot()
+					const restored = await restorePendingCanonicalAccount()
+					detailRefreshed = (restored || !dialog.open || recovery.accountToRefresh === undefined) && detailRefreshed
+				}
+				if (recovery.pendingRefresh) continue
+				if (!detailRefreshed) return false
+				completeCanonicalRefresh()
 				return true
 			}
 		} finally {
 			if (activeReorgRecovery === recovery) {
 				activeReorgRecovery = undefined
+				syncCanonicalDialogStatus()
 				updateFreshness()
 			}
 		}
@@ -3785,7 +4685,7 @@ const connectStream = () => {
 		}
 		invalidateAddressIdentityCache(payload.chainId)
 		if (String(payload.chainId) !== selectedChainId()) return
-		const depth = payload.depth ?? 'unknown'
+		const depth = String(payload.depth ?? 'unknown')
 		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; views are refreshing.`)
 	})
 	nextStream.addEventListener('reset', async () => {
@@ -3809,6 +4709,8 @@ addEventListener('pagehide', () => {
 	streamHasOpened = false
 	if (blockRefreshTimer !== undefined) clearTimeout(blockRefreshTimer)
 	blockRefreshTimer = undefined
+	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
+	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 })
 addEventListener('pageshow', async (event) => {
@@ -3896,3 +4798,4 @@ if (isRichList && accountDeepLink !== null) {
 		history.replaceState(null, '', url)
 	}
 }
+if (isDemo && pageUrl.searchParams.get('queuedPaginationDemo') === '1') window.setTimeout(() => void requestRouteRefresh(1), 100)

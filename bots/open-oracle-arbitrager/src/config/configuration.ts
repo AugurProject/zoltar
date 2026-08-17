@@ -8,7 +8,7 @@ import type { RiskLimits } from '#core/safety-controls'
 import { loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 export const defaultConfigurationFile = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -38,6 +38,7 @@ export type Configuration = MutableStrategy & {
 	privateKey: Hex | undefined
 	positionFile: string
 	quorumRpcUrls: string[]
+	rpcQuorum: RpcQuorumRequirement
 	riskLimits: RiskLimits
 	router: Address | undefined
 	settingsFile: string
@@ -57,6 +58,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 	const saved = await loadOperatorSettings(settingsFile)
 	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Copy config/operator.example.json there, edit it, and start the bot again.`)
+	process.env['ZOLTAR_BOT_RPC_QUORUM'] = saved.rpcQuorum.toString()
 	const deployment = saved.deployment
 	const network = networkConfiguration(saved.network, {
 		factory: deployment.uniswapFactory,
@@ -66,7 +68,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	})
 	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
 	const quorumRpcUrls = [...savedQuorumRpcUrls]
-	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
+	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
 	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
@@ -94,6 +96,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 		privateKey: saved.privateKey,
 		positionFile: resolve(saved.runtime.positionFile),
 		quorumRpcUrls,
+		rpcQuorum: saved.rpcQuorum,
 		riskLimits: saved.runtime.riskLimits,
 		router: deployment.uniswapRouter,
 		settingsFile,
