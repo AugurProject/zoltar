@@ -20,7 +20,7 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { parseOptionalRepAmountInput } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
+import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getWrongNetworkMessage, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,

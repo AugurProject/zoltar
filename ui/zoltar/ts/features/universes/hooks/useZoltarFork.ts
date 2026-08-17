@@ -12,7 +12,7 @@ import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } f
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../../transactionPresentations.js'
-import { parseBigIntInput } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
+import { parseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'

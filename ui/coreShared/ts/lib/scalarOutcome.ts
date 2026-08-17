@@ -1,5 +1,5 @@
-import { parseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
-import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
+import { parseDecimalInput } from './decimal.js'
+import { getVisualRatio } from './visualMetrics.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'
 
 export { clampScalarTickIndex, formatScalarDisplayValue, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, isValidScalarOutcomeIndex, MAX_PRECISE_SCALAR_TICK_COUNT } from '@zoltar/shared/scalarOutcome'

@@ -7,8 +7,8 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
-import { getMarketTypeLabel } from '../lib/marketType.js'
-import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
+import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
+import { formatScalarDisplayValue } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type QuestionProps = {

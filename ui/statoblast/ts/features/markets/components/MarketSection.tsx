@@ -19,7 +19,7 @@ import { TransactionUniverseValue } from '@zoltar/ui-zoltar/features/universes/c
 import { ZoltarMigrationSection } from '@zoltar/ui-zoltar/features/universes/components/ZoltarMigrationSection.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { getMarketTypeLabel } from '../lib/marketType.js'
+import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import type { MarketSectionProps } from '../../types.js'
 
 export function MarketSection({

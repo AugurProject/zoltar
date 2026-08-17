@@ -6,7 +6,7 @@ import { OutcomeSelectionList } from '@zoltar/ui-statoblast/features/markets/com
 import { ScalarOutcomePicker } from '@zoltar/ui-statoblast/features/markets/components/ScalarOutcomePicker.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-statoblast/features/markets/lib/scalarOutcome.js'
+import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {

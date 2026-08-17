@@ -3,9 +3,9 @@ import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/ac
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { tryParseTradingAmountInput } from './marketForm.js'
+import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
-import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
+import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

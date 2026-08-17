@@ -3,8 +3,10 @@ import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.
 import type { DeploymentStatus, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
-import { parseStatoblastSecurityMultiplierBpsInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
-import { parseScalarFormInputs } from './scalarOutcome.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
+import { parseTimestampInput, tryParseTimestampInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { parseStatoblastSecurityMultiplierBpsInput } from './marketForm.js'
+import { parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {
 	fieldErrors: Partial<Record<MarketFormField, string>>

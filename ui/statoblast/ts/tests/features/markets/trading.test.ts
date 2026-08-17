@@ -30,7 +30,7 @@ import {
 	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
 } from '../../../features/markets/lib/trading.js'
-import { getScalarOutcomeIndex } from '../../../features/markets/lib/scalarOutcome.js'
+import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n

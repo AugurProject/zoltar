@@ -45,7 +45,7 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 } from '../lib/trading.js'
-import { tryParseTradingAmountInput } from '../lib/marketForm.js'
+import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import type { ReadinessAction } from '../../types.js'
 import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined

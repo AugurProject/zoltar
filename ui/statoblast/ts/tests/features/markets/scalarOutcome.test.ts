@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES, combineScalarParityOutcomeIndex, describeScalarParityOutcomeIndex, formatScalarParityOutcomeName, getScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
-import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, isValidScalarOutcomeIndex, parseScalarFormInputs } from '../../../features/markets/lib/scalarOutcome.js'
+import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, isValidScalarOutcomeIndex, parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 
 const scalarQuestion = {
 	answerUnit: 'km',

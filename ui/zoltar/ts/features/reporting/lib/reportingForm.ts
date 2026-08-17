@@ -1,5 +1,5 @@
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
-import { getDefaultReportingWithdrawDepositIndexesByOutcome } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
+import { getDefaultReportingWithdrawDepositIndexesByOutcome } from '../../../lib/formDefaults.js'
 import type { ReportingFormState } from '../../../types/app.js'
 
 export function applyReportingFormUpdate(current: ReportingFormState, update: Partial<ReportingFormState>): ReportingFormState {

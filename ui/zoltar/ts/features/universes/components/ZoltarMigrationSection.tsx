@@ -23,7 +23,7 @@ import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from 
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
+import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'

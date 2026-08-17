@@ -8,7 +8,7 @@ import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-statoblast/features/markets/lib/marketForm.js'
+import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { addOpenOracleBountyBuffer, getOpenOracleDisputeSwapTokenKey } from '../../../protocol/openOracleMath.js'
 import { getOpenOracleCreateParameterValidation, OPEN_ORACLE_MULTIPLIER_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION } from '../../../protocol/openOracleValidation.js'

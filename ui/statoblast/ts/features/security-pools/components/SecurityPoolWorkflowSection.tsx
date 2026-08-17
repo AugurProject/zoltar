@@ -34,7 +34,7 @@ import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionR
 import { UniverseLink } from '@zoltar/ui-zoltar/features/universes/components/UniverseLink.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { tryParseBigIntInput } from '../../markets/lib/marketForm.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getWrongNetworkMessage } from '@zoltar/ui-core-shared/lib/network.js'

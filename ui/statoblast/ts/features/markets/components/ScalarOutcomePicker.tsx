@@ -3,9 +3,9 @@ import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { tryParseBigIntInput } from '../lib/marketForm.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import type { ScalarOutcomePickerProps } from '../../types.js'
-import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 
 function getSafeSelectedTickValue(selectedTick: string) {

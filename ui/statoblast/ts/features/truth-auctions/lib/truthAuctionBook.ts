@@ -3,7 +3,7 @@ import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary 
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_MIN_SUPPORTED_TICK } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js'
-import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '../../markets/lib/marketForm.js'
+import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 
 export { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION }
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_MIN_SUPPORTED_TICK }
