@@ -39,7 +39,7 @@ import {
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from '../lib/reporting.js'
-import { deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolState.js'
+import { deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../../types.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 type ReportingStatus = 'active' | 'missing' | 'not-started'
@@ -238,16 +238,12 @@ export function ReportingSection({
 	const showSettlementSection = showFullReporting || showWithdrawOnly
 	const reportingReady = marketDetails === undefined ? undefined : hasReportingOpened(marketDetails.endTime, effectiveCurrentTimestamp)
 	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
-	const reportingStageKey = deriveSecurityPoolReportingStage({
+	const reportingStageKey = deriveReportingStage({
 		reportingDetails: effectiveReportingDetails,
 		reportingReady,
 	})
-	const reportingState = evaluateSecurityPoolState({
-		reportingStage: reportingStageKey,
-		universeHasForked: false,
-	})
-	const reportOutcomeEnabled = reportingState.actions.reportOutcome.enabled
-	const withdrawEscalationEnabled = reportingState.actions.withdrawEscalation.enabled
+	const reportOutcomeEnabled = isReportingOutcomeEnabled(reportingStageKey)
+	const withdrawEscalationEnabled = isWithdrawEscalationEnabled(reportingStageKey)
 	let reportLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
 		reportLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON
@@ -257,7 +253,7 @@ export function ReportingSection({
 		reportLifecycleReason = reportingCopy.poolFinalizedReason
 	}
 	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.reportingDetailsRequired : undefined
-	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
+	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
@@ -275,7 +271,7 @@ export function ReportingSection({
 	if (showSettlementSection && loadingReportingDetails) {
 		withdrawControlsLockedReason = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDeposits
 	} else {
-		withdrawControlsLockedReason = pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
+		withdrawControlsLockedReason = pickFirstReason(lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
 	}
 	let settlementContextMessage: string | undefined
 	if (activeReportingDetails?.settlementState === 'migration-required') settlementContextMessage = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail

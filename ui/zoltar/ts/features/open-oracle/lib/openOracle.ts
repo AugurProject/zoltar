@@ -6,7 +6,9 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
@@ -661,4 +663,22 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		token2ContributionAmount,
 		token2Decimals,
 	}
+}
+
+export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
+	if (lastSettlementTimestamp === 0n) return '-'
+	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
+}
+
+export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
+	if (lastSettlementTimestamp === 0n) return undefined
+	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
+	if (validUntilTimestamp === undefined) return undefined
+	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
+	if (timeRemaining === undefined) return undefined
+	if (timeRemaining === 0n) {
+		const expiredFor = currentTimestamp > validUntilTimestamp ? currentTimestamp - validUntilTimestamp : 0n
+		return { text: `(expired ${expiredFor === 0n ? 'less than a minute' : formatDuration(expiredFor)} ago)`, tone: 'danger' as const }
+	}
+	return { text: `(Valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
 }

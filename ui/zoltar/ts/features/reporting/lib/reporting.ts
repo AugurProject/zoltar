@@ -1,4 +1,5 @@
-import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getEscalationPhase, isPoolQuestionFinalized } from './reportingDomain.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 
@@ -37,4 +38,37 @@ export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp
 export function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined) {
 	if (currentTimestamp === undefined) return undefined
 	return currentTimestamp > endTime
+}
+
+export type ReportingStage = 'preOpen' | 'notStarted' | 'activeLocked' | 'activeWithdrawable' | 'resolved' | 'forkTriggered' | 'timedOut'
+
+export function deriveReportingStage({ reportingDetails, reportingReady }: { reportingDetails: ReportingDetails | undefined; reportingReady: boolean | undefined }): ReportingStage | undefined {
+	if (reportingReady === false) return 'preOpen'
+	if (reportingDetails === undefined) return undefined
+	if (isPoolQuestionFinalized(reportingDetails)) return 'resolved'
+	if (reportingDetails.status === 'not-started') return 'notStarted'
+
+	const escalationPhase = getEscalationPhase(reportingDetails)
+	switch (escalationPhase) {
+		case 'Resolved':
+			return 'resolved'
+		case 'Fork Triggered':
+			return 'forkTriggered'
+		case 'Timed Out':
+			return 'timedOut'
+		case 'Pending Start':
+		case 'Active':
+			if (reportingDetails.settlementState === 'migration-required' || reportingDetails.settlementState === 'migration-expired') return 'forkTriggered'
+			return reportingDetails.parentWithdrawalEnabled ? 'activeWithdrawable' : 'activeLocked'
+		default:
+			return assertNever(escalationPhase)
+	}
+}
+
+export function isReportingOutcomeEnabled(stage: ReportingStage | undefined) {
+	return stage === 'notStarted' || stage === 'activeLocked' || stage === 'activeWithdrawable'
+}
+
+export function isWithdrawEscalationEnabled(stage: ReportingStage | undefined) {
+	return stage === 'activeWithdrawable' || stage === 'resolved'
 }

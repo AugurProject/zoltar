@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolWorkflow.js'
+import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '../lib/openOracle.js'
 
 type OpenOraclePriceValueProps = {
 	currentTimestamp?: bigint | undefined

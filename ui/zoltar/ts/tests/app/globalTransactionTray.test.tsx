@@ -1,14 +1,14 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
-import { GlobalTransactionTray } from '../../app/components/GlobalTransactionTray.js'
+import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
 import { createMarketCreationSuccessPresentation, createSecurityPoolCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar/features/transactionPresentations.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../lib/transactionTray.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
 	let restoreDomEnvironment: (() => void) | undefined
