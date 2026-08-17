@@ -65,11 +65,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			throw rpcFailureWithContext(error, target, method)
 		}
 	}
-	const createClient = (rpcUrl?: string) =>
-		createPublicClient({
+	const createClient = (rpcUrl?: string) => {
+		const baseClient = createPublicClient({
 			chain: config.network.chain,
 			transport: config.execute && rpcUrl !== undefined ? readPool.transportFor(rpcUrl) : readPool.transport,
 		})
+		const readContract: typeof baseClient.readContract = async parameters => await contextualRpcRead('eth_call', () => baseClient.readContract(parameters), rpcUrl === undefined ? undefined : endpointLabel(rpcUrl))
+		return baseClient.extend(() => ({ readContract }))
+	}
 	const createWallet = () =>
 		config.privateKey === undefined
 			? undefined
