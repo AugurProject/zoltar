@@ -48,6 +48,7 @@ RUN bun run ui:vendor
 # UI TypeScript source
 COPY ./ui/index.html /source/ui/index.html
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
+COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.json /source/ui/tsconfig.json
 COPY ./ui/css/ /source/ui/css/
 COPY ./ui/ts/ /source/ui/ts/
@@ -57,15 +58,33 @@ COPY ./ui/favicon.svg /source/ui/favicon.svg
 # Refresh local packages, type-check, validate deployment data, and build the UI.
 RUN bun run ui:build:prod:prepared
 
-# --------------------------------------------------------
-# Base Image: Create the base image that will host the app
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Local runtime: Serve the production UI over plain HTTP
+# ----------------------------------------------------
 
-# Cache the kubo image
+# start.bat selects this target explicitly, so no IPFS layers are built or run.
+FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime
+
+WORKDIR /app
+
+COPY --from=builder --chown=bun:bun /source/ui/dist/ /app/ui/
+COPY --chown=bun:bun ./ui/build/dockerServe.mts /app/dockerServe.mts
+
+USER bun
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+
+CMD [ "bun", "/app/dockerServe.mts" ]
+
+# -------------------------------------------------
+# Publisher: Upload the production UI to host IPFS
+# -------------------------------------------------
+
+# Keep the publisher last for compatibility with the release workflow, which
+# builds the Dockerfile's default target.
 FROM ipfs/kubo:v0.25.0@sha256:0c17b91cab8ada485f253e204236b712d0965f3d463cb5b60639ddd2291e7c52 AS ipfs-kubo
 
-# Create the base image
-FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf
+FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher
 
 # Add curl to the base image (7.88.1-10+deb12u6)
 # Add jq to the base image (1.6-2.1)
@@ -91,24 +110,8 @@ RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_ha
 # Print the hash for visibility
 RUN cat ipfs_hash.txt
 
-# --------------------------------------------------------
-# Publish Script: when run, publishes to IPFS running on docker host.
-# --------------------------------------------------------
+COPY --chmod=755 ./ui/scripts/docker-entrypoint.sh /entrypoint.sh
 
 WORKDIR /temp
-COPY <<'EOF' /entrypoint.sh
-#!/bin/sh
-set -e
-
-echo "Build Hash: $(cat /ipfs_hash.txt)"
-
-IPFS_IP4_ADDRESS=$(getent ahostsv4 host.docker.internal | grep STREAM | head -n 1 | cut -d ' ' -f 1)
-
-echo "Adding files to docker running IPFS at $IPFS_IP4_ADDRESS"
-IPFS_HASH=$(ipfs add --api /ip4/$IPFS_IP4_ADDRESS/tcp/5001 --cid-version 1 --quieter -r /export)
-echo "Uploaded Hash: $IPFS_HASH"
-EOF
-
-RUN chmod u+x /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
