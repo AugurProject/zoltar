@@ -200,18 +200,22 @@ export type MarketRouteContentProps = {
 	onActiveViewChange: (view: ZoltarView) => void
 	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
+	loadingZoltarQuestion: boolean
 	loadingZoltarQuestions: boolean
 	hasLoadedZoltarQuestions: boolean
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	loadingZoltarUniverse: boolean
 	zoltarUniverseState: LoadableValueState
 	onLoadZoltarQuestions: () => Promise<void>
+	onLoadZoltarQuestion: (questionId: string) => Promise<void>
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
+	zoltarQuestionLookupError: string | undefined
+	zoltarQuestionLookupId: string | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined

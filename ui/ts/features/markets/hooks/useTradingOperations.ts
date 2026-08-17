@@ -11,7 +11,7 @@ import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tr
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
-import { convertSettlementCollateralAttoEthToAttoShares, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
+import { convertSettlementCollateralAttoEthToAttoShares, estimateMintCheckpoint, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
@@ -204,9 +204,19 @@ export function useTradingOperations(
 					if (actionName === 'createCompleteSet') {
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
+						const mintCheckpoint = estimateMintCheckpoint({
+							currentRetentionRate: latestMintCapacity.currentRetentionRate,
+							currentTimestamp: latestMintCapacity.currentTimestamp,
+							feeEligibleCapacityOwnershipAttoRep: latestMintCapacity.feeEligibleCapacityOwnershipAttoRep,
+							feeEndTimestamp: latestMintCapacity.feeEndTimestamp,
+							feeIndexRemainder: latestMintCapacity.feeIndexRemainder,
+							lastUpdatedFeeAccumulator: latestMintCapacity.lastUpdatedFeeAccumulator,
+							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
+							totalFeesOwedRemainder: latestMintCapacity.totalFeesOwedRemainder,
+						})
 						const guardMessage = getTradingMintGuardMessage({
 							accountAddress: walletAddress,
-							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
+							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
 							isPriceValid: latestMintCapacity.isPriceValid,

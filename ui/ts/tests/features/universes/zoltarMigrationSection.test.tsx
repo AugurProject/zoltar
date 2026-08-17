@@ -207,7 +207,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
-	test('reviews labeled child-universe outputs against the Zoltar contract without consuming custody', async () => {
+	test('reviews labeled child-universe outputs without consuming custody', async () => {
 		const renderedComponent = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -215,7 +215,7 @@ describe('ZoltarMigrationSection', () => {
 		if (review === null) throw new Error('Expected transaction review')
 		expect(review.textContent).toContain('Yes · Universe 0x2')
 		expect(review.textContent).toContain('Child-Universe REP Received')
-		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
+		expect(review.textContent).not.toContain('Technical Details')
 		expect(review.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
 		const balanceChanges = within(document.body).getByText('Balance Changes').closest('details')
 		if (balanceChanges === null) throw new Error('Expected balance changes disclosure')

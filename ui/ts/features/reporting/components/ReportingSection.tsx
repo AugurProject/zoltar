@@ -1,9 +1,7 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
-import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { AddressValue } from '../../../components/AddressValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -16,7 +14,6 @@ import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
@@ -625,11 +622,6 @@ export function ReportingSection({
 							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
 						]}
 						risks={[reportingCopy.reportingDisputeStakeRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
-						technicalDetails={[
-							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
-							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
-							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-						]}
 					/>
 					<div className='reporting-shared-action-region'>
 						{shouldRenderSharedReportSettlementDisabledReason ? (

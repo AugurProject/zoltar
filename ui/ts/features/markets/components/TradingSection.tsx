@@ -18,8 +18,8 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
+import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
@@ -27,13 +27,16 @@ import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '..
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
 	calculateMintingCapacityAttoEth,
+	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
+	getMaximumMintAmount,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	convertAttoSharesToSettlementCollateralAttoEth,
+	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
 	getTradingRedeemSharesGuardMessage,
 	hasUndefinedCompleteSetExchangeRate,
@@ -68,6 +71,7 @@ export function TradingSection({
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
 	const [activeModal, setActiveModal] = useState<TradingActionModal>(undefined)
+	const currentTimestamp = useChainTimestamp()
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
@@ -104,7 +108,20 @@ export function TradingSection({
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, selectedPool?.lastOraclePrice, selectedPool?.statoblastSecurityMultiplierBps)
-	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(mintAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const mintCheckpoint = estimateMintCheckpoint({
+		currentRetentionRate: selectedPool?.currentRetentionRate,
+		currentTimestamp,
+		feeEligibleCapacityOwnershipAttoRep: selectedPool?.feeEligibleCapacityOwnershipAttoRep,
+		feeEndTimestamp: selectedPool?.marketDetails.endTime,
+		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
+		lastUpdatedFeeAccumulator: selectedPool?.feeAccrualState?.lastUpdatedFeeAccumulator,
+		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
+		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
+	})
+	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
+	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
+	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertMintSettlementCollateralAttoEthToAttoShares(mintAmount, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
 	const redeemAmountAttoShares = redeemAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(redeemAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
@@ -113,7 +130,7 @@ export function TradingSection({
 	const resolvedWinningPayout = convertAttoSharesToSettlementCollateralAttoEth(resolvedWinningShareBalance, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
-		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
+		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
 		mintingCapacityAttoEth,
 		hasSelectedPool,
@@ -148,7 +165,6 @@ export function TradingSection({
 		hasSelectedPool,
 		isOnActiveAppChain,
 	})
-	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
@@ -367,21 +383,33 @@ export function TradingSection({
 			<ErrorNotice message={tradingError} />
 
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
-				{selectedPool === undefined ? undefined : (
-					<MetricGrid>
-						<MetricField label={tradingCopy.capacityOwnershipAttoRepInUse}>
-							<CurrencyValue value={selectedPool.feeEligibleCapacityOwnershipAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-						<MetricField label={tradingCopy.repBacking}>
-							<CurrencyValue value={selectedPool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-					</MetricGrid>
-				)}
+				<MetricGrid>
+					<MetricField label={tradingCopy.walletEth}>
+						<CurrencyValue value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={tradingCopy.availableToMint}>
+						<CurrencyValue loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
+					</MetricField>
+				</MetricGrid>
 				<label className='field'>
 					<span>{tradingCopy.mintCompleteSetsAmount}</span>
-					<FormInput value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
+					<div className='field-inline'>
+						<FormInput className='field-inline-input' value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
+						<button
+							className='quiet field-inline-action'
+							type='button'
+							onClick={() => {
+								if (maximumMintAmount === undefined) return
+								onTradingFormChange({ completeSetAmount: formatCurrencyInputBalance(maximumMintAmount) })
+							}}
+							disabled={maximumMintAmount === undefined || maximumMintAmount <= 0n}
+						>
+							{commonCopy.max}
+						</button>
+					</div>
 				</label>
 				<TransactionReview
+					variant='inline'
 					primary={[
 						{
 							label: transactionReviewCopy.youPay,
@@ -393,30 +421,33 @@ export function TradingSection({
 								mintedAmountAttoShares === undefined ? (
 									transactionReviewCopy.amountUnavailable
 								) : (
-									<span>
-										{commonCopy.yes}
-										{' + '}
-										<CurrencyValue value={mintedAmountAttoShares} />
-										{' · '}
-										{commonCopy.no}
-										{' + '}
-										<CurrencyValue value={mintedAmountAttoShares} />
-										{' · '}
-										{commonCopy.invalid}
-										{' + '}
-										<CurrencyValue value={mintedAmountAttoShares} />
+									<span className='trading-minted-outcomes'>
+										<span className='trading-minted-outcome'>
+											{commonCopy.yes}
+											{' + '}
+											<CurrencyValue value={mintedAmountAttoShares} />
+										</span>
+										<span className='trading-minted-outcome'>
+											{commonCopy.no}
+											{' + '}
+											<CurrencyValue value={mintedAmountAttoShares} />
+										</span>
+										<span className='trading-minted-outcome'>
+											{commonCopy.invalid}
+											{' + '}
+											<CurrencyValue value={mintedAmountAttoShares} />
+										</span>
 									</span>
 								),
 						},
 					]}
-					disclosures={retentionFeeDisclosure}
-					details={[{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> }]}
-					risks={[tradingCopy.mintBalanceRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+					details={[
+						{ label: tradingCopy.estimatedRetentionFee, value: <CurrencyValue value={mintCheckpoint?.estimatedRetentionFeeAttoEth} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
 					]}
+					risks={[tradingCopy.mintBalanceRisk]}
 				/>
+				<p className='detail'>{tradingCopy.retentionFeeEstimateDetail}</p>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSetsActionLabel}
@@ -464,10 +495,6 @@ export function TradingSection({
 					disclosures={retentionFeeDisclosure}
 					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.redeemCompleteSetRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -518,11 +545,6 @@ export function TradingSection({
 					]}
 					details={[{ label: tradingCopy.selectedChildUniversesLabel, value: selectedTargetOutcomeIndexes.length === 0 ? tradingCopy.notSelected : selectedTargetOutcomeIndexes.join(', ') }]}
 					risks={[tradingCopy.shareMigrationRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
-						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -551,10 +573,6 @@ export function TradingSection({
 					disclosures={retentionFeeDisclosure}
 					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.resolvedShareRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
