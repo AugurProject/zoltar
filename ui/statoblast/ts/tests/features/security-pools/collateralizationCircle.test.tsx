@@ -1,0 +1,199 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { within } from '../../testUtils/queries'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
+import { getChromiumPath, withChromiumTestLock } from '@zoltar/ui-core-shared-build/chromiumPath.js'
+import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+
+type GaugeFitResult = {
+	clientWidth: number
+	ringLeft: number
+	ringRight: number
+	scrollWidth: number
+	text: string
+	valueLeft: number
+	valueRight: number
+}
+
+function isGaugeFitResult(value: unknown): value is GaugeFitResult {
+	if (typeof value !== 'object' || value === null) return false
+	const result = value as Partial<Record<keyof GaugeFitResult, unknown>>
+	return typeof result.clientWidth === 'number' && typeof result.ringLeft === 'number' && typeof result.ringRight === 'number' && typeof result.scrollWidth === 'number' && typeof result.text === 'string' && typeof result.valueLeft === 'number' && typeof result.valueRight === 'number'
+}
+
+const chromiumPath = getChromiumPath()
+const browserFitTest = chromiumPath === undefined ? test.skip : test
+const CHROMIUM_GAUGE_FIT_TIMEOUT_MS = 60_000
+
+describe('CollateralizationCircle', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
+	test('renders the collateralization percentage inside the ring', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={140n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const gauge = document.querySelector('.collateralization-gauge')
+		const gaugeValue = documentQueries.getByText('140%')
+
+		expect(gauge?.className).not.toContain('has-external-value')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 140%; target: 150%')
+		expect(gaugeValue).not.toBeNull()
+		expect(documentQueries.getByText('Target 150%')).not.toBeNull()
+		expect(gaugeValue.className).toBe('collateralization-gauge-value')
+	})
+
+	test('shows oversized collateralization percentages visibly beside a compact ring value', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={3667n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const gauge = document.querySelector('.collateralization-gauge')
+		const gaugeValue = documentQueries.getByText('>999%')
+
+		expect(gauge?.className).not.toContain('has-external-value')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 3 667%; target: 150%')
+		expect(gaugeValue.className).toBe('collateralization-gauge-value')
+		expect(documentQueries.getByText('Above target')).not.toBeNull()
+		expect(documentQueries.getByText('3 667%')).not.toBeNull()
+	})
+
+	test('describes oversized collateralization relative to an equally oversized target', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={1000n * 10n ** 18n} targetCollateralizationPercent={1000n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('>999%')).not.toBeNull()
+		expect(documentQueries.getByText('At target')).not.toBeNull()
+		expect(documentQueries.queryByText('Above target')).toBeNull()
+		expect(documentQueries.getByText('Target 1 000%')).not.toBeNull()
+	})
+
+	test('describes oversized collateralization below a higher target', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={1000n * 10n ** 18n} targetCollateralizationPercent={1200n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('>999%')).not.toBeNull()
+		expect(documentQueries.getByText('Below target')).not.toBeNull()
+		expect(documentQueries.queryByText('Above target')).toBeNull()
+		expect(documentQueries.getByText('Target 1 200%')).not.toBeNull()
+	})
+
+	test('keeps the largest displayed collateralization label inside the ring', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={1000n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const gauge = document.querySelector('.collateralization-gauge')
+		const documentQueries = within(document.body)
+		const gaugeValue = documentQueries.getByText('>999%')
+
+		expect(gauge?.className).not.toContain('has-external-value')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 1 000%; target: 150%')
+		expect(documentQueries.getByText('1 000%')).not.toBeNull()
+		expect(gaugeValue.parentElement?.className).toContain('collateralization-gauge')
+	})
+
+	browserFitTest(
+		'renders the largest displayed collateralization label without clipping in the smallest ring',
+		async () =>
+			await withChromiumTestLock(async () => {
+				if (chromiumPath === undefined) throw new Error('Chromium is required for the browser fit test')
+				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar#collateralization-circle-'))
+				try {
+					const tokensSource = readFileSync('ui/css/tokens.css', 'utf8')
+					const cssSource = readFileSync('ui/css/index.css', 'utf8')
+					const htmlPath = join(temporaryDirectory, 'gauge-fit.html')
+					writeFileSync(
+						htmlPath,
+						`<!doctype html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<style>${tokensSource}\n${cssSource}</style>
+</head>
+<body>
+	<div class='collateralization-gauge collateralization-gauge-size-small tone-success'>
+		<span class='collateralization-gauge-ring'>
+			<svg class='collateralization-gauge-svg' viewBox='0 0 100 100' aria-hidden='true'>
+				<circle class='collateralization-gauge-track' cx='50' cy='50' r='36.8'></circle>
+				<circle class='collateralization-gauge-progress' cx='50' cy='50' r='36.8'></circle>
+			</svg>
+		</span>
+		<strong class='collateralization-gauge-value'>>999%</strong>
+		<span class='collateralization-gauge-label'>Collateralization</span>
+	</div>
+	<pre id='fit-result'></pre>
+	<script>
+		const ring = document.querySelector('.collateralization-gauge-ring')
+		const value = document.querySelector('.collateralization-gauge-value')
+		const ringRect = ring.getBoundingClientRect()
+		const valueRect = value.getBoundingClientRect()
+		document.getElementById('fit-result').textContent = JSON.stringify({
+			clientWidth: value.clientWidth,
+			ringLeft: ringRect.left,
+			ringRight: ringRect.right,
+			scrollWidth: value.scrollWidth,
+			text: value.textContent,
+			valueLeft: valueRect.left,
+			valueRight: valueRect.right
+		})
+	</script>
+</body>
+</html>`,
+					)
+
+					const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--dump-dom', pathToFileURL(htmlPath).href], { stderr: 'pipe', stdout: 'pipe', windowsHide: true })
+					let timedOut = false
+					const timeoutId = setTimeout(() => {
+						timedOut = true
+						browser.kill()
+					}, CHROMIUM_GAUGE_FIT_TIMEOUT_MS)
+					const [exitCode, browserStderr, browserStdout] = await Promise.all([browser.exited, new Response(browser.stderr).text(), new Response(browser.stdout).text()])
+					clearTimeout(timeoutId)
+					if (timedOut) throw new Error(`Chromium gauge fit process timed out after ${CHROMIUM_GAUGE_FIT_TIMEOUT_MS.toString()}ms`)
+					if (exitCode !== 0) throw new Error(`Chromium gauge fit process exited with status ${exitCode.toString()}: ${browserStderr}`)
+					const resultMatch = browserStdout.match(/<pre id="fit-result">([^<]+)<\/pre>/)
+					expect(resultMatch).not.toBeNull()
+					const resultText = resultMatch?.[1]
+					if (resultText === undefined) throw new Error('Chromium did not return gauge fit measurements')
+					const parsedResult: unknown = JSON.parse(resultText)
+					if (!isGaugeFitResult(parsedResult)) throw new Error(`Unexpected gauge fit result: ${resultText}`)
+
+					expect(parsedResult.text).toBe('&gt;999%')
+					expect(parsedResult.scrollWidth).toBeLessThanOrEqual(parsedResult.clientWidth)
+					expect(parsedResult.valueLeft).toBeGreaterThanOrEqual(parsedResult.ringLeft)
+					expect(parsedResult.valueRight).toBeLessThanOrEqual(parsedResult.ringRight)
+				} finally {
+					rmSync(temporaryDirectory, { recursive: true, force: true })
+				}
+			}),
+	)
+
+	test('applies tone-derived success coloring classes', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={150n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const gauge = document.querySelector('.collateralization-gauge')
+		expect(gauge?.className).toContain('tone-success')
+	})
+})

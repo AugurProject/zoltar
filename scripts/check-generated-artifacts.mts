@@ -21,9 +21,9 @@ export type GeneratedArtifactCheckOptions = {
 	runGit?: GitRunner
 }
 
-const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts']
+const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts']
 
-const generatedReviewPaths = ['shared/js', 'solidity/artifacts', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/js', 'ui/ts/abis.ts', 'ui/ts/contractArtifact.ts', 'ui/ts/deploymentArtifacts.ts', 'ui/ts/deploymentsArtifacts.ts', 'ui/vendor']
+const generatedReviewPaths = ['shared/js', 'solidity/artifacts', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/coreShared/ts/deploymentArtifacts.ts', 'ui/zoltar/vendor', 'ui/statoblast/vendor']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -82,23 +82,24 @@ export async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
 	return outputs
 }
 
-async function getUiImportMapGeneratedOutputs(repositoryRoot: string) {
-	const indexHtml = await fs.readFile(path.join(repositoryRoot, 'ui/index.html'), 'utf8')
+async function getUiImportMapGeneratedOutputs(repositoryRoot: string, appId: string) {
+	const appRoot = path.join(repositoryRoot, 'ui', appId)
+	const indexHtml = await fs.readFile(path.join(appRoot, 'index.html'), 'utf8')
 	const importMapMatch = indexHtml.match(/<script\b[^>]*\btype\s*=\s*['"]importmap['"][^>]*>([\s\S]*?)<\/script>/i)
-	if (importMapMatch === null) throw new Error('ui/index.html is missing an import map')
+	if (importMapMatch === null) throw new Error(`ui/${appId}/index.html is missing an import map`)
 
 	const importMapText = importMapMatch[1]
-	if (importMapText === undefined) throw new Error('ui/index.html import map is empty')
+	if (importMapText === undefined) throw new Error(`ui/${appId}/index.html import map is empty`)
 	const importMap = JSON.parse(importMapText)
-	if (!isRecord(importMap)) throw new Error('ui/index.html import map must be a JSON object')
+	if (!isRecord(importMap)) throw new Error(`ui/${appId}/index.html import map must be a JSON object`)
 	const imports = importMap['imports']
-	if (!isRecord(imports)) throw new Error('ui/index.html import map imports must be an object')
+	if (!isRecord(imports)) throw new Error(`ui/${appId}/index.html import map imports must be an object`)
 
 	const outputs: string[] = []
 	for (const [specifier, targetPath] of Object.entries(imports)) {
-		if (typeof targetPath !== 'string') throw new Error(`ui/index.html import map target for ${specifier} must be a string`)
+		if (typeof targetPath !== 'string') throw new Error(`ui/${appId}/index.html import map target for ${specifier} must be a string`)
 		if (!targetPath.startsWith('./') && !targetPath.startsWith('../')) continue
-		outputs.push(normalizeRepositoryRelativePath('ui', targetPath))
+		outputs.push(normalizeRepositoryRelativePath(path.join('ui', appId), targetPath))
 	}
 	return outputs
 }
@@ -138,7 +139,7 @@ function assertNoTrackedGeneratedPaths(trackedGeneratedPaths: readonly string[])
 export async function assertGeneratedArtifactsClean(options: GeneratedArtifactCheckOptions = {}) {
 	const repositoryRoot = options.repositoryRoot ?? defaultRepositoryRoot
 	const runGit = options.runGit ?? createGitRunner(repositoryRoot)
-	const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...(await getUiImportMapGeneratedOutputs(repositoryRoot))])
+	const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'zoltar')), ...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'statoblast'))])
 
 	for (const relativePath of requiredGeneratedOutputs) {
 		await assertExists(repositoryRoot, relativePath)

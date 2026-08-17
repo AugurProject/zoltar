@@ -1,0 +1,910 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '../../testUtils/queries'
+import { useEffect, useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
+import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
+import { TradingSection } from '../../../features/markets/components/TradingSection.js'
+import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
+import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
+import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar/types/app.js'
+import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TradingSectionProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
+import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+
+function createMarketDetails(): MarketDetails {
+	return {
+		answerUnit: '',
+		createdAt: 1n,
+		description: 'Question description',
+		displayValueMax: 100n,
+		displayValueMin: 0n,
+		endTime: 2n,
+		exists: true,
+		marketType: 'binary',
+		numTicks: 2n,
+		outcomeLabels: ['Yes', 'No'],
+		questionId: '0x01',
+		startTime: 1n,
+		title: 'Will this resolve?',
+	}
+}
+
+function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
+	const selectedPool: ListedSecurityPool = {
+		settlementCollateralAttoEth: 0n,
+		currentRetentionRate: 10n,
+		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		hasForkActivity: false,
+		forkOutcome: 'none',
+		forkOwnSecurityPool: false,
+		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+		lastOraclePrice: 10n ** 18n,
+		lastOracleSettlementTimestamp: 0n,
+		managerAddress: zeroAddress,
+		marketDetails: createMarketDetails(),
+		migratedAttoRep: 0n,
+		parent: zeroAddress,
+		questionOutcome: 'none',
+		questionId: '0x01',
+		statoblastSecurityMultiplierBps: 20_000n,
+		securityPoolAddress: zeroAddress,
+		shareTokenSupplyAttoShares: 0n,
+		systemState: 'operational',
+		totalPoolHeldAttoRep: 0n,
+		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		truthAuctionAddress: zeroAddress,
+		truthAuctionStartedAt: 0n,
+		universeHasForked: false,
+		universeId: 1n,
+		vaultCount: 0n,
+		vaults: [],
+		...overrides,
+	}
+	return {
+		...selectedPool,
+		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
+	}
+}
+
+function createShareBalances(overrides: Partial<TradingShareBalances> = {}): TradingShareBalances {
+	return {
+		invalidAttoShares: 2n * 10n ** 18n,
+		noAttoShares: 4n * 10n ** 18n,
+		yesAttoShares: 3n * 10n ** 18n,
+		...overrides,
+	}
+}
+
+function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingDetails {
+	const shareBalances = createShareBalances()
+	return {
+		maxRedeemableCompleteSetsAttoShares: 2n * 10n ** 18n,
+		shareBalances,
+		universeId: 1n,
+		...overrides,
+	}
+}
+
+function createTradingForm(overrides: Partial<TradingFormState> = {}): TradingFormState {
+	return {
+		completeSetAmount: '1',
+		redeemAmount: '1',
+		securityPoolAddress: zeroAddress,
+		selectedShareOutcome: 'yes',
+		targetOutcomeIndexes: '',
+		...overrides,
+	}
+}
+
+function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
+	return {
+		address: zeroAddress,
+		chainId: '0x1',
+		ethBalanceAttoEth: 10n * 10n ** 18n,
+		wethBalanceAttoEth: 0n,
+		...overrides,
+	}
+}
+
+function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {}): TradingSectionProps {
+	return {
+		accountState: createAccountState(),
+		embedInCard: true,
+		loadingTradingForkUniverse: false,
+		loadingTradingDetails: false,
+		onCreateCompleteSet: () => undefined,
+		onMigrateShares: () => undefined,
+		onRedeemCompleteSet: () => undefined,
+		onRedeemShares: () => undefined,
+		onTradingFormChange: () => undefined,
+		repPerEthPrice: undefined,
+		repPerEthSource: undefined,
+		repPerEthSourceUrl: undefined,
+		selectedPool: createSelectedPool(),
+		showHeader: false,
+		showSecurityPoolAddressInput: false,
+		tradingActiveAction: undefined,
+		tradingDetails: createTradingDetails(),
+		tradingError: undefined,
+		tradingForkUniverse: undefined,
+		tradingForm: createTradingForm(),
+		tradingResult: undefined,
+		...overrides,
+	}
+}
+
+function createScalarForkUniverse(): ZoltarUniverseSummary {
+	return {
+		childUniverses: [
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 2n,
+				outcomeLabel: '20 USD',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 2n,
+			},
+		],
+		forkThresholdAttoRep: 0n,
+		forkQuestionDetails: {
+			...createMarketDetails(),
+			answerUnit: 'USD',
+			displayValueMax: 100n,
+			displayValueMin: 0n,
+			marketType: 'scalar',
+			numTicks: 10n,
+			outcomeLabels: [],
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 0n,
+		hasForked: true,
+		parentUniverseId: 1n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupplyAttoRep: 0n,
+		universeId: 10n,
+	}
+}
+
+function createBinaryForkUniverse(): ZoltarUniverseSummary {
+	return {
+		childUniverses: [
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 0n,
+				outcomeLabel: 'Yes',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 2n,
+			},
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 1n,
+				outcomeLabel: 'No',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 3n,
+			},
+		],
+		forkThresholdAttoRep: 0n,
+		forkQuestionDetails: {
+			...createMarketDetails(),
+			marketType: 'binary',
+			numTicks: 2n,
+			outcomeLabels: ['Yes', 'No'],
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 0n,
+		hasForked: true,
+		parentUniverseId: 1n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupplyAttoRep: 0n,
+		universeId: 10n,
+	}
+}
+
+function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: ZoltarUniverseSummary }) {
+	const [tradingForm, setTradingForm] = useState<TradingFormState>(createTradingForm())
+
+	return (
+		<TradingSection
+			{...createTradingSectionProps({
+				selectedPool: createSelectedPool({ universeHasForked: true }),
+				tradingForkUniverse,
+				tradingForm,
+			})}
+			onTradingFormChange={update => setTradingForm(current => ({ ...current, ...update }))}
+		/>
+	)
+}
+
+function TradingSectionWithMutableForm({ initialTradingForm = {}, tradingForkUniverse, selectedPool = createSelectedPool({ universeHasForked: true }) }: { initialTradingForm?: Partial<TradingFormState>; tradingForkUniverse: ZoltarUniverseSummary; selectedPool?: ListedSecurityPool }) {
+	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
+
+	return (
+		<TradingSection
+			{...createTradingSectionProps({
+				selectedPool,
+				tradingForkUniverse,
+				tradingForm,
+			})}
+			onTradingFormChange={update => setTradingForm(current => ({ ...current, ...update }))}
+		/>
+	)
+}
+
+function TradingSectionNetworkHarness() {
+	const [accountState, setAccountState] = useState(createAccountState())
+
+	return (
+		<>
+			<button type='button' onClick={() => setAccountState(createAccountState({ chainId: '0xaa36a7' }))}>
+				Switch Test Network
+			</button>
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState,
+				})}
+			/>
+		</>
+	)
+}
+
+void describe('TradingSection', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
+	void test('labels the max complete sets metric as redeemable complete sets', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Redeemable Complete Sets')).not.toBeNull()
+		expect(documentQueries.queryByText('Max Complete Sets')).toBeNull()
+	})
+
+	void test('renders trading content without the workflow strip and launches complete-set actions from the share summary', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ embedInCard: false, showHeader: false })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Share Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Balances are shown as complete-set amounts for the selected pool.')).toBe(false)
+		expect(document.body.textContent?.includes('Statoblast does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
+		expect(documentQueries.queryByRole('heading', { name: 'Mint Complete Sets' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem Complete Sets' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Migrate Forked Shares' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem resolved shares' })).toBeNull()
+	})
+
+	void test('does not render a local latest trading action card when a result exists', async () => {
+		const poolAddress = '0x00000000000000000000000000000000000000ab'
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingResult: {
+						action: 'createCompleteSet',
+						hash: zeroHash,
+						securityPoolAddress: poolAddress,
+						universeId: 0n,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const documentQueries = within(document.body)
+		expect(poolAddress).toBe('0x00000000000000000000000000000000000000ab')
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Share Action' })).toBeNull()
+		expect(documentQueries.queryByText('Complete Sets Minted')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+	})
+
+	void test('closes a trading modal for a new result without blocking the same modal from reopening', async () => {
+		let completeTradingOperation: ((result: TradingActionResult) => void) | undefined
+
+		function TradingResultHarness() {
+			const [tradingResult, setTradingResult] = useState<TradingActionResult | undefined>(undefined)
+			const [transaction, setTransaction] = useState<GlobalTransactionPresentation | undefined>()
+			useEffect(() => {
+				completeTradingOperation = result => {
+					setTradingResult(result)
+					setTransaction({
+						dismissKey: result.hash,
+						hash: result.hash,
+						operationKey: 'trading-request-1',
+						title: 'Complete sets minted',
+						tone: 'success',
+					})
+				}
+			}, [])
+
+			return (
+				<GlobalTransactionPresentationProvider transaction={transaction}>
+					<TradingSection {...createTradingSectionProps({ tradingResult })} />
+				</GlobalTransactionPresentationProvider>
+			)
+		}
+
+		const renderedComponent = await renderIntoDocument(<TradingResultHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+
+		await act(() => {
+			if (completeTradingOperation === undefined) throw new Error('Expected trading operation completion')
+			completeTradingOperation({
+				action: 'createCompleteSet',
+				hash: zeroHash,
+				securityPoolAddress: zeroAddress,
+				universeId: 1n,
+			})
+		})
+		expect(documentQueries.queryByRole('dialog', { name: 'Mint Complete Sets' })).toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+	})
+
+	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSetsAttoShares: 410000000000000n,
+						shareBalances: createShareBalances({
+							invalidAttoShares: 410000000000000n,
+							noAttoShares: 23000000000000000n,
+							yesAttoShares: 1234000000000000000n,
+						}),
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByText('≈ 1.23').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('≈ 0.023').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('≈ 0.00041').length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1.234' }).length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.023' }).length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.00041' }).length).toBeGreaterThanOrEqual(2)
+	})
+
+	void test('renders first-mint share balances as complete-set collateral amounts', async () => {
+		const firstMintShareAmount = 10n ** 36n
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						settlementCollateralAttoEth: 1n * 10n ** 18n,
+						shareTokenSupplyAttoShares: firstMintShareAmount,
+					}),
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSetsAttoShares: firstMintShareAmount,
+						shareBalances: createShareBalances({
+							invalidAttoShares: firstMintShareAmount,
+							noAttoShares: firstMintShareAmount,
+							yesAttoShares: firstMintShareAmount,
+						}),
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Total Across Outcomes')).not.toBeNull()
+		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
+		expect(documentQueries.queryByText('Total Shares')).toBeNull()
+		expect(documentQueries.getAllByText('≈ 1.00').length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1' }).length).toBeGreaterThanOrEqual(4)
+		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
+	})
+
+	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						settlementCollateralAttoEth: 0n,
+						feeEligibleCapacityOwnershipAttoRep: 0n,
+						totalPoolHeldAttoRep: 20n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 0n,
+						universeHasForked: false,
+					}),
+					tradingForm: createTradingForm({ completeSetAmount: '100' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
+	})
+
+	void test('shows wallet ETH and the amount currently available to mint', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
+					selectedPool: createSelectedPool({
+						settlementCollateralAttoEth: 0n,
+						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
+		const mintableMetric = modalQueries.getByText('Available to Mint').parentElement
+		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
+		expect(within(walletMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+		expect(within(mintableMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+	})
+
+	void test('fills the mint amount with the lesser of wallet ETH and remaining capacity', async () => {
+		let mintedAmount: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
+					onTradingFormChange: ({ completeSetAmount }) => {
+						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
+					},
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 5n * 10n ** 18n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		await act(() => {
+			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
+			fireEvent.click(maxButton)
+		})
+
+		expect(mintedAmount).toBe('1.25')
+	})
+
+	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button')
+		expect(mintSubmitButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch Test Network' }))
+		})
+
+		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
+		expect(mintSubmitButton.disabled).toBe(true)
+		expect(mintSubmitButton.title).toBe('Switch to Ethereum mainnet.')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+	})
+
+	void test('shows the checkpoint retention estimate and uses it for the mint share preview', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={2n}>
+				<TradingSection
+					{...createTradingSectionProps({
+						selectedPool: createSelectedPool({
+							currentRetentionRate: 900_000_000_000_000_000n,
+							feeAccrualState: { feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
+							settlementCollateralAttoEth: 10n * 10n ** 18n,
+							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+							totalCapacityOwnershipAttoRep: 50n * 10n ** 18n,
+						}),
+						tradingForm: createTradingForm({ completeSetAmount: '1' }),
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
+		expect(dialog.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
+		expect(document.body.querySelector('.transaction-review')).toBeNull()
+		expect(dialog.getByText('You Pay')).not.toBeNull()
+		expect(dialog.getByText('Estimated Shares Received')).not.toBeNull()
+		expect(dialog.getByText('Estimated Retention Fee')).not.toBeNull()
+		expect(dialog.getByText('Estimate may change when accrued fees are checkpointed.')).not.toBeNull()
+		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
+		const estimatedFeeRow = dialog.getByText('Estimated Retention Fee').parentElement
+		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
+		expect(within(estimatedFeeRow).getByRole('button', { name: 'Copy exact value 1' })).not.toBeNull()
+		expect(dialog.getAllByRole('button', { name: 'Copy exact value 1.111111111111111111' })).toHaveLength(3)
+		expect(dialog.queryByText('Technical Details')).toBeNull()
+		expect(document.body.textContent?.includes('Yes +')).toBe(true)
+		expect(document.body.textContent?.includes('No +')).toBe(true)
+		expect(document.body.textContent?.includes('Invalid +')).toBe(true)
+	})
+
+	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						settlementCollateralAttoEth: 0n,
+						shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+						universeHasForked: false,
+					}),
+					tradingForm: createTradingForm({ completeSetAmount: '1' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
+	})
+
+	void test('shows the complete-set redemption disabled reason on the launcher when the wallet lacks matching shares', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: false }),
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSetsAttoShares: 0n,
+						shareBalances: createShareBalances({
+							invalidAttoShares: 0n,
+							noAttoShares: 2n * 10n ** 18n,
+							yesAttoShares: 2n * 10n ** 18n,
+						}),
+					}),
+					tradingForm: createTradingForm({ redeemAmount: '1' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
+		expect(redeemButton.disabled).toBe(true)
+		expect(redeemButton.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+	})
+
+	void test('shows the share migration disabled reason before the universe forks', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: false }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
+		expect(migrateButton.disabled).toBe(true)
+		expect(migrateButton.title).toBe('Refresh the fork target universes.')
+	})
+
+	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: true }),
+					tradingForkUniverse: createScalarForkUniverse(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share Outcome To Migrate' }) as HTMLButtonElement
+		expect(shareOutcomeDropdown.disabled).toBe(false)
+		expect(modalQueries.getByText('Target Child Universes')).not.toBeNull()
+	})
+
+	void test('shows the share redemption disabled reason before finalization', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'none' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
+		expect(redeemSharesButton.disabled).toBe(true)
+		expect(redeemSharesButton.title).toBe('Wait for the selected pool to resolve before redeeming shares.')
+	})
+
+	void test('uses a title-case resolved-share dialog title and a sentence-case action label', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
+		fireEvent.click(launcher)
+
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem Resolved Shares' })
+		expect(within(dialog).getByRole('button', { name: 'Redeem shares' })).not.toBeNull()
+	})
+
+	void test('blocks minting once the selected market has finalized', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe('This market has already finalized.')
+	})
+
+	void test('shows mint write failures through the shared error notice', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingError: 'Transaction failed. Reason: question already resolved.',
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		expect(documentQueries.getByText('Transaction failed. Reason: question already resolved.')).not.toBeNull()
+		expect(modalQueries.queryByText('Mint failed')).toBeNull()
+	})
+
+	void test('keeps non-suppressed trading guard messages visible in the redeem modal', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					loadingTradingDetails: true,
+					tradingDetails: undefined,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
+		expect(redeemButton.disabled).toBe(true)
+		expect(redeemButton.title).toBe('Loading wallet share balances.')
+	})
+
+	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSectionHarness tradingForkUniverse={createScalarForkUniverse()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const slider = modalQueries.getByRole('slider') as HTMLInputElement
+
+		expect(modalQueries.getByText('Select scalar target')).not.toBeNull()
+		expect(modalQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(slider, {
+				target: { value: '7' },
+			})
+		})
+
+		expect(modalQueries.getByText('7 / 10')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
+		})
+
+		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
+	})
+
+	void test('does not render local trading outcome cards for completed action variants', async () => {
+		for (const scenario of [
+			{ action: 'redeemCompleteSet' as const, title: 'Complete Sets Redeemed' },
+			{ action: 'migrateShares' as const, title: 'Shares Migrated' },
+			{ action: 'redeemShares' as const, title: 'Resolved Shares Redeemed' },
+		] as const) {
+			const tradingResult: TradingActionResult = {
+				action: scenario.action,
+				hash: zeroHash,
+				securityPoolAddress: zeroAddress,
+				universeId: 1n,
+				...(scenario.action === 'migrateShares' ? { shareOutcome: 'yes', targetOutcomeIndexes: [0n, 1n] } : {}),
+			} as const
+
+			const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingResult })} />)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			const documentQueries = within(document.body)
+			expect(documentQueries.queryByText('Latest Share Action')).toBeNull()
+			expect(documentQueries.queryByText(scenario.title)).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: `Copy address ${zeroAddress}` })).toBeNull()
+			expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+
+			await renderedComponent.cleanup()
+			cleanupRenderedComponent = undefined
+		}
+	})
+
+	void test('renders security pool address input when enabled and updates it through onTradingFormChange', async () => {
+		let nextSecurityPoolAddress: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					onTradingFormChange: ({ securityPoolAddress }) => {
+						if (securityPoolAddress !== undefined) {
+							nextSecurityPoolAddress = securityPoolAddress
+						}
+					},
+					showSecurityPoolAddressInput: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const input = documentQueries.getByPlaceholderText('0x...')
+		expect(input).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(input, { target: { value: '0xabc' } })
+		})
+		expect(nextSecurityPoolAddress).toBe('0xabc')
+	})
+
+	void test('fills the redeem amount from the max helper in the redeem modal', async () => {
+		let redeemedAmount: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					onTradingFormChange: ({ redeemAmount }) => {
+						if (redeemAmount !== undefined) {
+							redeemedAmount = redeemAmount
+						}
+					},
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSetsAttoShares: 1n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem complete sets' }))
+		})
+
+		const modalElement = documentQueries.getByRole('dialog')
+		const maxButton = modalElement.querySelector('.field-inline-action') as HTMLButtonElement
+		expect(maxButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(maxButton)
+		})
+
+		expect(redeemedAmount).toBe('1')
+	})
+
+	void test('lets malformed migration targets be reset and toggled through shared target helpers', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSectionWithMutableForm
+				tradingForkUniverse={createBinaryForkUniverse()}
+				initialTradingForm={{
+					targetOutcomeIndexes: 'bad index',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const selectAllButton = modalQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
+		const clearButton = modalQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
+		expect(clearButton.disabled).toBe(true)
+		await act(() => {
+			fireEvent.click(selectAllButton)
+		})
+		expect(clearButton.disabled).toBe(false)
+
+		const yesTarget = modalQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
+		expect(yesTarget.getAttribute('aria-pressed')).toBe('true')
+		await act(() => {
+			fireEvent.click(yesTarget)
+		})
+		expect(yesTarget.getAttribute('aria-pressed')).toBe('false')
+	})
+})

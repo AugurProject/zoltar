@@ -8,13 +8,15 @@ This repository contains two protocol layers:
 The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
-- `ui/` contains the Preact frontend, organized by application shell, feature, and protocol-client boundaries
+- `ui/coreShared/` contains the shared Preact primitives, application-shell framework, simulation engine, and per-app build tooling used by both interfaces
+- `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
+- `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `scripts/` contains repository-wide build, validation, and test orchestration
 - `bots/` contains liquidator and open oracle arbitrager bots
 
-Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-feature UI primitives remain in `components`, application composition belongs in `app`, and contract reads and writes belong in `protocol`.
+Each interface package (`ui/zoltar`, `ui/statoblast`) keeps route-specific code under `ts/features/<domain>`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. The two apps are independent packages: `ui/statoblast` depends on `ui/zoltar` and `ui/coreShared`, and `ui/zoltar` depends on `ui/coreShared`; `ui/coreShared` depends on neither.
 
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 
@@ -49,7 +51,7 @@ Important:
 After completing [Setup](#setup), start a local chain and launch the app:
 
 1. Start the repository-pinned local chain with `bun run anvil`
-1. Run `bun run app:serve`
+1. Run `bun run app:serve:zoltar` for the Zoltar interface (http://localhost:12346) or `bun run app:serve:statoblast` for the Statoblast interface (http://localhost:12347)
 
 If you are iterating on the app and want rebuilds, use:
 
@@ -197,8 +199,8 @@ those features are used.
 The UI also supports a walletless browser-local simulation mode for manual QA.
 After completing [Setup](#setup):
 
-1. Run `bun run app:serve`
-1. Open `http://localhost:12345/?simulate=1`
+1. Run `bun run app:serve:zoltar` (Zoltar on port 12346) or `bun run app:serve:statoblast` (Statoblast on port 12347)
+1. Open `http://localhost:12346/?simulate=1` or `http://localhost:12347/?simulate=1`
 
 This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain, seeds the QA accounts with ETH, WETH, and REP, and leaves the application contracts undeployed so the UI starts on the deploy flow.
 
@@ -212,19 +214,21 @@ Simulation mode details:
 
 ## Common Commands
 
-Run the full app in development mode. This includes contract generation and the frontend build pipeline:
+Run each interface in development mode. Each command includes contract generation and that app's build pipeline:
 
 ```bash
-bun run app:serve
+bun run app:serve:zoltar      # Zoltar on http://localhost:12346
+bun run app:serve:statoblast  # Statoblast on http://localhost:12347
 ```
 
-Watch and rebuild the full app pipeline:
+Watch and rebuild an app's pipeline:
 
 ```bash
-bun run app:watch
+bun run app:watch:zoltar
+bun run app:watch:statoblast
 ```
 
-Build the full app:
+Build both apps:
 
 ```bash
 bun run app:build

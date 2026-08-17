@@ -20,7 +20,7 @@ import {
 
 describe('TypeScript coverage accounting', () => {
 	test('uses weighted executable totals instead of averaging file percentages', () => {
-		const records = parseLcov(`SF:ui/ts/large.ts
+		const records = parseLcov(`SF:ui/zoltar/ts/large.ts
 DA:1,1
 DA:2,1
 DA:3,1
@@ -30,7 +30,7 @@ LH:3
 FNF:2
 FNH:1
 end_of_record
-SF:ui/ts/small.ts
+SF:ui/zoltar/ts/small.ts
 DA:1,1
 LF:1
 LH:1
@@ -39,8 +39,8 @@ FNH:1
 end_of_record
 `)
 		const report = buildTypeScriptCoverage(records, [
-			{ file: 'ui/ts/large.ts', source: 'export const large = () => 1' },
-			{ file: 'ui/ts/small.ts', source: 'export const small = () => 1' },
+			{ file: 'ui/zoltar/ts/large.ts', source: 'export const large = () => 1' },
+			{ file: 'ui/zoltar/ts/small.ts', source: 'export const small = () => 1' },
 		])
 
 		expect(report.surfaces.ui.lines).toEqual({ covered: 4, total: 5, percentage: 80 })
@@ -77,7 +77,7 @@ end_of_record
 			{ file: 'shared/ts/runtime.ts', source: 'export const answer = () => 42\nanswer()' },
 			{ file: 'shared/ts/types.ts', source: 'export interface Answer { value: number }' },
 			{ file: 'shared/ts/runtime.test.ts', source: 'test("answer", () => {})' },
-			{ file: 'ui/ts/contractArtifact.ts', source: 'export const artifact = {}' },
+			{ file: 'ui/coreShared/ts/contractArtifact.ts', source: 'export const artifact = {}' },
 		])
 
 		expect(report.surfaces.shared.unloadedFiles).toEqual(['shared/ts/runtime.ts'])
@@ -86,11 +86,11 @@ end_of_record
 		expect(report.surfaces.shared.functions).toEqual({ covered: 0, total: 1, percentage: 0 })
 		expect(report.excludedFiles).toContain('shared/ts/types.ts')
 		expect(report.excludedFiles).toContain('shared/ts/runtime.test.ts')
-		expect(report.excludedFiles).toContain('ui/ts/contractArtifact.ts')
+		expect(report.excludedFiles).toContain('ui/coreShared/ts/contractArtifact.ts')
 	})
 
 	test('classifies application, shared, and executable tooling surfaces', () => {
-		expect(classifyTypeScriptSource('ui/ts/app.ts', 'export const app = true')).toBe('ui')
+		expect(classifyTypeScriptSource('ui/zoltar/ts/app.ts', 'export const app = true')).toBe('ui')
 		expect(classifyTypeScriptSource('shared/ts/model.ts', 'export const model = true')).toBe('shared')
 		expect(classifyTypeScriptSource('scripts/task.mts', 'console.log("run")')).toBe('tooling')
 		expect(classifyTypeScriptSource('solidity/ts/client.ts', 'export const client = true')).toBe('tooling')
@@ -238,9 +238,9 @@ describe('changed-line and Solidity coverage', () => {
 	})
 
 	test('parses added line numbers from zero-context git diffs', () => {
-		const changed = parseChangedLines(`diff --git a/ui/ts/app.ts b/ui/ts/app.ts
---- a/ui/ts/app.ts
-+++ b/ui/ts/app.ts
+		const changed = parseChangedLines(`diff --git a/ui/zoltar/ts/app.ts b/ui/zoltar/ts/app.ts
+--- a/ui/zoltar/ts/app.ts
++++ b/ui/zoltar/ts/app.ts
 @@ -10,2 +10,3 @@
 +one
  context
@@ -253,7 +253,7 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 +second
 `)
 
-		expect(changed.get('ui/ts/app.ts')).toEqual(new Set([10, 12]))
+		expect(changed.get('ui/zoltar/ts/app.ts')).toEqual(new Set([10, 12]))
 		expect(changed.get('shared/ts/new.ts')).toEqual(new Set([1, 2]))
 	})
 
@@ -263,20 +263,20 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 			await runTemporaryGit(repositoryRoot, ['init', '--quiet'])
 			await runTemporaryGit(repositoryRoot, ['config', 'user.email', 'coverage@example.com'])
 			await runTemporaryGit(repositoryRoot, ['config', 'user.name', 'Coverage Test'])
-			await mkdir(join(repositoryRoot, 'ui/ts'), { recursive: true })
+			await mkdir(join(repositoryRoot, 'ui/zoltar/ts'), { recursive: true })
 			await mkdir(join(repositoryRoot, 'shared/ts'), { recursive: true })
-			await writeFile(join(repositoryRoot, 'ui/ts/existing.ts'), 'export const baseline = 1\n')
-			await runTemporaryGit(repositoryRoot, ['add', 'ui/ts/existing.ts'])
+			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/existing.ts'), 'export const baseline = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'ui/zoltar/ts/existing.ts'])
 			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'baseline'])
 			await runTemporaryGit(repositoryRoot, ['branch', 'coverage-baseline'])
 
-			await writeFile(join(repositoryRoot, 'ui/ts/committed.ts'), 'export const committed = 1\n')
-			await runTemporaryGit(repositoryRoot, ['add', 'ui/ts/committed.ts'])
+			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/committed.ts'), 'export const committed = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'ui/zoltar/ts/committed.ts'])
 			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'committed'])
 			await writeFile(join(repositoryRoot, 'shared/ts/staged.ts'), 'export const staged = 1\n')
 			await runTemporaryGit(repositoryRoot, ['add', 'shared/ts/staged.ts'])
-			await writeFile(join(repositoryRoot, 'ui/ts/existing.ts'), 'export const baseline = 1\nexport const unstaged = 2\n')
-			await writeFile(join(repositoryRoot, 'ui/ts/untracked.ts'), '// untracked product source\nexport const untracked = 3\n')
+			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/existing.ts'), 'export const baseline = 1\nexport const unstaged = 2\n')
+			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/untracked.ts'), '// untracked product source\nexport const untracked = 3\n')
 
 			const changedLines = await readTaskChangedLines(repositoryRoot, 'coverage-baseline')
 			const trackedSources = await readTrackedTypeScriptSources(repositoryRoot)
@@ -288,7 +288,7 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 					})
 					.map(source => [source.file, source.source]),
 			)
-			const records = parseLcov(`SF:ui/ts/committed.ts
+			const records = parseLcov(`SF:ui/zoltar/ts/committed.ts
 DA:1,1
 FNF:0
 FNH:0
@@ -298,7 +298,7 @@ DA:1,1
 FNF:0
 FNH:0
 end_of_record
-SF:ui/ts/existing.ts
+SF:ui/zoltar/ts/existing.ts
 DA:1,1
 DA:2,1
 FNF:0
@@ -306,10 +306,10 @@ FNH:0
 end_of_record
 `)
 
-			expect(changedLines.get('ui/ts/committed.ts')).toEqual(new Set([1]))
+			expect(changedLines.get('ui/zoltar/ts/committed.ts')).toEqual(new Set([1]))
 			expect(changedLines.get('shared/ts/staged.ts')).toEqual(new Set([1]))
-			expect(changedLines.get('ui/ts/existing.ts')).toEqual(new Set([2]))
-			expect(changedLines.get('ui/ts/untracked.ts')).toEqual(new Set([1, 2]))
+			expect(changedLines.get('ui/zoltar/ts/existing.ts')).toEqual(new Set([2]))
+			expect(changedLines.get('ui/zoltar/ts/untracked.ts')).toEqual(new Set([1, 2]))
 			expect(calculateChangedLineCoverage(changedLines, records, productSources)).toEqual({ covered: 3, total: 4, percentage: 75 })
 		} finally {
 			await rm(repositoryRoot, { recursive: true, force: true })

@@ -7,18 +7,18 @@ import { getHistoricalTestWeights, readTestTimingHistory, writeTestTimingObserva
 const repositoryRoot = process.cwd()
 
 const knownFileWeights = new Map<string, number>([
-	['ui/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
+	['ui/statoblast/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
 	['solidity/ts/tests/peripherals/forkMigration.test.ts', 37],
 	['solidity/ts/tests/peripherals/truthAuction.test.ts', 19],
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 15],
 	['solidity/ts/tests/escalationGame.test.ts', 15],
-	['ui/ts/tests/simulation/activeEnvironment.test.ts', 15],
+	['ui/coreShared/ts/tests/simulation/activeEnvironment.test.ts', 15],
 	['solidity/ts/tests/auction.test.ts', 14],
 	['solidity/ts/tests/peripherals/escalationMigration.test.ts', 9],
-	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
+	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
 	['solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts', 5],
 	['solidity/ts/tests/peripherals/vaultAccounting.test.ts', 5],
-	['ui/ts/tests/simulation/deployedEnvironment.test.ts', 4],
+	['ui/coreShared/ts/tests/simulation/deployedEnvironment.test.ts', 4],
 	['solidity/ts/tests/peripheralsInvariant.test.ts', 4],
 	['solidity/ts/tests/peripherals/receiveGuards.test.ts', 2],
 ])

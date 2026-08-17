@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
-import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
+import { SEPOLIA_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
+import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight } from './uniswap-deployment.mts'
 
 const WETH = getAddress('0x65156FD21726b8efcB627fa38c506E3f3542F601')

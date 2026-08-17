@@ -18,9 +18,10 @@ const generatedFixtureFiles = [
 	'solidity/artifacts/.freshness-hash',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
-	'ui/ts/abis.ts',
-	'ui/ts/contractArtifact.ts',
-	'ui/vendor/isows/native.js',
+	'ui/coreShared/ts/abis.ts',
+	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/zoltar/vendor/isows/native.js',
+	'ui/statoblast/vendor/isows/native.js',
 ]
 
 async function writeFixtureFile(repositoryRoot: string, relativePath: string, contents: string) {
@@ -34,11 +35,23 @@ async function createGeneratedArtifactFixture() {
 	await writeFixtureFile(repositoryRoot, 'shared/package.json', `${JSON.stringify({ exports: { './foo': { default: './js/foo.js' } } }, undefined, '\t')}\n`)
 	await writeFixtureFile(
 		repositoryRoot,
-		'ui/index.html',
+		'ui/zoltar/index.html',
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../shared/js/foo.js",
+		"@zoltar/shared/foo": "../../shared/js/foo.js",
+		"isows": "./vendor/isows/native.js"
+	}
+}
+</script>`,
+	)
+	await writeFixtureFile(
+		repositoryRoot,
+		'ui/statoblast/index.html',
+		`<script type='importmap'>
+{
+	"imports": {
+		"@zoltar/shared/foo": "../../shared/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -55,8 +68,8 @@ async function createGeneratedArtifactFixture() {
 test('generated artifact checker fails when import-map generated outputs are missing', async () => {
 	const repositoryRoot = await createGeneratedArtifactFixture()
 	try {
-		await rm(path.join(repositoryRoot, 'ui/vendor/isows/native.js'))
-		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('Generated artifact is missing after generation: ui/vendor/isows/native.js')
+		await rm(path.join(repositoryRoot, 'ui/zoltar/vendor/isows/native.js'))
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('Generated artifact is missing after generation: ui/zoltar/vendor/isows/native.js')
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}
@@ -67,7 +80,7 @@ test('generated artifact checker fails when ignored generated outputs are tracke
 	const trackedGeneratedPathGit: GitRunner = () => ({
 		status: 0,
 		stderr: '',
-		stdout: 'ui/vendor/isows/native.js\n',
+		stdout: 'ui/zoltar/vendor/isows/native.js\n',
 	})
 
 	try {

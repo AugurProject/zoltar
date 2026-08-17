@@ -13,9 +13,9 @@ test('classifies documentation and agent-only changes as lightweight', () => {
 })
 
 test('classifies executable changes as heavy and identifies them', () => {
-	expect(classifyCiChange(['docs/operators.md', 'ui/ts/index.ts'])).toEqual({
+	expect(classifyCiChange(['docs/operators.md', 'ui/zoltar/ts/index.ts'])).toEqual({
 		heavy: true,
-		reason: 'Executable or configuration paths changed: ui/ts/index.ts',
+		reason: 'Executable or configuration paths changed: ui/zoltar/ts/index.ts',
 	})
 })
 

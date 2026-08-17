@@ -113,9 +113,9 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 }
 
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deployment.ts')
-	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
-	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'networkProfile.ts')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'zoltar', 'ts', 'protocol', 'deployment.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltar', 'ts', 'protocol', 'deploymentHelpers.ts')
+	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'lib', 'networkProfile.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {

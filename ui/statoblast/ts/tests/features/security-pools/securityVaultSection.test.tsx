@@ -1,0 +1,971 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '../../testUtils/queries'
+import { zeroAddress } from '@zoltar/shared/ethereum'
+import { SecurityVaultSection, SelectedVaultSummarySection } from '../../../features/security-pools/components/SecurityVaultSection.js'
+import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
+import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar/features/types.js'
+import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '../../testUtils/transactionActionButton.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+
+function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
+	return {
+		address: zeroAddress,
+		chainId: '0x1',
+		ethBalanceAttoEth: 0n,
+		wethBalanceAttoEth: 0n,
+		...overrides,
+	}
+}
+
+function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
+	return {
+		badDebtAttoEth: 0n,
+		currentRetentionRate: 10n,
+		disputeStakedAttoRep: 3n * 10n ** 18n,
+		managerAddress: zeroAddress,
+		totalRepBackingUnits: 1n,
+		vaultAttoRepBacking: 12n * 10n ** 18n,
+		repToken: zeroAddress,
+		capacityOwnershipAttoRep: 2n * 10n ** 18n,
+		securityPoolAddress: zeroAddress,
+		totalCapacityOwnershipAttoRep: 3n * 10n ** 18n,
+		claimableFeesAttoEth: 1n * 10n ** 18n,
+		universeId: 1n,
+		vaultAddress: zeroAddress,
+		...overrides,
+	}
+}
+
+function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSectionProps> = {}): SecurityVaultSectionProps {
+	return {
+		accountState: createAccountState(),
+		loadingSecurityVault: false,
+		onApproveRep: () => undefined,
+		onDepositRepToVault: () => undefined,
+		onLoadSecurityVault: () => undefined,
+		onRedeemFees: () => undefined,
+		onRedeemRepFromVault: () => undefined,
+		onSecurityVaultFormChange: () => undefined,
+		onWithdrawRep: () => undefined,
+		oracleManagerDetails: undefined,
+		repPerEthPrice: undefined,
+		repPerEthSource: undefined,
+		repPerEthSourceUrl: undefined,
+		securityPoolVaults: undefined,
+		securityVaultActiveAction: undefined,
+		securityVaultDetails: createSecurityVaultDetails(),
+		securityVaultError: undefined,
+		securityVaultForm: {
+			depositAmount: '',
+			repWithdrawAmount: '',
+			targetHealthFactor: '',
+			securityPoolAddress: zeroAddress,
+			selectedVaultOwner: zeroAddress,
+		},
+		securityVaultMissing: false,
+		securityVaultRepApproval: {
+			error: undefined,
+			loading: false,
+			value: 8n * 10n ** 18n,
+		},
+		walletRepBalanceAttoRep: undefined,
+		securityVaultResult: undefined,
+		selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
+		showHeader: false,
+		...overrides,
+		walletRepBalanceError: overrides.walletRepBalanceError,
+		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
+	}
+}
+
+function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
+	return {
+		callbackStateHash: undefined,
+		exactToken1Report: undefined,
+		isPriceValid: true,
+		lastPrice: 3n * 10n ** 18n,
+		lastSettlementTimestamp: 1n,
+		managerAddress: zeroAddress,
+		openOracleAddress: zeroAddress,
+		pendingOperation: undefined,
+		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
+		pendingSettlementQueueCapacity: 4n,
+		pendingReportId: 0n,
+		priceValidUntilTimestamp: 10n,
+		queuedOperationCostAttoEth: 0n,
+		requestPriceCostAttoEth: 0n,
+		token1: undefined,
+		token2: undefined,
+		...overrides,
+	}
+}
+
+function createEndedPoolState() {
+	return evaluateSecurityPoolState({
+		lifecycleState: 'ended',
+		universeHasForked: false,
+	})
+}
+
+describe('SecurityVaultSection', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
+	test('renders the shared selected-vault metric summary', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
+		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
+		if (!(selectedVaultCard instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
+		const selectedVaultQueries = within(selectedVaultCard)
+		expect(selectedVaultQueries.getByText('Vault REP backing')).not.toBeNull()
+		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
+		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
+	})
+
+	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('alert').textContent).toContain('Wallet REP balance RPC failed')
+	})
+
+	test('shows wallet REP loading while the deposit balance read is pending', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, walletRepBalanceLoading: true })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expect(within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })).getByText('Loading')).not.toBeNull()
+	})
+
+	test('keeps a wallet REP balance failure accessible inside the deposit dialog', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expect(within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })).getByRole('alert').textContent).toContain('Wallet REP balance RPC failed')
+	})
+
+	test('keeps nonzero dispute-staked REP visible in the embedded selected-vault action summary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded dispute-staked REP metric')
+		expect(escalationMetric.textContent).toContain('3.00 REP')
+	})
+
+	test('keeps zero dispute-staked REP explicit in the embedded selected-vault action summary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
+		if (!(escalationMetric instanceof HTMLElement)) throw new Error('Expected the embedded dispute-staked REP metric')
+		expect(escalationMetric.textContent).toContain('0 REP')
+	})
+
+	test('expands the embedded selected-vault summary grid for nonzero bad debt', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={0n}
+				securityVaultDetails={createSecurityVaultDetails({ badDebtAttoEth: 2n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+				variant='embedded'
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summaryGrid = document.querySelector('.security-pool-browse-vault-row-top-compact')
+		if (!(summaryGrid instanceof HTMLElement)) throw new Error('Expected the embedded selected-vault summary grid')
+		expect(summaryGrid.classList.contains('with-bad-debt')).toBe(true)
+	})
+
+	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: createSecurityVaultDetails({
+						securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						targetHealthFactor: '',
+						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
+						selectedVaultOwner: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
+		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
+		expect(documentQueries.queryByText('Refresh the vault before setting a capacity ownership.')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
+	})
+
+	test('directs a missing vault lookup to another vault owner address', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: undefined,
+					securityVaultMissing: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Try another vault owner address.')).not.toBeNull()
+		expect(documentQueries.queryByText('Try another pool address.')).toBeNull()
+	})
+
+	test('keeps fee-claim actions available when a zeroed vault still has claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
+						capacityOwnershipAttoRep: 0n,
+						claimableFeesAttoEth: 1n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
+		expectTransactionButtonEnabled(document.body, 'Claim fees')
+	})
+
+	test('blocks the modal-first claim fees launcher when an existing vault has no claimable fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState: 'forkMigration',
+						universeHasForked: true,
+					}),
+					securityVaultDetails: createSecurityVaultDetails({
+						claimableFeesAttoEth: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim fees' })
+		const claimFeesReason = documentQueries.getByText('No fees are available to claim.')
+
+		expectTransactionButtonDisabled(document.body, 'Claim fees', 'No fees are available to claim.')
+		expect(claimFeesButton.getAttribute('aria-describedby')).toBe(claimFeesReason.id)
+		fireEvent.click(claimFeesButton)
+		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
+	})
+
+	test('uses neutral missing-state copy when a queued withdrawal succeeds before manager state is visible', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					oracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						pendingOperation: undefined,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+					securityVaultResult: {
+						action: 'queueWithdrawRep',
+						hash: '0x01',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
+	})
+
+	test('labels queued vault operation amounts with exact human units', async () => {
+		for (const queuedCase of [{ action: 'queueWithdrawRep' as const, amountLabel: 'REP withdrawal', amountText: '5 REP', operation: 'withdrawRep' as const, openLabel: 'Withdraw REP' }]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({
+							pendingOperation: { amount: 5n * 10n ** 18n, operator: zeroAddress, operation: queuedCase.operation, operationId: 7n, targetVault: zeroAddress },
+							pendingOperationSlotId: 7n,
+							pendingSettlementOperationIds: [7n],
+						}),
+						securityVaultResult: { action: queuedCase.action, hash: '0x01' },
+					})}
+				/>,
+			)
+			try {
+				const documentQueries = within(document.body)
+				fireEvent.click(documentQueries.getByRole('button', { name: queuedCase.openLabel }))
+				const dialog = documentQueries.getByRole('dialog', { name: queuedCase.openLabel })
+				expect(within(dialog).getByText(queuedCase.amountLabel)).not.toBeNull()
+				expect(within(dialog).getByText(queuedCase.amountText)).not.toBeNull()
+			} finally {
+				await renderedComponent.cleanup()
+			}
+		}
+	})
+
+	test('shows the shared failed badge when a queued withdrawal fails', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultResult: {
+						action: 'queueWithdrawRep',
+						hash: '0x03',
+						stagedExecution: {
+							errorMessage: 'The transaction failed.',
+							operation: 'withdrawRep',
+							operationId: 7n,
+							success: false,
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expect(within(dialog).getByText('Failed')).not.toBeNull()
+		expect(within(dialog).getByText('The transaction failed.')).not.toBeNull()
+	})
+
+	test('keeps the modal-first claim fees launcher silently disabled when lifecycle gating blocks it', async () => {
+		const endedPoolState = createEndedPoolState()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: {
+						...endedPoolState,
+						actions: {
+							...endedPoolState.actions,
+							redeemFees: { enabled: false },
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
+	})
+
+	test('explains fork lifecycle gating once for the complete vault action group', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					extraReadinessActions: [
+						{
+							actionLabel: 'Review Special Action',
+							blocker: 'Complete its separate prerequisite.',
+							key: 'special-action',
+							readiness: 'blocked',
+							title: 'Review Special Action',
+						},
+					],
+					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState: 'forkMigration',
+						universeHasForked: true,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
+		for (const actionLabel of ['Deposit REP', 'Withdraw REP']) {
+			const button = documentQueries.getByRole('button', { name: actionLabel })
+			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
+			expectTransactionButtonDisabled(document.body, actionLabel)
+		}
+		expect(getTransactionButtonState(document.body, 'Review Special Action')).toEqual({ disabled: true, reason: 'Complete its separate prerequisite.' })
+		const specialActionReason = documentQueries.getByText('Complete its separate prerequisite.')
+		expect(documentQueries.getByRole('button', { name: 'Review Special Action' }).getAttribute('aria-describedby')).toBe(specialActionReason.id)
+	})
+
+	test('preserves wallet recovery for lifecycle-enabled redemption after the pool ends', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Redeem REP')).toEqual({ disabled: true, reason: 'Connect a wallet before redeeming REP.' })
+	})
+
+	test('shows explicit modal-first vault blockers when the wallet is disconnected', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Connect a wallet before depositing REP.' })
+		expect(getTransactionButtonState(document.body, 'Claim fees')).toEqual({ disabled: true, reason: 'Connect a wallet before claiming fees.' })
+	})
+
+	test('shows explicit modal-first vault blockers for a vault owned by another account', async () => {
+		const otherVaultAddress = '0x00000000000000000000000000000000000000a9'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: zeroAddress }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						vaultAddress: otherVaultAddress,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: otherVaultAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Select your own vault to deposit REP.' })
+		expect(getTransactionButtonState(document.body, 'Claim fees')).toEqual({ disabled: true, reason: 'Select your own vault to claim fees.' })
+	})
+
+	test('explains how to recover when no REP is available to create the selected vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
+						capacityOwnershipAttoRep: 0n,
+						claimableFeesAttoEth: 0n,
+					}),
+					walletRepBalanceAttoRep: 0n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({
+			disabled: true,
+			reason: 'No REP is available in the active universe. Obtain or migrate REP into this universe before creating a vault.',
+		})
+	})
+
+	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
+						capacityOwnershipAttoRep: 0n,
+						claimableFeesAttoEth: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const depositDialogQueries = within(depositDialog)
+		const transactionContext = depositDialog.querySelector('.transaction-object-context')
+		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected deposit transaction context')
+		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
+		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
+		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
+		expect(
+			within(transactionContext)
+				.getAllByRole('button', { name: `Copy address ${zeroAddress}` })
+				.every(button => button.textContent === zeroAddress),
+		).toBe(true)
+	})
+
+	test('associates invalid target health factor guidance in embedded and modal deposit layouts', async () => {
+		for (const modalFirst of [false, true]) {
+			const renderedComponent = await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst,
+						securityVaultForm: {
+							depositAmount: '1',
+							repWithdrawAmount: '1',
+							targetHealthFactor: '',
+							securityPoolAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+					})}
+				/>,
+			)
+			const documentQueries = within(document.body)
+			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
+			const factorInput = scope.getByText('Target health factor').parentElement?.querySelector('input')
+			expect(factorInput).not.toBeNull()
+			const factorError = scope.getByText('Target health factor must be a number with at most four decimal places')
+			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
+			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
+			renderedComponent.cleanup()
+		}
+		cleanupRenderedComponent = undefined
+	})
+
+	test('uses the loaded pool minimum for a new-vault deposit', async () => {
+		const configuredMinimum = 30n * 10n ** 18n
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 1n, wethBalanceAttoEth: 0n }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 0n,
+						vaultAttoRepBacking: 0n,
+						capacityOwnershipAttoRep: 0n,
+						claimableFeesAttoEth: 0n,
+						minimumVaultRepDepositAttoRep: configuredMinimum,
+					}),
+					securityVaultForm: {
+						depositAmount: '20',
+						repWithdrawAmount: '',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+					securityVaultRepApproval: { error: undefined, loading: false, value: configuredMinimum },
+					walletRepBalanceAttoRep: 100n * 10n ** 18n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
+		expectTransactionButtonDisabled(documentQueries.getByRole('dialog', { name: 'Deposit REP' }), 'Deposit REP', 'New vaults require at least 30 REP in the first deposit.')
+	})
+
+	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({
+						ethBalanceAttoEth: 2n * 10n ** 18n,
+					}),
+					oracleManagerDetails: {
+						...createOracleManagerDetails(),
+						isPriceValid: false,
+						requestPriceCostAttoEth: 1n,
+					},
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test('blocks pool-held vault REP backing withdrawal while escalation deposits remain unsettled', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 3n * 10n ** 18n,
+						vaultAttoRepBacking: 20n * 10n ** 18n,
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Settle escalation deposits before withdrawing REP.')
+	})
+
+	test('requires fresh-report funding for vault actions at the exact oracle-price expiry boundary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={10n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+							requestPriceCostAttoEth: 1n * 10n ** 18n,
+						}),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							targetHealthFactor: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
+	})
+
+	test('does not require fresh-report funding immediately before oracle-price expiry', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={9n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+							requestPriceCostAttoEth: 1n * 10n ** 18n,
+						}),
+						securityVaultDetails: createSecurityVaultDetails({
+							disputeStakedAttoRep: 0n,
+							vaultAttoRepBacking: 13n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							targetHealthFactor: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test('does not infer immediate withdrawal execution from an expired raw validity flag', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={10n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+						}),
+						securityVaultResult: {
+							action: 'queueWithdrawRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000a1',
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Withdraw REP' }))
+
+		expect(within(document.body).getByRole('heading', { name: 'REP Withdrawal Submitted' })).not.toBeNull()
+		expect(within(document.body).queryByRole('heading', { name: 'REP Withdrawal Executed' })).toBeNull()
+	})
+
+	test('defaults queued self-service timeout copy to 5 minutes when the form has no explicit timeout', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This queued self-service operation will expire 5m after the oracle settlement window completes.')).toBe(true)
+	})
+
+	test('does not render a local vault transaction status card', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: {
+						action: 'depositRepToVault',
+						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Vault Action' })).toBeNull()
+	})
+
+	test('allows REP redemption after the selected pool has ended while keeping collateral changes locked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails(),
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({
+						disputeStakedAttoRep: 0n,
+					}),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						targetHealthFactor: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+					walletRepBalanceAttoRep: 10n * 10n ** 18n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		expectTransactionButtonEnabled(document.body, 'Redeem REP')
+		expectTransactionButtonEnabled(document.body, 'Claim fees')
+	})
+
+	test('disables REP approval after the selected pool has ended', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					poolState: createEndedPoolState(),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '',
+						targetHealthFactor: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: zeroAddress,
+					},
+					securityVaultRepApproval: {
+						error: undefined,
+						loading: false,
+						value: 0n,
+					},
+					walletRepBalanceAttoRep: 10n * 10n ** 18n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Approve 1 REP')
+	})
+
+	test('keeps REP redemption blocked until escalation deposits are settled after the pool ends', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					poolState: createEndedPoolState(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Settle escalation deposits before redeeming REP.')
+	})
+
+	test('disables modal-first vault launchers when a guard blocker is present', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('Connect a wallet before depositing REP.')
+	})
+
+	test('keeps modal-first vault launchers disabled off mainnet with recovery guidance', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+	})
+
+	test('prioritizes wrong-network recovery for modal-first vault launchers owned by another account', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						vaultAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						targetHealthFactor: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultOwner: '0x00000000000000000000000000000000000000a1',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+	})
+
+	test('prioritizes wrong-network recovery before selected vault details load', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ chainId: '0x2105' }),
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						targetHealthFactor: '',
+						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
+						selectedVaultOwner: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
+		expect(depositLauncher.disabled).toBe(true)
+		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+	})
+})

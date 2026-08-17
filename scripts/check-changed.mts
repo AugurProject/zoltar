@@ -6,7 +6,7 @@ function runCommand(command: string, args: string[]) {
 }
 
 const BIOME_COVERED_FILE_PATTERNS = [
-	/^(package\.json|\.prettierrc\.json|shared\/package\.json|ui\/package\.json|solidity\/package\.json|tsconfig\.scripts\.json)$/,
+	/^(package\.json|\.prettierrc\.json|shared\/package\.json|ui\/(?:coreShared|zoltar|statoblast)\/package\.json|solidity\/package\.json|tsconfig\.scripts\.json)$/,
 	/^bun-test-setup[^/]*\.ts$/,
 	/^README\.md$/,
 	/^AGENTS\.md$/,
@@ -16,10 +16,12 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^shared\/ts\//,
 	/^solidity\/ts\//,
 	/^ui\/AGENTS\.md$/,
-	/^ui\/ts\//,
-	/^ui\/build\//,
-	/^ui\/dev-server\.ts$/,
-	/^ui\/css\//,
+	/^ui\/coreShared\/ts\//,
+	/^ui\/coreShared\/build\//,
+	/^ui\/coreShared\/dev-server\.ts$/,
+	/^ui\/coreShared\/css\//,
+	/^ui\/zoltar\/ts\//,
+	/^ui\/statoblast\/ts\//,
 ]
 
 function isBiomeCoveredChangedFile(filePath: string) {
