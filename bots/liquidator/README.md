@@ -1,4 +1,4 @@
-# Zoltar security-pool liquidator
+# Statoblast liquidator
 
 The liquidator discovers every security pool registered by a configured
 `SecurityPoolFactory`, shows pool and vault statistics in a local dashboard, and

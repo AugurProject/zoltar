@@ -1,4 +1,4 @@
-# Zoltar two-way trading
+# Statoblast trading
 
 This self-contained project implements the two-reserve constant-product alternative described in [How To Build: Augur Constant Product with Invalid Insurance](https://micah-zoltu.medium.com/augur-constant-product-with-invalid-insurance-385fca7efbc7), adapted to the current local Zoltar protocol.
 
