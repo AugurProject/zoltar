@@ -17,7 +17,7 @@ export function TabNavigation({ route, tabs, onRouteChange }: TabNavigationProps
 		...(tab.disabled ? { disabled: true } : {}),
 		...(tab.disabled && tab.disabledReason !== undefined ? { reason: tab.disabledReason } : {}),
 	}))
-	const disabledReason = tabs.find(tab => tab.disabled)?.disabledReason
+	const disabledReason = tabs.find(tab => tab.disabled === true)?.disabledReason
 	const fallbackRoute = tabs[0]?.route ?? route
 	const effectiveRoute = route === 'not-found' ? fallbackRoute : route
 

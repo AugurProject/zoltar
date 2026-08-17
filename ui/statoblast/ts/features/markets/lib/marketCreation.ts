@@ -1,6 +1,6 @@
 import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.js'
-import type { DeploymentStatus, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'

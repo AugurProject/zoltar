@@ -7,6 +7,7 @@ import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
+import type * as preact from 'preact'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
@@ -53,7 +54,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 							inputMode='numeric'
 							value={exactTickInputValue}
 							onBlur={() => setExactTickInputValue(resolvedSelectedTick)}
-							onInput={event => {
+							onInput={(event: preact.JSX.TargetedEvent<HTMLInputElement>) => {
 								const nextInputValue = event.currentTarget.value
 								setExactTickInputValue(nextInputValue)
 								const parsedTick = tryParseBigIntInput(nextInputValue)

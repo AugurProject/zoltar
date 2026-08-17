@@ -2,11 +2,10 @@ import { createElement, render, type ComponentChildren } from 'preact'
 import * as appCopy from '../copy/app.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { initializeActiveEnvironment } from '../lib/activeEnvironment.js'
-import { App } from './App.js'
 import { AppErrorBoundary } from './components/AppErrorBoundary.js'
 import { ApplicationErrorNotice } from './components/ApplicationErrorNotice.js'
 
-export function createAppRoot(children: ComponentChildren = createElement(App, {})) {
+export function createAppRoot(children: ComponentChildren) {
 	return createElement(AppErrorBoundary, {}, children)
 }
 
@@ -16,9 +15,11 @@ type MountAppOptions = {
 	target?: Element
 }
 
-export async function mountApp(options: MountAppOptions = {}) {
+export async function mountApp(options: MountAppOptions) {
 	const initialize = options.initialize ?? initializeActiveEnvironment
-	const root = options.root ?? createAppRoot
+	const rootOption = options.root
+	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
+	const root = rootOption
 	const target = options.target ?? document.body
 	try {
 		await initialize()

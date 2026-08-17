@@ -2,11 +2,13 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { UniverseLink } from '@zoltar/ui-zoltar/features/universes/components/UniverseLink.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
-import type { TransactionContextItem, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
-import type { ForkAuctionActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { GlobalTransactionRow, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 
@@ -24,7 +26,7 @@ type PoolUniverseTransactionContext = {
 	universeId?: bigint | undefined
 }
 
-function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): TransactionContextItem[] | undefined {
+function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
 	if (context === undefined) return undefined
 	return [
 		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]),
@@ -120,6 +122,8 @@ export function createSecurityVaultSuccessPresentation(result: SecurityVaultActi
 
 export function createSecurityVaultWarningPresentation(result: SecurityVaultActionResult, message: string, context?: SecurityVaultTransactionContext) {
 	return withWarning(createSecurityVaultSuccessPresentation(result, context), message)
+}
+
 type TradingTransactionContext = PoolUniverseTransactionContext & {
 	shareOutcome?: ReportingActionResult['outcome'] | undefined
 }
@@ -160,6 +164,8 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 
 export function createTradingWarningPresentation(result: TradingActionResult, message: string) {
 	return withWarning(createTradingSuccessPresentation(result), message)
+}
+
 type LiquidationTransactionContext = PoolUniverseTransactionContext & {
 	amount?: string | undefined
 	targetVault?: string | undefined

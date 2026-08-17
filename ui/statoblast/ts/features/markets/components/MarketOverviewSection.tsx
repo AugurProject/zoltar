@@ -8,7 +8,7 @@ import { ChildUniverseDetails } from '@zoltar/ui-zoltar/features/universes/compo
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ChildUniversesSection, ChildUniverseStatusBadge } from '@zoltar/ui-zoltar/features/universes/components/ChildUniversesSection.js'
-import { Question } from './Question.js'
+import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'

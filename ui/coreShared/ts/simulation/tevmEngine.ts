@@ -645,7 +645,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
 		await bootstrapSimulationChain({
 			accounts: QA_ACCOUNTS,
-			applyScenario: dependencies.applyScenario,
+			...(dependencies.applyScenario === undefined ? {} : { applyScenario: dependencies.applyScenario }),
 			createReadClient: createBootstrapReadClient,
 			createWriteClient: createBootstrapWriteClient,
 			getDeploymentSteps: dependencies.getDeploymentSteps,

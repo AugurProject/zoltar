@@ -196,7 +196,6 @@ export function createZoltarMigrationWarningPresentation(result: ZoltarMigration
 	return withWarning(createZoltarMigrationSuccessPresentation(result), message)
 }
 
-}
 
 type PoolUniverseTransactionContext = {
 	securityPoolAddress?: string | undefined
@@ -211,7 +210,6 @@ function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext 
 	]
 }
 
-}
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
 	outcome?: ReportingActionResult['outcome'] | undefined

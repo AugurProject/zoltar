@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { formatAppDocumentTitle } from '../lib/appPageTitle.js'
 
 type AppPageHeadingProps = {
+	formatDocumentTitle: (pageTitle: string) => string
 	pageTitle: string
 }
 
-export function AppPageHeading({ pageTitle }: AppPageHeadingProps) {
+export function AppPageHeading({ formatDocumentTitle, pageTitle }: AppPageHeadingProps) {
 	const headingRef = useRef<HTMLHeadingElement>(null)
 	const previousPageTitleRef = useRef(pageTitle)
 	const historyTraversalUrlRef = useRef<string | undefined>()
@@ -19,7 +19,7 @@ export function AppPageHeading({ pageTitle }: AppPageHeadingProps) {
 	}, [])
 
 	useEffect(() => {
-		document.title = formatAppDocumentTitle(pageTitle)
+		document.title = formatDocumentTitle(pageTitle)
 		if (previousPageTitleRef.current === pageTitle) return
 		previousPageTitleRef.current = pageTitle
 		const heading = headingRef.current
@@ -29,7 +29,7 @@ export function AppPageHeading({ pageTitle }: AppPageHeadingProps) {
 		historyTraversalUrlRef.current = undefined
 		if (!wasHistoryTraversal) document.getElementById('app-content')?.scrollIntoView({ block: 'start' })
 		heading.focus({ preventScroll: true })
-	}, [pageTitle])
+	}, [formatDocumentTitle, pageTitle])
 
 	return (
 		<h1 ref={headingRef} className='visually-hidden' tabIndex={-1}>

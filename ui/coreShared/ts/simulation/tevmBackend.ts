@@ -58,7 +58,7 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 function resolveWorkerPath() {
 	const currentUrl = new URL(import.meta.url)
 	const appMatch = currentUrl.pathname.match(/\/ui\/(zoltar|statoblast)\/(?:ts|js)\//)
-	if (appMatch === undefined) throw new Error(`Unable to resolve simulation worker path from ${currentUrl.pathname}`)
+	if (appMatch === null || appMatch[1] === undefined) throw new Error(`Unable to resolve simulation worker path from ${currentUrl.pathname}`)
 	if (currentUrl.protocol === 'file:' && currentUrl.pathname.includes('/ts/')) return new URL(`../../${appMatch[1]}/ts/simulation/tevmWorker.ts`, import.meta.url)
 	return new URL(`../../${appMatch[1]}/js/simulation/tevmWorker.worker.js`, import.meta.url)
 }

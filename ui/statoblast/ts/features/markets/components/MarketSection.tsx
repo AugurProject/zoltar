@@ -10,7 +10,7 @@ import { ForkZoltarSection } from '@zoltar/ui-zoltar/features/universes/componen
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
-import { Question } from './Question.js'
+import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'

@@ -1,6 +1,6 @@
 import { getErrorMessage } from '../lib/errors.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
-import { isSimulationScenario, type SimulationScenario } from './scenarios.js'
+import type { SimulationScenario } from './scenarios.js'
 
 const SAVED_SIMULATION_STATES_STORAGE_KEY = 'zoltar.simulation.savedStates'
 const SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY = 'zoltar.simulation.savedStates.corruptedBackup'
@@ -154,7 +154,7 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a savedAt timestamp')
 	if (Number.isNaN(Date.parse(value['savedAt']))) throw new SavedSimulationStateError('Saved simulation state is missing a valid savedAt timestamp')
-	if (typeof value['baseScenario'] !== 'string' || !isSimulationScenario(value['baseScenario'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid baseScenario')
+	if (typeof value['baseScenario'] !== 'string' || value['baseScenario'] === '') throw new SavedSimulationStateError('Saved simulation state is missing a valid baseScenario')
 	if (!isObjectRecord(value['state'])) throw new SavedSimulationStateError('Saved simulation state is missing its state payload')
 	const state = value['state']
 	if (typeof state['selectedAccount'] !== 'string' || state['selectedAccount'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a selectedAccount')
@@ -174,7 +174,7 @@ function assertSavedStateRecord(value: unknown): asserts value is SavedSimulatio
 	if (typeof value['serialized'] !== 'string' || value['serialized'].trim() === '') throw new SavedSimulationStateError('Saved simulation state record is missing its serialized payload')
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state record is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state record is missing its savedAt timestamp')
-	if (typeof value['baseScenario'] !== 'string' || !isSimulationScenario(value['baseScenario'])) throw new SavedSimulationStateError('Saved simulation state record is missing a valid baseScenario')
+	if (typeof value['baseScenario'] !== 'string' || value['baseScenario'] === '') throw new SavedSimulationStateError('Saved simulation state record is missing a valid baseScenario')
 	if (value['persistedAt'] !== undefined && (typeof value['persistedAt'] !== 'string' || value['persistedAt'].trim() === '' || Number.isNaN(Date.parse(value['persistedAt'])))) {
 		throw new SavedSimulationStateError('Saved simulation state record is missing a valid persistedAt timestamp')
 	}

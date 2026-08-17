@@ -1,7 +1,6 @@
 import { createMemoryClient } from 'tevm'
-import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
-import { assertNever } from '../lib/assert.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import type { DeploymentStep } from '../types/contracts.js'
 import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
@@ -12,7 +11,6 @@ export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
 export type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
 
-const DAY_IN_SECONDS = 24n * 60n * 60n
 const ETH_BALANCE_AMOUNT = 10n ** 30n
 const GENESIS_UNIVERSE_ID = 0n
 const REP_TOKEN_MINT_AMOUNT = 3_000_000n * 10n ** 18n
@@ -50,7 +48,7 @@ function clampProgress(value: number) {
 	return Math.max(0, Math.min(1, value))
 }
 
-async export function reportBootstrapProgress(onProgress: BootstrapProgressHandler | undefined, label: string, value: number) {
+export async function reportBootstrapProgress(onProgress: BootstrapProgressHandler | undefined, label: string, value: number) {
 	await onProgress?.({
 		label,
 		value: clampProgress(value),

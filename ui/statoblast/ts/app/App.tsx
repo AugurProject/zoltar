@@ -29,7 +29,7 @@ import { useSecurityVaultOperations } from '../features/security-pools/hooks/use
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { getActiveSimulationController, initializeActiveEnvironment, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getAppPageTitle } from './appPageTitle.js'
+import { formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
@@ -784,7 +784,7 @@ export function App() {
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
-					<AppPageHeading pageTitle={pageTitle} />
+					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />
 					<AppStatusNotices
 						errorMessages={errorMessages}
 						readBackendMessage={readBackendMessage}

@@ -1,13 +1,8 @@
-import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
-import type { AccountState, ForkAuctionFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import type { AccountState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ZoltarMigrationFormState } from '../types/app.js'
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
-	ForkAuctionActionResult,
-	ForkAuctionDetails,
-	LiquidationApprovalDetails,
-	LiquidationFundingPreview,
 	ListedSecurityPool,
 	MarketDetails,
 	MarketDetailsPage,
@@ -15,28 +10,14 @@ import type {
 	OpenOracleReportDetails,
 	OpenOracleReportSummaryPage,
 	OpenOracleWithdrawableBalances,
-	OracleManagerDetails,
-	ReadClient,
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
-	SecurityPoolBrowsePage,
-	SecurityPoolCreationResult,
-	SecurityPoolOverviewActionResult,
-	SecurityPoolVaultSummary,
-	SecurityVaultActionResult,
-	SecurityVaultDetails,
-	TradingActionResult,
-	TradingDetails,
 	ZoltarUniverseSummary,
 } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ActionAvailability, ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
-import type { SecurityPoolLifecycleState } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolState.js'
-import type { ForkAuctionStageView } from '@zoltar/ui-statoblast/features/truth-auctions/lib/forkAuction.js'
+import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import type { SecurityPoolStateModel } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolState.js'
-import type { ForkWorkflowSelectionStage } from '@zoltar/ui-statoblast/features/security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { ReadBackendStatus } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -50,46 +31,6 @@ type RepPerEthPriceProps = {
 }
 
 export type RepPriceFailure = 'no-liquidity' | 'rpc-error'
-
-export type OutcomeChipRowProps = {
-	className?: string
-	items: Array<{
-		key: string
-		label: ComponentChildren
-		tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
-	}>
-}
-
-export type ScalarOutcomePickerProps = {
-	action?: ComponentChildren
-	details: {
-		maxValueLabel?: ComponentChildren
-		minValueLabel?: ComponentChildren
-		numTicks: bigint
-	}
-	disabled?: boolean
-	isInvalid: boolean
-	label: ComponentChildren
-	onInvalidChange: (invalid: boolean) => void
-	onSelectedTickChange: (tick: string) => void
-	selectedOutcomeLabel: ComponentChildren
-	selectedTick: string
-	selectedTickLabel: ComponentChildren
-	showMinMax?: boolean
-}
-
-export type OutcomeSelectionListProps = {
-	className?: string
-	emptyMessage?: ComponentChildren
-	items: Array<{
-		details?: ComponentChildren
-		disabled?: boolean
-		key: string
-		label: ComponentChildren
-		onSelect: () => void
-		selected: boolean
-	}>
-}
 
 export type DeploymentSectionProps = {
 	title: string
@@ -136,7 +77,6 @@ export type OverviewPanelsProps = {
 
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
@@ -204,141 +144,6 @@ export type MarketRouteContentProps = {
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 }
 
-export type SecurityPoolRouteContentProps = {
-	accountState: AccountState
-	availableQuestionsContextKey: string
-	availableQuestions: MarketDetails[]
-	checkingDuplicateOriginPool: boolean
-	duplicateOriginPoolExists: boolean
-	hasLoadedAvailableQuestions: boolean
-	loadingAvailableQuestions: boolean
-	onCreateSecurityPool: () => void
-	onLoadAvailableQuestions: () => Promise<void>
-	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
-	loadingMarketDetails: boolean
-	marketDetails: MarketDetails | undefined
-	poolCreationMarketDetails: MarketDetails | undefined
-	onResetSecurityPoolCreation: () => void
-	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
-	zoltarUniverseHasForked: boolean
-	securityPools: ListedSecurityPool[]
-	securityPoolCreating: boolean
-	securityPoolError: string | undefined
-	securityPoolForm: SecurityPoolFormState
-	securityPoolResult: SecurityPoolCreationResult | undefined
-} & RepPerEthPriceProps
-
-export type MarketSectionProps = MarketRouteContentProps
-
-export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
-	onReturnToBrowse?: () => void
-	showHeader?: boolean
-}
-
-export type SecurityPoolsOverviewRouteContentProps = {
-	accountState: AccountState
-	environmentRefreshKey: number
-	hasLoadedSecurityPoolPage: boolean
-	loadingSecurityPoolPage: boolean
-	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
-	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	repPerEthPrice: bigint | undefined
-	securityPoolOverviewError: string | undefined
-	securityPoolBrowseCount: bigint | undefined
-	securityPoolPage: SecurityPoolBrowsePage | undefined
-	securityPools: ListedSecurityPool[]
-}
-
-export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
-
-export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
-	accountState: AccountState
-	activeUniverseId: bigint
-	checkedSecurityPoolAddress: string | undefined
-	forkAuction: ForkAuctionRouteContentProps
-	loadingSecurityPools: boolean
-	onBrowsePools: () => void
-	onCreatePool: () => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
-	onReturnToCurrentUniverse?: () => void
-	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
-	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void
-	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void
-	onSelectedPoolViewChange: (view: string | undefined) => void
-	onViewPendingReport: (reportId: bigint) => void
-	selectedPoolRefreshNonce: number
-	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
-	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
-	poolOracleManagerError: string | undefined
-	poolOracleManagerErrorAddress: Address | undefined
-	poolPriceOracleResult: OpenOracleActionResult | undefined
-	universeForkTime?: bigint | undefined
-	selectedPoolView: string
-	securityPoolAddress: string
-	onSecurityPoolAddressChange: (value: string) => void
-	reporting: ReportingRouteContentProps
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
-	repPerEthSourceUrl: string | undefined
-	securityPools: ListedSecurityPool[]
-	securityVault: SecurityVaultRouteContentProps
-	trading: TradingRouteContentProps
-}
-
-export type SecurityPoolsSectionProps = {
-	activeView: SecurityPoolsView
-	createPool: SecurityPoolRouteContentProps
-	onActiveUniverseChange?: (universeId: bigint) => void
-	onActiveViewChange: (view: SecurityPoolsView) => void
-	overview: SecurityPoolsOverviewRouteContentProps
-	workflow: SecurityPoolWorkflowRouteContentProps
-}
-
-export type SecurityVaultRouteContentProps = {
-	accountState: AccountState
-	loadingSecurityVault: boolean
-	onApproveRep: (amount?: bigint) => void
-	onDepositRepToVault: () => void
-	onLoadSecurityVault: (vaultAddress?: string) => void
-	onRedeemFees: () => void
-	onRedeemRepFromVault: () => void
-	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onWithdrawRep: () => void
-	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
-	securityVaultDetails: SecurityVaultDetails | undefined
-	securityVaultError: string | undefined
-	securityVaultForm: SecurityVaultFormState
-	securityVaultMissing: boolean
-	securityVaultRepApproval: TokenApprovalState
-	walletRepBalanceAttoRep: bigint | undefined
-	walletRepBalanceError: string | undefined
-	walletRepBalanceLoading: boolean
-	securityVaultResult: SecurityVaultActionResult | undefined
-	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
-	repPerEthSourceUrl: string | undefined
-	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-}
-
-export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
-	compactLayout?: boolean
-	extraReadinessActions?: ReadinessAction[]
-	modalFirst?: boolean
-	onViewStagedOperations?: () => void
-	oracleManagerDetails?: OracleManagerDetails | undefined
-	poolState?: SecurityPoolStateModel | undefined
-	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
-	selectedPoolTotalCapacityOwnershipAttoRep?: bigint | undefined
-	selectedMarketTitle?: string | undefined
-	autoLoadVault?: boolean
-	showLookupSection?: boolean
-	showSummarySection?: boolean
-	showSecurityPoolAddressInput?: boolean
-	showHeader?: boolean
-}
 
 export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
 
@@ -383,128 +188,6 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	triggerZoltarForkPending?: boolean | undefined
 }
 
-export type TradingRouteContentProps = {
-	accountState: AccountState
-	loadingTradingForkUniverse: boolean
-	loadingTradingDetails: boolean
-	onCreateCompleteSet: () => void
-	onMigrateShares: () => void
-	onRedeemCompleteSet: () => void
-	onRedeemShares: () => void
-	onTradingFormChange: (update: Partial<TradingFormState>) => void
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
-	repPerEthSourceUrl: string | undefined
-	selectedPool: ListedSecurityPool | undefined
-	tradingActiveAction: TradingActionResult['action'] | undefined
-	tradingDetails: TradingDetails | undefined
-	tradingError: string | undefined
-	tradingForkUniverse: ZoltarUniverseSummary | undefined
-	tradingForm: TradingFormState
-	tradingResult: TradingActionResult | undefined
-}
-
-export type TradingSectionProps = TradingRouteContentProps & {
-	embedInCard?: boolean
-	poolState?: SecurityPoolStateModel | undefined
-	showSecurityPoolAddressInput?: boolean
-	showHeader?: boolean
-}
-
-export type SettlementSelectedBid = {
-	tick: bigint
-	bidIndex: bigint
-}
-
-export type ForkAuctionRouteContentProps = {
-	accountState: AccountState
-	forkAuctionDetails: ForkAuctionDetails | undefined
-	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
-	forkAuctionError: string | undefined
-	forkAuctionForm: ForkAuctionFormState
-	forkAuctionResult: ForkAuctionActionResult | undefined
-	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
-	onCreateChildUniverse: () => void
-	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
-	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
-	onForkUniverse: () => void
-	onForkWithOwnEscalation: () => void
-	onInitiateFork: () => void
-	onLoadForkAuction: (securityPoolAddressOverride?: Address) => void
-	onClaimParentEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
-	onMigrateUnresolvedEscalation: (selectedChildOutcome: ReportingOutcomeKey) => void
-	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
-	onMigrateVault: () => void
-	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
-	onStartTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
-	onSubmitBid: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
-	onWithdrawForkedEscalation: (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) => void
-}
-
-export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
-	auctionDetailsOverride?: ForkAuctionDetails | undefined
-	currentTimestamp?: bigint | undefined
-	disabled?: boolean
-	disabledMessage?: string | undefined
-	embedInCard?: boolean
-	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
-	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
-	loadingReportingDetails?: boolean
-	onLoadReporting?: (() => void) | undefined
-	onReportingFormChange?: ((update: Partial<ReportingFormState>) => void) | undefined
-	previewPool?: ListedSecurityPool | undefined
-	reportingDetails?: ReportingDetails | undefined
-	reportingError?: string | undefined
-	reportingForm?: ReportingFormState | undefined
-	securityPools?: ListedSecurityPool[] | undefined
-	selectedPoolRefreshNonce?: number | undefined
-	universeForkTime?: bigint | undefined
-	currentStageView?: ForkAuctionStageView | undefined
-	selectedStageView?: ForkWorkflowSelectionStage | undefined
-	stageView?: ForkAuctionStageView | undefined
-	onSelectedStageViewChange?: ((stage: ForkWorkflowSelectionStage) => void) | undefined
-	showSecurityPoolAddressInput?: boolean
-	showHeader?: boolean
-	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
-}
-
-export type LiquidationModalStateProps = {
-	closeLiquidationModal: () => void
-	liquidationDebtEthAmount: string
-	maximumLiquidationDebtAttoEth: bigint | undefined
-	liquidationManagerAddress: Address | undefined
-	liquidationFundingPreview?: LiquidationFundingPreview | undefined
-	liquidationFundingPreviewError?: string | undefined
-	liquidationModalOpen: boolean
-	liquidationSecurityPoolAddress: Address | undefined
-	liquidationTimeoutMinutes: string
-	loadingPoolOracleManager: boolean
-	loadingLiquidationFundingPreview?: boolean | undefined
-	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
-	securityPoolOverviewError: string | undefined
-	securityPoolLiquidationError: string | undefined
-	liquidationTargetVault: string
-	liquidationReceiverVault?: string | undefined
-	liquidationApprovalId?: string | undefined
-	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
-	liquidationApprovalError?: string | undefined
-	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
-	liquidationReceiverVaultSummaryError?: string | undefined
-	liquidationReceiverVaultSummaryResolved?: boolean | undefined
-	loadingLiquidationApproval?: boolean | undefined
-	loadingLiquidationReceiverVaultSummary?: boolean | undefined
-	onLiquidationAmountChange: (value: string) => void
-	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
-	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
-	onLoadLiquidationApproval?: (() => void) | undefined
-	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
-	onLiquidationTimeoutMinutesChange: (value: string) => void
-	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	poolOracleManagerDetails: OracleManagerDetails | undefined
-}
 
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
