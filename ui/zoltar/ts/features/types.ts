@@ -61,17 +61,6 @@ export type OutcomeChipRowProps = {
 	}>
 }
 
-export type CollateralizationCircleProps = {
-	collateralizationPercent: bigint | undefined
-	className?: string
-	label?: string
-	size?: 'small' | 'medium' | 'large'
-	successThreshold?: number
-	targetCollateralizationPercent: bigint | undefined
-	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
-	warningThreshold?: number
-}
-
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
 	details: {
@@ -102,18 +91,6 @@ export type OutcomeSelectionListProps = {
 		selected: boolean
 	}>
 }
-
-export type VaultMetricGridProps = {
-	badDebtAttoEth?: bigint | undefined
-	className?: string
-	layout?: 'grid' | 'preview'
-	disputeStakedAttoRep?: bigint | undefined
-	priceValidUntilTimestamp?: bigint | undefined
-	vaultAttoRepBacking: bigint | undefined
-	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	capacityOwnershipAttoRep: bigint | undefined
-	claimableFeesAttoEth: bigint | undefined
-} & RepPerEthPriceProps
 
 export type DeploymentSectionProps = {
 	title: string
@@ -262,46 +239,10 @@ export type SecurityPoolRouteContentProps = {
 } & RepPerEthPriceProps
 
 export type MarketSectionProps = MarketRouteContentProps
+
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 	onReturnToBrowse?: () => void
 	showHeader?: boolean
-}
-
-type LiquidationModalStateProps = {
-	closeLiquidationModal: () => void
-	liquidationDebtEthAmount: string
-	maximumLiquidationDebtAttoEth: bigint | undefined
-	liquidationManagerAddress: Address | undefined
-	liquidationFundingPreview?: LiquidationFundingPreview | undefined
-	liquidationFundingPreviewError?: string | undefined
-	liquidationModalOpen: boolean
-	liquidationSecurityPoolAddress: Address | undefined
-	liquidationTimeoutMinutes: string
-	loadingPoolOracleManager: boolean
-	loadingLiquidationFundingPreview?: boolean | undefined
-	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
-	securityPoolOverviewError: string | undefined
-	securityPoolLiquidationError: string | undefined
-	liquidationTargetVault: string
-	liquidationReceiverVault?: string | undefined
-	liquidationApprovalId?: string | undefined
-	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
-	liquidationApprovalError?: string | undefined
-	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
-	liquidationReceiverVaultSummaryError?: string | undefined
-	liquidationReceiverVaultSummaryResolved?: boolean | undefined
-	loadingLiquidationApproval?: boolean | undefined
-	loadingLiquidationReceiverVaultSummary?: boolean | undefined
-	onLiquidationAmountChange: (value: string) => void
-	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
-	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
-	onLoadLiquidationApproval?: (() => void) | undefined
-	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
-	onLiquidationTimeoutMinutesChange: (value: string) => void
-	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
 
 export type SecurityPoolsOverviewRouteContentProps = {
@@ -407,48 +348,6 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	showSummarySection?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
-}
-
-type OpenOracleRouteContentProps = {
-	accountState: AccountState
-	onApproveToken1: (amount?: bigint) => void
-	onApproveToken2: (amount?: bigint) => void
-	onCancelOpenOracleWithdrawalBalanceCheck: () => void
-	onCreateOpenOracleGame: () => void
-	onDisputeReport: () => void
-	onLoadOracleReport: (reportId?: string) => void
-	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
-	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
-	onSettleReport: () => void
-	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
-	loadingOpenOracleCreate: boolean
-	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
-	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
-	openOracleError: string | undefined
-	openOracleTokenAccessState: {
-		token1Approval: TokenApprovalState
-		token1Balance: bigint | undefined
-		token1BalanceError: string | undefined
-		token1Decimals: number | undefined
-		token2Approval: TokenApprovalState
-		token2Balance: bigint | undefined
-		token2BalanceError: string | undefined
-		token2Decimals: number | undefined
-		tokenAccessLoadingInitial: boolean
-		tokenAccessRefreshing: boolean
-	}
-	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
-	openOracleCreateForm: OpenOracleCreateFormState
-	openOracleCreateFieldErrors?: OpenOracleCreateContractFieldErrors
-	openOracleForm: OpenOracleFormState
-	openOracleReportLookupState: OpenOracleReportLookupState
-	openOracleReportDetails: OpenOracleReportDetails | undefined
-	openOracleResult: OpenOracleActionResult | undefined
-	openOracleWithdrawalBalanceChecking: boolean
-	openOracleWithdrawalReviewMessage: { balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined
-	openOracleWithdrawableBalances: OpenOracleWithdrawableBalances | undefined
-	openOracleWithdrawableBalancesError: string | undefined
-	openOracleWithdrawableBalancesLoading: boolean
 }
 
 export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
@@ -579,3 +478,84 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	showHeader?: boolean
 	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
 }
+
+export type LiquidationModalStateProps = {
+	closeLiquidationModal: () => void
+	liquidationDebtEthAmount: string
+	maximumLiquidationDebtAttoEth: bigint | undefined
+	liquidationManagerAddress: Address | undefined
+	liquidationFundingPreview?: LiquidationFundingPreview | undefined
+	liquidationFundingPreviewError?: string | undefined
+	liquidationModalOpen: boolean
+	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTimeoutMinutes: string
+	loadingPoolOracleManager: boolean
+	loadingLiquidationFundingPreview?: boolean | undefined
+	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewError: string | undefined
+	securityPoolLiquidationError: string | undefined
+	liquidationTargetVault: string
+	liquidationReceiverVault?: string | undefined
+	liquidationApprovalId?: string | undefined
+	liquidationApprovalDetails?: LiquidationApprovalDetails | undefined
+	liquidationApprovalError?: string | undefined
+	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
+	liquidationReceiverVaultSummaryError?: string | undefined
+	liquidationReceiverVaultSummaryResolved?: boolean | undefined
+	loadingLiquidationApproval?: boolean | undefined
+	loadingLiquidationReceiverVaultSummary?: boolean | undefined
+	onLiquidationAmountChange: (value: string) => void
+	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
+	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
+	onLoadLiquidationApproval?: (() => void) | undefined
+	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
+	onLiquidationTimeoutMinutesChange: (value: string) => void
+	onLoadPoolOracleManager: (managerAddress: Address) => void
+	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	poolOracleManagerDetails: OracleManagerDetails | undefined
+}
+
+type OpenOracleRouteContentProps = {
+	accountState: AccountState
+	onApproveToken1: (amount?: bigint) => void
+	onApproveToken2: (amount?: bigint) => void
+	onCancelOpenOracleWithdrawalBalanceCheck: () => void
+	onCreateOpenOracleGame: () => void
+	onDisputeReport: () => void
+	onLoadOracleReport: (reportId?: string) => void
+	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
+	onSettleReport: () => void
+	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
+	loadingOpenOracleCreate: boolean
+	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
+	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
+	openOracleError: string | undefined
+	openOracleTokenAccessState: {
+		token1Approval: TokenApprovalState
+		token1Balance: bigint | undefined
+		token1BalanceError: string | undefined
+		token1Decimals: number | undefined
+		token2Approval: TokenApprovalState
+		token2Balance: bigint | undefined
+		token2BalanceError: string | undefined
+		token2Decimals: number | undefined
+		tokenAccessLoadingInitial: boolean
+		tokenAccessRefreshing: boolean
+	}
+	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
+	openOracleCreateForm: OpenOracleCreateFormState
+	openOracleCreateFieldErrors?: OpenOracleCreateContractFieldErrors
+	openOracleForm: OpenOracleFormState
+	openOracleReportLookupState: OpenOracleReportLookupState
+	openOracleReportDetails: OpenOracleReportDetails | undefined
+	openOracleResult: OpenOracleActionResult | undefined
+	openOracleWithdrawalBalanceChecking: boolean
+	openOracleWithdrawalReviewMessage: { balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined
+	openOracleWithdrawableBalances: OpenOracleWithdrawableBalances | undefined
+	openOracleWithdrawableBalancesError: string | undefined
+	openOracleWithdrawableBalancesLoading: boolean
+}
+
+
