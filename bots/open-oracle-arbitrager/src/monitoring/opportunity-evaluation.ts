@@ -1,4 +1,4 @@
-import { getAddress, getBalanceAtBlock, getTransactionCountAtBlock, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
+import { getAddress, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'
@@ -274,8 +274,8 @@ export async function executionReadQuorum(clients: readonly ReadClient[], config
 			loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
 			quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
 			hedgeQuotes,
-			getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
-			getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
+			readClient.getTransactionCount({ address: account, blockNumber }),
+			readClient.getBalance({ address: account, blockNumber }),
 			readContractAtBlock(readClient, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
 			readContractAtBlock(readClient, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
 			readContractAtBlock(readClient, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),

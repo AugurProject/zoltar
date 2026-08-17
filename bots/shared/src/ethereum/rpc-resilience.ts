@@ -208,7 +208,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		try {
 			return await request(url === undefined ? transportWithContext(value => (context = value)) : transportFor(url, value => (context = value)))
 		} catch (error) {
-			throw rpcFailureWithContext(error, context?.target ?? endpointTarget(url ?? defaultUrl), method)
+			throw rpcFailureWithContext(error, context?.target ?? endpointTarget(url ?? defaultUrl), context?.method ?? method)
 		}
 	}
 	return {

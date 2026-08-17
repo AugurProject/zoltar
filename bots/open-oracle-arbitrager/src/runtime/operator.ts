@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '#ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
@@ -63,17 +63,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	if (config.execute) await savePositionJournal(config.positionFile, positions)
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 	let clientRpcUrl: string | undefined
-	const contextualRpcRead = async <Value>(method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => {
-		return await readPool.contextualRequest(method, transport => request(createPublicClient({ chain: config.network.chain, transport })), explicitRpcUrl)
-	}
-	const createClient = (rpcUrl?: string) => {
-		const baseClient = createPublicClient({
-			chain: config.network.chain,
-			transport: config.execute && rpcUrl !== undefined ? readPool.transportFor(rpcUrl) : readPool.transport,
-		})
-		const readContract: typeof baseClient.readContract = async parameters => await contextualRpcRead('eth_call', requestClient => requestClient.readContract(parameters), rpcUrl)
-		return baseClient.extend(() => ({ readContract }))
-	}
+	const createClient = (rpcUrl?: string) => createContextualPublicClient(config.network.chain, readPool, config.execute ? rpcUrl : undefined)
+	const contextualRpcRead = async <Value>(_method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => await request(createClient(explicitRpcUrl))
 	const createWallet = () =>
 		config.privateKey === undefined
 			? undefined

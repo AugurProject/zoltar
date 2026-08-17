@@ -8,7 +8,7 @@ import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
-import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
+import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
@@ -36,6 +36,7 @@ describe('shared bot primitives', () => {
 				'bigintToSafeNumber',
 				'bytesToHex',
 				'concatHex',
+				'createContextualPublicClient',
 				'createPublicClient',
 				'createRpcEndpointPool',
 				'createWalletClient',
@@ -328,6 +329,47 @@ describe('shared bot primitives', () => {
 			}
 		} finally {
 			secondary.stop(true)
+		}
+	})
+
+	test('keeps concurrent typed response failures bound to their exact RPC action', async () => {
+		const transactionServer = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const payload = await request.json()
+				const id = typeof payload === 'object' && payload !== null && !Array.isArray(payload) && 'id' in payload ? payload['id'] : 1
+				await Bun.sleep(25)
+				return Response.json({ id, jsonrpc: '2.0', result: {} })
+			},
+		})
+		const receiptServer = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const payload = await request.json()
+				const id = typeof payload === 'object' && payload !== null && !Array.isArray(payload) && 'id' in payload ? payload['id'] : 1
+				return Response.json({ id, jsonrpc: '2.0', result: {} })
+			},
+		})
+		try {
+			if (transactionServer.port === undefined || receiptServer.port === undefined) throw new Error('Contextual client test servers did not expose ports')
+			const transactionUrl = `http://user:transaction-secret@127.0.0.1:${transactionServer.port.toString()}/private-rpc?token=transaction-secret#fragment`
+			const receiptUrl = `http://user:receipt-secret@127.0.0.1:${receiptServer.port.toString()}/private-rpc?token=receipt-secret#fragment`
+			const pool = createRpcEndpointPool([transactionUrl, receiptUrl])
+			const transactionClient = createContextualPublicClient(mainnet, pool, transactionUrl)
+			const receiptClient = createContextualPublicClient(mainnet, pool, receiptUrl)
+			const results = await Promise.allSettled([transactionClient.getTransaction({ hash: `0x${'11'.repeat(32)}` }), receiptClient.getTransactionReceipt({ hash: `0x${'22'.repeat(32)}` })])
+			const messages = results.map(result => (result.status === 'rejected' ? String(result.reason) : 'request unexpectedly succeeded'))
+			expect(messages[0]).toContain(`RPC http://127.0.0.1:${transactionServer.port.toString()} failed while calling eth_getTransactionByHash`)
+			expect(messages[1]).toContain(`RPC http://127.0.0.1:${receiptServer.port.toString()} failed while calling eth_getTransactionReceipt`)
+			for (const message of messages) {
+				expect(message).not.toContain('secret')
+				expect(message).not.toContain('private-rpc')
+				expect(message).not.toContain('token=')
+				expect(message).not.toContain('fragment')
+			}
+		} finally {
+			transactionServer.stop(true)
+			receiptServer.stop(true)
 		}
 	})
 
