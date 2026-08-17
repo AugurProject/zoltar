@@ -147,6 +147,7 @@ function TransactionFeedbackOperationModalHarness() {
 								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
+							technicalRows: [{ label: 'Function', value: 'approve' }],
 							title: 'Approve REP',
 							tone: 'preparing',
 						})
@@ -165,6 +166,7 @@ function TransactionFeedbackOperationModalHarness() {
 								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
+							technicalRows: [{ label: 'Function', value: 'approve' }],
 							title: 'Approval confirmed',
 							tone: 'success',
 						})
@@ -178,6 +180,7 @@ function TransactionFeedbackOperationModalHarness() {
 						setTransaction({
 							detail: 'The share migration transaction failed.',
 							dismissKey: 'transaction-request-2',
+							technicalRows: [{ label: 'Function', value: 'migrateShares' }],
 							title: 'Share migration failed',
 							tone: 'error',
 						})
@@ -472,6 +475,8 @@ describe('OperationModal', () => {
 		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
 		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
+		expect(within(dialog).queryByText('Technical details')).toBeNull()
+		expect(within(dialog).queryByText('approve')).toBeNull()
 		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
 		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
 		await act(() => {
@@ -483,6 +488,8 @@ describe('OperationModal', () => {
 		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
 		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
 		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
+		expect(within(dialog).queryByText('Technical details')).toBeNull()
+		expect(within(dialog).queryByText('approve')).toBeNull()
 		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
 		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
@@ -492,6 +499,8 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).getByRole('alert').textContent).toContain('The share migration transaction failed.')
+		expect(within(dialog).queryByText('Technical details')).toBeNull()
+		expect(within(dialog).queryByText('migrateShares')).toBeNull()
 	})
 
 	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
@@ -619,7 +628,7 @@ describe('OperationModal', () => {
 		})
 
 		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
-		expect(within(dialog).getByText('Confirm transaction context')).not.toBeNull()
+		expect(within(dialog).queryByText('Confirm transaction context')).toBeNull()
 		expect(within(dialog).getByText('Will this resolve?')).not.toBeNull()
 		expect(within(dialog).getByText('Genesis (0)')).not.toBeNull()
 		expect(within(dialog).getByRole('button', { name: `Copy address ${poolAddress}` }).textContent).toBe(poolAddress)

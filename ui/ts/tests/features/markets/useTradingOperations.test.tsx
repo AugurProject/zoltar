@@ -263,6 +263,61 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
+	test('allows the checkpoint-adjusted maximum mint amount through submit-time validation', async () => {
+		const tokenPrecision = 10n ** 18n
+		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: typeof SECURITY_POOL_ADDRESS, amount: bigint) => ({
+			action: 'createCompleteSet' as const,
+			hash: zeroHash,
+			securityPoolAddress,
+			universeId: 1n,
+			amount,
+		}))
+		const onTransactionFailed = mock(() => undefined)
+		const dependencies = createTradingOperationsDependencies({
+			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * tokenPrecision),
+			loadSecurityPoolMintCapacity: mock(async () => ({
+				currentRetentionRate: tokenPrecision / 2n,
+				currentTimestamp: 2n,
+				feeEligibleCapacityOwnershipAttoRep: 2n * tokenPrecision,
+				feeEndTimestamp: 100n,
+				feeIndexRemainder: 0n,
+				isPriceValid: true,
+				lastUpdatedFeeAccumulator: 1n,
+				mintingCapacityAttoEth: 3n * tokenPrecision,
+				settlementCollateralAttoEth: 2n * tokenPrecision,
+				shareTokenSupplyAttoShares: 2n * tokenPrecision,
+				totalCapacityOwnershipAttoRep: 3n * tokenPrecision,
+				totalFeesOwedRemainder: 0n,
+				totalPoolHeldAttoRep: 20n * tokenPrecision,
+			})),
+			loadTradingDetails: mock(async () => createTradingDetails()),
+			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
+		})
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			dependencies,
+		)
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({ ...current, completeSetAmount: '2' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).createCompleteSet()
+		})
+
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * tokenPrecision)
+	})
+
 	test('converts redeem complete-set input to share units before submitting', async () => {
 		const firstMintShareAmount = 10n ** 36n
 		let submittedRedeemAmount: bigint | undefined

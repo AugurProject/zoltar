@@ -81,11 +81,6 @@ export const questionCreationWalletRequired = 'Connect a wallet before creating 
 export const completeRequiredQuestionFields = 'Complete the required question fields.'
 export const formatInvalidQuestionFieldsReason = (message: string) => `Fix invalid fields: ${message}`
 export const requiredFieldsNote = 'Required fields are marked with an asterisk (*).'
-export const forkIntroduction = 'Forking selects one existing question to split the active universe into outcome-specific child universes. This protocol action cannot be undone.'
-export const forkQuestionRequirement = 'Choose the question whose outcomes will define the child universes.'
-export const forkQuestionUnavailableReason = 'Create a question before starting a fork.'
-export const forkRepRequirement = 'The connected wallet must hold and approve enough REP to meet the fork threshold.'
-export const forkConsequence = 'After the fork, REP migration becomes the primary next step and question creation in this universe stops.'
 export const binary = 'Binary'
 export const categorical = 'Categorical'
 export const binaryQuestionDescription = 'Ask a yes-or-no question that can be resolved from one public source of truth.'

@@ -11,6 +11,7 @@ export const migrationAmountAlreadySplitDetail = 'This amount is already fully s
 export const alreadyForkedReason = 'This universe has already forked.'
 export const formatAddMigrationRepDetail = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount} REP to your migration balance from this universe, then split it across the selected universes.`
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
+export const forkQuestionIdInvalid = 'Enter a valid hexadecimal question ID.'
 export const forkQuestionTimeLoadingReason = 'Loading current chain time before checking whether the selected question has ended.'
 export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before the universe can fork. It ends ${endTime} (${relativeEndTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn and migration-credit terms are unavailable.'
@@ -58,8 +59,6 @@ export const repMovedToMigrationCustody = 'REP Moved to Migration Custody'
 export const destinationRepAfterSplit = (destination: CopyTemplateValue) => `${destination} REP After Split`
 export const migrationSplitRisk = 'Splitting REP commits that amount to the selected child universes and cannot be reversed through this workflow.'
 export const migrationDestinationRisk = 'Verify every destination outcome before splitting; each selected universe receives the migrated amount.'
-export const migrationCustodyCredit = 'Migration Custody Credit'
 export const permanentRepBurn = 'Permanent REP Burn'
-export const zoltarContract = 'Zoltar Contract'
 export const forkIrreversibleRisk = 'Fork initiation is irreversible and permanently sets this question as the universe fork question.'
 export const forkMigrationRisk = 'After the fork, REP and pool positions must follow the outcome-universe migration process before settlement.'

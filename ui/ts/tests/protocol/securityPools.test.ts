@@ -808,7 +808,8 @@ describe('securityPools protocol client', () => {
 	test('loadSecurityPoolMintCapacity reads only selected-pool capacity fields', async () => {
 		const requestedFunctionNames: string[] = []
 		const requestedAddresses: Address[] = []
-		const client: Parameters<typeof loadSecurityPoolMintCapacity>[0] = {
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(99n),
 			multicall: createMulticallStub(async request => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
@@ -816,13 +817,22 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				return request.contracts.length === 5 ? [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress] : [true]
+				if (request.contracts.length === 8) return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress, 88n, alternateSecurityPoolAddress, 66n]
+				return getContractFunctionName(request.contracts[0]) === 'isPriceValid' ? [true] : [77n]
 			}),
-		}
+			readContract: async () => {
+				throw new Error('readContract should not be called')
+			},
+		})
 
 		const capacity = await loadSecurityPoolMintCapacity(client, securityPoolAddress)
 
 		expect(capacity).toEqual({
+			currentRetentionRate: 88n,
+			currentTimestamp: 99n,
+			feeEndTimestamp: 77n,
+			feeIndexRemainder: 0n,
+			lastUpdatedFeeAccumulator: 0n,
 			settlementCollateralAttoEth: 11n,
 			feeEligibleCapacityOwnershipAttoRep: 17n,
 			mintingCapacityAttoEth: 55n,
@@ -830,8 +840,9 @@ describe('securityPools protocol client', () => {
 			totalPoolHeldAttoRep: 33n,
 			totalCapacityOwnershipAttoRep: 44n,
 			isPriceValid: true,
+			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'isPriceValid'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'questionData', 'questionId', 'isPriceValid', 'getQuestionEndDate'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress, alternateSecurityPoolAddress])
 	})
 })
