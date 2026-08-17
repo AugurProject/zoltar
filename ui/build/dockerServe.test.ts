@@ -58,6 +58,13 @@ describe('Docker static UI server', () => {
 			const healthyResponse = await fetch(`http://127.0.0.1:${server.port}/`)
 			expect(healthyResponse.status).toBe(200)
 			expect(await healthyResponse.text()).toBe('<h1>Zoltar</h1>')
+
+			const getResponse = await fetch(`http://127.0.0.1:${server.port}/assets/app.js`)
+			const headResponse = await fetch(`http://127.0.0.1:${server.port}/assets/app.js`, { method: 'HEAD' })
+			expect(headResponse.status).toBe(200)
+			expect(headResponse.headers.get('content-type')).toBe(getResponse.headers.get('content-type'))
+			expect(headResponse.headers.get('content-length')).toBe(getResponse.headers.get('content-length'))
+			expect(await headResponse.text()).toBe('')
 		} finally {
 			await server.stop(true)
 		}

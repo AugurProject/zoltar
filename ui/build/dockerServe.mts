@@ -31,7 +31,7 @@ export const createAssetHandler = (root: string) => {
 			throw error
 		}
 
-		return new Response(request.method === 'HEAD' ? undefined : file, {
+		return new Response(file, {
 			headers: { 'cache-control': noStoreFiles.has(pathname) ? 'no-store' : 'no-cache' },
 		})
 	}
