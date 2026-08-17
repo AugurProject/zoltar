@@ -2319,6 +2319,8 @@ button.wallet-asset-action-pending:disabled {
 	flex-shrink: 0;
 	align-items: center;
 	gap: 0.5rem;
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-1);
 	cursor: pointer;
 }
 

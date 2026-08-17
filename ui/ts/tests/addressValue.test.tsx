@@ -58,6 +58,7 @@ describe('AddressValue', () => {
 		await waitFor(() => {
 			expect(copyButton.childNodes[0]?.textContent).toBe('Copied address')
 		})
+		expect(documentQueries.getByRole('status').textContent).toBe('Copied address')
 	})
 
 	test('keeps the complete address visible in constrained layouts', async () => {

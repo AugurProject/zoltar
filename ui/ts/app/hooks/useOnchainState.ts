@@ -13,6 +13,7 @@ import type { AccountState, RefreshStateOptions } from '../../types/app.js'
 import type { DeploymentStatus } from '../../types/contracts.js'
 import { useLoadController } from '../../hooks/useLoadController.js'
 import { sameChainId } from '../../lib/chainId.js'
+import { formatTimestampWithRelative } from '../../lib/formatters.js'
 
 type ChainClock = {
 	currentBlockNumber: bigint | undefined
@@ -64,7 +65,7 @@ async function validateConfiguredReadBackend(backend: ChainBackend): Promise<Rea
 		const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
 		if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
 			return {
-				readBackendMessage: `Configured read RPC is stale. Latest block timestamp is ${blockTimestamp.toString()}, more than 10 minutes behind local time.`,
+				readBackendMessage: `Configured read RPC is stale. Latest block timestamp is ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
 				validated: true,
 			}
 		}
