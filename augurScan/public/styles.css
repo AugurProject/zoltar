@@ -222,6 +222,9 @@ main {
 .network-card[data-phase="degraded"]::before {
 	background: var(--red);
 }
+.network-card[data-head-freshness="stale"]::before {
+	background: var(--red);
+}
 .network-title {
 	display: flex;
 	align-items: center;
@@ -245,6 +248,11 @@ main {
 	background: rgba(242, 182, 93, 0.08);
 }
 .network-card[data-phase="degraded"] .badge {
+	color: var(--red);
+	border-color: rgba(255, 129, 122, 0.35);
+	background: rgba(255, 129, 122, 0.08);
+}
+.network-card[data-head-freshness="stale"] .badge {
 	color: var(--red);
 	border-color: rgba(255, 129, 122, 0.35);
 	background: rgba(255, 129, 122, 0.08);
