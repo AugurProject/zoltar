@@ -94,7 +94,7 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/#/deploy',
-		assertExpression: `document.querySelector('.deployment-setup select')?.options.length === 3 && document.querySelector('.deployment-setup input[type="url"]') !== null && document.body.textContent?.includes('Immutable trading fee') === true && [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `(() => { const checks = { networkOptions: document.querySelector('.deployment-setup select')?.options.length === 3, rpcField: document.querySelector('.deployment-setup input[type="url"]') !== null, feeCopy: document.body.textContent?.includes('Immutable trading fee') === true, deployDisabled: [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'deployment-setup-mobile',
@@ -171,9 +171,9 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=baseline#/markets',
-		clickSelector: '.wallet-summary__trigger',
-		clickWaitMs: 50,
-		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === true && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1' && document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0 && document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= innerWidth`,
+		evaluate: `(() => { const summary = document.querySelector('details.wallet-summary'); if (!(summary instanceof HTMLDetailsElement)) return false; if (!summary.open) summary.querySelector('.wallet-summary__trigger')?.click(); return true })()`,
+		evaluateWaitMs: 50,
+		assertExpression: `(() => { const checks = { open: document.querySelector('.wallet-summary')?.hasAttribute('open') === true, interactive: document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1', identityVisible: document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0, balancesVisible: document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0, fits: document.documentElement.scrollWidth <= innerWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'wallet-balance-loading',
