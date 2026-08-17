@@ -23,7 +23,6 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
@@ -1094,11 +1093,6 @@ export function ForkAuctionSection({
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
 					]}
 					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCapacityOwnershipRisk]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
-						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions'>
 					{renderStageActionButton({

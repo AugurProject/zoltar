@@ -22,8 +22,8 @@ describe('TransactionReview', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('keeps decision data without a generic instruction', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionReview primary={[{ label: 'You Pay', value: '1 ETH' }]} risks={['Funds remain locked until settlement.']} technicalDetails={[{ label: 'Network', value: 'Ethereum Mainnet' }]} />)
+	test('keeps decision data without generic or technical-detail sections', async () => {
+		const renderedComponent = await renderIntoDocument(<TransactionReview primary={[{ label: 'You Pay', value: '1 ETH' }]} risks={['Funds remain locked until settlement.']} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction Review' })
@@ -32,10 +32,6 @@ describe('TransactionReview', () => {
 		expect(review.querySelector('.transaction-review-header .detail')).toBeNull()
 		expect(review.textContent).toContain('1 ETH')
 		expect(review.textContent).toContain('Funds remain locked until settlement.')
-		const technicalDetailsSummary = within(review).getByText('Technical Details', { selector: 'summary' })
-		const technicalDetails = technicalDetailsSummary.closest('details')
-		if (!(technicalDetails instanceof HTMLElement)) throw new Error('Expected technical details disclosure')
-		expect(technicalDetails.hasAttribute('open')).toBe(false)
-		expect(technicalDetails.textContent).toContain('Ethereum Mainnet')
+		expect(within(review).queryByText('Technical Details')).toBeNull()
 	})
 })

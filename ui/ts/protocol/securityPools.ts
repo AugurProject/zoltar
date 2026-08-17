@@ -444,6 +444,11 @@ async function loadSecurityPoolDetails(
 	return {
 		settlementCollateralAttoEth,
 		currentRetentionRate,
+		feeAccrualState: {
+			feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
+			lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
+			totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
+		},
 		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
 		forkOutcome,
 		forkOwnSecurityPool,

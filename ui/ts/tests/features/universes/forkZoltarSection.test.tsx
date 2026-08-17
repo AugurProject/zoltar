@@ -176,7 +176,7 @@ describe('ForkZoltarSection', () => {
 		expect(approveButton.hasAttribute('disabled')).toBe(false)
 	})
 
-	test('shows the permanent fork burn, migration credit, and Zoltar target before submission', async () => {
+	test('shows only the required and permanently burned REP amounts before submission', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
@@ -203,10 +203,11 @@ describe('ForkZoltarSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Migration Custody Credit≈ 80.00 REP')
+		expect(review.textContent).toContain('Fork Threshold≈ 100.00 REP')
 		expect(review.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
-		expect(review.textContent).toContain('Zoltar Contract')
-		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
+		expect(review.textContent).not.toContain('Migration Custody Credit')
+		expect(review.textContent).not.toContain('Resulting REP Balance')
+		expect(review.textContent).not.toContain('Technical Details')
 		expect(review.textContent).not.toContain('Protocol FeeNone')
 	})
 
@@ -315,7 +316,12 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No question matches this ID. Try another question ID.')).not.toBeNull()
+		const questionIdInput = documentQueries.getByLabelText('Fork Question ID')
+		const questionError = document.getElementById('fork-zoltar-question-state')
+		if (questionError === null) throw new Error('Expected question ID error notice')
+		expect(questionError.textContent).toContain('No question matches this ID. Try another question ID.')
+		expect(questionIdInput.getAttribute('aria-invalid')).toBe('true')
+		expect(questionIdInput.getAttribute('aria-describedby')).toBe(questionError.id)
 		expect(document.body.textContent?.includes('Refresh questions')).toBe(false)
 	})
 

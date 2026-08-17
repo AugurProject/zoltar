@@ -3,10 +3,11 @@ import { useEffect, useState } from 'preact/hooks'
 import { isCloseableErrorMessage } from '../lib/errors.js'
 
 type ErrorNoticeProps = {
+	id?: string
 	message: string | undefined
 }
 
-export function ErrorNotice({ message }: ErrorNoticeProps) {
+export function ErrorNotice({ id, message }: ErrorNoticeProps) {
 	const [dismissed, setDismissed] = useState(false)
 	const isCloseable = isCloseableErrorMessage(message)
 
@@ -18,7 +19,7 @@ export function ErrorNotice({ message }: ErrorNoticeProps) {
 	if (isCloseable && dismissed) return undefined
 
 	return (
-		<div className={`notice error${isCloseable ? ' closeable' : ''}`} role='alert' aria-live='assertive' aria-atomic='true'>
+		<div id={id} className={`notice error${isCloseable ? ' closeable' : ''}`} role='alert' aria-live='assertive' aria-atomic='true'>
 			{isCloseable ? (
 				<button type='button' className='notice-dismiss' aria-label={commonCopy.dismissErrorActionLabel} onClick={() => setDismissed(true)}>
 					<span className='notice-dismiss-icon' aria-hidden='true' />
