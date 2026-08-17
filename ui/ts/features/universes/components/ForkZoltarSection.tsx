@@ -22,6 +22,8 @@ import { getReportPresentation, getUniversePresentation, getWalletPresentation }
 import type { MarketDetails, ZoltarUniverseSummary } from '../../../types/contracts.js'
 
 const FORK_CONFIRMATION = 'FORK'
+const FORK_QUESTION_ERROR_ID = 'fork-zoltar-question-error'
+const FORK_QUESTION_STATE_ID = 'fork-zoltar-question-state'
 
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
@@ -103,6 +105,9 @@ export function ForkZoltarSection({
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
+	let selectedQuestionDescriptionId: string | undefined
+	if (selectedQuestionError !== undefined) selectedQuestionDescriptionId = FORK_QUESTION_ERROR_ID
+	else if (selectedQuestionLookupState === 'missing') selectedQuestionDescriptionId = FORK_QUESTION_STATE_ID
 	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThresholdAttoRep / rootUniverse.forkBurnDivisor
 	const approvalGuardMessage = (() => {
@@ -171,7 +176,7 @@ export function ForkZoltarSection({
 
 				<label className='field'>
 					<span>{zoltarCopy.forkQuestionId}</span>
-					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} disabled={hasForked || zoltarForkPending} />
+					<FormInput aria-describedby={selectedQuestionDescriptionId} disabled={hasForked || zoltarForkPending} invalid={selectedQuestionDescriptionId !== undefined} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} value={zoltarForkQuestionId} />
 				</label>
 
 				{selectedQuestion === undefined ? undefined : (
@@ -179,8 +184,8 @@ export function ForkZoltarSection({
 						<Question question={selectedQuestion} />
 					</WorkflowSubsection>
 				)}
-				{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
-				<ErrorNotice message={selectedQuestionError} />
+				{selectedQuestionPresentation === undefined ? undefined : <StateHint id={selectedQuestionLookupState === 'missing' ? FORK_QUESTION_STATE_ID : undefined} presentation={selectedQuestionPresentation} />}
+				<ErrorNotice id={FORK_QUESTION_ERROR_ID} message={selectedQuestionError} />
 				{zoltarQuestionLookupError === undefined || !isSelectedQuestionLookup || onRetryZoltarQuestion === undefined ? undefined : (
 					<div className='actions'>
 						<button type='button' className='secondary' disabled={loadingZoltarQuestion} onClick={onRetryZoltarQuestion}>

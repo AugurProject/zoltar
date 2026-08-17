@@ -354,6 +354,100 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([cachedQuestion])
 	})
 
+	test('ignores an exact lookup failure after the full question list resolves the canonical ID', async () => {
+		const exactQuestion = createDeferred<MarketDetails>()
+		const listedQuestion = createQuestion('0x01')
+		const dependencies = createZoltarUniverseDependencies({
+			loadAllZoltarQuestions: async () => [listedQuestion],
+			loadMarketDetails: async () => await exactQuestion.promise,
+			loadZoltarQuestionCount: async () => 1n,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let exactRequest: Promise<void> | undefined
+		await act(async () => {
+			exactRequest = requireHookState(hookState).loadZoltarQuestion('0x1')
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestions()
+		})
+		await act(async () => {
+			exactQuestion.reject(new Error('late exact lookup failure'))
+			await exactRequest
+		})
+
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([listedQuestion])
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()
+	})
+
+	test('clears an exact lookup error when a later question page resolves the canonical ID', async () => {
+		const exactQuestion = createDeferred<MarketDetails>()
+		const pagedQuestion = createQuestion('0x0001')
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => await exactQuestion.promise,
+			loadZoltarQuestionCount: async () => 1n,
+			loadZoltarQuestionPage: async () => ({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [pagedQuestion] }),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let exactRequest: Promise<void> | undefined
+		await act(async () => {
+			exactRequest = requireHookState(hookState).loadZoltarQuestion('0x1')
+			await Promise.resolve()
+		})
+		await act(async () => {
+			exactQuestion.reject(new Error('exact lookup failed first'))
+			await exactRequest
+		})
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: exact lookup failed first')
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([pagedQuestion])
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()
+	})
+
 	test('reports automatic universe and question-count load failures', async () => {
 		const dependencies = createZoltarUniverseDependencies({
 			loadZoltarQuestionCount: async () => {

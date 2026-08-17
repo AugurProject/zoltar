@@ -28,9 +28,14 @@ function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage:
 }
 
 function mergeQuestionLists(existingQuestions: MarketDetails[], nextQuestions: readonly MarketDetails[]) {
-	const questionsById = new Map(existingQuestions.map(question => [question.questionId.toLowerCase(), question]))
-	for (const question of nextQuestions) questionsById.set(question.questionId.toLowerCase(), question)
+	const getQuestionKey = (question: MarketDetails) => normalizeQuestionId(question.questionId) ?? question.questionId.toLowerCase()
+	const questionsById = new Map(existingQuestions.map(question => [getQuestionKey(question), question]))
+	for (const question of nextQuestions) questionsById.set(getQuestionKey(question), question)
 	return [...questionsById.values()]
+}
+
+function includesQuestionId(questions: readonly MarketDetails[], normalizedQuestionId: string) {
+	return questions.some(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
 }
 
 type UseZoltarUniverseParameters = {
@@ -130,6 +135,10 @@ export function useZoltarUniverse(
 	}
 	const isCurrentQuestionLoad = (generation: number, context: { activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean }) => {
 		return questionLoadGenerationRef.current === generation && isCurrentZoltarContext(context)
+	}
+	const clearResolvedQuestionLookupError = (questions: readonly MarketDetails[]) => {
+		const lookupId = zoltarQuestionLookupId.value
+		if (lookupId !== undefined && includesQuestionId(questions, lookupId)) zoltarQuestionLookupError.value = undefined
 	}
 
 	const ensureZoltarUniverse = async (): Promise<ZoltarUniverseSummary> => {
@@ -243,6 +252,7 @@ export function useZoltarUniverse(
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestions.value = questions
+				clearResolvedQuestionLookupError(questions)
 				hasLoadedZoltarQuestions.value = true
 				const currentQuestionPage = zoltarQuestionPage.value
 				if (currentQuestionPage !== undefined) {
@@ -293,7 +303,9 @@ export function useZoltarUniverse(
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionPage.value = page
-				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, page.questions)
+				const mergedQuestions = mergeQuestionLists(zoltarQuestions.value, page.questions)
+				zoltarQuestions.value = mergedQuestions
+				clearResolvedQuestionLookupError(mergedQuestions)
 			},
 			onError: error => {
 				loadError = loadError ?? error
@@ -330,14 +342,15 @@ export function useZoltarUniverse(
 			onSuccess: question => {
 				if (!isMounted.current || !isCurrentZoltarContext(questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
 				if (!question.exists) {
-					zoltarQuestionLookupError.value = 'Question not found'
+					if (!includesQuestionId(zoltarQuestions.value, normalizedQuestionId)) zoltarQuestionLookupError.value = 'Question not found'
 					return
 				}
 				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, [question])
+				zoltarQuestionLookupError.value = undefined
 			},
 			onError: error => {
 				if (!isMounted.current || !isCurrentZoltarContext(questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
-				zoltarQuestionLookupError.value = getErrorMessage(error, 'Failed to load question')
+				if (!includesQuestionId(zoltarQuestions.value, normalizedQuestionId)) zoltarQuestionLookupError.value = getErrorMessage(error, 'Failed to load question')
 			},
 		})
 	}

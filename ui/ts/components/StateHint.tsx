@@ -6,11 +6,12 @@ type StateHintProps = {
 	actions?: ComponentChildren
 	announcement?: 'assertive' | 'polite'
 	className?: string
+	id?: string | undefined
 	presentation: UserMessagePresentation
 	title?: ComponentChildren
 }
 
-export function StateHint({ actions, announcement, className = '', presentation, title }: StateHintProps) {
+export function StateHint({ actions, announcement, className = '', id, presentation, title }: StateHintProps) {
 	const hasVisibleCopy = title !== undefined || presentation.detail !== undefined || presentation.actionHint !== undefined || actions !== undefined
 	const fallbackTitle = hasVisibleCopy ? undefined : presentation.badgeLabel
 	let announcementRole: 'alert' | 'status' | undefined
@@ -18,7 +19,7 @@ export function StateHint({ actions, announcement, className = '', presentation,
 	if (announcement === 'polite') announcementRole = 'status'
 
 	return (
-		<div aria-atomic={announcement === undefined ? undefined : 'true'} aria-live={announcement} className={`state-hint ${className}`.trim()} role={announcementRole}>
+		<div id={id} aria-atomic={announcement === undefined ? undefined : 'true'} aria-live={announcement} className={`state-hint ${className}`.trim()} role={announcementRole}>
 			{title === undefined ? undefined : <h3>{title}</h3>}
 			{fallbackTitle === undefined ? undefined : <h3>{fallbackTitle}</h3>}
 			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detailIsLoading ? <LoadingText>{presentation.detail}</LoadingText> : <LoadingAwareText>{presentation.detail}</LoadingAwareText>}</p>}

@@ -316,7 +316,12 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No question matches this ID. Try another question ID.')).not.toBeNull()
+		const questionIdInput = documentQueries.getByLabelText('Fork Question ID')
+		const questionError = document.getElementById('fork-zoltar-question-state')
+		if (questionError === null) throw new Error('Expected question ID error notice')
+		expect(questionError.textContent).toContain('No question matches this ID. Try another question ID.')
+		expect(questionIdInput.getAttribute('aria-invalid')).toBe('true')
+		expect(questionIdInput.getAttribute('aria-describedby')).toBe(questionError.id)
 		expect(document.body.textContent?.includes('Refresh questions')).toBe(false)
 	})
 
