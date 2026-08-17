@@ -74,9 +74,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
 			const [token0, token1, reserves] = await Promise.all([
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
 			])
 			if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
 			return { blockHash: block.hash, blockNumber: block.number, blockTimestamp: block.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }

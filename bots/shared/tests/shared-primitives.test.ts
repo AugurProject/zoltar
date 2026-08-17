@@ -307,6 +307,30 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('attributes post-response validation failures to the endpoint that served the request', async () => {
+		const secondary = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x2' }) })
+		try {
+			if (secondary.port === undefined) throw new Error('RPC validation test server did not expose a port')
+			const primaryUrl = 'http://127.0.0.1:1'
+			const secondaryUrl = `http://127.0.0.1:${secondary.port.toString()}`
+			const pool = createRpcEndpointPool([primaryUrl, secondaryUrl], { timeoutMilliseconds: 100 })
+			try {
+				await pool.contextualRequest('eth_chainId', async transport => {
+					const chainId = await createPublicClient({ transport }).getChainId()
+					if (chainId !== 1) throw new Error(`Expected chain 1, received ${chainId.toString()}`)
+				})
+				throw new Error('Expected chain validation to fail')
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				expect(message).toContain(`RPC ${new URL(secondaryUrl).origin} failed while calling eth_chainId`)
+				expect(message).not.toContain(new URL(primaryUrl).origin)
+				expect(message.match(/eth_chainId/g)).toHaveLength(1)
+			}
+		} finally {
+			secondary.stop(true)
+		}
+	})
+
 	test('omits one refused endpoint from endpoint-bound quorum reads', async () => {
 		const first = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
 		const second = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })

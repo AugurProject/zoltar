@@ -104,6 +104,8 @@ function validatedInteger(value: number, label: string, minimum: number, maximum
 export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpointPoolOptions = {}) {
 	const uniqueUrls = [...new Set(urls)]
 	if (uniqueUrls.length === 0) throw new Error('RPC endpoint pool requires at least one URL')
+	const defaultUrl = uniqueUrls[0]
+	if (defaultUrl === undefined) throw new Error('RPC endpoint pool requires at least one URL')
 	const timeoutMilliseconds = validatedInteger(options.timeoutMilliseconds ?? 15_000, 'RPC timeoutMilliseconds', 1, 300_000)
 	const baseCooldownMilliseconds = validatedInteger(options.baseCooldownMilliseconds ?? 1_000, 'RPC baseCooldownMilliseconds', 1, 300_000)
 	const maximumCooldownMilliseconds = validatedInteger(options.maximumCooldownMilliseconds ?? 30_000, 'RPC maximumCooldownMilliseconds', baseCooldownMilliseconds, 3_600_000)
@@ -182,7 +184,35 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		},
 	})
 	const totalTimeoutMilliseconds = Math.min(300_000, timeoutMilliseconds * uniqueUrls.length + 1_000)
+	const transportWithContext = (onSuccess: (context: RpcRequestContext) => void) => custom(provider(onSuccess), { timeoutMilliseconds: totalTimeoutMilliseconds })
+	const transportFor = (url: string, onSuccess?: (context: RpcRequestContext) => void) => {
+		const endpoint = endpoints.find(candidate => candidate.url === url)
+		if (endpoint === undefined) throw new Error('Cannot create an RPC transport outside the endpoint pool')
+		return custom(
+			{
+				request: async ({ method, params }) => {
+					if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target }])
+					try {
+						return await requestEndpoint(endpoint, method, params, onSuccess)
+					} catch (error) {
+						if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
+						throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
+					}
+				},
+			},
+			{ timeoutMilliseconds: timeoutMilliseconds + 1_000 },
+		)
+	}
+	const contextualRequest = async <Value>(method: string, request: (transport: ReturnType<typeof transportWithContext>) => Promise<Value>, url?: string) => {
+		let context: RpcRequestContext | undefined
+		try {
+			return await request(url === undefined ? transportWithContext(value => (context = value)) : transportFor(url, value => (context = value)))
+		} catch (error) {
+			throw rpcFailureWithContext(error, context?.target ?? endpointTarget(url ?? defaultUrl), method)
+		}
+	}
 	return {
+		contextualRequest,
 		prefer: (url: string) => {
 			const index = endpoints.findIndex(endpoint => endpoint.url === url)
 			if (index === -1) throw new Error('Cannot prefer an RPC URL outside the endpoint pool')
@@ -190,24 +220,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		},
 		snapshot: (): readonly RpcEndpointHealth[] => endpoints.map(({ nextRetryMilliseconds: _nextRetryMilliseconds, url: _url, ...endpoint }) => ({ ...endpoint })),
 		transport: custom(provider(), { timeoutMilliseconds: totalTimeoutMilliseconds }),
-		transportWithContext: (onSuccess: (context: RpcRequestContext) => void) => custom(provider(onSuccess), { timeoutMilliseconds: totalTimeoutMilliseconds }),
-		transportFor: (url: string, onSuccess?: (context: RpcRequestContext) => void) => {
-			const endpoint = endpoints.find(candidate => candidate.url === url)
-			if (endpoint === undefined) throw new Error('Cannot create an RPC transport outside the endpoint pool')
-			return custom(
-				{
-					request: async ({ method, params }) => {
-						if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target }])
-						try {
-							return await requestEndpoint(endpoint, method, params, onSuccess)
-						} catch (error) {
-							if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
-							throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
-						}
-					},
-				},
-				{ timeoutMilliseconds: timeoutMilliseconds + 1_000 },
-			)
-		},
+		transportFor,
+		transportWithContext,
 	}
 }
