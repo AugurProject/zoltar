@@ -122,6 +122,12 @@ describe('universe selector', () => {
 			await Bun.sleep(10)
 		})
 		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
+		await act(async () => {
+			window.history.replaceState(undefined, '', `/#/security-pool/0x${'55'.repeat(20)}`)
+			window.dispatchEvent(new Event('hashchange'))
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain('No injected wallet was found')
 	})
 
 	test('keeps only markets minted in the selected universe', () => {

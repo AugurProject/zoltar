@@ -474,7 +474,7 @@ export function LiveTrading({
 		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
 	})
-	const { account, walletClient, connect, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances, refreshBalancesAfterApproval } = balances
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, approve, submit } = position
@@ -542,7 +542,8 @@ export function LiveTrading({
 			)
 	}
 	if (routePool !== undefined) {
-		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={message} />
+		if (selected !== undefined)
+			return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={connectionMessage} />
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -553,9 +554,9 @@ export function LiveTrading({
 						<h1>Security pool</h1>
 					</div>
 				</header>
-				{message === undefined ? null : (
+				{connectionMessage === undefined ? null : (
 					<p class='error' role='alert'>
-						{message}
+						{connectionMessage}
 					</p>
 				)}
 				<section class='section' aria-busy={discoveryState === 'loading'}>
