@@ -176,6 +176,9 @@ describe('OverviewPanels', () => {
 
 		expect(documentQueries.getByText('No liquidity available')).not.toBeNull()
 		expect(documentQueries.getByText('Quote failed')).not.toBeNull()
+		const priceFailures = document.querySelectorAll('.rep-price-failure')
+		expect(priceFailures).toHaveLength(2)
+		for (const failure of Array.from(priceFailures)) expect(failure.classList.contains('currency-value')).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
 

@@ -31,7 +31,7 @@ function getWalletNetworkLabel(chainId: string | undefined) {
 function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
 	if (failure === undefined) return undefined
 	return (
-		<span className='currency-value unavailable' role='status'>
+		<span className='currency-value unavailable rep-price-failure' role='status'>
 			{failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity}
 		</span>
 	)
