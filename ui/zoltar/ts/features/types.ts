@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
-import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import type { AccountState, ForkAuctionFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
@@ -9,7 +9,6 @@ import type {
 	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
-	MarketCreationResult,
 	MarketDetails,
 	MarketDetailsPage,
 	OpenOracleActionResult,
@@ -166,16 +165,10 @@ export type MarketRouteContentProps = {
 	environmentRefreshKey: number
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
-	onCreateMarket: () => void
 	onForkZoltar: () => void
 	onMigrateInternalRep: () => void
 	onPrepareRepForMigration: () => void
-	marketCreating: boolean
-	marketError: string | undefined
-	marketForm: MarketFormState
-	marketResult: MarketCreationResult | undefined
 	onActiveViewChange: (view: ZoltarView) => void
-	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestion: boolean
 	loadingZoltarQuestions: boolean
@@ -186,9 +179,6 @@ export type MarketRouteContentProps = {
 	onLoadZoltarQuestions: () => Promise<void>
 	onLoadZoltarQuestion: (questionId: string) => Promise<void>
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
-	onMarketFormChange: (update: Partial<MarketFormState>) => void
-	onUseQuestionForFork: (questionId: string) => void
-	onUseQuestionForPool: (questionId: string) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionLookupError: string | undefined
