@@ -164,7 +164,7 @@ function publicRpcEndpointHealth(value: unknown) {
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'paused', 'scanning', 'status', 'wallet'])
+	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
