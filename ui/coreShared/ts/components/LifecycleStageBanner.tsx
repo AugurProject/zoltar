@@ -1,7 +1,7 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as commonCopy from '../copy/common.js'
 import type { LifecycleStagePresentation } from '../types/components.js'
-import { LoadingAwareText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
+import { LoadingAwareText } from '../components/LoadingText.js'
+import { WarningSurface } from '../components/WarningSurface.js'
 
 type LifecycleStageBannerProps = {
 	detailId?: string | undefined

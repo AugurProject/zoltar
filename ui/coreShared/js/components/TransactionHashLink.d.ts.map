@@ -1,0 +1,1 @@
+{"version":3,"file":"TransactionHashLink.d.ts","sourceRoot":"","sources":["../../ts/components/TransactionHashLink.tsx"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,IAAI,EAAE,MAAM,yBAAyB,CAAA;AAInD,KAAK,wBAAwB,GAAG;IAC/B,IAAI,EAAE,IAAI,CAAA;CACV,CAAA;AAED,wBAAgB,mBAAmB,CAAC,EAAE,IAAI,EAAE,EAAE,wBAAwB,gCASrE"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"CopyErrorMessage.d.ts","sourceRoot":"","sources":["../../ts/components/CopyErrorMessage.tsx"],"names":[],"mappings":"AAEA,KAAK,qBAAqB,GAAG;IAC5B,EAAE,EAAE,MAAM,CAAA;IACV,WAAW,CAAC,EAAE,MAAM,CAAA;IACpB,OAAO,EAAE,MAAM,GAAG,SAAS,CAAA;CAC3B,CAAA;AAED,wBAAgB,gBAAgB,CAAC,EAAE,EAAE,EAAE,WAAW,EAAE,OAAO,EAAE,EAAE,qBAAqB,4CAiBnF"}

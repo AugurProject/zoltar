@@ -1,11 +1,11 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as commonCopy from '../copy/common.js'
 
-import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
+import { DataGrid } from '../components/DataGrid.js'
+import { FormInput } from '../components/FormInput.js'
+import { MetricField } from '../components/MetricField.js'
+import { tryParseBigIntInput } from '../lib/integerInput.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
-import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
+import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type * as preact from 'preact'
 

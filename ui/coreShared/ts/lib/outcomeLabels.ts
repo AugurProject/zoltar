@@ -1,4 +1,4 @@
-import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
+import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 
 export function isInvalidOutcomeLabel(outcome: string) {
 	return sameCaseInsensitiveText(outcome, 'invalid')

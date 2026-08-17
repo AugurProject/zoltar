@@ -1,0 +1,1 @@
+{"version":3,"file":"marketType.js","sourceRoot":"","sources":["../../ts/copy/marketType.ts"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,MAAM,GAAG,QAAQ,CAAA;AAC9B,MAAM,CAAC,MAAM,WAAW,GAAG,aAAa,CAAA;AACxC,MAAM,CAAC,MAAM,MAAM,GAAG,QAAQ,CAAA","sourcesContent":["export const binary = 'Binary'\nexport const categorical = 'Categorical'\nexport const scalar = 'Scalar'\n"]}

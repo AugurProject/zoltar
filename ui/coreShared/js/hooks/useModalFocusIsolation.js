@@ -1,0 +1,173 @@
+import { useEffect, useRef } from 'preact/hooks';
+const hiddenSiblingStates = new WeakMap();
+let modalScrollLockCount = 0;
+let bodyOverflowBeforeModal;
+function lockPageScroll() {
+    if (modalScrollLockCount === 0) {
+        bodyOverflowBeforeModal = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+    }
+    modalScrollLockCount += 1;
+    return () => {
+        modalScrollLockCount = Math.max(0, modalScrollLockCount - 1);
+        if (modalScrollLockCount !== 0)
+            return;
+        document.body.style.overflow = bodyOverflowBeforeModal ?? '';
+        bodyOverflowBeforeModal = undefined;
+    };
+}
+function hideModalSibling(element) {
+    const state = hiddenSiblingStates.get(element);
+    if (state !== undefined) {
+        state.count += 1;
+        return;
+    }
+    hiddenSiblingStates.set(element, {
+        ariaHidden: element.getAttribute('aria-hidden') ?? undefined,
+        count: 1,
+        inert: element.hasAttribute('inert'),
+    });
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('inert', '');
+}
+function restoreModalSibling(element) {
+    const state = hiddenSiblingStates.get(element);
+    if (state === undefined)
+        return;
+    state.count -= 1;
+    if (state.count > 0)
+        return;
+    hiddenSiblingStates.delete(element);
+    if (state.ariaHidden === undefined) {
+        element.removeAttribute('aria-hidden');
+    }
+    else {
+        element.setAttribute('aria-hidden', state.ariaHidden);
+    }
+    if (state.inert) {
+        element.setAttribute('inert', '');
+    }
+    else {
+        element.removeAttribute('inert');
+    }
+}
+function getModalIsolationSiblings(backdropElement) {
+    const siblings = [];
+    const seenSiblings = new Set();
+    let currentElement = backdropElement;
+    while (currentElement !== undefined) {
+        if (currentElement === document.body)
+            break;
+        const parentElement = currentElement.parentElement;
+        if (!(parentElement instanceof HTMLElement))
+            break;
+        for (const sibling of Array.from(parentElement.children)) {
+            if (sibling === currentElement || !(sibling instanceof HTMLElement) || seenSiblings.has(sibling))
+                continue;
+            if (sibling.classList.contains('modal-backdrop') && (backdropElement.compareDocumentPosition(sibling) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
+                continue;
+            seenSiblings.add(sibling);
+            siblings.push(sibling);
+        }
+        currentElement = parentElement;
+    }
+    return siblings;
+}
+function getTopOtherModalBackdrop(backdropElement) {
+    const modalBackdrops = Array.from(document.querySelectorAll('.modal-backdrop')).filter(modalBackdrop => modalBackdrop !== backdropElement);
+    return modalBackdrops[modalBackdrops.length - 1];
+}
+function isTopModalBackdrop(backdropElement) {
+    if (!(backdropElement instanceof HTMLElement))
+        return false;
+    const modalBackdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+    return modalBackdrops[modalBackdrops.length - 1] === backdropElement;
+}
+function getFocusableElements(dialogElement) {
+    return Array.from(dialogElement?.querySelectorAll("button:not([disabled]), input:not([disabled]), [href]:not([tabindex='-1']), select:not([disabled]), summary, textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []).filter(element => {
+        if (element.closest('[hidden], [inert]') !== null)
+            return false;
+        let ancestor = element;
+        while (ancestor !== null) {
+            const style = window.getComputedStyle(ancestor);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse')
+                return false;
+            if (ancestor.tagName === 'DETAILS' && !ancestor.hasAttribute('open') && !(element.tagName === 'SUMMARY' && element.parentElement === ancestor))
+                return false;
+            ancestor = ancestor.parentElement;
+        }
+        return true;
+    });
+}
+export function useModalFocusIsolation({ dialogRef, initialFocusRef, isOpen, onClose }) {
+    const onCloseRef = useRef(onClose);
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+    useEffect(() => {
+        if (!isOpen)
+            return;
+        const unlockPageScroll = lockPageScroll();
+        const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const backdropElement = dialogRef.current?.parentElement;
+        const hiddenSiblings = [];
+        if (backdropElement instanceof HTMLElement) {
+            for (const sibling of getModalIsolationSiblings(backdropElement)) {
+                hideModalSibling(sibling);
+                hiddenSiblings.push(sibling);
+            }
+        }
+        if (isTopModalBackdrop(backdropElement)) {
+            const focusableElements = getFocusableElements(dialogRef.current);
+            const requestedInitialFocus = initialFocusRef.current;
+            const focusTarget = requestedInitialFocus !== null && focusableElements.includes(requestedInitialFocus) ? requestedInitialFocus : (focusableElements[0] ?? dialogRef.current);
+            focusTarget?.focus();
+        }
+        const handleKeyDown = (event) => {
+            if (!isTopModalBackdrop(backdropElement))
+                return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                onCloseRef.current();
+                return;
+            }
+            if (event.key !== 'Tab')
+                return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            const focusableElements = getFocusableElements(dialogRef.current);
+            if (focusableElements.length === 0)
+                return;
+            if (!(document.activeElement instanceof HTMLElement)) {
+                focusableElements[0]?.focus();
+                return;
+            }
+            const currentIndex = focusableElements.indexOf(document.activeElement);
+            if (currentIndex === -1) {
+                focusableElements[0]?.focus();
+                return;
+            }
+            if (event.shiftKey) {
+                focusableElements[(currentIndex - 1 + focusableElements.length) % focusableElements.length]?.focus();
+                return;
+            }
+            focusableElements[(currentIndex + 1) % focusableElements.length]?.focus();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            unlockPageScroll();
+            for (const sibling of hiddenSiblings) {
+                restoreModalSibling(sibling);
+            }
+            const topOtherModalBackdrop = getTopOtherModalBackdrop(backdropElement);
+            if (topOtherModalBackdrop !== undefined) {
+                getFocusableElements(topOtherModalBackdrop)[0]?.focus();
+                return;
+            }
+            previouslyFocusedElement?.focus();
+        };
+    }, [dialogRef, initialFocusRef, isOpen]);
+}
+//# sourceMappingURL=useModalFocusIsolation.js.map

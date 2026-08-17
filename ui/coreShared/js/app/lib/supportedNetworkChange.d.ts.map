@@ -1,0 +1,1 @@
+{"version":3,"file":"supportedNetworkChange.d.ts","sourceRoot":"","sources":["../../../ts/app/lib/supportedNetworkChange.ts"],"names":[],"mappings":"AAAA,KAAK,2CAA2C,GAAG;IAClD,gBAAgB,EAAE,MAAM,MAAM,CAAA;IAC9B,kBAAkB,EAAE,CAAC,SAAS,EAAE,MAAM,OAAO,KAAK,OAAO,CAAC,OAAO,CAAC,CAAA;CAClE,CAAA;AAED,wBAAgB,uCAAuC,CAAC,EAAE,gBAAgB,EAAE,kBAAkB,EAAE,EAAE,2CAA2C;;;EA8B5I"}

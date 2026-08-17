@@ -1,0 +1,7 @@
+import { jsx as _jsx, jsxs as _jsxs } from "preact/jsx-runtime";
+import { clampVisualRatio, getVisualRatio } from '../lib/visualMetrics.js';
+export function ProgressMeter({ className = '', detail, label, maxValue, secondaryValue, tone = 'default', value, valueText }) {
+    const ratio = clampVisualRatio(getVisualRatio({ value, maxValue }));
+    return (_jsxs("div", { className: ['progress-meter', `tone-${tone}`, className].filter(Boolean).join(' '), children: [_jsxs("div", { className: 'progress-meter-header', children: [_jsx("span", { className: 'progress-meter-label', children: label }), _jsx("strong", { className: 'progress-meter-value', children: valueText })] }), _jsx("div", { className: 'progress-meter-track', "aria-hidden": 'true', children: _jsx("div", { className: 'progress-meter-fill', style: { width: `${(ratio * 100).toFixed(2)}%` } }) }), secondaryValue === undefined && detail === undefined ? undefined : (_jsxs("div", { className: 'progress-meter-footer', children: [secondaryValue === undefined ? undefined : _jsx("span", { className: 'progress-meter-secondary', children: secondaryValue }), detail === undefined ? undefined : _jsx("span", { className: 'progress-meter-detail', children: detail })] }))] }));
+}
+//# sourceMappingURL=ProgressMeter.js.map

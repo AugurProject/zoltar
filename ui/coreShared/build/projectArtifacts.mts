@@ -5,7 +5,7 @@ import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
+const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..', '..')
 const ABI_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'abis.ts')
 const ABI_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'contractArtifact.ts')
