@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const dockerfile = join(import.meta.dir, '..', 'ui', 'Dockerfile')
+const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'ipfs-deploy.yml')
 const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'scripts', 'docker-entrypoint.sh')
 const rootPackage = join(import.meta.dir, '..', 'package.json')
 const staticServer = join(import.meta.dir, '..', 'ui', 'build', 'dockerServe.mts')
@@ -46,5 +47,12 @@ describe('UI Docker packaging', () => {
 		expect(server).toContain('http://localhost:${port}/')
 		expect(server).not.toContain('ipfs')
 		expect(launcher).not.toContain('ipfs')
+	})
+
+	test('keeps the release image on the explicit IPFS publisher target', async () => {
+		const workflow = await readFile(ipfsDeployWorkflow, 'utf8')
+		expect(workflow).toContain('file: ui/Dockerfile')
+		expect(workflow).toContain('target: publisher')
+		expect(workflow).toContain('cat /ipfs_hash.txt')
 	})
 })
