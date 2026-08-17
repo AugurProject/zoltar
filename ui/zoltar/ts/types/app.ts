@@ -1,36 +1,8 @@
 import type { MarketType, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
-import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 
-export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
+export type { AccountState, RefreshStateOptions, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
 
-export type RefreshStateOptions = {
-	loadChainClock?: boolean
-	loadDeploymentState?: boolean
-	loadWalletState?: boolean
-}
-
-type RefreshState = (options?: RefreshStateOptions) => Promise<void>
-
-export type WriteOperationsParameters = {
-	accountAddress: Address | undefined
-	onTransactionCanceled?: () => void
-	onTransactionFailed?: (message: string) => void
-	onTransactionFinished: () => void
-	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
-	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
-	onTransactionRequested: (intent: TransactionIntent) => void
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: RefreshState
-}
-
-export type AccountState = {
-	address: Address | undefined
-	chainId: string | undefined
-	ethBalanceAttoEth: bigint | undefined
-	wethBalanceAttoEth: bigint | undefined
-}
+export type Route = 'deploy' | 'zoltar' | 'open-oracle' | 'not-found'
 
 export type MarketFormState = {
 	answerUnit: string
@@ -43,21 +15,6 @@ export type MarketFormState = {
 	endTime: string
 	marketType: MarketType
 	startTime: string
-}
-
-export type SecurityPoolFormState = {
-	initialReportPriorityFeeGwei: string
-	marketId: string
-	statoblastSecurityMultiplierBps: string
-}
-
-export type SecurityVaultFormState = {
-	depositAmount: string
-	targetHealthFactor: string
-	repWithdrawAmount: string
-	selectedVaultOwner: string
-	securityPoolAddress: string
-	stagedOperationTimeoutMinutes?: string
 }
 
 export type OpenOracleFormState = {
@@ -85,14 +42,6 @@ export type OpenOracleCreateFormState = {
 	disputeDelay: string
 }
 
-export type TradingFormState = {
-	completeSetAmount: string
-	redeemAmount: string
-	securityPoolAddress: string
-	selectedShareOutcome: ReportingOutcomeKey
-	targetOutcomeIndexes: string
-}
-
 export type ReportingWithdrawDepositIndexesByOutcome = {
 	invalid: bigint[]
 	yes: bigint[]
@@ -104,23 +53,6 @@ export type ReportingFormState = {
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedWithdrawDepositIndexesByOutcome: ReportingWithdrawDepositIndexesByOutcome
-}
-
-export type ForkAuctionFormState = {
-	claimBidIndex: string
-	claimBidTick: string
-	depositIndexes: string
-	directForkQuestionId: string
-	directForkUniverseId: string
-	refundBidIndex: string
-	refundTick: string
-	repMigrationOutcomes: string
-	securityPoolAddress: string
-	selectedOutcome: ReportingOutcomeKey
-	settlementAddress: string
-	submitBidAmount: string
-	submitBidPrice: string
-	vaultAddress: string
 }
 
 export type ZoltarMigrationFormState = {
