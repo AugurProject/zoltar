@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
-import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
+import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, routeOwnsLiveWallet, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../features/LiveTrading.tsx'
 import type { DeploymentConfiguration } from '../protocol/config.ts'
@@ -60,6 +60,74 @@ describe('universe selector', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
 		expect(document.title).toBe(tradingDocumentTitle('not-found'))
+		expect(document.title).toBe('Not found · Statoblast trading')
+	})
+
+	test('uses Statoblast branding without the removed footer disclaimers', async () => {
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('.brand')?.textContent).toContain('Statoblast trading')
+		expect(rendered.container.querySelector('footer')).toBeNull()
+		expect(rendered.container.textContent).not.toContain('unaudited MVP')
+		expect(rendered.container.textContent).not.toContain('Spot prices are not manipulation-resistant oracles.')
+	})
+
+	test('connects wallets from the persistent top-right header action', async () => {
+		window.history.replaceState(undefined, '', '/#/markets')
+		const configuration: DeploymentConfiguration = {
+			chainId: 31_337,
+			chainName: 'Local',
+			rpcUrl: 'http://127.0.0.1:1',
+			securityPoolFactory: `0x${'11'.repeat(20)}`,
+			factory: `0x${'22'.repeat(20)}`,
+			router: `0x${'33'.repeat(20)}`,
+			feeBps: 30,
+		}
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.header-actions .wallet-button')
+		expect(walletButton?.textContent).toBe('Connect wallet')
+		expect(walletButton?.disabled).toBeFalse()
+		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
+		await act(async () => {
+			walletButton?.click()
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
+	})
+
+	test('shows wallet connection failures on live security-pool routes', async () => {
+		window.history.replaceState(undefined, '', `/#/security-pool/0x${'44'.repeat(20)}`)
+		const configuration: DeploymentConfiguration = {
+			chainId: 31_337,
+			chainName: 'Local',
+			rpcUrl: 'http://127.0.0.1:1',
+			securityPoolFactory: `0x${'11'.repeat(20)}`,
+			factory: `0x${'22'.repeat(20)}`,
+			router: `0x${'33'.repeat(20)}`,
+			feeBps: 30,
+		}
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.header-actions .wallet-button')
+		expect(walletButton?.textContent).toBe('Connect wallet')
+		await act(async () => {
+			walletButton?.click()
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
+		await act(async () => {
+			window.history.replaceState(undefined, '', '/#/markets')
+			window.dispatchEvent(new Event('hashchange'))
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain('No injected wallet was found')
 	})
 
 	test('keeps only markets minted in the selected universe', () => {
@@ -198,6 +266,8 @@ describe('universe selector', () => {
 		const previous = { account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72' as const, ethAttoEth: 64n * 10n ** 18n, repAttoRep: 12_500n * 10n ** 18n, status: 'ready' as const, error: undefined, errorLabel: undefined, universeId: '1' }
 		const detached = walletSummaryAfterRouteChange(previous, 'markets', 'help', '1')
 		expect(detached.account).toBeUndefined()
+		expect(walletSummaryAfterRouteChange(previous, 'markets', 'not-found', '1').account).toBeUndefined()
+		expect(routeOwnsLiveWallet('not-found')).toBeFalse()
 		expect(walletSummaryAfterRouteChange(detached, 'help', 'markets', '1')).toEqual(detached)
 		expect(walletSummaryAfterRouteChange(previous, 'markets', 'portfolio', '1')).toBe(previous)
 	})
@@ -242,10 +312,11 @@ describe('universe selector', () => {
 		)
 		cleanupRendered = rendered.cleanup
 		await act(async () => {
-			await Bun.sleep(10)
+			await Bun.sleep(0)
 		})
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === 'Retry configuration')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('deployment RPC unavailable')
+		expect(rendered.container.querySelector('.header-actions .wallet-button')).toBeNull()
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Deployment retry control is unavailable')
 		await act(async () => {
 			retry.click()
@@ -257,5 +328,6 @@ describe('universe selector', () => {
 		expect(attempts).toBe(2)
 		expect(rendered.container.textContent).toContain('Verified live deployment')
 		expect(rendered.container.textContent).not.toContain('Retry configuration')
+		expect(rendered.container.querySelector('.header-actions .wallet-button')?.textContent).toBe('Connect wallet')
 	})
 })

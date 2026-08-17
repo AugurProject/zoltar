@@ -24,7 +24,7 @@ export function tradingDocumentTitle(route: TradingRoute) {
 	if (route === 'not-found') label = 'Not found'
 	if (route === 'market') label = 'Market'
 	if (route.startsWith('security-pool/')) label = 'Security pool'
-	return `${label} · Zoltar Trading`
+	return `${label} · Statoblast trading`
 }
 
 function DemoSecurityPoolUnavailable() {
@@ -223,8 +223,8 @@ export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUn
 	return { account: summary.account, ethAttoEth: undefined, repAttoRep: undefined, status: summary.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
 }
 
-function routeOwnsLiveWallet(route: string) {
-	return route !== 'deploy' && route !== 'help'
+export function routeOwnsLiveWallet(route: string) {
+	return route !== 'deploy' && route !== 'help' && route !== 'not-found'
 }
 
 export function walletSummaryAfterRouteChange(summary: WalletSummaryState, previousRoute: string, nextRoute: string, selectedUniverseId: string | undefined): WalletSummaryState {
@@ -279,6 +279,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const [liveUniverseOptions, setLiveUniverseOptions] = useState<readonly UniverseOption[]>([])
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
+	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentRetryNonce, setDeploymentRetryNonce] = useState(0)
 	const [demoWalletRetrySucceeded, setDemoWalletRetrySucceeded] = useState(false)
 	const routeRef = useRef(route)
@@ -397,6 +398,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 					onWorkflowLockChange={updateWorkflowLock}
 					onWalletSummaryChange={setLiveWalletSummary}
 					walletSummaryRetryNonce={walletSummaryRetryNonce}
+					walletConnectRequestNonce={walletConnectRequestNonce}
 					onDeploymentRetry={retryDeployment}
 				/>
 			)
@@ -434,10 +436,10 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 			<div class='site-chrome'>
 				{banner}
 				<header class='site-header'>
-					<a class='brand' href='#/markets' aria-label='Zoltar Trading home' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-						<span class='brand__mark'>Z</span>
+					<a class='brand' href='#/markets' aria-label='Statoblast trading home' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+						<span class='brand__mark'>S</span>
 						<span>
-							<strong>Zoltar</strong>
+							<strong>Statoblast trading</strong>
 						</span>
 					</a>
 					<nav aria-label='Primary'>
@@ -466,14 +468,15 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 						</span>
 						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
+						{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
+							<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
+								{walletSummary.account === undefined ? 'Connect wallet' : shortAddress(walletSummary.account)}
+							</button>
+						) : null}
 					</div>
 				</header>
 			</div>
 			{content}
-			<footer>
-				<span>Zoltar two-way AMM · unaudited MVP</span>
-				<span>Spot prices are not manipulation-resistant oracles.</span>
-			</footer>
 		</div>
 	)
 }
