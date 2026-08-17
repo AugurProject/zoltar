@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
-import { completeSuccessfulPoll } from '../../src/runtime/operator.ts'
+import { completeSuccessfulPoll, completeUnconfiguredPoll } from '../../src/runtime/operator.ts'
 
 describe('OpenOracle monitor resilience', () => {
 	test('keeps a healthy quote when another direction fails', async () => {
@@ -96,6 +96,21 @@ describe('OpenOracle monitor resilience', () => {
 			expect(completeSuccessfulPoll(state, 'Risk policy requires operator attention', stopAfterPoll)).toBe(stopAfterPoll)
 			expect(state).toEqual({ consecutivePollFailures: 0, lastError: 'Risk policy requires operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'error' })
 		}
+	})
+
+	test('clears a recovered retry before returning to unconfigured paused state', () => {
+		const state: Parameters<typeof completeUnconfiguredPoll>[0] = {
+			consecutivePollFailures: 2,
+			lastError: 'old poll failure',
+			lastPollFailureAt: '2026-08-17T12:00:00.000Z',
+			lastRetryAt: '2026-08-17T12:00:05.000Z',
+			nextRetryAt: undefined,
+			paused: false,
+			retryInProgress: true,
+			status: 'error',
+		}
+		expect(completeUnconfiguredPoll(state)).toBe(false)
+		expect(state).toEqual({ consecutivePollFailures: 0, lastError: undefined, lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'paused' })
 	})
 
 	test('removes orphaned overlap logs before replaying canonical replacements', () => {

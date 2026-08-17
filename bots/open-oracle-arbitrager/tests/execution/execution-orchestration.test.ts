@@ -636,6 +636,11 @@ describe('funded execution orchestration', () => {
 		expect(() => assertReceiptSnapshotBlockHash(receipt.blockHash, canonicalHash, 'Entry')).toThrow('different canonical blocks')
 	})
 
+	test('retains endpoint and method context when a canonical block omits its hash', async () => {
+		const readers = [{ getBlock: () => Promise.resolve({ hash: undefined }) }]
+		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example/private'], 'pending entry 7', 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending entry 7 canonical block is missing its hash')
+	})
+
 	test('rejects receipt recovery when mined gas price is missing', async () => {
 		const receipt = { ...transactionReceipt(), effectiveGasPrice: undefined }
 		const readers = [{ getTransactionReceipt: () => Promise.resolve(receipt) }, { getTransactionReceipt: () => Promise.resolve(receipt) }]

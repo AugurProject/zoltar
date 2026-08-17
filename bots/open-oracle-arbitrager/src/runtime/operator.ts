@@ -46,6 +46,12 @@ export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: st
 	return stopAfterPoll
 }
 
+export function completeUnconfiguredPoll(state: SuccessfulPollState) {
+	const stop = completeSuccessfulPoll(state, undefined, false)
+	state.status = 'paused'
+	return stop
+}
+
 export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined) {
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
@@ -243,7 +249,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						activeSignerLock = appliedSigner.activeSignerLock
 						wallet = appliedSigner.wallet
 					}
-					if (!config.networkConfigured) return false
+					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
 					if (!startupValidated) {
 						if (config.execute) {
 							const chainReads = readClients.map(async (_, index) => {
