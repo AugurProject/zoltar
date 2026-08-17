@@ -31,7 +31,8 @@ const fixed = { execute: false, executor: undefined, expectedChainId: 1, explore
 
 describe('public poll failures', () => {
 	test('clears stale retry timing after recovery before retaining a non-poll warning', () => {
-		const state: { lastPollFailureAt: string | undefined; lastRetryAt: string | undefined; nextRetryAt: string | undefined; retryInProgress: boolean } = {
+		const state: { consecutivePollFailures: number; lastPollFailureAt: string | undefined; lastRetryAt: string | undefined; nextRetryAt: string | undefined; retryInProgress: boolean } = {
+			consecutivePollFailures: 3,
 			lastPollFailureAt: '2026-08-17T12:00:00.000Z',
 			lastRetryAt: '2026-08-17T12:00:05.000Z',
 			nextRetryAt: '2026-08-17T12:00:10.000Z',
@@ -39,7 +40,7 @@ describe('public poll failures', () => {
 		}
 		clearPollFailureMetadata(state)
 		const recoveredState = { ...state, lastError: 'Report execution needs operator attention' }
-		expect(recoveredState).toEqual({ lastError: 'Report execution needs operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, retryInProgress: false })
+		expect(recoveredState).toEqual({ consecutivePollFailures: 0, lastError: 'Report execution needs operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, retryInProgress: false })
 	})
 
 	test.each([',', ';', ')'])('redacts the complete RPC URL token when its path contains %s', delimiter => {
@@ -309,6 +310,7 @@ describe('operator execution history', () => {
 		} satisfies PositionRecord
 		const state: OperatorState = {
 			activeReportCount: 0,
+			consecutivePollFailures: 2,
 			balances: undefined,
 			blockNumber: undefined,
 			blockTimestamp: undefined,
@@ -329,6 +331,7 @@ describe('operator execution history', () => {
 			transactionActivity: [],
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
+		expect(snapshot.consecutivePollFailures).toBe(2)
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0.2')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0.07')
 		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.04')

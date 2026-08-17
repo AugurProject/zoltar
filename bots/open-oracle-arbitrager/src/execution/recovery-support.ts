@@ -189,8 +189,8 @@ export async function currentBlockNumberWithQuorum(clients: readonly ReadClient[
 
 export async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
 	const [rawGame, rawHelper] = await Promise.all([
-		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }) : readContractAtBlock(client.transport, { address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }, blockNumber),
-		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }) : readContractAtBlock(client.transport, { address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }, blockNumber),
+		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }, blockNumber),
+		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }, blockNumber),
 	])
 	const game = requiredTuple(rawGame, 20, 'Stored OpenOracle game')
 	const helper = requiredTuple(rawHelper, 3, 'Stored OpenOracle helper')
@@ -231,7 +231,7 @@ type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coor
 export async function pendingCoordinatorReports(client: ReadClient, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'openOracle'>, blockNumber: bigint) {
 	const reports = await Promise.all(
 		config.coordinatorAddresses.map(async coordinator => {
-			const rawReportId = await readContractAtBlock(client.transport, { address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' }, blockNumber)
+			const rawReportId = await readContractAtBlock(client, { address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' }, blockNumber)
 			const reportId = requiredBigint(rawReportId, `Coordinator ${coordinator} pending report id`)
 			if (reportId === 0n) return undefined
 			const report = await storedReport(client, config.openOracle, reportId, blockNumber)
@@ -254,7 +254,7 @@ export async function pendingCoordinatorReportsWithQuorum(clients: readonly Read
 }
 
 export async function disputeRecord(client: ReadClient, openOracle: Address, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
-	const rawRecord = await readContractAtBlock(client.transport, { address: openOracle, abi: openOracleAbi, functionName: 'disputeHistory', args: [reportId, disputeIndex] }, blockNumber)
+	const rawRecord = await readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'disputeHistory', args: [reportId, disputeIndex] }, blockNumber)
 	const record = requiredTuple(rawRecord, 4, `OpenOracle report ${reportId.toString()} dispute ${disputeIndex.toString()}`)
 	return {
 		amount1: requiredBigint(record[0], 'OpenOracle dispute amount1'),
@@ -301,11 +301,11 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 		clients.map(async (client, index) => {
 			const snapshot = await canonicalBlockSnapshot(client, blockNumber, 'position lifecycle balance snapshot', () =>
 				Promise.all([
-					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
-					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
-					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
-					readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
-					readContractAtBlock(client.transport, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
+					readContractAtBlock(client, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
+					readContractAtBlock(client, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
 				]),
 			)
 			const [rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = snapshot.value

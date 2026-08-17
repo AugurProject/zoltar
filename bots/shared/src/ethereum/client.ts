@@ -1,4 +1,4 @@
-import { createPublicClient, type Abi, type Address, type Transport } from '@zoltar/shared/ethereum'
+import { createPublicClient, type Abi, type Address, type PublicClient, type Transport } from '@zoltar/shared/ethereum'
 import { custom, http, RpcError, type TransportOptions } from './rpc-transport.ts'
 
 export {
@@ -11,8 +11,8 @@ export {
 export type { PublicActions, PublicClient, WalletClient } from '@zoltar/shared/ethereum'
 export { custom, http, RpcError, type TransportOptions }
 
-export async function readContractAtBlock(transport: Transport, parameters: { abi: Abi; address: Address; args?: readonly unknown[] | undefined; functionName: string }, blockNumber: bigint): Promise<unknown> {
-	return await createPublicClient({ transport }).readContract({ ...parameters, blockNumber })
+export async function readContractAtBlock(client: Pick<PublicClient, 'readContract'>, parameters: { abi: Abi; address: Address; args?: readonly unknown[] | undefined; functionName: string }, blockNumber: bigint): Promise<unknown> {
+	return await client.readContract({ ...parameters, blockNumber })
 }
 
 export async function getBalanceAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {

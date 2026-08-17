@@ -280,6 +280,33 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('keeps successful endpoint context isolated across overlapping pooled reads', async () => {
+		const first = Bun.serve({
+			port: 0,
+			fetch: async () => {
+				await Bun.sleep(25)
+				return Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })
+			},
+		})
+		const second = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
+		try {
+			if (first.port === undefined || second.port === undefined) throw new Error('RPC context test servers did not expose ports')
+			const firstUrl = `http://127.0.0.1:${first.port.toString()}`
+			const secondUrl = `http://127.0.0.1:${second.port.toString()}`
+			const pool = createRpcEndpointPool([firstUrl, secondUrl])
+			let firstTarget: string | undefined
+			let secondTarget: string | undefined
+			const firstRead = createPublicClient({ transport: pool.transportFor(firstUrl, context => (firstTarget = context.target)) }).getChainId()
+			const secondRead = createPublicClient({ transport: pool.transportFor(secondUrl, context => (secondTarget = context.target)) }).getChainId()
+			await expect(Promise.all([firstRead, secondRead])).resolves.toEqual([1, 1])
+			expect(firstTarget).toBe(new URL(firstUrl).origin)
+			expect(secondTarget).toBe(new URL(secondUrl).origin)
+		} finally {
+			first.stop(true)
+			second.stop(true)
+		}
+	})
+
 	test('omits one refused endpoint from endpoint-bound quorum reads', async () => {
 		const first = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
 		const second = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })

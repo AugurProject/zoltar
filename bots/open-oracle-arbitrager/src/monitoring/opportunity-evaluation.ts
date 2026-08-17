@@ -36,21 +36,21 @@ async function loadPool(client: ReadClient, address: Address, token: Address, fe
 		abi: poolAbi,
 		functionName: 'liquidity',
 	} as const
-	const liquidity = requiredBigint(blockNumber === undefined ? await client.readContract(liquidityParameters) : await readContractAtBlock(client.transport, liquidityParameters, blockNumber), 'Uniswap liquidity')
+	const liquidity = requiredBigint(blockNumber === undefined ? await client.readContract(liquidityParameters) : await readContractAtBlock(client, liquidityParameters, blockNumber), 'Uniswap liquidity')
 	if (liquidity === 0n) return undefined
 	const slot0Parameters = {
 		address,
 		abi: poolAbi,
 		functionName: 'slot0',
 	} as const
-	const slot0 = requiredTuple(blockNumber === undefined ? await client.readContract(slot0Parameters) : await readContractAtBlock(client.transport, slot0Parameters, blockNumber), 2, 'Uniswap slot0')
+	const slot0 = requiredTuple(blockNumber === undefined ? await client.readContract(slot0Parameters) : await readContractAtBlock(client, slot0Parameters, blockNumber), 2, 'Uniswap slot0')
 	const observationParameters = {
 		address,
 		abi: poolAbi,
 		functionName: 'observe',
 		args: [[twapSeconds, 0]],
 	} as const
-	const observation = requiredTuple(blockNumber === undefined ? await client.readContract(observationParameters) : await readContractAtBlock(client.transport, observationParameters, blockNumber), 1, 'Uniswap observation')
+	const observation = requiredTuple(blockNumber === undefined ? await client.readContract(observationParameters) : await readContractAtBlock(client, observationParameters, blockNumber), 1, 'Uniswap observation')
 	const tickCumulatives = requiredBigintArray(observation[0], 'Uniswap tick cumulatives')
 	return {
 		address,
@@ -103,7 +103,7 @@ export async function quoteInput(client: ReadClient, quoter: Address, tokenIn: A
 		functionName: 'quoteExactInputSingle',
 		args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap exact-input quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client, parameters, blockNumber), 1, 'Uniswap exact-input quote')
 	return requiredBigint(result[0], 'Uniswap exact-input amount')
 }
 
@@ -114,17 +114,14 @@ async function quoteOutput(client: ReadClient, quoter: Address, tokenIn: Address
 		functionName: 'quoteExactOutputSingle',
 		args: [{ tokenIn, tokenOut, amount, fee, sqrtPriceLimitX96: 0n }],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap exact-output quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client, parameters, blockNumber), 1, 'Uniswap exact-output quote')
 	return requiredBigint(result[0], 'Uniswap exact-output amount')
 }
 
 async function constantProductReserves(client: ReadClient, pair: Address, token: Address, blockNumber?: bigint | undefined) {
 	const token0Parameters = { address: pair, abi: constantProductPairAbi, functionName: 'token0' } as const
 	const reservesParameters = { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' } as const
-	const [token0, reservesValue] = await Promise.all([
-		blockNumber === undefined ? client.readContract(token0Parameters) : readContractAtBlock(client.transport, token0Parameters, blockNumber),
-		blockNumber === undefined ? client.readContract(reservesParameters) : readContractAtBlock(client.transport, reservesParameters, blockNumber),
-	])
+	const [token0, reservesValue] = await Promise.all([blockNumber === undefined ? client.readContract(token0Parameters) : readContractAtBlock(client, token0Parameters, blockNumber), blockNumber === undefined ? client.readContract(reservesParameters) : readContractAtBlock(client, reservesParameters, blockNumber)])
 	const reserves = requiredTuple(reservesValue, 2, 'Uniswap V2 reserves')
 	const reserve0 = requiredBigint(reserves[0], 'Uniswap V2 reserve0')
 	const reserve1 = requiredBigint(reserves[1], 'Uniswap V2 reserve1')
@@ -139,7 +136,7 @@ async function quoteV4ExactInput(client: ReadClient, quoter: Address, parameters
 		functionName: 'quoteExactInputSingle',
 		args: [parameters],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client.transport, contractParameters, blockNumber), 1, 'Uniswap V4 exact-input quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client, contractParameters, blockNumber), 1, 'Uniswap V4 exact-input quote')
 	return requiredBigint(result[0], 'Uniswap V4 exact-input amount')
 }
 
@@ -150,7 +147,7 @@ async function quoteV4ExactOutput(client: ReadClient, quoter: Address, parameter
 		functionName: 'quoteExactOutputSingle',
 		args: [parameters],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client.transport, contractParameters, blockNumber), 1, 'Uniswap V4 exact-output quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client, contractParameters, blockNumber), 1, 'Uniswap V4 exact-output quote')
 	return requiredBigint(result[0], 'Uniswap V4 exact-output amount')
 }
 
@@ -273,18 +270,18 @@ export async function executionReadQuorum(clients: readonly ReadClient[], config
 		}
 		const [block, stateHash, refreshedPool, replacementAmount2, refreshedHedgeQuotes, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
 			readClient.getBlock({ blockNumber }),
-			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
+			readContractAtBlock(readClient, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
 			loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
 			quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
 			hedgeQuotes,
 			getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
 			getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
-			readContractAtBlock(readClient.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
-			readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
-			readContractAtBlock(readClient.transport, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
-			readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
-			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token1] }, blockNumber),
-			readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token2] }, blockNumber),
+			readContractAtBlock(readClient, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+			readContractAtBlock(readClient, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+			readContractAtBlock(readClient, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+			readContractAtBlock(readClient, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+			readContractAtBlock(readClient, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token1] }, blockNumber),
+			readContractAtBlock(readClient, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token2] }, blockNumber),
 		])
 		if (block.hash == null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
 		return {

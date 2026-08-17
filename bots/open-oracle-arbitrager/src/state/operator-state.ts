@@ -155,6 +155,7 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 
 export type OperatorSnapshot = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -240,6 +241,7 @@ export type PublicTransactionActivity = Pick<TransactionActivity, 'acceptedTarge
 
 export type PublicOperatorSnapshot = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -291,6 +293,7 @@ export type PublicOperatorSnapshot = {
 
 export type OperatorState = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -435,6 +438,7 @@ function publicEndpointTarget(target: string) {
 export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperatorSnapshot {
 	return {
 		activeReportCount: snapshot.activeReportCount,
+		consecutivePollFailures: snapshot.consecutivePollFailures ?? 0,
 		balances:
 			snapshot.balances === undefined
 				? undefined
@@ -618,9 +622,10 @@ export function recordOperation(state: OperatorState, entry: Omit<OperationEntry
 	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
 }
 
-type PollFailureMetadata = Pick<OperatorState, 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
+type PollFailureMetadata = Pick<OperatorState, 'consecutivePollFailures' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
 
 export function clearPollFailureMetadata(state: PollFailureMetadata) {
+	state.consecutivePollFailures = 0
 	state.lastPollFailureAt = undefined
 	state.lastRetryAt = undefined
 	state.nextRetryAt = undefined
@@ -936,6 +941,7 @@ export function operatorSnapshot(
 	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,
+		consecutivePollFailures: state.consecutivePollFailures ?? 0,
 		balances: state.balances,
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,

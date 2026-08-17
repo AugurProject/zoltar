@@ -37,7 +37,7 @@ import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-exec
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 100n
 
-type SuccessfulPollState = Pick<OperatorState, 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
+type SuccessfulPollState = Pick<OperatorState, 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
 
 export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: string | undefined, stopAfterPoll: boolean) {
 	clearPollFailureMetadata(state)
@@ -60,9 +60,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		try {
 			return await request()
 		} catch (error) {
-			const context = readPool.latestRequestContext()
-			const target = explicitTarget ?? (context?.method === method ? context.target : endpointLabel(config.connectivity.readRpcUrl))
-			throw rpcFailureWithContext(error, target, method)
+			throw rpcFailureWithContext(error, explicitTarget ?? endpointLabel(config.connectivity.readRpcUrl), method)
 		}
 	}
 	const createClient = (rpcUrl?: string) => {
@@ -70,7 +68,16 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			chain: config.network.chain,
 			transport: config.execute && rpcUrl !== undefined ? readPool.transportFor(rpcUrl) : readPool.transport,
 		})
-		const readContract: typeof baseClient.readContract = async parameters => await contextualRpcRead('eth_call', () => baseClient.readContract(parameters), rpcUrl === undefined ? undefined : endpointLabel(rpcUrl))
+		const readContract: typeof baseClient.readContract = async parameters => {
+			let requestTarget: string | undefined
+			const transport = rpcUrl === undefined ? readPool.transportWithContext(context => (requestTarget = context.target)) : readPool.transportFor(rpcUrl, context => (requestTarget = context.target))
+			const requestClient = createPublicClient({ chain: config.network.chain, transport })
+			try {
+				return await requestClient.readContract(parameters)
+			} catch (error) {
+				throw rpcFailureWithContext(error, requestTarget ?? (rpcUrl === undefined ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(rpcUrl)), 'eth_call')
+			}
+		}
 		return baseClient.extend(() => ({ readContract }))
 	}
 	const createWallet = () =>
@@ -93,6 +100,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	}
 	const state: OperatorState = {
 		activeReportCount: 0,
+		consecutivePollFailures: 0,
 		balances: undefined,
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -223,6 +231,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	try {
 		await pollUntilStopped(
 			async consecutiveFailures => {
+				state.consecutivePollFailures = consecutiveFailures
 				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorDeploymentIntentPath(config.settingsFile))
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
@@ -474,9 +483,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
 							const [token0, token1, reserves] = await contextualRpcRead('eth_call', () =>
 								Promise.all([
-									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
-									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
-									readContractAtBlock(client.transport, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
+									readContractAtBlock(client, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
+									readContractAtBlock(client, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
+									readContractAtBlock(client, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
 								]),
 							)
 							const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
@@ -745,6 +754,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				}
 			},
 			consecutiveFailures => {
+				state.consecutivePollFailures = consecutiveFailures
 				state.retryInProgress = false
 				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)
 				if (consecutiveFailures > 0) state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()

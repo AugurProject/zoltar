@@ -84,6 +84,7 @@ describe('OpenOracle monitor resilience', () => {
 	test('clears retry metadata through every shared successful-poll exit', () => {
 		for (const stopAfterPoll of [false, true]) {
 			const state: Parameters<typeof completeSuccessfulPoll>[0] = {
+				consecutivePollFailures: 4,
 				lastError: 'old poll failure',
 				lastPollFailureAt: '2026-08-17T12:00:00.000Z',
 				lastRetryAt: '2026-08-17T12:00:05.000Z',
@@ -93,7 +94,7 @@ describe('OpenOracle monitor resilience', () => {
 				status: 'error',
 			}
 			expect(completeSuccessfulPoll(state, 'Risk policy requires operator attention', stopAfterPoll)).toBe(stopAfterPoll)
-			expect(state).toEqual({ lastError: 'Risk policy requires operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'error' })
+			expect(state).toEqual({ consecutivePollFailures: 0, lastError: 'Risk policy requires operator attention', lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'error' })
 		}
 	})
 

@@ -22,6 +22,8 @@ export type RpcEndpointPoolOptions = {
 	timeoutMilliseconds?: number | undefined
 }
 
+export type RpcRequestContext = { method: string; target: string }
+
 type MutableEndpointHealth = RpcEndpointHealth & {
 	nextRetryMilliseconds: number
 	url: string
@@ -120,13 +122,11 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		url,
 	}))
 	let preferredIndex = 0
-	let latestRequestContext: { method: string; target: string } | undefined
-
-	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown) {
+	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown, onSuccess?: (context: RpcRequestContext) => void) {
 		const startedAt = now()
 		try {
 			const value = validateRpcResult(method, await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params }))
-			latestRequestContext = { method, target: endpoint.target }
+			onSuccess?.({ method, target: endpoint.target })
 			const completedAt = now()
 			endpoint.consecutiveFailures = 0
 			endpoint.error = undefined
@@ -161,7 +161,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		return [...recoveryProbes, ...eligible.filter(endpoint => !recoveryProbes.includes(endpoint))]
 	}
 
-	const provider = {
+	const provider = (onSuccess?: (context: RpcRequestContext) => void) => ({
 		request: async ({ method, params }: { method: string; params?: unknown }) => {
 			const failures: { error: string; target: string }[] = []
 			const candidates = orderedEndpoints(now())
@@ -170,7 +170,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			}
 			for (const endpoint of candidates) {
 				try {
-					const value = await requestEndpoint(endpoint, method, params)
+					const value = await requestEndpoint(endpoint, method, params, onSuccess)
 					preferredIndex = endpoints.indexOf(endpoint)
 					return value
 				} catch (error) {
@@ -180,18 +180,18 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			}
 			throw new RpcEndpointPoolFailure(failures)
 		},
-	}
+	})
 	const totalTimeoutMilliseconds = Math.min(300_000, timeoutMilliseconds * uniqueUrls.length + 1_000)
 	return {
-		latestRequestContext: () => latestRequestContext,
 		prefer: (url: string) => {
 			const index = endpoints.findIndex(endpoint => endpoint.url === url)
 			if (index === -1) throw new Error('Cannot prefer an RPC URL outside the endpoint pool')
 			preferredIndex = index
 		},
 		snapshot: (): readonly RpcEndpointHealth[] => endpoints.map(({ nextRetryMilliseconds: _nextRetryMilliseconds, url: _url, ...endpoint }) => ({ ...endpoint })),
-		transport: custom(provider, { timeoutMilliseconds: totalTimeoutMilliseconds }),
-		transportFor: (url: string) => {
+		transport: custom(provider(), { timeoutMilliseconds: totalTimeoutMilliseconds }),
+		transportWithContext: (onSuccess: (context: RpcRequestContext) => void) => custom(provider(onSuccess), { timeoutMilliseconds: totalTimeoutMilliseconds }),
+		transportFor: (url: string, onSuccess?: (context: RpcRequestContext) => void) => {
 			const endpoint = endpoints.find(candidate => candidate.url === url)
 			if (endpoint === undefined) throw new Error('Cannot create an RPC transport outside the endpoint pool')
 			return custom(
@@ -199,7 +199,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					request: async ({ method, params }) => {
 						if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target }])
 						try {
-							return await requestEndpoint(endpoint, method, params)
+							return await requestEndpoint(endpoint, method, params, onSuccess)
 						} catch (error) {
 							if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
 							throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
