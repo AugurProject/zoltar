@@ -116,6 +116,8 @@ export const isCurrentLiveRequest = (requestVersion, currentVersion, responseCha
 export const isCurrentContextRequest = (requestContext, currentContext, requestVersion, currentVersion) =>
 	requestContext === currentContext && requestVersion === currentVersion
 
+export const isCurrentCanonicalGeneration = (requestGeneration, currentGeneration) => requestGeneration === currentGeneration
+
 export const isNoncanonicalDetailFailure = (canonicalRecovery, status) => canonicalRecovery && status === 404
 
 export const shouldClearPendingDetailState = (preservePendingOnClose) => !preservePendingOnClose

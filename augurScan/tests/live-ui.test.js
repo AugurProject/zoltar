@@ -14,6 +14,7 @@ import {
 	indexerConnectionStatus,
 	indexerLagLabel,
 	indexerProgressEstimate,
+	isCurrentCanonicalGeneration,
 	isCurrentContextRequest,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
@@ -93,6 +94,52 @@ test('rejects activity and rich-list pagination queued during canonical recovery
 		expect(appendRequests, surface).toBe(0)
 		expect(retainedPaginationAvailable(true, canonicalRefreshRequired), surface).toBe(false)
 	}
+})
+
+test('drops in-flight activity, account, and rich-list appends from an older canonical generation', async () => {
+	for (const surface of ['activity', 'account', 'rich list']) {
+		let canonicalGeneration = 4
+		const requestGeneration = canonicalGeneration
+		const retained = [`${surface} retained`]
+		let resolveRequest
+		const response = new Promise((resolve) => {
+			resolveRequest = resolve
+		})
+		const append = (async () => {
+			const items = await response
+			if (!isCurrentCanonicalGeneration(requestGeneration, canonicalGeneration)) return false
+			retained.push(...items)
+			return true
+		})()
+		canonicalGeneration++
+		resolveRequest([`${surface} stale`])
+		expect(await append, surface).toBe(false)
+		expect(retained, surface).toEqual([`${surface} retained`])
+	}
+})
+
+test('drops a multi-page canonical snapshot when a newer invalidation arrives', async () => {
+	let canonicalGeneration = 8
+	const requestGeneration = canonicalGeneration
+	const retained = [{ id: 'retained' }]
+	let resolveFirstPage
+	const firstPage = new Promise((resolve) => {
+		resolveFirstPage = resolve
+	})
+	const refresh = (async () => {
+		const snapshot = await collectCanonicalPages(
+			async (cursor) => (cursor === undefined ? await firstPage : { items: [{ id: 'stale-2' }], nextCursor: undefined }),
+			2,
+			(item) => item.id,
+		)
+		if (!isCurrentCanonicalGeneration(requestGeneration, canonicalGeneration)) return false
+		retained.splice(0, retained.length, ...snapshot.items)
+		return true
+	})()
+	canonicalGeneration += 2
+	resolveFirstPage({ items: [{ id: 'stale-1' }], nextCursor: 'page-2' })
+	expect(await refresh).toBe(false)
+	expect(retained).toEqual([{ id: 'retained' }])
 })
 
 test('retries transaction append failures from the retained cursor', () => {

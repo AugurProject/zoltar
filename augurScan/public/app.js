@@ -13,6 +13,7 @@ import {
 	indexerConnectionStatus,
 	indexerLagLabel,
 	indexerProgressEstimate,
+	isCurrentCanonicalGeneration,
 	isCurrentContextRequest,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
@@ -100,6 +101,7 @@ let networkFreshnessThresholdMs = 48_000
 let lastNetworkRequestFailed = false
 let activeReorgRecovery
 let canonicalRefreshRequired = false
+let canonicalDataGeneration = 0
 let richListItems = []
 let richListTotal = 0
 let richListRequestVersion = 0
@@ -1224,6 +1226,7 @@ const api = async (path, { signal } = {}) => {
 			const chainId = request.searchParams.get('chainId')
 			const event = request.searchParams.get('event')?.toLowerCase()
 			const address = request.searchParams.get('address')?.toLowerCase()
+			if (pageUrl.searchParams.get('logAppendDelay') === '1' && request.searchParams.has('cursor')) await new Promise((resolve) => setTimeout(resolve, 3_500))
 			if (address && !/^0x[0-9a-f]{40}$/.test(address)) throw new Error('Address filter is invalid')
 			const filtered =
 				demoState === 'empty'
@@ -1388,6 +1391,12 @@ const completeCanonicalRefresh = () => {
 		$('#richlist-more').hidden = richListItems.length >= richListTotal
 		$('#richlist-more').disabled = false
 	}
+	const accountMore = detailContent.querySelector('.account-transactions-more')
+	if (accountMore !== null && activeAccountTransactions !== undefined) {
+		accountMore.hidden =
+			activeAccountTransactions.nextPageCursor === undefined || (activeAccountTransactions.pageError !== undefined && activeAccountTransactions.pageErrorAppend)
+		accountMore.disabled = false
+	}
 	hideCanonicalDialogStatus()
 	updateFreshness()
 }
@@ -1444,9 +1453,11 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 		if (refreshAfterCurrent) networkFollowUpPromise = followUp
 		return await followUp
 	}
+	const canonicalGeneration = canonicalDataGeneration
 	const run = (async () => {
 		try {
 			const { items, serverTime, freshnessThresholdMs } = await api('/api/v1/networks')
+			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
 			if (Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousNetwork = selectedChainId()
@@ -1465,6 +1476,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			if (isAddress && synchronizeActivity && previousNetwork !== selectedChainId()) await loadAddressProfile()
 			return true
 		} catch (error) {
+			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
 			lastNetworkRequestFailed = true
 			updateConnectionStatus()
@@ -1577,6 +1589,7 @@ const setLogControlsBusy = (busy) => {
 
 const performLoadLogs = async ({ append = false, live = false, replaceDepth, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
 		$('#more').hidden = true
 		$('#more').disabled = true
@@ -1615,7 +1628,11 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			!append && replaceDepth !== undefined
 				? await collectCanonicalPages((cursor, limit) => api(queryPath(cursor, limit), { signal: requestSignal }), replaceDepth, logKeyFor)
 				: await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (!append) feed.replaceChildren()
 		const refreshedKeys = new Set(append ? [...feed.querySelectorAll('.log-row[data-live-key]')].map((row) => row.dataset.liveKey) : [])
 		for (const log of payload.items) {
@@ -1640,7 +1657,11 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		return true
 	} catch (error) {
 		if (error.name === 'AbortError') return false
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (!append && !hadRows) feed.replaceChildren()
 		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
 		const retryAction = () => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : loadLogs({ append }))
@@ -1864,6 +1885,7 @@ const restoreDetailContext = (snapshot) => {
 
 const performOpenDetail = async (log, { live = false, canonicalRecovery = false, contextVersion } = {}) => {
 	if (contextVersion !== detailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++detailRequestVersion
 	const previousContext = live ? captureDetailContext() : undefined
 	activeLog = log
@@ -1895,7 +1917,11 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 	history.replaceState(null, '', url)
 	try {
 		const detail = await api(`/api/v1/logs/${log.chain_id}/${log.block_hash}/${log.tx_hash}/${log.log_index}`)
-		if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
@@ -1953,7 +1979,11 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 		if (canonicalRecovery) pendingCanonicalLog = undefined
 		return true
 	} catch (error) {
-		if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error.status)
 		if (canonicalRecovery && !noncanonical && canonicalRefreshRequired) {
 			detailContent.querySelector('.detail-refresh-error')?.remove()
@@ -2039,9 +2069,10 @@ const restoreAccountDialogSnapshot = (snapshot) => {
 
 const performOpenAccountTransactions = async (account, { live = false, restoreSnapshot, canonicalRecovery = false, contextVersion } = {}) => {
 	if (contextVersion !== detailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const pageReservation = accountPageRefreshGate.reserve()
 	await pageReservation.ready
-	if (contextVersion !== detailContextVersion) {
+	if (contextVersion !== detailContextVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) {
 		pageReservation.release()
 		await pageReservation.completed
 		return false
@@ -2167,8 +2198,8 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 		const more = element('button', 'secondary account-transactions-more', state.pageLoading ? 'Loading more transactions…' : 'Show more transactions')
 		more.type = 'button'
 		more.dataset.liveFocus = 'show-more-transactions'
-		more.hidden = state.nextPageCursor === undefined || (state.pageError !== undefined && state.pageErrorAppend)
-		more.disabled = state.pageLoading
+		more.hidden = canonicalRefreshRequired || state.nextPageCursor === undefined || (state.pageError !== undefined && state.pageErrorAppend)
+		more.disabled = canonicalRefreshRequired || state.pageLoading
 		more.addEventListener('click', () => activeAccountLoadMore?.())
 		const content = [header]
 		let transactionError
@@ -2206,6 +2237,14 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 		{ liveRefresh = false, background = false, stageOnly = false, limit = 50, restartInvalidSnapshot = true } = {},
 	) => {
 		if (state.pageLoading) return false
+		if (!stageOnly && !paginationRequestAllowed(append, canonicalRefreshRequired)) {
+			const more = detailContent.querySelector('.account-transactions-more')
+			if (more !== null) {
+				more.hidden = true
+				more.disabled = true
+			}
+			return false
+		}
 		state.pageLoading = true
 		state.pageError = undefined
 		state.pageErrorAppend = false
@@ -2227,7 +2266,11 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			})
 			if (append && state.nextPageCursor) query.set('cursor', state.nextPageCursor)
 			const result = await api(`/api/v1/address-transactions?${query}`)
-			if (contextVersion !== detailContextVersion || !isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId())) {
+			if (
+				contextVersion !== detailContextVersion ||
+				!isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId()) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			) {
 				state.pageLoading = false
 				return false
 			}
@@ -2244,7 +2287,10 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			if (!stageOnly) render({ previous, highlight: liveRefresh })
 			return true
 		} catch (error) {
-			if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) {
+			if (
+				!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			) {
 				state.pageLoading = false
 				return false
 			}
@@ -2356,7 +2402,10 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 		while (restoreSnapshot && shouldContinueTransactionRestore(loaded, state.loaded.length, restoreSnapshot.loadedCount, state.nextPageCursor))
 			loaded = await loadPage(true)
 	}
-	if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) {
+	if (
+		!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
+		!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+	) {
 		releaseStagedRefresh?.()
 		return false
 	}
@@ -2747,6 +2796,7 @@ const renderContracts = () => {
 
 const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++contractRequestVersion
 	const status = $('#contracts-status')
 	const presentation = refreshPresentation({ live })
@@ -2758,7 +2808,11 @@ const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
 	$('#contract-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
 		const result = await api(`/api/v1/contracts?${new URLSearchParams({ chainId: requiredChainId() })}`)
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		contractItems = result.items
 		renderContracts()
 		if (presentation.loadingState) {
@@ -2767,7 +2821,11 @@ const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
 		} else status.hidden = true
 		return true
 	} catch (error) {
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		$('#contract-list').setAttribute('aria-busy', 'false')
 		renderRetryStatus(
 			status,
@@ -2968,6 +3026,7 @@ const renderRichList = ({ live = false } = {}) => {
 
 const performLoadRichList = async ({ append = false, live = false, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
 		$('#richlist-more').hidden = true
 		$('#richlist-more').disabled = true
@@ -3012,10 +3071,18 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		}
 		let replace = !append
 		let result = append ? await fetchPage(nextOffset, 50) : await fetchSnapshot(Math.max(50, richListItems.length))
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (append && paginatedSnapshotWasReplaced(richListItems.length, result.total)) {
 			result = await fetchSnapshot(Math.max(1, richListItems.length))
-			if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion)) return false
+			if (
+				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			)
+				return false
 			replace = true
 		}
 		richListItems = replace ? result.items : [...richListItems, ...result.items]
@@ -3026,7 +3093,11 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		paginationStatus.replaceChildren()
 		return true
 	} catch (error) {
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		$('#richlist-rows').setAttribute('aria-busy', 'false')
 		const failureStatus = append ? paginationStatus : status
 		renderRetryStatus(
@@ -3227,6 +3298,7 @@ const renderAddressProfile = (item, transactions, interactions, { live = false }
 
 const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++addressProfileRequestVersion
 	const content = $('#address-profile-content')
 	const hadProfile = content.querySelector('[data-live-key]') !== null
@@ -3252,7 +3324,11 @@ const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) 
 			api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
 			api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
 		])
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === selectedChainId())
 		const profileItem = profile.items[0]
 		const item = profileItem
@@ -3276,7 +3352,11 @@ const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) 
 		currentAddressProfile = item
 		return true
 	} catch (error) {
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		if (hadProfile && canonicalRefreshRequired) {
 			content.querySelector('.address-refresh-error')?.remove()
 			content.setAttribute('aria-busy', 'false')
@@ -3313,9 +3393,9 @@ const fetchEntityHistory = async (type, item) => {
 	return await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}`)
 }
 
-const renderPoolDetail = async (poolItem, requestVersion, suppliedHistory) => {
+const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, suppliedHistory) => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('pools', poolItem))
-	if (requestVersion !== stateDetailRequestVersion) return
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const poolNativeSymbol = nativeSymbol(poolItem.chain_id)
 	const ammPrices = history.ammPrices ?? []
 	const repEthPrices = history.repEthPrices ?? []
@@ -3460,9 +3540,9 @@ const renderPoolDetail = async (poolItem, requestVersion, suppliedHistory) => {
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const renderVaultDetail = async (vaultItem, requestVersion, suppliedHistory) => {
+const renderVaultDetail = async (vaultItem, requestVersion, canonicalGeneration, suppliedHistory) => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('vaults', vaultItem))
-	if (requestVersion !== stateDetailRequestVersion) return
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest indexed'))
@@ -3511,9 +3591,9 @@ const questionStatus = (question) => {
 	return 'Ended'
 }
 
-const renderQuestionDetail = async (question, requestVersion, suppliedHistory) => {
+const renderQuestionDetail = async (question, requestVersion, canonicalGeneration, suppliedHistory) => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('questions', question))
-	if (requestVersion !== stateDetailRequestVersion) return
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · ${questionStatus(question)}`))
@@ -3642,9 +3722,9 @@ const renderLineage = (universes, selected) => {
 	return svg
 }
 
-const renderUniverseDetail = async (universe, requestVersion, suppliedHistory) => {
+const renderUniverseDetail = async (universe, requestVersion, canonicalGeneration, suppliedHistory) => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('universes', universe))
-	if (requestVersion !== stateDetailRequestVersion) return
+	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const fragment = document.createDocumentFragment()
 	const title = universe.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(universe.universe_id, 12, 8)}`
 	fragment.append(
@@ -3720,6 +3800,7 @@ const entityCopy = (type, item) => {
 
 const performSelectEntity = async (item, { preserveDetail = false, quiet = false, contextVersion, suppliedHistory } = {}) => {
 	if (contextVersion !== stateDetailContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	selectedEntityKey = entityKey(activeStateType, item)
 	for (const row of document.querySelectorAll('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
 	const requestVersion = ++stateDetailRequestVersion
@@ -3741,13 +3822,19 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 	url.searchParams.set('entity', selectedEntityKey)
 	history.replaceState(null, '', url)
 	try {
-		if (activeStateType === 'pools') await renderPoolDetail(item, requestVersion, suppliedHistory)
-		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion, suppliedHistory)
-		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion, suppliedHistory)
-		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion, suppliedHistory)
-		return isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion)
+		if (activeStateType === 'pools') await renderPoolDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		return (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
 	} catch (error) {
-		if (isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion)) {
+		if (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			if (replaceWithLoading) {
 				const failure = element('div', 'state-error')
 				failure.append(element('span', '', `State history unavailable: ${error.message}`))
@@ -3770,7 +3857,10 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 		}
 		return false
 	} finally {
-		if (isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion))
+		if (
+			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
 			$('#state-detail').setAttribute('aria-busy', 'false')
 	}
 }
@@ -3863,6 +3953,7 @@ const setSystemControlsDisabled = (disabled) => {
 
 const performLoadSystemState = async ({ live = false, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++catalogRequestVersion
 	const alert = $('#system-alert')
 	const status = $('#system-status')
@@ -3880,7 +3971,11 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 	$('#entity-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
 		const nextStateData = await api(`/api/v1/state/catalog?chainId=${requiredChainId()}`)
-		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion)) return false
+		if (
+			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		)
+			return false
 		for (const poolItem of nextStateData.pools) poolItem.current_state = {}
 		const orderedPoolStates = nextStateData.poolStates.toSorted(
 			(left, right) => Number(left.block_number) - Number(right.block_number) || Number(left.log_index) - Number(right.log_index),
@@ -3906,6 +4001,7 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 		const currentSelectedKey = currentSelectedItem === undefined ? undefined : entityKey(stagedStateType, currentSelectedItem)
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration) ||
 			stagedDetailContext !== stateDetailContextVersion ||
 			stagedStateType !== activeStateType ||
 			query !== currentQuery ||
@@ -3921,6 +4017,7 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 			const reservedSelectedKey = reservedSelectedItem === undefined ? undefined : entityKey(stagedStateType, reservedSelectedItem)
 			if (
 				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration) ||
 				stagedDetailContext !== stateDetailContextVersion ||
 				stagedStateType !== activeStateType ||
 				query !== reservedQuery ||
@@ -3930,7 +4027,11 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 			stateData = nextStateData
 			renderStateStats({ live })
 			const detailRefreshed = await renderEntityList({ refreshSelected: true, live, selectedHistory, detailGateReserved: true })
-			if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion)) return false
+			if (
+				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
+				!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+			)
+				return false
 			if (live && previousDetail !== $('#state-detail').textContent) animateLiveNode($('#state-detail'), 'live-changed')
 			status.hidden = true
 			alert.hidden = true
@@ -3945,7 +4046,10 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 			return detailRefreshed
 		})
 	} catch (error) {
-		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion)) {
+		if (
+			isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
 			$('#entity-list').setAttribute('aria-busy', 'false')
 			$('#state-detail').setAttribute('aria-busy', 'false')
@@ -3966,7 +4070,10 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 		}
 		return false
 	} finally {
-		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion)) {
+		if (
+			isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) &&
+			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+		) {
 			$('#state-stats').setAttribute('aria-busy', 'false')
 			$('#entity-list').setAttribute('aria-busy', 'false')
 			setSystemControlsDisabled(false)
@@ -4278,6 +4385,7 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 requestRouteRefresh = createLiveRouteRefreshCoordinator(refreshAfterUpdates, () => activeReorgRecovery)
 
 const refreshCanonicalViews = (title, detail) => {
+	canonicalDataGeneration++
 	if (activeReorgRecovery !== undefined) {
 		activeReorgRecovery.pendingRefresh = true
 		if (isActivity) {
@@ -4317,6 +4425,11 @@ const refreshCanonicalViews = (title, detail) => {
 		$('#richlist-more').hidden = true
 		$('#richlist-more').disabled = true
 	}
+	const accountMore = detailContent.querySelector('.account-transactions-more')
+	if (accountMore !== null) {
+		accountMore.hidden = true
+		accountMore.disabled = true
+	}
 	const banner = $('#freshness-banner')
 	banner.hidden = false
 	$('#freshness-title').textContent = title
@@ -4327,8 +4440,9 @@ const refreshCanonicalViews = (title, detail) => {
 			while (true) {
 				recovery.pendingRefresh = false
 				const refreshed = await requestRouteRefresh(1, true)
-				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId || !refreshed) return false
+				if (activeReorgRecovery !== recovery || selectedChainId() !== recovery.chainId) return false
 				if (recovery.pendingRefresh) continue
+				if (!refreshed) return false
 				let detailRefreshed = true
 				if (recovery.logToRefresh && dialog.open) {
 					pendingCanonicalLog = recovery.logToRefresh
@@ -4341,8 +4455,8 @@ const refreshCanonicalViews = (title, detail) => {
 					const restored = await restorePendingCanonicalAccount()
 					detailRefreshed = (restored || !dialog.open || recovery.accountToRefresh === undefined) && detailRefreshed
 				}
-				if (!detailRefreshed) return false
 				if (recovery.pendingRefresh) continue
+				if (!detailRefreshed) return false
 				completeCanonicalRefresh()
 				return true
 			}
