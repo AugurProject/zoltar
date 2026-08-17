@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
-import { getChromiumPath, withChromiumTestLock } from '@zoltar/ui-core-shared-build/chromiumPath.js'
+import { getChromiumPath, withChromiumTestLock } from '../../../../../coreShared/build/chromiumPath.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 

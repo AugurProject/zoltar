@@ -9,7 +9,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createOracleManagerDetails } from '../../../../statoblast/ts/tests/features/security-pools/workflow/builders.js'
+import { createOracleManagerDetails } from '../../../../../statoblast/ts/tests/features/security-pools/workflow/builders.js'
 
 type TestWriteClient = { kind: 'price-oracle-write-client' }
 type UsePriceOracleManagerState = ReturnType<typeof usePriceOracleManager>
