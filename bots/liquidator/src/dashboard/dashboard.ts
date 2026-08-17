@@ -86,6 +86,8 @@ type Snapshot = {
 	error?: string
 	execute: boolean
 	lastScanAt?: string
+	lastScannedBlock?: string
+	lastScannedTimestamp?: string
 	metrics: {
 		approvedUniverseCount: number
 		assumedOpenInterestEth: string
@@ -167,6 +169,7 @@ const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const lastScan = element('last-scan', HTMLParagraphElement)
+const blockStatus = element('block-status', HTMLParagraphElement)
 const globalError = element('global-error', HTMLDivElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
 const poolFilter = element('pool-filter', HTMLInputElement)
@@ -201,6 +204,34 @@ let configurationConnected = false
 let pauseRequestPending: boolean | undefined
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
+
+function compactDuration(seconds: number) {
+	if (seconds < 60) return `${seconds.toString()}s`
+	const minutes = Math.floor(seconds / 60)
+	if (minutes < 60) return `${minutes.toString()}m`
+	const hours = Math.floor(minutes / 60)
+	return hours < 24 ? `${hours.toString()}h` : `${Math.floor(hours / 24).toString()}d`
+}
+
+function renderBlockStatus(snapshot = currentSnapshot) {
+	if (snapshot?.lastScannedBlock === undefined) {
+		blockStatus.textContent = 'Block — · waiting for first observation'
+		return
+	}
+	const timestamp = snapshot.lastScannedTimestamp
+	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
+		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		return
+	}
+	const timestampMilliseconds = Number(timestamp) * 1_000
+	if (!Number.isSafeInteger(timestampMilliseconds)) {
+		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		return
+	}
+	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
+	const age = compactDuration(differenceSeconds)
+	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
+}
 
 function setMutationControlsEnabled(enabled: boolean) {
 	const configurationAvailable = enabled && currentConfiguration !== undefined
@@ -935,6 +966,7 @@ function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
+	renderBlockStatus(snapshot)
 	stateConnected = true
 	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
 	setMutationControlsEnabled(true)
@@ -1459,3 +1491,4 @@ void loadConfiguration()
 refreshButton.addEventListener('click', () => void refresh())
 void refresh()
 setInterval(refresh, 3_000)
+setInterval(renderBlockStatus, 1_000)

@@ -275,6 +275,16 @@ section,
 	margin-bottom: 1rem;
 }
 
+.section-status {
+	display: grid;
+	gap: 0.25rem;
+	text-align: right;
+}
+
+.section-status .muted {
+	margin-top: 0;
+}
+
 .metric-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
@@ -760,6 +770,10 @@ td small {
 
 	.reconciliation-form {
 		display: flex;
+	}
+
+	.section-status {
+		text-align: left;
 	}
 
 	.topbar-actions {

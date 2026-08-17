@@ -896,6 +896,10 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
 }
 
+function renderBlockStatus(snapshot = latestSnapshot) {
+	setText('block-value', snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+}
+
 function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
 	const body = element<HTMLTableSectionElement>('transactions-body')
 	body.replaceChildren()
@@ -955,7 +959,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
-	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+	renderBlockStatus(snapshot)
 	setText('profit-value', exactAmount(snapshot.totalRealizedNetProfitEth, 'ETH'))
 	setText('open-profit-value', exactAmount(snapshot.totalOpenHedgedNetProfitEth, 'ETH'))
 	setText('hedged-profit-value', exactAmount(snapshot.totalHedgedProfitBeforeGasEth, 'ETH'))
@@ -1499,3 +1503,4 @@ element<HTMLInputElement>('private-key').addEventListener('input', () => {
 void refresh()
 void loadCompleteConfiguration()
 window.setInterval(() => void refresh(), 2_000)
+window.setInterval(renderBlockStatus, 1_000)

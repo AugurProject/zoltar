@@ -9,6 +9,7 @@ import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from 
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../lib/networkProfile.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from './testUtils.js'
 
@@ -44,6 +45,73 @@ void describe('active environment', () => {
 		expect(isActiveAppChain('0xaa36a7')).toBe(true)
 		expect(isActiveAppChain('0x1')).toBe(false)
 		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
+	})
+
+	void test('follows a supported wallet network when no network is pinned in the URL', async () => {
+		const requestedProfiles = [] as NetworkProfile[]
+		const backend = await initializeActiveEnvironment(
+			{ hostname: 'localhost', search: '' },
+			{
+				createInjectedBackend: ({ profile = MAINNET_NETWORK_PROFILE } = {}) => {
+					requestedProfiles.push(profile)
+					const walletBackend = createFakeBackend({ profile })
+					walletBackend.getChainId = async () => SEPOLIA_NETWORK_PROFILE.chainIdHex
+					return walletBackend
+				},
+				createSimulationBackend,
+			},
+		)
+
+		expect(backend.profile).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(requestedProfiles).toEqual([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE])
+		const pinnedBackend = await initializeActiveEnvironment(
+			{ hostname: 'localhost', search: '?network=mainnet' },
+			{
+				createInjectedBackend: ({ profile = MAINNET_NETWORK_PROFILE } = {}) => createFakeBackend({ profile }),
+				createSimulationBackend,
+			},
+		)
+		expect(pinnedBackend.profile).toBe(MAINNET_NETWORK_PROFILE)
+	})
+
+	void test('keeps the newest injected wallet network when environment selections overlap', async () => {
+		const firstChainId = createDeferred<string>()
+		let mainnetBackendCount = 0
+		const dependencies = {
+			createInjectedBackend: ({ profile = MAINNET_NETWORK_PROFILE } = {}) => {
+				const backend = createFakeBackend({ profile })
+				if (profile === MAINNET_NETWORK_PROFILE) {
+					mainnetBackendCount += 1
+					backend.getChainId = mainnetBackendCount === 1 ? async () => await firstChainId.promise : async () => MAINNET_NETWORK_PROFILE.chainIdHex
+				}
+				return backend
+			},
+			createSimulationBackend,
+		}
+		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies)
+		const secondInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies)
+		expect((await secondInitialization).profile).toBe(MAINNET_NETWORK_PROFILE)
+
+		firstChainId.resolve(SEPOLIA_NETWORK_PROFILE.chainIdHex)
+		expect((await firstInitialization).profile).toBe(MAINNET_NETWORK_PROFILE)
+		expect(getActiveBackend().profile).toBe(MAINNET_NETWORK_PROFILE)
+	})
+
+	void test('does not commit a discovered wallet network when the commit guard closes', async () => {
+		const walletChainId = createDeferred<string>()
+		const dependencies = {
+			createInjectedBackend: ({ profile = MAINNET_NETWORK_PROFILE } = {}) => {
+				const backend = createFakeBackend({ profile })
+				backend.getChainId = async () => await walletChainId.promise
+				return backend
+			},
+			createSimulationBackend,
+		}
+		const initialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies, { shouldCommit: () => false })
+		walletChainId.resolve(SEPOLIA_NETWORK_PROFILE.chainIdHex)
+
+		expect((await initialization).profile).toBe(MAINNET_NETWORK_PROFILE)
+		expect(getActiveBackend().profile).toBe(MAINNET_NETWORK_PROFILE)
 	})
 
 	void test('enables simulation mode when the explicit URL flag is present', () => {

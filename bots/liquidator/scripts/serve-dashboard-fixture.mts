@@ -186,6 +186,7 @@ const server = startDashboardServer(4183, {
 		execute: false,
 		lastScanAt: new Date().toISOString(),
 		lastScannedBlock: '8842011',
+		lastScannedTimestamp: Math.floor(Date.now() / 1_000 - 12).toString(),
 		metrics: {
 			approvedUniverseCount: approvedUniverses.length,
 			assumedOpenInterestEth: '58.9',

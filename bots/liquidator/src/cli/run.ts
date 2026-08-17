@@ -440,6 +440,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.lastScannedBlock = scannedBlockNumber
 				state.lastScannedBlockHash = scannedBlockHash
 				state.lastScannedTimestamp = scannedBlock.timestamp
+				console.log(`observedBlock=${scannedBlockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - scannedBlock.timestamp).toString()}`)
 				if (replacedMarketHead) {
 					recordActivity(state, {
 						details: `block=${scannedBlockNumber.toString()}`,
