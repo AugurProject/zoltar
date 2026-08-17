@@ -239,7 +239,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		delete pendingReportIds[managerAddress]
 	}
 
-	mock.module('@zoltar/ui-zoltar/protocol/index.js', () => ({
+	const protocolModule = {
 		approveErc20: mock(async () => {
 			state.callLog.approveErc20 += 1
 			return {
@@ -573,9 +573,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				universeId: 1n,
 			} as never
 		}),
-	}))
+	}
+	mock.module('@zoltar/ui-zoltar/protocol/index.js', () => protocolModule)
 
-	mock.module('../simulation/clock.js', () => ({
+	mock.module('@zoltar/ui-core-shared/simulation/clock.js', () => ({
 		advanceSimulationTime: async () => undefined,
 		getSimulationChainTimestamp: async () => 1_000n,
 		initializeSimulationClock: async () => 1_000n,
@@ -659,7 +660,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			},
 		}) as never
 
-	return { contractWriteCalls, createWriteClient, memoryClient, state, writeCalls }
+	return { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps: protocolModule.getDeploymentSteps, memoryClient, state, writeCalls }
 }
 
 function createBootstrapMemoryClient(
@@ -694,6 +695,7 @@ function createBootstrapMemoryClient(
 }
 
 const applyScenario = (parameters: BootstrapScenarioApplyParameters) => applyStatoblastScenario(parameters)
+const getDeploymentSteps = () => [] as const satisfies ReadonlyArray<DeploymentStep>
 
 describe('simulation bootstrap', () => {
 	afterEach(() => {
@@ -826,12 +828,11 @@ describe('simulation bootstrap', () => {
 			}) as never
 
 		await bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
 			memoryClient,
+			getDeploymentSteps,
 			onProgress: progress,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,
@@ -862,12 +863,11 @@ describe('simulation bootstrap', () => {
 
 		await expect(
 			bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 				accounts: [],
 				createReadClient: () => ({ kind: 'read-client' }) as never,
 				createWriteClient,
 				memoryClient,
+				getDeploymentSteps,
 				primaryAccount: MOCK_PRIMARY_ACCOUNT,
 				onProgress: () => undefined,
 				profile: createBaselineProfile(),
@@ -892,12 +892,11 @@ describe('simulation bootstrap', () => {
 
 		await expect(
 			bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 				accounts: [MOCK_PRIMARY_ACCOUNT],
 				createReadClient: () => ({ kind: 'read-client' }) as never,
 				createWriteClient,
 				memoryClient,
+				getDeploymentSteps,
 				primaryAccount: MOCK_PRIMARY_ACCOUNT,
 				onProgress: () => undefined,
 				profile: createBaselineProfile(),
@@ -924,12 +923,11 @@ describe('simulation bootstrap', () => {
 			}) as never
 
 		await bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({ kind: 'read-client' }) as never,
 			createWriteClient,
 			memoryClient,
+			getDeploymentSteps,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			onProgress: payload => {
 				progressCalls.push(payload.label)
@@ -967,12 +965,11 @@ describe('simulation bootstrap', () => {
 		try {
 			await expect(
 				bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 					accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 					createReadClient: () => ({}) as never,
 					createWriteClient: createWriteClient,
 					memoryClient,
+					getDeploymentSteps,
 					onProgress: () => undefined,
 					primaryAccount: MOCK_PRIMARY_ACCOUNT,
 					profile: createBaselineProfile(),
@@ -986,7 +983,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the security-pool simulation path with seeded pool construction and oracle report settling', async () => {
 		const profile = createBaselineProfile()
-		const { contractWriteCalls, createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT],
 			scenario: 'security-pool',
 			profile,
@@ -996,12 +993,11 @@ describe('simulation bootstrap', () => {
 
 		const progressCalls: string[] = []
 		await bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 			accounts: [MOCK_PRIMARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
 			memoryClient,
+			getDeploymentSteps,
 			onProgress: async (payload: { label: string; value: number }) => {
 				progressCalls.push(payload.label)
 			},
@@ -1023,7 +1019,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the securitypoolx2 simulation path with secondary vault capacity ownership execution', async () => {
 		const profile = createBaselineProfile()
-		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			scenario: 'securitypoolx2',
 			profile,
@@ -1031,12 +1027,11 @@ describe('simulation bootstrap', () => {
 		const { bootstrapSimulationChain } = await import(`../../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
 		await bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
 			memoryClient,
+			getDeploymentSteps,
 			onProgress: async () => undefined,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,
@@ -1059,7 +1054,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the securitypoolx2-auction simulation path with forked child-auction seeding and ten bids', async () => {
 		const profile = createBaselineProfile()
-		const { createWriteClient, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			scenario: 'securitypoolx2-auction',
 			profile,
@@ -1067,12 +1062,11 @@ describe('simulation bootstrap', () => {
 		const { bootstrapSimulationChain } = await import(`../../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
 		await bootstrapSimulationChain({
-			applyScenario,
-			getDeploymentSteps: () => [],
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
 			memoryClient,
+			getDeploymentSteps,
 			onProgress: async () => undefined,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,
