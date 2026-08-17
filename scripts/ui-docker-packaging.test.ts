@@ -29,13 +29,15 @@ describe('UI Docker packaging', () => {
 		}
 	})
 
-	test('serves the UI through a published local IPFS gateway', async () => {
+	test('keeps local serving and host IPFS publishing as separate commands', async () => {
 		const launcher = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
 		const packageSource = await readFile(rootPackage, 'utf8')
 		const server = await readFile(serverEntrypoint, 'utf8')
-		const runCommand = 'docker run --rm -p 8080:8080 --entrypoint /serve-ui.sh zoltar-ui'
-		expect(launcher).toContain(runCommand)
-		expect(packageSource).toContain(runCommand)
+		const localRunCommand = 'docker run --rm -p 8080:8080 --entrypoint /serve-ui.sh zoltar-ui'
+		const publishRunCommand = 'docker run --rm --add-host=host.docker.internal:host-gateway zoltar-ui'
+		expect(launcher).toContain(localRunCommand)
+		expect(packageSource).toContain(`"ui:publish:ipfs": "docker build -f ui/Dockerfile . -t zoltar-ui && ${publishRunCommand}"`)
+		expect(packageSource).not.toContain('"ui:docker"')
 		expect(server).toContain('ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080')
 		expect(server).toContain('http://localhost:8080/ipfs/${IPFS_HASH}/')
 		expect(server).toContain('exec ipfs daemon')
