@@ -66,7 +66,10 @@
 					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
-				<button id="more" class="more" type="button" hidden>Show more</button>
+				<div class="activity-pagination">
+					<div id="activity-more-status" class="system-status" role="status" aria-live="polite" hidden></div>
+					<button id="more" class="more" type="button" hidden>Show more</button>
+				</div>
 			</section>
 
 			<section id="system" class="system" aria-labelledby="system-heading" hidden>
@@ -125,7 +128,13 @@
 					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP tokens</span><span id="rich-native-heading">ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
-				<div class="richlist-footer"><span id="richlist-summary"></span><button id="richlist-more" class="secondary" type="button" hidden>Show more</button></div>
+				<div class="richlist-footer">
+					<span id="richlist-summary"></span>
+					<div class="richlist-pagination">
+						<div id="richlist-more-status" class="system-status" role="status" aria-live="polite" hidden></div>
+						<button id="richlist-more" class="secondary" type="button" hidden>Show more</button>
+					</div>
+				</div>
 			</section>
 
 			<section id="contracts" class="contracts" aria-labelledby="contracts-heading" hidden>
@@ -159,12 +168,21 @@
 		</main>
 
 		<dialog id="detail-dialog" aria-labelledby="detail-title">
-			<div class="dialog-bar">
-				<div>
-					<p id="detail-eyebrow" class="eyebrow">Log evidence</p>
-					<h2 id="detail-title">Event details</h2>
+			<div class="dialog-sticky-header">
+				<div class="dialog-bar">
+					<div>
+						<p id="detail-eyebrow" class="eyebrow">Log evidence</p>
+						<h2 id="detail-title">Event details</h2>
+					</div>
+					<button id="close-detail" class="icon-button" type="button" aria-label="Close details">×</button>
 				</div>
-				<button id="close-detail" class="icon-button" type="button" aria-label="Close details">×</button>
+				<div id="detail-canonical-status" class="detail-canonical-status" role="status" aria-live="polite" hidden>
+					<div>
+						<strong id="detail-canonical-title"></strong>
+						<span id="detail-canonical-detail"></span>
+					</div>
+					<button id="detail-canonical-retry" class="secondary compact" type="button" hidden>Retry now</button>
+				</div>
 			</div>
 			<div id="detail-content" class="detail-content"></div>
 		</dialog>

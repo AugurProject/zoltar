@@ -1,22 +1,255 @@
 import { expect, test } from 'bun:test'
 import {
+	accountStateDuringStagedRefresh,
+	activityRefreshRetention,
+	canonicalPageLimit,
 	classifyLiveRecords,
+	collectCanonicalPages,
 	compactIndexerDuration,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
+	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
 	indexerLagLabel,
 	indexerProgressEstimate,
+	isCurrentContextRequest,
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
+	paginatedSnapshotWasReplaced,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
+	refreshPresentation,
+	resolveActivityRefreshDepth,
+	retainedPaginationAvailable,
+	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
+	transactionRetryMode,
 } from '../public/live-update.js'
+
+test('keeps background refreshes silent while retaining explicit loading feedback', () => {
+	expect(refreshPresentation({ live: true, append: false })).toEqual({ busy: false, loadingState: false })
+	expect(refreshPresentation({ live: false, append: false })).toEqual({ busy: true, loadingState: true })
+	expect(refreshPresentation({ live: false, append: true })).toEqual({ busy: true, loadingState: true })
+})
+
+test('retains multi-page activity for forced noncanonical refreshes such as persisted page restoration', () => {
+	expect(activityRefreshRetention(false, undefined, 220)).toEqual({ replaceDepth: 220, retainVisibleDepth: true })
+	expect(activityRefreshRetention(true, 220, 100)).toEqual({ replaceDepth: 220, retainVisibleDepth: true })
+	expect(activityRefreshRetention(false, undefined, 0)).toEqual({ replaceDepth: undefined, retainVisibleDepth: true })
+})
+
+test('resolves activity refresh depth after queued pagination settles', async () => {
+	const gate = createForegroundRefreshGate()
+	let releasePagination
+	let visibleDepth = 100
+	const pagination = gate.runForeground(
+		() =>
+			new Promise((resolve) => {
+				releasePagination = () => {
+					visibleDepth = 200
+					resolve()
+				}
+			}),
+	)
+	const captured = activityRefreshRetention(true, 100, visibleDepth)
+	const refresh = gate.runBackground(async () => resolveActivityRefreshDepth(captured.replaceDepth, 100, visibleDepth))
+	releasePagination()
+	await pagination
+	expect(await refresh).toBe(200)
+})
+
+test('keeps known pagination available after ordinary refresh failures but not canonical invalidation', () => {
+	expect(retainedPaginationAvailable(true, false)).toBe(true)
+	expect(retainedPaginationAvailable(false, false)).toBe(false)
+	expect(retainedPaginationAvailable(true, true)).toBe(false)
+})
+
+test('retries transaction append failures from the retained cursor', () => {
+	expect(transactionRetryMode(true, true)).toEqual({ append: true, liveRefresh: false })
+	expect(transactionRetryMode(false, true)).toEqual({ append: false, liveRefresh: true })
+	expect(transactionRetryMode(false, false)).toEqual({ append: false, liveRefresh: false })
+})
+
+test('keeps committed account depth authoritative while a refresh snapshot is staged', () => {
+	const committed = { loaded: Array.from({ length: 83 }, (_, index) => index) }
+	const staged = { loaded: [] }
+	expect(accountStateDuringStagedRefresh(committed, staged, true)).toBe(committed)
+	expect(accountStateDuringStagedRefresh(committed, staged, false)).toBe(staged)
+})
+
+test('defers background refreshes until an explicit log load settles', async () => {
+	const gate = createForegroundRefreshGate()
+	let releaseForeground
+	const calls = []
+	const foreground = gate.runForeground(
+		() =>
+			new Promise((resolve) => {
+				calls.push('foreground')
+				releaseForeground = resolve
+			}),
+	)
+	const background = gate.runBackground(async () => {
+		calls.push('background')
+		return true
+	})
+	expect(calls).toEqual(['foreground'])
+	releaseForeground()
+	await foreground
+	expect(await background).toBe(true)
+	expect(calls).toEqual(['foreground', 'background'])
+})
+
+test('queues foreground pagination behind an active background refresh', async () => {
+	const gate = createForegroundRefreshGate()
+	let releaseBackground
+	const calls = []
+	const background = gate.runBackground(
+		() =>
+			new Promise((resolve) => {
+				calls.push('background')
+				releaseBackground = resolve
+			}),
+	)
+	const foreground = gate.runForeground(async () => {
+		calls.push('foreground')
+		return 'page appended'
+	})
+	expect(calls).toEqual(['background'])
+	releaseBackground()
+	await background
+	expect(await foreground).toBe('page appended')
+	expect(calls).toEqual(['background', 'foreground'])
+})
+
+test('drops queued detail work after its lifecycle context is invalidated', async () => {
+	const gate = createForegroundRefreshGate()
+	let release
+	let context = 2
+	const active = gate.runForeground(
+		() =>
+			new Promise((resolve) => {
+				release = resolve
+			}),
+	)
+	const capturedContext = context
+	let committed = false
+	const queued = gate.runForeground(async () => {
+		if (!isCurrentContextRequest(capturedContext, context, 1, 1)) return false
+		committed = true
+		return true
+	})
+	context++
+	release()
+	await active
+	expect(await queued).toBe(false)
+	expect(committed).toBe(false)
+})
+
+test('reserves a pagination gate while refresh state is captured', async () => {
+	const gate = createForegroundRefreshGate()
+	const calls = []
+	const reservation = gate.reserve()
+	await reservation.ready
+	const pagination = gate.runForeground(async () => {
+		calls.push('pagination')
+	})
+	await Promise.resolve()
+	expect(calls).toEqual([])
+	reservation.release()
+	await reservation.completed
+	await pagination
+	expect(calls).toEqual(['pagination'])
+})
+
+test('commits a staged system snapshot only while its detail gate is reserved', async () => {
+	const gate = createForegroundRefreshGate()
+	let releaseOldDetail
+	const calls = []
+	const oldDetail = gate.runForeground(
+		() =>
+			new Promise((resolve) => {
+				calls.push('old detail')
+				releaseOldDetail = resolve
+			}),
+	)
+	const refresh = runWithForegroundReservation(gate, async () => {
+		calls.push('atomic catalog and detail commit')
+		return true
+	})
+	const nextDetail = gate.runForeground(async () => {
+		calls.push('next detail')
+	})
+	await Promise.resolve()
+	expect(calls).toEqual(['old detail'])
+	releaseOldDetail()
+	await oldDetail
+	expect(await refresh).toBe(true)
+	await nextDetail
+	expect(calls).toEqual(['old detail', 'atomic catalog and detail commit', 'next detail'])
+})
+
+test('collects a canonical snapshot to the prior visible depth without retaining missing records', async () => {
+	const pages = new Map([
+		[undefined, { items: [{ id: 'new' }, { id: 'kept-3' }], nextCursor: 'page-2' }],
+		['page-2', { items: [{ id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' }],
+		['page-3', { items: [{ id: 'older' }], nextCursor: undefined }],
+	])
+	const requested = []
+	const snapshot = await collectCanonicalPages(
+		async (cursor) => {
+			requested.push(cursor)
+			return pages.get(cursor)
+		},
+		4,
+		(item) => item.id,
+	)
+	expect(requested).toEqual([undefined, 'page-2'])
+	expect(snapshot).toEqual({ items: [{ id: 'new' }, { id: 'kept-3' }, { id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' })
+	expect(snapshot.items.some((item) => item.id === 'orphaned')).toBe(false)
+})
+
+test('requests only the remaining canonical depth on a partial final page', async () => {
+	const requestedLimits = []
+	const snapshot = await collectCanonicalPages(
+		async (cursor, limit) => {
+			requestedLimits.push(limit)
+			const offset = cursor ?? 0
+			const items = Array.from({ length: limit }, (_, index) => ({ id: offset + index }))
+			return { items, nextCursor: offset + limit }
+		},
+		150,
+		(item) => item.id,
+	)
+	expect(requestedLimits).toEqual([100, 50])
+	expect(snapshot.items).toHaveLength(150)
+	expect(snapshot.nextCursor).toBe(150)
+	expect(canonicalPageLimit(83, 0, 50)).toBe(50)
+	expect(canonicalPageLimit(83, 50, 50)).toBe(33)
+})
+
+test('keeps every log reachable when a live burst exceeds the first refreshed page', async () => {
+	const current = Array.from({ length: 350 }, (_, index) => ({ id: index }))
+	const requestedLimits = []
+	const retention = activityRefreshRetention(false, undefined, 220)
+	const refreshed = await collectCanonicalPages(
+		async (cursor = 0, limit = 100) => {
+			requestedLimits.push(limit)
+			const items = current.slice(cursor, cursor + limit)
+			const nextCursor = cursor + items.length < current.length ? cursor + items.length : undefined
+			return { items, nextCursor }
+		},
+		retention.replaceDepth,
+		(item) => item.id,
+	)
+	const appended = current.slice(refreshed.nextCursor)
+	expect(requestedLimits).toEqual([100, 100, 20])
+	expect(refreshed.nextCursor).toBe(220)
+	expect([...refreshed.items, ...appended].map((item) => item.id)).toEqual(current.map((item) => item.id))
+})
 
 test('distinguishes indexer startup and backfill progress from stream connectivity', () => {
 	expect(indexerConnectionStatus(undefined, 'connecting', false)).toEqual({ label: 'Connecting', tone: 'pending' })
@@ -130,6 +363,11 @@ test('does not lower a live total while consuming a cursor from an older snapsho
 	expect(reconcilePaginatedTotal(85, 84, false)).toBe(84)
 })
 
+test('detects when pagination points into a replaced snapshot', () => {
+	expect(paginatedSnapshotWasReplaced(100, 99)).toBe(true)
+	expect(paginatedSnapshotWasReplaced(100, 100)).toBe(false)
+})
+
 test('coalesces refresh bursts into one active request and one latest-state follow-up', async () => {
 	const releases = []
 	const calls = []
@@ -215,6 +453,12 @@ test('rejects stale live responses by request version and selected network', () 
 	expect(isCurrentLiveRequest(4, 4, '1', '1')).toBe(true)
 	expect(isCurrentLiveRequest(3, 4, '1', '1')).toBe(false)
 	expect(isCurrentLiveRequest(4, 4, '11155111', '1')).toBe(false)
+})
+
+test('rejects queued or active requests after their route context changes', () => {
+	expect(isCurrentContextRequest(4, 4, 9, 9)).toBe(true)
+	expect(isCurrentContextRequest(3, 4, 9, 9)).toBe(false)
+	expect(isCurrentContextRequest(4, 4, 8, 9)).toBe(false)
 })
 
 test('only treats a missing log as noncanonical during canonical recovery', () => {

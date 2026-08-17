@@ -14,10 +14,105 @@ export const mergeUniqueRecords = (primary, retained, keyFor) => {
 	})
 }
 
+export const canonicalPageLimit = (targetCount, loadedCount, pageSize) => (targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize)
+
+export const collectCanonicalPages = async (fetchPage, targetCount, keyFor) => {
+	let cursor
+	let items = []
+	do {
+		const remaining = targetCount > 0 ? canonicalPageLimit(targetCount, items.length, 100) : undefined
+		const page = await fetchPage(cursor, remaining)
+		items = mergeUniqueRecords(items, page.items, keyFor)
+		cursor = page.nextCursor
+	} while (cursor !== undefined && items.length < targetCount)
+	return { items: targetCount > 0 ? items.slice(0, targetCount) : items, nextCursor: cursor }
+}
+
 export const reconcilePaginatedTotal = (currentTotal, responseTotal, append) => (append ? Math.max(currentTotal, responseTotal) : responseTotal)
+
+export const paginatedSnapshotWasReplaced = (loadedCount, responseTotal) => responseTotal < loadedCount
+
+export const refreshPresentation = ({ live, append = false }) => {
+	const visible = !live || append
+	return { busy: visible, loadingState: visible }
+}
+
+export const resolveActivityRefreshDepth = (...depths) => {
+	const targetDepth = Math.max(0, ...depths.filter((depth) => Number.isInteger(depth) && depth > 0))
+	return targetDepth > 0 ? targetDepth : undefined
+}
+
+export const activityRefreshRetention = (canonicalRefreshRequired, canonicalDepth, visibleDepth) => ({
+	replaceDepth: resolveActivityRefreshDepth(canonicalRefreshRequired ? canonicalDepth : undefined, visibleDepth),
+	retainVisibleDepth: true,
+})
+
+export const retainedPaginationAvailable = (hasContinuation, canonicalRefreshRequired) => hasContinuation && !canonicalRefreshRequired
+
+export const transactionRetryMode = (appendFailure, hasLoadedTransactions) => ({
+	append: appendFailure,
+	liveRefresh: !appendFailure && hasLoadedTransactions,
+})
+
+export const accountStateDuringStagedRefresh = (committedState, stagedState, stagedRefresh) => (stagedRefresh ? committedState : stagedState)
+
+export const createForegroundRefreshGate = () => {
+	let active
+	const run = (operation) => {
+		let request
+		if (active === undefined) {
+			try {
+				request = Promise.resolve(operation())
+			} catch (error) {
+				request = Promise.reject(error)
+			}
+		} else {
+			request = active.then(
+				() => operation(),
+				() => operation(),
+			)
+		}
+		active = request
+		const clear = () => {
+			if (active === request) active = undefined
+		}
+		void request.then(clear, clear)
+		return request
+	}
+	const reserve = () => {
+		let markReady
+		let releaseOperation
+		const ready = new Promise((resolve) => {
+			markReady = resolve
+		})
+		const completed = run(
+			() =>
+				new Promise((resolve) => {
+					releaseOperation = resolve
+					markReady()
+				}),
+		)
+		return { ready, release: () => releaseOperation(), completed }
+	}
+	return { runBackground: run, runForeground: run, reserve }
+}
+
+export const runWithForegroundReservation = async (gate, operation) => {
+	const reservation = gate.reserve()
+	try {
+		await reservation.ready
+		return await operation()
+	} finally {
+		reservation.release()
+		await reservation.completed
+	}
+}
 
 export const isCurrentLiveRequest = (requestVersion, currentVersion, responseChainId, selectedChainId) =>
 	requestVersion === currentVersion && String(responseChainId) === String(selectedChainId)
+
+export const isCurrentContextRequest = (requestContext, currentContext, requestVersion, currentVersion) =>
+	requestContext === currentContext && requestVersion === currentVersion
 
 export const isNoncanonicalDetailFailure = (canonicalRecovery, status) => canonicalRecovery && status === 404
 
