@@ -90,7 +90,7 @@ export function OverviewPanels({
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
 		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge>
-		if (accountState.address === undefined) return <Badge tone='pending'>{appCopy.readOnly}</Badge>
+		if (accountState.address === undefined) return undefined
 		return <Badge tone='ok'>{appCopy.connected}</Badge>
 	})()
 	const environmentDescription = (() => {

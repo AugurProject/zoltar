@@ -6,7 +6,7 @@ import { createConnectedReadClient, normalizeAccount } from '../../lib/clients.j
 import type { ChainBackend, ReadBackendStatus } from '../../lib/chainBackend.js'
 import { getErrorMessage, hasErrorCode, hasErrorMessage } from '../../lib/errors.js'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
-import { getNetworkSwitchTarget } from '../../lib/networkProfile.js'
+import { getNetworkSwitchTarget, getPublicNetworkProfileForChainId } from '../../lib/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
 import { getWethAddress } from '../../protocol/uniswapQuoter.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
@@ -155,6 +155,7 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 type UseOnchainStateOptions = {
 	activeEnvironmentNonce?: number
 	enableChainClock?: boolean
+	onSupportedNetworkChange?: (chainId: string) => void
 }
 
 export type UseOnchainStateDependencies = {
@@ -169,7 +170,7 @@ const defaultUseOnchainStateDependencies: UseOnchainStateDependencies = {
 	loadErc20Balance,
 }
 
-export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies = defaultUseOnchainStateDependencies) {
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, onSupportedNetworkChange }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies = defaultUseOnchainStateDependencies) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -204,6 +205,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const walletActionContextRef = useRef({ activeEnvironmentNonce, backend: renderedBackend })
 	const connectWalletGenerationRef = useRef(0)
 	const manageWalletGenerationRef = useRef(0)
+	const supportedNetworkChangeRef = useRef(onSupportedNetworkChange)
+	supportedNetworkChangeRef.current = onSupportedNetworkChange
 	if (walletActionContextRef.current.activeEnvironmentNonce !== activeEnvironmentNonce || walletActionContextRef.current.backend !== renderedBackend) {
 		walletActionContextRef.current = { activeEnvironmentNonce, backend: renderedBackend }
 		connectWalletGenerationRef.current += 1
@@ -610,8 +613,22 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		const handleWalletChange = () => {
 			void refreshState()
 		}
+		const handleChainChange = () => {
+			void (async () => {
+				try {
+					const chainId = await backend.getChainId()
+					if (supportedNetworkChangeRef.current !== undefined && getPublicNetworkProfileForChainId(chainId) !== undefined) {
+						supportedNetworkChangeRef.current(chainId)
+						return
+					}
+				} catch (_error) {
+					// The normal refresh path surfaces wallet discovery failures.
+				}
+				await refreshState()
+			})()
+		}
 		const unsubscribeAccounts = backend.subscribeAccountsChanged(handleWalletChange)
-		const unsubscribeChain = backend.subscribeChainChanged(handleWalletChange)
+		const unsubscribeChain = backend.subscribeChainChanged(handleChainChange)
 
 		return () => {
 			unsubscribeChain()

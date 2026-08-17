@@ -160,7 +160,7 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.getByText('Sepolia')).not.toBeNull()
-			expect(documentQueries.getByText('Read-only')).not.toBeNull()
+			expect(documentQueries.queryByText('Read-only')).toBeNull()
 			expect(documentQueries.queryByText('Not configured on Sepolia')).toBeNull()
 			expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 		} finally {
@@ -174,7 +174,7 @@ describe('OverviewPanels', () => {
 			repUsdcFailure: 'rpc-error',
 		})
 
-		expect(documentQueries.getByText('No pool quote')).not.toBeNull()
+		expect(documentQueries.getByText('No liquidity available')).not.toBeNull()
 		expect(documentQueries.getByText('Quote failed')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
@@ -353,7 +353,7 @@ describe('OverviewPanels', () => {
 
 		expect(routeTitleRow.querySelector('.route-header-badge')).toBeNull()
 		expect(routeHeaderMain.children[1]).toBe(badgeSlot)
-		expect(badgeSlot.textContent).toContain('Read-only')
+		expect(badgeSlot.textContent).not.toContain('Read-only')
 		expect(badgeSlot.textContent).toContain('Forked')
 	})
 

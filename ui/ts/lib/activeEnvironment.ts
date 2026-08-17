@@ -1,7 +1,7 @@
 import type { ChainBackend } from './chainBackend.js'
 import { createInjectedBackend } from './chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import { getPublicNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
+import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -24,10 +24,12 @@ const SIMULATION_QUERY_VALUE = '1'
 const NETWORK_QUERY_PARAM = 'network'
 
 type InitializeActiveEnvironmentDependencies = {
+	createInjectedBackend?: typeof createInjectedBackend
 	createSimulationBackend: typeof createSimulationBackend
 }
 
 const defaultInitializeActiveEnvironmentDependencies: InitializeActiveEnvironmentDependencies = {
+	createInjectedBackend,
 	createSimulationBackend,
 }
 
@@ -52,6 +54,10 @@ export function shouldUseSimulationLocation(location: LocationLike) {
 	return params.get(SIMULATION_QUERY_PARAM) === SIMULATION_QUERY_VALUE
 }
 
+export function shouldFollowWalletNetwork(location: LocationLike = window.location) {
+	return !shouldUseSimulationLocation(location) && !readLocationParams(location).has(NETWORK_QUERY_PARAM)
+}
+
 function getSimulationScenario(location: LocationLike): SimulationScenario {
 	const params = readLocationParams(location)
 	return normalizeSimulationScenario(params.get('simScenario') ?? undefined)
@@ -63,15 +69,29 @@ function getSimulationStateId(location: LocationLike) {
 	return stateId === null || stateId.trim() === '' ? undefined : stateId
 }
 
-export async function initializeActiveEnvironment(location: LocationLike = window.location, dependencies: InitializeActiveEnvironmentDependencies = defaultInitializeActiveEnvironmentDependencies) {
+type InitializeActiveEnvironmentOptions = {
+	shouldCommit?: () => boolean
+}
+
+export async function initializeActiveEnvironment(location: LocationLike = window.location, dependencies: InitializeActiveEnvironmentDependencies = defaultInitializeActiveEnvironmentDependencies, options: InitializeActiveEnvironmentOptions = {}) {
 	initializeActiveEnvironmentGeneration += 1
 	const requestGeneration = initializeActiveEnvironmentGeneration
 	const previousSimulationController = activeSimulationController
 
 	if (!shouldUseSimulationLocation(location)) {
-		const injectedBackend = createInjectedBackend({
-			profile: getPublicNetworkProfile(readLocationParams(location).get(NETWORK_QUERY_PARAM) ?? undefined),
-		})
+		const createBackend = dependencies.createInjectedBackend ?? createInjectedBackend
+		const requestedNetwork = readLocationParams(location).get(NETWORK_QUERY_PARAM)
+		let profile = requestedNetwork === null ? undefined : getPublicNetworkProfile(requestedNetwork)
+		let injectedBackend = createBackend({ profile: profile ?? MAINNET_NETWORK_PROFILE })
+		if (profile === undefined) {
+			try {
+				profile = getPublicNetworkProfileForChainId(await injectedBackend.getChainId())
+			} catch (_error) {
+				// A missing, locked, or unavailable wallet leaves Mainnet as the public default.
+			}
+			if (profile !== undefined && profile !== injectedBackend.profile) injectedBackend = createBackend({ profile })
+		}
+		if (options.shouldCommit?.() === false || requestGeneration !== initializeActiveEnvironmentGeneration) return getActiveBackend()
 		activeBackend = injectedBackend
 		setRuntimeNetworkProfile(injectedBackend.profile)
 		activeSimulationController = undefined
