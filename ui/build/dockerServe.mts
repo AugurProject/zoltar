@@ -18,14 +18,21 @@ export const createAssetHandler = (root: string) => {
 		}
 
 		if (pathname === '/') pathname = '/index.html'
+		if (pathname.includes('\0')) return new Response('Bad request', { status: 400 })
 		const filePath = path.resolve(resolvedRoot, `.${pathname}`)
 		if (!filePath.startsWith(`${resolvedRoot}${path.sep}`)) return new Response('Forbidden', { status: 403 })
 
-		const file = Bun.file(filePath)
-		if (!(await file.exists())) return new Response('Not found', { status: 404 })
+		let file: ReturnType<typeof Bun.file>
+		try {
+			file = Bun.file(filePath)
+			if (!(await file.exists())) return new Response('Not found', { status: 404 })
+		} catch (error) {
+			if (error instanceof Error) return new Response('Not found', { status: 404 })
+			throw error
+		}
 
 		return new Response(request.method === 'HEAD' ? undefined : file, {
-			headers: { 'cache-control': noStoreFiles.has(pathname) ? 'no-store' : 'public, max-age=3600' },
+			headers: { 'cache-control': noStoreFiles.has(pathname) ? 'no-store' : 'no-cache' },
 		})
 	}
 }
