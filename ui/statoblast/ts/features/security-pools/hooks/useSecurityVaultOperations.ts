@@ -9,6 +9,7 @@ import {
 	approveErc20,
 	depositRepToVaultToSecurityPool,
 	loadCoordinatorInitialReportFundingRequirement,
+	loadErc20Allowance,
 	loadErc20Balance,
 	loadOracleManagerDetails,
 	loadSecurityVaultDetails,
@@ -96,8 +97,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const securityVaultMissing = useSignal(false)
 	const securityVaultError = useSignal<string | undefined>(undefined)
 	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
-	const repBalanceLoader = useErc20BalanceLoader()
-	const repAllowanceLoader = useErc20AllowanceLoader()
+	const repBalanceLoader = useErc20BalanceLoader(loadErc20Balance)
+	const repAllowanceLoader = useErc20AllowanceLoader(loadErc20Allowance)
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
 	const securityVaultFeedback = useSignal<ActionFeedback<SecurityVaultActionResult['action']> | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)

@@ -2,11 +2,10 @@ import { createMemoryClient, type CallParams, type DumpStateResult } from 'tevm'
 import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
-import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
+import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
 import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
@@ -295,7 +294,13 @@ async function applyDumpedStorageState(memoryClient: MemoryClientLike, address: 
 	}
 }
 
-export async function createSimulationEngine({ initialization }: { initialization: SimulationInitialization }): Promise<SimulationEngine> {
+export type SimulationEngineDependencies = {
+	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
+	getDeploymentSteps: (profile: ReturnType<typeof createSimulationProfile>) => readonly import('../types/contracts.js').DeploymentStep[]
+	getZoltarAddress: (profile: ReturnType<typeof createSimulationProfile>) => Address
+}
+
+export async function createSimulationEngine({ initialization, dependencies }: { initialization: SimulationInitialization; dependencies: SimulationEngineDependencies }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount)
@@ -640,8 +645,10 @@ export async function createSimulationEngine({ initialization }: { initializatio
 	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
 		await bootstrapSimulationChain({
 			accounts: QA_ACCOUNTS,
+			applyScenario: dependencies.applyScenario,
 			createReadClient: createBootstrapReadClient,
 			createWriteClient: createBootstrapWriteClient,
+			getDeploymentSteps: dependencies.getDeploymentSteps,
 			memoryClient,
 			onProgress: progress => {
 				bootstrapLabel = progress.label
@@ -759,7 +766,7 @@ export async function createSimulationEngine({ initialization }: { initializatio
 				throw new Error('Simulation REP token is unavailable')
 			}
 
-			const zoltarAddress = getZoltarAddress(profile)
+			const zoltarAddress = dependencies.getZoltarAddress(profile)
 			const zoltarCode = await memoryClient.getCode({
 				address: zoltarAddress,
 			})

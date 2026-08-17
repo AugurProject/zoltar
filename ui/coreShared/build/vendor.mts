@@ -32,7 +32,11 @@ import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const VENDOR_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'vendor')
+const APP_IDS = ['zoltar', 'statoblast'] as const
+const appId = process.argv[2] ?? process.env.UI_APP ?? 'zoltar'
+if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for vendor build: ${appId}`)
+const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
+const VENDOR_OUTPUT_PATH = path.join(APP_ROOT_PATH, 'vendor')
 
 type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [

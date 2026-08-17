@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import * as pricingCopy from '@zoltar/ui-zoltar/copy/pricing.js'
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'

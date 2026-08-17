@@ -1,4 +1,4 @@
-import * as pricingCopy from '@zoltar/ui-zoltar/copy/pricing.js'
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { CollateralizationCircleProps } from '../../types.js'
 import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold, getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 

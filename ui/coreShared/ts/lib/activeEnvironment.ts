@@ -5,7 +5,7 @@ import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NET
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
-import { normalizeSimulationScenario, type SimulationScenario } from '../simulation/scenarios.js'
+import { getRegisteredSimulationScenarios, type SimulationScenario } from '../simulation/scenarios.js'
 
 type LocationLike = {
 	hash?: string
@@ -59,8 +59,9 @@ export function shouldFollowWalletNetwork(location: LocationLike = window.locati
 }
 
 function getSimulationScenario(location: LocationLike): SimulationScenario {
-	const params = readLocationParams(location)
-	return normalizeSimulationScenario(params.get('simScenario') ?? undefined)
+	const raw = readLocationParams(location).get('simScenario') ?? undefined
+	if (raw === undefined) return 'baseline'
+	return getRegisteredSimulationScenarios().includes(raw) ? raw : 'baseline'
 }
 
 function getSimulationStateId(location: LocationLike) {

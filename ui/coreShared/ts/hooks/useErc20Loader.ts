@@ -1,5 +1,4 @@
 import { useSignal } from '@preact/signals'
-import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/index.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -31,11 +30,11 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 	return { invalidate, signal, reload }
 }
 
-export function useErc20BalanceLoader() {
+export function useErc20BalanceLoader(loadErc20Balance: (client: ReadClient, tokenAddress: `0x${string}`, accountAddress: `0x${string}`) => Promise<bigint>) {
 	return useErc20Loader(loadErc20Balance)
 }
 
-export function useErc20AllowanceLoader() {
+export function useErc20AllowanceLoader(loadErc20Allowance: (client: ReadClient, tokenAddress: `0x${string}`, ownerAddress: `0x${string}`, spenderAddress: `0x${string}`) => Promise<bigint>) {
 	const signal = useSignal<TokenApprovalState>({
 		error: undefined,
 		loading: false,

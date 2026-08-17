@@ -1,16 +1,14 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/index.js'
 import { createConnectedReadClient, normalizeAccount } from '../../lib/clients.js'
 import type { ChainBackend, ReadBackendStatus } from '../../lib/chainBackend.js'
 import { getErrorMessage, hasErrorCode, hasErrorMessage } from '../../lib/errors.js'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
 import { getNetworkSwitchTarget, getPublicNetworkProfileForChainId } from '../../lib/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
-import { getWethAddress } from '@zoltar/ui-zoltar/protocol/uniswapQuoter.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
-import type { DeploymentStatus } from '../../types/contracts.js'
+import type { DeploymentStatus, ReadClient } from '../../types/contracts.js'
 import { useLoadController } from '../../hooks/useLoadController.js'
 import { sameChainId } from '../../lib/chainId.js'
 
@@ -159,18 +157,13 @@ type UseOnchainStateOptions = {
 }
 
 export type UseOnchainStateDependencies = {
-	getDeploymentSteps: typeof getDeploymentSteps
-	loadDeploymentStatusOracleSnapshot: typeof loadDeploymentStatusOracleSnapshot
-	loadErc20Balance: typeof loadErc20Balance
+	getDeploymentSteps: () => ReadonlyArray<DeploymentStatus>
+	getWethAddress: () => Address
+	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ deployed: boolean }>
+	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
 
-const defaultUseOnchainStateDependencies: UseOnchainStateDependencies = {
-	getDeploymentSteps,
-	loadDeploymentStatusOracleSnapshot,
-	loadErc20Balance,
-}
-
-export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, onSupportedNetworkChange }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies = defaultUseOnchainStateDependencies) {
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, onSupportedNetworkChange }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -463,7 +456,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				if (connectedAddress !== undefined && walletOnExpectedChain) {
 					const readClient = createConnectedReadClient()
 					const ethBalanceAttoEthPromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalanceAttoEthPromise = dependencies.loadErc20Balance(readClient, getWethAddress(), connectedAddress)
+					const wethBalanceAttoEthPromise = dependencies.loadErc20Balance(readClient, dependencies.getWethAddress(), connectedAddress)
 					void loadWalletState({
 						chainIdPromise: Promise.resolve(connectedChainId ?? backend.profile.chainIdHex),
 						connectedAddress,

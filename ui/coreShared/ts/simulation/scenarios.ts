@@ -1,46 +1,63 @@
 import { assertNever } from '../lib/assert.js'
 
-export const SIMULATION_SCENARIOS = ['baseline', 'deployed', 'security-pool', 'securitypoolx2', 'securitypoolx2-auction'] as const
+export const CORE_SIMULATION_SCENARIOS = ['baseline', 'deployed'] as const
 
-export type SimulationScenario = (typeof SIMULATION_SCENARIOS)[number]
+export type CoreSimulationScenario = (typeof CORE_SIMULATION_SCENARIOS)[number]
 
-export function isSimulationScenario(value: string): value is SimulationScenario {
-	return SIMULATION_SCENARIOS.includes(value as SimulationScenario)
+export type SimulationScenario = string
+
+type ScenarioPresentation = {
+	description: string
+	label: string
 }
 
-export function normalizeSimulationScenario(value: string | undefined): SimulationScenario {
-	return value !== undefined && isSimulationScenario(value) ? value : 'baseline'
+const scenarioPresentations = new Map<SimulationScenario, ScenarioPresentation>()
+
+export function registerSimulationScenario(scenario: SimulationScenario, presentation: ScenarioPresentation) {
+	scenarioPresentations.set(scenario, presentation)
+}
+
+export function getRegisteredSimulationScenarios(): readonly SimulationScenario[] {
+	return [...CORE_SIMULATION_SCENARIOS, ...scenarioPresentations.keys()]
 }
 
 export function getSimulationScenarioLabel(scenario: SimulationScenario) {
+	const registered = scenarioPresentations.get(scenario)
+	if (registered !== undefined) return registered.label
+	return getCoreSimulationScenarioLabel(scenario as CoreSimulationScenario)
+}
+
+export function getSimulationScenarioDescription(scenario: SimulationScenario) {
+	const registered = scenarioPresentations.get(scenario)
+	if (registered !== undefined) return registered.description
+	return getCoreSimulationScenarioDescription(scenario as CoreSimulationScenario)
+}
+
+export function isCoreSimulationScenario(value: string): value is CoreSimulationScenario {
+	return (CORE_SIMULATION_SCENARIOS as readonly string[]).includes(value)
+}
+
+export function normalizeSimulationScenario(value: string | undefined): CoreSimulationScenario {
+	return value !== undefined && isCoreSimulationScenario(value) ? value : 'baseline'
+}
+
+export function getCoreSimulationScenarioLabel(scenario: CoreSimulationScenario) {
 	switch (scenario) {
 		case 'baseline':
 			return 'Baseline'
 		case 'deployed':
 			return 'Deployed'
-		case 'security-pool':
-			return 'Security pool'
-		case 'securitypoolx2':
-			return 'Security pool x2'
-		case 'securitypoolx2-auction':
-			return 'Security pool x2 auction'
 		default:
 			return assertNever(scenario)
 	}
 }
 
-export function getSimulationScenarioDescription(scenario: SimulationScenario) {
+export function getCoreSimulationScenarioDescription(scenario: CoreSimulationScenario) {
 	switch (scenario) {
 		case 'baseline':
 			return 'Fresh walletless simulation with funded QA accounts and no app contracts deployed. Use it to test the Deploy flow from scratch.'
 		case 'deployed':
 			return 'App contracts are deployed, but no security pools or questions are created. Use it to test setup flows from an empty deployment.'
-		case 'security-pool':
-			return 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.'
-		case 'securitypoolx2':
-			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
-		case 'securitypoolx2-auction':
-			return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
 		default:
 			return assertNever(scenario)
 	}

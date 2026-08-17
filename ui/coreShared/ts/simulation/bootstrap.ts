@@ -1,62 +1,21 @@
 import { createMemoryClient } from 'tevm'
 import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
-import {
-	approveErc20,
-	createMarket,
-	createChildUniverseFromSecurityPool,
-	createCompleteSetInSecurityPool,
-	createSecurityPool,
-	depositRepToVaultToSecurityPool,
-	forkZoltarWithOwnEscalation,
-	getDeploymentSteps,
-	loadAllSecurityPools,
-	loadForkAuctionDetails,
-	loadOracleManagerDetails,
-	loadOpenOracleReportDetails,
-	loadReportingDetails,
-	loadSecurityVaultDetails,
-	loadZoltarUniverseSummary,
-	migrateRepToZoltarFromSecurityPool,
-	reportOutcomeInSecurityPool,
-	requestOraclePrice,
-	settleOracleReport,
-	startTruthAuctionForSecurityPool,
-	submitTruthAuctionBid,
-} from '@zoltar/ui-zoltar/protocol/index.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
+import type { DeploymentStep } from '../types/contracts.js'
 import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
-import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
-import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
+import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 
-type TevmLikeClient = ReturnType<typeof createMemoryClient>
+export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
-function getSeededCoordinatorInitialReportPrice() {
-	return SEEDED_REP_ETH_PRICE
-}
-type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
+export type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
-const FORK_MIGRATION_TIME_SECONDS = 8n * 7n * DAY_IN_SECONDS
 const ETH_BALANCE_AMOUNT = 10n ** 30n
 const GENESIS_UNIVERSE_ID = 0n
-const SEEDED_REP_ETH_PRICE = 3n * 10n ** 18n
 const REP_TOKEN_MINT_AMOUNT = 3_000_000n * 10n ** 18n
-const STATOBLAST_SECURITY_MULTIPLIER_BPS = 20_000n
-const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
-const CAPACITY_OWNERSHIP_ATTO_REP = 80n * 10n ** 18n
-const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
-const SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP = 40n * 10n ** 18n
-const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
-const SECURITY_POOL_X2_SECONDARY_CAPACITY_OWNERSHIP_ATTO_REP = 40n * 10n ** 18n
-const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 2_000_000n * 10n ** 18n
-const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
-const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
-const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const WETH_NAME_SLOT = 0n
 const WETH_SYMBOL_SLOT = 1n
@@ -91,7 +50,7 @@ function clampProgress(value: number) {
 	return Math.max(0, Math.min(1, value))
 }
 
-async function reportBootstrapProgress(onProgress: BootstrapProgressHandler | undefined, label: string, value: number) {
+async export function reportBootstrapProgress(onProgress: BootstrapProgressHandler | undefined, label: string, value: number) {
 	await onProgress?.({
 		label,
 		value: clampProgress(value),
@@ -351,7 +310,7 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 	}
 }
 
-async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
+export async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }, getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]) {
 	const steps = getDeploymentSteps(profile)
 	for (const [index, step] of steps.entries()) {
 		const code = await memoryClient.getCode({ address: step.address })
@@ -364,26 +323,12 @@ async function deploySimulationAppContracts(primaryWriteClient: WriteClient, mem
 	}
 }
 
-type ProgressRange = {
+export type ProgressRange = {
 	end: number
 	start: number
 }
 
-type SeededVaultSpec = {
-	accountAddress: Address
-	vaultRepBackingDepositAttoRep: bigint
-	capacityOwnershipAttoRep: bigint
-}
-
-type SeededSecurityPoolSpec = {
-	poolLabel: string
-	progressRange: ProgressRange
-	questionTitle: string
-	readyLabel: string
-	vaults: readonly SeededVaultSpec[]
-}
-
-function createRangeProgressReporter(onProgress: BootstrapProgressHandler | undefined, range: ProgressRange, stepCount: number) {
+export function createRangeProgressReporter(onProgress: BootstrapProgressHandler | undefined, range: ProgressRange, stepCount: number) {
 	let completedStepCount = 0
 
 	return async (label: string) => {
@@ -392,549 +337,38 @@ function createRangeProgressReporter(onProgress: BootstrapProgressHandler | unde
 	}
 }
 
-function requireQaAccount(account: Address | undefined, label: string) {
+export function requireQaAccount(account: Address | undefined, label: string) {
 	if (account === undefined) throw new Error(label)
 	return account
 }
 
-function createSecurityPoolSeedParameters(
-	currentTimestamp: bigint,
-	title: string,
-): {
-	marketType: 'binary'
-	outcomeLabels: string[]
-	questionData: QuestionData
-} {
-	return {
-		marketType: 'binary',
-		outcomeLabels: ['Yes', 'No'],
-		questionData: {
-			answerUnit: '',
-			description: '',
-			displayValueMax: 0n,
-			displayValueMin: 0n,
-			endTime: currentTimestamp + 365n * DAY_IN_SECONDS,
-			numTicks: 0n,
-			startTime: 0n,
-			title,
-		},
-	}
-}
 
-async function loadRequiredSeededPool(readClient: ReadClient, securityPoolAddress: Address, poolLabel: string) {
-	const seededPool = (await loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress === securityPoolAddress)
-	if (seededPool === undefined) throw new Error(`Expected ${poolLabel} at ${securityPoolAddress}`)
-	return seededPool
-}
-
-async function loadRequiredSecurityVault(readClient: ReadClient, securityPoolAddress: Address, vaultAddress: Address, label: string) {
-	const vaultDetails = await loadSecurityVaultDetails(readClient, securityPoolAddress, vaultAddress)
-	if (vaultDetails === undefined) throw new Error(`Expected seeded security vault details for ${label}`)
-	return vaultDetails
-}
-
-function getSeededVaultTargetHealthFactorBps(vault: SeededVaultSpec) {
-	if (vault.capacityOwnershipAttoRep <= 0n) throw new Error('Seeded vault capacity ownership must be positive')
-	const numerator = vault.vaultRepBackingDepositAttoRep * 10_000n
-	if (numerator % vault.capacityOwnershipAttoRep !== 0n) throw new Error('Seeded vault capacity ownership must map to an exact target health factor')
-	const targetHealthFactorBps = numerator / vault.capacityOwnershipAttoRep
-	if (targetHealthFactorBps < 10_000n) throw new Error('Seeded vault target health factor must be at least 1.00×')
-	return targetHealthFactorBps
-}
-
-async function createSeededSecurityPool({ createWriteClient, currentTimestamp, deployerAccount, questionTitle }: { createWriteClient: (accountAddress: Address) => WriteClient; currentTimestamp: bigint; deployerAccount: Address; questionTitle: string }) {
-	const deployerWriteClient = createWriteClient(deployerAccount)
-	const marketResult = await createMarket(deployerWriteClient, createSecurityPoolSeedParameters(currentTimestamp, questionTitle))
-	const questionId = BigInt(marketResult.questionId)
-	const poolResult = await createSecurityPool(deployerWriteClient, {
-		initialReportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
-		questionId,
-		statoblastSecurityMultiplierBps: STATOBLAST_SECURITY_MULTIPLIER_BPS,
-	})
-
-	return {
-		questionId,
-		securityPoolAddress: poolResult.securityPoolAddress,
-	}
-}
-
-async function validateSeededSecurityPool({ expectedVaults, poolLabel, readClient, securityPoolAddress }: { expectedVaults: readonly SeededVaultSpec[]; poolLabel: string; readClient: ReadClient; securityPoolAddress: Address }) {
-	const seededPool = await loadRequiredSeededPool(readClient, securityPoolAddress, poolLabel)
-	const expectedVaultCount = BigInt(expectedVaults.length)
-	let expectedRepDeposit = 0n
-	let expectedCapacityOwnershipAttoRep = 0n
-
-	for (const expectedVault of expectedVaults) {
-		expectedRepDeposit += expectedVault.vaultRepBackingDepositAttoRep
-		expectedCapacityOwnershipAttoRep += expectedVault.capacityOwnershipAttoRep
-	}
-
-	if (seededPool.vaultCount !== expectedVaultCount) throw new Error(`Expected ${poolLabel} to have ${expectedVaultCount.toString()} seeded vaults`)
-	if (seededPool.totalPoolHeldAttoRep !== expectedRepDeposit) throw new Error(`Expected ${poolLabel} to have ${expectedRepDeposit.toString()} seeded REP`)
-	if (seededPool.totalCapacityOwnershipAttoRep !== expectedCapacityOwnershipAttoRep) throw new Error(`Expected ${poolLabel} to have ${expectedCapacityOwnershipAttoRep.toString()} seeded capacity ownership`)
-
-	for (const expectedVault of expectedVaults) {
-		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === expectedVault.accountAddress)
-		if (vault === undefined) throw new Error(`Expected ${poolLabel} to include seeded vault ${expectedVault.accountAddress}`)
-		if (vault.vaultAttoRepBacking !== expectedVault.vaultRepBackingDepositAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.vaultRepBackingDepositAttoRep.toString()} seeded REP`)
-		if (vault.capacityOwnershipAttoRep !== expectedVault.capacityOwnershipAttoRep) throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.capacityOwnershipAttoRep.toString()} seeded capacity ownership`)
-	}
-}
-
-async function settleSeededOracleReport({
-	accountAddress,
-	createWriteClient,
-	managerAddress,
-	onProgressStep,
-	poolLabel,
-	readClient,
-}: {
-	accountAddress: Address
-	createWriteClient: (accountAddress: Address) => WriteClient
-	managerAddress: Address
-	onProgressStep: (label: string) => Promise<void>
-	poolLabel: string
-	readClient: ReadClient
-}) {
-	const writeClient = createWriteClient(accountAddress)
-	const initialReportPrice = getSeededCoordinatorInitialReportPrice()
-	await requestOraclePrice(writeClient, managerAddress, initialReportPrice)
-	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
-
-	const oracleManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	if (oracleManagerDetails.pendingReportId === 0n) throw new Error(`Expected a pending oracle report for ${poolLabel}`)
-	await onProgressStep(`Opening seeded oracle report for ${poolLabel}`)
-
-	return {
-		openOracleAddress: oracleManagerDetails.openOracleAddress,
-		pendingReportId: oracleManagerDetails.pendingReportId,
-	}
-}
-
-async function settleOracleReportIfNeeded({ memoryClient, readClient, writeClient, openOracleAddress, pendingReportId }: { memoryClient: TevmLikeClient; readClient: ReadClient; writeClient: WriteClient; openOracleAddress: Address; pendingReportId: bigint }) {
-	const seededReport = await loadOpenOracleReportDetails(readClient, openOracleAddress, pendingReportId)
-	if (seededReport.isDistributed) return
-	const reportTimestamp = getSimulationReportTiming(seededReport.reportTimestamp)
-	const settlementTime = getSimulationReportTiming(seededReport.settlementTime)
-	if (reportTimestamp !== undefined && settlementTime !== undefined) {
-		const settlementReadyTimestamp = reportTimestamp + settlementTime + 1n
-		const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-		if (currentTimestamp < settlementReadyTimestamp) {
-			await advanceSimulationTime(memoryClient, settlementReadyTimestamp - currentTimestamp)
-		}
-	}
-	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
-}
-
-async function refreshSeededOraclePrice({ accountAddress, createWriteClient, managerAddress, memoryClient, readClient }: { accountAddress: Address; createWriteClient: (accountAddress: Address) => WriteClient; managerAddress: Address; memoryClient: TevmLikeClient; readClient: ReadClient }) {
-	const writeClient = createWriteClient(accountAddress)
-	let managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	if (managerDetails.isPriceValid) return
-	if (managerDetails.pendingReportId === 0n) {
-		const initialReportPrice = getSeededCoordinatorInitialReportPrice()
-		await requestOraclePrice(writeClient, managerAddress, initialReportPrice)
-		managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	}
-	if (managerDetails.pendingReportId === 0n) {
-		throw new Error(`Expected a pending oracle report for ${managerAddress}`)
-	}
-	const reportDetails = await loadOpenOracleReportDetails(readClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
-	if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === zeroAddress) {
-		throw new Error(`Expected the coordinator request to submit the initial report for ${managerAddress}`)
-	}
-	await settleOracleReportIfNeeded({
-		memoryClient,
-		openOracleAddress: managerDetails.openOracleAddress,
-		pendingReportId: managerDetails.pendingReportId,
-		readClient,
-		writeClient,
-	})
-	const refreshedManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	if (!refreshedManagerDetails.isPriceValid) throw new Error(`Expected a valid seeded oracle price for ${managerAddress}`)
-}
-
-function getSimulationReportTiming(value: unknown) {
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
-	return undefined
-}
-
-async function seedSecurityPool({
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	poolSpec,
-	profile,
-	seedTimestamp,
-}: {
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	poolSpec: SeededSecurityPoolSpec
-	profile: NetworkProfile
-	seedTimestamp: bigint
-}) {
-	const readClient = createReadClient()
-	const primaryVaultSpec = poolSpec.vaults[0]
-	if (primaryVaultSpec === undefined) throw new Error(`Missing primary seeded vault account for ${poolSpec.poolLabel}`)
-	const primaryVaultAccount = primaryVaultSpec.accountAddress
-	const additionalVaults = poolSpec.vaults.slice(1)
-	const stepCount = 2 + poolSpec.vaults.length + 3 + additionalVaults.length + 1
-	const reportStep = createRangeProgressReporter(onProgress, poolSpec.progressRange, stepCount)
-
-	const poolResult = await createSeededSecurityPool({
-		createWriteClient,
-		currentTimestamp: seedTimestamp,
-		deployerAccount: primaryVaultAccount,
-		questionTitle: poolSpec.questionTitle,
-	})
-	await reportStep(`Creating seeded question for ${poolSpec.poolLabel}`)
-	await reportStep(`Deploying seeded security pool for ${poolSpec.poolLabel}`)
-
-	for (const [index, vaultSpec] of poolSpec.vaults.entries()) {
-		const writeClient = createWriteClient(vaultSpec.accountAddress)
-		await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-		await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultTargetHealthFactorBps(vaultSpec))
-		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
-		if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
-		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
-	}
-
-	const primaryVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
-	const seededOracleReport = await settleSeededOracleReport({
-		accountAddress: primaryVaultAccount,
-		createWriteClient,
-		managerAddress: primaryVault.managerAddress,
-		onProgressStep: reportStep,
-		poolLabel: poolSpec.poolLabel,
-		readClient,
-	})
-	await settleOracleReportIfNeeded({
-		memoryClient,
-		openOracleAddress: seededOracleReport.openOracleAddress,
-		pendingReportId: seededOracleReport.pendingReportId,
-		readClient,
-		writeClient: createWriteClient(primaryVaultAccount),
-	})
-	await reportStep(`Settling seeded oracle report for ${poolSpec.poolLabel}`)
-
-	const seededReport = await loadOpenOracleReportDetails(readClient, seededOracleReport.openOracleAddress, seededOracleReport.pendingReportId)
-	if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${poolSpec.poolLabel}`)
-
-	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
-	if (primaryVaultAfterSettlement.capacityOwnershipAttoRep !== primaryVaultSpec.capacityOwnershipAttoRep) {
-		throw new Error(`Expected seeded capacity ownership ${primaryVaultSpec.capacityOwnershipAttoRep.toString()} for ${primaryVaultAccount}`)
-	}
-
-	for (const index of additionalVaults.keys()) {
-		await reportStep(`Configuring seeded security vault ${index + 2} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
-	}
-
-	await validateSeededSecurityPool({
-		expectedVaults: poolSpec.vaults,
-		poolLabel: poolSpec.poolLabel,
-		readClient,
-		securityPoolAddress: poolResult.securityPoolAddress,
-	})
-	await reportStep(poolSpec.readyLabel)
-}
-
-async function seedSecurityPoolScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
+type CoreScenarioApplyParameters = {
 	accounts: readonly Address[]
-	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
+	getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]
 	memoryClient: TevmLikeClient
 	onProgress: BootstrapProgressHandler | undefined
 	profile: NetworkProfile
-}) {
+	scenario: SimulationScenario
+}
+
+async function applyCoreScenario({ accounts, createWriteClient, getDeploymentSteps, memoryClient, onProgress, profile, scenario }: CoreScenarioApplyParameters) {
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 
-	await seedSecurityPool({
-		createReadClient,
-		createWriteClient,
-		memoryClient,
-		onProgress,
-		poolSpec: {
-			poolLabel: 'seeded security pool',
-			progressRange: { start: 0.78, end: 0.98 },
-			questionTitle: 'Will this resolve?',
-			readyLabel: 'Seeded security-pool scenario is ready',
-			vaults: [
-				{
-					accountAddress: primaryAccount,
-					vaultRepBackingDepositAttoRep: SECURITY_POOL_REP_DEPOSIT,
-					capacityOwnershipAttoRep: CAPACITY_OWNERSHIP_ATTO_REP,
-				},
-			],
-		},
-		profile,
-		seedTimestamp: currentTimestamp,
-	})
+	switch (scenario) {
+		case 'baseline':
+			await reportBootstrapProgress(onProgress, 'Using baseline simulation scenario', 0.84)
+			return true
+		case 'deployed':
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.92 }, getDeploymentSteps)
+			return true
+		default:
+			return false
+	}
 }
 
-async function seedSecurityPoolX2Scenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
-	accounts: readonly Address[]
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	profile: NetworkProfile
-}) {
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for securitypoolx2')
-	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for securitypoolx2')
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	const readClient = createReadClient()
-	const reportStep = createRangeProgressReporter(onProgress, { start: 0.72, end: 0.98 }, 17)
-	const seededVaults = [
-		{
-			accountAddress: primaryAccount,
-			vaultRepBackingDepositAttoRep: SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT,
-			capacityOwnershipAttoRep: SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP,
-		},
-		{
-			accountAddress: secondaryAccount,
-			vaultRepBackingDepositAttoRep: SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT,
-			capacityOwnershipAttoRep: SECURITY_POOL_X2_SECONDARY_CAPACITY_OWNERSHIP_ATTO_REP,
-		},
-	] as const
-	const seededPools = [
-		{
-			poolLabel: 'securitypoolx2 pool 1',
-			questionTitle: 'Will this resolve? (securitypoolx2 #1)',
-			vaults: seededVaults,
-		},
-		{
-			poolLabel: 'securitypoolx2 pool 2',
-			questionTitle: 'Will this resolve? (securitypoolx2 #2)',
-			vaults: seededVaults,
-		},
-	] as const
-
-	const preparedPools: Array<{
-		managerAddress: Address
-		openOracleAddress: Address
-		poolLabel: string
-		pendingReportId: bigint
-		primaryVault: SeededVaultSpec
-		securityPoolAddress: Address
-		vaults: readonly SeededVaultSpec[]
-	}> = []
-
-	for (const seededPool of seededPools) {
-		const poolResult = await createSeededSecurityPool({
-			createWriteClient,
-			currentTimestamp,
-			deployerAccount: primaryAccount,
-			questionTitle: seededPool.questionTitle,
-		})
-		await reportStep(`Creating seeded question for ${seededPool.poolLabel}`)
-		await reportStep(`Deploying seeded security pool for ${seededPool.poolLabel}`)
-
-		for (const [index, vaultSpec] of seededPool.vaults.entries()) {
-			const writeClient = createWriteClient(vaultSpec.accountAddress)
-			await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-			await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultTargetHealthFactorBps(vaultSpec))
-			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
-			if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
-			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)
-		}
-
-		const primaryVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryAccount, primaryAccount)
-		const primaryVaultSpec = seededPool.vaults[0]
-		if (primaryVaultSpec === undefined) throw new Error(`Expected a primary seeded vault for ${seededPool.poolLabel}`)
-		const seededOracleReport = await settleSeededOracleReport({
-			accountAddress: primaryAccount,
-			createWriteClient,
-			managerAddress: primaryVault.managerAddress,
-			onProgressStep: reportStep,
-			poolLabel: seededPool.poolLabel,
-			readClient,
-		})
-
-		preparedPools.push({
-			managerAddress: primaryVault.managerAddress,
-			openOracleAddress: seededOracleReport.openOracleAddress,
-			poolLabel: seededPool.poolLabel,
-			pendingReportId: seededOracleReport.pendingReportId,
-			primaryVault: primaryVaultSpec,
-			securityPoolAddress: poolResult.securityPoolAddress,
-			vaults: seededPool.vaults,
-		})
-	}
-
-	for (const preparedPool of preparedPools) {
-		await settleOracleReportIfNeeded({
-			memoryClient,
-			openOracleAddress: preparedPool.openOracleAddress,
-			pendingReportId: preparedPool.pendingReportId,
-			readClient,
-			writeClient: createWriteClient(primaryAccount),
-		})
-		await reportStep(`Settling seeded oracle report for ${preparedPool.poolLabel}`)
-
-		const seededReport = await loadOpenOracleReportDetails(readClient, preparedPool.openOracleAddress, preparedPool.pendingReportId)
-		if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${preparedPool.poolLabel}`)
-
-		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
-		if (primaryVaultAfterSettlement.capacityOwnershipAttoRep !== preparedPool.primaryVault.capacityOwnershipAttoRep) {
-			throw new Error(`Expected seeded capacity ownership ${preparedPool.primaryVault.capacityOwnershipAttoRep.toString()} for ${primaryAccount}`)
-		}
-	}
-
-	for (const preparedPool of preparedPools) {
-		const secondaryVault = preparedPool.vaults[1]
-		if (secondaryVault === undefined) throw new Error(`Expected a secondary seeded vault for ${preparedPool.poolLabel}`)
-		await reportStep(`Configuring seeded security vault 2 of 2 for ${preparedPool.poolLabel}`)
-
-		await validateSeededSecurityPool({
-			expectedVaults: preparedPool.vaults,
-			poolLabel: preparedPool.poolLabel,
-			readClient,
-			securityPoolAddress: preparedPool.securityPoolAddress,
-		})
-	}
-
-	await reportStep('Seeded securitypoolx2 scenario is ready')
-}
-
-async function loadRequiredChildSecurityPool(readClient: ReadClient, parentSecurityPoolAddress: Address, questionOutcome: ListedSecurityPool['questionOutcome']) {
-	const childPool = (await loadAllSecurityPools(readClient)).find(pool => pool.parent === parentSecurityPoolAddress && pool.questionOutcome === questionOutcome)
-	if (childPool === undefined) throw new Error(`Expected a ${questionOutcome} child pool for ${parentSecurityPoolAddress}`)
-	return childPool
-}
-
-async function seedSecurityPoolX2AuctionScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
-	accounts: readonly Address[]
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	profile: NetworkProfile
-}) {
-	await seedSecurityPoolX2Scenario({
-		accounts,
-		createReadClient,
-		createWriteClient,
-		memoryClient,
-		onProgress,
-		profile,
-	})
-
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for securitypoolx2-auction')
-	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for securitypoolx2-auction')
-	const readClient = createReadClient()
-	const writeClient = createWriteClient(primaryAccount)
-	const x2Pools = await loadAllSecurityPools(readClient)
-	const parentPool = x2Pools.find(pool => pool.marketDetails.title === 'Will this resolve? (securitypoolx2 #1)')
-	if (parentPool === undefined) throw new Error('Expected the first securitypoolx2 parent pool for auction scenario seeding')
-
-	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
-	await approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, 'approveRep')
-	await depositRepToVaultToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT)
-	const secondaryWriteClient = createWriteClient(secondaryAccount)
-	await approveErc20(secondaryWriteClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, 'approveRep')
-	await depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT)
-	await createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
-
-	const universeSummary = await loadZoltarUniverseSummary(readClient, parentPool.universeId)
-	if (universeSummary === undefined) throw new Error(`Expected a Zoltar universe summary for parent pool ${parentPool.securityPoolAddress}`)
-	const reportingDetailsBeforeFork = await loadReportingDetails(readClient, parentPool.securityPoolAddress, primaryAccount)
-	if (reportingDetailsBeforeFork.marketDetails.endTime >= reportingDetailsBeforeFork.currentTime) {
-		await advanceSimulationTime(memoryClient, reportingDetailsBeforeFork.marketDetails.endTime - reportingDetailsBeforeFork.currentTime + DAY_IN_SECONDS)
-	}
-
-	const ownForkDepositAmount = (universeSummary.forkThresholdAttoRep * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
-	await refreshSeededOraclePrice({
-		accountAddress: primaryAccount,
-		createWriteClient,
-		managerAddress: parentPool.managerAddress,
-		memoryClient,
-		readClient,
-	})
-	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
-	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
-	await reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
-	await forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
-
-	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
-	await createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
-	await migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
-	await advanceSimulationTime(memoryClient, FORK_MIGRATION_TIME_SECONDS + DAY_IN_SECONDS)
-
-	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')
-	const yesForkDetailsBeforeAuction = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
-	await reportBootstrapProgress(onProgress, 'Starting seeded truth auction', 0.992)
-	await startTruthAuctionForSecurityPool(writeClient, yesChildPool.securityPoolAddress, yesForkDetailsBeforeAuction.universeId)
-
-	const yesForkDetails = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
-	if (yesForkDetails.truthAuctionAddress === undefined || yesForkDetails.truthAuctionAddress === '0x0000000000000000000000000000000000000000') {
-		throw new Error('Expected a seeded truth auction address for the Yes child pool')
-	}
-	if (yesForkDetails.truthAuction?.finalized) {
-		await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
-		return
-	}
-
-	const biddingAccounts = [primaryAccount, secondaryAccount, ...accounts.slice(2)]
-	const bidPriceByIndex = [
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[0],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[1],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
-		SECURITY_POOL_X2_AUCTION_BID_PRICES[2],
-	] as const
-
-	for (const [index, bidAmount] of SECURITY_POOL_X2_AUCTION_BID_AMOUNTS.entries()) {
-		const bidderAccount = biddingAccounts[index % biddingAccounts.length]
-		if (bidderAccount === undefined) throw new Error('Expected at least one QA account for seeded truth auction bids')
-		const bidPrice = bidPriceByIndex[index]
-		if (bidPrice === undefined) throw new Error(`Missing seeded truth auction bid price for bid ${index + 1}`)
-		const bidTick = getTruthAuctionTickAtPrice(bidPrice)
-		if (bidTick === undefined) throw new Error(`Unable to map seeded truth auction bid price to a tick for bid ${index + 1}`)
-		await submitTruthAuctionBid(createWriteClient(bidderAccount), yesChildPool.securityPoolAddress, yesForkDetails.universeId, yesForkDetails.truthAuctionAddress, bidTick, bidAmount)
-	}
-
-	await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
-}
-
-async function applyScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-	scenario,
-}: {
+export type BootstrapScenarioApplyParameters = {
 	accounts: readonly Address[]
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -942,58 +376,14 @@ async function applyScenario({
 	onProgress: BootstrapProgressHandler | undefined
 	profile: NetworkProfile
 	scenario: SimulationScenario
-}) {
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
-
-	switch (scenario) {
-		case 'baseline':
-			await reportBootstrapProgress(onProgress, 'Using baseline simulation scenario', 0.84)
-			return
-		case 'deployed':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.92 })
-			return
-		case 'security-pool':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 })
-			await seedSecurityPoolScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return
-		case 'securitypoolx2':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
-			await seedSecurityPoolX2Scenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return
-		case 'securitypoolx2-auction':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
-			await seedSecurityPoolX2AuctionScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return
-		default:
-			return assertNever(scenario)
-	}
 }
 
 export async function bootstrapSimulationChain({
 	accounts,
+	applyScenario,
 	createReadClient,
 	createWriteClient,
+	getDeploymentSteps,
 	memoryClient,
 	onProgress,
 	primaryAccount,
@@ -1001,8 +391,10 @@ export async function bootstrapSimulationChain({
 	scenario,
 }: {
 	accounts: readonly Address[]
+	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
+	getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]
 	memoryClient: TevmLikeClient
 	onProgress: BootstrapProgressHandler | undefined
 	primaryAccount: Address
@@ -1028,15 +420,30 @@ export async function bootstrapSimulationChain({
 		zoltarAddress: zoltarStep.address,
 	})
 	await seedWrappedEthBalances(createWriteClient, accounts, profile.wethAddress, onProgress)
-	await applyScenario({
-		accounts,
-		createReadClient,
-		createWriteClient,
-		memoryClient,
-		onProgress,
-		profile,
-		scenario,
-	})
+	const extendedApplied =
+		applyScenario === undefined
+			? false
+			: await applyScenario({
+					accounts,
+					createReadClient,
+					createWriteClient,
+					memoryClient,
+					onProgress,
+					profile,
+					scenario,
+				})
+	const scenarioApplied =
+		extendedApplied ||
+		(await applyCoreScenario({
+			accounts,
+			createWriteClient,
+			getDeploymentSteps,
+			memoryClient,
+			onProgress,
+			profile,
+			scenario,
+		}))
+	if (!scenarioApplied) throw new Error(`Unknown simulation scenario: ${scenario}`)
 	await reportBootstrapProgress(onProgress, 'Saving simulation snapshot', 0.99)
 	await reportBootstrapProgress(onProgress, 'Simulation scenario ready', 1)
 }

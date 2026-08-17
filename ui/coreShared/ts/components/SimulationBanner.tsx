@@ -9,7 +9,7 @@ import { tryParseDecimalInput } from '../lib/decimal.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
-import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
+import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '../simulation/scenarios.js'
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
 import { AddressValue } from './AddressValue.js'
@@ -402,7 +402,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							}}
 						>
 							<optgroup label={simulationCopy.builtInScenarios}>
-								{SIMULATION_SCENARIOS.map(scenario => (
+								{getRegisteredSimulationScenarios().map(scenario => (
 									<option key={scenario} value={`scenario:${scenario}`}>
 										{getSimulationScenarioLabel(scenario)}
 									</option>

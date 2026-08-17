@@ -1,7 +1,11 @@
 /// <reference lib="webworker" />
 
 import { assertNever } from '../lib/assert.js'
-import { createSimulationEngine } from './tevmEngine.js'
+import { createSimulationEngine, type SimulationEngineDependencies } from './tevmEngine.js'
+
+declare global {
+	var zoltarSimulationEngineDependencies: SimulationEngineDependencies | undefined
+}
 import type { SimulationWorkerCallMessage, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage } from './tevmWorkerProtocol.js'
 
 function isDedicatedWorkerGlobalScope(value: typeof globalThis): value is typeof globalThis & DedicatedWorkerGlobalScope {
@@ -97,7 +101,10 @@ scope.onmessage = event => {
 		try {
 			if (message.type === 'init') {
 				if (enginePromise !== undefined) throw new Error('Simulation worker was already initialized')
+				const dependencies = globalThis.zoltarSimulationEngineDependencies
+				if (dependencies === undefined) throw new Error('Simulation engine dependencies were not registered before worker initialization')
 				enginePromise = createSimulationEngine({
+					dependencies,
 					initialization: message.initialization,
 				})
 				const engine = await enginePromise

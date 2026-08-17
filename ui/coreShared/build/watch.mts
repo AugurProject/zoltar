@@ -6,9 +6,13 @@ import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
+const APP_IDS = ['zoltar', 'statoblast'] as const
+const appId = process.argv[2] ?? process.env.UI_APP ?? 'zoltar'
+if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for watch: ${appId}`)
+const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
+const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..', '..')
 const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.ts')
-const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
+const INDEX_HTML_PATH = path.join(APP_ROOT_PATH, 'index.html')
 const SHARED_SOURCE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')
 const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig.json')
 const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')
@@ -17,13 +21,13 @@ const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 
 const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'projectArtifacts.mts')
 const BUNDLER_PATHS_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'bundlerPaths.mts')
-const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
-const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
+const TYPE_SCRIPT_OUTPUT_PATH = path.join(APP_ROOT_PATH, 'js')
+const TYPE_SCRIPT_SOURCE_PATH = path.join(APP_ROOT_PATH, 'ts')
 const VENDOR_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'vendor.mts')
-const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
+const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
 const WORKER_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'workers.mts')
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
-const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
+const LIVE_RELOAD_ENDPOINT = appId === 'statoblast' ? 'http://127.0.0.1:12347/__live-reload' : 'http://127.0.0.1:12346/__live-reload'
 const BUN_EXECUTABLE_PATH = process.execPath
 
 type ManagedProcess = ReturnType<typeof spawn>
@@ -170,7 +174,7 @@ const sendLiveReload = async (reason: string) => {
 const spawnServer = () => {
 	console.log('[ui:watch] Starting ui:serve')
 	try {
-		serverProcess = spawn(BUN_EXECUTABLE_PATH, [DEV_SERVER_PATH], {
+		serverProcess = spawn(BUN_EXECUTABLE_PATH, [DEV_SERVER_PATH, appId], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -457,7 +461,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
-		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH], {
+		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH, appId], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -506,7 +510,7 @@ const runWorkerBuild = async (reason: string) => {
 	workerBuildRunning = true
 	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
 	try {
-		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH], {
+		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH, appId], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -694,7 +698,7 @@ const main = () => {
 	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
 	try {
 		typeScriptWatchProcess = spawn(BUN_EXECUTABLE_PATH, ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
-			cwd: UI_ROOT_PATH,
+			cwd: APP_ROOT_PATH,
 			stdio: ['inherit', 'pipe', 'pipe'],
 		})
 	} catch (error) {

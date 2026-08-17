@@ -1,4 +1,19 @@
+import { registerSimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
+import { applyStatoblastScenario, getStatoblastScenarioDescription, getStatoblastScenarioLabel, type StatoblastScenario } from './statoblastScenarios.js'
+
+const STATOBLAST_SCENARIOS = ['security-pool', 'securitypoolx2', 'securitypoolx2-auction'] as const satisfies readonly StatoblastScenario[]
+
+export function isStatoblastScenario(value: string): value is StatoblastScenario {
+	return (STATOBLAST_SCENARIOS as readonly string[]).includes(value)
+}
+
+export { applyStatoblastScenario, getStatoblastScenarioDescription, getStatoblastScenarioLabel }
+
 export function registerStatoblastSimulationScenarios() {
-	// Simulation scenarios are registered by the simulation feature module.
-	// This placeholder keeps the bootstrap wiring stable until the module lands.
+	for (const scenario of STATOBLAST_SCENARIOS) {
+		registerSimulationScenario(scenario, {
+			description: getStatoblastScenarioDescription(scenario),
+			label: getStatoblastScenarioLabel(scenario),
+		})
+	}
 }

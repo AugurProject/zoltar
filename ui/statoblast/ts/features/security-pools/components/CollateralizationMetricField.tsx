@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as pricingCopy from '@zoltar/ui-zoltar/copy/pricing.js'
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
