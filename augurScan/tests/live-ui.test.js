@@ -442,7 +442,11 @@ test('warns when a caught-up chain head is more than one minute old', () => {
 			stale: false,
 		},
 	)
-	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: null }, now)).toEqual({ stale: false })
+	for (const indexedTimestamp of [null, undefined, 'not-a-date']) {
+		const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: indexedTimestamp, phase: 'live' }
+		expect(indexerHeadFreshness(network, now)).toEqual({ stale: false })
+		expect(indexerHeadFreshnessTransitionDelay(network, now)).toBeUndefined()
+	}
 })
 
 test('schedules the stale-head transition without waiting for another network response', () => {
