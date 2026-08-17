@@ -208,7 +208,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	updateStrategyFromRequest(strategy, record['strategy'])
 	const privateKeyValue = record['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : record['privateKey']
 	const candidate = signerCandidate(privateKeyValue ?? null)
-	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : 2
+	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : 1
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Operator rpcQuorum must be 1 or 2')
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const deployment = validateDeploymentSettings(record['deployment'])

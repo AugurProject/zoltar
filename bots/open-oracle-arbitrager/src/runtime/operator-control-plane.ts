@@ -53,6 +53,10 @@ export function requireActivePersistedNetwork(activeNetwork: Configuration['netw
 	if (persistedNetwork !== activeNetwork) throw new Error('Restart to apply the saved network before deploying the executor')
 }
 
+export function requireActivePersistedRpcQuorum(activeRpcQuorum: Configuration['rpcQuorum'], persistedRpcQuorum: PersistedOperatorSettings['rpcQuorum']) {
+	if (persistedRpcQuorum !== activeRpcQuorum) throw new Error('Restart to apply the saved RPC agreement requirement before deploying the executor')
+}
+
 export function requirePausedExecutorDeployment(execute: boolean, paused: boolean) {
 	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
@@ -248,6 +252,7 @@ export function startOperatorControlPlane(parameters: {
 					const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 					if (latest === undefined) throw configurationRevisionConflict()
 					requireActivePersistedNetwork(config.network.name, latest.settings.network)
+					requireActivePersistedRpcQuorum(config.rpcQuorum, latest.settings.rpcQuorum)
 					requirePausedExecutorDeployment(config.execute, state.paused)
 					if (lockManager === undefined) throw new Error('Executor deployment signer lock management is unavailable')
 					if (!config.execute) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
