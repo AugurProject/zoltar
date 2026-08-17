@@ -442,6 +442,8 @@ describe('shared bot primitives', () => {
 		const alreadyContextual = rpcFailureWithContext(new Error('RPC https://rpc.example eth_getLogs not supported'), target, 'eth_getLogs')
 		expect(alreadyContextual.message.match(/https:\/\/rpc\.example/g)).toHaveLength(1)
 		expect(alreadyContextual.message.match(/eth_getLogs/g)).toHaveLength(1)
+		const attemptedElsewhere = rpcFailureWithContext(new Error('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs'), target, 'eth_getLogs')
+		expect(attemptedElsewhere.message).toBe('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs')
 
 		const rejected = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_601, message: 'eth_getLogs not supported' }, id: 1, jsonrpc: '2.0' }) })
 		try {
@@ -459,6 +461,26 @@ describe('shared bot primitives', () => {
 			expect(message).not.toContain('provider-key')
 		} finally {
 			rejected.stop(true)
+		}
+	})
+
+	test('rejects malformed typed RPC results before endpoint context is lost', async () => {
+		const malformed = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: {} }) })
+		try {
+			if (malformed.port === undefined) throw new Error('Malformed RPC result server did not expose a port')
+			const url = `http://127.0.0.1:${malformed.port.toString()}/private/provider-key`
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: createRpcEndpointPool([url]).transport }).getBalance({ address: '0x0000000000000000000000000000000000000001' })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message.match(/eth_getBalance/g)).toHaveLength(1)
+			expect(message.match(new RegExp(new URL(url).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+		} finally {
+			malformed.stop(true)
 		}
 	})
 

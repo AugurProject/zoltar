@@ -139,10 +139,40 @@ describe('operator connectivity', () => {
 		const connectivity = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [mainnetRelay], readRpcUrl: mainnetRelay }), 1)
 		expect(withConnectivityChecks(healthy, connectivity).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
 		expect(withSubmissionChecks(connectivity, healthy).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
-		await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [sepoliaRelay] }), 1)).rejects.toThrow('Expected chain 1')
+		let wrongRelayFailure: unknown
+		try {
+			await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [sepoliaRelay] }), 1)
+		} catch (error) {
+			wrongRelayFailure = error
+		}
+		const wrongRelayMessage = wrongRelayFailure instanceof Error ? wrongRelayFailure.message : String(wrongRelayFailure)
+		expect(wrongRelayMessage).toContain('Expected chain 1')
+		expect(wrongRelayMessage.match(/eth_chainId/g)).toHaveLength(1)
+		expect(wrongRelayMessage.match(new RegExp(new URL(sepoliaRelay).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 		const publicChecks = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'public', relayUrls: [mainnetRelay] }), 1)
 		expect(publicChecks).toEqual([])
 		expect(withSubmissionChecks([...connectivity, ...healthy], publicChecks).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc'])
+	})
+
+	test('identifies the RPC origin and method once for a wrong-chain connectivity probe', async () => {
+		const wrongChain = rpc(method => {
+			if (method === 'eth_chainId') return '0x2'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const healthy = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		let failure: unknown
+		try {
+			await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [healthy], readRpcUrl: wrongChain }), 1)
+		} catch (error) {
+			failure = error
+		}
+		const message = failure instanceof Error ? failure.message : String(failure)
+		expect(message).toContain('Expected chain 1')
+		expect(message.match(/eth_chainId/g)).toHaveLength(1)
+		expect(message.match(new RegExp(new URL(wrongChain).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 	})
 
 	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {

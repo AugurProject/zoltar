@@ -39,10 +39,19 @@ export class RpcEndpointPoolFailure extends Error {
 
 export function rpcFailureWithContext(error: unknown, target: string, method: string) {
 	const detail = errorMessage(error)
-	if (detail.includes(method) && detail.includes(target)) return error instanceof Error ? error : new Error(detail)
+	if (detail.includes(method) && /\bRPC https?:\/\//.test(detail)) return error instanceof Error ? error : new Error(detail)
 	const targetPrefix = `RPC ${target} `
 	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
 	return new Error(normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`, { cause: error })
+}
+
+function validateRpcResult(method: string, value: unknown) {
+	const quantityMethods = new Set(['eth_blockNumber', 'eth_chainId', 'eth_estimateGas', 'eth_gasPrice', 'eth_getBalance', 'eth_getTransactionCount'])
+	if (quantityMethods.has(method) && (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value))) throw new Error(`RPC returned an invalid ${method} quantity`)
+	if ((method === 'eth_call' || method === 'eth_getCode') && (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(value))) throw new Error(`RPC returned invalid data for ${method}`)
+	if (method === 'eth_getLogs' && !Array.isArray(value)) throw new Error('RPC returned invalid logs')
+	if (method === 'eth_getBlockByNumber' && value !== null && (typeof value !== 'object' || Array.isArray(value))) throw new Error('RPC returned an invalid block')
+	return value
 }
 
 function endpointTarget(url: string) {
@@ -115,7 +124,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown) {
 		const startedAt = now()
 		try {
-			const value = await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params })
+			const value = validateRpcResult(method, await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params }))
 			latestRequestContext = { method, target: endpoint.target }
 			const completedAt = now()
 			endpoint.consecutiveFailures = 0

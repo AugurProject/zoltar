@@ -206,7 +206,7 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	const checkedAt = new Date().toISOString()
 	try {
 		const chainId = await readRpcChainId(url)
-		if (chainId !== expectedChainId) throw new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`)
+		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
 		return { chainId, checkedAt, error: undefined, kind, status: 'healthy', target: endpointLabel(url) }
 	} catch (error) {
 		return {
@@ -273,7 +273,7 @@ async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): 
 	let chainId: number | undefined
 	try {
 		chainId = await readRpcChainId(url)
-		if (chainId !== expectedChainId) throw new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`)
+		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
 		await assertRelayMethodCapability(url, 'eth_callBundle')
 		await assertRelayMethodCapability(url, 'eth_sendBundle')
 		return { chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
