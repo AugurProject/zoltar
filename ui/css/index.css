@@ -785,6 +785,10 @@ button .loading-value {
 	white-space: nowrap;
 }
 
+.copy-feedback {
+	width: max-content;
+}
+
 .copy-error-recovery-wrap {
 	display: block;
 	max-width: 100%;
@@ -881,7 +885,7 @@ button.currency-value.copyable {
 	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
-	margin: -0.2rem -0.25rem;
+	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	cursor: copy;
@@ -962,7 +966,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
-	margin: -0.2rem -0.25rem;
+	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	font: inherit;
@@ -7213,6 +7217,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .overview-inline-metrics.data-grid > .overview-address-metric {
 	grid-column: span 2;
+}
+
+@media (min-width: 1280px) {
+	.overview-inline-metrics.data-grid {
+		grid-template-columns: minmax(16rem, 1fr) repeat(6, fit-content(10rem));
+	}
+
+	.overview-inline-metrics.data-grid > .overview-address-metric {
+		grid-column: auto;
+	}
 }
 
 .workflow-stack,
