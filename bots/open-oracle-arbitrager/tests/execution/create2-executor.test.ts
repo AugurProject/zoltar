@@ -3,7 +3,7 @@ import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, as
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
-import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
@@ -14,6 +14,11 @@ import { tmpdir } from 'node:os'
 test('rejects executor deployment while a different network is saved for restart', () => {
 	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Restart to apply the saved network')
 	expect(() => requireActivePersistedNetwork('mainnet', 'mainnet')).not.toThrow()
+})
+
+test('rejects executor deployment while a different RPC quorum is saved for restart', () => {
+	expect(() => requireActivePersistedRpcQuorum(1, 2)).toThrow('Restart to apply the saved RPC agreement requirement')
+	expect(() => requireActivePersistedRpcQuorum(2, 2)).not.toThrow()
 })
 
 test('rechecks execution pause immediately before executor deployment', () => {

@@ -47,7 +47,7 @@ const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 const savedSettings = await loadOperatorSettings(settingsFile)
-const rpcQuorum = savedSettings?.rpcQuorum ?? 2
+const rpcQuorum = savedSettings?.rpcQuorum ?? 1
 process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)

@@ -238,6 +238,23 @@ describe('file-only startup configuration', () => {
 		}
 	})
 
+	test('defaults deploy-executor to one reader when the operator file is missing', async () => {
+		const directory = await temporaryDirectory()
+		const child = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
+			env: {
+				...process.env,
+				OPEN_ORACLE_ARBITRAGER_CONFIG: join(directory, 'missing.json'),
+				PRIVATE_KEY: `0x${'11'.repeat(32)}`,
+			},
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+		expect(exitCode).toBe(1)
+		expect(stdout).toContain('predicted=')
+		expect(`${stdout}${stderr}`).not.toContain('does not satisfy the saved RPC agreement requirement')
+	})
+
 	test('rejects invalid file settings before RPC activity', async () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')
@@ -373,6 +390,58 @@ describe('file-only startup configuration', () => {
 		})
 		expect(removal.status).toBe(400)
 		expect(await Bun.file(path).text()).toBe(configuredContents)
+	})
+
+	test('requires a restart before executor deployment can use a newly saved quorum', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpc = Bun.serve({
+			hostname: '127.0.0.1',
+			port: 0,
+			async fetch(request) {
+				const requestValue = (await request.json()) as { id: unknown; method: string }
+				const result = requestValue.method === 'eth_chainId' ? '0x1' : requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
+			},
+		})
+		servers.push(rpc)
+		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
+		const path = join(directory, 'operator.json')
+		const configured = settings(rpcUrl, dashboardPort, `0x${'11'.repeat(32)}`)
+		await saveOperatorSettings(path, {
+			...configured,
+			paused: true,
+			rpcQuorum: 1,
+			runtime: {
+				...configured.runtime,
+				historyFile: join(directory, 'history.jsonl'),
+				positionFile: join(directory, 'positions.json'),
+				priceHistoryFile: join(directory, 'prices.jsonl'),
+			},
+		})
+		const child = Bun.spawn([executable, runSource], {
+			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path },
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		children.push(child)
+		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
+		await waitForJson(origin, '/api/state')
+		const saveResponse = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(saveResponse.status, await saveResponse.clone().text()).toBe(200)
+		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(2)
+		const deploymentResponse = await fetch(`${origin}/api/executor-deployment`, {
+			body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'POST',
+		})
+		expect(deploymentResponse.status).toBe(400)
+		expect(await deploymentResponse.json()).toEqual({ error: 'Executor deployment could not be completed. Review chain state and protected bot logs.' })
 	})
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {
