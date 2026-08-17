@@ -163,6 +163,30 @@ export const indexerWaitingForStart = (network) => {
 	return startBlock !== undefined && observedBlock !== undefined && observedBlock < startBlock
 }
 
+const chainHeadFreshnessThresholdMs = 60_000
+
+export const indexerHeadFreshness = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return { stale: false }
+	const indexedBlock = decimalBlock(network?.indexed_block)
+	const observedBlock = decimalBlock(network?.observed_block)
+	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return { stale: false }
+	const timestamp = new Date(network.indexed_timestamp).getTime()
+	if (!Number.isFinite(timestamp)) return { stale: false }
+	const ageMs = Math.max(0, now - timestamp)
+	return ageMs > chainHeadFreshnessThresholdMs ? { stale: true, ageMs } : { stale: false }
+}
+
+export const indexerHeadFreshnessTransitionDelay = (network, now = Date.now()) => {
+	if (network?.phase !== 'live') return undefined
+	const indexedBlock = decimalBlock(network?.indexed_block)
+	const observedBlock = decimalBlock(network?.observed_block)
+	if (indexedBlock === undefined || observedBlock === undefined || indexedBlock !== observedBlock || !network.indexed_timestamp) return undefined
+	const timestamp = new Date(network.indexed_timestamp).getTime()
+	if (!Number.isFinite(timestamp)) return undefined
+	const delayMs = timestamp + chainHeadFreshnessThresholdMs + 1 - now
+	return delayMs > 0 ? delayMs : undefined
+}
+
 export const indexerLagLabel = (network) => {
 	const observedBlock = decimalBlock(network.observed_block)
 	if (observedBlock === undefined) return 'head unknown'
@@ -217,7 +241,7 @@ export const indexerProgressEstimate = (network, previousSample, sampledAt = Dat
 	const roundedHundredths = (exactCompletedBlocks * 10_000n + exactTotalBlocks / 2n) / exactTotalBlocks
 	const hundredths = remainingBlocks > 0 && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
 	const percentage = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`
-	if (remainingBlocks === 0) return { percentage: '100.00', eta: 'Caught up' }
+	if (remainingBlocks === 0) return { percentage: '100.00', eta: indexerHeadFreshness(network, sampledAt).stale ? 'RPC head stale' : 'Caught up' }
 	let blocksPerSecond = previousSample?.blocksPerSecond
 	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
 		const observedRate = (boundedIndexed - previousSample.indexedBlock) / ((sampledAt - previousSample.sampledAt) / 1_000)
@@ -241,14 +265,17 @@ export const indexerProgressEstimate = (network, previousSample, sampledAt = Dat
 export const contractDeploymentStatus = (contract) => {
 	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
 		return contract.deployment_block_exact === false
-			? { label: `Deployed by #${contract.deployment_block}`, tone: 'live' }
+			? { label: `Code present at #${contract.deployment_block}`, tone: 'live' }
 			: { label: 'Deployed', tone: 'live' }
 	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
-		return { label: `Not deployed at #${contract.deployment_checked_block}`, tone: 'error' }
+		return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
 	return { label: 'Checking deployment', tone: 'pending' }
 }
 
-export const contractDeploymentTimestampLabel = (contract) => (contract.deployment_block_exact === false ? 'Code present by' : 'Deployed at')
+export const contractDeploymentTimestampLabel = (contract) => (contract.deployment_block_exact === false ? 'Code present at' : 'Deployed at')
+
+export const contractDeploymentBlockActionLabel = (contract) =>
+	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'
 
 export const reconcileTransactionDialogSnapshot = (snapshot, availableKeys) => ({
 	...snapshot,
