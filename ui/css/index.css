@@ -7475,18 +7475,8 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .selected-pool-change-control {
 	display: grid;
-	gap: var(--space-2);
 	width: 100%;
 	max-width: 100%;
-}
-
-.selected-pool-change-label {
-	display: flex;
-	align-items: center;
-	width: fit-content;
-	color: var(--text-secondary);
-	font-size: var(--font-detail);
-	font-weight: 700;
 }
 
 .mobile-workflow-context {

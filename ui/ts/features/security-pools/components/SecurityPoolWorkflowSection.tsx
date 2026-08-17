@@ -772,7 +772,6 @@ export function SecurityPoolWorkflowSection({
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-change-control'>
-						<span className='selected-pool-change-label'>{securityPoolCopy.changePool}</span>
 						<div className='selected-pool-context-lookup'>
 							<LookupFieldRow
 								label={commonCopy.securityPoolAddress}

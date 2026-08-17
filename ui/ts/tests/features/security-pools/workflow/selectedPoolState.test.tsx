@@ -286,7 +286,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(selectedPoolContext).getByText('Security Pool Address')).not.toBeNull()
 		const changePoolControl = document.body.querySelector('.selected-pool-change-control')
 		if (!(changePoolControl instanceof HTMLElement) || changePoolControl.tagName !== 'DIV') throw new Error('Expected an always-visible change-pool control')
-		expect(documentQueries.getByText('Change pool')).not.toBeNull()
+		expect(documentQueries.queryByText('Change pool')).toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Security Pool Address' })).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
