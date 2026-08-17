@@ -37,6 +37,14 @@ export class RpcEndpointPoolFailure extends Error {
 	}
 }
 
+export function rpcFailureWithContext(error: unknown, target: string, method: string) {
+	const detail = errorMessage(error)
+	if (detail.includes(method) && detail.includes(target)) return error instanceof Error ? error : new Error(detail)
+	const targetPrefix = `RPC ${target} `
+	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
+	return new Error(normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`, { cause: error })
+}
+
 function endpointTarget(url: string) {
 	return new URL(url).origin
 }
@@ -51,7 +59,10 @@ function safeErrorMessage(error: unknown, url: string, target: string) {
 
 function endpointRequestFailureDetail(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
 	const detail = safeErrorMessage(error, endpoint.url, endpoint.target)
-	return detail.startsWith('HTTP ') && detail.endsWith(` while calling ${method}`) ? `returned ${detail}` : `failed while calling ${method}: ${detail}`
+	const targetPrefix = `RPC ${endpoint.target} `
+	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
+	if (normalizedDetail.includes(method)) return normalizedDetail.startsWith('HTTP ') ? `returned ${normalizedDetail}` : normalizedDetail
+	return normalizedDetail.startsWith('HTTP ') ? `returned ${normalizedDetail} while calling ${method}` : `failed while calling ${method}: ${normalizedDetail}`
 }
 
 function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
@@ -99,11 +110,13 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		url,
 	}))
 	let preferredIndex = 0
+	let latestRequestContext: { method: string; target: string } | undefined
 
 	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown) {
 		const startedAt = now()
 		try {
 			const value = await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params })
+			latestRequestContext = { method, target: endpoint.target }
 			const completedAt = now()
 			endpoint.consecutiveFailures = 0
 			endpoint.error = undefined
@@ -160,6 +173,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 	}
 	const totalTimeoutMilliseconds = Math.min(300_000, timeoutMilliseconds * uniqueUrls.length + 1_000)
 	return {
+		latestRequestContext: () => latestRequestContext,
 		prefer: (url: string) => {
 			const index = endpoints.findIndex(endpoint => endpoint.url === url)
 			if (index === -1) throw new Error('Cannot prefer an RPC URL outside the endpoint pool')

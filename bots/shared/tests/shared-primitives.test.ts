@@ -9,7 +9,7 @@ import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
-import { createRpcEndpointPool, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
+import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
@@ -70,6 +70,7 @@ describe('shared bot primitives', () => {
 				'publicActions',
 				'readContractAtBlock',
 				'recoverTransactionAddress',
+				'rpcFailureWithContext',
 				'toHex',
 				'zeroAddress',
 				'zeroHash',
@@ -429,6 +430,35 @@ describe('shared bot primitives', () => {
 		} finally {
 			rejected.stop(true)
 			healthy.stop(true)
+		}
+	})
+
+	test('keeps endpoint and method context idempotent for typed response and provider failures', async () => {
+		const target = 'https://rpc.example'
+		const wrongChain = rpcFailureWithContext(new Error('Read RPC chain mismatch: expected 1, received 2'), target, 'eth_chainId')
+		expect(wrongChain.message).toBe('RPC https://rpc.example failed while calling eth_chainId: Read RPC chain mismatch: expected 1, received 2')
+		const malformedBlock = rpcFailureWithContext(new Error('RPC returned an invalid block'), target, 'eth_getBlockByNumber')
+		expect(malformedBlock.message).toBe('RPC https://rpc.example failed while calling eth_getBlockByNumber: RPC returned an invalid block')
+		const alreadyContextual = rpcFailureWithContext(new Error('RPC https://rpc.example eth_getLogs not supported'), target, 'eth_getLogs')
+		expect(alreadyContextual.message.match(/https:\/\/rpc\.example/g)).toHaveLength(1)
+		expect(alreadyContextual.message.match(/eth_getLogs/g)).toHaveLength(1)
+
+		const rejected = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_601, message: 'eth_getLogs not supported' }, id: 1, jsonrpc: '2.0' }) })
+		try {
+			if (rejected.port === undefined) throw new Error('RPC method diagnostic server did not expose a port')
+			const rejectedUrl = `http://127.0.0.1:${rejected.port.toString()}/private/provider-key`
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: createRpcEndpointPool([rejectedUrl]).transport }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message.match(new RegExp(new URL(rejectedUrl).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+		} finally {
+			rejected.stop(true)
 		}
 	})
 

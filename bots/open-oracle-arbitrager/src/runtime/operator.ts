@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type TransactionLog, zeroAddress } from '#ethereum'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, rpcFailureWithContext } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
@@ -56,6 +56,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let positions = await loadPositionJournal(config.positionFile)
 	if (config.execute) await savePositionJournal(config.positionFile, positions)
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+	const contextualRpcRead = async <Value>(method: string, request: () => Promise<Value>, explicitTarget?: string) => {
+		try {
+			return await request()
+		} catch (error) {
+			const context = readPool.latestRequestContext()
+			const target = explicitTarget ?? (context?.method === method ? context.target : endpointLabel(config.connectivity.readRpcUrl))
+			throw rpcFailureWithContext(error, target, method)
+		}
+	}
 	const createClient = (rpcUrl?: string) =>
 		createPublicClient({
 			chain: config.network.chain,
@@ -236,9 +245,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					if (!config.networkConfigured) return false
 					if (!startupValidated) {
 						if (config.execute) {
-							const chainReads = readClients.map(async (readClient, index) => ({ endpoint: index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? ''), index, value: await readClient.getChainId() }))
+							const chainReads = readClients.map(async (readClient, index) => {
+								const endpoint = index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? '')
+								return { endpoint, index, value: await contextualRpcRead('eth_chainId', () => readClient.getChainId(), endpoint) }
+							})
 							const observedChainId = await settledQuorumValue('configured chain id', chainReads)
-							if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC quorum must use ${config.network.name} chain ${config.network.chain.id.toString()}`)
+							if (observedChainId !== config.network.chain.id)
+								throw new Error(`Read RPC quorum ${[config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel).join(', ')} returned chain ${observedChainId.toString()} while calling eth_chainId; expected ${config.network.name} chain ${config.network.chain.id.toString()}`)
 							const availableChainRead = (await Promise.allSettled(chainReads)).find(result => result.status === 'fulfilled')
 							const availableClient = availableChainRead === undefined ? undefined : readClients[availableChainRead.value.index]
 							if (availableClient === undefined) throw new Error('Configured chain validation requires an available read RPC endpoint')
@@ -247,8 +260,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						coordinatorPolicies = config.execute ? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config) : await loadCoordinatorPolicies(client, config)
 						await authenticateConfiguredDeployments(readClients, config)
 						if (config.execute && config.executor !== undefined) {
-							const executorCode = await client.getCode({ address: config.executor })
-							if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${config.executor} has no contract code on ${config.network.name}`)
+							const executor = config.executor
+							const executorCode = await contextualRpcRead('eth_getCode', () => client.getCode({ address: executor }))
+							if (executorCode === undefined || executorCode === '0x') throw new Error(`Configured executor ${executor} has no contract code on ${config.network.name}`)
 						}
 						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
 						startupValidated = true
@@ -266,7 +280,12 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					let fixedHeadNumber: bigint | undefined
 					if (config.execute) {
 						const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-						const settledHeads = await Promise.allSettled(readClients.map(async (readClient, index) => ({ endpoint: endpointLabel(endpoints[index] ?? ''), head: await readClient.getBlockNumber(), index })))
+						const settledHeads = await Promise.allSettled(
+							readClients.map(async (readClient, index) => {
+								const endpoint = endpointLabel(endpoints[index] ?? '')
+								return { endpoint, head: await contextualRpcRead('eth_blockNumber', () => readClient.getBlockNumber(), endpoint), index }
+							}),
+						)
 						const availableHeads = availableSettledValues(settledHeads)
 						const quorumRequirement = rpcQuorumRequirement()
 						if (availableHeads.length < quorumRequirement) {
@@ -278,8 +297,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							availableHeads.map(async observation => {
 								const readClient = readClients[observation.index]
 								if (readClient === undefined) throw new Error('Canonical head reader is unavailable')
-								const fixedBlock = await readClient.getBlock({ blockNumber: sharedHead })
-								if (fixedBlock.hash === undefined) throw new Error('Canonical head block is missing its hash')
+								const fixedBlock = await contextualRpcRead(
+									'eth_getBlockByNumber',
+									async () => {
+										const value = await readClient.getBlock({ blockNumber: sharedHead })
+										if (value.hash === undefined) throw new Error('Canonical head block is missing its hash')
+										return { ...value, hash: value.hash }
+									},
+									observation.endpoint,
+								)
 								return { block: fixedBlock, endpoint: observation.endpoint, index: observation.index }
 							}),
 						)
@@ -299,18 +325,27 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						client = selectedClient
 						fixedHeadNumber = sharedHead
 					}
-					const observedChainId = await client.getChainId()
-					if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
-					const block = fixedHeadNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber: fixedHeadNumber })
+					await contextualRpcRead('eth_chainId', async () => {
+						const value = await client.getChainId()
+						if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
+					})
+					const block = await contextualRpcRead('eth_getBlockByNumber', async () => {
+						const value = fixedHeadNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber: fixedHeadNumber })
+						if (value.number === undefined) throw new Error('Latest block is missing its number')
+						if (value.hash === undefined) throw new Error('Latest block is missing its hash')
+						return { ...value, hash: value.hash, number: value.number }
+					})
 					const blockNumber = block.number
-					if (blockNumber === undefined) throw new Error('Latest block is missing its number')
 					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
-					if (blockHash === undefined) throw new Error('Latest block is missing its hash')
 					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
-						const anchor = await client.getBlock({ blockNumber: cursor.finalityAnchorNumber })
-						if (anchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-						assertFinalityAnchor(cursor, cursor.finalityAnchorNumber, anchor.hash)
+						const anchorNumber = cursor.finalityAnchorNumber
+						const anchor = await contextualRpcRead('eth_getBlockByNumber', async () => {
+							const value = await client.getBlock({ blockNumber: anchorNumber })
+							if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+							return { ...value, hash: value.hash }
+						})
+						assertFinalityAnchor(cursor, anchorNumber, anchor.hash)
 					}
 					let lifecycleProcessed = false
 					if (config.execute && wallet !== undefined) {
@@ -392,12 +427,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					} else {
 						const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
 						for (const range of ranges) {
-							const logs = await client.getLogs({
-								address: config.openOracle,
-								fromBlock: range.fromBlock,
-								toBlock: range.toBlock,
-								topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-							})
+							const logs = await contextualRpcRead('eth_getLogs', () =>
+								client.getLogs({
+									address: config.openOracle,
+									fromBlock: range.fromBlock,
+									toBlock: range.toBlock,
+									topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+								}),
+							)
 							cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
 							reports.clear()
 							applyLogs(reports, cachedLogs)
@@ -407,8 +444,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					if (replacedMarketHead) {
 						cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {})
 						const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-						const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
-						if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+						const finalityAnchor = await contextualRpcRead('eth_getBlockByNumber', async () => {
+							const value = await client.getBlock({ blockNumber: finalityAnchorNumber })
+							if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+							return { ...value, hash: value.hash }
+						})
 						cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
 						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
 						state.blockNumber = blockNumber.toString()
@@ -447,7 +487,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							}
 						})
 						try {
-							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => (await client.getBlock({ blockNumber: canonicalBlockNumber })).hash)
+							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => {
+								const canonicalBlock = await contextualRpcRead('eth_getBlockByNumber', async () => {
+									const value = await client.getBlock({ blockNumber: canonicalBlockNumber })
+									if (value.hash == null) throw new Error('Canonical block is missing its hash')
+									return { ...value, hash: value.hash }
+								})
+								return canonicalBlock.hash
+							})
 						} catch (error) {
 							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
 							state.marketConsensus = undefined
@@ -664,8 +711,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						completedOpportunityCount = opportunities.length
 					})
 					const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-					const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
-					if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+					const finalityAnchor = await contextualRpcRead('eth_getBlockByNumber', async () => {
+						const value = await client.getBlock({ blockNumber: finalityAnchorNumber })
+						if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+						return { ...value, hash: value.hash }
+					})
 					cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
 					const settledReportIds = new Set(
 						[...reports.entries()]

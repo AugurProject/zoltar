@@ -110,6 +110,19 @@ describe('operator connectivity', () => {
 		const checks = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [url], readRpcUrl: url }), 11_155_111)
 		expect(checks.map(check => check.status)).toEqual(['healthy', 'healthy'])
 		await expect(checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [url], readRpcUrl: url }), 1)).rejects.toThrow('Expected chain 1')
+		const malformed = rpc(method => {
+			if (method === 'eth_chainId') return 'not-a-chain-id'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		let malformedFailure: unknown
+		try {
+			await readRpcChainId(malformed)
+		} catch (error) {
+			malformedFailure = error
+		}
+		const malformedMessage = malformedFailure instanceof Error ? malformedFailure.message : String(malformedFailure)
+		expect(malformedMessage.match(/eth_chainId/g)).toHaveLength(1)
+		expect(malformedMessage.match(new RegExp(new URL(malformed).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 	})
 
 	test('fails closed on wrong-chain private relays and clears checks for public mode', async () => {
@@ -187,7 +200,7 @@ describe('operator connectivity', () => {
 			failure = error
 		}
 		const message = failure instanceof Error ? failure.message : String(failure)
-		expect(message).toContain(new URL(unavailable).origin)
+		expect(message.match(new RegExp(new URL(unavailable).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 		expect(message.match(/eth_chainId/g)).toHaveLength(1)
 		expect(message).not.toContain('provider-key')
 		expect(message).not.toContain('query-secret')
@@ -238,7 +251,7 @@ describe('operator connectivity', () => {
 			failure = error
 		}
 		const message = failure instanceof Error ? failure.message : String(failure)
-		expect(message).toContain(new URL(endpoint).origin)
+		expect(message.match(new RegExp(new URL(endpoint).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 		expect(message).toContain('HTTP 503')
 		expect(message.match(/eth_callBundle/g)).toHaveLength(1)
 		expect(message).not.toContain('provider-key')

@@ -37,7 +37,9 @@ function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | '
 function endpointMethodFailure(error: unknown, url: string, method: string) {
 	const target = endpointLabel(url)
 	const detail = (error instanceof Error ? error.message : String(error)).split(url).join(target)
-	const message = detail.includes(method) ? `RPC ${target} ${detail}` : `RPC ${target} failed while calling ${method}: ${detail}`
+	const targetPrefix = `RPC ${target} `
+	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
+	const message = normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`
 	if (error instanceof EndpointTransportError) return new EndpointTransportError(message, { cause: error })
 	if (error instanceof EndpointSafetyError) return new EndpointSafetyError(message, { cause: error })
 	return new Error(message, { cause: error })
@@ -143,24 +145,32 @@ async function rpcRequest(url: string, method: string, params: readonly unknown[
 }
 
 export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
-	const result = await rpcRequest(url, 'eth_chainId', [], timeoutMilliseconds)
-	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('RPC returned an invalid chain id')
-	const chainId = bigintToSafeNumber(BigInt(result), 'RPC chain ID')
-	if (chainId <= 0) throw new Error('RPC returned an unsupported chain id')
-	return chainId
+	try {
+		const result = await rpcRequest(url, 'eth_chainId', [], timeoutMilliseconds)
+		if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('RPC returned an invalid chain id')
+		const chainId = bigintToSafeNumber(BigInt(result), 'RPC chain ID')
+		if (chainId <= 0) throw new Error('RPC returned an unsupported chain id')
+		return chainId
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_chainId')
+	}
 }
 
 export async function sendRawTransactionToRpc(url: string, serializedTransaction: Hex, timeoutMilliseconds = 10_000) {
-	let result: unknown
 	try {
-		result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+		let result: unknown
+		try {
+			result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
+		} catch (error) {
+			const message = error instanceof Error ? error.message.toLowerCase() : ''
+			if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
+			throw error
+		}
+		if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
+		return result as Hex
 	} catch (error) {
-		const message = error instanceof Error ? error.message.toLowerCase() : ''
-		if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
-		throw error
+		throw endpointMethodFailure(error, url, 'eth_sendRawTransaction')
 	}
-	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
-	return result as Hex
 }
 
 function rpcQuantity(value: unknown, label: string) {
@@ -169,15 +179,27 @@ function rpcQuantity(value: unknown, label: string) {
 }
 
 export async function readRpcPendingNonce(url: string, address: Address, timeoutMilliseconds = 10_000) {
-	return rpcQuantity(await rpcRequest(url, 'eth_getTransactionCount', [address, 'pending'], timeoutMilliseconds), 'pending nonce')
+	try {
+		return rpcQuantity(await rpcRequest(url, 'eth_getTransactionCount', [address, 'pending'], timeoutMilliseconds), 'pending nonce')
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_getTransactionCount')
+	}
 }
 
 export async function estimateRpcTransactionGas(url: string, transaction: { data: Hex; from: Address; to: Address }, timeoutMilliseconds = 10_000) {
-	return rpcQuantity(await rpcRequest(url, 'eth_estimateGas', [transaction], timeoutMilliseconds), 'gas estimate')
+	try {
+		return rpcQuantity(await rpcRequest(url, 'eth_estimateGas', [transaction], timeoutMilliseconds), 'gas estimate')
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_estimateGas')
+	}
 }
 
 export async function readRpcGasPrice(url: string, timeoutMilliseconds = 10_000) {
-	return rpcQuantity(await rpcRequest(url, 'eth_gasPrice', [], timeoutMilliseconds), 'gas price')
+	try {
+		return rpcQuantity(await rpcRequest(url, 'eth_gasPrice', [], timeoutMilliseconds), 'gas price')
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_gasPrice')
+	}
 }
 
 export async function checkRpcEndpoint(url: string, expectedChainId: number, kind: EndpointCheck['kind']): Promise<EndpointCheck> {
@@ -271,7 +293,7 @@ async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): 
 export async function checkConnectivity(settings: ConnectivitySettings, expectedChainId: number) {
 	const checks = await Promise.all([checkRpcEndpoint(settings.readRpcUrl, expectedChainId, 'read-rpc'), ...settings.publicRpcUrls.map(url => checkRpcEndpoint(url, expectedChainId, 'public-rpc'))])
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => `${check.target}: ${check.error ?? 'endpoint check failed'}`).join('; '), checks)
+	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'endpoint check failed'}`)).join('; '), checks)
 	return checks
 }
 
@@ -279,7 +301,7 @@ export async function checkSubmissionEndpoints(settings: SubmissionSettings, exp
 	if (settings.mode === 'public') return []
 	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => `${check.target}: ${check.error ?? 'relay check failed'}`).join('; '), checks)
+	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
 	return checks
 }
 

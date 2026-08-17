@@ -68,4 +68,4 @@ export {
 	readContractAtBlock,
 	RpcError,
 } from './ethereum/client'
-export { createRpcEndpointPool, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
+export { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
