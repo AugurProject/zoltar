@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import * as forkAuctionCopy from '../copy/forkAuction.js'
 import * as appCopy from '../copy/app.js'
+import * as commonCopy from '../copy/common.js'
 import * as marketCopy from '../copy/market.js'
 import * as liquidationCopy from '../copy/liquidation.js'
 import * as openOracleCopy from '../copy/openOracle.js'
@@ -57,11 +58,12 @@ test('reporting risk copy keeps escalation claims with their committed depositor
 
 test('market and Open Oracle values own their complete spacing and units', () => {
 	expect(marketCopy.selectedForkQuestionSummary).toBe('Selected fork question')
-	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.secondsAbbreviation)).toBe('12 s')
-	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.blocks)).toBe('12 blocks')
+	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.secondsAbbreviation)).toBe('12\u00a0s')
+	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.blocks)).toBe('12\u00a0blocks')
 })
 
 test('dynamic value and unit copy uses nonbreaking separators', () => {
+	expect(commonCopy.formatApproveTokenAmount('12', 'ETH')).toBe('Approve 12\u00a0ETH')
 	expect(zoltarCopy.formatAddMigrationRepDetail('12')).toContain('12\u00a0REP')
 	expect(zoltarCopy.formatMigrationRepShortfall('12')).toContain('12\u00a0more\u00a0REP')
 	expect(zoltarCopy.formatMigrationPreparationRequired('12')).toContain('12\u00a0REP')

@@ -117,7 +117,7 @@ export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
 export const approvalSatisfied = 'Approval Satisfied'
 export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve Max ${tokenLabel}`
-export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel} ${tokenSymbol}`
+export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
 export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${amount}`
 export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
 export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue) => `${tokenLabel} Approval Amount`

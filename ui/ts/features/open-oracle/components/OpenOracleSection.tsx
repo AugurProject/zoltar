@@ -56,7 +56,7 @@ import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { getWrongNetworkMessage, isActiveAppChain } from '../../../lib/network.js'
 import { tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
-import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration, formatValueWithUnit } from '../../../lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../types.js'
@@ -1151,7 +1151,7 @@ export function OpenOracleSection({
 								items={[
 									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} copyable={false} responsiveAbbreviation /> },
 									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} copyable={false} responsiveAbbreviation /> },
-									{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+									{ label: transactionReviewCopy.youPay, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
 								]}
 							/>
 							<div className='form-grid'>
@@ -1372,11 +1372,11 @@ export function OpenOracleSection({
 										{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 									]}
 									primary={[
-										{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+										{ label: transactionReviewCopy.youPay, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
 										{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
 									]}
 									details={[
-										{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerRewardEthAmount || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+										{ label: openOracleCopy.settlerReward, value: formatValueWithUnit(openOracleCreateForm.settlerRewardEthAmount || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
 										{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
 										{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
 										{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
