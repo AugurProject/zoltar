@@ -7,6 +7,7 @@ import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { TradingSection } from '../../../features/markets/components/TradingSection.js'
 import { GlobalTransactionPresentationProvider } from '../../../components/GlobalTransactionPresentationContext.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
 import type { AccountState, TradingFormState } from '../../../types/app.js'
@@ -460,13 +461,14 @@ void describe('TradingSection', () => {
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
 	})
 
-	void test('shows only assigned fee-eligible capacity ownership in the mint transaction modal', async () => {
+	void test('shows wallet ETH and the amount currently available to mint', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
 					selectedPool: createSelectedPool({
-						feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
-						totalCapacityOwnershipAttoRep: 9n * 10n ** 18n,
+						settlementCollateralAttoEth: 0n,
+						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
 					}),
 				})}
 			/>,
@@ -479,12 +481,39 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		const activeCapacityOwnershipLabel = modalQueries.getByText('Active capacity ownership')
-		const activeCapacityOwnershipMetric = activeCapacityOwnershipLabel.parentElement
-		if (activeCapacityOwnershipMetric === null) throw new Error('Expected active capacity ownership metric')
-		const activeCapacityOwnershipQueries = within(activeCapacityOwnershipMetric)
-		expect(activeCapacityOwnershipQueries.getByRole('button', { name: 'Copy exact value 2' })).not.toBeNull()
-		expect(activeCapacityOwnershipQueries.queryByRole('button', { name: 'Copy exact value 9' })).toBeNull()
+		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
+		const mintableMetric = modalQueries.getByText('Available to Mint').parentElement
+		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
+		expect(within(walletMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+		expect(within(mintableMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+	})
+
+	void test('fills the mint amount with the lesser of wallet ETH and remaining capacity', async () => {
+		let mintedAmount: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
+					onTradingFormChange: ({ completeSetAmount }) => {
+						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
+					},
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 5n * 10n ** 18n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+		await act(() => {
+			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
+			fireEvent.click(maxButton)
+		})
+
+		expect(mintedAmount).toBe('1.25')
 	})
 
 	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
@@ -513,13 +542,22 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	void test('labels checkpoint-dependent mint outputs as estimates and explains retention fees', async () => {
+	void test('shows the checkpoint retention estimate and uses it for the mint share preview', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<TradingSection
-				{...createTradingSectionProps({
-					tradingForm: createTradingForm({ completeSetAmount: '1' }),
-				})}
-			/>,
+			<ChainTimestampContext.Provider value={2n}>
+				<TradingSection
+					{...createTradingSectionProps({
+						selectedPool: createSelectedPool({
+							currentRetentionRate: 900_000_000_000_000_000n,
+							feeAccrualState: { feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
+							settlementCollateralAttoEth: 10n * 10n ** 18n,
+							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+							totalCapacityOwnershipAttoRep: 50n * 10n ** 18n,
+						}),
+						tradingForm: createTradingForm({ completeSetAmount: '1' }),
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -528,13 +566,18 @@ void describe('TradingSection', () => {
 		})
 
 		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
-		expect(dialog.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
+		expect(dialog.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
+		expect(document.body.querySelector('.transaction-review')).toBeNull()
 		expect(dialog.getByText('You Pay')).not.toBeNull()
 		expect(dialog.getByText('Estimated Shares Received')).not.toBeNull()
-		expect(dialog.getByText('Estimate details')).not.toBeNull()
-		expect(dialog.getByText('Retention fee')).not.toBeNull()
+		expect(dialog.getByText('Estimated Retention Fee')).not.toBeNull()
 		expect(dialog.getByText('Estimate may change when accrued fees are checkpointed.')).not.toBeNull()
 		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
+		const estimatedFeeRow = dialog.getByText('Estimated Retention Fee').parentElement
+		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
+		expect(within(estimatedFeeRow).getByRole('button', { name: 'Copy exact value 1' })).not.toBeNull()
+		expect(dialog.getAllByRole('button', { name: 'Copy exact value 1.111111111111111111' })).toHaveLength(3)
+		expect(dialog.queryByText('Technical Details')).toBeNull()
 		expect(document.body.textContent?.includes('Yes +')).toBe(true)
 		expect(document.body.textContent?.includes('No +')).toBe(true)
 		expect(document.body.textContent?.includes('Invalid +')).toBe(true)

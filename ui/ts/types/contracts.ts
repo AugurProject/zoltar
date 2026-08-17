@@ -328,6 +328,11 @@ export type OpenOracleReportDetails = {
 export type ListedSecurityPool = {
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
+	feeAccrualState?: {
+		feeIndexRemainder: bigint
+		lastUpdatedFeeAccumulator: bigint
+		totalFeesOwedRemainder: bigint
+	}
 	feeEligibleCapacityOwnershipAttoRep: bigint
 	hasForkActivity: boolean
 	initialReportPriorityFeeAttoEthPerGas: bigint

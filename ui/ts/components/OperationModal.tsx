@@ -11,11 +11,13 @@ function getTransactionOperationKey(transaction: ReturnType<typeof useGlobalTran
 }
 
 function getModalTransactionPresentation(transaction: ReturnType<typeof useGlobalTransactionPresentation>, context: NonNullable<OperationModalProps['context']>) {
-	if (transaction === undefined || transaction.rows === undefined) return transaction
+	if (transaction === undefined) return undefined
 	const contextIdentityKeys = new Set(context.flatMap(item => (item.identityKey === undefined ? [] : [item.identityKey])))
 	const contextLabels = new Set(context.flatMap(item => (typeof item.label === 'string' ? [item.label] : [])))
+	const { technicalRows: _technicalRows, ...modalTransaction } = transaction
+	if (transaction.rows === undefined) return modalTransaction
 	return {
-		...transaction,
+		...modalTransaction,
 		rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)),
 	}
 }

@@ -1,6 +1,5 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AddressInfo } from '../../../components/AddressInfo.js'
@@ -15,7 +14,6 @@ import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { TransactionStatusCard } from '../../../components/TransactionStatusCard.js'
@@ -664,10 +662,6 @@ export function LiquidationModal({
 							: []
 					}
 					risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
-					technicalDetails={[
-						{ label: transactionReviewCopy.contract, value: liquidationManagerAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationManagerAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
 				/>
 				<div className='actions liquidation-modal-actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>

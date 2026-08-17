@@ -176,7 +176,7 @@ describe('ForkZoltarSection', () => {
 		expect(approveButton.hasAttribute('disabled')).toBe(false)
 	})
 
-	test('shows the permanent fork burn, migration credit, and Zoltar target before submission', async () => {
+	test('shows only the required and permanently burned REP amounts before submission', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
@@ -203,10 +203,11 @@ describe('ForkZoltarSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Migration Custody Credit≈ 80.00 REP')
+		expect(review.textContent).toContain('Fork Threshold≈ 100.00 REP')
 		expect(review.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
-		expect(review.textContent).toContain('Zoltar Contract')
-		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
+		expect(review.textContent).not.toContain('Migration Custody Credit')
+		expect(review.textContent).not.toContain('Resulting REP Balance')
+		expect(review.textContent).not.toContain('Technical Details')
 		expect(review.textContent).not.toContain('Protocol FeeNone')
 	})
 

@@ -1,7 +1,7 @@
 import { type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from '../lib/assert.js'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from './core.js'
@@ -9,6 +9,11 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
+	currentRetentionRate?: bigint
+	currentTimestamp?: bigint
+	feeEndTimestamp?: bigint
+	feeIndexRemainder?: bigint
+	lastUpdatedFeeAccumulator?: bigint
 	settlementCollateralAttoEth: bigint
 	feeEligibleCapacityOwnershipAttoRep: bigint
 	mintingCapacityAttoEth: bigint
@@ -16,9 +21,10 @@ type SecurityPoolMintCapacity = {
 	totalPoolHeldAttoRep: bigint
 	totalCapacityOwnershipAttoRep: bigint
 	isPriceValid: boolean
+	totalFeesOwedRemainder?: bigint
 }
-export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer] = await readRequiredMulticall(client, [
+export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, questionData, questionId] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -49,16 +55,38 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 			address: securityPoolAddress,
 			args: [],
 		},
-	])
-	const [isPriceValid] = await readRequiredMulticall(client, [
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'isPriceValid',
-			address: priceOracleManagerAndOperatorQueuer,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'currentRetentionRate',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'questionData',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'questionId',
+			address: securityPoolAddress,
 			args: [],
 		},
 	])
+	const [priceValidity, questionEnd, currentBlock] = await Promise.all([
+		readRequiredMulticall(client, [{ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]),
+		readRequiredMulticall(client, [{ abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', address: questionData, args: [questionId] }]),
+		client.getBlock(),
+	])
+	const [isPriceValid] = priceValidity
+	const [feeEndTimestamp] = questionEnd
 	return {
+		currentRetentionRate,
+		currentTimestamp: currentBlock.timestamp,
+		feeEndTimestamp,
+		feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
+		lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
 		mintingCapacityAttoEth,
@@ -66,6 +94,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 		totalPoolHeldAttoRep,
 		totalCapacityOwnershipAttoRep: poolAccountingSnapshot.totalCapacityOwnershipAttoRep,
 		isPriceValid,
+		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {

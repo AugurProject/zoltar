@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/index.js'
+import { createZoltarChildUniverse, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/index.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../../../lib/errors.js'
@@ -11,6 +11,7 @@ import { createChildUniverseSuccessPresentation, createChildUniverseTransactionI
 import { hasDeployedStep } from '../../markets/lib/marketCreation.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { requireWallet } from '../../../lib/requireWalletConnection.js'
+import { normalizeQuestionId } from '../../../lib/questionId.js'
 import { assertActiveWallet } from '../../../lib/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '../../../types/contracts.js'
@@ -51,6 +52,7 @@ export type UseZoltarUniverseDependencies = {
 	createWalletWriteClient: typeof createWalletWriteClient
 	createZoltarChildUniverse: typeof createZoltarChildUniverse
 	loadAllZoltarQuestions: typeof loadAllZoltarQuestions
+	loadMarketDetails: typeof loadMarketDetails
 	loadZoltarQuestionCount: typeof loadZoltarQuestionCount
 	loadZoltarQuestionPage: typeof loadZoltarQuestionPage
 	loadZoltarUniverseSummary: typeof loadZoltarUniverseSummary
@@ -61,6 +63,7 @@ const defaultUseZoltarUniverseDependencies: UseZoltarUniverseDependencies = {
 	createWalletWriteClient,
 	createZoltarChildUniverse,
 	loadAllZoltarQuestions,
+	loadMarketDetails,
 	loadZoltarQuestionCount,
 	loadZoltarQuestionPage,
 	loadZoltarUniverseSummary,
@@ -74,6 +77,7 @@ export function useZoltarUniverse(
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
+	const questionByIdLoad = useLoadController()
 	const zoltarUniverseMissing = useSignal(false)
 	const zoltarUniverseLoadedId = useSignal<bigint | undefined>(undefined)
 	const zoltarUniverseResolvedId = useSignal<bigint | undefined>(undefined)
@@ -84,6 +88,8 @@ export function useZoltarUniverse(
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
 	const zoltarQuestionsError = useSignal<string | undefined>(undefined)
+	const zoltarQuestionLookupError = useSignal<string | undefined>(undefined)
+	const zoltarQuestionLookupId = useSignal<string | undefined>(undefined)
 	const zoltarUniverseError = useSignal<string | undefined>(undefined)
 	const zoltarChildUniverseFeedback = useSignal<ActionFeedback<'createChildUniverse'> | undefined>(undefined)
 	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
@@ -94,12 +100,14 @@ export function useZoltarUniverse(
 	const nextUniverseLoad = useRequestGuard()
 	const nextQuestionCountLoad = useRequestGuard()
 	const nextQuestionsLoad = useRequestGuard()
+	const nextQuestionByIdLoad = useRequestGuard()
 	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 
 	const resetZoltarUniverseState = () => {
 		universeLoad.invalidate()
 		questionCountLoad.invalidate()
 		questionsLoad.invalidate()
+		questionByIdLoad.invalidate()
 		questionLoadGenerationRef.current += 1
 		zoltarUniverseMissing.value = false
 		zoltarUniverse.value = undefined
@@ -107,6 +115,8 @@ export function useZoltarUniverse(
 		zoltarUniverseResolvedId.value = undefined
 		zoltarChildUniverseError.value = undefined
 		zoltarQuestionsError.value = undefined
+		zoltarQuestionLookupError.value = undefined
+		zoltarQuestionLookupId.value = undefined
 		zoltarUniverseError.value = undefined
 		zoltarChildUniversePendingOutcomeIndex.value = undefined
 		hasLoadedZoltarQuestions.value = false
@@ -298,6 +308,40 @@ export function useZoltarUniverse(
 		}
 	}
 
+	const loadQuestionById = async (questionId: string): Promise<void> => {
+		if (!isMounted.current || !zoltarDeployed) return
+		const isCurrent = nextQuestionByIdLoad()
+		questionByIdLoad.invalidate()
+		const normalizedQuestionId = normalizeQuestionId(questionId)
+		zoltarQuestionLookupId.value = normalizedQuestionId
+		zoltarQuestionLookupError.value = undefined
+		if (normalizedQuestionId === undefined) {
+			zoltarQuestionLookupError.value = 'Enter a valid hexadecimal question ID'
+			return
+		}
+
+		const existingQuestion = zoltarQuestions.value.find(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
+		if (existingQuestion !== undefined) return
+
+		const questionLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		await questionByIdLoad.run({
+			isCurrent,
+			load: async () => await dependencies.loadMarketDetails(dependencies.createConnectedReadClient(), BigInt(normalizedQuestionId)),
+			onSuccess: question => {
+				if (!isMounted.current || !isCurrentZoltarContext(questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
+				if (!question.exists) {
+					zoltarQuestionLookupError.value = 'Question not found'
+					return
+				}
+				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, [question])
+			},
+			onError: error => {
+				if (!isMounted.current || !isCurrentZoltarContext(questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
+				zoltarQuestionLookupError.value = getErrorMessage(error, 'Failed to load question')
+			},
+		})
+	}
+
 	const createChildUniverse = async (outcomeIndex: bigint) => {
 		if (
 			!requireWallet(
@@ -378,9 +422,11 @@ export function useZoltarUniverse(
 		ensureZoltarUniverse,
 		hasLoadedZoltarQuestions: hasLoadedZoltarQuestions.value,
 		loadingZoltarQuestionCount: questionCountLoad.isLoading.value,
+		loadingZoltarQuestion: questionByIdLoad.isLoading.value,
 		loadingZoltarQuestions: questionsLoad.isLoading.value,
 		loadingZoltarUniverse: universeLoad.isLoading.value,
 		loadZoltarQuestionCount: loadZoltarQuestionCountData,
+		loadZoltarQuestion: loadQuestionById,
 		loadZoltarQuestionPage: loadQuestionsPage,
 		loadZoltarQuestions: loadQuestions,
 		loadZoltarUniverse,
@@ -390,6 +436,8 @@ export function useZoltarUniverse(
 		zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex.value,
 		zoltarQuestionPage: zoltarQuestionPage.value,
 		zoltarQuestionCount: zoltarQuestionCount.value,
+		zoltarQuestionLookupError: zoltarQuestionLookupError.value,
+		zoltarQuestionLookupId: zoltarQuestionLookupId.value,
 		zoltarQuestions: zoltarQuestions.value,
 		zoltarQuestionsError: zoltarQuestionsError.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,

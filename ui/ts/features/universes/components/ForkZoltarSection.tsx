@@ -1,10 +1,8 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { useState } from 'preact/hooks'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
-import { AddressValue } from '../../../components/AddressValue.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -14,9 +12,8 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
-import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
+import { normalizeQuestionId } from '../../../lib/questionId.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '../../../lib/formatters.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../../../lib/loadState.js'
@@ -32,9 +29,11 @@ type ForkZoltarSectionProps = {
 	hasLoadedZoltarQuestions: boolean
 	isOnActiveAppChain: boolean
 	loadingZoltarForkAccess: boolean
+	loadingZoltarQuestion?: boolean
 	loadingZoltarQuestions: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onForkZoltar: () => void
+	onRetryZoltarQuestion?: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	zoltarForkApproval: TokenApprovalState
@@ -42,6 +41,8 @@ type ForkZoltarSectionProps = {
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalanceAttoRep: bigint | undefined
+	zoltarQuestionLookupError?: string | undefined
+	zoltarQuestionLookupId?: string | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
@@ -52,9 +53,11 @@ export function ForkZoltarSection({
 	hasLoadedZoltarQuestions,
 	isOnActiveAppChain,
 	loadingZoltarForkAccess,
+	loadingZoltarQuestion = false,
 	loadingZoltarQuestions,
 	onApproveZoltarForkRep,
 	onForkZoltar,
+	onRetryZoltarQuestion,
 	onZoltarForkQuestionIdChange,
 	zoltarForkActiveAction,
 	zoltarForkApproval,
@@ -62,6 +65,8 @@ export function ForkZoltarSection({
 	zoltarForkPending,
 	zoltarForkQuestionId,
 	zoltarForkRepBalanceAttoRep,
+	zoltarQuestionLookupError,
+	zoltarQuestionLookupId,
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
@@ -78,22 +83,28 @@ export function ForkZoltarSection({
 	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const hasSelectedQuestionId = selectedQuestionId !== ''
+	const normalizedSelectedQuestionId = normalizeQuestionId(selectedQuestionId)
+	const hasValidSelectedQuestionId = normalizedSelectedQuestionId !== undefined
 	const confirmationValue = forkConfirmation.questionId === selectedQuestionId ? forkConfirmation.value : ''
 	const hasConfirmedFork = confirmationValue.trim() === FORK_CONFIRMATION
 	const canonicalForkQuestion = rootUniverse?.forkQuestionDetails
 	const selectedQuestion =
-		selectedQuestionId === '' ? undefined : (zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId)) ?? (canonicalForkQuestion !== undefined && sameCaseInsensitiveText(canonicalForkQuestion.questionId, selectedQuestionId) ? canonicalForkQuestion : undefined))
+		normalizedSelectedQuestionId === undefined
+			? undefined
+			: (zoltarQuestions.find(question => normalizeQuestionId(question.questionId) === normalizedSelectedQuestionId) ?? (canonicalForkQuestion !== undefined && normalizeQuestionId(canonicalForkQuestion.questionId) === normalizedSelectedQuestionId ? canonicalForkQuestion : undefined))
 	const selectedQuestionHasEnded = selectedQuestion === undefined || effectiveCurrentTimestamp === undefined ? undefined : effectiveCurrentTimestamp >= selectedQuestion.endTime
+	const isSelectedQuestionLookup = normalizedSelectedQuestionId !== undefined && zoltarQuestionLookupId === normalizedSelectedQuestionId
+	let selectedQuestionError: string | undefined
+	if (hasSelectedQuestionId && !hasValidSelectedQuestionId) selectedQuestionError = zoltarCopy.forkQuestionIdInvalid
+	else if (isSelectedQuestionLookup) selectedQuestionError = zoltarQuestionLookupError
 	const selectedQuestionLookupState = resolveLoadableValueState({
-		isLoading: loadingZoltarQuestions,
-		isMissing: hasSelectedQuestionId && hasLoadedZoltarQuestions && selectedQuestion === undefined,
+		isLoading: hasValidSelectedQuestionId && (loadingZoltarQuestions || loadingZoltarQuestion || (hasSelectedQuestionId && selectedQuestion === undefined && !hasLoadedZoltarQuestions && !isSelectedQuestionLookup)),
+		isMissing: hasSelectedQuestionId && (hasLoadedZoltarQuestions || isSelectedQuestionLookup) && selectedQuestion === undefined && selectedQuestionError === undefined,
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
-	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalanceAttoRep === undefined || zoltarForkRepBalanceAttoRep < rootUniverse.forkThresholdAttoRep ? undefined : zoltarForkRepBalanceAttoRep - rootUniverse.forkThresholdAttoRep
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThresholdAttoRep / rootUniverse.forkBurnDivisor
-	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThresholdAttoRep - permanentRepBurn
 	const approvalGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
 		if (walletPresentation !== undefined) return walletPresentation.detail
@@ -131,11 +142,13 @@ export function ForkZoltarSection({
 	}
 	return (
 		<>
-			<DataGrid>
-				<MetricField label={commonCopy.forkThresholdAttoRep}>
-					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
-				</MetricField>
-			</DataGrid>
+			{hasForked ? undefined : (
+				<DataGrid>
+					<MetricField label={commonCopy.forkThresholdAttoRep}>
+						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+				</DataGrid>
+			)}
 
 			<div className='form-grid'>
 				{hasForked ? undefined : (
@@ -167,41 +180,45 @@ export function ForkZoltarSection({
 					</WorkflowSubsection>
 				)}
 				{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
+				<ErrorNotice message={selectedQuestionError} />
+				{zoltarQuestionLookupError === undefined || !isSelectedQuestionLookup || onRetryZoltarQuestion === undefined ? undefined : (
+					<div className='actions'>
+						<button type='button' className='secondary' disabled={loadingZoltarQuestion} onClick={onRetryZoltarQuestion}>
+							{loadingZoltarQuestion ? commonCopy.retrying : commonCopy.retry}
+						</button>
+					</div>
+				)}
 
-				<TransactionReview
-					primary={[
-						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} /> },
-						{ label: zoltarCopy.migrationCustodyCredit, value: <CurrencyValue value={migrationCustodyCredit} suffix={commonCopy.rep} /> },
-					]}
-					details={[
-						{ label: zoltarCopy.permanentRepBurn, value: <CurrencyValue value={permanentRepBurn} suffix={commonCopy.rep} /> },
-						{ label: transactionReviewCopy.resultingRepBalance, value: <CurrencyValue value={resultingRepBalance} suffix={commonCopy.rep} /> },
-					]}
-					risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
-					technicalDetails={[
-						{ label: zoltarCopy.zoltarContract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
-						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-					]}
-				/>
+				{hasForked ? undefined : (
+					<>
+						<TransactionReview
+							primary={[
+								{ label: commonCopy.forkThresholdAttoRep, value: <CurrencyValue value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} /> },
+								{ label: zoltarCopy.permanentRepBurn, value: <CurrencyValue value={permanentRepBurn} suffix={commonCopy.rep} /> },
+							]}
+							risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
+						/>
 
-				<label className='field'>
-					<span>{zoltarCopy.forkConfirmationLabel}</span>
-					<FormInput aria-label={zoltarCopy.forkConfirmationLabel} autoComplete='off' disabled={hasForked || zoltarForkPending || selectedQuestion === undefined} onInput={event => setForkConfirmation({ questionId: selectedQuestionId, value: event.currentTarget.value })} value={confirmationValue} />
-					<p className='field-help'>{zoltarCopy.forkConfirmationHelp}</p>
-				</label>
+						<label className='field'>
+							<span>{zoltarCopy.forkConfirmationLabel}</span>
+							<FormInput aria-label={zoltarCopy.forkConfirmationLabel} autoComplete='off' disabled={zoltarForkPending || selectedQuestion === undefined} onInput={event => setForkConfirmation({ questionId: selectedQuestionId, value: event.currentTarget.value })} value={confirmationValue} />
+							<p className='field-help'>{zoltarCopy.forkConfirmationHelp}</p>
+						</label>
 
-				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={zoltarCopy.forkZoltar}
-						pendingLabel={zoltarCopy.forkSubmissionPending}
-						onClick={() => {
-							if (selectedQuestionId === '') return
-							onForkZoltar()
-						}}
-						pending={zoltarForkActiveAction === 'fork'}
-						availability={{ disabled: !canFork, reason: forkGuardMessage }}
-					/>
-				</div>
+						<div className='actions'>
+							<TransactionActionButton
+								idleLabel={zoltarCopy.forkZoltar}
+								pendingLabel={zoltarCopy.forkSubmissionPending}
+								onClick={() => {
+									if (selectedQuestionId === '') return
+									onForkZoltar()
+								}}
+								pending={zoltarForkActiveAction === 'fork'}
+								availability={{ disabled: !canFork, reason: forkGuardMessage }}
+							/>
+						</div>
+					</>
+				)}
 			</div>
 
 			<ErrorNotice message={zoltarForkError} />

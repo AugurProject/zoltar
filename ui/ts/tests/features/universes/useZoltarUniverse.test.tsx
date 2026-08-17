@@ -75,6 +75,9 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 		loadAllZoltarQuestions: async () => {
 			throw new Error('loadAllZoltarQuestions should not be called in this test')
 		},
+		loadMarketDetails: async () => {
+			throw new Error('loadMarketDetails should not be called in this test')
+		},
 		loadZoltarQuestionCount: async () => {
 			throw new Error('loadZoltarQuestionCount should not be called in this test')
 		},
@@ -204,6 +207,151 @@ describe('useZoltarUniverse', () => {
 
 		expect(requireHookState(hookState).zoltarQuestionPage).toBeUndefined()
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
+	})
+
+	test('loads and canonicalizes an exact existing question ID without loading the question list', async () => {
+		const question = createQuestion('0x99')
+		const loadMarketDetails = mock(async (_client, questionId: bigint) => {
+			expect(questionId).toBe(0x99n)
+			return question
+		})
+		const dependencies = createZoltarUniverseDependencies({ loadMarketDetails })
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion('0x00099')
+		})
+
+		expect(loadMarketDetails).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([question])
+		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x99')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion(`0x1${'0'.repeat(64)}`)
+		})
+		expect(loadMarketDetails).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).zoltarQuestionLookupId).toBeUndefined()
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Enter a valid hexadecimal question ID')
+	})
+
+	test('attributes loading and errors only to the current exact question request', async () => {
+		const olderQuestion = createDeferred<MarketDetails>()
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async (_client, questionId) => {
+				if (questionId === 1n) return await olderQuestion.promise
+				throw new Error('current question lookup failed')
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let olderRequest: Promise<void> | undefined
+		await act(async () => {
+			olderRequest = requireHookState(hookState).loadZoltarQuestion('0x1')
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion('0x2')
+		})
+
+		expect(requireHookState(hookState).loadingZoltarQuestion).toBe(false)
+		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x2')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: current question lookup failed')
+
+		await act(async () => {
+			olderQuestion.resolve(createQuestion('0x1'))
+			await olderRequest
+		})
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: current question lookup failed')
+	})
+
+	test('invalidates an older exact question request when the current question is cached', async () => {
+		const olderQuestion = createDeferred<MarketDetails>()
+		const cachedQuestion = createQuestion('0x2')
+		const loadMarketDetails = mock(async (_client, questionId: bigint) => (questionId === 1n ? await olderQuestion.promise : cachedQuestion))
+		const dependencies = createZoltarUniverseDependencies({ loadMarketDetails })
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion('0x2')
+		})
+		let olderRequest: Promise<void> | undefined
+		await act(async () => {
+			olderRequest = requireHookState(hookState).loadZoltarQuestion('0x1')
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion('0x02')
+		})
+
+		expect(loadMarketDetails).toHaveBeenCalledTimes(2)
+		expect(requireHookState(hookState).loadingZoltarQuestion).toBe(false)
+		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x2')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()
+
+		await act(async () => {
+			olderQuestion.resolve(createQuestion('0x1'))
+			await olderRequest
+		})
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([cachedQuestion])
 	})
 
 	test('reports automatic universe and question-count load failures', async () => {
