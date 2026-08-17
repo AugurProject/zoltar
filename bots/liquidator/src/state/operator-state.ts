@@ -333,6 +333,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		execute,
 		lastScanAt: state.lastScanAt,
 		lastScannedBlock: state.lastScannedBlock?.toString(),
+		lastScannedTimestamp: state.lastScannedTimestamp?.toString(),
 		metrics: {
 			approvedUniverseCount: [...universeMap.values()].filter(universe => universe.approved).length,
 			assumedOpenInterestEth: formatDecimalAmount(assumedOpenInterestAttoEth),

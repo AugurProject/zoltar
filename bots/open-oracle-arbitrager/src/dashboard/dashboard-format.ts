@@ -149,7 +149,7 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	if (!Number.isSafeInteger(timestampMilliseconds) || !Number.isFinite(nowMilliseconds)) return 'timestamp unavailable'
 	const differenceSeconds = Math.floor(Math.abs(nowMilliseconds - timestampMilliseconds) / 1_000)
 	const label = compactDuration(differenceSeconds)
-	return nowMilliseconds >= timestampMilliseconds ? `${label} behind` : `${label} ahead of local clock`
+	return nowMilliseconds >= timestampMilliseconds ? `seen ${label} ago` : `${label} ahead of local clock`
 }
 
 export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
