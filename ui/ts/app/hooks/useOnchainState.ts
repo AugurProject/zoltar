@@ -621,7 +621,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 						supportedNetworkChangeRef.current(chainId)
 						return
 					}
-				} catch (_error) {
+				} catch (error) {
+					void error
 					// The normal refresh path surfaces wallet discovery failures.
 				}
 				await refreshState()

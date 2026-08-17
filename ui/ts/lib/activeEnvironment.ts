@@ -86,7 +86,8 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		if (profile === undefined) {
 			try {
 				profile = getPublicNetworkProfileForChainId(await injectedBackend.getChainId())
-			} catch (_error) {
+			} catch (error) {
+				void error
 				// A missing, locked, or unavailable wallet leaves Mainnet as the public default.
 			}
 			if (profile !== undefined && profile !== injectedBackend.profile) injectedBackend = createBackend({ profile })

@@ -27,6 +27,8 @@ describe('liquidator dashboard server', () => {
 				],
 				alerts: [{ internalPath: protectedPath, message: 'Execution is paused', severity: 'warning' }],
 				execute: true,
+				lastScannedBlock: '12345678',
+				lastScannedTimestamp: '1786924800',
 				metrics: {
 					approvedUniverseCount: 1,
 					assumedOpenInterestEth: '2',
@@ -122,6 +124,8 @@ describe('liquidator dashboard server', () => {
 		expect(body).not.toContain(protectedPath)
 		expect(body).not.toContain(rpcSecret)
 		expect(Reflect.get(snapshot, 'status')).toBe('connectivity-degraded')
+		expect(Reflect.get(snapshot, 'lastScannedBlock')).toBe('12345678')
+		expect(Reflect.get(snapshot, 'lastScannedTimestamp')).toBe('1786924800')
 		expect(Reflect.get(snapshot, 'rpcEndpointHealth')).toEqual([{ consecutiveFailures: 2, error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.', lastFailureAt: '2026-08-13T00:00:00.000Z', nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: 'https://rpc.example' }])
 		expect(body).not.toContain('manager-marker')
 		expect(body).not.toContain('nested-vault-marker')
