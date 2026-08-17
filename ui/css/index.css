@@ -7474,32 +7474,9 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .selected-pool-change-control {
-	width: fit-content;
-	max-width: 100%;
-}
-
-.selected-pool-change-control > summary {
-	display: flex;
-	align-items: center;
-	min-height: var(--touch-target-min);
-	width: fit-content;
-	color: var(--accent);
-	cursor: pointer;
-	font-size: var(--font-detail);
-	font-weight: 700;
-}
-
-.selected-pool-change-control > summary:hover,
-.selected-pool-change-control > summary:focus-visible {
-	color: var(--text);
-}
-
-.selected-pool-change-control[open] {
+	display: grid;
 	width: 100%;
-}
-
-.selected-pool-change-control[open] > summary {
-	margin-bottom: var(--space-2);
+	max-width: 100%;
 }
 
 .mobile-workflow-context {
