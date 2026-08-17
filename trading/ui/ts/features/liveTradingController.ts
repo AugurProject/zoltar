@@ -150,6 +150,7 @@ function useWalletState() {
 	const [walletSummaryErrorLabel, setWalletSummaryErrorLabel] = useState<string>()
 	const [walletSummaryUniverseId, setWalletSummaryUniverseId] = useState<string>()
 	const [walletSummaryReceiptNonce, setWalletSummaryReceiptNonce] = useState(0)
+	const [walletConnectionFeedback, setWalletConnectionFeedback] = useState<{ route: string; detail: string }>()
 
 	return {
 		account,
@@ -175,6 +176,8 @@ function useWalletState() {
 		setWalletSummaryUniverseId,
 		walletSummaryReceiptNonce,
 		setWalletSummaryReceiptNonce,
+		walletConnectionFeedback,
+		setWalletConnectionFeedback,
 	}
 }
 
@@ -347,6 +350,8 @@ export function useLiveTradingController({
 		setWalletSummaryUniverseId,
 		walletSummaryReceiptNonce,
 		setWalletSummaryReceiptNonce,
+		walletConnectionFeedback,
+		setWalletConnectionFeedback,
 	} = useWalletState()
 	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce } = useBalanceState()
 	const {
@@ -423,13 +428,14 @@ export function useLiveTradingController({
 			setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			setWalletContextInvalidated(true)
 			setQuote(undefined)
+			setWalletConnectionFeedback({ route, detail })
 			if (!positionWorkflowLockedRef.current) {
 				setPositionHash(undefined)
 				setPositionReceiptWarning(undefined)
 			}
 			setMessage(detail)
 		},
-		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, selectedUniverseId, simulationRequests, walletSummaryRequests],
+		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, simulationRequests, walletSummaryRequests],
 	)
 
 	const executeWithCurrentWalletContext = useCallback(
@@ -678,7 +684,11 @@ export function useLiveTradingController({
 		setPositionHash(undefined)
 		setPositionReceiptWarning(undefined)
 		setState('idle')
-		if (previousRoute.current !== route) void refresh(configuration, 0n)
+		setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
+		if (previousRoute.current !== route) {
+			setMessage(undefined)
+			void refresh(configuration, 0n)
+		}
 		previousRoute.current = route
 	}, [route])
 
@@ -875,10 +885,11 @@ export function useLiveTradingController({
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
+			setWalletConnectionFeedback(undefined)
 			setMessage(undefined)
 			await refresh(configuration)
 		} catch (error) {
-			if (!connectionRequests.isCurrent(request)) return
+			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
 			invalidateWalletIdentity(publicErrorMessage(error, 'Wallet connection failed'))
 		}
 	}
@@ -939,11 +950,12 @@ export function useLiveTradingController({
 			setAccount(connected)
 			setWalletClient(createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
+			setWalletConnectionFeedback(undefined)
 			setMessage(undefined)
 			setState('idle')
 			await refresh(configuration)
 		} catch (error) {
-			if (!connectionRequests.isCurrent(request)) return
+			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
 			invalidateWalletIdentity(`${contextLabel}: ${publicErrorMessage(error, 'wallet refresh failed')}`)
 			setState('error')
 		}
@@ -1145,6 +1157,7 @@ export function useLiveTradingController({
 			account,
 			walletClient,
 			connect,
+			connectionMessage: walletConnectionFeedback?.route === route ? walletConnectionFeedback.detail : undefined,
 			refreshWalletSummaryAfterReceipt,
 			walletContextIsCurrent: (expectedAccount: Address) => accountRef.current === expectedAccount,
 			executeWithCurrentWalletContext,

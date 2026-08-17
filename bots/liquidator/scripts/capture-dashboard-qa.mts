@@ -113,7 +113,7 @@ try {
 			await command('Page.navigate', { url })
 			for (let poll = 0; poll < 50; poll += 1) {
 				observedTitle = await evaluate(`document.querySelector('h1')?.textContent`)
-				if (observedTitle === 'Pool liquidator') return
+				if (observedTitle === 'Statoblast liquidator') return
 				await Bun.sleep(100)
 			}
 		}

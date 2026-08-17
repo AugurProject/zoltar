@@ -239,7 +239,7 @@ describe('liquidator dashboard server', () => {
 		const page = await fetch(server.url)
 		expect(page.status).toBe(200)
 		const pageSource = await page.text()
-		expect(pageSource).toContain('Pool liquidator')
+		expect(pageSource).toContain('Statoblast liquidator')
 		expect(pageSource).toContain('id="centralized-market-status" class="muted" role="status" aria-live="polite"')
 		expect(pageSource).toContain('id="centralized-market-summary" class="metric-grid"')
 		expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')

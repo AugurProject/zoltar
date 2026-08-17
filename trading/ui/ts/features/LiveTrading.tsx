@@ -282,7 +282,7 @@ function PairInitializationAction({ market }: { market: LiveMarket }) {
 	)
 }
 
-export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean }) {
+export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked, connectionMessage }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean; connectionMessage?: string | undefined }) {
 	const hasLoadedDetails = market.loadError === undefined
 	let refreshMessage: string | undefined
 	if (refreshing) refreshMessage = hasLoadedDetails ? 'Refreshing security pool; showing the last successful result.' : 'Retrying security pool details…'
@@ -301,6 +301,11 @@ export function LiveSecurityPoolDetails({ market, refreshError, refreshing = fal
 				</div>
 				{market.loadError === undefined ? null : <Status tone='warn'>Pool data unavailable</Status>}
 			</header>
+			{connectionMessage === undefined ? null : (
+				<p class='error' role='alert'>
+					{connectionMessage}
+				</p>
+			)}
 			<section class='section' aria-busy={refreshing}>
 				{refreshMessage === undefined ? null : <p role='status'>{refreshMessage}</p>}
 				{errorMessage === undefined ? null : (
@@ -443,6 +448,7 @@ export function LiveTrading({
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
+	walletConnectRequestNonce,
 	onDeploymentRetry = () => undefined,
 }: {
 	route: string
@@ -453,6 +459,7 @@ export function LiveTrading({
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
+	walletConnectRequestNonce?: number
 	onDeploymentRetry?(): void
 }) {
 	const { wallet, balances, discovery, position, workflow } = useLiveTradingController({
@@ -467,11 +474,18 @@ export function LiveTrading({
 		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
 	})
-	const { account, walletClient, connect, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances, refreshBalancesAfterApproval } = balances
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, approve, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
+	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
+	useEffect(() => {
+		if (walletConnectRequestNonce === undefined) return
+		if (previousWalletConnectRequestNonce.current === walletConnectRequestNonce) return
+		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
+		void connect()
+	}, [connect, walletConnectRequestNonce])
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
@@ -528,7 +542,8 @@ export function LiveTrading({
 			)
 	}
 	if (routePool !== undefined) {
-		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} />
+		if (selected !== undefined)
+			return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={connectionMessage} />
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -539,6 +554,11 @@ export function LiveTrading({
 						<h1>Security pool</h1>
 					</div>
 				</header>
+				{connectionMessage === undefined ? null : (
+					<p class='error' role='alert'>
+						{connectionMessage}
+					</p>
+				)}
 				<section class='section' aria-busy={discoveryState === 'loading'}>
 					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
 				</section>
@@ -554,9 +574,11 @@ export function LiveTrading({
 						<h1>Portfolio</h1>
 						<p>{configuration.chainName}</p>
 					</div>
-					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-						{account === undefined ? 'Connect wallet' : shortAddress(account)}
-					</button>
+					{walletConnectRequestNonce === undefined ? (
+						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+							{account === undefined ? 'Connect wallet' : shortAddress(account)}
+						</button>
+					) : null}
 				</header>
 				{message === undefined ? null : (
 					<p class='error' role='alert'>
@@ -588,9 +610,11 @@ export function LiveTrading({
 					<h1>Two-way markets</h1>
 					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
-				<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-					{account === undefined ? 'Connect wallet' : shortAddress(account)}
-				</button>
+				{walletConnectRequestNonce === undefined ? (
+					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+						{account === undefined ? 'Connect wallet' : shortAddress(account)}
+					</button>
+				) : null}
 			</header>
 			{message === undefined && parsedAmount.error === undefined ? null : (
 				<p class='error' role='alert'>
