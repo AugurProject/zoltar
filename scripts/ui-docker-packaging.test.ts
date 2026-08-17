@@ -58,5 +58,7 @@ describe('UI Docker packaging', () => {
 		const dockerSource = await readFile(dockerfile, 'utf8')
 		expect(dockerSource.lastIndexOf('AS publisher')).toBeGreaterThan(dockerSource.lastIndexOf('AS local-runtime'))
 		expect(dockerSource.lastIndexOf('ENTRYPOINT [ "/entrypoint.sh" ]')).toBeGreaterThan(dockerSource.lastIndexOf('CMD [ "bun", "/app/dockerServe.mts" ]'))
+		const stages = dockerSource.split('\n').filter(line => line.startsWith('FROM '))
+		expect(stages.at(-1)).toContain(' AS publisher')
 	})
 })
