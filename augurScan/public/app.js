@@ -18,6 +18,7 @@ import {
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	paginatedSnapshotWasReplaced,
+	paginationRequestAllowed,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
@@ -1379,6 +1380,14 @@ const updateFreshness = () => {
 const completeCanonicalRefresh = () => {
 	canonicalRefreshRequired = false
 	pendingCanonicalActivityCount = undefined
+	if (isActivity) {
+		$('#more').hidden = nextCursor === undefined
+		$('#more').disabled = false
+	}
+	if (isRichList) {
+		$('#richlist-more').hidden = richListItems.length >= richListTotal
+		$('#richlist-more').disabled = false
+	}
 	hideCanonicalDialogStatus()
 	updateFreshness()
 }
@@ -1568,6 +1577,11 @@ const setLogControlsBusy = (busy) => {
 
 const performLoadLogs = async ({ append = false, live = false, replaceDepth, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
+		$('#more').hidden = true
+		$('#more').disabled = true
+		return false
+	}
 	logsAbortController?.abort()
 	logsAbortController = new AbortController()
 	const requestSignal = logsAbortController?.signal
@@ -1616,7 +1630,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 		}
 		nextCursor = payload.nextCursor
-		$('#more').hidden = !nextCursor
+		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
 		paginationStatus.hidden = true
 		paginationStatus.replaceChildren()
 		feedState.hidden = feed.childElementCount > 0
@@ -1649,6 +1663,10 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion)) {
 			feed.setAttribute('aria-busy', 'false')
 			setLogControlsBusy(false)
+			if (canonicalRefreshRequired) {
+				moreButton.hidden = true
+				moreButton.disabled = true
+			}
 			moreButton.removeAttribute('aria-busy')
 			moreButton.textContent = 'Show more'
 		}
@@ -2945,11 +2963,16 @@ const renderRichList = ({ live = false } = {}) => {
 	applyLiveChanges(rows, previousRows, { live, selector: '.rich-row[data-live-key]' })
 	rows.setAttribute('aria-busy', 'false')
 	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
-	$('#richlist-more').hidden = richListItems.length >= richListTotal
+	$('#richlist-more').hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
 }
 
 const performLoadRichList = async ({ append = false, live = false, contextVersion } = {}) => {
 	if (contextVersion !== viewContextVersion) return false
+	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
+		$('#richlist-more').hidden = true
+		$('#richlist-more').disabled = true
+		return false
+	}
 	const requestVersion = ++richListRequestVersion
 	const status = $('#richlist-status')
 	const paginationStatus = $('#richlist-more-status')
@@ -3021,7 +3044,8 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		return false
 	} finally {
 		if (isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion)) {
-			more.disabled = false
+			more.disabled = canonicalRefreshRequired
+			if (canonicalRefreshRequired) more.hidden = true
 			$('#rich-sort').disabled = false
 			more.removeAttribute('aria-busy')
 			more.textContent = 'Show more'
@@ -4285,6 +4309,14 @@ const refreshCanonicalViews = (title, detail) => {
 	}
 	activeReorgRecovery = recovery
 	canonicalRefreshRequired = true
+	if (isActivity) {
+		$('#more').hidden = true
+		$('#more').disabled = true
+	}
+	if (isRichList) {
+		$('#richlist-more').hidden = true
+		$('#richlist-more').disabled = true
+	}
 	const banner = $('#freshness-banner')
 	banner.hidden = false
 	$('#freshness-title').textContent = title
@@ -4311,9 +4343,7 @@ const refreshCanonicalViews = (title, detail) => {
 				}
 				if (!detailRefreshed) return false
 				if (recovery.pendingRefresh) continue
-				canonicalRefreshRequired = false
-				pendingCanonicalActivityCount = undefined
-				hideCanonicalDialogStatus()
+				completeCanonicalRefresh()
 				return true
 			}
 		} finally {

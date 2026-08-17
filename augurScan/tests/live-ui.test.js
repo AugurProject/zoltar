@@ -19,6 +19,7 @@ import {
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	paginatedSnapshotWasReplaced,
+	paginationRequestAllowed,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
@@ -66,6 +67,32 @@ test('keeps known pagination available after ordinary refresh failures but not c
 	expect(retainedPaginationAvailable(true, false)).toBe(true)
 	expect(retainedPaginationAvailable(false, false)).toBe(false)
 	expect(retainedPaginationAvailable(true, true)).toBe(false)
+})
+
+test('rejects activity and rich-list pagination queued during canonical recovery', async () => {
+	for (const surface of ['activity', 'rich list']) {
+		const gate = createForegroundRefreshGate()
+		let releaseRefresh
+		let canonicalRefreshRequired = false
+		let appendRequests = 0
+		const refresh = gate.runBackground(
+			() =>
+				new Promise((resolve) => {
+					canonicalRefreshRequired = true
+					releaseRefresh = () => resolve(false)
+				}),
+		)
+		const append = gate.runForeground(async () => {
+			if (!paginationRequestAllowed(true, canonicalRefreshRequired)) return false
+			appendRequests++
+			return true
+		})
+		releaseRefresh()
+		expect(await refresh, surface).toBe(false)
+		expect(await append, surface).toBe(false)
+		expect(appendRequests, surface).toBe(0)
+		expect(retainedPaginationAvailable(true, canonicalRefreshRequired), surface).toBe(false)
+	}
 })
 
 test('retries transaction append failures from the retained cursor', () => {

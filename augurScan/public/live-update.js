@@ -49,6 +49,8 @@ export const activityRefreshRetention = (canonicalRefreshRequired, canonicalDept
 
 export const retainedPaginationAvailable = (hasContinuation, canonicalRefreshRequired) => hasContinuation && !canonicalRefreshRequired
 
+export const paginationRequestAllowed = (append, canonicalRefreshRequired) => !append || !canonicalRefreshRequired
+
 export const transactionRetryMode = (appendFailure, hasLoadedTransactions) => ({
 	append: appendFailure,
 	liveRefresh: !appendFailure && hasLoadedTransactions,
