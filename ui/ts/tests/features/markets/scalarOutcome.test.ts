@@ -108,8 +108,9 @@ void describe('scalar outcome helpers', () => {
 		void test(`formats scalar parity fixture: ${fixture.name}`, () => {
 			const question = getScalarParityQuestion(fixture.questionName)
 			const outcomeIndex = getScalarOutcomeIndex(question, fixture.tickIndex)
-			expect(formatScalarOutcomeLabel(question, fixture.tickIndex)).toBe(fixture.expectedLabel)
-			expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(fixture.expectedLabel)
+			const expectedUiLabel = fixture.expectedLabel.replace(' ', '\u00a0')
+			expect(formatScalarOutcomeLabel(question, fixture.tickIndex)).toBe(expectedUiLabel)
+			expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(expectedUiLabel)
 		})
 	}
 
@@ -125,7 +126,7 @@ void describe('scalar outcome helpers', () => {
 			if (fixture.expectedDescriptor.kind === 'malformed') {
 				expect(() => formatScalarOutcomeIndexLabel(question, outcomeIndex)).toThrow('Scalar outcome index is malformed')
 			} else {
-				expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(fixture.expectedLabel)
+				expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(fixture.expectedLabel.replace(' ', '\u00a0'))
 			}
 		})
 	}
