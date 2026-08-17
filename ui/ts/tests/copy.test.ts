@@ -61,6 +61,18 @@ test('market and Open Oracle values own their complete spacing and units', () =>
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.blocks)).toBe('12 blocks')
 })
 
+test('dynamic value and unit copy uses nonbreaking separators', () => {
+	expect(zoltarCopy.formatAddMigrationRepDetail('12')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatMigrationRepShortfall('12')).toContain('12\u00a0more\u00a0REP')
+	expect(zoltarCopy.formatMigrationPreparationRequired('12')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatSplitCapacityDetail('12')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('4\u00a0wallet\u00a0REP')
+	expect(securityPoolCopy.formatInsufficientRepBalanceDetail('12')).toContain('12\u00a0REP')
+	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH / REP')
+	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH / REP')
+})
+
 test('transaction actions and pending labels use sentence case independently of titles', () => {
 	expect(marketCopy.createQuestionPendingLabel).toBe('Creating question…')
 	expect(appCopy.changeWallet).toBe('Change wallet')

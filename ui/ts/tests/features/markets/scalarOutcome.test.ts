@@ -71,7 +71,7 @@ void describe('scalar outcome helpers', () => {
 		expect(isValidScalarOutcomeIndex(scalarQuestion, scalarOutcomeIndex)).toBe(true)
 		expect(isValidScalarOutcomeIndex(scalarQuestion, 0n)).toBe(true)
 		expect(isValidScalarOutcomeIndex(scalarQuestion, 5n)).toBe(false)
-		expect(formatScalarOutcomeIndexLabel(scalarQuestion, scalarOutcomeIndex)).toBe('4 km')
+		expect(formatScalarOutcomeIndexLabel(scalarQuestion, scalarOutcomeIndex)).toBe('4\u00a0km')
 		expect(formatScalarOutcomeIndexLabel(scalarQuestion, 0n)).toBe('Invalid')
 		expect(() => formatScalarOutcomeIndexLabel(scalarQuestion, 5n)).toThrow('Scalar outcome index is malformed')
 	})

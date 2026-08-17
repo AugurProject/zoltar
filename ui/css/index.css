@@ -2444,6 +2444,15 @@ button.wallet-asset-action-pending:disabled {
 	gap: 0.65rem 0.9rem;
 }
 
+.scalar-slider-stats .metric-label,
+.scalar-slider-stats .metric-field-value {
+	display: block;
+}
+
+.scalar-slider-stats .metric-label {
+	margin-bottom: 0.2rem;
+}
+
 .scalar-value-editor {
 	display: grid;
 	max-width: 100%;

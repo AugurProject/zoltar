@@ -75,7 +75,7 @@ void describe('question helpers', () => {
 		expect(fields.find(field => field.label === 'Display Range')).toEqual({
 			kind: 'text',
 			label: 'Display Range',
-			value: '1 to 10 USD',
+			value: '1 to 10\u00a0USD',
 		})
 		expect(fields.find(field => field.label === 'Answer Unit')).toEqual({
 			kind: 'text',

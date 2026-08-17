@@ -8,7 +8,7 @@ export const prepareRep = 'Prepare REP'
 export const splitRep = 'Split REP'
 export const migrationAmountAlreadySplitDetail = 'This amount is already fully split across the selected universes.'
 export const alreadyForkedReason = 'This universe has already forked.'
-export const formatAddMigrationRepDetail = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount} REP to your migration balance from this universe, then split it across the selected universes.`
+export const formatAddMigrationRepDetail = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount}\u00a0REP to your migration balance from this universe, then split it across the selected universes.`
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
 export const forkQuestionIdInvalid = 'Enter a valid hexadecimal question ID.'
 export const forkQuestionTimeLoadingReason = 'Loading current chain time before checking whether the selected question has ended.'
@@ -29,13 +29,14 @@ export const outcomeUniversesEmpty = 'No outcome universes available.'
 export const walletBalanceLabel = 'Your balance:'
 export const migratedBalanceLabel = 'Already migrated:'
 export const migrationBalanceReadyDetail = 'This amount is already in your migration balance. Split REP when ready.'
-export const formatMigrationRepShortfall = (repShortfallAttoRep: CopyTemplateValue) => `Need ${repShortfallAttoRep} more REP in this universe to prepare the selected amount.`
+export const formatMigrationRepShortfall = (repShortfallAttoRep: CopyTemplateValue) => `Need ${repShortfallAttoRep}\u00a0more\u00a0REP in this universe to prepare the selected amount.`
 export const migrationApprovalPendingDetail = 'Waiting for approved REP amount before preparing the selected amount.'
-export const formatMigrationPreparationRequired = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount} REP to your migration balance first, then split it across the selected universes.`
+export const formatMigrationPreparationRequired = (attoRepAmount: CopyTemplateValue) => `Add ${attoRepAmount}\u00a0REP to your migration balance first, then split it across the selected universes.`
 export const outcomeSelectionRequired = 'Select at least one outcome universe.'
 export const outcomeBalancesLoading = 'Loading outcome universe balances…'
-export const formatSplitCapacityDetail = (remainingCapacity: CopyTemplateValue) => `The selected universes only have ${remainingCapacity} REP of room left for this amount. Reduce the amount or choose different universes.`
-export const formatMigrationBalanceExceeded = (availableRep: CopyTemplateValue, migrationBalance: CopyTemplateValue, walletBalance: CopyTemplateValue) => `You only have ${availableRep} REP available for migration in this universe (${migrationBalance} in your migration balance and ${walletBalance} wallet REP).`
+export const formatSplitCapacityDetail = (remainingCapacity: CopyTemplateValue) => `The selected universes only have ${remainingCapacity}\u00a0REP of room left for this amount. Reduce the amount or choose different universes.`
+export const formatMigrationBalanceExceeded = (availableRep: CopyTemplateValue, migrationBalance: CopyTemplateValue, walletBalance: CopyTemplateValue) =>
+	`You only have ${availableRep}\u00a0REP available for migration in this universe (${migrationBalance} in your migration balance and ${walletBalance}\u00a0wallet\u00a0REP).`
 export const migrationRepBalance = 'Migration REP Balance'
 export const migrationAmount = 'Migration Amount'
 export const preparingCurrentAmountLabel = 'preparing the current amount'

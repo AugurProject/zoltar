@@ -160,7 +160,7 @@ export const vaultCoverageDetail = 'Ordinary coverage counts pool-held vault REP
 export const depositRepToVaultPendingLabel = 'Depositing REP…'
 export const firstDepositTail = 'in the first deposit.'
 export const newVaultsRequireAtLeast = 'New vaults require at least'
-export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`
+export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
 export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
 export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'
 export const connectWalletBeforeRedeemingRep = 'Connect a wallet before redeeming REP.'

@@ -592,7 +592,7 @@ void describe('selected pool oracle price display', () => {
 					lastOracleSettlementTimestamp: 1n,
 				}),
 			),
-		).toBe('≈ 0.00 REP / ETH')
+		).toBe('≈ 0.00\u00a0REP / ETH')
 
 		expect(
 			getOracleLastPriceDisplay(
@@ -601,7 +601,7 @@ void describe('selected pool oracle price display', () => {
 					lastOracleSettlementTimestamp: 1n,
 				}),
 			),
-		).toBe('≈ 42.00 REP / ETH')
+		).toBe('≈ 42.00\u00a0REP / ETH')
 	})
 
 	void test('derives validity copy from the last settlement when manager details are not loaded', () => {

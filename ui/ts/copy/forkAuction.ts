@@ -32,14 +32,14 @@ export const submitBidTitle = 'Submit Bid'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const worthNowLead = 'Worth now: '
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool-held REP has already been migrated for the ${outcomeLabel} child universe.`
-export const formatEthPerRepValue = (price: CopyTemplateValue) => `${price} ETH / REP`
+export const formatEthPerRepValue = (price: CopyTemplateValue) => `${price}\u00a0ETH / REP`
 export const attoEthRaised = 'ETH Raised'
 export const attoRepSold = 'REP Sold'
 export const minBid = 'Min Bid'
 export const winningThreshold = 'Winning Threshold'
 export const zeroEth = '0 ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
-export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price} ETH / REP from depth chart`
+export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH / REP from depth chart`
 export const formatImportedForkDepositPageSummary = (startIndex: CopyTemplateValue, endIndex: CopyTemplateValue, totalCount: CopyTemplateValue, paginationSummary: CopyTemplateValue) => `Showing parent deposits ${startIndex}-${endIndex} of ${totalCount}. ${paginationSummary}`
 export const formatDepositSelectionRequired = (outcomeLabel: CopyTemplateValue) => `Select at least one ${outcomeLabel} fork-carried deposit to settle.`
 export const importedFromParentUniverse = 'Imported from parent universe'
