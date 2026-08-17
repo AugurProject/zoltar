@@ -47,6 +47,26 @@ describe('deployment authentication', () => {
 		).rejects.toThrow('runtime bytecode hash')
 	})
 
+	test('rejects manifest configuration mismatches before reading RPC code', async () => {
+		let codeReads = 0
+		const readCode = async () => {
+			codeReads += 1
+			return openOracleCode
+		}
+		for (const authentication of [
+			authenticateDeploymentManifest(manifest, { chainId: 11_155_111, network: 'sepolia', readCode, required: [{ address: openOracle, role: 'open-oracle' }] }),
+			authenticateDeploymentManifest(manifest, { chainId: 1, network: 'mainnet', readCode, required: [{ address: getAddress('0x0000000000000000000000000000000000000003'), role: 'token' }] }),
+		]) {
+			try {
+				await authentication
+				throw new Error('Expected deployment authentication to fail')
+			} catch (error) {
+				expect(error instanceof Error ? error.message : String(error)).not.toContain('RPC ')
+			}
+		}
+		expect(codeReads).toBe(0)
+	})
+
 	test('recognizes the separately authenticated Uniswap execution roles', () => {
 		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
 		expect(parseDeploymentRole('uniswap-v4-pool-manager')).toBe('uniswap-v4-pool-manager')

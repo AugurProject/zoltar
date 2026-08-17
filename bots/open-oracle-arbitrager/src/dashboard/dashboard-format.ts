@@ -143,6 +143,35 @@ function compactDuration(seconds: number) {
 	return remainingMinutes === 0 ? `${hours.toString()}h` : `${hours.toString()}h ${remainingMinutes.toString()}m`
 }
 
+type PollRetryTiming = Pick<PublicOperatorSnapshot, 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
+
+export function pollRetryStatus(timing: PollRetryTiming, nowMilliseconds = Date.now()) {
+	if (timing.lastError === undefined) return undefined
+	if (timing.retryInProgress === true && timing.lastRetryAt !== undefined) {
+		return {
+			label: 'Retrying now',
+			state: 'retrying' as const,
+		}
+	}
+	if (timing.nextRetryAt !== undefined) {
+		const retryMilliseconds = Date.parse(timing.nextRetryAt)
+		if (Number.isFinite(retryMilliseconds)) {
+			if (retryMilliseconds <= nowMilliseconds) {
+				return {
+					label: 'Retry due',
+					state: 'due' as const,
+				}
+			}
+			const remaining = compactDuration(Math.max(1, Math.ceil((retryMilliseconds - nowMilliseconds) / 1_000)))
+			return {
+				label: `Retry in ${remaining}`,
+				state: 'scheduled' as const,
+			}
+		}
+	}
+	return undefined
+}
+
 export function blockAgeLabel(blockTimestamp: string | undefined, nowMilliseconds = Date.now()) {
 	if (blockTimestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(blockTimestamp)) return 'timestamp unavailable'
 	const timestampMilliseconds = Number(blockTimestamp) * 1_000

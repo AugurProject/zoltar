@@ -110,6 +110,19 @@ describe('operator connectivity', () => {
 		const checks = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [url], readRpcUrl: url }), 11_155_111)
 		expect(checks.map(check => check.status)).toEqual(['healthy', 'healthy'])
 		await expect(checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [url], readRpcUrl: url }), 1)).rejects.toThrow('Expected chain 1')
+		const malformed = rpc(method => {
+			if (method === 'eth_chainId') return 'not-a-chain-id'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		let malformedFailure: unknown
+		try {
+			await readRpcChainId(malformed)
+		} catch (error) {
+			malformedFailure = error
+		}
+		const malformedMessage = malformedFailure instanceof Error ? malformedFailure.message : String(malformedFailure)
+		expect(malformedMessage.match(/eth_chainId/g)).toHaveLength(1)
+		expect(malformedMessage.match(new RegExp(new URL(malformed).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 	})
 
 	test('fails closed on wrong-chain private relays and clears checks for public mode', async () => {
@@ -126,10 +139,40 @@ describe('operator connectivity', () => {
 		const connectivity = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [mainnetRelay], readRpcUrl: mainnetRelay }), 1)
 		expect(withConnectivityChecks(healthy, connectivity).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
 		expect(withSubmissionChecks(connectivity, healthy).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
-		await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [sepoliaRelay] }), 1)).rejects.toThrow('Expected chain 1')
+		let wrongRelayFailure: unknown
+		try {
+			await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [sepoliaRelay] }), 1)
+		} catch (error) {
+			wrongRelayFailure = error
+		}
+		const wrongRelayMessage = wrongRelayFailure instanceof Error ? wrongRelayFailure.message : String(wrongRelayFailure)
+		expect(wrongRelayMessage).toContain('Expected chain 1')
+		expect(wrongRelayMessage.match(/eth_chainId/g)).toHaveLength(1)
+		expect(wrongRelayMessage.match(new RegExp(new URL(sepoliaRelay).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 		const publicChecks = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'public', relayUrls: [mainnetRelay] }), 1)
 		expect(publicChecks).toEqual([])
 		expect(withSubmissionChecks([...connectivity, ...healthy], publicChecks).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc'])
+	})
+
+	test('identifies the RPC origin and method once for a wrong-chain connectivity probe', async () => {
+		const wrongChain = rpc(method => {
+			if (method === 'eth_chainId') return '0x2'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const healthy = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		let failure: unknown
+		try {
+			await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [healthy], readRpcUrl: wrongChain }), 1)
+		} catch (error) {
+			failure = error
+		}
+		const message = failure instanceof Error ? failure.message : String(failure)
+		expect(message).toContain('Expected chain 1')
+		expect(message.match(/eth_chainId/g)).toHaveLength(1)
+		expect(message.match(new RegExp(new URL(wrongChain).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 	})
 
 	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {
@@ -174,6 +217,25 @@ describe('operator connectivity', () => {
 		expect(state.endpointChecks.every(check => check.failureDisposition === 'connectivity-degraded')).toBe(true)
 	})
 
+	test('identifies the RPC origin and method for unreachable connectivity endpoints without exposing URL secrets', async () => {
+		const healthy = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const unavailable = 'http://127.0.0.1:1/private/provider-key?token=query-secret'
+		let failure: unknown
+		try {
+			await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [healthy], readRpcUrl: unavailable }), 1)
+		} catch (error) {
+			failure = error
+		}
+		const message = failure instanceof Error ? failure.message : String(failure)
+		expect(message.match(new RegExp(new URL(unavailable).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+		expect(message.match(/eth_chainId/g)).toHaveLength(1)
+		expect(message).not.toContain('provider-key')
+		expect(message).not.toContain('query-secret')
+	})
+
 	test('accepts structured signature and invalid-parameter errors as positive relay capability evidence', async () => {
 		for (const error of [
 			{ code: -32_600, message: 'signature is required' },
@@ -212,7 +274,17 @@ describe('operator connectivity', () => {
 			if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
 			throw new Error(`Unexpected method: ${method}`)
 		})
-		await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('HTTP 503')
+		let failure: unknown
+		try {
+			await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [`${endpoint}/private/provider-key`] }), 1)
+		} catch (error) {
+			failure = error
+		}
+		const message = failure instanceof Error ? failure.message : String(failure)
+		expect(message.match(new RegExp(new URL(endpoint).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+		expect(message).toContain('HTTP 503')
+		expect(message.match(/eth_callBundle/g)).toHaveLength(1)
+		expect(message).not.toContain('provider-key')
 	})
 
 	test('preserves every endpoint role regardless of concurrent update completion order', async () => {

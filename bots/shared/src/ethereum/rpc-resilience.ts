@@ -22,6 +22,8 @@ export type RpcEndpointPoolOptions = {
 	timeoutMilliseconds?: number | undefined
 }
 
+export type RpcRequestContext = { method: string; target: string }
+
 type MutableEndpointHealth = RpcEndpointHealth & {
 	nextRetryMilliseconds: number
 	url: string
@@ -37,6 +39,24 @@ export class RpcEndpointPoolFailure extends Error {
 	}
 }
 
+export function rpcFailureWithContext(error: unknown, target: string, method: string) {
+	if (error instanceof RpcEndpointPoolFailure) return error
+	const detail = errorMessage(error)
+	if (/\bRPC https?:\/\//.test(detail) && /\beth_[A-Za-z0-9_]+\b/.test(detail)) return error instanceof Error ? error : new Error(detail)
+	const targetPrefix = `RPC ${target} `
+	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
+	return new Error(normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`, { cause: error })
+}
+
+function validateRpcResult(method: string, value: unknown) {
+	const quantityMethods = new Set(['eth_blockNumber', 'eth_chainId', 'eth_estimateGas', 'eth_gasPrice', 'eth_getBalance', 'eth_getTransactionCount'])
+	if (quantityMethods.has(method) && (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value))) throw new Error(`RPC returned an invalid ${method} quantity`)
+	if ((method === 'eth_call' || method === 'eth_getCode') && (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(value))) throw new Error(`RPC returned invalid data for ${method}`)
+	if (method === 'eth_getLogs' && !Array.isArray(value)) throw new Error('RPC returned invalid logs')
+	if (method === 'eth_getBlockByNumber' && value !== null && (typeof value !== 'object' || Array.isArray(value))) throw new Error('RPC returned an invalid block')
+	return value
+}
+
 function endpointTarget(url: string) {
 	return new URL(url).origin
 }
@@ -47,6 +67,18 @@ function errorMessage(error: unknown) {
 
 function safeErrorMessage(error: unknown, url: string, target: string) {
 	return errorMessage(error).split(url).join(target)
+}
+
+function endpointRequestFailureDetail(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
+	const detail = safeErrorMessage(error, endpoint.url, endpoint.target)
+	const targetPrefix = `RPC ${endpoint.target} `
+	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
+	if (normalizedDetail.includes(method)) return normalizedDetail.startsWith('HTTP ') ? `returned ${normalizedDetail}` : normalizedDetail
+	return normalizedDetail.startsWith('HTTP ') ? `returned ${normalizedDetail} while calling ${method}` : `failed while calling ${method}: ${normalizedDetail}`
+}
+
+function endpointRequestFailure(error: unknown, endpoint: Pick<MutableEndpointHealth, 'target' | 'url'>, method: string) {
+	return new Error(`RPC ${endpoint.target} ${endpointRequestFailureDetail(error, endpoint, method)}`, { cause: error })
 }
 
 function retryableRpcFailure(error: unknown) {
@@ -72,6 +104,8 @@ function validatedInteger(value: number, label: string, minimum: number, maximum
 export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpointPoolOptions = {}) {
 	const uniqueUrls = [...new Set(urls)]
 	if (uniqueUrls.length === 0) throw new Error('RPC endpoint pool requires at least one URL')
+	const defaultUrl = uniqueUrls[0]
+	if (defaultUrl === undefined) throw new Error('RPC endpoint pool requires at least one URL')
 	const timeoutMilliseconds = validatedInteger(options.timeoutMilliseconds ?? 15_000, 'RPC timeoutMilliseconds', 1, 300_000)
 	const baseCooldownMilliseconds = validatedInteger(options.baseCooldownMilliseconds ?? 1_000, 'RPC baseCooldownMilliseconds', 1, 300_000)
 	const maximumCooldownMilliseconds = validatedInteger(options.maximumCooldownMilliseconds ?? 30_000, 'RPC maximumCooldownMilliseconds', baseCooldownMilliseconds, 3_600_000)
@@ -90,11 +124,11 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		url,
 	}))
 	let preferredIndex = 0
-
-	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown) {
+	async function requestEndpoint(endpoint: MutableEndpointHealth, method: string, params: unknown, onSuccess?: (context: RpcRequestContext) => void) {
 		const startedAt = now()
 		try {
-			const value = await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params })
+			const value = validateRpcResult(method, await requestTransport<unknown>(http(endpoint.url, { timeoutMilliseconds }), { method, params }))
+			onSuccess?.({ method, target: endpoint.target })
 			const completedAt = now()
 			endpoint.consecutiveFailures = 0
 			endpoint.error = undefined
@@ -129,52 +163,64 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 		return [...recoveryProbes, ...eligible.filter(endpoint => !recoveryProbes.includes(endpoint))]
 	}
 
-	const provider = {
+	const provider = (onSuccess?: (context: RpcRequestContext) => void) => ({
 		request: async ({ method, params }: { method: string; params?: unknown }) => {
 			const failures: { error: string; target: string }[] = []
 			const candidates = orderedEndpoints(now())
 			if (candidates.length === 0) {
-				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target })))
+				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target })))
 			}
 			for (const endpoint of candidates) {
 				try {
-					const value = await requestEndpoint(endpoint, method, params)
+					const value = await requestEndpoint(endpoint, method, params, onSuccess)
 					preferredIndex = endpoints.indexOf(endpoint)
 					return value
 				} catch (error) {
-					if (!retryableRpcFailure(error)) throw error
-					failures.push({ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target })
+					if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
+					failures.push({ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target })
 				}
 			}
 			throw new RpcEndpointPoolFailure(failures)
 		},
-	}
+	})
 	const totalTimeoutMilliseconds = Math.min(300_000, timeoutMilliseconds * uniqueUrls.length + 1_000)
+	const transportWithContext = (onSuccess: (context: RpcRequestContext) => void) => custom(provider(onSuccess), { timeoutMilliseconds: totalTimeoutMilliseconds })
+	const transportFor = (url: string, onSuccess?: (context: RpcRequestContext) => void) => {
+		const endpoint = endpoints.find(candidate => candidate.url === url)
+		if (endpoint === undefined) throw new Error('Cannot create an RPC transport outside the endpoint pool')
+		return custom(
+			{
+				request: async ({ method, params }) => {
+					if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target }])
+					try {
+						return await requestEndpoint(endpoint, method, params, onSuccess)
+					} catch (error) {
+						if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
+						throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
+					}
+				},
+			},
+			{ timeoutMilliseconds: timeoutMilliseconds + 1_000 },
+		)
+	}
+	const contextualRequest = async <Value>(method: string, request: (transport: ReturnType<typeof transportWithContext>) => Promise<Value>, url?: string) => {
+		let context: RpcRequestContext | undefined
+		try {
+			return await request(url === undefined ? transportWithContext(value => (context = value)) : transportFor(url, value => (context = value)))
+		} catch (error) {
+			throw rpcFailureWithContext(error, context?.target ?? endpointTarget(url ?? defaultUrl), context?.method ?? method)
+		}
+	}
 	return {
+		contextualRequest,
 		prefer: (url: string) => {
 			const index = endpoints.findIndex(endpoint => endpoint.url === url)
 			if (index === -1) throw new Error('Cannot prefer an RPC URL outside the endpoint pool')
 			preferredIndex = index
 		},
 		snapshot: (): readonly RpcEndpointHealth[] => endpoints.map(({ nextRetryMilliseconds: _nextRetryMilliseconds, url: _url, ...endpoint }) => ({ ...endpoint })),
-		transport: custom(provider, { timeoutMilliseconds: totalTimeoutMilliseconds }),
-		transportFor: (url: string) => {
-			const endpoint = endpoints.find(candidate => candidate.url === url)
-			if (endpoint === undefined) throw new Error('Cannot create an RPC transport outside the endpoint pool')
-			return custom(
-				{
-					request: async ({ method, params }) => {
-						if (endpoint.nextRetryMilliseconds > now()) throw new RpcEndpointPoolFailure([{ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'}`, target: endpoint.target }])
-						try {
-							return await requestEndpoint(endpoint, method, params)
-						} catch (error) {
-							if (!retryableRpcFailure(error)) throw error
-							throw new RpcEndpointPoolFailure([{ error: safeErrorMessage(error, endpoint.url, endpoint.target), target: endpoint.target }])
-						}
-					},
-				},
-				{ timeoutMilliseconds: timeoutMilliseconds + 1_000 },
-			)
-		},
+		transport: custom(provider(), { timeoutMilliseconds: totalTimeoutMilliseconds }),
+		transportFor,
+		transportWithContext,
 	}
 }

@@ -155,6 +155,7 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 
 export type OperatorSnapshot = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -172,6 +173,10 @@ export type OperatorSnapshot = {
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
+	lastPollFailureAt?: string | undefined
+	lastRetryAt?: string | undefined
+	nextRetryAt?: string | undefined
+	retryInProgress?: boolean | undefined
 	mode: 'dry-run' | 'execute'
 	network: NetworkName
 	networkConfigured: boolean
@@ -236,6 +241,7 @@ export type PublicTransactionActivity = Pick<TransactionActivity, 'acceptedTarge
 
 export type PublicOperatorSnapshot = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -253,6 +259,10 @@ export type PublicOperatorSnapshot = {
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
+	lastPollFailureAt?: string | undefined
+	lastRetryAt?: string | undefined
+	nextRetryAt?: string | undefined
+	retryInProgress?: boolean | undefined
 	mode: 'dry-run' | 'execute'
 	network: NetworkName
 	networkConfigured: boolean
@@ -283,6 +293,7 @@ export type PublicOperatorSnapshot = {
 
 export type OperatorState = {
 	activeReportCount: number
+	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
@@ -295,6 +306,10 @@ export type OperatorState = {
 	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
+	lastPollFailureAt?: string | undefined
+	lastRetryAt?: string | undefined
+	nextRetryAt?: string | undefined
+	retryInProgress?: boolean | undefined
 	opportunities: OpportunitySnapshot[]
 	positions: PositionRecord[]
 	operationLog: OperationEntry[]
@@ -339,12 +354,17 @@ function publicFailureDetail(error: string, translateChainTerm = true) {
 		.replace(/(^|[\s'"(\[=])(?:[A-Za-z]:[\\/]|~?\/|\.\.?\/|\\\\)[^\s'"\)\]]+/g, '$1[protected path]')
 		.replace(/(^|\s)(?!\S*[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?=\S*[\\/])\S+/g, '$1[protected path]')
 	if (translateChainTerm) sanitized = sanitized.replace(/canonical chain/gi, match => (match.startsWith('C') ? 'Blockchain history' : 'blockchain history'))
-	return sanitized.replace(/[.!?]+$/, '').slice(0, 500)
+	const detail = sanitized.replace(/[.!?]+$/, '')
+	const maximumLength = 320
+	if (detail.length <= maximumLength) return detail
+	const prefix = detail.slice(0, maximumLength - 1)
+	const wordBoundary = prefix.lastIndexOf(' ')
+	return `${(wordBoundary >= maximumLength * 0.75 ? prefix.slice(0, wordBoundary) : prefix).trimEnd()}…`
 }
 
 function attemptedOperationFailure(attempt: string, error: string, recovery: string) {
 	const detail = publicFailureDetail(error)
-	return `The bot tried to ${attempt}, but it failed${detail === undefined ? '' : `: ${detail}`}. ${recovery}`
+	return `The bot tried to ${attempt}, but it failed${detail === undefined ? '' : `: ${detail}`}${detail?.endsWith('…') === true ? '' : '.'} ${recovery}`
 }
 
 function publicFailureCategory(error: string) {
@@ -418,6 +438,7 @@ function publicEndpointTarget(target: string) {
 export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperatorSnapshot {
 	return {
 		activeReportCount: snapshot.activeReportCount,
+		consecutivePollFailures: snapshot.consecutivePollFailures ?? 0,
 		balances:
 			snapshot.balances === undefined
 				? undefined
@@ -463,8 +484,12 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 			totalEthWeth: snapshot.gameCapital.totalEthWeth,
 			weth: snapshot.gameCapital.weth,
 		},
-		lastError: snapshot.lastError === undefined ? undefined : publicPollFailure(snapshot.lastError),
+		lastError: snapshot.lastError === undefined ? undefined : snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError),
 		lastPollAt: snapshot.lastPollAt,
+		lastPollFailureAt: snapshot.lastPollFailureAt,
+		lastRetryAt: snapshot.lastRetryAt,
+		nextRetryAt: snapshot.nextRetryAt,
+		retryInProgress: snapshot.retryInProgress,
 		mode: snapshot.mode,
 		network: snapshot.network,
 		networkConfigured: snapshot.networkConfigured,
@@ -595,6 +620,16 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 
 export function recordOperation(state: OperatorState, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
 	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
+}
+
+type PollFailureMetadata = Pick<OperatorState, 'consecutivePollFailures' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'retryInProgress'>
+
+export function clearPollFailureMetadata(state: PollFailureMetadata) {
+	state.consecutivePollFailures = 0
+	state.lastPollFailureAt = undefined
+	state.lastRetryAt = undefined
+	state.nextRetryAt = undefined
+	state.retryInProgress = false
 }
 
 export function clearWalletDerivedState(state: OperatorState) {
@@ -906,6 +941,7 @@ export function operatorSnapshot(
 	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,
+		consecutivePollFailures: state.consecutivePollFailures ?? 0,
 		balances: state.balances,
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,
@@ -923,6 +959,10 @@ export function operatorSnapshot(
 		gameCapital: state.gameCapital,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,
+		lastPollFailureAt: state.lastPollFailureAt,
+		lastRetryAt: state.lastRetryAt,
+		nextRetryAt: state.nextRetryAt,
+		retryInProgress: state.retryInProgress,
 		mode: fixed.execute ? 'execute' : 'dry-run',
 		network: fixed.network,
 		networkConfigured: fixed.networkConfigured ?? true,

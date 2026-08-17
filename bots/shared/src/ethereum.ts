@@ -57,6 +57,7 @@ export type { PublicActions, PublicClient, WalletClient } from './ethereum/clien
 export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
 export {
 	createPublicClient,
+	createContextualPublicClient,
 	createWalletClient,
 	custom,
 	defineChain,
@@ -68,4 +69,4 @@ export {
 	readContractAtBlock,
 	RpcError,
 } from './ethereum/client'
-export { createRpcEndpointPool, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
+export { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'

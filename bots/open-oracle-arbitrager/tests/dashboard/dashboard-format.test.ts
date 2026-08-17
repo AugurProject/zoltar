@@ -14,6 +14,7 @@ import {
 	opportunityDecisionReason,
 	pauseControlState,
 	persistedConnectivity,
+	pollRetryStatus,
 	requiredSignerPrivateKey,
 	requestWithTimeout,
 	selectedTokenPriceHistory,
@@ -26,6 +27,26 @@ import {
 } from '#dashboard/dashboard-format'
 
 describe('dashboard exact ETH formatting', () => {
+	test('describes scheduled and active automatic retries at the top of the dashboard', () => {
+		const now = Date.parse('2026-08-17T12:00:00.000Z')
+		expect(pollRetryStatus({ lastError: 'RPC failed', lastPollFailureAt: '2026-08-17T11:59:58.000Z', lastRetryAt: undefined, nextRetryAt: '2026-08-17T12:00:05.000Z', retryInProgress: false }, now)).toEqual({
+			label: 'Retry in 5s',
+			state: 'scheduled',
+		})
+		expect(pollRetryStatus({ lastError: 'RPC failed', lastPollFailureAt: '2026-08-17T12:00:01.000Z', lastRetryAt: '2026-08-17T12:00:00.000Z', nextRetryAt: '2026-08-17T12:00:05.000Z', retryInProgress: false }, now + 2_000)).toEqual({
+			label: 'Retry in 3s',
+			state: 'scheduled',
+		})
+		expect(pollRetryStatus({ lastError: 'RPC failed', lastPollFailureAt: '2026-08-17T11:59:58.000Z', lastRetryAt: undefined, nextRetryAt: '2026-08-17T12:00:05.000Z', retryInProgress: false }, now + 5_000)).toEqual({
+			label: 'Retry due',
+			state: 'due',
+		})
+		expect(pollRetryStatus({ lastError: 'RPC failed', lastPollFailureAt: '2026-08-17T11:59:58.000Z', lastRetryAt: '2026-08-17T12:00:05.000Z', nextRetryAt: undefined, retryInProgress: true }, now + 5_500)).toEqual({
+			label: 'Retrying now',
+			state: 'retrying',
+		})
+	})
+
 	test('shows the server-sanitized poll cause and describes the attempted operation for local failures', () => {
 		expect(statePollingFailureMessage(new Error('The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active.'))).toBe(
 			'The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active. Use Refresh to retry now.',
