@@ -1412,17 +1412,6 @@ summary {
 .prose h2:not(:first-child) {
 	margin-top: 2rem;
 }
-footer {
-	display: flex;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 1.5rem clamp(1rem, 4vw, 4rem);
-	border-top: 1px solid var(--line);
-	color: var(--faint);
-	font:
-		10px ui-monospace,
-		monospace;
-}
 .loading-line {
 	height: 18px;
 	width: 78%;
@@ -1791,9 +1780,6 @@ footer {
 	}
 	.explanation-flow article:nth-child(3) {
 		border-bottom: 1px solid var(--line);
-	}
-	footer {
-		flex-direction: column;
 	}
 }
 

@@ -477,9 +477,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 				</header>
 			</div>
 			{content}
-			<footer>
-				<span>Statoblast two-way AMM</span>
-			</footer>
 		</div>
 	)
 }

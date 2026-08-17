@@ -67,7 +67,7 @@ describe('universe selector', () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.brand')?.textContent).toContain('Statoblast trading')
-		expect(rendered.container.querySelector('footer')?.textContent).toBe('Statoblast two-way AMM')
+		expect(rendered.container.querySelector('footer')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('unaudited MVP')
 		expect(rendered.container.textContent).not.toContain('Spot prices are not manipulation-resistant oracles.')
 	})
