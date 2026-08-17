@@ -1,0 +1,1 @@
+{"version":3,"file":"ApplicationErrorNotice.d.ts","sourceRoot":"","sources":["ApplicationErrorNotice.tsx"],"names":[],"mappings":"AAIA,KAAK,2BAA2B,GAAG;IAClC,YAAY,EAAE,MAAM,CAAA;IACpB,OAAO,EAAE,MAAM,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CAAA;CACnC,CAAA;AAED,wBAAgB,sBAAsB,CAAC,EAAE,YAAY,EAAE,OAAO,EAAE,EAAE,2BAA2B,gCAgC5F"}

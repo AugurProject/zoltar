@@ -1,0 +1,1 @@
+{"version":3,"file":"TransactionUniverseValue.d.ts","sourceRoot":"","sources":["../../../../ts/features/universes/components/TransactionUniverseValue.tsx"],"names":[],"mappings":"AAGA,KAAK,6BAA6B,GAAG;IACpC,UAAU,EAAE,MAAM,GAAG,SAAS,CAAA;CAC9B,CAAA;AAED,wBAAgB,wBAAwB,CAAC,EAAE,UAAU,EAAE,EAAE,6BAA6B,gCAErF"}

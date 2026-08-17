@@ -35,5 +35,9 @@
 		"generate": "bun ./build/projectArtifacts.mts && bun ./build/vendor.mts zoltar && bun ./build/vendor.mts statoblast",
 		"tsc": "bun x tsc --project tsconfig.json",
 		"build:workers": "bun ./build/workers.mts zoltar && bun ./build/workers.mts statoblast"
+	},
+	"types": "./js/index.d.ts",
+	"exports": {
+		"./*": "./js/*.js"
 	}
 }

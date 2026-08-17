@@ -1,0 +1,3 @@
+import type { DeploymentRouteContentProps } from '../../types.js';
+export declare function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps): import("preact").JSX.Element;
+//# sourceMappingURL=DeploymentRouteContent.d.ts.map

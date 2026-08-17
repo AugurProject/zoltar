@@ -41,5 +41,9 @@
 		"build:prod": "bun run generate && bun ../coreShared/build/production.mts zoltar",
 		"watch": "bun ../coreShared/build/watch.mts zoltar",
 		"serve": "bun ../coreShared/dev-server.ts zoltar"
+	},
+	"types": "./js/index.d.ts",
+	"exports": {
+		"./*": "./js/*.js"
 	}
 }

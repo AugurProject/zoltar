@@ -1,0 +1,31 @@
+import type { Address } from '@zoltar/shared/ethereum';
+import { type LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js';
+import { type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js';
+import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
+type ForkZoltarSectionProps = {
+    accountAddress: Address | undefined;
+    currentTimestamp?: bigint | undefined;
+    hasLoadedZoltarQuestions: boolean;
+    isOnActiveAppChain: boolean;
+    loadingZoltarForkAccess: boolean;
+    loadingZoltarQuestion?: boolean;
+    loadingZoltarQuestions: boolean;
+    onApproveZoltarForkRep: (amount?: bigint) => void;
+    onForkZoltar: () => void;
+    onRetryZoltarQuestion?: () => void;
+    onZoltarForkQuestionIdChange: (questionId: string) => void;
+    zoltarForkActiveAction: 'approve' | 'fork' | undefined;
+    zoltarForkApproval: TokenApprovalState;
+    zoltarForkError: string | undefined;
+    zoltarForkPending: boolean;
+    zoltarForkQuestionId: string;
+    zoltarForkRepBalanceAttoRep: bigint | undefined;
+    zoltarQuestionLookupError?: string | undefined;
+    zoltarQuestionLookupId?: string | undefined;
+    zoltarQuestions: MarketDetails[];
+    zoltarUniverse: ZoltarUniverseSummary | undefined;
+    zoltarUniverseState: LoadableValueState;
+};
+export declare function ForkZoltarSection({ accountAddress, currentTimestamp, hasLoadedZoltarQuestions, isOnActiveAppChain, loadingZoltarForkAccess, loadingZoltarQuestion, loadingZoltarQuestions, onApproveZoltarForkRep, onForkZoltar, onRetryZoltarQuestion, onZoltarForkQuestionIdChange, zoltarForkActiveAction, zoltarForkApproval, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalanceAttoRep, zoltarQuestionLookupError, zoltarQuestionLookupId, zoltarQuestions, zoltarUniverse, zoltarUniverseState, }: ForkZoltarSectionProps): import("preact").JSX.Element;
+export {};
+//# sourceMappingURL=ForkZoltarSection.d.ts.map

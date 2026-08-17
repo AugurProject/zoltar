@@ -1,0 +1,55 @@
+import { type Address, type Hex } from '@zoltar/shared/ethereum';
+import { type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js';
+export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport';
+export declare const PROXY_DEPLOYER_ADDRESS: `0x${string}`;
+export declare const ZERO_SALT: `0x${string}`;
+export declare const MULTICALL3_BYTECODE: `0x${any}`;
+export declare const getShareTokenFactoryByteCode: (zoltarAddress: Address) => `0x${string}`;
+export declare const getEscalationGameFactoryByteCode: (claimDelegate: Address) => `0x${string}`;
+export declare const getPriceOracleManagerAndOperatorQueuerFactoryByteCode: (wethAddress?: `0x${string}`) => `0x${string}`;
+export declare const getZoltarQuestionDataByteCode: () => `0x${string}`;
+export declare const getSecurityPoolForkerByteCode: (zoltarAddress: Address) => `0x${string}`;
+export declare const getZoltarInitCode: (zoltarQuestionDataAddress: Address, genesisReputationTokenAddress?: `0x${string}`) => Hex;
+export declare const getSecurityPoolFactoryByteCode: ({ escalationGameFactory, openOracle, priceOracleManagerAndOperatorQueuerFactory, securityPoolForker, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, zoltar, zoltarQuestionData, }: {
+    escalationGameFactory: Address;
+    openOracle: Address;
+    priceOracleManagerAndOperatorQueuerFactory: Address;
+    securityPoolForker: Address;
+    shareTokenFactory: Address;
+    uniformPriceDualCapBatchAuctionFactory: Address;
+    zoltar: Address;
+    zoltarQuestionData: Address;
+}) => `0x${string}`;
+export declare function getZoltarAddress(profile?: NetworkProfile): `0x${string}`;
+export declare function getInfraContractAddresses(profile?: NetworkProfile): {
+    escalationGameClaimDelegate: Address;
+    escalationGameFactory: Address;
+    escalationGameProofVerifier: Address;
+    multicall3: Address;
+    openOracle: Address;
+    priceOracleManagerAndOperatorQueuerFactory: Address;
+    scalarOutcomes: Address;
+    securityPoolFactory: Address;
+    securityPoolForker: Address;
+    securityPoolUtils: Address;
+    shareTokenFactory: Address;
+    uniformPriceDualCapBatchAuctionFactory: Address;
+    zoltar: Address;
+    zoltarQuestionData: Address;
+};
+type BootstrapDescendantAddresses = {
+    [id: string]: Address;
+    escalationGameProofVerifier: Address;
+    liquidationApprovalRegistryDeployer: Address;
+    liquidationApprovalRegistryImplementation: Address;
+    priceCoordinatorCreationCodeFirstChunk: Address;
+    priceCoordinatorCreationCodeSecondChunk: Address;
+    priceCoordinatorDeploymentWorker: Address;
+    securityPoolCreationCodeFirstChunk: Address;
+    securityPoolCreationCodeSecondChunk: Address;
+    securityPoolDeploymentWorker: Address;
+};
+export declare function getBootstrapDescendantAddresses(profile?: NetworkProfile): BootstrapDescendantAddresses;
+export declare function getOpenOracleAddress(): `0x${string}`;
+export declare function getMulticall3Address(): `0x${string}`;
+//# sourceMappingURL=deploymentHelpers.d.ts.map

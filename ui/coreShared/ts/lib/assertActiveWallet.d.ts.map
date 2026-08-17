@@ -1,0 +1,1 @@
+{"version":3,"file":"assertActiveWallet.d.ts","sourceRoot":"","sources":["assertActiveWallet.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,yBAAyB,CAAA;AAKtD,MAAM,MAAM,mBAAmB,GAAG;IACjC,cAAc,EAAE,OAAO,CAAA;IACvB,OAAO,EAAE,MAAM,CAAA;CACf,CAAA;AAED,wBAAsB,kBAAkB,CAAC,cAAc,EAAE,OAAO;;;GAa/D"}

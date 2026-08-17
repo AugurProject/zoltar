@@ -1,0 +1,3 @@
+import type { OverviewPanelsProps } from '../../features/types.js';
+export declare function OverviewPanels({ activeUniverseId, accountState, isConnectingWallet, isManagingWallet, isLoadingRepPrices, isRefreshingRepPrices, isLoadingUniverseRepBalance, onConnect, onChangeWallet, onDisconnectWallet, onGoToGenesisUniverse, onRefreshRepPrices, onSwitchNetwork, parentUniverseId, readBackendStatus, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, universeForkTime, universeHasForked, universePresentation, universeLabel, universeRepBalanceAttoRep, isRefreshing, walletBootstrapComplete, }: OverviewPanelsProps): import("preact").JSX.Element;
+//# sourceMappingURL=OverviewPanels.d.ts.map
