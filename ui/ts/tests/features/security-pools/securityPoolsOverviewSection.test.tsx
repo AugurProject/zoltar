@@ -944,9 +944,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(poolCardQueries.queryByText('No known vaults in this pool.')).toBeNull()
 		const vaultMetric = Array.from(poolCard.querySelectorAll('.comparison-record-metrics > div')).find(element => element.querySelector('dt')?.textContent === 'Known Vaults')
 		expect(vaultMetric?.querySelector('dd')?.textContent).toBe('2')
-		expect(documentQueries.getByLabelText('Known Vault Registry')).not.toBeNull()
-		expect(documentQueries.getByRole('option', { name: 'Has known vaults' })).not.toBeNull()
-		expect(documentQueries.getByRole('option', { name: 'No known vaults' })).not.toBeNull()
+		expect(documentQueries.queryByText('Known Vault Registry')).toBeNull()
+		expect(documentQueries.queryByRole('option', { name: 'Has known vaults' })).toBeNull()
+		expect(documentQueries.queryByRole('option', { name: 'No known vaults' })).toBeNull()
 	})
 
 	test('keeps browse pool cards focused on pool-level information', async () => {

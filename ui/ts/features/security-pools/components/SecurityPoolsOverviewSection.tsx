@@ -33,7 +33,6 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
 	const [searchText, setSearchText] = useState('')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
-	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
 	const requestedPoolCount = securityPoolPage?.poolCount ?? securityPoolBrowseCount
@@ -108,12 +107,10 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
-		if (vaultFilter === 'has-vaults' && pool.vaultCount === 0n) return false
-		if (vaultFilter === 'empty' && pool.vaultCount > 0n) return false
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
-	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || vaultFilter !== 'all'
+	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all'
 	return (
 		<SectionBlock
 			density='compact'
@@ -156,14 +153,6 @@ export function SecurityPoolsOverviewSection({ accountState, environmentRefreshK
 						<option value='poolForked'>{securityPoolCopy.poolForked}</option>
 						<option value='forkMigration'>{securityPoolCopy.forkMigration}</option>
 						<option value='forkTruthAuction'>{commonCopy.truthAuction}</option>
-					</select>
-				</label>
-				<label className='field'>
-					<span>{securityPoolCopy.knownVaultRegistry}</span>
-					<select value={vaultFilter} onChange={event => setVaultFilter(event.currentTarget.value as 'all' | 'has-vaults' | 'empty')}>
-						<option value='all'>{securityPoolCopy.allPools}</option>
-						<option value='has-vaults'>{securityPoolCopy.hasKnownVaults}</option>
-						<option value='empty'>{securityPoolCopy.noKnownVaults}</option>
 					</select>
 				</label>
 			</div>
