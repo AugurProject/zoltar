@@ -1115,6 +1115,20 @@ button[aria-busy="true"]:disabled {
 	color: var(--cyan);
 	background: transparent;
 }
+.activity-pagination {
+	display: grid;
+	justify-items: center;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+.activity-pagination .system-status {
+	max-width: min(100%, 48rem);
+	margin: 0;
+	text-align: left;
+}
+.activity-pagination .more:not([hidden]) {
+	margin: 0;
+}
 dialog {
 	width: min(820px, calc(100vw - 2rem));
 	max-height: min(820px, calc(100vh - 2rem));
@@ -1129,16 +1143,18 @@ dialog::backdrop {
 	background: rgba(1, 5, 9, 0.76);
 	backdrop-filter: blur(4px);
 }
-.dialog-bar {
+.dialog-sticky-header {
 	position: sticky;
 	top: 0;
 	z-index: 1;
+	background: rgba(16, 24, 32, 0.98);
+}
+.dialog-bar {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	padding: 1rem 1.2rem;
 	border-bottom: 1px solid var(--line);
-	background: rgba(16, 24, 32, 0.96);
 }
 .icon-button {
 	width: 38px;
@@ -1151,6 +1167,30 @@ dialog::backdrop {
 }
 .detail-content {
 	padding: 1.2rem;
+}
+.detail-canonical-status {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.8rem;
+	margin: 1rem 1.2rem 0;
+	padding: 0.75rem 0.9rem;
+	border: 1px solid rgba(255, 129, 122, 0.4);
+	border-radius: 10px;
+	color: #ffd0cd;
+	background: rgba(255, 129, 122, 0.09);
+	font-size: 0.76rem;
+}
+.detail-canonical-status strong,
+.detail-canonical-status span {
+	display: block;
+}
+.detail-canonical-status[hidden] {
+	display: none;
+}
+.detail-canonical-status span {
+	margin-top: 0.18rem;
+	color: var(--muted);
 }
 .detail-status,
 .detail-error {
@@ -1583,12 +1623,22 @@ dialog::backdrop {
 }
 .richlist-footer {
 	display: flex;
-	align-items: center;
+	align-items: end;
 	justify-content: space-between;
 	gap: 1rem;
 	margin-top: 0.8rem;
 	color: var(--muted);
 	font-size: 0.7rem;
+}
+.richlist-pagination {
+	display: grid;
+	justify-items: end;
+	gap: 0.5rem;
+	max-width: min(100%, 38rem);
+}
+#richlist-more-status {
+	margin: 0;
+	text-align: left;
 }
 .account-transactions-header {
 	display: grid;
@@ -1598,6 +1648,9 @@ dialog::backdrop {
 .account-transactions-header h3,
 .account-transactions-header p {
 	margin: 0;
+}
+.account-transactions-header h3 {
+	overflow-wrap: anywhere;
 }
 .account-transactions-header code {
 	color: var(--muted);
@@ -1653,6 +1706,9 @@ dialog::backdrop {
 }
 .account-transactions-more {
 	margin-top: 1rem;
+}
+.account-transactions-error.append-error {
+	margin: 1rem 0 0;
 }
 .transaction-failed {
 	color: var(--red);
@@ -1838,6 +1894,10 @@ dialog::backdrop {
 		align-items: flex-start;
 		flex-direction: column;
 	}
+	.detail-canonical-status {
+		align-items: flex-start;
+		flex-direction: column;
+	}
 	.site-header {
 		height: 118px;
 		align-items: flex-start;
@@ -1960,6 +2020,14 @@ dialog::backdrop {
 	.richlist-controls label,
 	.richlist-controls select {
 		width: 100%;
+	}
+	.richlist-footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.richlist-pagination {
+		justify-items: stretch;
+		max-width: none;
 	}
 	.state-stats {
 		grid-template-columns: 1fr 1fr;
