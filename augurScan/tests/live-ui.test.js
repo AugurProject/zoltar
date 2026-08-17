@@ -6,12 +6,15 @@ import {
 	classifyLiveRecords,
 	collectCanonicalPages,
 	compactIndexerDuration,
+	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	indexerConnectionStatus,
+	indexerHeadFreshness,
+	indexerHeadFreshnessTransitionDelay,
 	indexerLagLabel,
 	indexerProgressEstimate,
 	isCurrentCanonicalGeneration,
@@ -405,6 +408,13 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 		percentage: '100.00',
 		eta: 'Caught up',
 	})
+	expect(
+		indexerProgressEstimate(
+			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' },
+			undefined,
+			Date.parse('2026-08-17T12:00:00.000Z'),
+		),
+	).toEqual({ percentage: '100.00', eta: 'RPC head stale' })
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '999', observed_block: '1000', phase: 'live' }, undefined, 1_000)).toEqual({
 		percentage: '99.89',
 		eta: 'Estimating ETA',
@@ -412,13 +422,53 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 	})
 })
 
+test('warns when a caught-up chain head is more than one minute old', () => {
+	const now = Date.parse('2026-08-17T12:00:00.000Z')
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:00.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' }, now)).toEqual({
+		stale: true,
+		ageMs: 61_000,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '41', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'live' }, now)).toEqual({
+		stale: false,
+	})
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'backfilling' }, now)).toEqual(
+		{
+			stale: false,
+		},
+	)
+	for (const indexedTimestamp of [null, undefined, 'not-a-date']) {
+		const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: indexedTimestamp, phase: 'live' }
+		expect(indexerHeadFreshness(network, now)).toEqual({ stale: false })
+		expect(indexerHeadFreshnessTransitionDelay(network, now)).toBeUndefined()
+	}
+})
+
+test('schedules the stale-head transition without waiting for another network response', () => {
+	const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:59:01.000Z', phase: 'live' }
+	const now = Date.parse('2026-08-17T12:00:00.000Z')
+	expect(indexerHeadFreshnessTransitionDelay(network, now)).toBe(1_001)
+	expect(indexerHeadFreshness(network, now + 1_000)).toEqual({ stale: false })
+	expect(indexerHeadFreshness(network, now + 1_001)).toEqual({ stale: true, ageMs: 60_001 })
+	expect(indexerHeadFreshnessTransitionDelay(network, now + 1_001)).toBeUndefined()
+	expect(indexerHeadFreshnessTransitionDelay({ ...network, indexed_block: '41' }, now)).toBeUndefined()
+	expect(indexerHeadFreshnessTransitionDelay({ ...network, phase: 'backfilling' }, now)).toBeUndefined()
+})
+
 test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: true })).toEqual({ label: 'Deployed', tone: 'live' })
-	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Deployed by #42', tone: 'live' })
-	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'Not deployed at #100', tone: 'error' })
+	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Code present at #42', tone: 'live' })
+	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'No code at #100', tone: 'error' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: null })).toEqual({ label: 'Checking deployment', tone: 'pending' })
-	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Code present by')
+	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Code present at')
 	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
+	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
+	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')
 })
 
 test('classifies appended, changed, and stable live records by canonical key', () => {
