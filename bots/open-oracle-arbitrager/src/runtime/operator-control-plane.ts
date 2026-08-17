@@ -11,7 +11,6 @@ import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-l
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { authenticatedExecutionToken } from '#config/runtime-deployment'
-import { networkConfiguration } from '#config/network'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
@@ -194,31 +193,17 @@ export function startOperatorControlPlane(parameters: {
 					submission: latest.settings.submission,
 					value,
 				})
-				pending.connectivity = next.rpcQuorumRestartRequired ? pending.connectivity : next.connectivity
-				if (next.restartRequired) {
-					const network = networkConfiguration(next.network, {
-						factory: latest.settings.deployment.uniswapFactory,
-						quoter: latest.settings.deployment.uniswapQuoter,
-						rep: latest.settings.deployment.rep,
-						weth: latest.settings.deployment.weth,
-					})
-					config.network = network
-					config.networkConfigured = true
-					config.centralizedMarkets = { ...config.centralizedMarkets, assetChainId: network.chain.id }
-					fixedState.expectedChainId = network.chain.id
-					fixedState.explorerUrl = network.explorerUrl
-					fixedState.network = network.name
-					fixedState.networkConfigured = true
-				}
+				const restartRequired = next.restartRequired || next.rpcQuorumRestartRequired
+				pending.connectivity = restartRequired ? pending.connectivity : next.connectivity
 				recordOperation(state, {
 					category: 'configuration',
 					details: next.connectivity.publicRpcUrls.map(endpointLabel).join(', '),
 					level: 'info',
 					message: 'Network and RPC configuration verified and saved',
-					reason: next.restartRequired || next.rpcQuorumRestartRequired ? 'Saved settings apply after restart' : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
+					reason: restartRequired ? 'Saved settings apply after restart' : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
 					reportId: undefined,
 				})
-				return { connectivity: next.connectivity, network: next.network, rpcQuorum: next.rpcQuorum, restartRequired: next.restartRequired || next.rpcQuorumRestartRequired }
+				return { connectivity: next.connectivity, network: next.network, rpcQuorum: next.rpcQuorum, restartRequired }
 			})
 		},
 		updateDeployment: value => {

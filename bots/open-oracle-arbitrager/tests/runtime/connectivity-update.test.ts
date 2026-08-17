@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
-import type { EndpointCheck } from '#monitoring/connectivity'
+import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
 
 async function exampleSettings() {
 	const settings = parseOperatorSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -20,12 +20,13 @@ function relayCheck(): EndpointCheck {
 describe('operator connectivity updates', () => {
 	test('persists a dashboard switch to the isolated-development quorum for restart', async () => {
 		let settings = await exampleSettings()
+		const state = { endpointChecks: [relayCheck()] }
 		const result = await updateOperatorConnectivity({
 			activeNetwork: 'mainnet',
 			activeRpcQuorum: 2,
 			check: async () => [{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
 			deployment: settings.deployment,
-			endpointState: { endpointChecks: [] },
+			endpointState: state,
 			execute: false,
 			persist: async update => {
 				settings = update(settings)
@@ -35,6 +36,31 @@ describe('operator connectivity updates', () => {
 		})
 		expect(result).toMatchObject({ rpcQuorum: 1, rpcQuorumRestartRequired: true })
 		expect(settings.rpcQuorum).toBe(1)
+		expect(state.endpointChecks).toEqual([relayCheck()])
+	})
+
+	test('preserves active endpoint health when a quorum-change check fails', async () => {
+		const settings = await exampleSettings()
+		const state = { endpointChecks: [relayCheck()] }
+		let persisted = false
+		const failedCheck = { chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: 'offline', kind: 'read-rpc', status: 'failed', target: 'saved.example' } as const
+		await expect(
+			updateOperatorConnectivity({
+				activeNetwork: 'mainnet',
+				activeRpcQuorum: 2,
+				check: () => Promise.reject(new EndpointCheckFailure('saved RPC failed', [failedCheck])),
+				deployment: settings.deployment,
+				endpointState: state,
+				execute: false,
+				persist: async () => {
+					persisted = true
+				},
+				submission: settings.submission,
+				value: request('mainnet', 'https://saved.example/', 1),
+			}),
+		).rejects.toThrow('saved RPC failed')
+		expect(state.endpointChecks).toEqual([relayCheck()])
+		expect(persisted).toBe(false)
 	})
 
 	test('preserves private relay health when applying same-chain RPC checks', async () => {

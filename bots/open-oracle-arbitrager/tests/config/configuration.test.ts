@@ -305,13 +305,25 @@ describe('file-only startup configuration', () => {
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 		const response = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 2 }),
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', restartRequired: true, rpcQuorum: 2 })
-		expect((await loadOperatorSettings(path))?.networkConfigured).toBe(true)
+		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', restartRequired: true, rpcQuorum: 1 })
+		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ networkConfigured: false, status: 'paused' })
+		const prematureResume = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(prematureResume.status).toBe(400)
+		child.kill()
+		await child.exited
+		children.splice(children.indexOf(child), 1)
+		const restartedChild = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(restartedChild)
 		const noOpConfiguration = await waitForJson(origin, '/api/configuration')
 		const noOpSave = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(noOpConfiguration),
@@ -324,7 +336,7 @@ describe('file-only startup configuration', () => {
 			await Bun.sleep(20)
 			configuredState = await waitForJson(origin, '/api/state')
 		}
-		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
+		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		const rpcOrigin = new URL(rpcUrl).origin
 		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
 			await Bun.sleep(20)

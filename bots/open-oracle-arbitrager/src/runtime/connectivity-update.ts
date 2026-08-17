@@ -40,7 +40,8 @@ export async function updateOperatorConnectivity(parameters: {
 	const connectivity = validateConnectivitySettingsForQuorum(value.connectivity, parameters.deployment.quorumRpcUrls)
 	if (parameters.execute && parameters.deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	const runCheck = () => (parameters.check ?? checkConnectivity)(connectivity, selectedNetwork.chain.id)
-	if (restartRequired) await runCheck()
+	const rpcQuorumRestartRequired = rpcQuorum !== parameters.activeRpcQuorum
+	if (restartRequired || rpcQuorumRestartRequired) await runCheck()
 	else await updateConnectivityEndpointChecks(parameters.endpointState, runCheck)
 	await checkIndependentRpcChains(parameters.deployment.quorumRpcUrls, selectedNetwork.chain.id, parameters.readChainId ?? readRpcChainId)
 	await checkSubmissionEndpoints(parameters.submission, selectedNetwork.chain.id)
@@ -48,5 +49,5 @@ export async function updateOperatorConnectivity(parameters: {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
 		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
 	})
-	return { connectivity, network: networkName, restartRequired, rpcQuorum, rpcQuorumRestartRequired: rpcQuorum !== parameters.activeRpcQuorum }
+	return { connectivity, network: networkName, restartRequired, rpcQuorum, rpcQuorumRestartRequired }
 }
