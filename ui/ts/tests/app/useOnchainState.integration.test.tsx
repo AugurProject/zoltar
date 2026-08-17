@@ -577,6 +577,39 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('follows a supported wallet chain discovered when an account connects without a chain event', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a6')
+		let connected = false
+		const onSupportedNetworkChange = mock((_chainId: string) => undefined)
+		const { backend, subscriptionState } = createBackend({
+			getAccounts: async () => (connected ? [account] : []),
+			getChainId: async () => '0xaa36a7',
+			profile: MAINNET_NETWORK_PROFILE,
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(
+			createOnchainStateDependencies(),
+			state => {
+				hookState = state
+			},
+			{ onSupportedNetworkChange },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+
+		connected = true
+		await act(async () => {
+			subscriptionState.accountHandler?.()
+			await Promise.resolve()
+		})
+
+		await waitFor(() => expect(onSupportedNetworkChange).toHaveBeenCalledWith('0xaa36a7'))
+		expect(subscriptionState.chainHandler).toBeDefined()
+		resetEnvironment()
+	})
+
 	test('uses the active backend label when surfacing a read-RPC chain mismatch', async () => {
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
 			augurStatoblastDeployed: false,

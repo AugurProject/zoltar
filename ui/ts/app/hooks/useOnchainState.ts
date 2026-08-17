@@ -387,6 +387,10 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				return
 			}
 		}
+		if (connectedChainId !== undefined && supportedNetworkChangeRef.current !== undefined && getPublicNetworkProfileForChainId(connectedChainId) !== undefined && !sameChainId(connectedChainId, backend.profile.chainIdHex)) {
+			supportedNetworkChangeRef.current(connectedChainId)
+			return
+		}
 		const walletOnExpectedChain = sameChainId(connectedChainId, backend.profile.chainIdHex)
 		backend.setReadTransportMode?.(walletOnExpectedChain ? 'provider' : 'rpc')
 		if (!walletOnExpectedChain) {
