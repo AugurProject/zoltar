@@ -54,8 +54,8 @@ dispute while preserving the wallet as the replacement reporter. After the dispu
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
 exact asset recovery pass the finality policy through 12 canonical descendants. By
-default the primary reader is sufficient. When `ZOLTAR_BOT_RPC_QUORUM=2`, at least
-two readers must be available and every available reader must agree. If a later reporter replaces
+default the primary reader is sufficient. When the saved `rpcQuorum` setting is `2`,
+at least two readers must be available and every available reader must agree. If a later reporter replaces
 the bot, it derives the exact one-token credit from the authenticated old and new
 report amounts, withdraws only that amount through a parent-bound executor call,
 and verifies the `ReplacementCreditWithdrawn` event through the same receipt and
@@ -103,11 +103,11 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. The primary read RPC
-  authenticates every manifest entry by default. With `ZOLTAR_BOT_RPC_QUORUM=2`,
+  authenticates every manifest entry by default. With the saved `rpcQuorum` setting at `2`,
   at least two available readers must authenticate every entry before the bot can
   sign. A contradictory authentication result fails closed.
 - One primary read RPC. Optional independent quorum RPCs add corroboration; when
-  `ZOLTAR_BOT_RPC_QUORUM=2`, configure two or more in addition to the primary. Only a retryable transport failure
+  the saved `rpcQuorum` setting is `2`, configure two or more in addition to the primary. Only a retryable transport failure
   makes a reader unavailable. Live execution requires the configured number of responses, and every responding reader must
   agree exactly. Under the opt-in two-reader policy, one transport-unavailable reader is reported as degraded without
   stopping an otherwise healthy quorum; a malformed or contradictory response is a
@@ -356,7 +356,7 @@ URLs:
 PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-When `ZOLTAR_BOT_RPC_QUORUM=2`, the three read RPCs must use independent origins. Before broadcasting, the command
+When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
 configuration as `<operator-config>.executor-deployment.json`. It also holds the same
@@ -900,7 +900,7 @@ signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
 token input and returned token delta are negative, while the native output delta is
 positive and cannot fall below the signed minimum WETH output.
 
-When `ZOLTAR_BOT_RPC_QUORUM=2`, at least two available read RPCs must return the
+When the saved `rpcQuorum` setting is `2`, at least two available read RPCs must return the
 same quote at the exact quorum block, and every available response must agree. The executor
 calls the authenticated PoolManager directly, requires those signed deltas to match
 the requested input or output, settles only those deltas, and converts native ETH
