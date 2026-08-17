@@ -134,7 +134,7 @@ describe('dashboard exact ETH formatting', () => {
 	})
 
 	test('shows block delay against the operator computer without hiding clock skew', () => {
-		expect(blockAgeLabel('1000', 1_012_400)).toBe('12s behind')
+		expect(blockAgeLabel('1000', 1_012_400)).toBe('seen 12s ago')
 		expect(blockAgeLabel('1000', 995_000)).toBe('5s ahead of local clock')
 		expect(blockAgeLabel(undefined, 1_012_400)).toBe('timestamp unavailable')
 	})

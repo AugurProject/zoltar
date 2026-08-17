@@ -29,8 +29,9 @@ import { useRepPrices } from '../features/open-oracle/hooks/useRepPrices.js'
 import { useSecurityVaultOperations } from '../features/security-pools/hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
-import { getActiveSimulationController, initializeActiveEnvironment } from '../lib/activeEnvironment.js'
+import { getActiveSimulationController, initializeActiveEnvironment, shouldFollowWalletNetwork } from '../lib/activeEnvironment.js'
 import { getAppPageTitle } from './lib/appPageTitle.js'
+import { createSupportedNetworkChangeCoordinator } from './lib/supportedNetworkChange.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '../lib/chainTimestamp.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '../lib/loadState.js'
@@ -54,6 +55,27 @@ export function App() {
 	const deployNextMissingPending = useSignal(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
+	const followSupportedWalletNetwork = shouldFollowWalletNetwork()
+	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
+	const supportedNetworkChangeCoordinator =
+		supportedNetworkChangeCoordinatorRef.current ??
+		createSupportedNetworkChangeCoordinator({
+			getInFlightCount: () => transactionState.value.inFlightCount,
+			replaceEnvironment: async canCommit => {
+				let commitAllowed = false
+				await initializeActiveEnvironment(window.location, undefined, {
+					shouldCommit: () => {
+						commitAllowed = canCommit()
+						return commitAllowed
+					},
+				})
+				if (!commitAllowed) return false
+				setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+				setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
+				return true
+			},
+		})
+	supportedNetworkChangeCoordinatorRef.current = supportedNetworkChangeCoordinator
 	const {
 		activeUniverseId,
 		openOracleReportId: urlOpenOracleReportId,
@@ -93,6 +115,7 @@ export function App() {
 	}
 	const onTransactionFinished = () => {
 		transactionState.value = markTransactionFinished(transactionState.value)
+		void supportedNetworkChangeCoordinator.handleTransactionFinished()
 	}
 	const { navigate, route } = useHashRoute()
 	const {
@@ -121,7 +144,11 @@ export function App() {
 		disconnectWallet,
 		switchNetwork,
 		walletBootstrapComplete,
-	} = useOnchainState({ activeEnvironmentNonce, enableChainClock: route !== 'deploy' })
+	} = useOnchainState({
+		activeEnvironmentNonce,
+		enableChainClock: route !== 'deploy',
+		...(followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
+	})
 	const readBackendReady = readBackendValidated && readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
 	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)

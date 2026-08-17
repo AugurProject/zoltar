@@ -894,6 +894,13 @@ button.currency-value.copyable:hover:not(:disabled) {
 	opacity: 0.72;
 }
 
+.rep-price-failure {
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal;
+}
+
 .currency-value.copyable:focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
