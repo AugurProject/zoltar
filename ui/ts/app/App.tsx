@@ -190,6 +190,7 @@ export function App() {
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
 		...walletScopedHookConfig,
+		activeUniverseId,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
@@ -873,7 +874,7 @@ export function App() {
 					/>
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
+						<GlobalTransactionTray activeUniverseId={activeUniverseId} routeKey={transactionRouteKey} transaction={transactionState.value.active} />
 
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>

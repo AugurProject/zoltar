@@ -149,6 +149,8 @@ describe('transaction presentations', () => {
 			expect(presentation.rows?.[0]?.label).toBe('Pool')
 			expect(intent.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(presentation.rows?.map(row => row.label)).not.toContain('Universe')
+			expect(intent.universeId).toBe(7n)
+			expect(presentation.universeId).toBe(7n)
 		}
 	})
 
@@ -176,6 +178,7 @@ describe('transaction presentations', () => {
 			for (const state of [requested, prepared, submitted, failed]) {
 				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
 				expect(state.active?.rows?.map(row => row.label)).not.toContain('Universe')
+				expect(state.active?.universeId).toBe(7n)
 			}
 			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
 			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')

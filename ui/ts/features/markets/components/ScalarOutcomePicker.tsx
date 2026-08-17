@@ -30,10 +30,10 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 		setExactTickInputValue(resolvedSelectedTick)
 	}, [resolvedSelectedTick])
 	useEffect(() => {
-		if (resolvedScalarValueInput === undefined) return
+		if (isInvalid || resolvedScalarValueInput === undefined) return
 		setScalarValueInput(resolvedScalarValueInput)
 		setScalarValueError(undefined)
-	}, [resolvedScalarValueInput])
+	}, [details.displayValueMax, details.displayValueMin, details.numTicks, isInvalid, resolvedScalarValueInput])
 	const updateScalarValue = (value: string) => {
 		setScalarValueInput(value)
 		const parsedValue = tryParseDecimalInput(value)

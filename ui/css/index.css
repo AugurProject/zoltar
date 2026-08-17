@@ -4073,6 +4073,10 @@ strong.metric-value-danger {
 	gap: 0.32rem;
 }
 
+.global-transaction-universe-warning {
+	margin-right: 2.7rem;
+}
+
 main.global-transaction-tray-open {
 	padding-bottom: max(4rem, calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem)));
 }

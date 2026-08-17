@@ -92,6 +92,7 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 			...(pendingIntent.technicalRows === undefined ? {} : { technicalRows: pendingIntent.technicalRows }),
 			title: pendingIntent.submittedTitle,
 			tone: 'pending',
+			...(pendingIntent.universeId === undefined ? {} : { universeId: pendingIntent.universeId }),
 		},
 	}
 }
@@ -146,12 +147,14 @@ export function markTransactionPresented(state: TransactionTrayState, active: Gl
 	const isSameTransaction = previousActive !== undefined && ((active.hash !== undefined && active.hash === previousActive.hash) || (active.dismissKey !== undefined && active.dismissKey === previousActive.dismissKey))
 	const operationKey = isSameTransaction ? (previousActive.operationKey ?? active.operationKey ?? active.dismissKey ?? active.hash) : (active.operationKey ?? active.dismissKey ?? active.hash)
 	const technicalRows = active.technicalRows ?? (isSameTransaction ? previousActive.technicalRows : undefined)
+	const universeId = active.universeId ?? (isSameTransaction ? previousActive.universeId : undefined)
 	return {
 		...state,
 		active: {
 			...active,
 			...(operationKey === undefined ? {} : { operationKey }),
 			...(technicalRows === undefined ? {} : { technicalRows }),
+			...(universeId === undefined ? {} : { universeId }),
 		},
 	}
 }

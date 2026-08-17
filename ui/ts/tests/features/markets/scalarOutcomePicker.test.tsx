@@ -125,6 +125,30 @@ describe('ScalarOutcomePicker', () => {
 		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
 	})
 
+	test('restores the canonical scalar value after leaving invalid mode', async () => {
+		const renderedComponent = await renderIntoDocument(<ScalarOutcomePickerHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		const invalidToggle = documentQueries.getByRole('checkbox', { name: 'Invalid' }) as HTMLInputElement
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '75' } })
+		})
+		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(invalidToggle)
+		})
+		await act(() => {
+			fireEvent.click(invalidToggle)
+		})
+
+		expect(scalarValueInput.value).toBe('20')
+		expect(scalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
+		expect(documentQueries.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).toBeNull()
+	})
+
 	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {
 		const renderedComponent = await renderIntoDocument(<ExactScalarOutcomePickerHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
