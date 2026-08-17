@@ -71,6 +71,7 @@ test('dynamic value and unit copy uses nonbreaking separators', () => {
 	expect(securityPoolCopy.formatInsufficientRepBalanceDetail('12')).toContain('12\u00a0REP')
 	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH / REP')
 	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH / REP')
+	expect(forkAuctionCopy.zeroEth).toBe('0\u00a0ETH')
 })
 
 test('transaction actions and pending labels use sentence case independently of titles', () => {

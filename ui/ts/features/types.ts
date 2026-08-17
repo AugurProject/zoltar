@@ -264,6 +264,7 @@ export type SecurityPoolRouteContentProps = {
 
 export type MarketSectionProps = MarketRouteContentProps
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
+	activeUniverseId: bigint
 	onReturnToBrowse?: () => void
 	showHeader?: boolean
 }

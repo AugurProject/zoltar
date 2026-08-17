@@ -37,7 +37,7 @@ export const attoEthRaised = 'ETH Raised'
 export const attoRepSold = 'REP Sold'
 export const minBid = 'Min Bid'
 export const winningThreshold = 'Winning Threshold'
-export const zeroEth = '0 ETH'
+export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH / REP from depth chart`
 export const formatImportedForkDepositPageSummary = (startIndex: CopyTemplateValue, endIndex: CopyTemplateValue, totalCount: CopyTemplateValue, paginationSummary: CopyTemplateValue) => `Showing parent deposits ${startIndex}-${endIndex} of ${totalCount}. ${paginationSummary}`

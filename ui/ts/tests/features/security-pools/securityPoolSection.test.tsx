@@ -46,6 +46,7 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): SecurityPoolSectionProps {
 	return {
 		accountState: createAccountState(),
+		activeUniverseId: 0n,
 		availableQuestionsContextKey: 'environment-1:universe-0',
 		availableQuestions: [createMarketDetails(), createMarketDetails({ marketType: 'categorical', questionId: '0x02', title: 'Categorical question' })],
 		checkingDuplicateOriginPool: false,
@@ -195,8 +196,8 @@ describe('SecurityPoolSection', () => {
 		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee' })
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
-		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0 gwei.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0 gwei.')
+		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0\u00a0gwei.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0\u00a0gwei.')
 	})
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
@@ -535,6 +536,29 @@ describe('SecurityPoolSection', () => {
 		expect(returnedToBrowse).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
+	})
+
+	test('warns when a retained created pool belongs to a different active universe', async () => {
+		const resultPool = {
+			deployPoolHash: zeroHash,
+			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+			questionId: '0x01',
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000a2'),
+			statoblastSecurityMultiplierBps: 20_000n,
+			universeId: 1n,
+		}
+		const initialProps = createProps({ activeUniverseId: 1n, securityPoolResult: resultPool })
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).queryByText('Universe Mismatch')).toBeNull()
+		await act(() => {
+			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
+		})
+
+		const warning = within(document.body).getByRole('alert')
+		expect(warning.textContent).toContain('Universe Mismatch')
+		expect(warning.textContent).toContain('This pool belongs to 0x1, while the header shows 0x2.')
 	})
 
 	test('uses carried market details when created market does not match loaded market details', async () => {
