@@ -70,6 +70,10 @@ describe('GlobalTransactionTray', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray activeUniverseId={7n} transaction={requested.active} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByText('Transaction universe mismatch')).toBeNull()
+		await act(() => {
+			render(<GlobalTransactionTray activeUniverseId={8n} transaction={{ ...success, universeId: undefined }} />, renderedComponent.container)
+		})
+		expect(within(document.body).queryByText('Transaction universe mismatch')).toBeNull()
 
 		for (const presentation of lifecyclePresentations) {
 			await act(() => {

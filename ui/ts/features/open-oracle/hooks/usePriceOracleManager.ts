@@ -92,8 +92,8 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 		})
 	}
 
-	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => {
-		const transactionContext = { managerAddress, securityPoolAddress }
+	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId?: bigint) => {
+		const transactionContext = { managerAddress, securityPoolAddress, universeId }
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'requestPrice'
@@ -158,8 +158,8 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 		}
 	}
 
-	const executePendingPoolOperation = async (managerAddress: Address, operationId: bigint, securityPoolAddress?: Address) => {
-		const transactionContext = { managerAddress, securityPoolAddress }
+	const executePendingPoolOperation = async (managerAddress: Address, operationId: bigint, securityPoolAddress?: Address, universeId?: bigint) => {
+		const transactionContext = { managerAddress, securityPoolAddress, universeId }
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'executeStagedOperation'

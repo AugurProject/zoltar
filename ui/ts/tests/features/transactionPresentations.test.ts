@@ -9,6 +9,8 @@ import {
 	createMarketCreationSuccessPresentation,
 	createOpenOracleSuccessPresentation,
 	createOpenOracleTransactionIntent,
+	createPoolOracleSuccessPresentation,
+	createPoolOracleTransactionIntent,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
 	createSecurityPoolCreationTransactionIntent,
@@ -183,6 +185,32 @@ describe('transaction presentations', () => {
 			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
 			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')
 			expect(failed.active?.technicalRows?.map(row => row.label)).toContain('Function')
+		}
+	})
+
+	test('preserves pool oracle universe metadata through every transaction lifecycle state', () => {
+		const context = {
+			managerAddress: '0x0000000000000000000000000000000000000002' as const,
+			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
+			universeId: 7n,
+		}
+		const intent = createPoolOracleTransactionIntent('requestPrice', context)
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
+		const prepared = markTransactionPrepared(requested, {
+			account: '0x0000000000000000000000000000000000000003',
+			args: [],
+			chainName: 'Ethereum',
+			contractAddress: context.managerAddress,
+			functionName: 'requestPrice',
+			value: 0n,
+		})
+		const submitted = markTransactionSubmitted(prepared, transactionHash)
+		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
+
+		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
+			expect(presentation?.universeId).toBe(7n)
+			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
 		}
 	})
 

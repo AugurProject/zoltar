@@ -437,6 +437,7 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 type PoolOracleTransactionContext = {
 	managerAddress: string
 	securityPoolAddress?: string | undefined
+	universeId?: bigint | undefined
 }
 
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
@@ -454,6 +455,7 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 		rows: getPoolOracleTransactionRows(context),
 		source: 'pool-oracle',
 		submittedTitle,
+		universeId: context?.universeId,
 	})
 }
 
@@ -467,6 +469,7 @@ export function createPoolOracleSuccessPresentation(result: OpenOracleActionResu
 		rows: getPoolOracleTransactionRows(context),
 		title,
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 
