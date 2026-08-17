@@ -354,7 +354,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 10n ** 18n,
 			}),
-		).toBe('Max mint capacity is 0.2 ETH.')
+		).toBe('Max mint capacity is 0.2\u00a0ETH.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -368,7 +368,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
-		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
+		).toBe('Need 0.5\u00a0more\u00a0ETH in this wallet to mint the selected amount.')
 	})
 
 	void test('blocks minting when migrated complete-set shares have no collateral exchange rate', () => {

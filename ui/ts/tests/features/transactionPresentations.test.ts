@@ -128,8 +128,8 @@ describe('transaction presentations', () => {
 
 		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
 		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Requested liquidation debt'])
-		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5 ETH' })
-		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5 ETH' })
+		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
+		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Requested liquidation debt', value: '4.5\u00a0ETH' })
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {

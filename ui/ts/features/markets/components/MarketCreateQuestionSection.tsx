@@ -510,7 +510,6 @@ export function MarketCreateQuestionSection({
 										if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
 
 										if (marketFormValidation.isValid) return undefined
-										if (timingRelationshipError !== undefined) return marketCopy.formatInvalidQuestionFieldsReason(timingRelationshipError)
 										return marketFormValidation.notice
 									})(),
 								}}

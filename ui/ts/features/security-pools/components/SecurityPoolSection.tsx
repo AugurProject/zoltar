@@ -15,7 +15,7 @@ import { TransactionActionButton } from '../../../components/TransactionActionBu
 import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
@@ -152,9 +152,7 @@ export function SecurityPoolSection({
 					</li>
 					<li>
 						<span>{commonCopy.initialReportPriorityFee}</span>
-						<strong>
-							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, 9)} {commonCopy.gwei}
-						</strong>
+						<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</strong>
 					</li>
 					<li>
 						<span>{securityPoolCopy.deploymentTransactionHash}</span>

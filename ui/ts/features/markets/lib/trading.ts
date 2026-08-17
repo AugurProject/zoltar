@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
 import { assertNever } from '../../../lib/assert.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { tryParseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
@@ -208,9 +208,9 @@ export function getTradingMintGuardMessage({
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
-	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalance(remainingCapacity)} ETH.`
+	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (mintAmount > ethBalanceAttoEth) return `Need ${formatCurrencyBalance(mintAmount - ethBalanceAttoEth)} more ETH in this wallet to mint the selected amount.`
+	if (mintAmount > ethBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - ethBalanceAttoEth, 'ETH')} in this wallet to mint the selected amount.`
 	return undefined
 }
 

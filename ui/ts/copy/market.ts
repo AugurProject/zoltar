@@ -76,7 +76,6 @@ export const title = 'Title'
 export const useForFork = 'Use for fork'
 export const formatUseForForkLabel = (questionTitle: string, questionId: string) => `Use for fork: ${questionTitle} (${questionId})`
 export const questionCreationWalletRequired = 'Connect a wallet before creating a question.'
-export const formatInvalidQuestionFieldsReason = (message: string) => `Fix invalid fields: ${message}`
 export const requiredFieldsNote = 'Required fields are marked with an asterisk (*).'
 export const forkIntroduction = 'Forking selects one existing question to split the active universe into outcome-specific child universes. This protocol action cannot be undone.'
 export const forkQuestionRequirement = 'Choose the question whose outcomes will define the child universes.'

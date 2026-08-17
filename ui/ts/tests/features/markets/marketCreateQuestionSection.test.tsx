@@ -211,7 +211,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Review question', 'Fix invalid fields: End time must be after start time')
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
 	})
 
 	test('keeps scalar details and ended-state risk visible through reversible review and submission', async () => {

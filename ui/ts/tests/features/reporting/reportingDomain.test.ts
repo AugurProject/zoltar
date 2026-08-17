@@ -538,7 +538,7 @@ describe('reportingDomain', () => {
 	test('previewReportingContribution rejects a pre-start amount below the first-report minimum', () => {
 		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(2n))).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Enter at least 3 REP to start the escalation game.',
+			reason: 'Enter at least 3\u00a0REP to start the escalation game.',
 		})
 	})
 
@@ -753,7 +753,7 @@ describe('reportingDomain', () => {
 			),
 		).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Selected side is already full at 10 REP.',
+			reason: 'Selected side is already full at 10\u00a0REP.',
 		})
 	})
 

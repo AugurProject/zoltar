@@ -19,7 +19,7 @@ import {
 } from '../../../protocol/index.js'
 import { assertNever } from '../../../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../../../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
@@ -246,11 +246,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined) => {
 		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress)
 		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.initialReportAmount2) {
-			throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalanceAttoRep)} more REP in this wallet to fund the initial report.`)
+			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 		}
 		const requiredEthWithWrap = addOpenOracleBountyBuffer(requiredCostAttoEth) + fundingRequirement.wethShortfallAttoEth
 		if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < requiredEthWithWrap) {
-			throw new Error(`Need ${formatCurrencyBalance(requiredEthWithWrap - walletBalanceAttoEth)} more ETH in this wallet to fund the initial report and ${actionLabel}.`)
+			throw new Error(`Need ${formatAdditionalCurrencyBalance(requiredEthWithWrap - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and ${actionLabel}.`)
 		}
 	}
 
@@ -412,7 +412,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
-				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalanceAttoRep)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
+				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
 				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',

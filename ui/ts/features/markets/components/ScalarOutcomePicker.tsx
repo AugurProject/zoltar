@@ -101,7 +101,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 				{showMinMax ? <MetricField label={marketCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
 				<MetricField label={marketCopy.selectedTick}>{selectedTickLabel}</MetricField>
 				<MetricField label={showMinMax ? marketCopy.selectedOutcome : marketCopy.currentValue} valueTagName='span'>
-					{resolvedScalarValueInput === undefined ? (
+					{isInvalid || resolvedScalarValueInput === undefined ? (
 						selectedOutcomeLabel
 					) : (
 						<span className='scalar-value-editor'>

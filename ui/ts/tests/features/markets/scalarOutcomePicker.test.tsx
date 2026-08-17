@@ -99,6 +99,13 @@ describe('ScalarOutcomePicker', () => {
 		expect(invalidToggle.checked).toBe(true)
 		expect(slider.disabled).toBe(true)
 		expect(documentQueries.getAllByText('Invalid').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByRole('textbox', { name: 'Scalar Value' })).toBeNull()
+
+		await act(() => {
+			fireEvent.click(invalidToggle)
+		})
+
+		expect((documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement).value).toBe('70')
 	})
 
 	test('keeps direct scalar value entry synchronized with the slider', async () => {
@@ -145,8 +152,9 @@ describe('ScalarOutcomePicker', () => {
 			fireEvent.click(invalidToggle)
 		})
 
-		expect(scalarValueInput.value).toBe('20')
-		expect(scalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
+		const restoredScalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar Value' }) as HTMLInputElement
+		expect(restoredScalarValueInput.value).toBe('20')
+		expect(restoredScalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
 		expect(documentQueries.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).toBeNull()
 	})
 

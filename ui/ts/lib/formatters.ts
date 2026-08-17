@@ -96,6 +96,18 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	return formatDecimalString(formattedValue)
 }
 
+export function formatValueWithUnit(value: string, unit: string) {
+	return `${value}\u00a0${unit}`
+}
+
+export function formatCurrencyBalanceWithUnit(value: bigint | undefined, unit: string, units: number = 18) {
+	return formatValueWithUnit(formatCurrencyBalance(value, units), unit)
+}
+
+export function formatAdditionalCurrencyBalance(value: bigint, unit: string, units: number = 18) {
+	return `${formatCurrencyBalance(value, units)}\u00a0more\u00a0${unit}`
+}
+
 export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
 	assertInteger(units, 'Units')
 	return units === 18 ? formatEther(value) : formatUnits(value, units)

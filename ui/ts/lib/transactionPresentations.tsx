@@ -2,7 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { formatCurrencyBalance } from './formatters.js'
+import { formatCurrencyBalanceWithUnit } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 
@@ -120,7 +120,7 @@ function getPreparedTransactionTechnicalRows(preview: TransactionRequestPreview)
 		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: formatRecipient(preview.contractLabel, preview.contractAddress) }]),
 		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: formatRecipient(preview.toLabel, preview.to) }]),
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
-		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
+		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: formatCurrencyBalanceWithUnit(preview.value, commonCopy.eth) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(argument => formatPreviewArgument(argument)).join(', ') }]),
 	]
 }

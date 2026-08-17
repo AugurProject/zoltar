@@ -7,7 +7,7 @@ import {
 	type EscalationBalanceTuple,
 } from '@zoltar/shared/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../../../types/contracts.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { requireDefined } from '../../../lib/required.js'
 import { getTimeRemaining } from '../../../lib/time.js'
 type ReportingAmountSuggestion = {
@@ -375,12 +375,12 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (selectedSide.balance >= details.nonDecisionThresholdAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Selected side is already full at ${formatCurrencyBalance(details.nonDecisionThresholdAttoRep)} REP.`,
+			reason: `Selected side is already full at ${formatCurrencyBalanceWithUnit(details.nonDecisionThresholdAttoRep, 'REP')}.`,
 		}
 	if (amount < details.startBondAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Enter at least ${formatCurrencyBalance(details.startBondAttoRep)} REP to meet the current start bond.`,
+			reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to meet the current start bond.`,
 		}
 	const projectedDeposit = projectEscalationDeposit({
 		amountAttoRep: amount,
@@ -404,7 +404,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		if (amount < details.startBondAttoRep)
 			return {
 				actualDepositAmount: undefined,
-				reason: `Enter at least ${formatCurrencyBalance(details.startBondAttoRep)} REP to start the escalation game.`,
+				reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to start the escalation game.`,
 			}
 		return {
 			actualDepositAmount: amount,

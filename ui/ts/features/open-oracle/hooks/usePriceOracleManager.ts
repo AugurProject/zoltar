@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance } from '../../../lib/formatters.js'
 import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation } from '../../transactionPresentations.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { runWriteAction } from '../../../lib/writeAction.js'
@@ -131,12 +131,12 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
 					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
 					if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.initialReportAmount2) {
-						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalanceAttoRep)} more REP in this wallet to fund the initial report.`)
+						throw new Error(`Need ${formatAdditionalCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 					}
 					const walletBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					const totalRequiredEth = reviewedRequestValueAttoEth + initialReportFunding.wethShortfallAttoEth
 					if (walletBalanceAttoEth < totalRequiredEth) {
-						throw new Error(`Need ${formatCurrencyBalance(totalRequiredEth - walletBalanceAttoEth)} more ETH in this wallet to fund the initial report and request a new price.`)
+						throw new Error(`Need ${formatAdditionalCurrencyBalance(totalRequiredEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and request a new price.`)
 					}
 					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
 						actionLabel: 'request a new price',

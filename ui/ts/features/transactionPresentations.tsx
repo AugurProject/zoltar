@@ -6,7 +6,7 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '../lib/formatters.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from './markets/lib/marketType.js'
@@ -163,7 +163,7 @@ type ZoltarMigrationTransactionContext = {
 function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: `${context.amount.trim()} ${commonCopy.rep}` }]),
+		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: formatValueWithUnit(context.amount.trim(), commonCopy.rep) }]),
 		...(context.outcomeIndexes === undefined || context.outcomeIndexes.trim() === '' ? [] : [{ label: transactionCopy.outcomeIndexes, value: context.outcomeIndexes.trim() }]),
 	]
 }
@@ -183,7 +183,7 @@ export function createZoltarMigrationSuccessPresentation(result: ZoltarMigration
 		detail: result.action === 'addRepToMigrationBalance' ? transactionCopy.migrationRepPreparationSuccessDetail : transactionCopy.repSplitSuccessDetail,
 		hash: result.hash,
 		rows: [
-			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amountAttoRep)} ${commonCopy.rep}` },
+			{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(result.amountAttoRep, commonCopy.rep) },
 			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
 		],
 		title: result.action === 'addRepToMigrationBalance' ? transactionCopy.repPrepared : transactionCopy.repSplit,
@@ -206,7 +206,7 @@ type SecurityPoolCreationTransactionContext = {
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: `${context.initialReportPriorityFeeGwei.trim()} gwei` }]),
+		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeGwei.trim(), commonCopy.gwei) }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
 	]
@@ -230,7 +230,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
-			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeAttoEthPerGas, 9)} gwei` },
+			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9) },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
@@ -390,7 +390,7 @@ function getLiquidationTransactionRows(context: LiquidationTransactionContext | 
 	return [
 		...(getPoolUniverseTransactionRows(context) ?? []),
 		...(context?.targetVault === undefined || context.targetVault.trim() === '' ? [] : [{ label: commonCopy.targetVault, value: <AddressValue address={context.targetVault} /> }]),
-		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: `${context.amount.trim()} ${commonCopy.eth}` }]),
+		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: formatValueWithUnit(context.amount.trim(), commonCopy.eth) }]),
 	]
 }
 

@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
 
@@ -33,8 +33,8 @@ export function getVaultDepositGuardMessage({
 	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor)
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
-	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatCurrencyBalance(walletRepShortfallAttoRep)} more REP in this wallet.`
-	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalance(minimumVaultRepDepositAttoRep)} REP in the first deposit.`
+	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatAdditionalCurrencyBalance(walletRepShortfallAttoRep, 'REP')} in this wallet.`
+	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} in the first deposit.`
 	return undefined
 }
 
@@ -59,7 +59,7 @@ export function getVaultWithdrawGuardMessage({
 	if (withdrawAmount <= 0n) return undefined
 	if (disputeStakedAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
 	if (withdrawableRepAmountAttoRep === undefined || withdrawableRepAmountAttoRep <= 0n) return undefined
-	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmountAttoRep)} REP or less.`
+	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalanceWithUnit(withdrawableRepAmountAttoRep, 'REP')} or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({

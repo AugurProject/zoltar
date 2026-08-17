@@ -6,7 +6,7 @@ import { sameAddress } from '../../../lib/address.js'
 import { assertNever } from '../../../lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '../../../lib/errors.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseAddressInput, tryParseAddressInput } from '../../../lib/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from '../../../lib/tokenApproval.js'
@@ -79,7 +79,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	if (settlerRewardAttoEth === undefined) return 'Enter a valid settler reward.'
 	if (ethValue < settlerRewardAttoEth) return 'ETH value to send must be at least the settler reward.'
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletBalanceAttoEth) return `Need ${formatCurrencyBalance(ethValue - walletBalanceAttoEth)} more ETH in this wallet to create the selected standalone Open Oracle report.`
+	if (ethValue > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethValue - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
 	return undefined
 }
 

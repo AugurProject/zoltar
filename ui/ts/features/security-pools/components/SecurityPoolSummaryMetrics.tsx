@@ -10,7 +10,7 @@ import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 
@@ -37,7 +37,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
 				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
-				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeAttoEthPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
+				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>
