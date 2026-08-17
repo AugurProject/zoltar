@@ -38,6 +38,8 @@ describe('UI Docker packaging', () => {
 		expect(launcher).toContain(localRunCommand)
 		expect(packageSource).toContain(`"ui:publish:ipfs": "docker build -f ui/Dockerfile . -t zoltar-ui && ${publishRunCommand}"`)
 		expect(packageSource).not.toContain('"ui:docker"')
+		expect(await readFile(dockerfile, 'utf8')).toContain('ENTRYPOINT [ "/entrypoint.sh" ]')
+		expect(await readFile(publisherEntrypoint, 'utf8')).toContain('ipfs add --api "/ip4/$IPFS_IP4_ADDRESS/tcp/5001"')
 		expect(server).toContain('ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080')
 		expect(server).toContain('http://localhost:8080/ipfs/${IPFS_HASH}/')
 		expect(server).toContain('exec ipfs daemon')
