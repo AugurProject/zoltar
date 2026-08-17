@@ -19,7 +19,7 @@ export function getInitialReportPriorityFeeValidationMessage(initialReportPriori
 	if (input === '') return 'Enter an initial-report priority fee in gwei.'
 	const priorityFeeAttoEthPerGas = tryParseDecimalInput(input, 9)
 	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a gwei value with at most 9 decimal places.'
-	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0 gwei.'
+	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0gwei.'
 	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
 	return undefined
 }

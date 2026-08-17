@@ -17,7 +17,6 @@ import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
-import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
 import { getWrongNetworkMessage } from '../../../lib/network.js'
 type MarketOverviewSectionProps = {
@@ -34,7 +33,6 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
-	const currentUniverseName = rootUniverse === undefined ? undefined : formatUniverseCollectionLabel([rootUniverse.universeId])
 	const isScalarFork = rootUniverse?.forkQuestionDetails?.marketType === 'scalar'
 	const scalarQuestionDetails = rootUniverse?.forkQuestionDetails
 	const [selectedChildOutcomeIndex, setSelectedChildOutcomeIndex] = useState<bigint | undefined>(undefined)
@@ -56,7 +54,6 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 			) : (
 				<>
 					<DataGrid className='market-overview-grid'>
-						<MetricField label={commonCopy.universe}>{currentUniverseName ?? commonCopy.universe}</MetricField>
 						<MetricField label={commonCopy.status}>{hasForked ? commonCopy.forked : marketCopy.unforked}</MetricField>
 						{hasForked ? (
 							<>
@@ -67,7 +64,7 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
-							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
+							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={commonCopy.reputationToken} />
 						</MetricField>
 						<MetricField label={marketCopy.totalTheoreticalSupplyAttoRep}>
 							<CurrencyValue value={rootUniverse.totalTheoreticalSupplyAttoRep} suffix={commonCopy.rep} />

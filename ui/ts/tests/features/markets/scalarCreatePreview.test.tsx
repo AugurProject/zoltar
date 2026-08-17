@@ -66,7 +66,7 @@ describe('ScalarCreatePreview', () => {
 			expect(onSelectedTickChangeCalls).toContain('10')
 		})
 		expect(slider.value).toBe('10')
-		expect(slider.getAttribute('aria-valuetext')).toBe('100 USD')
+		expect(slider.getAttribute('aria-valuetext')).toBe('100\u00a0USD')
 	})
 
 	test('toggles invalid mode and forwards user-selected ticks through callbacks', async () => {

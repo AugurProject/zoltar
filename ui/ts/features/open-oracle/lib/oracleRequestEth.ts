@@ -1,4 +1,4 @@
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance } from '../../../lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
 import { resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
 
@@ -15,5 +15,5 @@ export function getOracleRequestEthGuardMessage({ actionLabel, includeBuffer = f
 	if (requiredEthValue === 0n) return undefined
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
 	if (walletBalanceAttoEth >= requiredEthValue) return undefined
-	return `Need ${formatCurrencyBalance(requiredEthValue - walletBalanceAttoEth)} more ETH in this wallet to ${actionLabel}.`
+	return `Need ${formatAdditionalCurrencyBalance(requiredEthValue - walletBalanceAttoEth, 'ETH')} in this wallet to ${actionLabel}.`
 }

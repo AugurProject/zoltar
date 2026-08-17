@@ -176,6 +176,18 @@ describe('CurrencyValue', () => {
 		expect(copyButton.textContent).not.toContain('≈')
 	})
 
+	test('keeps maximum exact values inside the ellipsizing number-unit group', async () => {
+		const maximumUint256 = (1n << 256n) - 1n
+		const formattedMaximum = maximumUint256.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+		const documentQueries = await renderCurrencyValue({ precision: 'exact', units: 0, value: maximumUint256 })
+		const copyButton = documentQueries.getByRole('button', { name: `Copy exact value ${formattedMaximum}` })
+		const numberUnit = copyButton.querySelector('.currency-value-number-unit')
+
+		expect(numberUnit).not.toBeNull()
+		expect(numberUnit?.textContent).toContain('ETH')
+		expect(copyButton.getAttribute('title')).toBe(`${formattedMaximum} ETH`)
+	})
+
 	test('keeps the value visible and associates an announced clipboard error', async () => {
 		const clipboard = {
 			writeText: async () => {

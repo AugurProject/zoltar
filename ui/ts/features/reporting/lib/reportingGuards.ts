@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '../../../lib/actionGuards.js'
-import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../../../lib/formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 
@@ -42,9 +42,9 @@ export function getReportingReportGuardMessage({
 	if (viewerPoolHeldVaultRepBackingAttoRep === undefined) return 'Loading pool-held vault REP backing.'
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {
 		if (remainingSelectedOutcomeCapacity === 0n) return 'No remaining contribution capacity is available on the selected side.'
-		return `Only ${formatCurrencyBalance(remainingSelectedOutcomeCapacity)} REP remains before the selected side reaches the threshold.`
+		return `Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the threshold.`
 	}
-	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep)} more REP into your vault's pool-held backing before reporting.`
+	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep, 'REP')} into your vault's pool-held backing before reporting.`
 	return undefined
 }
 

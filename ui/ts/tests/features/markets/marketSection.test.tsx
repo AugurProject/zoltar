@@ -250,7 +250,7 @@ describe('MarketSection', () => {
 		expect(pageLoadCalls).toBe(2)
 	})
 
-	test('renders the active universe as a deterministic hex identifier outside the questions view', async () => {
+	test('does not repeat the active universe outside the header', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
@@ -263,7 +263,7 @@ describe('MarketSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Universe 0xa')).not.toBeNull()
+		expect(within(document.body).queryByText('Universe 0xa')).toBeNull()
 		const contextSummary = document.body.querySelector('.market-task-context')
 		if (!(contextSummary instanceof HTMLElement)) throw new Error('Expected task-focused market context')
 		expect(contextSummary.querySelector('.data-grid')).not.toBeNull()
@@ -298,6 +298,11 @@ describe('MarketSection', () => {
 		expect(document.body.textContent?.includes('Mint or redeem matching Yes, No, and Invalid shares.')).toBe(false)
 		expect(documentQueries.getByText('Open Interest')).not.toBeNull()
 		expect(documentQueries.getByText('Share Supply')).not.toBeNull()
+		const universeWarning = documentQueries.getByRole('alert')
+		expect(universeWarning.textContent).toContain('Universe mismatch')
+		expect(universeWarning.textContent).toContain('while the header shows 0x1')
+		expect(universeWarning.classList.contains('market-linked-pool-universe-warning')).toBe(true)
+		expect(universeWarning.classList.contains('compact')).toBe(true)
 		const shareSupply = document.body.querySelector('.market-linked-pool-share-supply')
 		if (!(shareSupply instanceof HTMLElement)) throw new Error('Expected a compact linked-pool share supply value')
 		expect(shareSupply.title).toBe('0.000000000000000004')
@@ -778,11 +783,11 @@ describe('MarketSection', () => {
 		expect(selectedViews).toEqual(['create'])
 	})
 
-	test('explains how Zoltar questions connect to forks and security pools', async () => {
+	test('omits the removed Zoltar question introduction', async () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('A Question is a reusable resolution definition stored in Zoltar. Creating one produces a Question ID. Augur Statoblast reuses that Question ID to create a tradeable Market (a Security Pool), while Zoltar can reuse the Question to define a universe fork.')).not.toBeNull()
+		expect(within(document.body).queryByText(/A Question is a reusable resolution definition/)).toBeNull()
 	})
 
 	test('selects a paginated question for the fork workflow', async () => {
@@ -1008,7 +1013,7 @@ describe('MarketSection', () => {
 		expect(within(summary).getByText('Binary')).not.toBeNull()
 		expect(within(summary).getByText('Yes')).not.toBeNull()
 		expect(within(summary).getByText('No')).not.toBeNull()
-		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
+		expect(within(summary).queryByText('Universe 0x7')).toBeNull()
 		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
 	})
 
@@ -1036,7 +1041,7 @@ describe('MarketSection', () => {
 		expect(within(summary).getByText('Binary')).not.toBeNull()
 		expect(within(summary).getByText('Yes')).not.toBeNull()
 		expect(within(summary).getByText('No')).not.toBeNull()
-		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
+		expect(within(summary).queryByText('Universe 0x7')).toBeNull()
 		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
 
 		const documentQueries = within(document.body)
@@ -1093,7 +1098,7 @@ describe('MarketSection', () => {
 		const summaryQueries = within(summary)
 		expect(summaryQueries.getByText('Canonical fork question')).not.toBeNull()
 		expect(summaryQueries.queryByText('Fork question title')).toBeNull()
-		expect(summaryQueries.getByText('Universe 0x2')).not.toBeNull()
+		expect(summaryQueries.queryByText('Universe 0x2')).toBeNull()
 		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${canonicalQuestion.questionId}` })).not.toBeNull()
 
 		const documentQueries = within(document.body)
@@ -1129,7 +1134,7 @@ describe('MarketSection', () => {
 		expect(summaryQueries.getByText('Outcomes')).not.toBeNull()
 		expect(summaryQueries.getByText('Question Type')).not.toBeNull()
 		expect(summaryQueries.getAllByText('Unavailable')).toHaveLength(3)
-		expect(summaryQueries.getByText('Universe 0x7')).not.toBeNull()
+		expect(summaryQueries.queryByText('Universe 0x7')).toBeNull()
 		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${questionId}` })).not.toBeNull()
 	})
 

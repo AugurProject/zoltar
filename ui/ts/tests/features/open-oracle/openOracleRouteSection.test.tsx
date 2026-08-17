@@ -639,6 +639,7 @@ describe('OpenOracleSection route create view', () => {
 		}
 		expect(review.textContent).toContain(defaultForm.settlementTime)
 		expect(review.textContent).toContain(defaultForm.disputeDelay)
+		expect(reviewQueries.getAllByText('1\u00a0ETH')).toHaveLength(2)
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {

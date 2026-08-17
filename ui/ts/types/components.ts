@@ -35,6 +35,7 @@ export type TransactionIntent = {
 	source: string
 	submittedDetail?: ComponentChildren
 	submittedTitle: ComponentChildren
+	universeId?: bigint | undefined
 }
 
 export type GlobalTransactionPresentation = {
@@ -46,6 +47,7 @@ export type GlobalTransactionPresentation = {
 	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren
 	tone: GlobalTransactionTone
+	universeId?: bigint | undefined
 }
 
 export type StickyContextItem = {

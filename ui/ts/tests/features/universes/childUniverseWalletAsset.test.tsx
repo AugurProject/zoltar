@@ -51,7 +51,7 @@ describe('ChildUniverseDetails wallet asset control', () => {
 	test('adds the control only for deployed child-universe REP tokens', async () => {
 		const deployed = await renderIntoDocument(<ChildUniverseDetails accountAddress={TOKEN_ADDRESS} child={createChild()} isSupportedChain />)
 		cleanupRenderedComponent = deployed.cleanup
-		expect(within(document.body).getByRole('button', { name: 'Add Universe 0xa REP to wallet' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Add Yes REP to wallet' })).not.toBeNull()
 
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined

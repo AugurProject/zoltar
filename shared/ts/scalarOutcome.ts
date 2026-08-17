@@ -62,10 +62,27 @@ export function getScalarOutcomeIndex(question: ScalarQuestionDetails, tickIndex
 	return combineUint256FromTwoWithInvalid(false, question.numTicks - tickIndex, tickIndex)
 }
 
-export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIndex: bigint) {
+export function getScalarDisplayValue(question: ScalarQuestionDetails, tickIndex: bigint) {
 	validateTickIndex(question, tickIndex)
 	const scalarRange = question.displayValueMax - question.displayValueMin
-	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
+	if (scalarRange <= 0n) throw new Error('Scalar question display range must be positive')
+	return question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
+}
+
+export function getScalarTickIndexForDisplayValue(question: ScalarQuestionDetails, displayValue: bigint) {
+	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
+	const scalarRange = question.displayValueMax - question.displayValueMin
+	if (scalarRange <= 0n) throw new Error('Scalar question display range must be positive')
+	if (displayValue < question.displayValueMin || displayValue > question.displayValueMax) return undefined
+
+	const offset = displayValue - question.displayValueMin
+	const candidateTick = offset === 0n ? 0n : (offset * question.numTicks + scalarRange - 1n) / scalarRange
+	if (candidateTick > question.numTicks) return undefined
+	return getScalarDisplayValue(question, candidateTick) === displayValue ? candidateTick : undefined
+}
+
+export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIndex: bigint) {
+	const scalarValue = getScalarDisplayValue(question, tickIndex)
 	const formattedValue = formatScalarDisplayValue(scalarValue)
 	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
 }

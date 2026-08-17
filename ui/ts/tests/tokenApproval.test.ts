@@ -71,7 +71,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Need 1 more ETH approved before submitting the initial report.')
+		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
 
 		expect(
 			formatTokenApprovalPartialMessage({
@@ -81,7 +81,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Approving 24.5 ETH will still leave 0.5 more ETH needed before submitting the initial report.')
+		).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})
 
 	test('resolveTokenApprovalStatusMessage hides loading-only approval states', () => {
@@ -149,7 +149,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Need 1 more ETH approved before submitting the initial report.')
+		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
 
 		expect(
 			resolveTokenApprovalStatusMessage({
@@ -163,7 +163,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Approving 24.5 ETH will still leave 0.5 more ETH needed before submitting the initial report.')
+		).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {

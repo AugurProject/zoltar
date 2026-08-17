@@ -759,14 +759,7 @@ export function SecurityPoolWorkflowSection({
 							),
 						})}
 				title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
-				items={
-					selectedPoolSummaryPool === undefined
-						? []
-						: [
-								{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> },
-								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
-							]
-				}
+				items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> }]}
 				variant='embedded-context-strip'
 			/>
 			<div className='selected-pool-context-nonsticky'>
@@ -1088,7 +1081,7 @@ export function SecurityPoolWorkflowSection({
 													pendingLabel={securityPoolCopy.executingStagedOperationLabel}
 													onClick={() => {
 														if (resolvedPendingOperationId === undefined) return
-														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress)
+														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress, loadedSelectedPool.universeId)
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
@@ -1167,7 +1160,6 @@ export function SecurityPoolWorkflowSection({
 						: [
 								...(requestPriceReview.questionTitle === undefined ? [] : [{ label: commonCopy.question, value: requestPriceReview.questionTitle }]),
 								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={requestPriceReview.securityPoolAddress} /> },
-								{ label: commonCopy.universe, value: <UniverseLink universeId={requestPriceReview.universeId} /> },
 								{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 							]
 				}
@@ -1194,7 +1186,7 @@ export function SecurityPoolWorkflowSection({
 						pendingLabel={securityPoolCopy.requestingNewPrice}
 						onClick={() => {
 							if (requestPriceReview === undefined) return
-							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.requestValueAttoEth)
+							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.requestValueAttoEth, requestPriceReview.universeId)
 						}}
 						pending={poolOracleActiveAction === 'requestPrice'}
 						availability={{

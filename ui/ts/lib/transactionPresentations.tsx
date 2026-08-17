@@ -2,11 +2,25 @@ import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { formatCurrencyBalance } from './formatters.js'
+import { formatCurrencyBalanceWithUnit } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 
-export function buildPresentation({ detail, hash, rows, title, tone }: { detail?: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[] | undefined; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+export function buildPresentation({
+	detail,
+	hash,
+	rows,
+	title,
+	tone,
+	universeId,
+}: {
+	detail?: GlobalTransactionPresentation['detail']
+	hash: Hash
+	rows?: GlobalTransactionRow[] | undefined
+	title: GlobalTransactionPresentation['title']
+	tone: GlobalTransactionPresentation['tone']
+	universeId?: bigint | undefined
+}): GlobalTransactionPresentation {
 	return {
 		dismissKey: hash,
 		hash,
@@ -14,6 +28,7 @@ export function buildPresentation({ detail, hash, rows, title, tone }: { detail?
 		...(rows === undefined ? {} : { rows }),
 		title,
 		tone,
+		...(universeId === undefined ? {} : { universeId }),
 	}
 }
 
@@ -24,6 +39,7 @@ function buildHashlessPresentation({
 	technicalRows,
 	title,
 	tone,
+	universeId,
 }: {
 	detail: ComponentChildren
 	dismissKey: string
@@ -31,6 +47,7 @@ function buildHashlessPresentation({
 	technicalRows?: GlobalTransactionRow[]
 	title: GlobalTransactionPresentation['title']
 	tone: GlobalTransactionPresentation['tone']
+	universeId?: bigint | undefined
 }): GlobalTransactionPresentation {
 	return {
 		detail,
@@ -39,16 +56,32 @@ function buildHashlessPresentation({
 		tone,
 		...(rows === undefined ? {} : { rows }),
 		...(technicalRows === undefined ? {} : { technicalRows }),
+		...(universeId === undefined ? {} : { universeId }),
 	}
 }
 
-export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[] | undefined; source: string; submittedDetail?: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
+export function buildIntent({
+	action,
+	rows,
+	source,
+	submittedDetail,
+	submittedTitle,
+	universeId,
+}: {
+	action: string
+	rows?: GlobalTransactionRow[] | undefined
+	source: string
+	submittedDetail?: TransactionIntent['submittedDetail']
+	submittedTitle: TransactionIntent['submittedTitle']
+	universeId?: bigint | undefined
+}): TransactionIntent {
 	return {
 		action,
 		...(rows === undefined ? {} : { rows }),
 		source,
 		...(submittedDetail === undefined ? {} : { submittedDetail }),
 		submittedTitle,
+		...(universeId === undefined ? {} : { universeId }),
 	}
 }
 
@@ -87,7 +120,7 @@ function getPreparedTransactionTechnicalRows(preview: TransactionRequestPreview)
 		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: formatRecipient(preview.contractLabel, preview.contractAddress) }]),
 		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: formatRecipient(preview.toLabel, preview.to) }]),
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
-		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
+		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: formatCurrencyBalanceWithUnit(preview.value, commonCopy.eth) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(argument => formatPreviewArgument(argument)).join(', ') }]),
 	]
 }
@@ -100,6 +133,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 			title: intent.submittedTitle,
 			tone: 'preparing',
 			...(intent.rows === undefined ? {} : { rows: intent.rows }),
+			...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 		})
 
 	return buildHashlessPresentation({
@@ -108,6 +142,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 		title: intent.submittedTitle,
 		tone: 'awaiting-wallet',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 	})
 }
 
@@ -120,6 +155,7 @@ export function createPreparedWalletPresentation(intent: TransactionIntent, prev
 		technicalRows: getPreparedTransactionTechnicalRows(preview),
 		title: intent.submittedTitle,
 		tone: requiresWalletConfirmation ? 'awaiting-wallet' : 'preparing',
+		...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 	})
 }
 
@@ -131,5 +167,6 @@ export function createTransactionFailurePresentation(intent: TransactionIntent, 
 		tone: 'error',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
 		...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),
+		...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
 	})
 }

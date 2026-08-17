@@ -1,6 +1,6 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
-import type { RefObject } from 'preact'
+import type { ComponentChildren, RefObject } from 'preact'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -9,6 +9,7 @@ import type { BadgeTone, GlobalTransactionPresentation } from '../types/componen
 type TransactionPresentationNoticeProps = {
 	className?: string
 	compact?: boolean
+	contextWarning?: ComponentChildren
 	dismissible?: boolean
 	noticeRef?: RefObject<HTMLDivElement>
 	onDismiss?: () => void
@@ -24,7 +25,7 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
-export function TransactionPresentationNotice({ className = '', compact = false, dismissible = false, noticeRef, onDismiss, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', compact = false, contextWarning, dismissible = false, noticeRef, onDismiss, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
@@ -61,6 +62,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 
 	return (
 		<div {...(noticeRef === undefined ? {} : { ref: noticeRef })} className={noticeClassName} role={transaction.tone === 'error' ? 'alert' : 'status'} aria-live={transaction.tone === 'error' ? 'assertive' : 'polite'}>
+			{contextWarning}
 			{!dismissible ? undefined : (
 				<button className='quiet global-transaction-close' type='button' aria-label={transactionCopy.closeStatus} onClick={onDismiss}>
 					<span aria-hidden='true'>×</span>

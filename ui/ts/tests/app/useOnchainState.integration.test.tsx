@@ -14,6 +14,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
+import { formatTimestampWithRelative } from '../../lib/formatters.js'
 
 type UseOnchainStateState = ReturnType<typeof useOnchainState>
 type UseOnchainStateOptions = Parameters<typeof useOnchainState>[0]
@@ -448,6 +449,26 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 		expect(loadDeploymentStatusOracleSnapshot).not.toHaveBeenCalled()
+
+		resetEnvironment()
+	})
+
+	test('formats stale read RPC timestamps with absolute and relative time', async () => {
+		const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
+		const staleBlockTimestamp = currentUnixSeconds - 601n
+		const staleReadClient = createReadClient({ blockTimestamp: staleBlockTimestamp })
+		const { backend } = createBackend({ hasWallet: false, readClient: staleReadClient })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(createOnchainStateDependencies(), state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe(`Configured read RPC is stale. Latest block timestamp is ${formatTimestampWithRelative(staleBlockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`))
+		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
+		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 
 		resetEnvironment()
 	})

@@ -11,11 +11,9 @@ import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { Question } from './Question.js'
-import { LoadingText } from '../../../components/LoadingText.js'
 import { ActionLauncherButton } from '../../../components/ActionLauncherButton.js'
 import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
-import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
 import { isActiveAppChain } from '../../../lib/network.js'
 import { normalizeQuestionId } from '../../../lib/questionId.js'
@@ -24,6 +22,7 @@ import type { MarketSectionProps } from '../../types.js'
 
 export function MarketSection({
 	accountState,
+	activeUniverseId,
 	activeView,
 	environmentRefreshKey,
 	securityPools = [],
@@ -99,10 +98,7 @@ export function MarketSection({
 	const forkQuestionMetadataFallback = forkQuestionLookupLoading ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
 	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetailsTitle : zoltarCopy.forkZoltar
 	const permanentRepBurn = zoltarUniverse?.forkBurnDivisor === undefined || zoltarUniverse.forkBurnDivisor <= 1n ? undefined : zoltarUniverse.forkThresholdAttoRep / zoltarUniverse.forkBurnDivisor
-	const forkContext = [
-		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? selectedForkQuestionId ?? commonCopy.noneSelected },
-		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
-	]
+	const forkContext = [{ label: commonCopy.question, value: selectedForkQuestion?.title ?? selectedForkQuestionId ?? commonCopy.noneSelected }]
 
 	useEffect(() => {
 		if (view !== 'migrate') return
@@ -127,7 +123,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' description={marketCopy.zoltarIntroduction} title={commonCopy.zoltar} variant='plain'>
+			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' title={commonCopy.zoltar} variant='plain'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -141,10 +137,6 @@ export function MarketSection({
 					/>
 				) : (
 					<DataGrid columns='auto'>
-						<div>
-							<p className='detail'>{commonCopy.universe}</p>
-							<strong>{zoltarUniverse === undefined ? <LoadingText /> : <TransactionUniverseValue universeId={zoltarUniverse.universeId} />}</strong>
-						</div>
 						<div>
 							<p className='detail'>{commonCopy.status}</p>
 							<strong>{hasForked ? commonCopy.forked : marketCopy.unforked}</strong>
@@ -169,6 +161,7 @@ export function MarketSection({
 							</SectionBlock>
 						) : undefined}
 						<MarketQuestionsSection
+							activeUniverseId={activeUniverseId}
 							environmentRefreshKey={environmentRefreshKey}
 							hasForked={hasForked}
 							onCreateQuestion={() => onActiveViewChange('create')}
@@ -245,12 +238,6 @@ export function MarketSection({
 												<strong>{forkQuestionMetadataFallback}</strong>
 											</div>
 											<div>
-												<p className='detail'>{commonCopy.universe}</p>
-												<strong>
-													<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
-												</strong>
-											</div>
-											<div>
 												<p className='detail'>{commonCopy.questionId}</p>
 												<IdentifierValue value={selectedForkQuestionId} />
 											</div>
@@ -262,12 +249,6 @@ export function MarketSection({
 												<div>
 													<p className='detail'>{marketCopy.questionType}</p>
 													<strong>{getMarketTypeLabel(selectedForkQuestion.marketType)}</strong>
-												</div>
-												<div>
-													<p className='detail'>{commonCopy.universe}</p>
-													<strong>
-														<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
-													</strong>
 												</div>
 											</DataGrid>
 										</>

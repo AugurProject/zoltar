@@ -156,7 +156,7 @@ describe('reporting guards', () => {
 				viewerPoolHeldVaultRepBackingAttoRep: 2n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
-		).toBe("Deposit 3 more REP into your vault's pool-held backing before reporting.")
+		).toBe("Deposit 3\u00a0more\u00a0REP into your vault's pool-held backing before reporting.")
 
 		expect(
 			getReportingReportGuardMessage({
@@ -206,7 +206,7 @@ describe('reporting guards', () => {
 				viewerPoolHeldVaultRepBackingAttoRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Only 2 REP remains before the selected side reaches the threshold.')
+		).toBe('Only 2\u00a0REP remains before the selected side reaches the threshold.')
 
 		expect(
 			getReportingReportGuardMessage({

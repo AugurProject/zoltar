@@ -23,7 +23,6 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
-import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
@@ -1080,7 +1079,6 @@ export function ForkAuctionSection({
 					context={[
 						{ label: commonCopy.question, value: selectedAuctionChildPool?.marketDetails.title ?? previewPool?.marketDetails.title ?? commonCopy.unavailable },
 						{ label: commonCopy.securityPoolAddress, value: auctionSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionSecurityPoolAddress} /> },
-						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedAuctionChildPool?.universeId ?? universeId} /> },
 						{ label: commonCopy.outcome, value: selectedAuctionLabel },
 					]}
 					primary={[

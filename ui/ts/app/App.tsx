@@ -1,7 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as marketCopy from '../copy/market.js'
-import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -222,6 +221,7 @@ export function App() {
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
 		...walletScopedHookConfig,
+		activeUniverseId,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
@@ -393,7 +393,6 @@ export function App() {
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const overviewProps = {
-		activeUniverseId,
 		accountState,
 		isConnectingWallet,
 		isManagingWallet,
@@ -406,7 +405,6 @@ export function App() {
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		onRefreshRepPrices: refreshRepPrices,
 		onSwitchNetwork: () => void switchNetwork(),
-		parentUniverseId: zoltarUniverse?.parentUniverseId,
 		repPerEthFailure,
 		repPerEthPrice,
 		repPerEthSource,
@@ -624,6 +622,7 @@ export function App() {
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		overview: {
 			accountState,
+			activeUniverseId,
 			environmentRefreshKey: activeEnvironmentNonce,
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
@@ -704,12 +703,12 @@ export function App() {
 				refreshSelectedPoolData(selectedSecurityPoolAddress)
 			},
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
-			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress),
+			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
 			loadingPoolOracleManager,
 			loadingLiquidationFundingPreview,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth),
+			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
@@ -854,7 +853,7 @@ export function App() {
 						label: marketCopy.repMigration,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : {}),
 					},
 				]}
 			/>
@@ -910,7 +909,7 @@ export function App() {
 					/>
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
+						<GlobalTransactionTray activeUniverseId={activeUniverseId} routeKey={transactionRouteKey} transaction={transactionState.value.active} />
 
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
