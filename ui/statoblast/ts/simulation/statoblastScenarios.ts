@@ -1,6 +1,7 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import * as protocol from '../protocol/index.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 type StatoblastScenarioProtocol = Pick<
 	typeof protocol,
@@ -53,6 +54,8 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 			return 'Security pool x2'
 		case 'securitypoolx2-auction':
 			return 'Security pool x2 auction'
+		default:
+			return assertNever(scenario)
 	}
 }
 
@@ -64,6 +67,8 @@ export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
 		case 'securitypoolx2-auction':
 			return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
+		default:
+			return assertNever(scenario)
 	}
 }
 

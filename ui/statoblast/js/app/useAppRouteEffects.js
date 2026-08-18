@@ -3,7 +3,7 @@ import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js';
 export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId }) {
     return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== '';
 }
-export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete, }) {
+export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }) {
     return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined;
 }
 export function shouldSyncSecurityPoolAddressToRouteForms({ route }) {

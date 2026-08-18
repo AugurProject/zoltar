@@ -15,6 +15,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { useDeploymentFlow } from '@zoltar/ui-zoltar/features/deployment/hooks/useDeploymentFlow.js'
 import { getDeploymentSections } from '@zoltar/ui-zoltar/features/deployment/lib/deployment.js'
+import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js'
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
@@ -373,7 +374,7 @@ export function App() {
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,
-		universeLabel: 'universe',
+		universeLabel: formatUniverseCollectionLabel([activeUniverseId]),
 		universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
 		isRefreshing,
 		walletBootstrapComplete,

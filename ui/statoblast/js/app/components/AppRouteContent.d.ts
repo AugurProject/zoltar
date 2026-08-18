@@ -10,7 +10,6 @@ type Props = {
     route: Route;
     securityPools: ComponentProps<typeof SecurityPoolsSection>;
 };
-export declare function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>): boolean;
 export declare function AppRouteContent({ deploy, openOracle, readBackendMessage, route, securityPools }: Props): import("preact").JSX.Element | null;
 export {};
 //# sourceMappingURL=AppRouteContent.d.ts.map

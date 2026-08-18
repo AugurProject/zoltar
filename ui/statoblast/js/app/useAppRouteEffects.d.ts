@@ -30,7 +30,7 @@ export declare function shouldLoadOpenOracleReportFromUrl({ environmentReady, ro
     route: Route;
     urlOpenOracleReportId: string;
 }): boolean;
-export declare function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete, }: {
+export declare function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: {
     environmentReady: boolean;
     route: Route;
     securityPoolAddress: string;

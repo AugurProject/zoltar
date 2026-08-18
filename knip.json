@@ -1,49 +1,120 @@
 {
-	"entry": [
-		"docs/charts/chartRuntime.ts",
-		"solidity/ts/compile.ts",
-		"solidity/ts/gas-costs.ts",
-		"solidity/ts/tests/**/*.ts",
-		"solidity/ts/fuzz/**/*.ts",
-		"solidity/ts/types/bun-test.d.ts",
-		"solidity/ts/types/index.d.ts",
-		"ui/coreShared/ts/tests/**/*.ts",
-		"ui/coreShared/ts/tests/**/*.tsx",
-		"ui/zoltar/ts/tests/**/*.ts",
-		"ui/zoltar/ts/tests/**/*.tsx",
-		"ui/statoblast/ts/tests/**/*.ts",
-		"ui/statoblast/ts/tests/**/*.tsx",
-		"ui/zoltar/ts/index.ts",
-		"ui/statoblast/ts/index.ts",
-		"ui/coreShared/build/vendor.mts",
-		"ui/coreShared/build/tests.mts"
-	],
-	"project": [
-		"docs/charts/**/*.ts",
-		"scripts/uniswap-deployment.mts",
-		"solidity/ts/**/*.ts",
-		"ui/coreShared/ts/**/*.ts",
-		"ui/coreShared/ts/**/*.tsx",
-		"ui/zoltar/ts/**/*.ts",
-		"ui/zoltar/ts/**/*.tsx",
-		"ui/statoblast/ts/**/*.ts",
-		"ui/statoblast/ts/**/*.tsx",
-		"ui/coreShared/build/**/*.mts"
-	],
-	"ignoreDependencies": [
-		"better-typescript-lib"
-	],
-	"ignoreIssues": {
-		"solidity/ts/**/*.ts": [
-			"unlisted"
-		]
+	"workspaces": {
+		".": {
+			"entry": [
+				"docs/charts/chartRuntime.ts",
+				"solidity/ts/compile.ts",
+				"solidity/ts/gas-costs.ts",
+				"solidity/ts/tests/**/*.ts",
+				"solidity/ts/fuzz/**/*.ts",
+				"solidity/ts/types/bun-test.d.ts",
+				"solidity/ts/types/index.d.ts"
+			],
+			"project": [
+				"docs/charts/**/*.ts",
+				"scripts/uniswap-deployment.mts",
+				"solidity/ts/**/*.ts"
+			],
+			"ignoreIssues": {
+				"solidity/ts/**/*.ts": [
+					"unlisted"
+				]
+			},
+			"ignore": [
+				"docs/charts/virtualModules.d.ts"
+			]
+		},
+		"ui/coreShared": {
+			"entry": [
+				"ts/tests/**/*.ts",
+				"ts/tests/**/*.tsx",
+				"build/vendor.mts",
+				"build/tests.mts"
+			],
+			"project": [
+				"ts/**/*.ts",
+				"ts/**/*.tsx",
+				"build/**/*.mts"
+			],
+			"paths": {
+				"@zoltar/ui-core-shared/*": [
+					"./ts/*"
+				]
+			},
+			"ignore": [
+				"build/production.mts",
+				"build/workers.mts",
+				"ts/simulation/tevmWorker.ts",
+				"ts/simulation/tevmEngine.ts"
+			]
+		},
+		"ui/zoltar": {
+			"entry": [
+				"ts/tests/**/*.ts",
+				"ts/tests/**/*.tsx",
+				"ts/index.ts"
+			],
+			"project": [
+				"ts/**/*.ts",
+				"ts/**/*.tsx"
+			],
+			"paths": {
+				"@zoltar/ui-core-shared/*": [
+					"../coreShared/ts/*"
+				],
+				"@zoltar/ui-zoltar/*": [
+					"./ts/*"
+				]
+			},
+			"ignore": [
+				"ts/index.dev.ts",
+				"ts/liveReload.ts",
+				"ts/simulation/tevmWorker.ts"
+			]
+		},
+		"ui/statoblast": {
+			"entry": [
+				"ts/tests/**/*.ts",
+				"ts/tests/**/*.tsx",
+				"ts/index.ts"
+			],
+			"project": [
+				"ts/**/*.ts",
+				"ts/**/*.tsx"
+			],
+			"paths": {
+				"@zoltar/ui-core-shared/*": [
+					"../coreShared/ts/*"
+				],
+				"@zoltar/ui-zoltar/*": [
+					"../zoltar/ts/*"
+				],
+				"@zoltar/ui-statoblast/*": [
+					"./ts/*"
+				]
+			},
+			"ignore": [
+				"ts/index.dev.ts",
+				"ts/liveReload.ts",
+				"ts/simulation/tevmWorker.ts"
+			]
+		}
 	},
-	"ignore": [
-		"ui/coreShared/build/production.mts",
-		"ui/coreShared/build/workers.mts",
-		"ui/zoltar/ts/index.dev.ts",
-		"ui/zoltar/ts/liveReload.ts",
-		"ui/statoblast/ts/index.dev.ts",
-		"ui/statoblast/ts/liveReload.ts"
+	"ignoreDependencies": [
+		"better-typescript-lib",
+		"@preact/signals",
+		"tevm",
+		"@noble/curves",
+		"@noble/hashes",
+		"buffer",
+		"micro-eth-signer",
+		"micro-packed",
+		"source-map",
+		"funtypes",
+		"solc-0-8-28"
+	],
+	"ignoreUnresolved": [
+		"./bun-test-setup-ui.ts",
+		"../../scripts/sharedBrowserArtifacts.ts"
 	]
 }

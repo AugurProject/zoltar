@@ -1,13 +1,6 @@
 import { buildRouteHref, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 
-export function getUseQuestionForPoolState(questionId: string) {
-	return {
-		marketId: questionId,
-		securityPoolAddress: '',
-	}
-}
-
 export function getSecurityPoolLinkHref(securityPoolAddress: string, selectedPoolView?: string, universeId?: bigint) {
 	const currentSearch = getRouteHashSearch()
 	const nextSelectedPoolView = selectedPoolView ?? readSelectedPoolViewQueryParam(currentSearch)

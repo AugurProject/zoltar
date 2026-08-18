@@ -3,6 +3,7 @@ import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
+import { SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE } from '../lib/activeEnvironment.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { tryParseDecimalInput } from '../lib/decimal.js'
@@ -38,7 +39,7 @@ type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'sav
 
 function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(getRouteHashSearch())
-	params.set('simulate', '1')
+	params.set(SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE)
 	update(params)
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`

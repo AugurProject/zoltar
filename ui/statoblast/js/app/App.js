@@ -14,6 +14,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js';
 import { useDeploymentFlow } from '@zoltar/ui-zoltar/features/deployment/hooks/useDeploymentFlow.js';
 import { getDeploymentSections } from '@zoltar/ui-zoltar/features/deployment/lib/deployment.js';
+import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/universes/lib/universe.js';
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js';
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js';
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js';
@@ -124,7 +125,14 @@ export function App() {
         accountAddress: walletScopedAccountAddress,
     };
     const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses });
-    const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError, } = useMarketCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView: 'questions', autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce });
+    const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
+        ...walletScopedHookConfig,
+        activeUniverseId,
+        activeZoltarView: 'questions',
+        autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
+        deploymentStatuses,
+        environmentRefreshKey: activeEnvironmentNonce,
+    });
     const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true;
     const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
         ...walletScopedHookConfig,
@@ -201,7 +209,7 @@ export function App() {
         universeForkTime: zoltarUniverse?.forkTime,
         universeHasForked: zoltarUniverse?.hasForked,
         universePresentation: undefined,
-        universeLabel: 'universe',
+        universeLabel: formatUniverseCollectionLabel([activeUniverseId]),
         universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
         isRefreshing,
         walletBootstrapComplete,

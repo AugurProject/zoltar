@@ -1,4 +1,3 @@
-import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { AccountState, ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
@@ -34,21 +33,6 @@ import type { ReportingRouteContentProps } from '@zoltar/ui-zoltar/features/type
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
-export type RepPerEthPriceProps = {
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
-	repPerEthSourceUrl: string | undefined
-}
-
-export type OutcomeChipRowProps = {
-	className?: string
-	items: Array<{
-		key: string
-		label: ComponentChildren
-		tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
-	}>
-}
-
 export type CollateralizationCircleProps = {
 	collateralizationPercent: bigint | undefined
 	className?: string
@@ -58,37 +42,6 @@ export type CollateralizationCircleProps = {
 	targetCollateralizationPercent: bigint | undefined
 	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
 	warningThreshold?: number
-}
-
-export type ScalarOutcomePickerProps = {
-	action?: ComponentChildren
-	details: {
-		maxValueLabel?: ComponentChildren
-		minValueLabel?: ComponentChildren
-		numTicks: bigint
-	}
-	disabled?: boolean
-	isInvalid: boolean
-	label: ComponentChildren
-	onInvalidChange: (invalid: boolean) => void
-	onSelectedTickChange: (tick: string) => void
-	selectedOutcomeLabel: ComponentChildren
-	selectedTick: string
-	selectedTickLabel: ComponentChildren
-	showMinMax?: boolean
-}
-
-export type OutcomeSelectionListProps = {
-	className?: string
-	emptyMessage?: ComponentChildren
-	items: Array<{
-		details?: ComponentChildren
-		disabled?: boolean
-		key: string
-		label: ComponentChildren
-	}>
-	onSelect: (key: string) => void
-	selectedKey?: string | undefined
 }
 
 export type VaultMetricGridProps = {
@@ -103,9 +56,15 @@ export type VaultMetricGridProps = {
 	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
+type RepPerEthPriceProps = {
+	repPerEthPrice: bigint | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSourceUrl: string | undefined
+}
+
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export type SecurityPoolRouteContentProps = {
+type SecurityPoolRouteContentProps = {
 	accountState: AccountState
 	availableQuestionsContextKey: string
 	availableQuestions: MarketDetails[]
@@ -171,7 +130,7 @@ type LiquidationModalStateProps = {
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
 
-export type SecurityPoolsOverviewRouteContentProps = {
+type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	environmentRefreshKey: number
 	hasLoadedSecurityPoolPage: boolean
@@ -232,7 +191,7 @@ export type SecurityPoolsSectionProps = {
 	workflow: SecurityPoolWorkflowRouteContentProps
 }
 
-export type SecurityVaultRouteContentProps = {
+type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
@@ -276,7 +235,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	showHeader?: boolean
 }
 
-export type TradingRouteContentProps = {
+type TradingRouteContentProps = {
 	accountState: AccountState
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
@@ -309,7 +268,7 @@ export type SettlementSelectedBid = {
 	bidIndex: bigint
 }
 
-export type ForkAuctionRouteContentProps = {
+type ForkAuctionRouteContentProps = {
 	accountState: AccountState
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined

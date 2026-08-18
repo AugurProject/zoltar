@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../../../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 import { App } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'

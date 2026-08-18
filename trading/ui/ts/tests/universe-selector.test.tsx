@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../../../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../features/LiveTrading.tsx'

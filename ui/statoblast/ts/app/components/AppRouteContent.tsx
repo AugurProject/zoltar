@@ -13,7 +13,7 @@ type Props = {
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
 }
 
-export function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
+function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
 	if (route !== 'deploy' && readBackendMessage !== undefined) return false
 	return true
 }

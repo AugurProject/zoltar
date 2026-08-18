@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../../../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 import { LivePortfolio, LiveSecurityPoolDetails, SecurityPoolRouteEmptyState } from '../features/LiveTrading.tsx'
 import { Portfolio } from '../features/Routes.tsx'
 import { demoMarket } from '../demo/markets.ts'

@@ -3,7 +3,7 @@ import { DeploymentRouteContent } from '@zoltar/ui-zoltar/features/deployment/co
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js';
 import { OpenOracleSection } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOracleSection.js';
 import { SecurityPoolsSection } from '../../features/security-pools/components/SecurityPoolsSection.js';
-export function shouldRenderRouteContent({ readBackendMessage, route }) {
+function shouldRenderRouteContent({ readBackendMessage, route }) {
     if (route !== 'deploy' && readBackendMessage !== undefined)
         return false;
     return true;

@@ -1,6 +1,7 @@
 import { zeroAddress } from '@zoltar/shared/ethereum';
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport';
 import * as protocol from '../protocol/index.js';
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js';
 let scenarioProtocolOverride;
 export function installStatoblastScenarioProtocolForTesting(override) {
     scenarioProtocolOverride = override;
@@ -8,7 +9,7 @@ export function installStatoblastScenarioProtocolForTesting(override) {
 function getScenarioProtocol() {
     return scenarioProtocolOverride ?? protocol;
 }
-import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, } from '@zoltar/ui-core-shared/simulation/bootstrap.js';
+import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js';
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js';
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js';
 export function getStatoblastScenarioLabel(scenario) {
@@ -19,6 +20,8 @@ export function getStatoblastScenarioLabel(scenario) {
             return 'Security pool x2';
         case 'securitypoolx2-auction':
             return 'Security pool x2 auction';
+        default:
+            return assertNever(scenario);
     }
 }
 export function getStatoblastScenarioDescription(scenario) {
@@ -29,6 +32,8 @@ export function getStatoblastScenarioDescription(scenario) {
             return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.';
         case 'securitypoolx2-auction':
             return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.';
+        default:
+            return assertNever(scenario);
     }
 }
 const DAY_IN_SECONDS = 24n * 60n * 60n;
@@ -470,7 +475,7 @@ async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, c
     }
     await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995);
 }
-export async function applyStatoblastScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario, }) {
+export async function applyStatoblastScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario }) {
     const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1');
     switch (scenario) {
         case 'security-pool':

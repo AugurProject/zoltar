@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from './changed-files.mts'
@@ -45,7 +45,7 @@ const USER_FACING_PROPERTY_NAMES = new Set([
 	'__html',
 	'zeroText',
 ])
-const INTERNAL_STATUS_TOKENS = new Set(['queued', 'executed', 'failed', 'refreshing', 'missing', 'loading', 'unknown'])
+const INTERNAL_STATUS_TOKENS = new Set(['active', 'queued', 'executed', 'failed', 'refreshing', 'missing', 'loading', 'unknown'])
 const ASSIGNMENT_OPERATOR_KINDS = new Set([
 	ts.SyntaxKind.EqualsToken,
 	ts.SyntaxKind.PlusEqualsToken,
@@ -415,11 +415,12 @@ function lintFile(filePath: string) {
 
 if (import.meta.main) {
 	const changedUiTsxFiles = getChangedUiTsxFiles()
-	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot =>
-		readdirSync(copyRoot, { withFileTypes: true })
+	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot => {
+		if (!existsSync(copyRoot)) return []
+		return readdirSync(copyRoot, { withFileTypes: true })
 			.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
-			.map(entry => path.join(copyRoot, entry.name)),
-	)
+			.map(entry => path.join(copyRoot, entry.name))
+	})
 	const failures = [...changedUiTsxFiles.flatMap(lintFile), ...copyModuleFiles.flatMap(filePath => lintCopySourceText(filePath, readFileSync(filePath, 'utf8')))]
 
 	if (failures.length === 0) {

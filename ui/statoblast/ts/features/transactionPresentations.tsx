@@ -298,27 +298,11 @@ export function createForkAuctionWarningPresentation(result: ForkAuctionActionRe
 }
 
 export {
-	createDeploymentSuccessPresentation,
-	createDeploymentTransactionIntent,
 	createMarketCreationSuccessPresentation,
 	createMarketCreationTransactionIntent,
 	createMarketCreationWarningPresentation,
 	createOpenOracleSuccessPresentation,
 	createOpenOracleTransactionIntent,
-	createOpenOracleWarningPresentation,
-	createPoolOracleSuccessPresentation,
-	createPoolOracleTransactionIntent,
-	createPoolOracleWarningPresentation,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
-	createReportingWarningPresentation,
-	createChildUniverseSuccessPresentation,
-	createChildUniverseTransactionIntent,
-	createChildUniverseWarningPresentation,
-	createZoltarForkSuccessPresentation,
-	createZoltarForkTransactionIntent,
-	createZoltarForkWarningPresentation,
-	createZoltarMigrationSuccessPresentation,
-	createZoltarMigrationTransactionIntent,
-	createZoltarMigrationWarningPresentation,
 } from '@zoltar/ui-zoltar/features/transactionPresentations.js'

@@ -19,8 +19,8 @@ let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
 let initializeActiveEnvironmentGeneration = 0
 
-const SIMULATION_QUERY_PARAM = 'simulate'
-const SIMULATION_QUERY_VALUE = '1'
+export const SIMULATION_QUERY_PARAM = 'simulate'
+export const SIMULATION_QUERY_VALUE = '1'
 const NETWORK_QUERY_PARAM = 'network'
 
 type InitializeActiveEnvironmentDependencies = {
