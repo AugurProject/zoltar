@@ -8,8 +8,8 @@ const defaultInjectedBackend = createInjectedBackend();
 let activeBackend = undefined;
 let activeSimulationController = undefined;
 let initializeActiveEnvironmentGeneration = 0;
-const SIMULATION_QUERY_PARAM = 'simulate';
-const SIMULATION_QUERY_VALUE = '1';
+export const SIMULATION_QUERY_PARAM = 'simulate';
+export const SIMULATION_QUERY_VALUE = '1';
 const NETWORK_QUERY_PARAM = 'network';
 const defaultInitializeActiveEnvironmentDependencies = {
     createInjectedBackend,

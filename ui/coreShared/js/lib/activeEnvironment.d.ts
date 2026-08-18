@@ -8,6 +8,8 @@ type LocationLike = {
     hostname: string;
     search: string;
 };
+export declare const SIMULATION_QUERY_PARAM = "simulate";
+export declare const SIMULATION_QUERY_VALUE = "1";
 type InitializeActiveEnvironmentDependencies = {
     appId?: 'zoltar' | 'statoblast';
     createInjectedBackend?: typeof createInjectedBackend;

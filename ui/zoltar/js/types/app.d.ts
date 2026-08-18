@@ -1,5 +1,5 @@
 import type { MarketType, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js';
-export type { AccountState, RefreshStateOptions, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js';
+export type { AccountState, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js';
 export type Route = 'deploy' | 'zoltar' | 'open-oracle' | 'not-found';
 export type MarketFormState = {
     answerUnit: string;

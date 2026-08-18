@@ -47,9 +47,7 @@ function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateCh
                     pendingLabel: commonCopy.opening,
                 }), renderBadge: child => _jsx(ChildUniverseStatusBadge, { child: child }), renderBody: child => _jsx(ChildUniverseDetails, { accountAddress: accountAddress, child: child, isSupportedChain: isOnActiveAppChain }), surface: 'flat' }), _jsx(ChildUniverseDeploymentModal, { actionAvailability: {
                     disabled: selectedChildUniverse === undefined || childDeploymentAvailabilityReason !== undefined || selectedChildUniverse.exists,
-                    reason: selectedChildUniverse === undefined
-                        ? marketCopy.childDeploymentSelectionRequired
-                        : (childDeploymentAvailabilityReason ?? (selectedChildUniverse.exists ? marketCopy.childUniverseDeployedReason : undefined)),
+                    reason: selectedChildUniverse === undefined ? marketCopy.childDeploymentSelectionRequired : (childDeploymentAvailabilityReason ?? (selectedChildUniverse.exists ? marketCopy.childUniverseDeployedReason : undefined)),
                 }, idleLabel: marketCopy.deployUniverse, isOpen: selectedChildUniverse !== undefined, onClose: () => setSelectedChildOutcomeIndex(undefined), onConfirm: () => {
                     if (selectedChildUniverse === undefined)
                         return;
@@ -71,6 +69,6 @@ export function ZoltarSection({ accountState, activeView, loadingZoltarForkAcces
     if (activeView === 'migrate') {
         return (_jsxs(_Fragment, { children: [_jsx(RouteHeader, { title: zoltarCopy.migrateRep }), _jsx(ZoltarMigrationSection, { accountAddress: accountState.address, isOnActiveAppChain: isOnActiveAppChain, loadingZoltarForkAccess: loadingZoltarForkAccess, loadingZoltarUniverse: loadingZoltarUniverse, onApproveZoltarForkRep: amount => onApproveZoltarForkRep(amount), onMigrateInternalRep: onMigrateInternalRep, onPrepareRepForMigration: onPrepareRepForMigration, onZoltarMigrationFormChange: onZoltarMigrationFormChange, zoltarForkActiveAction: zoltarForkActiveAction, zoltarForkApproval: zoltarForkApproval, zoltarForkRepBalanceAttoRep: zoltarForkRepBalanceAttoRep, zoltarMigrationActiveAction: zoltarMigrationActiveAction, zoltarMigrationChildRepBalancesAttoRep: zoltarMigrationChildRepBalancesAttoRep, zoltarMigrationError: zoltarMigrationError, zoltarMigrationForm: zoltarMigrationForm, zoltarMigrationPending: zoltarMigrationPending, zoltarMigrationPreparedRepBalanceAttoRep: zoltarMigrationPreparedRepBalanceAttoRep, zoltarUniverse: zoltarUniverse, zoltarUniverseState: zoltarUniverseState })] }));
     }
-    return (_jsx(ZoltarUniverseOverview, { accountAddress: accountState.address, isOnActiveAppChain: isOnActiveAppChain, onCreateChildUniverseForOutcomeIndex: onCreateChildUniverseForOutcomeIndex, zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex, zoltarUniverse: zoltarUniverse }));
+    return _jsx(ZoltarUniverseOverview, { accountAddress: accountState.address, isOnActiveAppChain: isOnActiveAppChain, onCreateChildUniverseForOutcomeIndex: onCreateChildUniverseForOutcomeIndex, zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex, zoltarUniverse: zoltarUniverse });
 }
 //# sourceMappingURL=ZoltarSection.js.map
