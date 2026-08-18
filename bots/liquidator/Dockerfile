@@ -33,6 +33,7 @@ RUN cd shared \
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/
 COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/check-market-sources.mts
+COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts
 COPY bots/liquidator/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
 COPY bots/liquidator/src/ ./bots/liquidator/src/
 RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
@@ -40,6 +41,7 @@ RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
 
 USER bun
 WORKDIR /app/bots/liquidator
+RUN bun ./scripts/check-process-lock-runtime.mts
 
 EXPOSE 4183
 VOLUME ["/app/bots/liquidator/.state"]

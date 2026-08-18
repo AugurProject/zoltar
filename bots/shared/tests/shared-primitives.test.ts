@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { initialCursor, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
@@ -776,8 +777,7 @@ describe('shared bot primitives', () => {
 		}
 	})
 
-	test('unlinks a failed lock initialization even when closing the handle fails', async () => {
-		let removed = false
+	test('reports cleanup failure when failed lock initialization cannot close its handle', async () => {
 		await expect(
 			acquireExclusiveProcessLock(
 				'operator.lock',
@@ -790,40 +790,110 @@ describe('shared bot primitives', () => {
 						close: async () => {
 							throw new Error('close failed')
 						},
+						fd: 1,
 						sync: async () => undefined,
+						truncate: async () => undefined,
 						writeFile: async () => {
 							throw new Error('write failed')
 						},
 					}),
 					readFile: async () => '',
-					rm: async () => {
-						removed = true
-					},
+					tryLock: () => true,
 				},
 			),
 		).rejects.toThrow('Failed to initialize and clean up process lock')
-		expect(removed).toBe(true)
 	})
 
-	test('retries process-lock cleanup after a transient unlink failure', async () => {
+	test('closes the file handle when native lock acquisition throws', async () => {
+		let closed = false
+		await expect(
+			acquireExclusiveProcessLock(
+				'operator.lock',
+				'Test lock',
+				{},
+				{
+					mkdir: async () => undefined,
+					open: async () => ({
+						chmod: async () => undefined,
+						close: async () => {
+							closed = true
+						},
+						fd: 1,
+						sync: async () => undefined,
+						truncate: async () => undefined,
+						writeFile: async () => undefined,
+					}),
+					readFile: async () => '',
+					tryLock: () => {
+						throw new Error('native lock unavailable')
+					},
+				},
+			),
+		).rejects.toThrow('native lock unavailable')
+		expect(closed).toBe(true)
+	})
+
+	test('retries process-lock cleanup after a transient close failure without replacing the lock inode', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-process-lock-'))
 		temporaryDirectories.push(directory)
 		const lockPath = join(directory, 'operator.lock')
-		let removals = 0
+		let closes = 0
 		const filesystem = {
 			mkdir,
 			open,
 			readFile,
-			rm: async (path: string, options: { force: true }) => {
-				removals += 1
-				if (removals === 1) throw new Error('transient unlink failure')
-				await rm(path, options)
-			},
+			tryLock: () => true,
 		}
-		const lock = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
-		await expect(lock.release()).rejects.toThrow('transient unlink failure')
+		const lock = await acquireExclusiveProcessLock(
+			lockPath,
+			'Test lock',
+			{},
+			{
+				...filesystem,
+				open: async (...arguments_) => {
+					const handle = await open(...arguments_)
+					return {
+						chmod: async mode => await handle.chmod(mode),
+						close: async () => {
+							closes += 1
+							if (closes === 1) throw new Error('transient close failure')
+							await handle.close()
+						},
+						fd: handle.fd,
+						sync: async () => await handle.sync(),
+						truncate: async length => await handle.truncate(length),
+						writeFile: async (data, options) => await handle.writeFile(data, options),
+					}
+				},
+			},
+		)
+		const inode = (await stat(lockPath)).ino
+		await expect(lock.release()).rejects.toThrow('transient close failure')
 		await lock.release()
 		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
+		await replacement.release()
+		expect((await stat(lockPath)).isFile()).toBe(true)
+		expect((await stat(lockPath)).ino).toBe(inode)
+	})
+
+	test('reclaims a process lock after its owner is killed', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-killed-process-lock-'))
+		temporaryDirectories.push(directory)
+		const lockPath = join(directory, 'operator.lock')
+		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/process-lock.ts')).href
+		const child = Bun.spawn([process.execPath, '--eval', `import { acquireExclusiveProcessLock } from ${JSON.stringify(moduleUrl)}; await acquireExclusiveProcessLock(${JSON.stringify(lockPath)}, 'Test lock', {}); console.log('ready'); await Bun.sleep(60_000)`], { stderr: 'pipe', stdout: 'pipe' })
+		try {
+			const reader = child.stdout.getReader()
+			const next = await reader.read()
+			if (next.done || !new TextDecoder().decode(next.value).includes('ready')) throw new Error(`Lock subprocess stopped before acquisition: ${await new Response(child.stderr).text()}`)
+			reader.releaseLock()
+			child.kill('SIGKILL')
+			expect(await child.exited).not.toBe(0)
+		} finally {
+			if (child.exitCode === null) child.kill('SIGKILL')
+			await child.exited
+		}
+		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {})
 		await replacement.release()
 	})
 
