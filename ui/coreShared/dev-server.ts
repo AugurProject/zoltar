@@ -8,7 +8,7 @@ const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
 if (appId !== 'zoltar' && appId !== 'statoblast') throw new Error(`Unknown UI app identifier '${appId}'; expected zoltar or statoblast`)
 const uiRootDirectory = path.resolve(directoryOfThisFile, '..', appId)
-const repositoryRootDirectory = path.resolve(directoryOfThisFile, '..', '..', '..')
+const repositoryRootDirectory = path.resolve(directoryOfThisFile, '..', '..')
 const liveReloadClients = new Set<http.ServerResponse>()
 
 const getServedFilePaths = (requestPath: string) => {

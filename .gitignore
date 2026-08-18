@@ -10,6 +10,8 @@ solidity/ts/types/contractArtifact.ts
 /ui/js
 /ui/dist
 /ui/vendor
+/ui/*/js
+/ui/*/vendor
 /ui/ts/abis.ts
 /ui/ts/contractArtifact.ts
 /ui/ts/deploymentArtifacts.ts
