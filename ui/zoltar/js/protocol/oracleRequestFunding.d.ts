@@ -3,7 +3,7 @@ export declare function resolveOracleOperationEthFunding({ managerDetails, price
     managerDetails: OracleManagerDetails | undefined;
     priceUsable?: boolean | undefined;
 }): {
-    costAttoEth: any;
+    costAttoEth: bigint;
     includeBuffer: boolean;
 } | undefined;
 //# sourceMappingURL=oracleRequestFunding.d.ts.map

@@ -7,6 +7,6 @@ type RepPriceSourceCopy = {
     tooltip: string;
 };
 export declare function getRepPriceSourceCopy(source: RepPriceSource | undefined): RepPriceSourceCopy;
-export declare function renderRepPriceSourceLabel(source: RepPriceSource | undefined, sourceUrl: string | undefined): any;
+export declare function renderRepPriceSourceLabel(source: RepPriceSource | undefined, sourceUrl: string | undefined): string | import("preact").JSX.Element | undefined;
 export {};
 //# sourceMappingURL=repPriceSource.d.ts.map

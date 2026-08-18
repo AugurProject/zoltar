@@ -30,15 +30,15 @@ export type OpenOracleDisputeSubmissionDetails = {
     token2ContributionAmount: bigint | undefined;
     token2Decimals: number | undefined;
 };
-export declare function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage?: string): any;
-export declare function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage?: string): any;
+export declare function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage?: string): string;
+export declare function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage?: string): string;
 export declare function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: {
     ethValueInput: string;
     isOnActiveAppChain: boolean;
     settlerRewardInput: string;
     walletConnected: boolean;
     walletBalanceAttoEth: bigint | undefined;
-}): any;
+}): string | undefined;
 export declare const OPEN_ORACLE_CREATE_FIELD_ORDER: ReadonlyArray<keyof OpenOracleCreateFormState>;
 export type OpenOracleCreateField = (typeof OPEN_ORACLE_CREATE_FIELD_ORDER)[number];
 export type OpenOracleCreateContractFieldErrors = Partial<Record<'token1Address' | 'token2Address', string>>;
@@ -72,17 +72,17 @@ export declare function parseOpenOracleCreateFormSubmission({ form, token1Decima
     token2Decimals: number;
 }): {
     disputeDelay: number;
-    escalationHalt: any;
-    exactToken1Report: any;
-    initialToken2Amount: any;
-    ethValueAttoEth: any;
+    escalationHalt: bigint;
+    exactToken1Report: bigint;
+    initialToken2Amount: bigint;
+    ethValueAttoEth: bigint;
     feePercentage: number;
     multiplier: number;
     protocolFee: number;
     settlementTime: number;
-    settlerRewardAttoEth: any;
-    token1Address: any;
-    token2Address: any;
+    settlerRewardAttoEth: bigint;
+    token1Address: `0x${string}`;
+    token2Address: `0x${string}`;
 };
 export declare function formatOpenOracleMultiplier(multiplier: bigint | undefined): string;
 export declare function deriveOpenOracleDisputeSubmissionDetails({ accountAddress, approvedToken1Amount, approvedToken2Amount, disputeNewAmount1Input, disputeNewAmount2Input, disputeTokenToSwap, reportDetails, token1AllowanceError, token1Balance, token1BalanceError, token1Decimals, token2AllowanceError, token2Balance, token2BalanceError, token2Decimals, }: {

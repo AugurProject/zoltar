@@ -10,7 +10,7 @@ import {
 	loadSecurityPoolPage,
 	loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary,
 	queueSecurityPoolLiquidation,
-} from '@zoltar/ui-zoltar/protocol/index.js'
+} from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'

@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { useAppRouteEffects } from '@zoltar/ui-zoltar/app/hooks/useAppRouteEffects.js'
+import { useAppRouteEffects } from '../../app/useAppRouteEffects.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

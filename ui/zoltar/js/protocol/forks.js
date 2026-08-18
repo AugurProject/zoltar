@@ -1,7 +1,7 @@
 import { zeroAddress } from '@zoltar/shared/ethereum';
-import { ABIS } from '../abis.js';
+import { ABIS } from '@zoltar/ui-core-shared/abis.js';
 import { deriveHasForkActivity } from './forkActivity.js';
-import { Zoltar_Zoltar, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPool_SecurityPool, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js';
+import { Zoltar_Zoltar, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPool_SecurityPool, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js';
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from './helpers.js';
 import { readRequiredMulticall, writeContractAndWait } from './core.js';
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js';

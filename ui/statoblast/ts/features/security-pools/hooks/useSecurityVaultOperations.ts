@@ -17,7 +17,7 @@ import {
 	redeemRepFromVaultFromSecurityPool,
 	redeemSecurityVaultFees,
 	updateSecurityVaultFees,
-} from '@zoltar/ui-zoltar/protocol/index.js'
+} from '../../../protocol/index.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'

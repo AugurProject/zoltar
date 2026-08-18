@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
-import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import type { AccountState, ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type {
 	ForkAuctionActionResult,
@@ -8,9 +8,7 @@ import type {
 	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
-	MarketCreationResult,
 	MarketDetails,
-	MarketDetailsPage,
 	OpenOracleActionResult,
 	OracleManagerDetails,
 	ReadClient,
@@ -26,7 +24,7 @@ import type {
 	TradingDetails,
 	ZoltarUniverseSummary,
 } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ActionAvailability, ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
+import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
@@ -107,37 +105,6 @@ export type VaultMetricGridProps = {
 
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export type MarketSectionProps = {
-	accountState: AccountState
-	activeUniverseId: bigint
-	securityPools?: ListedSecurityPool[]
-	hasLoadedSecurityPools: boolean
-	loadingSecurityPools: boolean
-	onLoadSecurityPools: () => void
-	securityPoolsLoadError: string | undefined
-	environmentRefreshKey: number
-	onCreateMarket: () => void
-	marketCreating: boolean
-	marketError: string | undefined
-	marketForm: MarketFormState
-	marketResult: MarketCreationResult | undefined
-	onResetMarket: () => void
-	loadingZoltarQuestionCount: boolean
-	loadingZoltarQuestion: boolean
-	loadingZoltarQuestions: boolean
-	hasLoadedZoltarQuestions: boolean
-	onLoadZoltarQuestions: () => Promise<void>
-	onLoadZoltarQuestion: (questionId: string) => Promise<void>
-	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
-	onMarketFormChange: (update: Partial<MarketFormState>) => void
-	onUseQuestionForPool: (questionId: string) => void
-	zoltarQuestionCount: bigint | undefined
-	zoltarQuestionLookupError: string | undefined
-	zoltarQuestionLookupId: string | undefined
-	zoltarQuestionPage: MarketDetailsPage | undefined
-	zoltarQuestions: MarketDetails[]
-	zoltarQuestionsError: string | undefined
-}
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState

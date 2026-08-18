@@ -1,8 +1,8 @@
 import { useSignal } from '@preact/signals';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { zeroAddress } from '@zoltar/shared/ethereum';
-import { ABIS } from '../../../abis.js';
-import { Zoltar_Zoltar } from '../../../contractArtifact.js';
+import { ABIS } from '@zoltar/ui-core-shared/abis.js';
+import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js';
 import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMulticall } from '../../../protocol/index.js';
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js';
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js';

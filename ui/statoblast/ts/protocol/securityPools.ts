@@ -7,7 +7,7 @@ import {
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
-} from '../contractArtifact.js'
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { deriveHasForkActivity } from '@zoltar/ui-zoltar/protocol/forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'

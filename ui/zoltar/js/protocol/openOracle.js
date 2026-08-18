@@ -1,6 +1,6 @@
 import { bigintToSafeNumber, decodeEventLog, getAddress, zeroAddress } from '@zoltar/shared/ethereum';
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES } from '@zoltar/shared/openOracle';
-import { ABIS } from '../abis.js';
+import { ABIS } from '@zoltar/ui-core-shared/abis.js';
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js';
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js';
 import { resolveOracleOperationEthFunding } from './oracleRequestFunding.js';
@@ -10,7 +10,7 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js';
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js';
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js';
 import { getWethAddress } from './uniswapQuoter.js';
-import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js';
+import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js';
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js';
 import { readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js';
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js';

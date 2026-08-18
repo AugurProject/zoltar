@@ -1,5 +1,5 @@
 import { zeroAddress } from '@zoltar/shared/ethereum';
-import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js';
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js';
 import { readRequiredMulticall, writeContractAndWait } from './core.js';
 import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray } from './helpers.js';
 import { getDeploymentSteps } from './deployment.js';

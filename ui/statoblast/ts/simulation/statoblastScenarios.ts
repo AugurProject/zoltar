@@ -1,6 +1,7 @@
-import { getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import {
+	approveErc20,
 	createChildUniverseFromSecurityPool,
 	createCompleteSetInSecurityPool,
 	createMarket,
@@ -21,18 +22,17 @@ import {
 	settleOracleReport,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
-} from '@zoltar/ui-zoltar/protocol/index.js'
+} from '../protocol/index.js'
 import {
 	createRangeProgressReporter,
 	deploySimulationAppContracts,
 	reportBootstrapProgress,
 	requireQaAccount,
-	withSimulationAuthorityAccount,
 	type BootstrapProgressHandler,
+	type ProgressRange,
 	type BootstrapScenarioApplyParameters,
 	type TevmLikeClient,
 } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -62,6 +62,8 @@ export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 			return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
 	}
 }
+
+const DAY_IN_SECONDS = 24n * 60n * 60n
 
 function getSeededCoordinatorInitialReportPrice() {
 	return SEEDED_REP_ETH_PRICE

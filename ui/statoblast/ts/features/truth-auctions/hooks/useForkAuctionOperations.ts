@@ -20,7 +20,7 @@ import {
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 	withdrawForkedEscalationDeposits,
-} from '@zoltar/ui-zoltar/protocol/index.js'
+} from '../../../protocol/index.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'

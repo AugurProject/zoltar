@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum';
 import type { AccountState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ZoltarMigrationFormState } from '../types/app.js';
-import type { DeploymentStatus, DeploymentStepId, ListedSecurityPool, MarketDetails, MarketDetailsPage, OpenOracleActionResult, OpenOracleReportDetails, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
+import type { DeploymentStatus, DeploymentStepId, MarketDetails, MarketDetailsPage, OpenOracleActionResult, OpenOracleReportDetails, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js';
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js';
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js';
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js';
@@ -77,11 +77,6 @@ export type MarketRouteContentProps = {
     accountState: AccountState;
     activeUniverseId: bigint;
     activeView: ZoltarView;
-    securityPools?: ListedSecurityPool[];
-    hasLoadedSecurityPools: boolean;
-    loadingSecurityPools: boolean;
-    onLoadSecurityPools: () => void;
-    securityPoolsLoadError: string | undefined;
     environmentRefreshKey: number;
     onApproveZoltarForkRep: (amount?: bigint) => void;
     onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void;

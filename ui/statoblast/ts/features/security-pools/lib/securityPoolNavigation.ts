@@ -1,4 +1,4 @@
-import { buildRouteHref, getRouteHashSearch, getTopLevelRouteSearch, SECURITY_POOLS_ROUTE } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 
 export function getUseQuestionForPoolState(questionId: string) {
@@ -15,14 +15,14 @@ export function getSecurityPoolLinkHref(securityPoolAddress: string, selectedPoo
 	const securityPoolSearch = writeSecurityPoolQueryParam(currentSearch, securityPoolAddress)
 	const selectedPoolViewSearch = writeSelectedPoolViewQueryParam(securityPoolSearch, nextSelectedPoolView)
 	const nextSearch = writeUniverseQueryParam(selectedPoolViewSearch, nextUniverseId)
-	return buildRouteHref(SECURITY_POOLS_ROUTE, nextSearch)
+	return buildRouteHref(getRouteHash('security-pools'), nextSearch)
 }
 
 export function getUseQuestionForPoolHref(questionId: string, universeId?: bigint) {
 	const currentSearch = getTopLevelRouteSearch('security-pools')
 	const questionSearch = writeSecurityPoolQuestionIdQueryParam(currentSearch, questionId)
 	const nextSearch = writeUniverseQueryParam(questionSearch, universeId ?? readUniverseQueryParam(currentSearch))
-	return buildRouteHref(SECURITY_POOLS_ROUTE, nextSearch)
+	return buildRouteHref(getRouteHash('security-pools'), nextSearch)
 }
 
 export function navigateToSecurityPool(securityPoolAddress: string, selectedPoolView?: string, universeId?: bigint) {

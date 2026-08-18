@@ -176,7 +176,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleCreateFieldErrors = useSignal<OpenOracleCreateContractFieldErrors>({})
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
-	const openOracleActiveWithdrawalBalance = useSignal<keyof OpenOracleWithdrawableBalances | undefined>(undefined)
+	type OpenOracleWithdrawableBalanceKey = 'ethAttoEth' | 'token1' | 'token2'
+	const openOracleActiveWithdrawalBalance = useSignal<OpenOracleWithdrawableBalanceKey | undefined>(undefined)
 	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
 	const { state: openOracleForm, setState: setOpenOracleFormState } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
 	const openOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)

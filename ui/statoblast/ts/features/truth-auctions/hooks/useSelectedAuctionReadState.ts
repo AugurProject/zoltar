@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '@zoltar/ui-zoltar/protocol/index.js'
+import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '../../../protocol/index.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'

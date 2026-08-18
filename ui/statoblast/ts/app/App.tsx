@@ -25,6 +25,7 @@ import { useReportingOperations } from '@zoltar/ui-zoltar/features/reporting/hoo
 import { useForkAuctionOperations } from '../features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { useSecurityPoolCreation } from '../features/security-pools/hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from '../features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/securityVaultHandlers.js'
 import { useSecurityVaultOperations } from '../features/security-pools/hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
@@ -34,8 +35,6 @@ import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/securityVaultHandlers.js'
-import { getUseQuestionForPoolHref, getUseQuestionForPoolState } from '../features/security-pools/lib/securityPoolNavigation.js'
 import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import type { TransactionTrayState } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -46,6 +45,7 @@ import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balanc
 import { getWethAddress } from '@zoltar/ui-zoltar/protocol/uniswapQuoter.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
+import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { GlobalTransactionPresentation, RouteTabDefinition, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 
@@ -122,6 +122,7 @@ export function App() {
 		void supportedNetworkChangeCoordinator.handleTransactionFinished()
 	}
 	const { navigate, route } = useHashRoute()
+	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
 		augurStatoblastDeployed,
@@ -180,24 +181,9 @@ export function App() {
 		hasLoadedZoltarQuestions,
 		loadZoltarForkAccess,
 		loadingZoltarForkAccess,
-		loadingZoltarQuestionCount,
-		loadingZoltarQuestion,
 		loadingZoltarQuestions,
-		loadZoltarQuestionPage,
-		loadZoltarQuestion,
 		loadZoltarQuestions,
-		marketCreating,
-		marketError,
-		marketForm,
-		marketResult,
-		resetMarket,
-		setMarketForm,
-		zoltarQuestionCount,
-		zoltarQuestionLookupError,
-		zoltarQuestionLookupId,
-		zoltarQuestionPage,
 		zoltarQuestions,
-		zoltarQuestionsError,
 		zoltarUniverse,
 		zoltarUniverseError,
 	} = useMarketCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView: 'questions', autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
@@ -266,7 +252,7 @@ export function App() {
 	})
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
-		setReportingForm(current => applyReportingFormUpdate(current, update))
+		setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
 	}
 	const {
 		checkedSecurityPoolAddress,
@@ -311,9 +297,6 @@ export function App() {
 		setLiquidationReceiverVault,
 		setLiquidationApprovalId,
 		setLiquidationTimeoutMinutes,
-		securityPoolsLoadedEnvironmentRefreshKey,
-		securityPoolsLoadError,
-		securityPoolsLoadErrorEnvironmentRefreshKey,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
@@ -418,7 +401,7 @@ export function App() {
 	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, ['browse', 'create', 'operate'])
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
-	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route })
+	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
@@ -434,15 +417,6 @@ export function App() {
 		} finally {
 			deployNextMissingPending.value = false
 		}
-	}
-	const onUseQuestionForPool = (questionId: string) => {
-		const { marketId } = getUseQuestionForPoolState(questionId)
-		resetSecurityPoolCreation()
-		setSecurityPoolForm(current => ({
-			...current,
-			marketId,
-		}))
-		window.location.hash = getUseQuestionForPoolHref(questionId, activeUniverseId)
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
@@ -473,7 +447,7 @@ export function App() {
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
 		resetSecurityPoolCreation,
-		route,
+		route: activeRoute,
 		securityPoolAddress,
 		securityPoolQuestionId,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
@@ -800,7 +774,7 @@ export function App() {
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
 								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
+									<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
 								</fieldset>
 							</TransactionActionButtonLockProvider>
 						</div>

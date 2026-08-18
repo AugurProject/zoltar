@@ -1,4 +1,5 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum';
+import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js';
 import type { WriteOperationsParameters } from '../../../types/app.js';
 import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js';
 import { type RpcStateRetryWait } from '../../../protocol/core.js';
@@ -15,8 +16,8 @@ type UseDeploymentFlowParameters = {
     rpcStateRetryWait?: RpcStateRetryWait;
 };
 export declare function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }: UseDeploymentFlowParameters): {
-    busyStepId: any;
-    deploymentFeedback: any;
+    busyStepId: DeploymentStepId | undefined;
+    deploymentFeedback: ActionFeedback<DeploymentStepId | "deployNextMissing"> | undefined;
     deployNextMissing: () => Promise<void>;
     deployStep: (stepId: DeploymentStepId, feedbackAction?: DeploymentStepId | "deployNextMissing") => Promise<void>;
     errorMessage: string | undefined;

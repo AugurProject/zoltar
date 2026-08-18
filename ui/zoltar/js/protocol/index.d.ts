@@ -5,4 +5,5 @@ export { readOptionalMulticall } from './core.js';
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './deploymentHelpers.js';
 export * from './forks.js';
 export * from './openOracle.js';
+export { approveErc20 } from './tokenActions.js';
 //# sourceMappingURL=index.d.ts.map

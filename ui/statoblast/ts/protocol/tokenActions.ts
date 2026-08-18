@@ -1,5 +1,5 @@
 import { type Address } from '@zoltar/shared/ethereum'
-import { ABIS } from '../abis.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { OpenOracleActionResult, SecurityVaultActionResult, WriteClient, ZoltarForkActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar/protocol/core.js'
 
