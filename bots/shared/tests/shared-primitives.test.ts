@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { initialCursor, scanRanges } from '../src/monitoring/block-sync.ts'
+import { fetchLogsWithAdaptiveRanges, initialCursor, logRangeLimitError, LogScanError, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
@@ -90,6 +90,44 @@ describe('shared bot primitives', () => {
 			{ fromBlock: 10n, toBlock: 19n },
 			{ fromBlock: 20n, toBlock: 25n },
 		])
+	})
+
+	test('narrows log scans when a provider rejects the requested block range', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges(initialCursor(13n, 13n), 13n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock > 2n) throw new Error(`You can query up to 3 blocks at a time, but requested ${(range.toBlock - range.fromBlock + 1n).toString()} blocks`)
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-3', 'log-6', 'log-9', 'log-12'])
+		expect(requestedRanges[0]).toEqual({ fromBlock: 0n, toBlock: 9n })
+		expect(requestedRanges).toContainEqual({ fromBlock: 0n, toBlock: 2n })
+		const finalRange = requestedRanges.at(-1)
+		expect(finalRange).toEqual({ fromBlock: 12n, toBlock: 13n })
+	})
+
+	test('identifies provider range and throughput rejections without retrying deterministic failures', () => {
+		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(true)
+		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(true)
+		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(true)
+		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
+		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	})
+
+	test('stops narrowing at single-block ranges and reports the failing range', async () => {
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 1n }, 1n, 10n, async () => {
+				throw new Error('HTTP 400 while calling eth_getLogs')
+			})
+		} catch (error) {
+			failure = error
+		}
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 1n, toBlock: 1n })
+		expect(failure.message).toContain('blocks 1 through 1')
 	})
 
 	test('requires independent quorum observations to agree', () => {

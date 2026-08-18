@@ -1,3 +1,62 @@
+export type LogRange = { fromBlock: bigint; toBlock: bigint }
+
+export class LogScanError extends Error {
+	readonly logRange: LogRange
+
+	constructor(logRange: LogRange, options: { cause?: unknown }) {
+		super(`Log scan failed for blocks ${logRange.fromBlock.toString()} through ${logRange.toBlock.toString()}`, options)
+		this.name = 'LogScanError'
+		this.logRange = logRange
+	}
+}
+
+function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if (visit(current)) return true
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
+}
+
+export function logRangeLimitError(error: unknown) {
+	const rateLimited = walkErrorCauses(error, current => 'code' in current && (current.code === 429 || current.code === '429' || current.code === -32_005 || current.code === '-32005'))
+	if (rateLimited) return true
+	return walkErrorCauses(error, current => {
+		if (!('message' in current) || typeof current.message !== 'string') return false
+		const message = current.message.toLowerCase()
+		if (message.includes('http 400') || message.includes('http 413') || message.includes('http 429') || message.includes('range is too large')) return true
+		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')
+		const mentionsExceeding = message.includes('limit') || message.includes('too many') || message.includes('exceed') || message.includes('too large') || message.includes('maximum') || message.includes('up to') || message.includes('more than')
+		return mentionsRangeCap && mentionsExceeding
+	})
+}
+
+export async function fetchLogsWithAdaptiveRanges<Log>(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, maximumRange: bigint, fetchRange: (logRange: LogRange) => Promise<readonly Log[]>): Promise<Log[]> {
+	let range = maximumRange
+	if (range < 1n) throw new Error('maximumRange must be positive')
+	const logs: Log[] = []
+	let fromBlock = cursor.nextBlock
+	while (fromBlock <= head) {
+		const candidate = fromBlock + range - 1n
+		const toBlock = candidate < head ? candidate : head
+		const logRange = { fromBlock, toBlock }
+		try {
+			logs.push(...(await fetchRange(logRange)))
+			fromBlock = toBlock + 1n
+		} catch (error) {
+			if (range > 1n && logRangeLimitError(error)) {
+				range = (range + 1n) / 2n
+				continue
+			}
+			throw new LogScanError(logRange, { cause: error })
+		}
+	}
+	return logs
+}
+
 export type SyncCursor = {
 	finalityAnchorHash: string | undefined
 	finalityAnchorNumber: bigint | undefined
