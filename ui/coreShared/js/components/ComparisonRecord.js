@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "preact/jsx-runtime";
-export function ComparisonRecord({ action, badge, children, metrics, title }) {
-    return (_jsxs("article", { className: 'comparison-record record-card', children: [_jsxs("header", { className: 'comparison-record-header', children: [_jsxs("div", { className: 'comparison-record-identity', children: [_jsx("h3", { children: title }), badge === undefined ? undefined : _jsx("div", { className: 'comparison-record-badge', children: badge })] }), action === undefined ? undefined : _jsx("div", { className: 'comparison-record-action', children: action })] }), _jsx("dl", { className: 'comparison-record-metrics', children: metrics.map((metric, index) => (_jsxs("div", { children: [_jsx("dt", { children: metric.label }), _jsx("dd", { children: metric.value })] }, `${index}`))) }), children === undefined ? undefined : _jsx("div", { className: 'comparison-record-details', children: children })] }));
-}
-//# sourceMappingURL=ComparisonRecord.js.map

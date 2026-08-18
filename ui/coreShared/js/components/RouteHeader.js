@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "preact/jsx-runtime";
-export function RouteHeader({ actions, badge, className = '', description, eyebrow, summary, title }) {
-    return (_jsxs("header", { className: `route-header ${className}`.trim(), children: [_jsxs("div", { className: 'route-header-main', children: [_jsxs("div", { className: 'route-header-copy', children: [eyebrow === undefined ? undefined : _jsx("p", { className: 'route-eyebrow', children: eyebrow }), _jsx("div", { className: 'route-title-row', children: _jsx("h2", { children: title }) }), description === undefined ? undefined : _jsx("p", { className: 'detail route-description', children: description })] }), badge === undefined ? undefined : _jsx("div", { className: 'route-header-badge', children: badge }), actions === undefined ? undefined : _jsx("div", { className: 'route-header-actions', children: actions })] }), summary === undefined ? undefined : _jsx("div", { className: 'route-summary-strip', children: summary })] }));
-}
-//# sourceMappingURL=RouteHeader.js.map

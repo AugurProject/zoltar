@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "preact/jsx-runtime";
-export function EntityCard({ actions, badge, children, className = '', surface = 'card', title, variant = 'record' }) {
-    return (_jsxs("article", { className: `entity-card record-card ${variant === 'compact' ? 'compact' : ''} ${surface === 'flat' ? 'flat' : ''} ${className}`.trim(), children: [_jsxs("div", { className: 'entity-card-header', children: [_jsx("div", { className: 'entity-card-copy', children: _jsx("h3", { children: title }) }), badge === undefined ? undefined : _jsx("div", { className: 'entity-card-badge', children: badge })] }), _jsx("div", { className: 'entity-card-body', children: children }), actions === undefined ? undefined : _jsx("div", { className: 'entity-card-actions', children: actions })] }));
-}
-//# sourceMappingURL=EntityCard.js.map

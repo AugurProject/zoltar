@@ -1,1 +1,0 @@
-{"version":3,"file":"forkActivity.d.ts","sourceRoot":"","sources":["../../ts/protocol/forkActivity.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,kBAAkB,EAAE,MAAM,2CAA2C,CAAA;AAEnF,KAAK,kBAAkB,GAAG,IAAI,CAAC,kBAAkB,EAAE,aAAa,GAAG,iBAAiB,GAAG,aAAa,GAAG,uBAAuB,CAAC,CAAA;AAE/H,wBAAgB,qBAAqB,CAAC,MAAM,EAAE,kBAAkB,WAE/D"}

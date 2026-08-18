@@ -1,2 +1,0 @@
-import './liveReload.js';
-//# sourceMappingURL=index.dev.d.ts.map

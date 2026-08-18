@@ -1,2 +1,0 @@
-export declare function createLoadSecurityVaultHandler(loadSecurityVault: (vaultAddress?: string) => Promise<void>): (vaultAddress?: string) => void;
-//# sourceMappingURL=securityVaultHandlers.d.ts.map

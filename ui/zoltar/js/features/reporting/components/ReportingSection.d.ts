@@ -1,3 +1,0 @@
-import type { ReportingSectionProps } from '../../types.js';
-export declare function ReportingSection({ accountState, currentTimestamp, embedInCard, forkAlreadyTriggered, loadingReportingDetails, lockedReason, onLoadReporting, onOpenForkWorkflow, onOpenPriceOracle, onTriggerZoltarFork, onReportOutcome, onReportingFormChange, onWithdrawEscalation, previewMarketDetails, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportActionGuardMessage, showHeader, showSecurityPoolAddressInput, mode, triggerZoltarForkAvailability, triggerZoltarForkPending, }: ReportingSectionProps): import("preact").JSX.Element;
-//# sourceMappingURL=ReportingSection.d.ts.map

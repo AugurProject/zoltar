@@ -1,3 +1,0 @@
-import type { TradingSectionProps } from '../../types.js';
-export declare function TradingSection({ accountState, embedInCard, loadingTradingForkUniverse, loadingTradingDetails, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, poolState, tradingDetails, selectedPool, tradingActiveAction, tradingError, tradingForm, tradingForkUniverse, tradingResult, showHeader, showSecurityPoolAddressInput, }: TradingSectionProps): import("preact").JSX.Element;
-//# sourceMappingURL=TradingSection.d.ts.map

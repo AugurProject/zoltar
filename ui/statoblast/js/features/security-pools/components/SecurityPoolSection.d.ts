@@ -1,3 +1,0 @@
-import type { SecurityPoolSectionProps } from '../../types.js';
-export declare function SecurityPoolSection({ accountState, availableQuestionsContextKey, availableQuestions, checkingDuplicateOriginPool, duplicateOriginPoolExists, hasLoadedAvailableQuestions, loadingMarketDetails, loadingAvailableQuestions, marketDetails, onCreateSecurityPool, onLoadAvailableQuestions, onOpenCreatedPool, onReturnToBrowse, onSecurityPoolFormChange, onResetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, showHeader, poolCreationMarketDetails: carriedPoolCreationMarketDetails, zoltarUniverseHasForked, }: SecurityPoolSectionProps): import("preact").JSX.Element;
-//# sourceMappingURL=SecurityPoolSection.d.ts.map

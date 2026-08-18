@@ -1,1 +1,0 @@
-{"version":3,"file":"AddressInfo.d.ts","sourceRoot":"","sources":["../../ts/components/AddressInfo.tsx"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,yBAAyB,CAAA;AAKtD,KAAK,gBAAgB,GAAG;IACvB,OAAO,EAAE,OAAO,GAAG,SAAS,CAAA;IAC5B,KAAK,EAAE,MAAM,CAAA;IACb,gBAAgB,CAAC,EAAE,MAAM,CAAA;CACzB,CAAA;AAED,wBAAgB,WAAW,CAAC,EAAE,OAAO,EAAE,KAAK,EAAE,gBAAqC,EAAE,EAAE,gBAAgB,gCAGtG"}

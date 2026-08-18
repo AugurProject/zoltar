@@ -1,1 +1,0 @@
-{"version":3,"file":"AppPageHeading.d.ts","sourceRoot":"","sources":["../../../ts/app/components/AppPageHeading.tsx"],"names":[],"mappings":"AAEA,KAAK,mBAAmB,GAAG;IAC1B,mBAAmB,EAAE,CAAC,SAAS,EAAE,MAAM,KAAK,MAAM,CAAA;IAClD,SAAS,EAAE,MAAM,CAAA;CACjB,CAAA;AAED,wBAAgB,cAAc,CAAC,EAAE,mBAAmB,EAAE,SAAS,EAAE,EAAE,mBAAmB,gCA+BrF"}

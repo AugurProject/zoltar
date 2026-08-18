@@ -1,3 +1,0 @@
-import type { SecurityPoolsOverviewSectionProps } from '../../types.js';
-export declare function SecurityPoolsOverviewSection({ accountState, environmentRefreshKey, hasLoadedSecurityPoolPage, loadingSecurityPoolPage, onCreateSecurityPool, onLoadSecurityPoolPage, onSelectSecurityPool, securityPoolBrowseCount, securityPoolPage, securityPoolOverviewError }: SecurityPoolsOverviewSectionProps): import("preact").JSX.Element;
-//# sourceMappingURL=SecurityPoolsOverviewSection.d.ts.map
