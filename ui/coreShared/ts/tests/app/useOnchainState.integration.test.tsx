@@ -18,15 +18,12 @@ import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hoo
 const FAKE_WETH_ADDRESS = '0x0000000000000000000000000000000000000ee1' as const
 
 function getDeploymentSteps() {
-	return [
-		{ address: '0x00000000000000000000000000000000000000d1', dependencies: [], deploy: async () => '0x00000000000000000000000000000000000000000000000000000000000000d1', id: 'zoltar', label: 'Zoltar' },
-	] as const satisfies ReadonlyArray<DeploymentStep>
+	return [{ address: '0x00000000000000000000000000000000000000d1', dependencies: [], deploy: async () => '0x00000000000000000000000000000000000000000000000000000000000000d1', id: 'zoltar', label: 'Zoltar' }] as const satisfies ReadonlyArray<DeploymentStep>
 }
 
 function getWethAddress() {
 	return FAKE_WETH_ADDRESS
 }
-
 
 type UseOnchainStateState = ReturnType<typeof useOnchainState>
 type UseOnchainStateOptions = Parameters<typeof useOnchainState>[0]

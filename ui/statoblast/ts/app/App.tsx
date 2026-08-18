@@ -177,16 +177,14 @@ export function App() {
 		accountAddress: walletScopedAccountAddress,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
-	const {
-		hasLoadedZoltarQuestions,
-		loadZoltarForkAccess,
-		loadingZoltarForkAccess,
-		loadingZoltarQuestions,
-		loadZoltarQuestions,
-		zoltarQuestions,
-		zoltarUniverse,
-		zoltarUniverseError,
-	} = useMarketCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView: 'questions', autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
+		...walletScopedHookConfig,
+		activeUniverseId,
+		activeZoltarView: 'questions',
+		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
+		deploymentStatuses,
+		environmentRefreshKey: activeEnvironmentNonce,
+	})
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
 		...walletScopedHookConfig,
@@ -759,14 +757,7 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />
-					<AppStatusNotices
-						errorMessages={errorMessages}
-						readBackendMessage={readBackendMessage}
-						readBackendStatus={readBackendStatus}
-						simulationBootstrapError={environmentBootstrapError}
-						showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning}
-						zoltarUniverseError={zoltarUniverseError}
-					/>
+					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
 						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />

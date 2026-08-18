@@ -121,7 +121,6 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 	)
 }
 
-
 function getDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
 	let maskIndex = 0n
 	const deploymentStatuses: DeploymentStatus[] = steps.map(step => {

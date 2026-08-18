@@ -108,7 +108,7 @@ export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHas
 export function getCurrentRouteHash() {
 	const routing = requireRouting()
 	const { routeHash } = splitRouteHash(window.location.hash)
-	return routeHash === '' ? routing.hashByRoute[routing.config.defaultRoute] ?? '' : routeHash
+	return routeHash === '' ? (routing.hashByRoute[routing.config.defaultRoute] ?? '') : routeHash
 }
 
 export function buildRouteHref(routeHash: string, search: string) {

@@ -76,7 +76,6 @@ export type OverviewPanelsProps = {
 
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
 
-
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
@@ -138,7 +137,6 @@ export type MarketRouteContentProps = {
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 }
 
-
 export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
 
 export type OpenOracleView = 'browse' | 'create' | 'selected-report'
@@ -182,7 +180,6 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	triggerZoltarForkPending?: boolean | undefined
 }
 
-
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	onApproveToken1: (amount?: bigint) => void
@@ -224,5 +221,3 @@ type OpenOracleRouteContentProps = {
 	openOracleWithdrawableBalancesError: string | undefined
 	openOracleWithdrawableBalancesLoading: boolean
 }
-
-

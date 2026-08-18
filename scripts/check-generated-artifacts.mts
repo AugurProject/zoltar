@@ -23,7 +23,19 @@ export type GeneratedArtifactCheckOptions = {
 
 const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts']
 
-const generatedReviewPaths = ['shared/js', 'solidity/artifacts', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/coreShared/ts/deploymentArtifacts.ts', 'ui/zoltar/vendor', 'ui/statoblast/vendor']
+const generatedReviewPaths = [
+	'shared/js',
+	'solidity/artifacts',
+	'solidity/.contract-hash.json',
+	'solidity/ts/types/contractArtifact.ts',
+	'ui/zoltar/js',
+	'ui/statoblast/js',
+	'ui/coreShared/ts/abis.ts',
+	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/coreShared/ts/deploymentArtifacts.ts',
+	'ui/zoltar/vendor',
+	'ui/statoblast/vendor',
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)

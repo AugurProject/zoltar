@@ -73,10 +73,7 @@ function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateCh
 			<ChildUniverseDeploymentModal
 				actionAvailability={{
 					disabled: selectedChildUniverse === undefined || childDeploymentAvailabilityReason !== undefined || selectedChildUniverse.exists,
-					reason:
-						selectedChildUniverse === undefined
-							? marketCopy.childDeploymentSelectionRequired
-							: (childDeploymentAvailabilityReason ?? (selectedChildUniverse.exists ? marketCopy.childUniverseDeployedReason : undefined)),
+					reason: selectedChildUniverse === undefined ? marketCopy.childDeploymentSelectionRequired : (childDeploymentAvailabilityReason ?? (selectedChildUniverse.exists ? marketCopy.childUniverseDeployedReason : undefined)),
 				}}
 				idleLabel={marketCopy.deployUniverse}
 				isOpen={selectedChildUniverse !== undefined}
@@ -204,13 +201,5 @@ export function ZoltarSection({
 		)
 	}
 
-	return (
-		<ZoltarUniverseOverview
-			accountAddress={accountState.address}
-			isOnActiveAppChain={isOnActiveAppChain}
-			onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
-			zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
-			zoltarUniverse={zoltarUniverse}
-		/>
-	)
+	return <ZoltarUniverseOverview accountAddress={accountState.address} isOnActiveAppChain={isOnActiveAppChain} onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex} zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex} zoltarUniverse={zoltarUniverse} />
 }

@@ -308,7 +308,14 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 	}
 }
 
-export async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }, getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]) {
+export async function deploySimulationAppContracts(
+	primaryWriteClient: WriteClient,
+	memoryClient: TevmLikeClient,
+	onProgress: BootstrapProgressHandler | undefined,
+	profile: NetworkProfile,
+	range: { start: number; end: number } = { start: 0.32, end: 0.8 },
+	getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[],
+) {
 	const steps = getDeploymentSteps(profile)
 	for (const [index, step] of steps.entries()) {
 		const code = await memoryClient.getCode({ address: step.address })
@@ -339,7 +346,6 @@ export function requireQaAccount(account: Address | undefined, label: string) {
 	if (account === undefined) throw new Error(label)
 	return account
 }
-
 
 type CoreScenarioApplyParameters = {
 	accounts: readonly Address[]

@@ -12,16 +12,7 @@ import {
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
-import {
-	MULTICALL3_BYTECODE,
-	PROXY_DEPLOYER_ADDRESS,
-	ZERO_SALT,
-	getInfraContractAddresses,
-	getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarInitCode,
-	getZoltarQuestionDataByteCode,
-} from './deploymentHelpers.js'
+import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getInfraContractAddresses, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode } from './deploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { installDomEnvironment } from '../ui/zoltar/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
 

@@ -11,7 +11,19 @@ import { getOpenOracleCreateParameterValidationMessage } from './openOracleValid
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
 import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type {
+	LiquidationApprovalDetails,
+	OpenOracleActionResult,
+	OpenOracleWithdrawableBalances,
+	OracleManagerDetails,
+	OracleQueueOperation,
+	ReadClient,
+	OpenOracleReportSummary,
+	OpenOracleReportSummaryPage,
+	StagedOracleExecutionResult,
+	StagedOracleQueuedResult,
+	WriteClient,
+} from '@zoltar/ui-core-shared/types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'

@@ -13,7 +13,28 @@ type CatchFinding = {
 const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
 const projectRoot = path.join(repositoryRoot, '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
-const ignoredPathPrefixes = ['.git', 'node_modules', 'ui/coreShared/node_modules', 'ui/zoltar/node_modules', 'ui/statoblast/node_modules', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/zoltar/vendor', 'ui/statoblast/vendor', 'ui/zoltar/js', 'ui/statoblast/js', 'shared/js', 'solidity/artifacts', 'solidity/js', 'solidity/node_modules', 'trading/artifacts', 'trading/ts/artifacts', 'trading/ui/dist', 'trading/ui/ts/generated', 'coverage']
+const ignoredPathPrefixes = [
+	'.git',
+	'node_modules',
+	'ui/coreShared/node_modules',
+	'ui/zoltar/node_modules',
+	'ui/statoblast/node_modules',
+	'ui/zoltar/dist',
+	'ui/statoblast/dist',
+	'ui/zoltar/vendor',
+	'ui/statoblast/vendor',
+	'ui/zoltar/js',
+	'ui/statoblast/js',
+	'shared/js',
+	'solidity/artifacts',
+	'solidity/js',
+	'solidity/node_modules',
+	'trading/artifacts',
+	'trading/ts/artifacts',
+	'trading/ui/dist',
+	'trading/ui/ts/generated',
+	'coverage',
+]
 const ignoredFiles = new Set(['solidity/ts/testSupport/simulator/types/wire-types.js'])
 
 function shouldIgnore(relativePath: string): boolean {

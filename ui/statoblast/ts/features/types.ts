@@ -105,7 +105,6 @@ export type VaultMetricGridProps = {
 
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
 	availableQuestionsContextKey: string

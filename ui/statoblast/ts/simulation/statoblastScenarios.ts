@@ -2,7 +2,30 @@ import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import * as protocol from '../protocol/index.js'
 
-type StatoblastScenarioProtocol = Pick<typeof protocol, 'approveErc20' | 'createChildUniverseFromSecurityPool' | 'createCompleteSetInSecurityPool' | 'createMarket' | 'createSecurityPool' | 'depositRepToVaultToSecurityPool' | 'forkZoltarWithOwnEscalation' | 'getDeploymentSteps' | 'loadAllSecurityPools' | 'loadForkAuctionDetails' | 'loadOracleManagerDetails' | 'loadOpenOracleReportDetails' | 'loadReportingDetails' | 'loadSecurityVaultDetails' | 'loadZoltarUniverseSummary' | 'migrateRepToZoltarFromSecurityPool' | 'reportOutcomeInSecurityPool' | 'requestOraclePrice' | 'settleOracleReport' | 'startTruthAuctionForSecurityPool' | 'submitTruthAuctionBid'>
+type StatoblastScenarioProtocol = Pick<
+	typeof protocol,
+	| 'approveErc20'
+	| 'createChildUniverseFromSecurityPool'
+	| 'createCompleteSetInSecurityPool'
+	| 'createMarket'
+	| 'createSecurityPool'
+	| 'depositRepToVaultToSecurityPool'
+	| 'forkZoltarWithOwnEscalation'
+	| 'getDeploymentSteps'
+	| 'loadAllSecurityPools'
+	| 'loadForkAuctionDetails'
+	| 'loadOracleManagerDetails'
+	| 'loadOpenOracleReportDetails'
+	| 'loadReportingDetails'
+	| 'loadSecurityVaultDetails'
+	| 'loadZoltarUniverseSummary'
+	| 'migrateRepToZoltarFromSecurityPool'
+	| 'reportOutcomeInSecurityPool'
+	| 'requestOraclePrice'
+	| 'settleOracleReport'
+	| 'startTruthAuctionForSecurityPool'
+	| 'submitTruthAuctionBid'
+>
 
 let scenarioProtocolOverride: StatoblastScenarioProtocol | undefined
 
@@ -13,16 +36,7 @@ export function installStatoblastScenarioProtocolForTesting(override: Statoblast
 function getScenarioProtocol(): StatoblastScenarioProtocol {
 	return scenarioProtocolOverride ?? protocol
 }
-import {
-	createRangeProgressReporter,
-	deploySimulationAppContracts,
-	reportBootstrapProgress,
-	requireQaAccount,
-	type BootstrapProgressHandler,
-	type ProgressRange,
-	type BootstrapScenarioApplyParameters,
-	type TevmLikeClient,
-} from '@zoltar/ui-core-shared/simulation/bootstrap.js'
+import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapProgressHandler, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -84,7 +98,6 @@ type SeededSecurityPoolSpec = {
 	readyLabel: string
 	vaults: readonly SeededVaultSpec[]
 }
-
 
 function createSecurityPoolSeedParameters(
 	currentTimestamp: bigint,
@@ -615,16 +628,7 @@ async function seedSecurityPoolX2AuctionScenario({
 	await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
 }
 
-
-export async function applyStatoblastScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-	scenario,
-}: BootstrapScenarioApplyParameters): Promise<boolean> {
+export async function applyStatoblastScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario }: BootstrapScenarioApplyParameters): Promise<boolean> {
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
 
 	switch (scenario) {

@@ -18,7 +18,12 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"lib": ["ESNext", "DOM"],
-		"types": ["bun-types", "node"]
+		"types": ["bun-types", "node"],
+		"paths": {
+			"@zoltar/ui-core-shared/*": ["./ui/coreShared/ts/*"],
+			"@zoltar/ui-zoltar/*": ["./ui/zoltar/ts/*"],
+			"@zoltar/ui-statoblast/*": ["./ui/statoblast/ts/*"]
+		}
 	},
 	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "ui/coreShared/build/**/*.mts", "ui/coreShared/dev-server.ts"]
 }

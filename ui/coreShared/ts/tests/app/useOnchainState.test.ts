@@ -21,7 +21,6 @@ const fakeOnchainStateDependencies: UseOnchainStateDependencies = {
 	loadErc20Balance: async () => 0n,
 }
 
-
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
 	let reject: (reason?: unknown) => void = () => undefined

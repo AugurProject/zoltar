@@ -11,7 +11,6 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {

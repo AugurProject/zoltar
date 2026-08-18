@@ -12,7 +12,14 @@ describe('application TypeScript process arguments', () => {
 		expect(getApplicationTypeScriptHeapOption('--trace-warnings --max_old_space_size 7168')).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
 		expect(getApplicationTypeScriptHeapOption('--max_old_space_size=+7168')).toBe('--max-old-space-size=7168')
 		expect(getApplicationTypeScriptHeapOption('--max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--max-old-space-size=8192')
-		expect(getApplicationTypeScriptCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--trace-warnings')).toEqual(['C:\\Program Files\\nodejs\\node.exe', '--max-old-space-size=6144', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--project', 'ui/coreShared/tsconfig.json', '--noEmit'])
+		expect(getApplicationTypeScriptCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--trace-warnings')).toEqual([
+			'C:\\Program Files\\nodejs\\node.exe',
+			'--max-old-space-size=6144',
+			'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc',
+			'--project',
+			'ui/coreShared/tsconfig.json',
+			'--noEmit',
+		])
 	})
 
 	test('preserves the effective heap limit from quoted and repeated NODE_OPTIONS', () => {

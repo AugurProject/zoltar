@@ -33,19 +33,7 @@ export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, url
 	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
 }
 
-export function shouldRefreshSelectedPoolForRoute({
-	environmentReady,
-	route,
-	securityPoolAddress,
-	selectedPoolSecurityPoolAddress,
-	walletBootstrapComplete,
-}: {
-	environmentReady: boolean
-	route: Route
-	securityPoolAddress: string
-	selectedPoolSecurityPoolAddress: string | undefined
-	walletBootstrapComplete: boolean
-}) {
+export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
 	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 

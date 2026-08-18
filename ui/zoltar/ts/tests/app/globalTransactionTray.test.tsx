@@ -99,10 +99,7 @@ describe('GlobalTransactionTray', () => {
 
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
-		const presentations = [
-			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
-			createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n }),
-		]
+		const presentations = [createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }), createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n })]
 		const renderedComponent = await renderIntoDocument(
 			<>
 				{presentations.map(presentation => (

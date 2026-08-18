@@ -126,19 +126,7 @@ void describe('deployment helpers', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual([
-			'proxyDeployer',
-			'deploymentStatusOracle',
-			'multicall3',
-			'uniformPriceDualCapBatchAuctionFactory',
-			'scalarOutcomes',
-			'securityPoolUtils',
-			'openOracle',
-			'zoltarQuestionData',
-			'zoltar',
-			'shareTokenFactory',
-			'priceOracleManagerAndOperatorQueuerFactory',
-		])
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'uniformPriceDualCapBatchAuctionFactory', 'scalarOutcomes', 'securityPoolUtils', 'openOracle', 'zoltarQuestionData', 'zoltar', 'shareTokenFactory', 'priceOracleManagerAndOperatorQueuerFactory'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
 	})

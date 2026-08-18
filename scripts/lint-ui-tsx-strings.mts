@@ -415,10 +415,11 @@ function lintFile(filePath: string) {
 
 if (import.meta.main) {
 	const changedUiTsxFiles = getChangedUiTsxFiles()
-	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy'))
-		.flatMap(copyRoot => readdirSync(copyRoot, { withFileTypes: true })
+	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot =>
+		readdirSync(copyRoot, { withFileTypes: true })
 			.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
-			.map(entry => path.join(copyRoot, entry.name)))
+			.map(entry => path.join(copyRoot, entry.name)),
+	)
 	const failures = [...changedUiTsxFiles.flatMap(lintFile), ...copyModuleFiles.flatMap(filePath => lintCopySourceText(filePath, readFileSync(filePath, 'utf8')))]
 
 	if (failures.length === 0) {

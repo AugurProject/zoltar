@@ -275,7 +275,10 @@ test('lint-ui-tsx-strings rejects assigned user-facing reasons', () => {
 test('lint-ui-tsx-strings rejects logical assignment expressions', () => {
 	const orEqualFailures = lintSourceText('ui/zoltar/ts/components/TestOrEqualAssignedReason.tsx', "export function TestOrEqualAssignedReason({ shouldBlock }: { shouldBlock: boolean }) { let disabledReason: string | undefined; disabledReason ||= 'Connect wallet.'; return <Panel reason={disabledReason} /> }")
 	const andEqualFailures = lintSourceText('ui/zoltar/ts/components/TestAndEqualAssignedReason.tsx', "export function TestAndEqualAssignedReason({ shouldBlock }: { shouldBlock: boolean }) { let disabledReason: string | undefined; disabledReason &&= 'Connect wallet.'; return <Panel reason={disabledReason} /> }")
-	const nullishEqualFailures = lintSourceText('ui/zoltar/ts/components/TestNullishEqualAssignedReason.tsx', "export function TestNullishEqualAssignedReason({ shouldBlock }: { shouldBlock: boolean }) { let disabledReason: string | undefined; disabledReason ??= 'Connect wallet.'; return <Panel reason={disabledReason} /> }")
+	const nullishEqualFailures = lintSourceText(
+		'ui/zoltar/ts/components/TestNullishEqualAssignedReason.tsx',
+		"export function TestNullishEqualAssignedReason({ shouldBlock }: { shouldBlock: boolean }) { let disabledReason: string | undefined; disabledReason ??= 'Connect wallet.'; return <Panel reason={disabledReason} /> }",
+	)
 
 	expect(orEqualFailures).toHaveLength(1)
 	expect(andEqualFailures).toHaveLength(1)

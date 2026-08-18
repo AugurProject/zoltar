@@ -22,7 +22,7 @@ globalThis.global ??= globalThis
 `.trim()
 
 const APP_IDS = ['zoltar', 'statoblast'] as const
-const appId = process.argv[2] ?? process.env.UI_APP ?? 'zoltar'
+const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
 if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for worker build: ${appId}`)
 const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
 const workerEntryPath = path.join(APP_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.ts')

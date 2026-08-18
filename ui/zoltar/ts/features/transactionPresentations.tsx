@@ -11,14 +11,7 @@ import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
-import type {
-	MarketCreationResult,
-	OpenOracleActionResult,
-	ReportingActionResult,
-	ZoltarChildUniverseActionResult,
-	ZoltarForkActionResult,
-	ZoltarMigrationActionResult,
-} from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 function humanizeAction(action: string) {
 	return action
 		.replace(/([A-Z])/g, ' $1')
@@ -196,7 +189,6 @@ export function createZoltarMigrationWarningPresentation(result: ZoltarMigration
 	return withWarning(createZoltarMigrationSuccessPresentation(result), message)
 }
 
-
 type PoolUniverseTransactionContext = {
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
@@ -209,7 +201,6 @@ function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext 
 		...(context.universeId === undefined ? [] : [{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
 	]
 }
-
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
 	outcome?: ReportingActionResult['outcome'] | undefined
@@ -246,7 +237,6 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 export function createReportingWarningPresentation(result: ReportingActionResult, message: string) {
 	return withWarning(createReportingSuccessPresentation(result), message)
 }
-
 
 type PoolOracleTransactionContext = {
 	managerAddress: string
@@ -345,4 +335,3 @@ export function createOpenOracleSuccessPresentation(result: OpenOracleActionResu
 export function createOpenOracleWarningPresentation(result: OpenOracleActionResult, message: string, context?: OpenOracleTransactionContext) {
 	return withWarning(createOpenOracleSuccessPresentation(result, context), message)
 }
-

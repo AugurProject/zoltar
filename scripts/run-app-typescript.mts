@@ -102,7 +102,14 @@ export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessE
 	return childEnvironment
 }
 
-export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath = UI_TYPESCRIPT_PROJECTS[0]) => [nodeExecutablePath, getApplicationTypeScriptHeapOption(existingNodeOptions), typescriptCliPath, '--project', projectPath, '--noEmit']
+export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath: (typeof UI_TYPESCRIPT_PROJECTS)[number] = UI_TYPESCRIPT_PROJECTS[0]) => [
+	nodeExecutablePath,
+	getApplicationTypeScriptHeapOption(existingNodeOptions),
+	typescriptCliPath,
+	'--project',
+	projectPath,
+	'--noEmit',
+]
 
 export async function runApplicationTypeScript() {
 	const nodeExecutablePath = Bun.which('node')
