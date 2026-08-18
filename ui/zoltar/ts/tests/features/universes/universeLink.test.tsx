@@ -1,13 +1,15 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { UniverseLink } from '../../../features/universes/components/UniverseLink.js'
 import { getUniverseLinkHref } from '../../../features/universes/lib/universe.js'
 
+installTestRouting()
 describe('UniverseLink', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

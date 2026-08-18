@@ -38,6 +38,17 @@
 	},
 	"types": "./js/index.d.ts",
 	"exports": {
-		"./*": "./js/*.js"
+		"./tests/simulationTestUtils.js": "./ts/tests/simulationTestUtils.ts",
+		"./tests/testUtils/domEnvironment.js": "./ts/tests/testUtils/domEnvironment.ts",
+		"./tests/testUtils/fakeBackend.js": "./ts/tests/testUtils/fakeBackend.ts",
+		"./tests/testUtils/protocolTestSupport.js": "./ts/tests/testUtils/protocolTestSupport.ts",
+		"./tests/testUtils/queries.js": "./ts/tests/testUtils/queries.ts",
+		"./tests/testUtils/renderIntoDocument.js": "./ts/tests/testUtils/renderIntoDocument.tsx",
+		"./tests/testUtils/transactionActionButton.js": "./ts/tests/testUtils/transactionActionButton.ts",
+		"./*": {
+			"bun": "./ts/*.ts",
+			"default": "./js/*.js"
+		},
+		"./tests/testUtils/testRouting.js": "./ts/tests/testUtils/testRouting.ts"
 	}
 }

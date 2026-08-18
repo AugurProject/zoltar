@@ -15,14 +15,11 @@ function emitListeners(listeners, eventName) {
         listener();
     }
 }
-function resolveWorkerPath() {
+function resolveWorkerPath(appId = 'zoltar') {
     const currentUrl = new URL(import.meta.url);
-    const appMatch = currentUrl.pathname.match(/\/ui\/(zoltar|statoblast)\/(?:ts|js)\//);
-    if (appMatch === null || appMatch[1] === undefined)
-        throw new Error(`Unable to resolve simulation worker path from ${currentUrl.pathname}`);
-    if (currentUrl.protocol === 'file:' && currentUrl.pathname.includes('/ts/'))
-        return new URL(`../../${appMatch[1]}/ts/simulation/tevmWorker.ts`, import.meta.url);
-    return new URL(`../../${appMatch[1]}/js/simulation/tevmWorker.worker.js`, import.meta.url);
+    if (currentUrl.protocol === 'file:')
+        return new URL(`../../../${appId}/ts/simulation/tevmWorker.ts`, import.meta.url);
+    return new URL(`../../../${appId}/js/simulation/tevmWorker.worker.js`, import.meta.url);
 }
 function createWorkerConnection(workerPath) {
     const worker = new Worker(workerPath, { type: 'module' });
@@ -53,7 +50,7 @@ function createSimulationProvider(requestRpc) {
         request,
     };
 }
-export async function createSimulationBackend({ initialBootstrapError, savedState, savedStateId, scenario }, dependencies = {}) {
+export async function createSimulationBackend({ appId = 'zoltar', initialBootstrapError, savedState, savedStateId, scenario }, dependencies = {}) {
     const primaryAccount = QA_ACCOUNTS[0];
     if (primaryAccount === undefined)
         throw new Error('No simulation QA accounts configured');
@@ -69,7 +66,7 @@ export async function createSimulationBackend({ initialBootstrapError, savedStat
             scenario: scenario ?? 'baseline',
         };
     const listeners = createListenerMap();
-    const workerPath = resolveWorkerPath();
+    const workerPath = resolveWorkerPath(appId);
     const worker = (dependencies.createWorkerConnection ?? createWorkerConnection)(workerPath);
     const pendingRequests = new Map();
     let nextRequestId = 1;

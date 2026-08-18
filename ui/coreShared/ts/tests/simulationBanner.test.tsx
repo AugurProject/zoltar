@@ -8,10 +8,25 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { SimulationBanner } from '../components/SimulationBanner.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
+import { registerSimulationScenario } from '../simulation/scenarios.js'
+import { installTestRouting } from './testUtils/testRouting.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
+registerSimulationScenario('security-pool', {
+	description: 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.',
+	label: 'Security pool',
+})
+registerSimulationScenario('securitypoolx2', {
+	description: 'Two security pools sharing a vault with capacity ownership split between them. Use it to test cross-pool liquidation and settlement paths.',
+	label: 'Security Pool x2',
+})
+registerSimulationScenario('securitypoolx2-auction', {
+	description: 'Two security pools with an in-progress truth auction. Use it to test auction bidding and finalization paths.',
+	label: 'Security Pool x2 Auction',
+})
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -102,6 +117,7 @@ function getElementValue(element: Element) {
 }
 
 describe('SimulationBanner', () => {
+	installTestRouting()
 	test('shows the selected scenario description', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)

@@ -9,8 +9,9 @@ type LocationLike = {
     search: string;
 };
 type InitializeActiveEnvironmentDependencies = {
+    appId?: 'zoltar' | 'statoblast';
     createInjectedBackend?: typeof createInjectedBackend;
-    createSimulationBackend: typeof createSimulationBackend;
+    createSimulationBackend?: typeof createSimulationBackend;
 };
 export declare function shouldUseSimulationLocation(location: LocationLike): boolean;
 export declare function shouldFollowWalletNetwork(location?: LocationLike): boolean;

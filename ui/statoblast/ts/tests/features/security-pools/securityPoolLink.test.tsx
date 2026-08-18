@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { SecurityPoolLink } from '../../../features/security-pools/components/SecurityPoolLink.js'

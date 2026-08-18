@@ -1,6 +1,7 @@
 import { createElement } from 'preact'
 import { installRouting } from '@zoltar/ui-core-shared/lib/routing.js'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
+import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { registerStatoblastSimulationScenarios } from './simulation/index.js'
 import { App } from './app/App.js'
 
@@ -15,4 +16,4 @@ installRouting({
 
 registerStatoblastSimulationScenarios()
 
-void mountApp({ root: () => createElement(App, {}) })
+void mountApp({ initialize: () => initializeActiveEnvironment(window.location, { appId: 'statoblast' }), root: () => createElement(App, {}) })

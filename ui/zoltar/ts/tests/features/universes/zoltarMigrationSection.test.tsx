@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ZoltarMigrationSection } from '../../../features/universes/components/ZoltarMigrationSection.js'
@@ -80,6 +81,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 	}
 }
 
+installTestRouting()
 describe('ZoltarMigrationSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

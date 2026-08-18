@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { useHashRoute } from '../../app/hooks/useHashRoute.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 type UseHashRoute = typeof import('../../app/hooks/useHashRoute.js')['useHashRoute']
@@ -27,6 +28,7 @@ describe('useHashRoute', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
+		installTestRouting()
 		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1').cleanup
 	})
 

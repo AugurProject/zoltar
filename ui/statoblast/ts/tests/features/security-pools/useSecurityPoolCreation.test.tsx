@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { createMarketCreationSuccessPresentation, createSecurityPoolCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar/features/transactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar/features/transactionPresentations.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
@@ -102,7 +102,6 @@ describe('GlobalTransactionTray', () => {
 		const presentations = [
 			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
 			createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n }),
-			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
 		]
 		const renderedComponent = await renderIntoDocument(
 			<>

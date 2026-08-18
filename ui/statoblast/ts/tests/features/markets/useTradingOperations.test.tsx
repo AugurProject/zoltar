@@ -13,7 +13,7 @@ import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '@z
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 
 type UseTradingOperations = typeof useTradingOperations
 type UseTradingOperationsState = ReturnType<UseTradingOperations>

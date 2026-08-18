@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { DeploymentRouteContent } from '../../../features/deployment/components/DeploymentRouteContent.js'
@@ -44,6 +45,7 @@ function createProps(): DeploymentRouteContentProps {
 	}
 }
 
+installTestRouting()
 describe('DeploymentRouteContent', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

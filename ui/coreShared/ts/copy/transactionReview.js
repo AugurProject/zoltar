@@ -1,8 +1,0 @@
-export const transactionReview = 'Transaction Review';
-export const risksAndConsequences = 'Risks and Consequences';
-export const youPay = 'You Pay';
-export const youReceive = 'You Receive';
-export const network = 'Network';
-export const resultingEthBalance = 'Resulting ETH Balance';
-export const amountUnavailable = 'Enter a valid amount to preview';
-//# sourceMappingURL=transactionReview.js.map

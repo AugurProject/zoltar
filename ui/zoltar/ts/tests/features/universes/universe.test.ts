@@ -5,6 +5,9 @@ import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiv
 import { getGenesisReputationTokenAddress, formatUniverseCollectionLabel, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '../../../features/universes/lib/universe.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+
+installTestRouting()
 
 void describe('universe helpers', () => {
 	let cleanup: (() => void) | undefined

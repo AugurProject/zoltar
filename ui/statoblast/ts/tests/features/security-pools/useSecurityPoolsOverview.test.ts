@@ -10,7 +10,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 

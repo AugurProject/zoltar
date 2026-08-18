@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -10,6 +11,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
+installTestRouting()
 describe('OverviewPanels', () => {
 	type MetricElement = {
 		classList: {

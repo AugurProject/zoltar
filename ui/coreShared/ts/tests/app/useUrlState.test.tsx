@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { useUrlState } from '../../app/hooks/useUrlState.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 type UseUrlState = typeof import('../../app/hooks/useUrlState.js')['useUrlState']
@@ -30,6 +31,7 @@ describe('useUrlState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
+		installTestRouting()
 		cleanupDom = installDomEnvironment('http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading&questionId=0x42').cleanup
 	})
 

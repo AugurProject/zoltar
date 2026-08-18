@@ -3,21 +3,24 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { TabNavigation } from '../components/TabNavigation.js'
-import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from '../lib/routing.js'
+import type { RouteTabDefinition } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { installTestRouting } from './testUtils/testRouting.js'
+
+const DEFAULT_TABS: readonly RouteTabDefinition[] = [
+	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
+	{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
+	{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
+]
 
 function createProps(overrides: Partial<Parameters<typeof TabNavigation>[0]> = {}): Parameters<typeof TabNavigation>[0] {
 	return {
-		augurStatoblastDeployed: true,
-		deployRoute: DEPLOY_ROUTE,
-		marketRoute: ZOLTAR_ROUTE,
 		onRouteChange: () => undefined,
-		openOracleRoute: OPEN_ORACLE_ROUTE,
 		route: 'zoltar',
-		securityPoolsRoute: SECURITY_POOLS_ROUTE,
-		showDeployTab: true,
+		tabs: DEFAULT_TABS,
 		...overrides,
 	}
 }
@@ -27,6 +30,7 @@ describe('TabNavigation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
+		installTestRouting()
 		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1').cleanup
 	})
 
@@ -44,14 +48,12 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('navigation', { name: 'Application sections' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
-		expect(documentQueries.queryByRole('link', { name: 'Markets' })).toBeNull()
-		expect(documentQueries.queryByRole('link', { name: 'Oracle Reports' })).toBeNull()
 	})
 
 	test('changes routes from the compact route selector', async () => {
@@ -71,35 +73,27 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual(['security-pools'])
 	})
 
-	test('keeps Deploy visible as the current compact route while deployment status is loading', async () => {
-		const rendered = await renderIntoDocument(
-			h(
-				TabNavigation,
-				createProps({
-					route: 'deploy',
-					showDeployTab: false,
-				}),
-			),
-		)
+	test('keeps the first tab as the current compact route when the route is unknown', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const routeSelector = within(document.body).getByRole('combobox', { name: 'Current application section' })
 		if (!(routeSelector instanceof window.HTMLSelectElement)) throw new Error('Expected compact route selector')
 		expect(routeSelector.value).toBe('deploy')
 		expect(routeSelector.selectedOptions[0]?.textContent).toBe('Deploy')
-		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
 	})
 
-	test('uses the deployment prerequisite copy for disabled application sections', async () => {
+	test('uses the disabled reason copy for disabled application sections', async () => {
+		const disabledReason = 'Deploy the application contracts before using this section.'
 		const routeChanges: string[] = []
 		const rendered = await renderIntoDocument(
 			h(
 				TabNavigation,
 				createProps({
-					augurStatoblastDeployed: false,
 					onRouteChange: route => {
 						routeChanges.push(route)
 					},
+					tabs: DEFAULT_TABS.map(tab => (tab.route === 'zoltar' ? { ...tab, disabled: true, disabledReason } : tab)),
 				}),
 			),
 		)
@@ -110,9 +104,9 @@ describe('TabNavigation', () => {
 		expect(zoltarTab.getAttribute('aria-disabled')).toBe('true')
 		expect(zoltarTab.getAttribute('href')).toBeNull()
 		expect(zoltarTab.tabIndex).toBe(0)
-		expect(zoltarTab.title).toBe('Deploy the application contracts before using this section.')
-		expect(zoltarTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
-		expect(documentQueries.getByText('Deploy the application contracts before using this section.', { selector: '.mobile-route-select .disabled-reason' })).toBeDefined()
+		expect(zoltarTab.title).toBe(disabledReason)
+		expect(zoltarTab.getAttribute('aria-description')).toBe(disabledReason)
+		expect(documentQueries.getByText(disabledReason, { selector: '.mobile-route-select .disabled-reason' })).toBeDefined()
 
 		zoltarTab.focus()
 		expect(document.activeElement).toBe(zoltarTab)
@@ -126,7 +120,7 @@ describe('TabNavigation', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})

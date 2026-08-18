@@ -8,7 +8,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { UseMarketCreationDependencies } from '../../../features/markets/hooks/useMarketCreation.js'

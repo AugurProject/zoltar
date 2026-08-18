@@ -11,7 +11,7 @@ import { getTruthAuctionTickAtPrice } from '../../../features/truth-auctions/lib
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar/features/types.js'
 import type { TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'

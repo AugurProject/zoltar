@@ -1,13 +1,20 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from '../lib/routing.js'
+import { buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '../lib/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { installTestRouting } from './testUtils/testRouting.js'
+
+const DEPLOY_ROUTE = '#/deploy'
+const OPEN_ORACLE_ROUTE = '#/open-oracle'
+const SECURITY_POOLS_ROUTE = '#/security-pools'
+const ZOLTAR_ROUTE = '#/zoltar'
 
 describe('routing', () => {
 	let cleanup: (() => void) | undefined
 
 	beforeEach(() => {
+		installTestRouting()
 		cleanup = installDomEnvironment('http://localhost/#/zoltar?zoltarView=create&simulate=1').cleanup
 	})
 

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkZoltarSection } from '../../../features/universes/components/ForkZoltarSection.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { readFileSync } from 'node:fs'
 import { CollateralizationMetricField } from '../../../features/security-pools/components/CollateralizationMetricField.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

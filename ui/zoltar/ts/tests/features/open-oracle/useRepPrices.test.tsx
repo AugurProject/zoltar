@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { createPublicClient, http } from '@zoltar/shared/ethereum'
 import { act } from 'preact/test-utils'

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../../../features/truth-auctions/components/ForkAuctionSection.js'

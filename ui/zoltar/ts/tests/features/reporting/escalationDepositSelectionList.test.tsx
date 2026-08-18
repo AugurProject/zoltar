@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'

@@ -10,11 +10,17 @@ function buildRoutingState(config) {
     }
     return { config, routeByHash, hashByRoute, queryParametersByRoute };
 }
-let activeRouting;
+function getRoutingState() {
+    return globalThis.__zoltarActiveRoutingState__;
+}
 export function installRouting(config) {
-    activeRouting = buildRoutingState(config);
+    globalThis.__zoltarActiveRoutingState__ = buildRoutingState(config);
+}
+export function resetRoutingForTesting() {
+    globalThis.__zoltarActiveRoutingState__ = undefined;
 }
 function requireRouting() {
+    const activeRouting = getRoutingState();
     if (activeRouting === undefined)
         throw new Error('Routing has not been installed. Call installRouting() during application bootstrap before reading routes.');
     return activeRouting;

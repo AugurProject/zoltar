@@ -17,7 +17,7 @@ import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOut
 import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '../../protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
-const rootSolcPath = fileURLToPath(new URL('../../../../node_modules/solc/index.js', import.meta.url))
+const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
 const solc: { compile: (input: string) => string; version: () => string } = require(rootSolcPath)
 
 function isRecord(value: unknown): value is Record<string, unknown> {

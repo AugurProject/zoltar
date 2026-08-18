@@ -17,7 +17,8 @@ type CreateSimulationBackendDependencies = {
 type SimulationBackend = ChainBackend & SimulationController & {
     bootstrap(): Promise<void>;
 };
-export declare function createSimulationBackend({ initialBootstrapError, savedState, savedStateId, scenario }: {
+export declare function createSimulationBackend({ appId, initialBootstrapError, savedState, savedStateId, scenario }: {
+    appId?: 'zoltar' | 'statoblast';
     initialBootstrapError?: string;
     savedState?: SavedSimulationStateEnvelopeV1;
     savedStateId?: string;

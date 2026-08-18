@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'

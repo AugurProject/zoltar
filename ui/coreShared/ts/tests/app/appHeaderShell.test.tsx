@@ -7,6 +7,7 @@ import type { SimulationController } from '../../simulation/controller.js'
 
 import { fireEvent, within } from '../testUtils/queries'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 function createSimulationController(): SimulationController {
@@ -50,6 +51,7 @@ function createSimulationController(): SimulationController {
 
 describe('AppHeaderShell', () => {
 	test('always shows a skip link and focuses app content without changing the hash', async () => {
+		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1')
 		const appContent = document.createElement('main')
 		appContent.id = 'app-content'

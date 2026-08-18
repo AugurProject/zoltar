@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
@@ -9,7 +9,7 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../../../statoblast/ts/features/markets/lib/marketForm.js'
+import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
 import type { AccountState, OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'

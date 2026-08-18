@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { ScalarCreatePreview } from '../../../features/markets/components/ScalarCreatePreview.js'

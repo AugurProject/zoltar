@@ -55,12 +55,10 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 	}
 }
 
-function resolveWorkerPath() {
+function resolveWorkerPath(appId: 'zoltar' | 'statoblast' = 'zoltar') {
 	const currentUrl = new URL(import.meta.url)
-	const appMatch = currentUrl.pathname.match(/\/ui\/(zoltar|statoblast)\/(?:ts|js)\//)
-	if (appMatch === null || appMatch[1] === undefined) throw new Error(`Unable to resolve simulation worker path from ${currentUrl.pathname}`)
-	if (currentUrl.protocol === 'file:' && currentUrl.pathname.includes('/ts/')) return new URL(`../../${appMatch[1]}/ts/simulation/tevmWorker.ts`, import.meta.url)
-	return new URL(`../../${appMatch[1]}/js/simulation/tevmWorker.worker.js`, import.meta.url)
+	if (currentUrl.protocol === 'file:') return new URL(`../../../${appId}/ts/simulation/tevmWorker.ts`, import.meta.url)
+	return new URL(`../../../${appId}/js/simulation/tevmWorker.worker.js`, import.meta.url)
 }
 
 function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
@@ -95,7 +93,7 @@ function createSimulationProvider(requestRpc: (parameters: RequestArguments) => 
 }
 
 export async function createSimulationBackend(
-	{ initialBootstrapError, savedState, savedStateId, scenario }: { initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
+	{ appId = 'zoltar', initialBootstrapError, savedState, savedStateId, scenario }: { appId?: 'zoltar' | 'statoblast'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
@@ -113,7 +111,7 @@ export async function createSimulationBackend(
 					scenario: scenario ?? 'baseline',
 				}
 	const listeners = createListenerMap()
-	const workerPath = resolveWorkerPath()
+	const workerPath = resolveWorkerPath(appId)
 	const worker = (dependencies.createWorkerConnection ?? createWorkerConnection)(workerPath)
 	const pendingRequests = new Map<number, PendingRequest>()
 	let nextRequestId = 1

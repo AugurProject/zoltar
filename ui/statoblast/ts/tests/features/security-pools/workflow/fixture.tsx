@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'

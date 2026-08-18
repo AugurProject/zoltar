@@ -96,12 +96,16 @@ export async function initializeActiveEnvironment(location = window.location, de
             initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`;
         }
     }
+    const createSimulationBackendImpl = dependencies.createSimulationBackend ?? createSimulationBackend;
+    const simulationAppId = dependencies.appId ?? 'zoltar';
     const simulationBackend = savedStateId !== undefined && savedState !== undefined
-        ? await dependencies.createSimulationBackend({
+        ? await createSimulationBackendImpl({
+            appId: simulationAppId,
             savedState,
             savedStateId,
         })
-        : await dependencies.createSimulationBackend({
+        : await createSimulationBackendImpl({
+            appId: simulationAppId,
             ...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
             scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
         });

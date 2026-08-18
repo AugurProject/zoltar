@@ -32,13 +32,24 @@ function buildRoutingState(config: RoutingConfig): RoutingState {
 	return { config, routeByHash, hashByRoute, queryParametersByRoute }
 }
 
-let activeRouting: RoutingState | undefined
+declare global {
+	var __zoltarActiveRoutingState__: RoutingState | undefined
+}
+
+function getRoutingState(): RoutingState | undefined {
+	return globalThis.__zoltarActiveRoutingState__
+}
 
 export function installRouting(config: RoutingConfig) {
-	activeRouting = buildRoutingState(config)
+	globalThis.__zoltarActiveRoutingState__ = buildRoutingState(config)
+}
+
+export function resetRoutingForTesting() {
+	globalThis.__zoltarActiveRoutingState__ = undefined
 }
 
 function requireRouting(): RoutingState {
+	const activeRouting = getRoutingState()
 	if (activeRouting === undefined) throw new Error('Routing has not been installed. Call installRouting() during application bootstrap before reading routes.')
 	return activeRouting
 }

@@ -36,7 +36,7 @@ import {
 	parseOpenOracleFeePercentageInput,
 } from '../../../features/open-oracle/lib/openOracle.js'
 import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '../../../protocol/openOraclePricing.js'
-import { getDefaultOpenOracleCreateFormState } from '../../../../../statoblast/ts/features/markets/lib/marketForm.js'
+import { getDefaultOpenOracleCreateFormState } from '../../../lib/formDefaults.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../../../statoblast/ts/features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'

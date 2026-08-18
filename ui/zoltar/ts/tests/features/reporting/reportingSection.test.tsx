@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'

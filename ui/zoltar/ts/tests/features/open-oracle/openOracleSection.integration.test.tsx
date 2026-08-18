@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
