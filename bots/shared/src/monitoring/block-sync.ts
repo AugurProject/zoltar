@@ -22,12 +22,11 @@ function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
 }
 
 export function logRangeLimitError(error: unknown) {
-	const rateLimited = walkErrorCauses(error, current => 'code' in current && (current.code === 429 || current.code === '429' || current.code === -32_005 || current.code === '-32005'))
-	if (rateLimited) return true
 	return walkErrorCauses(error, current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
-		if (message.includes('http 400') || message.includes('http 413') || message.includes('http 429') || message.includes('range is too large')) return true
+		if (message.includes('http 413') || message.includes('range is too large')) return true
+		if (message.includes('response exceeds')) return true
 		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')
 		const mentionsExceeding = message.includes('limit') || message.includes('too many') || message.includes('exceed') || message.includes('too large') || message.includes('maximum') || message.includes('up to') || message.includes('more than')
 		return mentionsRangeCap && mentionsExceeding
@@ -35,20 +34,22 @@ export function logRangeLimitError(error: unknown) {
 }
 
 export async function fetchLogsWithAdaptiveRanges<Log>(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, maximumRange: bigint, fetchRange: (logRange: LogRange) => Promise<readonly Log[]>): Promise<Log[]> {
-	let range = maximumRange
-	if (range < 1n) throw new Error('maximumRange must be positive')
+	if (maximumRange < 1n) throw new Error('maximumRange must be positive')
 	const logs: Log[] = []
 	let fromBlock = cursor.nextBlock
+	let requestedBlocks = maximumRange
 	while (fromBlock <= head) {
-		const candidate = fromBlock + range - 1n
-		const toBlock = candidate < head ? candidate : head
+		const remaining = head - fromBlock + 1n
+		const attemptedBlocks = requestedBlocks < remaining ? requestedBlocks : remaining
+		const toBlock = fromBlock + attemptedBlocks - 1n
 		const logRange = { fromBlock, toBlock }
 		try {
 			logs.push(...(await fetchRange(logRange)))
 			fromBlock = toBlock + 1n
+			requestedBlocks = maximumRange
 		} catch (error) {
-			if (range > 1n && logRangeLimitError(error)) {
-				range = (range + 1n) / 2n
+			if (attemptedBlocks > 1n && logRangeLimitError(error)) {
+				requestedBlocks = (attemptedBlocks + 1n) / 2n
 				continue
 			}
 			throw new LogScanError(logRange, { cause: error })

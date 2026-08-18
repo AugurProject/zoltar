@@ -153,30 +153,34 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 		const heads = availableSettledValues(settledHeads)
 		if (heads.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery does not satisfy the configured RPC quorum requirement`)
 		const toBlock = heads.reduce((minimum, head) => (head < minimum ? head : minimum))
-		const outcomes = await settledQuorumValue(
-			`staged operation ${pending.operationId.toString()} blocks ${pending.queuedBlock.toString()}-${toBlock.toString()}`,
-			clients.map(async ({ client, endpoint }) => {
-				try {
-					const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: pending.queuedBlock }, toBlock, MAXIMUM_RECOVERY_LOG_RANGE, range =>
-						client.getLogs({ address: pending.coordinator, fromBlock: range.fromBlock, toBlock: range.toBlock }),
-					)
-					return {
-						endpoint,
-						value: logs.flatMap(log => {
-							const decoded = stagedOperationOutcome(log, pending.operationId)
-							if (decoded === undefined) return []
-							if (log.blockHash === undefined || log.blockNumber === undefined || log.transactionHash === undefined) throw new Error('Staged-operation outcome log is missing canonical identity')
-							return [{ ...decoded, blockHash: log.blockHash, blockNumber: log.blockNumber, transactionHash: log.transactionHash }]
-						}),
+		let outcome: (NonNullable<ReturnType<typeof stagedOperationOutcome>> & { blockHash: Hex; blockNumber: bigint; transactionHash: Hex }) | undefined
+		for (const range of stagedOperationRecoveryRanges(pending.queuedBlock, toBlock)) {
+			const outcomes = await settledQuorumValue(
+				`staged operation ${pending.operationId.toString()} blocks ${range.fromBlock.toString()}-${range.toBlock.toString()}`,
+				clients.map(async ({ client, endpoint }) => {
+					try {
+						const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAXIMUM_RECOVERY_LOG_RANGE, subRange =>
+							client.getLogs({ address: pending.coordinator, fromBlock: subRange.fromBlock, toBlock: subRange.toBlock }),
+						)
+						return {
+							endpoint,
+							value: logs.flatMap(log => {
+								const decoded = stagedOperationOutcome(log, pending.operationId)
+								if (decoded === undefined) return []
+								if (log.blockHash === undefined || log.blockNumber === undefined || log.transactionHash === undefined) throw new Error('Staged-operation outcome log is missing canonical identity')
+								return [{ ...decoded, blockHash: log.blockHash, blockNumber: log.blockNumber, transactionHash: log.transactionHash }]
+							}),
+						}
+					} catch (error) {
+						if (!(error instanceof LogScanError)) throw error
+						throw error.cause === undefined ? error : error.cause
 					}
-				} catch (error) {
-					if (!(error instanceof LogScanError)) throw error
-					throw error.cause === undefined ? error : error.cause
-				}
-			}),
-		)
-		if (outcomes.length > 1) throw new Error(`Coordinator returned multiple outcomes for staged operation ${pending.operationId.toString()}`)
-		const outcome = outcomes[0]
+				}),
+			)
+			if (outcomes.length > 1) throw new Error(`Coordinator returned multiple outcomes for staged operation ${pending.operationId.toString()}`)
+			outcome = outcomes[0]
+			if (outcome !== undefined) break
+		}
 		if (outcome === undefined) continue
 		if (outcome.operation !== 0n || outcome.operationId !== pending.operationId || typeof outcome.success !== 'boolean' || typeof outcome.errorMessage !== 'string') {
 			throw new Error(`Coordinator returned an invalid outcome for staged operation ${pending.operationId.toString()}`)

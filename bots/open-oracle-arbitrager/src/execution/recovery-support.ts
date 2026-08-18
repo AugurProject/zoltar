@@ -136,16 +136,21 @@ async function legacyReplacementAmounts(client: ReadClient, openOracle: Address,
 	if (position.entrySubmissionBlockNumber === undefined) return undefined
 	const reportId = BigInt(position.reportId)
 	let foundEntry = false
-	const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: BigInt(position.entrySubmissionBlockNumber) }, blockNumber, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range =>
-		client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] }),
-	))].sort(compareLogs)
-	for (const log of logs) {
-		if (!foundEntry) {
-			foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()
-			continue
+	let fromBlock = BigInt(position.entrySubmissionBlockNumber)
+	while (fromBlock <= blockNumber) {
+		const toBlock = fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n : blockNumber
+		const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range =>
+			client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] }),
+		))].sort(compareLogs)
+		for (const log of logs) {
+			if (!foundEntry) {
+				foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()
+				continue
+			}
+			const replacement = decodeOpenOracleStatePreimage(log.data, reportId)
+			return { amount1: replacement.game.currentAmount1, amount2: replacement.game.currentAmount2 }
 		}
-		const replacement = decodeOpenOracleStatePreimage(log.data, reportId)
-		return { amount1: replacement.game.currentAmount1, amount2: replacement.game.currentAmount2 }
+		fromBlock = toBlock + 1n
 	}
 	return undefined
 }
