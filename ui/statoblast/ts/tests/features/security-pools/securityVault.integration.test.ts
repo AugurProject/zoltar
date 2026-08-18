@@ -2,7 +2,10 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { approveErc20, depositRepToVaultToSecurityPool, loadErc20Allowance, loadErc20Balance, loadSecurityVaultDetails } from '../../../protocol/index.js'
+import { approveErc20 } from '../../../protocol/tokenActions.js'
+import { depositRepToVaultToSecurityPool } from '../../../protocol/securityVault.js'
+import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
+import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/deployment.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
 import { DAY, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from '../../protocol/index.js'
+import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from '../../protocol/truthAuctions.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')

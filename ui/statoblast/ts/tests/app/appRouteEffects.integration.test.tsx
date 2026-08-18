@@ -11,7 +11,6 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-installTestRouting()
 
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 
@@ -95,6 +94,7 @@ function UrlStateHarness() {
 	)
 }
 
+installTestRouting()
 describe('app route effects integration', () => {
 	test('loads linked security pools once while browsing market questions', async () => {
 		const dom = installDomEnvironment('http://localhost/#/zoltar')

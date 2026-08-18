@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadSecurityPoolMintCapacity, loadSecurityPoolPage } from '../../protocol/index.js'
+import { loadAllSecurityPools, loadSecurityPoolPage } from '../../protocol/securityPools.js'
+import { loadSecurityPoolMintCapacity } from '../../protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')

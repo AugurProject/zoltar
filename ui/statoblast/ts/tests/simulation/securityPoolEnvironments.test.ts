@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { loadAllSecurityPools, loadSecurityVaultDetails } from '../../protocol/index.js'
+import { loadAllSecurityPools, loadSecurityVaultDetails } from '../../protocol/securityPools.js'
 import type { SimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 

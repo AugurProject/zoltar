@@ -4,7 +4,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { applyStatoblastScenario } from '../simulation/statoblastScenarios.js'
+import { applyStatoblastScenario, installStatoblastScenarioProtocolForTesting } from '../simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/shared/ethereum'
 
@@ -574,7 +574,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			} as never
 		}),
 	}
-	mock.module('../protocol/index.js', () => protocolModule)
+	installStatoblastScenarioProtocolForTesting(protocolModule as never)
 
 	mock.module('@zoltar/ui-core-shared/simulation/clock.js', () => ({
 		advanceSimulationTime: async () => undefined,
@@ -706,6 +706,7 @@ const getDeploymentSteps = () => [ZOLTAR_SIMULATION_STEP] as const satisfies Rea
 describe('simulation bootstrap', () => {
 	afterEach(() => {
 		mock.restore()
+		installStatoblastScenarioProtocolForTesting(undefined)
 	})
 
 	test('predicts simulation token addresses from account nonces', () => {

@@ -1,6 +1,10 @@
+import * as protocol from '../protocol/index.js';
+type StatoblastScenarioProtocol = Pick<typeof protocol, 'approveErc20' | 'createChildUniverseFromSecurityPool' | 'createCompleteSetInSecurityPool' | 'createMarket' | 'createSecurityPool' | 'depositRepToVaultToSecurityPool' | 'forkZoltarWithOwnEscalation' | 'getDeploymentSteps' | 'loadAllSecurityPools' | 'loadForkAuctionDetails' | 'loadOracleManagerDetails' | 'loadOpenOracleReportDetails' | 'loadReportingDetails' | 'loadSecurityVaultDetails' | 'loadZoltarUniverseSummary' | 'migrateRepToZoltarFromSecurityPool' | 'reportOutcomeInSecurityPool' | 'requestOraclePrice' | 'settleOracleReport' | 'startTruthAuctionForSecurityPool' | 'submitTruthAuctionBid'>;
+export declare function installStatoblastScenarioProtocolForTesting(override: StatoblastScenarioProtocol | undefined): void;
 import { type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js';
 export type StatoblastScenario = 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction';
 export declare function getStatoblastScenarioLabel(scenario: StatoblastScenario): "Security pool" | "Security pool x2" | "Security pool x2 auction";
 export declare function getStatoblastScenarioDescription(scenario: StatoblastScenario): "One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths." | "Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions." | "Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.";
 export declare function applyStatoblastScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario, }: BootstrapScenarioApplyParameters): Promise<boolean>;
+export {};
 //# sourceMappingURL=statoblastScenarios.d.ts.map
