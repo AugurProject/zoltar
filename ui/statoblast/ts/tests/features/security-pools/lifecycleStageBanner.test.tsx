@@ -35,7 +35,7 @@ describe('LifecycleStageBanner', () => {
 		expect(document.body.querySelector('.lifecycle-stage-banner.flat.success')).not.toBeNull()
 		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner.flat')).not.toBeNull()
 
-		const cssSource = readFileSync('ui/css/index.css', 'utf8')
+		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
 		const baseFlatRuleIndex = cssSource.indexOf('.lifecycle-stage-banner.flat {')
 		const warningFlatRuleIndex = cssSource.indexOf('.warning-surface.lifecycle-stage-banner.flat {')
 		const criticalFlatRuleIndex = cssSource.indexOf('.lifecycle-stage-banner.flat.critical {')

@@ -11,6 +11,7 @@ import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 function createQuestionDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
@@ -44,6 +45,7 @@ function createChildUniverse(overrides: Partial<ZoltarChildUniverseSummary> = {}
 	}
 }
 
+installTestRouting()
 describe('ScalarDeploymentSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

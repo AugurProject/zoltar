@@ -8,7 +8,9 @@ import { SecurityPoolLink } from '../../../features/security-pools/components/Se
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { getSecurityPoolLinkHref } from '../../../features/security-pools/lib/securityPoolNavigation.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
+installTestRouting()
 describe('SecurityPoolLink', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

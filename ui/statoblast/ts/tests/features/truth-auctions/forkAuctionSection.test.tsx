@@ -10,6 +10,7 @@ import type { AccountState, ForkAuctionFormState, ReportingFormState } from '@zo
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 
@@ -243,6 +244,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 	}
 }
 
+installTestRouting()
 describe('ForkAuctionSection', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

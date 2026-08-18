@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { loadAllSecurityPools, loadSecurityVaultDetails } from '@zoltar/ui-zoltar/protocol/index.js'
+import { loadAllSecurityPools, loadSecurityVaultDetails } from '../../protocol/index.js'
 import type { SimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 
@@ -15,7 +15,7 @@ void describe('security-pool simulation backends', () => {
 	let securityPoolX2AuctionBackend: SimulationBackend
 
 	beforeAll(async () => {
-		const backends = await Promise.all([createBootstrappedSimulationBackendWithRetry('security-pool', 1), createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1), createBootstrappedSimulationBackendWithRetry('securitypoolx2-auction', 1)])
+		const backends = await Promise.all([createBootstrappedSimulationBackendWithRetry('security-pool', 1, 'statoblast'), createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast'), createBootstrappedSimulationBackendWithRetry('securitypoolx2-auction', 1, 'statoblast')])
 		const [nextSecurityPoolBackend, nextSecurityPoolX2Backend, nextSecurityPoolX2AuctionBackend] = backends
 		if (nextSecurityPoolBackend === undefined || nextSecurityPoolX2Backend === undefined || nextSecurityPoolX2AuctionBackend === undefined) {
 			throw new Error('Expected every seeded security-pool simulation backend')

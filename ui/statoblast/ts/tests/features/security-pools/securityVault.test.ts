@@ -19,7 +19,7 @@ import {
 	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 } from '../../../features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { loadSecurityVaultDetails } from '@zoltar/ui-zoltar/protocol/index.js'
+import { loadSecurityVaultDetails } from '../../../protocol/index.js'
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {

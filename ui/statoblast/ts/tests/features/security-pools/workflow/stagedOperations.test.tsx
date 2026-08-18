@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { createStagedOperationsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
+installTestRouting()
 describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const testDom = useSecurityPoolWorkflowSectionTestDom()
 

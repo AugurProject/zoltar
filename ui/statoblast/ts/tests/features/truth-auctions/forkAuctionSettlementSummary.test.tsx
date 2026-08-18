@@ -12,8 +12,9 @@ import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.j
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-zoltar/protocol/index.js')
+const actualContracts = await import('../../../protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
 const actualTruthAuctionBookHook = await import('../../../features/truth-auctions/hooks/useTruthAuctionBookData.js')
 const actualTruthAuctionSettlementHook = await import('../../../features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
@@ -33,7 +34,7 @@ let mockedSecurityPools: ListedSecurityPool[] = []
 let mockedTruthAuctionBookState: TruthAuctionBookHookState
 let mockedTruthAuctionSettlementState: TruthAuctionSettlementHookState
 
-mock.module('@zoltar/ui-zoltar/protocol/index.js', () => ({
+mock.module('../../../protocol/index.js', () => ({
 	...actualContracts,
 	loadAllSecurityPools: mock(async () => mockedSecurityPools),
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
@@ -299,6 +300,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 	}
 }
 
+installTestRouting()
 describe('ForkAuctionSection settlement summary', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

@@ -101,7 +101,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('keeps success and danger color rules specific enough for every collateralization container', () => {
-		const cssSource = readFileSync('ui/css/index.css', 'utf8')
+		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
 
 		for (const selector of ['.workflow-metric-grid strong.metric-value-success', '.workflow-question-grid strong.metric-value-success', '.workflow-vault-grid strong.metric-value-success', '.entity-metric strong.metric-value-success', '.selected-pool-context-grid strong.metric-value-success']) {
 			expect(cssSource).toContain(selector)

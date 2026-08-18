@@ -13,6 +13,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -138,6 +139,7 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 	}
 }
 
+installTestRouting()
 describe('SecurityPoolsOverviewSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

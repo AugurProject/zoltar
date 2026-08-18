@@ -9,6 +9,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 type UseSecurityPoolCreation = typeof import('../../../features/security-pools/hooks/useSecurityPoolCreation.js')['useSecurityPoolCreation']
 type UseSecurityPoolCreationState = ReturnType<UseSecurityPoolCreation>
@@ -62,7 +63,7 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 }
 
 function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
-	mock.module('@zoltar/ui-zoltar/protocol/index.js', () => ({
+	mock.module('../../../protocol/index.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
 		createSecurityPool:
 			createSecurityPool ??
@@ -104,6 +105,7 @@ function createHarness(useSecurityPoolCreation: UseSecurityPoolCreation, props: 
 	}
 }
 
+installTestRouting()
 describe('useSecurityPoolCreation', () => {
 	let cleanupDom: (() => void) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined

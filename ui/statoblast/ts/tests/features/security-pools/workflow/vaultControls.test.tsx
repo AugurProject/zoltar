@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createVaultControlsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
+installTestRouting()
 describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const testDom = useSecurityPoolWorkflowSectionTestDom()
 	const { setCleanup } = testDom

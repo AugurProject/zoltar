@@ -13,6 +13,7 @@ import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar/features/types.
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -79,6 +80,7 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 	}
 }
 
+installTestRouting()
 describe('SecurityPoolSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

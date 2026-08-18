@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { createForkWorkflowStateFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
+installTestRouting()
 describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 	const testDom = useSecurityPoolWorkflowSectionTestDom()
 

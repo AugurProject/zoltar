@@ -11,8 +11,9 @@ import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zol
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-zoltar/protocol/index.js')
+const actualContracts = await import('../../../protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
@@ -33,7 +34,7 @@ const loadAllSecurityPoolsMock = mock(async (_client: unknown, options?: { accou
 	return recoveredPoolsFactory()
 })
 
-mock.module('@zoltar/ui-zoltar/protocol/index.js', () => ({
+mock.module('../../../protocol/index.js', () => ({
 	...actualContracts,
 	loadAllSecurityPools: loadAllSecurityPoolsMock,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
@@ -274,6 +275,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 	}
 }
 
+installTestRouting()
 describe('ForkAuctionSection child pool recovery', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined

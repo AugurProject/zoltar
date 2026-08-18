@@ -9,6 +9,9 @@ import { useAppRouteEffects } from '../../app/useAppRouteEffects.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+
+installTestRouting()
 
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 

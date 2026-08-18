@@ -120,8 +120,8 @@ describe('CollateralizationCircle', () => {
 				if (chromiumPath === undefined) throw new Error('Chromium is required for the browser fit test')
 				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar#collateralization-circle-'))
 				try {
-					const tokensSource = readFileSync('ui/css/tokens.css', 'utf8')
-					const cssSource = readFileSync('ui/css/index.css', 'utf8')
+					const tokensSource = readFileSync('ui/coreShared/css/tokens.css', 'utf8')
+					const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
 					const htmlPath = join(temporaryDirectory, 'gauge-fit.html')
 					writeFileSync(
 						htmlPath,

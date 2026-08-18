@@ -574,7 +574,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			} as never
 		}),
 	}
-	mock.module('@zoltar/ui-zoltar/protocol/index.js', () => protocolModule)
+	mock.module('../protocol/index.js', () => protocolModule)
 
 	mock.module('@zoltar/ui-core-shared/simulation/clock.js', () => ({
 		advanceSimulationTime: async () => undefined,
@@ -695,7 +695,13 @@ function createBootstrapMemoryClient(
 }
 
 const applyScenario = (parameters: BootstrapScenarioApplyParameters) => applyStatoblastScenario(parameters)
-const getDeploymentSteps = () => [] as const satisfies ReadonlyArray<DeploymentStep>
+const ZOLTAR_SIMULATION_STEP: DeploymentStep = {
+	id: 'zoltar',
+	label: 'Zoltar',
+	address: getAddress('0x00000000000000000000000000000000000000a1'),
+	deploy: async () => ({ action: 'none', address: getAddress('0x00000000000000000000000000000000000000a1'), hash: '0x01' }) as never,
+}
+const getDeploymentSteps = () => [ZOLTAR_SIMULATION_STEP] as const satisfies ReadonlyArray<DeploymentStep>
 
 describe('simulation bootstrap', () => {
 	afterEach(() => {
@@ -828,6 +834,7 @@ describe('simulation bootstrap', () => {
 			}) as never
 
 		await bootstrapSimulationChain({
+			applyScenario,
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
@@ -863,6 +870,7 @@ describe('simulation bootstrap', () => {
 
 		await expect(
 			bootstrapSimulationChain({
+				applyScenario,
 				accounts: [],
 				createReadClient: () => ({ kind: 'read-client' }) as never,
 				createWriteClient,
@@ -892,6 +900,7 @@ describe('simulation bootstrap', () => {
 
 		await expect(
 			bootstrapSimulationChain({
+				applyScenario,
 				accounts: [MOCK_PRIMARY_ACCOUNT],
 				createReadClient: () => ({ kind: 'read-client' }) as never,
 				createWriteClient,
@@ -923,6 +932,7 @@ describe('simulation bootstrap', () => {
 			}) as never
 
 		await bootstrapSimulationChain({
+			applyScenario,
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({ kind: 'read-client' }) as never,
 			createWriteClient,
@@ -965,6 +975,7 @@ describe('simulation bootstrap', () => {
 		try {
 			await expect(
 				bootstrapSimulationChain({
+					applyScenario,
 					accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 					createReadClient: () => ({}) as never,
 					createWriteClient: createWriteClient,
@@ -989,10 +1000,11 @@ describe('simulation bootstrap', () => {
 			profile,
 		})
 
-		const { bootstrapSimulationChain } = await import(`../../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+		const { bootstrapSimulationChain } = await import(`@zoltar/ui-core-shared/simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
 		const progressCalls: string[] = []
 		await bootstrapSimulationChain({
+			applyScenario,
 			accounts: [MOCK_PRIMARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
@@ -1024,9 +1036,10 @@ describe('simulation bootstrap', () => {
 			scenario: 'securitypoolx2',
 			profile,
 		})
-		const { bootstrapSimulationChain } = await import(`../../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+		const { bootstrapSimulationChain } = await import(`@zoltar/ui-core-shared/simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
 		await bootstrapSimulationChain({
+			applyScenario,
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,
@@ -1059,9 +1072,10 @@ describe('simulation bootstrap', () => {
 			scenario: 'securitypoolx2-auction',
 			profile,
 		})
-		const { bootstrapSimulationChain } = await import(`../../simulation/bootstrap.js?case=${crypto.randomUUID()}`)
+		const { bootstrapSimulationChain } = await import(`@zoltar/ui-core-shared/simulation/bootstrap.js?case=${crypto.randomUUID()}`)
 
 		await bootstrapSimulationChain({
+			applyScenario,
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			createReadClient: () => ({}) as never,
 			createWriteClient,

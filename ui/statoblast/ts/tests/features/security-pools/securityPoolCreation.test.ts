@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { createSecurityPool } from '@zoltar/ui-zoltar/protocol/index.js'
+import { createSecurityPool } from '../../../protocol/index.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
