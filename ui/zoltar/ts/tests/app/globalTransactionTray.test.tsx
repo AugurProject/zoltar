@@ -113,7 +113,7 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const identifierButtons = within(document.body).getAllByRole('button', { name: `Copy identifier ${questionId}` })
-		expect(identifierButtons).toHaveLength(3)
+		expect(identifierButtons).toHaveLength(2)
 		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(questionId)
 	})
 

@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { loadAllSecurityPools, loadSecurityVaultDetails } from '@zoltar/ui-zoltar/protocol/index.js'
 import type { SimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
@@ -35,6 +36,7 @@ void describe('security-pool simulation backends', () => {
 		if (securityPoolBackend !== undefined) await securityPoolBackend.dispose()
 		if (securityPoolX2Backend !== undefined) await securityPoolX2Backend.dispose()
 		if (securityPoolX2AuctionBackend !== undefined) await securityPoolX2AuctionBackend.dispose()
+		resetActiveEnvironmentForTesting()
 	}, 30_000)
 
 	void test('bootstraps seeded security-pool scenarios without reverting', async () => {

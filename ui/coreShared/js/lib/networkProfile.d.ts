@@ -22,6 +22,9 @@ export declare const SEPOLIA_NETWORK_PROFILE: NetworkProfile;
 export declare function getPublicNetworkProfile(network: string | undefined): NetworkProfile;
 export declare function getPublicNetworkProfileForChainId(chainId: string | undefined): NetworkProfile | undefined;
 export declare function getNetworkSwitchTarget(profile: NetworkProfile): string;
+declare global {
+    var __zoltarRuntimeNetworkProfile__: NetworkProfile | undefined;
+}
 export declare function getRuntimeNetworkProfile(): NetworkProfile;
 export declare function setRuntimeNetworkProfile(profile: NetworkProfile): void;
 export declare function resetRuntimeNetworkProfile(): void;

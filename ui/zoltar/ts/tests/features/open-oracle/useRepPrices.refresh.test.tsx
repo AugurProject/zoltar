@@ -9,6 +9,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installRepPriceQuoterForTesting } from '../../../features/open-oracle/hooks/useRepPrices.js'
 
 type UseRepPrices = typeof import('../../../features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
 
@@ -55,6 +56,7 @@ describe('useRepPrices refresh races', () => {
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 		mock.restore()
+		installRepPriceQuoterForTesting(undefined)
 		resetActiveEnvironmentForTesting()
 	})
 
@@ -67,8 +69,7 @@ describe('useRepPrices refresh races', () => {
 		let ethCallCount = 0
 		let usdcCallCount = 0
 
-		mock.module('../../../protocol/uniswapQuoter.js', () => ({
-			ETH_ADDRESS: getAddress('0x00000000000000000000000000000000000000f1'),
+		installRepPriceQuoterForTesting({
 			getRepAddress: () => repAddress,
 			isRepPricingEnabled: () => true,
 			quoteBestExactInputWithSource: mock(async () => {
@@ -88,7 +89,7 @@ describe('useRepPrices refresh races', () => {
 				if (usdcCallCount === 3) return await newUsdcQuote.promise
 				throw new Error('Unexpected REP/USDC quote call')
 			}),
-		}))
+		})
 		installActiveEnvironmentForTesting({
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
@@ -151,8 +152,7 @@ describe('useRepPrices refresh races', () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000e2')
 		let ethCallCount = 0
 		let usdcCallCount = 0
-		mock.module('../../../protocol/uniswapQuoter.js', () => ({
-			ETH_ADDRESS: getAddress('0x00000000000000000000000000000000000000f2'),
+		installRepPriceQuoterForTesting({
 			getRepAddress: () => repAddress,
 			isRepPricingEnabled: () => true,
 			quoteBestExactInputWithSource: mock(async () => {
@@ -167,7 +167,7 @@ describe('useRepPrices refresh races', () => {
 				if (usdcCallCount === 1) return { amountOut: 10n, source: { poolUrl: undefined, protocol: 'mock' as const } }
 				throw new Error('No pool is available for the REP/USDC quote')
 			}),
-		}))
+		})
 		installActiveEnvironmentForTesting({
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),

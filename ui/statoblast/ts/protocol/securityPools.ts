@@ -15,7 +15,7 @@ import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, 
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar/protocol/core.js'
 import { requireForkDataView } from '@zoltar/ui-zoltar/protocol/forkData.js'
 import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from '@zoltar/ui-zoltar/protocol/helpers.js'
-import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js'
+import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
 

@@ -40,6 +40,7 @@ import { getDefaultOpenOracleCreateFormState } from '../../../lib/formDefaults.j
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../../../statoblast/ts/features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
+import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
 import type { WriteContractClient } from '../../../protocol/core.js'
@@ -215,6 +216,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	beforeEach(() => {
+		resetActiveEnvironmentForTesting()
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		installInjectedEthereum(mockWindow)

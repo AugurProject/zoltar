@@ -2,7 +2,7 @@ import type { Address, Hash, Hex } from '@zoltar/shared/ethereum'
 import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
 export type { ReadClient, WriteClient } from '../lib/clients.js'
 
-export type DeploymentStepId =
+export type ZoltarDeploymentStepId =
 	| 'proxyDeployer'
 	| 'deploymentStatusOracle'
 	| 'weth'
@@ -16,10 +16,8 @@ export type DeploymentStepId =
 	| 'zoltar'
 	| 'shareTokenFactory'
 	| 'priceOracleManagerAndOperatorQueuerFactory'
-	| 'securityPoolForker'
-	| 'escalationGameClaimDelegate'
-	| 'escalationGameFactory'
-	| 'securityPoolFactory'
+
+export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type LiquidationApprovalDetails = {

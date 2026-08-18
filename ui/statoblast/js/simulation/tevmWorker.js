@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js';
+import { getDeploymentSteps } from '../protocol/deployment.js';
 import { getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js';
 import { applyStatoblastScenario } from './statoblastScenarios.js';
 const dependencies = {

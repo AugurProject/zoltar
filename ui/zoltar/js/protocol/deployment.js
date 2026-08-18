@@ -2,7 +2,7 @@ import { encodeDeployData, getAddress, keccak256 } from '@zoltar/shared/ethereum
 import { ABIS } from '@zoltar/ui-core-shared/abis.js';
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses';
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate, peripherals_Multicall3_Multicall3, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_WETH9_WETH9, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, } from '@zoltar/ui-core-shared/contractArtifact.js';
-import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getEscalationGameFactoryByteCode, getInfraContractAddresses, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode, } from './deploymentHelpers.js';
+import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getInfraContractAddresses, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode, } from './deploymentHelpers.js';
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt } from './core.js';
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js';
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js';
@@ -262,10 +262,6 @@ function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfi
         addresses.zoltar,
         addresses.shareTokenFactory,
         addresses.priceOracleManagerAndOperatorQueuerFactory,
-        addresses.securityPoolForker,
-        addresses.escalationGameClaimDelegate,
-        addresses.escalationGameFactory,
-        addresses.securityPoolFactory,
     ];
 }
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
@@ -498,43 +494,6 @@ export function getDeploymentSteps(profile = getRuntimeNetworkProfile(), wait) {
             address: addresses.priceOracleManagerAndOperatorQueuerFactory,
             dependencies: [...(profile.id === 'sepolia' ? ['weth'] : []), 'proxyDeployer'],
             deploy: async (client) => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress)),
-        },
-        {
-            id: 'securityPoolForker',
-            label: 'Security Pool Forker',
-            address: addresses.securityPoolForker,
-            dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
-            deploy: async (client) => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
-        },
-        {
-            id: 'escalationGameClaimDelegate',
-            label: 'Escalation Claim Checkpoint Delegate',
-            address: addresses.escalationGameClaimDelegate,
-            dependencies: ['proxyDeployer'],
-            deploy: async (client) => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
-        },
-        {
-            id: 'escalationGameFactory',
-            label: 'Escalation Game Factory',
-            address: addresses.escalationGameFactory,
-            dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
-            deploy: async (client) => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
-        },
-        {
-            id: 'securityPoolFactory',
-            label: 'Security Pool Factory',
-            address: addresses.securityPoolFactory,
-            dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
-            deploy: async (client) => await deployViaProxy(client, getSecurityPoolFactoryByteCode({
-                escalationGameFactory: addresses.escalationGameFactory,
-                openOracle: addresses.openOracle,
-                priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
-                securityPoolForker: addresses.securityPoolForker,
-                shareTokenFactory: addresses.shareTokenFactory,
-                uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
-                zoltar: addresses.zoltar,
-                zoltarQuestionData: addresses.zoltarQuestionData,
-            })),
         },
     ];
     return steps.map(step => ({

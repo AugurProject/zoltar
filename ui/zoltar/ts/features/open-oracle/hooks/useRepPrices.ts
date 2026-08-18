@@ -6,6 +6,27 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../../../protocol/uniswapQuoter.js'
+
+type RepPriceQuoter = {
+	getRepAddress: typeof getRepAddress
+	isRepPricingEnabled: typeof isRepPricingEnabled
+	quoteBestExactInputWithSource: typeof quoteBestExactInputWithSource
+	quoteBestV3ExactInputWithSource: typeof quoteBestV3ExactInputWithSource
+	quoteRepForUsdcV4WithSource: typeof quoteRepForUsdcV4WithSource
+}
+
+declare global {
+	// eslint-disable-next-line no-var
+	var __zoltarRepPriceQuoterOverride__: RepPriceQuoter | undefined
+}
+
+export function installRepPriceQuoterForTesting(quoter: RepPriceQuoter | undefined) {
+	globalThis.__zoltarRepPriceQuoterOverride__ = quoter
+}
+
+function getRepPriceQuoter(): RepPriceQuoter {
+	return globalThis.__zoltarRepPriceQuoterOverride__ ?? { getRepAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource }
+}
 import type { RepPriceFailure } from '../../types.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
@@ -80,14 +101,15 @@ export function resetRepPriceCacheForTesting() {
 }
 
 async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
-	const repAddress = getRepAddress()
+	const quoter = getRepPriceQuoter()
+	const repAddress = quoter.getRepAddress()
 	try {
-		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
+		const { amountOut, source } = await quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch (error) {
 		if (!isRecoverableQuoteError(error)) throw error
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
-		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
+		const { amountOut, source } = await quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
@@ -117,7 +139,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ATTO_REP)])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP)])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {
@@ -146,7 +168,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 			nextCachedRepPrices.repUsdcSource = repUsdcResult.value.source.protocol === 'mock' ? 'mock' : 'v4'
 			nextCachedRepPrices.repUsdcSourceUrl = repUsdcResult.value.source.poolUrl
 			hasNextCachedRepPrices = true
-		} else if (!isRepPricingEnabled()) {
+		} else if (!getRepPriceQuoter().isRepPricingEnabled()) {
 			nextCachedRepPrices.repUsdcCachedAtMs = Date.now()
 			nextCachedRepPrices.repUsdcPrice = undefined
 			nextCachedRepPrices.repUsdcSource = undefined

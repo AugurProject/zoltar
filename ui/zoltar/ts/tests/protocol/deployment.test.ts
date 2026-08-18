@@ -317,8 +317,8 @@ describe('contract deployment internals', () => {
 		const steps = createDeploymentSteps()
 		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
-		const factoryStep = steps.find(step => step.id === 'securityPoolFactory')
-		if (factoryStep === undefined) throw new Error('Expected securityPoolFactory step')
+		const factoryStep = steps.find(step => step.id === 'openOracle')
+		if (factoryStep === undefined) throw new Error('Expected openOracle step')
 
 		let capturedProxyDeployData: `0x${string}` | undefined
 		let capturedFactoryData: `0x${string}` | undefined

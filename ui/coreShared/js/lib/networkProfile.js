@@ -89,15 +89,14 @@ export function getPublicNetworkProfileForChainId(chainId) {
 export function getNetworkSwitchTarget(profile) {
     return profile.id === 'mainnet' ? 'Ethereum mainnet' : profile.displayName;
 }
-let runtimeNetworkProfile = MAINNET_NETWORK_PROFILE;
 export function getRuntimeNetworkProfile() {
-    return runtimeNetworkProfile;
+    return globalThis.__zoltarRuntimeNetworkProfile__ ?? MAINNET_NETWORK_PROFILE;
 }
 export function setRuntimeNetworkProfile(profile) {
-    runtimeNetworkProfile = profile;
+    globalThis.__zoltarRuntimeNetworkProfile__ = profile;
 }
 export function resetRuntimeNetworkProfile() {
-    runtimeNetworkProfile = MAINNET_NETWORK_PROFILE;
+    globalThis.__zoltarRuntimeNetworkProfile__ = undefined;
 }
 export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }) {
     return {

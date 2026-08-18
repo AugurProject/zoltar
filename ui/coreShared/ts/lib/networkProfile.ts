@@ -112,18 +112,20 @@ export function getNetworkSwitchTarget(profile: NetworkProfile) {
 	return profile.id === 'mainnet' ? 'Ethereum mainnet' : profile.displayName
 }
 
-let runtimeNetworkProfile: NetworkProfile = MAINNET_NETWORK_PROFILE
+declare global {
+	var __zoltarRuntimeNetworkProfile__: NetworkProfile | undefined
+}
 
 export function getRuntimeNetworkProfile() {
-	return runtimeNetworkProfile
+	return globalThis.__zoltarRuntimeNetworkProfile__ ?? MAINNET_NETWORK_PROFILE
 }
 
 export function setRuntimeNetworkProfile(profile: NetworkProfile) {
-	runtimeNetworkProfile = profile
+	globalThis.__zoltarRuntimeNetworkProfile__ = profile
 }
 
 export function resetRuntimeNetworkProfile() {
-	runtimeNetworkProfile = MAINNET_NETWORK_PROFILE
+	globalThis.__zoltarRuntimeNetworkProfile__ = undefined
 }
 
 export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }: { genesisRepTokenAddress: Address; wethAddress: Address }): NetworkProfile {

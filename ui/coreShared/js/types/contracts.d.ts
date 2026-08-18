@@ -1,7 +1,8 @@
 import type { Address, Hash, Hex } from '@zoltar/shared/ethereum';
 import type { WriteClient as ClientsWriteClient } from '../lib/clients.js';
 export type { ReadClient, WriteClient } from '../lib/clients.js';
-export type DeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'weth' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory' | 'securityPoolForker' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory';
+export type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'weth' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory';
+export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory';
 export type MarketType = 'binary' | 'categorical' | 'scalar';
 export type LiquidationApprovalDetails = {
     registryAddress: Address;

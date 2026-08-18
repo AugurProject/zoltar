@@ -138,10 +138,6 @@ void describe('deployment helpers', () => {
 			'zoltar',
 			'shareTokenFactory',
 			'priceOracleManagerAndOperatorQueuerFactory',
-			'securityPoolForker',
-			'escalationGameClaimDelegate',
-			'escalationGameFactory',
-			'securityPoolFactory',
 		])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')

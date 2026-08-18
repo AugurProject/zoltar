@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar/protocol/index.js'
 import { getDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js'
+import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
@@ -21,6 +22,7 @@ void describe('deployed simulation backend', () => {
 
 	afterAll(async () => {
 		if (deployedBackend !== undefined) await deployedBackend.dispose()
+		resetActiveEnvironmentForTesting()
 	}, 30_000)
 
 	void test('keeps the deployed-scenario fork threshold in sync after minting REP', async () => {
@@ -53,5 +55,6 @@ void describe('deployed simulation backend', () => {
 		expect(deployedBackend.currentScenario).toBe('deployed')
 		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(true)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed)).toBe(true)
+		expect(deploymentSnapshot.deploymentStatuses.some(step => step.id === 'securityPoolFactory')).toBe(false)
 	}, 30_000)
 })

@@ -1,0 +1,161 @@
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js';
+import { encodeDeployData, keccak256 } from '@zoltar/shared/ethereum';
+import { getDeploymentSteps as getZoltarDeploymentSteps } from '@zoltar/ui-zoltar/protocol/deployment.js';
+import { getInfraContractAddresses, getEscalationGameFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js';
+import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js';
+import { peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '@zoltar/ui-core-shared/contractArtifact.js';
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses';
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js';
+export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/deployment.js';
+export function getDeploymentSteps(profile = getRuntimeNetworkProfile(), wait) {
+    const addresses = getInfraContractAddresses(profile);
+    return [
+        ...getZoltarDeploymentSteps(profile, wait),
+        {
+            id: 'securityPoolForker',
+            label: 'Security Pool Forker',
+            address: addresses.securityPoolForker,
+            dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
+            deploy: async (client) => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
+        },
+        {
+            id: 'escalationGameClaimDelegate',
+            label: 'Escalation Claim Checkpoint Delegate',
+            address: addresses.escalationGameClaimDelegate,
+            dependencies: ['proxyDeployer'],
+            deploy: async (client) => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
+        },
+        {
+            id: 'escalationGameFactory',
+            label: 'Escalation Game Factory',
+            address: addresses.escalationGameFactory,
+            dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
+            deploy: async (client) => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
+        },
+        {
+            id: 'securityPoolFactory',
+            label: 'Security Pool Factory',
+            address: addresses.securityPoolFactory,
+            dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
+            deploy: async (client) => await deployViaProxy(client, getSecurityPoolFactoryByteCode({
+                escalationGameFactory: addresses.escalationGameFactory,
+                openOracle: addresses.openOracle,
+                priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
+                securityPoolForker: addresses.securityPoolForker,
+                shareTokenFactory: addresses.shareTokenFactory,
+                uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+                zoltar: addresses.zoltar,
+                zoltarQuestionData: addresses.zoltarQuestionData,
+            })),
+        },
+    ];
+}
+async function deployViaProxy(client, bytecode) {
+    const hash = await client.sendTransaction({
+        to: PROXY_DEPLOYER_ADDRESS,
+        data: bytecode,
+    });
+    const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash);
+    return resolvedHash;
+}
+async function waitForSubmittedTransactionReceipt(client, hash) {
+    const { waitForSubmittedTransactionReceipt: waitReceipt } = await import('@zoltar/ui-zoltar/protocol/core.js');
+    return await waitReceipt(client, hash);
+}
+function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
+    const addresses = getInfraContractAddresses(profile);
+    return [
+        PROXY_DEPLOYER_ADDRESS,
+        ...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []),
+        addresses.multicall3,
+        addresses.uniformPriceDualCapBatchAuctionFactory,
+        addresses.scalarOutcomes,
+        addresses.securityPoolUtils,
+        addresses.openOracle,
+        addresses.zoltarQuestionData,
+        addresses.zoltar,
+        addresses.shareTokenFactory,
+        addresses.priceOracleManagerAndOperatorQueuerFactory,
+        addresses.securityPoolForker,
+        addresses.escalationGameClaimDelegate,
+        addresses.escalationGameFactory,
+        addresses.securityPoolFactory,
+    ];
+}
+function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
+    return encodeDeployData({
+        abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+        bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
+        args: [getDeploymentStatusOracleStepAddresses(profile)],
+    });
+}
+function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) {
+    return createDeploymentStatusOracleAddressHelper({
+        deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
+        proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+        zeroSalt: ZERO_SALT,
+    }).getDeploymentStatusOracleAddress();
+}
+async function loadDeploymentStatusOracleMask(client) {
+    return BigInt(await client.readContract({
+        abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+        functionName: 'getDeploymentMask',
+        address: getDeploymentStatusOracleAddress(),
+        args: [],
+    }));
+}
+function getDeploymentStatusSnapshot(steps, deployedMask, deploymentStatusOracleDeployed) {
+    let maskIndex = 0n;
+    const deploymentStatuses = steps.map(step => {
+        if (step.id === 'deploymentStatusOracle')
+            return { ...step, deployed: deploymentStatusOracleDeployed };
+        const deployed = (deployedMask & (1n << maskIndex)) !== 0n;
+        maskIndex += 1n;
+        return { ...step, deployed };
+    });
+    return {
+        augurStatoblastDeployed: deploymentStatuses.every(step => step.deployed),
+        deploymentStatuses,
+    };
+}
+function assertStepRuntimeCode(step, code) {
+    if (step.trustedSimulationCodePresence)
+        return true;
+    if (code === undefined || code === '0x')
+        return false;
+    if (step.expectedRuntimeCodeHash === undefined)
+        throw new Error(`Exact runtime-code verification is unavailable for deployment step ${step.id} on the active network`);
+    if (keccak256(code) !== step.expectedRuntimeCodeHash)
+        throw new Error(`Unexpected runtime code for ${step.id} at ${step.address}`);
+    return true;
+}
+export async function loadDeploymentStatusOracleSnapshot(client) {
+    const profile = getRuntimeNetworkProfile();
+    const steps = getDeploymentSteps(profile);
+    const oracleAddress = getDeploymentStatusOracleAddress(profile);
+    const oracleCode = await client.getCode({ address: oracleAddress });
+    if (profile.id === 'simulation') {
+        if (oracleCode === undefined || oracleCode === '0x') {
+            const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS });
+            return getDeploymentStatusSnapshot(steps, proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false);
+        }
+        return getDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMask(client), true);
+    }
+    const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle');
+    const proxyStep = steps.find(step => step.id === 'proxyDeployer');
+    if (oracleStep === undefined || proxyStep === undefined)
+        throw new Error('Deployment plan is missing required verification steps');
+    if (!assertStepRuntimeCode(oracleStep, oracleCode)) {
+        const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS });
+        const proxyDeployerDeployed = assertStepRuntimeCode(proxyStep, proxyDeployerCode);
+        return getDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false);
+    }
+    const snapshot = getDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMask(client), true);
+    await Promise.all(snapshot.deploymentStatuses.map(async (step) => {
+        if (!step.deployed)
+            return;
+        assertStepRuntimeCode(step, await client.getCode({ address: step.address }));
+    }));
+    return snapshot;
+}
+//# sourceMappingURL=deployment.js.map
