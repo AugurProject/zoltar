@@ -1,10 +1,9 @@
 import { expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { createSystemDeploymentGate, systemDeploymentStatus } from '#core/deployment-gate'
 
-const zoltar = getAddress('0x0000000000000000000000000000000000000001')
-const securityPoolFactory = getAddress('0x0000000000000000000000000000000000000002')
-const weth = getAddress('0x0000000000000000000000000000000000000003')
+const zoltar = '0x0000000000000000000000000000000000000001' as const
+const securityPoolFactory = '0x0000000000000000000000000000000000000002' as const
+const weth = '0x0000000000000000000000000000000000000003' as const
 
 test('stops deployment checks at the first contract without runtime bytecode', async () => {
 	const queried: string[] = []
