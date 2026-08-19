@@ -14,13 +14,13 @@ import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
+export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, deploymentCompleteHref, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
 	const deploymentStatusReasonId = useId()
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
 	const deploymentComplete = deploymentStateReady && !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount
-	const questionsHref = buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
+	const completedHref = deploymentCompleteHref ?? buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
 	const deployNextAvailability = deploymentStateReady
 		? getDeployNextMissingAvailability({
 				accountAddress,
@@ -69,8 +69,8 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentS
 				title={deploymentCopy.deterministicContractDeployment}
 				description={deploymentCopy.deploymentOverviewDetail}
 				actions={
-					deploymentComplete ? (
-						<a className='button-link' href={questionsHref}>
+					deploymentComplete && deploymentComplete !== undefined ? (
+						<a className='button-link' href={completedHref}>
 							{deploymentCopy.browseQuestions}
 						</a>
 					) : (

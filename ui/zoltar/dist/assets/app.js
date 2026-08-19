@@ -28253,13 +28253,13 @@ function writeOpenOracleReportIdQueryParam(search, reportId) {
 }
 
 // ui/zoltar/ts/features/deployment/components/DeploymentRouteContent.tsx
-function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }) {
+function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, deploymentCompleteHref, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }) {
   const deploymentStatusReasonId = g2();
   const nextMissingStep = findNextDeployableStep(deploymentStatuses);
   const deployedContractCount = deploymentStatuses.filter((step) => step.deployed).length;
   const totalContractCount = deploymentStatuses.length;
   const deploymentComplete = deploymentStateReady && !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount;
-  const questionsHref = buildRouteHref(getRouteHash("zoltar"), writeZoltarViewQueryParam(getTopLevelRouteSearch("zoltar"), "questions"));
+  const completedHref = deploymentCompleteHref ?? buildRouteHref(getRouteHash("zoltar"), writeZoltarViewQueryParam(getTopLevelRouteSearch("zoltar"), "questions"));
   const deployNextAvailability = deploymentStateReady ? getDeployNextMissingAvailability({
     accountAddress,
     busyStepId,
@@ -28315,9 +28315,9 @@ function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateRea
         eyebrow: deploy,
         title: deterministicContractDeployment,
         description: deploymentOverviewDetail,
-        actions: deploymentComplete ? /* @__PURE__ */ u2("a", {
+        actions: deploymentComplete && deploymentComplete !== undefined ? /* @__PURE__ */ u2("a", {
           className: "button-link",
-          href: questionsHref,
+          href: completedHref,
           children: browseQuestions2
         }, undefined, false, undefined, this) : /* @__PURE__ */ u2(TransactionActionButton, {
           disabledReasonElementId: deploymentStateReady ? undefined : deploymentStatusReasonId,
@@ -40261,5 +40261,5 @@ installRouting({
 });
 mountApp({ root: () => _(App, {}) });
 
-//# debugId=6CE6BFF2ECE4415964756E2164756E21
+//# debugId=845387E35A904BB464756E2164756E21
 //# sourceMappingURL=app.js.map

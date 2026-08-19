@@ -107,6 +107,7 @@ for (const appId of UI_APP_IDS) {
 		expect(appBundle).not.toContain('./vendor/')
 		expect(appBundle).not.toContain('./js/')
 		expect(appBundle).toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
+		expect(appBundle).toContain('"/assets/"')
 		expect(workerBundle).not.toContain('./vendor/')
 		expect(workerBundle).not.toContain('./js/')
 		expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)

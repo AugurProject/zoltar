@@ -38172,13 +38172,13 @@ function writeOpenOracleReportIdQueryParam(search, reportId) {
 }
 
 // ui/zoltar/js/features/deployment/components/DeploymentRouteContent.js
-function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }) {
+function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, deploymentCompleteHref, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }) {
   const deploymentStatusReasonId = g2();
   const nextMissingStep = findNextDeployableStep(deploymentStatuses);
   const deployedContractCount = deploymentStatuses.filter((step) => step.deployed).length;
   const totalContractCount = deploymentStatuses.length;
   const deploymentComplete = deploymentStateReady && !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount;
-  const questionsHref = buildRouteHref(getRouteHash("zoltar"), writeZoltarViewQueryParam(getTopLevelRouteSearch("zoltar"), "questions"));
+  const completedHref = deploymentCompleteHref ?? buildRouteHref(getRouteHash("zoltar"), writeZoltarViewQueryParam(getTopLevelRouteSearch("zoltar"), "questions"));
   const deployNextAvailability = deploymentStateReady ? getDeployNextMissingAvailability({
     accountAddress,
     busyStepId,
@@ -38201,7 +38201,7 @@ function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateRea
     deploymentStatusNotice = u2("p", { id: deploymentStatusReasonId, className: "detail", children: u2(LoadingText, { children: loadingDeploymentStatus }) });
   else if (!deploymentStateReady)
     deploymentStatusNotice = u2(k, { children: [u2("p", { id: deploymentStatusReasonId, className: "detail", children: deploymentStatusUnavailableReason }), u2(ErrorNotice, { message: deploymentStatusError }), deploymentStatusError === undefined ? undefined : u2("div", { className: "actions", children: u2("button", { className: "secondary", type: "button", onClick: onRetryDeploymentStatus, children: retry }) })] });
-  return u2(k, { children: [u2(RouteHeader, { className: "deployment-route-header", eyebrow: deploy, title: deterministicContractDeployment, description: deploymentOverviewDetail, actions: deploymentComplete ? u2("a", { className: "button-link", href: questionsHref, children: browseQuestions }) : u2(TransactionActionButton, { disabledReasonElementId: deploymentStateReady ? undefined : deploymentStatusReasonId, idleLabel: buttonContent, pendingLabel: deploying, onClick: onDeployNextMissing, pending: deployNextMissingPending, availability: deployNextAvailability, showDisabledReason: deploymentStateReady }), summary: u2(DataGrid, { columns: "auto", children: [u2("div", { children: [u2("p", { className: "detail", children: contractsDeployed }), u2("strong", { children: u2(LoadableValue, { loading: isLoadingDeploymentStatuses, placeholder: loadingDeploymentStatus, children: deploymentStateReady ? `${deployedContractCount.toString()} / ${totalContractCount.toString()}` : unavailable }) })] }), u2("div", { children: [u2("p", { className: "detail", children: nextDeployable }), u2("strong", { children: nextDeployableContent })] })] }) }), deploymentStatusNotice, u2("details", { className: "deployment-contract-details", children: [u2("summary", { children: u2("span", { children: allContracts }) }), u2("div", { className: "workflow-stack deployment-contract-groups", children: deploymentSections.map((section) => {
+  return u2(k, { children: [u2(RouteHeader, { className: "deployment-route-header", eyebrow: deploy, title: deterministicContractDeployment, description: deploymentOverviewDetail, actions: deploymentComplete && deploymentComplete !== undefined ? u2("a", { className: "button-link", href: completedHref, children: browseQuestions }) : u2(TransactionActionButton, { disabledReasonElementId: deploymentStateReady ? undefined : deploymentStatusReasonId, idleLabel: buttonContent, pendingLabel: deploying, onClick: onDeployNextMissing, pending: deployNextMissingPending, availability: deployNextAvailability, showDisabledReason: deploymentStateReady }), summary: u2(DataGrid, { columns: "auto", children: [u2("div", { children: [u2("p", { className: "detail", children: contractsDeployed }), u2("strong", { children: u2(LoadableValue, { loading: isLoadingDeploymentStatuses, placeholder: loadingDeploymentStatus, children: deploymentStateReady ? `${deployedContractCount.toString()} / ${totalContractCount.toString()}` : unavailable }) })] }), u2("div", { children: [u2("p", { className: "detail", children: nextDeployable }), u2("strong", { children: nextDeployableContent })] })] }) }), deploymentStatusNotice, u2("details", { className: "deployment-contract-details", children: [u2("summary", { children: u2("span", { children: allContracts }) }), u2("div", { className: "workflow-stack deployment-contract-groups", children: deploymentSections.map((section) => {
     const allDeployed2 = section.steps.length > 0 && section.steps.every((step) => step.deployed);
     const sectionContent = u2(DeploymentSection, { title: section.title, completedGroup: allDeployed2, steps: section.steps, allSteps: deploymentStatuses, accountAddress, isOnActiveAppChain, busyStepId, deploymentStateReady, deploymentStatusReasonElementId: deploymentStateReady ? undefined : deploymentStatusReasonId, onDeploy });
     return u2("div", { children: sectionContent }, section.title);
@@ -62005,6 +62005,7 @@ function App() {
     deploymentStatuses,
     isLoadingDeploymentStatuses,
     isOnActiveAppChain,
+    deploymentCompleteHref: buildRouteHref(getRouteHashForRoute("security-pools"), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), "browse")),
     onDeploy: deployStep,
     onDeployNextMissing: () => void onDeployNextMissing(),
     onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false })
@@ -62354,5 +62355,5 @@ installRouting({
 registerStatoblastSimulationScenarios();
 mountApp({ initialize: () => initializeActiveEnvironment(window.location, { appId: "statoblast" }), root: () => _(App, {}) });
 
-//# debugId=5FD375E122819DCD64756E2164756E21
+//# debugId=93F67E149A3CC9A364756E2164756E21
 //# sourceMappingURL=app.js.map

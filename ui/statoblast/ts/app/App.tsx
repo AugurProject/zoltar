@@ -472,6 +472,7 @@ export function App() {
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
+		deploymentCompleteHref: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
