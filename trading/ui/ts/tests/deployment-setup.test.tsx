@@ -73,6 +73,16 @@ async function connectDeploymentWallet(container: HTMLElement) {
 	})
 }
 
+async function waitForConnectedWallet(container: HTMLElement) {
+	for (let attempt = 0; attempt < 30; attempt++) {
+		if (container.querySelector('.wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) return
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+	}
+	throw new Error('Connected wallet control is unavailable')
+}
+
 describe('trading deployment setup', () => {
 	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
@@ -141,7 +151,7 @@ describe('trading deployment setup', () => {
 		await waitForText('Ready to deploy')
 		await connectDeploymentWallet(rendered.container)
 		await waitForText('Wallet context changed during connection')
-		expect(rendered.container.textContent).toContain('Not connected')
+		expect(rendered.container.querySelector('.wallet-button')?.textContent).toContain('Connect wallet')
 	})
 
 	test('does not bind a provider returned after deployment setup unmounts', async () => {
@@ -351,7 +361,7 @@ describe('trading deployment setup', () => {
 		await act(async () => await Bun.sleep(0))
 		await waitForText('Ready to deploy')
 		await connectDeploymentWallet(rendered.container)
-		await waitForText('Connected')
+		await waitForConnectedWallet(rendered.container)
 		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
@@ -392,7 +402,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
 		await waitForText('Ready to deploy')
 		await connectDeploymentWallet(rendered.container)
-		await waitForText('Connected')
+		await waitForConnectedWallet(rendered.container)
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
 			await act(async () => {

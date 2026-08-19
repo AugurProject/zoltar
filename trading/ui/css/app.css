@@ -1046,9 +1046,10 @@ summary {
 }
 .address {
 	display: block;
-	max-width: 190px;
+	max-width: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: #c7d2dc;
 }
 .security-pool-link {

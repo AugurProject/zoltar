@@ -24,6 +24,7 @@ describe('trading core deployment registry', () => {
 	})
 
 	test('uses one default RPC registry for build and runtime deployment choices', () => {
+		expect(defaultCoreDeploymentRpcUrls[1]).toBe('https://ethereum.dark.florist')
 		const proxyDeployer = getAddress(`0x${'12'.repeat(20)}`)
 		const securityPoolFactory = getAddress(`0x${'34'.repeat(20)}`)
 		for (const [chainIdText, rpcUrl] of Object.entries(defaultCoreDeploymentRpcUrls)) {

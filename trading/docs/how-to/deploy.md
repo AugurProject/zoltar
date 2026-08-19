@@ -31,7 +31,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/deploy` and follow the public-network steps above with **Ethereum Mainnet · chain 1** and `http://127.0.0.1:8545`. The browser will deploy the trading factory and router through the same deterministic proxy.
+Open `http://localhost:4163/#/deploy` and follow the public-network steps above with **Ethereum Mainnet** and `http://127.0.0.1:8545`. The browser will deploy the trading factory and router through the same deterministic proxy.
 
 For a generated trading manifest instead of browser storage, open another terminal in the repository root, enter `trading/`, and run the local deployment script against the matching root manifest:
 

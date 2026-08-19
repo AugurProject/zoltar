@@ -86,12 +86,6 @@ function contractStatusPresentation(deployed: boolean, isNext: boolean) {
 	return { label: 'Not deployed', tone: 'warn' as const }
 }
 
-function walletStatusLabel(connected: boolean, ready: boolean) {
-	if (ready) return 'Connected'
-	if (connected) return 'Wrong network'
-	return 'Not connected'
-}
-
 export function TradingDeploymentSetup({
 	currentConfiguration,
 	onComplete,
@@ -167,7 +161,6 @@ export function TradingDeploymentSetup({
 	const effectiveRpcUrl = rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? rpcUrl)
 	const walletConnected = walletAccount !== undefined
 	const walletReady = walletConnected && selectedCore !== undefined && walletChain === selectedCore.chainId
-	const walletStatus = walletStatusLabel(walletConnected, walletReady)
 	let inputError: string | undefined
 	if (chainId !== '' && rpcUrl !== '' && feeBps !== '') {
 		try {
@@ -434,7 +427,7 @@ export function TradingDeploymentSetup({
 					>
 						{coreDeployments.map(deployment => (
 							<option key={deployment.chainId} value={deployment.chainId.toString()}>
-								{deployment.chainName} · chain {deployment.chainId.toString()}
+								{deployment.chainName}
 							</option>
 						))}
 					</select>
@@ -540,10 +533,6 @@ export function TradingDeploymentSetup({
 					<div>
 						<span>Deployment progress</span>
 						<strong>{deploymentProgress(deploymentStatus)}</strong>
-					</div>
-					<div>
-						<span>Wallet</span>
-						<Status tone={walletReady ? 'good' : 'warn'}>{walletStatus}</Status>
 					</div>
 					<Status tone={inspection.tone}>{inspection.label}</Status>
 				</div>
