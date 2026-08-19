@@ -3,7 +3,7 @@ import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { shortAddress } from '../app/format.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
-import { parseDeploymentSetupInput, saveDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.ts'
 import { isKnownDefaultRpcUrl, loadCoreDeployments } from '../protocol/coreDeployments.ts'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.ts'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.ts'
@@ -15,7 +15,6 @@ export type TradingDeploymentSetupServices = Readonly<{
 	deployStep?(publicClient: PublicClient, plan: TradingDeploymentPlan, step: TradingDeploymentStep, onSubmitted: (hash: Hash) => void): Promise<void>
 	getWalletProvider?(): InjectedEthereum | undefined
 	loadCoreDeployments(): Promise<readonly CoreDeployment[]>
-	saveConfiguration(configuration: DeploymentConfiguration): void
 }>
 
 export type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
@@ -47,7 +46,6 @@ const defaultServices: TradingDeploymentSetupServices = {
 		if (getInjectedEthereum() !== provider || (await walletChainId(provider)) !== plan.core.chainId || (await connectWallet(provider)) !== account) throw new Error('Wallet context changed during deployment; verify the transaction before continuing')
 	},
 	loadCoreDeployments,
-	saveConfiguration: configuration => saveDeploymentConfiguration(configuration),
 }
 
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
@@ -222,7 +220,6 @@ export function TradingDeploymentSetup({
 				setInspectionState('ready')
 				if (status.factory && status.router) {
 					const configuration = deploymentConfigurationForPlan(nextPlan, input.rpcUrl)
-					services.saveConfiguration(configuration)
 					onComplete(configuration)
 					return
 				}
@@ -378,7 +375,6 @@ export function TradingDeploymentSetup({
 			if (status.factory && status.router) {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 				const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
-				services.saveConfiguration(configuration)
 				onComplete(configuration)
 				return
 			}
@@ -393,7 +389,6 @@ export function TradingDeploymentSetup({
 					if (status.factory && status.router) {
 						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
-						services.saveConfiguration(configuration)
 						onComplete(configuration)
 						return
 					}
@@ -415,13 +410,17 @@ export function TradingDeploymentSetup({
 			<summary>Settings</summary>
 			<div class='deployment-settings__panel'>
 				<label class='field'>
-					<span>Core network</span>
+					<span>Network</span>
 					<select
 						value={chainId}
 						disabled={busy || registryLoading || coreDeployments.length === 0}
 						onChange={event => {
 							inputRevision.current += 1
-							setChainId(event.currentTarget.value)
+							const nextChainId = event.currentTarget.value
+							setChainId(nextChainId)
+							const nextDeployment = coreDeployments.find(deployment => deployment.chainId.toString() === nextChainId)
+							setRpcOverride(false)
+							setRpcUrl(nextDeployment?.defaultRpcUrl ?? '')
 						}}
 					>
 						{coreDeployments.map(deployment => (
@@ -446,20 +445,6 @@ export function TradingDeploymentSetup({
 						}}
 					/>
 				</label>
-				{rpcOverride && selectedCore !== undefined ? (
-					<button
-						class='secondary-action'
-						type='button'
-						disabled={busy}
-						onClick={() => {
-							inputRevision.current += 1
-							setRpcOverride(false)
-							setRpcUrl(selectedCore.defaultRpcUrl)
-						}}
-					>
-						Use default RPC
-					</button>
-				) : null}
 			</div>
 		</details>
 	)

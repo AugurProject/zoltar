@@ -37,7 +37,6 @@ function pendingDeploymentFixture() {
 			await new Promise<void>(() => undefined)
 		},
 		loadCoreDeployments: async () => [qaCore],
-		saveConfiguration: () => undefined,
 	}
 	const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(qaCore, 30), 'http://127.0.0.1:8545/')
 	return {

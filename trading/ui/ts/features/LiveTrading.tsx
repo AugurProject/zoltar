@@ -139,9 +139,16 @@ function stateLabel(state: TransactionState, action = 'Transaction') {
 	return 'Ready to simulate after wallet balances and inputs are valid'
 }
 
-type LiveTradeSummaryQuote =
-	| Readonly<{ kind: 'entry'; value: Readonly<{ amount: bigint; market: Pick<LiveMarket, 'feeBps'>; result: Readonly<{ totalLongShares: bigint; invalidInsurance: bigint }> }> }>
-	| Readonly<{ kind: 'exit'; value: Readonly<{ market: Pick<LiveMarket, 'feeBps'>; result: Readonly<{ totalLongShares: bigint; invalidInsurance: bigint; ethOut: bigint }> }> }>
+type EntrySummaryValue = Readonly<{
+	amount: Extract<Quote, { kind: 'entry' }>['value']['amount']
+	market: Pick<Extract<Quote, { kind: 'entry' }>['value']['market'], 'feeBps'>
+	result: Pick<Extract<Quote, { kind: 'entry' }>['value']['result'], 'totalLongShares' | 'invalidInsurance'>
+}>
+type ExitSummaryValue = Readonly<{
+	market: Pick<Extract<Quote, { kind: 'exit' }>['value']['market'], 'feeBps'>
+	result: Pick<Extract<Quote, { kind: 'exit' }>['value']['result'], 'totalLongShares' | 'invalidInsurance' | 'ethOut'>
+}>
+type LiveTradeSummaryQuote = Readonly<{ kind: 'entry'; value: EntrySummaryValue }> | Readonly<{ kind: 'exit'; value: ExitSummaryValue }>
 
 export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES' | 'NO') {
 	if (quote.kind === 'entry')
@@ -521,9 +528,9 @@ export function LiveTrading({
 				<header class='route-header'>
 					<div>
 						<span class='eyebrow'>Standalone live client</span>
-						<h1>Deployment configuration required</h1>
+						<h1>Trading contracts unavailable</h1>
 						<p class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
-							{configurationError ?? message ?? 'Loading deployment.json…'}
+							{configurationError ?? message ?? 'Checking deterministic trading contracts…'}
 						</p>
 						{configurationError === undefined ? null : (
 							<button class='secondary-action' type='button' onClick={onDeploymentRetry}>

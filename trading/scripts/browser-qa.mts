@@ -96,6 +96,13 @@ const scenarios = [
 		path: '/#/deploy',
 		assertExpression: `(async () => { let checks = {}; for (let attempt = 0; attempt < 100; attempt++) { checks = { networkOptions: document.querySelector('.site-header .deployment-settings select')?.options.length === 2, walletButton: [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Connect wallet'), settingsClosed: document.querySelector('.site-header .deployment-settings')?.open === false, setupHasNoRpc: document.querySelector('.deployment-setup input[type="url"]') === null, deployDisabled: [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (attempt === 99) checks.pageText = (document.body.textContent ?? '').slice(0, 300); if (Object.values(checks).every(value => value === true)) return true; await new Promise(resolve => setTimeout(resolve, 100)) } throw new Error(JSON.stringify(checks)) })()`,
 	},
+	...([1_000, 800] as const).map(width => ({
+		name: `deployment-setup-${width}`,
+		width,
+		height: 900,
+		path: '/#/deploy',
+		assertExpression: `(() => { const wallet = document.querySelector('.site-header .wallet-button')?.getBoundingClientRect(); const settings = document.querySelector('.site-header .deployment-settings-host')?.getBoundingClientRect(); return wallet !== undefined && settings !== undefined && wallet.right <= settings.left && Math.abs(wallet.top - settings.top) <= 1 && Math.abs(wallet.bottom - settings.bottom) <= 1 && document.documentElement.scrollWidth <= innerWidth })()`,
+	})),
 	{
 		name: 'deployment-setup-mobile',
 		width: 390,

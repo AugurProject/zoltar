@@ -184,6 +184,11 @@ nav a[aria-current="page"] {
 }
 .deployment-settings-host {
 	position: relative;
+	display: flex;
+	align-items: center;
+}
+.deployment-settings {
+	margin: 0;
 }
 .deployment-settings summary {
 	display: flex;
@@ -1610,6 +1615,12 @@ summary {
 	.header-actions .wallet-button {
 		grid-column: 4;
 	}
+	.header-actions--deployment .wallet-button {
+		grid-column: 3;
+	}
+	.header-actions--deployment .deployment-settings-host {
+		grid-column: 4;
+	}
 	.wallet-summary {
 		grid-row: 2;
 		grid-column: 1 / -1;
@@ -1654,6 +1665,23 @@ summary {
 		grid-column: 2;
 		justify-self: end;
 		padding: 0.55rem;
+	}
+	.header-actions--deployment .wallet-button {
+		grid-row: 2;
+		grid-column: 1;
+		justify-self: start;
+	}
+	.header-actions--deployment .deployment-settings-host {
+		grid-row: 2;
+		grid-column: 2;
+		justify-self: end;
+	}
+	.site-header .header-actions--deployment .network-pill {
+		grid-row: 3;
+		grid-column: 1 / -1;
+	}
+	.site-header--deployment nav {
+		grid-row: 4;
 	}
 	.header-actions {
 		display: contents;

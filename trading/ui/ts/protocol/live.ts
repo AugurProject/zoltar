@@ -342,7 +342,7 @@ export async function validateLiveDeployment(client: PublicClient, configuration
 	])
 	validateRpcChainId(rpcChainId, configuration.chainId)
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
-	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match deployment.json')
+	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
 }
 

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import type { PublicClient } from '@zoltar/shared/ethereum'
 import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoRep } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
-import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
+import type { DeploymentConfiguration } from '../protocol/config.ts'
 import { loadCoreDeployments } from '../protocol/coreDeployments.ts'
-import { validateStoredTradingDeployment } from '../protocol/deployment.ts'
-import { createTradingPublicClient, publicErrorMessage, validateLiveDeployment } from '../protocol/live.ts'
+import { deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, type CoreDeployment } from '../protocol/deployment.ts'
+import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.ts'
 import { formatUnits, shortAddress } from './format.ts'
 
 const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'deploy', 'help'] as const
@@ -93,13 +94,20 @@ function renderBanner(scenario: string, demo: boolean) {
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
+export async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
+	const core = coreDeployments[0]
+	if (core === undefined) throw new Error('No canonical network deployment is available')
+	const plan = getTradingDeploymentPlan(core, 30)
+	const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
+	const client = createPublicClient(configuration)
+	validateRpcChainId(await client.getChainId(), core.chainId)
+	const status = await loadTradingDeploymentStatus(client, plan)
+	if (!status.factory || !status.router) throw new Error('Trading contracts have not been deployed')
+	return configuration
+}
+
 async function resolveLiveDeployment() {
-	const loaded = await loadDeploymentConfiguration()
-	if (loaded === undefined) throw new Error('No bundled or wallet-deployed trading configuration was found.')
-	const client = createTradingPublicClient(loaded.configuration)
-	if (loaded.source === 'stored') await validateStoredTradingDeployment(client, loaded.configuration, await loadCoreDeployments())
-	else await validateLiveDeployment(client, loaded.configuration)
-	return loaded.configuration
+	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
 function networkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
@@ -332,6 +340,8 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		setLiveDeploymentStatus('verified')
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
+	const deploymentSetupActive = !demo && route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
+	const displayedRoute = deploymentSetupActive ? 'deploy' : route
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
@@ -348,8 +358,8 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	}, [demo, selectedUniverseId])
 	useEffect(() => {
 		window.scrollTo(0, 0)
-		document.title = tradingDocumentTitle(route)
-	}, [route])
+		document.title = tradingDocumentTitle(displayedRoute)
+	}, [displayedRoute])
 	useEffect(() => {
 		if (demo) return
 		let active = true
@@ -374,7 +384,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	}, [demo, loadLiveDeployment])
 	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
-	const deploymentSetupActive = !demo && route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	if (!demo) {
 		if (route === 'not-found') content = resolvedContent
 		else if (route === 'help') content = <Help />
@@ -448,7 +457,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 			</a>
 			<div class='site-chrome'>
 				{banner}
-				<header class='site-header'>
+				<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
 					<a class='brand' href='#/markets' aria-label='Statoblast trading home' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 						<span class='brand__mark'>S</span>
 						<span>
@@ -456,32 +465,31 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 						</span>
 					</a>
 					<nav aria-label='Primary'>
-						<a aria-current={route === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Markets
-						</a>
-						<a aria-current={route === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Liquidity
-						</a>
-						<a aria-current={route === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Portfolio
-						</a>
-						{demo ? null : (
-							<a aria-current={route === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+						{!demo && liveDeploymentStatus !== 'verified' ? (
+							<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 								Deploy
 							</a>
-						)}
-						<a aria-current={route === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+						) : null}
+						<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+							Markets
+						</a>
+						<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+							Liquidity
+						</a>
+						<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+							Portfolio
+						</a>
+						<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 							Help
 						</a>
 					</nav>
-					<div class='header-actions'>
+					<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
 						<span class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`}>
 							<span />
 							{networkLabel(scenario, demo, liveDeploymentStatus)}
 						</span>
 						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
-						{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
 						{deploymentSetupActive ? (
 							<button
 								class='wallet-button'
@@ -495,6 +503,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 								{deploymentWalletLabel(deploymentWalletState)}
 							</button>
 						) : null}
+						{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
 						{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
 							<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
 								{walletSummary.account === undefined ? 'Connect wallet' : shortAddress(walletSummary.account)}

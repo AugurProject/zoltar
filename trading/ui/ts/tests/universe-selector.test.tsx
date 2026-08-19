@@ -299,7 +299,6 @@ describe('universe selector', () => {
 						throw new Error('No deployment client expected')
 					},
 					loadCoreDeployments: async () => [],
-					saveConfiguration: () => undefined,
 				}}
 				loadLiveDeployment={async () => {
 					attempts++

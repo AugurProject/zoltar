@@ -6,4 +6,4 @@
 4. Run `bun run test` and `bun run ui:build`.
 5. Start `bun run ui:serve`, then open `http://localhost:4163/?demo=1#/markets`.
 
-For transaction testing, start Anvil and create a complete local Zoltar deployment with an operational binary SecurityPool. Export its manifest path as `ZOLTAR_DEPLOYMENT_MANIFEST` and run `bun run deploy:local`. Then build the live UI with `TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build`, serve it, and connect a wallet on the manifest chain. The client discovers canonical pools and pairs, simulates router calls, and can submit entry, exit, and liquidity transactions. [UI configuration](../how-to/configure-ui.md) documents the manifest and revalidation rules. Demo mode remains visual-only.
+For transaction testing, start Anvil and create a complete local Zoltar deployment with an operational binary SecurityPool. Export its manifest path as `ZOLTAR_DEPLOYMENT_MANIFEST` and run `bun run deploy:local` for script and integration testing. The standalone live UI uses the canonical networks copied from the root deployment manifests; demo mode remains the walletless visual-testing path.

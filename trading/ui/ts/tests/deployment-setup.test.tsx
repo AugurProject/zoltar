@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/ts/tests/testUtils/domEnvironment.ts'
-import { App } from '../app/App.tsx'
+import { App, resolveCanonicalLiveDeployment } from '../app/App.tsx'
 import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.ts'
 import type { InjectedEthereum } from '../protocol/injected.ts'
@@ -84,6 +84,37 @@ async function waitForConnectedWallet(container: HTMLElement) {
 }
 
 describe('trading deployment setup', () => {
+	test('derives and verifies the canonical CREATE2 trading deployment without configuration', async () => {
+		const plan = getTradingDeploymentPlan(core, 30)
+		let contractReadCount = 0
+		let rpcChainId = '0xaa36a7'
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return rpcChainId
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						return '0x01'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
+						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const configuration = await resolveCanonicalLiveDeployment([core], () => client)
+		expect(configuration.factory).toBe(plan.factory.address)
+		expect(configuration.router).toBe(plan.router.address)
+		expect(configuration.rpcUrl).toBe(core.defaultRpcUrl)
+		rpcChainId = '0x1'
+		await expect(resolveCanonicalLiveDeployment([core], () => client)).rejects.toThrow('RPC chain 1 does not match deployment chain 11155111')
+	})
 	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
@@ -103,7 +134,6 @@ describe('trading deployment setup', () => {
 		const services: TradingDeploymentSetupServices = {
 			createPublicClient: () => client,
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
@@ -121,7 +151,7 @@ describe('trading deployment setup', () => {
 		const canonicalRpcUrl = 'https://ethereum-sepolia-rpc.publicnode.com'
 		const canonicalCore = { ...core, defaultRpcUrl: canonicalRpcUrl }
 		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(canonicalCore, 30), `${canonicalRpcUrl}/`)
-		const services = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [canonicalCore], saveConfiguration: () => undefined }
+		const services = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [canonicalCore] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={configuration} onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Ready to deploy')
@@ -145,7 +175,7 @@ describe('trading deployment setup', () => {
 				throw new Error(`Unexpected wallet method ${method}`)
 			},
 		}
-		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: core.chainId, provider }), getWalletProvider: () => undefined, loadCoreDeployments: async () => [core], saveConfiguration: () => undefined }
+		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: core.chainId, provider }), getWalletProvider: () => undefined, loadCoreDeployments: async () => [core] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Ready to deploy')
@@ -167,7 +197,7 @@ describe('trading deployment setup', () => {
 		const connection = new Promise<{ account: string; chainId: number; provider: InjectedEthereum }>(resolve => {
 			resolveConnection = resolve
 		})
-		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => await connection, getWalletProvider: () => undefined, loadCoreDeployments: async () => [core], saveConfiguration: () => undefined }
+		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => await connection, getWalletProvider: () => undefined, loadCoreDeployments: async () => [core] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		await waitForText('Ready to deploy')
 		const connect = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Connect wallet')
@@ -190,7 +220,6 @@ describe('trading deployment setup', () => {
 				return { account: testWalletAccount, chainId: core.chainId }
 			},
 			loadCoreDeployments: async () => await new Promise<readonly (typeof core)[]>(() => undefined),
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(
 			<App
@@ -202,6 +231,10 @@ describe('trading deployment setup', () => {
 		)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Loading networks')
+		const navigationLabels = Array.from(rendered.container.querySelectorAll('nav a')).map(link => link.textContent?.trim())
+		expect(navigationLabels[0]).toBe('Deploy')
+		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Deploy')
+		expect(document.title).toBe('Deploy · Statoblast trading')
 		expect(rendered.container.querySelector('.site-header .deployment-settings')).not.toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.site-header .wallet-button')
@@ -210,6 +243,10 @@ describe('trading deployment setup', () => {
 		await act(async () => walletButton.click())
 		expect(connectCount).toBe(0)
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
+		const headerWallet = rendered.container.querySelector('.site-header .wallet-button')
+		const headerSettings = rendered.container.querySelector('.site-header .deployment-settings-host')
+		if (headerWallet === null || headerSettings === null) throw new Error('Deployment header controls are unavailable')
+		expect(headerWallet.compareDocumentPosition(headerSettings) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
 	test('announces registry loading and clears its error while retrying', async () => {
@@ -225,7 +262,6 @@ describe('trading deployment setup', () => {
 		const services: TradingDeploymentSetupServices = {
 			createPublicClient: () => deploymentClient(),
 			loadCoreDeployments: async () => await (++loadCount === 1 ? initialLoad : retryLoad),
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
@@ -262,7 +298,6 @@ describe('trading deployment setup', () => {
 				if (registryLoads > 1) throw new Error('Registry refresh failed')
 				return [core]
 			},
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
@@ -291,7 +326,6 @@ describe('trading deployment setup', () => {
 		const services: TradingDeploymentSetupServices = {
 			createPublicClient: () => deploymentClient(() => rpcAvailable),
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
@@ -325,7 +359,6 @@ describe('trading deployment setup', () => {
 				deployCount += 1
 			},
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, ...walletServices }} />)
 		cleanupRendered = rendered.cleanup
@@ -354,7 +387,6 @@ describe('trading deployment setup', () => {
 				throw new Error('Deployment submission failed')
 			},
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, ...walletServices }} />)
 		cleanupRendered = rendered.cleanup
@@ -394,7 +426,6 @@ describe('trading deployment setup', () => {
 				await deploymentPending
 			},
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<App deploymentSetupServices={{ ...services, ...walletServices }} loadLiveDeployment={async () => await configurationPending} />)
 		cleanupRendered = rendered.cleanup
@@ -475,7 +506,6 @@ describe('trading deployment setup', () => {
 		const services: TradingDeploymentSetupServices = {
 			createPublicClient: () => client,
 			loadCoreDeployments: async () => [core],
-			saveConfiguration: () => undefined,
 		}
 		const rendered = await renderIntoDocument(<App deploymentSetupServices={services} loadLiveDeployment={async () => await configurationPending} />)
 		cleanupRendered = rendered.cleanup
@@ -487,8 +517,11 @@ describe('trading deployment setup', () => {
 		expect(select?.value).toBe(core.chainId.toString())
 		expect(rpcInput?.value).toBe(configuration.rpcUrl)
 		expect(rendered.container.textContent).not.toContain('Immutable trading fee')
+		expect(rendered.container.textContent).not.toContain('Core network')
+		expect(rendered.container.textContent).not.toContain('Use default RPC')
 		expect(rendered.container.textContent).toContain('2 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
+		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deploy')
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deployment complete')).toBe(false)
 	})
 })
