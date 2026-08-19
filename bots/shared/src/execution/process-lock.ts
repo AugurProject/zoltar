@@ -1,21 +1,47 @@
-import { lstat, mkdir, open, readFile, rm } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, mkdir, open, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { dlopen } from 'bun:ffi'
 import { getAddress, type Address } from '../ethereum.ts'
 
 type ProcessLockFileHandle = {
 	chmod: (mode: number) => Promise<unknown>
 	close: () => Promise<unknown>
+	fd: number
 	sync: () => Promise<unknown>
+	truncate: (length?: number) => Promise<unknown>
 	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
 }
 
 export type ProcessLockFilesystem = {
 	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
 	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'wx', mode: number) => Promise<ProcessLockFileHandle>
+	open: (path: string, flags: number, mode: number) => Promise<ProcessLockFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
-	rm: (path: string, options: { force: true }) => Promise<unknown>
+	tryLock: (fileDescriptor: number) => boolean
+}
+
+const nativeFlockCandidates =
+	process.platform === 'darwin' ? ['/usr/lib/libSystem.B.dylib'] : process.platform === 'linux' ? ['libc.so.6', ...(process.arch === 'x64' ? ['/lib/libc.musl-x86_64.so.1', '/lib/ld-musl-x86_64.so.1'] : []), ...(process.arch === 'arm64' ? ['/lib/libc.musl-aarch64.so.1', '/lib/ld-musl-aarch64.so.1'] : [])] : []
+
+let nativeFlock: ((fileDescriptor: number) => number) | undefined
+
+function tryNativeFileLock(fileDescriptor: number) {
+	if (nativeFlock === undefined) {
+		const failures: unknown[] = []
+		for (const candidate of nativeFlockCandidates) {
+			try {
+				const library = dlopen(candidate, { flock: { args: ['i32', 'i32'], returns: 'i32' } })
+				nativeFlock = descriptor => library.symbols.flock(descriptor, 6)
+				break
+			} catch (error) {
+				failures.push(error)
+			}
+		}
+		if (nativeFlock === undefined) throw new AggregateError(failures, 'Native process locking is unavailable on this platform')
+	}
+	return nativeFlock(fileDescriptor) === 0
 }
 
 export type ExclusiveProcessLock = {
@@ -28,7 +54,7 @@ const processLockFilesystem: ProcessLockFilesystem = {
 	mkdir,
 	open,
 	readFile,
-	rm,
+	tryLock: tryNativeFileLock,
 }
 
 async function assertSafeLockDirectory(path: string, filesystem: ProcessLockFilesystem) {
@@ -46,21 +72,34 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 	await assertSafeLockDirectory(lockDirectory, filesystem)
 	let handle: ProcessLockFileHandle
 	try {
-		handle = await filesystem.open(lockPath, 'wx', 0o600)
+		handle = await filesystem.open(lockPath, constants.O_CREAT | constants.O_NOFOLLOW | constants.O_RDWR, 0o600)
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST') {
-			let owner = 'owner metadata unavailable'
-			try {
-				owner = (await filesystem.readFile(lockPath, 'utf8')).trim()
-			} catch (readError) {
-				void readError
-			}
-			throw new Error(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+		throw error
+	}
+	let acquired: boolean
+	try {
+		acquired = filesystem.tryLock(handle.fd)
+	} catch (error) {
+		try {
+			await handle.close()
+		} catch (cleanupError) {
+			throw new AggregateError([error, cleanupError], `Failed to acquire and clean up process lock ${lockPath}`)
 		}
 		throw error
 	}
+	if (!acquired) {
+		let owner = 'owner metadata unavailable'
+		try {
+			owner = (await filesystem.readFile(lockPath, 'utf8')).trim()
+		} catch (readError) {
+			void readError
+		}
+		await handle.close()
+		throw new Error(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+	}
 	const payload = `${JSON.stringify({ acquiredAt: new Date().toISOString(), ...metadata, pid: process.pid })}\n`
 	try {
+		await handle.truncate(0)
 		await handle.writeFile(payload, { encoding: 'utf8' })
 		await handle.chmod(0o600)
 		await handle.sync()
@@ -71,16 +110,10 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 		} catch (cleanupError) {
 			cleanupErrors.push(cleanupError)
 		}
-		try {
-			await filesystem.rm(lockPath, { force: true })
-		} catch (cleanupError) {
-			cleanupErrors.push(cleanupError)
-		}
 		if (cleanupErrors.length !== 0) throw new AggregateError([error, ...cleanupErrors], `Failed to initialize and clean up process lock ${lockPath}`)
 		throw error
 	}
 	let released = false
-	let handleClosed = false
 	let releaseAttempt: Promise<void> | undefined
 	return {
 		path: lockPath,
@@ -88,10 +121,6 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 			if (released) return Promise.resolve()
 			if (releaseAttempt !== undefined) return releaseAttempt
 			releaseAttempt = (async () => {
-				if (!handleClosed) {
-					await handle.close()
-					handleClosed = true
-				}
 				let current: string
 				try {
 					current = await filesystem.readFile(lockPath, 'utf8')
@@ -99,7 +128,7 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 					throw new Error(`Process lock ${lockPath} disappeared before release: ${error instanceof Error ? error.message : String(error)}`)
 				}
 				if (current !== payload) throw new Error(`Process lock ${lockPath} changed ownership before release`)
-				await filesystem.rm(lockPath, { force: true })
+				await handle.close()
 				released = true
 			})().finally(() => {
 				if (!released) releaseAttempt = undefined
