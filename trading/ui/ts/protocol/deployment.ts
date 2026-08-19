@@ -5,6 +5,7 @@ import type { DeploymentConfiguration } from './config.ts'
 export type CoreDeployment = Readonly<{
 	chainId: number
 	chainName: string
+	defaultRpcUrl: string
 	id: string
 	proxyDeployer: Address
 	securityPoolFactory: Address
@@ -59,9 +60,9 @@ export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): 
 	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
 	return {
 		core,
-		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Two-way trading factory' },
+		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
 		feeBps: checkedFeeBps,
-		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Two-way trading router' },
+		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
 	}
 }
 

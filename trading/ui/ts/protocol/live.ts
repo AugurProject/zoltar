@@ -352,6 +352,12 @@ export async function connectWallet(provider: InjectedEthereum) {
 	return getAddress(accounts[0])
 }
 
+export async function connectedWalletAccount(provider: InjectedEthereum) {
+	const accounts = await provider.request({ method: 'eth_accounts', params: [] })
+	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no connected account')
+	return getAddress(accounts[0])
+}
+
 export async function walletChainId(provider: InjectedEthereum) {
 	const result = await provider.request({ method: 'eth_chainId', params: [] })
 	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('Wallet returned an invalid chain ID')

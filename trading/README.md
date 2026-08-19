@@ -23,7 +23,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/markets`. Select a network whose canonical Zoltar core deployment is installed, enter its RPC URL, and connect a wallet. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code before it offers a trading deployment transaction.
+Open `http://localhost:4163/#/markets`. When trading contracts are not configured, the deployment screen automatically selects the canonical Zoltar deployment and its default public RPC. Connect a wallet, then deploy the trading factory and router in order. Advanced deployment configuration lets you override the network, RPC URL, or immutable fee. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code and shows each contract's status before it offers a deployment transaction.
 
 On Windows, run `start.bat` from this directory to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
 
@@ -91,7 +91,7 @@ The router creates and redeems complete sets using observed balance and attoETH 
 - [Start here](docs/index.md)
 - [First market](docs/tutorials/first-market.md) and [first trade](docs/tutorials/first-trade.md)
 - [Contract reference](docs/reference/contracts.md), [router reference](docs/reference/router.md), and [SDK reference](docs/reference/sdk.md)
-- [Two-way design](docs/explanation/two-way-market.md), [INVALID insurance](docs/explanation/invalid-insurance.md), and [security model](docs/explanation/security-model.md)
+- [Market design](docs/explanation/two-way-market.md), [INVALID insurance](docs/explanation/invalid-insurance.md), and [security model](docs/explanation/security-model.md)
 
 ## MVP limitations
 

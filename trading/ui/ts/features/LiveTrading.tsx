@@ -607,7 +607,7 @@ export function LiveTrading({
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<h1>Two-way markets</h1>
+					<h1>Markets</h1>
 					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
 				{walletConnectRequestNonce === undefined ? (

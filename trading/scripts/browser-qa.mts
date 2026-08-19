@@ -94,37 +94,37 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/#/deploy',
-		assertExpression: `(() => { const checks = { networkOptions: document.querySelector('.deployment-setup select')?.options.length === 3, rpcField: document.querySelector('.deployment-setup input[type="url"]') !== null, feeCopy: document.body.textContent?.includes('Immutable trading fee') === true, deployDisabled: [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(async () => { let checks = {}; for (let attempt = 0; attempt < 100; attempt++) { checks = { networkOptions: document.querySelector('.deployment-setup select')?.options.length === 3, walletButton: [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Connect wallet'), walletStatus: document.body.textContent?.includes('Not connected') === true, advancedClosed: document.querySelector('.deployment-setup__advanced')?.open === false, deployDisabled: [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (attempt === 99) checks.pageText = (document.body.textContent ?? '').slice(0, 300); if (Object.values(checks).every(value => value === true)) return true; await new Promise(resolve => setTimeout(resolve, 100)) } throw new Error(JSON.stringify(checks)) })()`,
 	},
 	{
 		name: 'deployment-setup-mobile',
 		width: 390,
 		height: 844,
 		path: '/#/deploy',
-		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } }); const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const all = [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1);  const offenders = [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1).map(el => ({ tag: el.tagName, cls: String(el.getAttribute('class') ?? '').slice(0, 60), right: el.getBoundingClientRect().right })); const ignoredfix = all.filter(el => !all.some(other => other !== el && el.contains(other))).map(el => ({ tag: el.tagName, cls: String(el.getAttribute('class') ?? '').slice(0, 60), right: el.getBoundingClientRect().right })); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } });  const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, offenders, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth || (checks.offenders ?? []).length > 0) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'deployment-setup-pending-hydration-desktop',
 		width: 1440,
 		height: 900,
 		path: '/?qaDeployment=pending#/deploy',
-		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluate: `(async () => { for (let attempt = 0; attempt < 200; attempt++) { const advanced = document.querySelector('.deployment-setup__advanced'); const connect = [...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Connect wallet'); if (advanced === null) { await new Promise(resolve => setTimeout(resolve, 100)); continue } advanced.open = true; const rpc = advanced.querySelector('input[type="url"]'); if (!(rpc instanceof HTMLInputElement)) return false; rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); connect?.click(); return true } throw new Error('setup-wait-timeout: ' + (document.body.textContent ?? '').slice(0, 200) + ' hash ' + location.hash) })()`,
 		evaluateWaitMs: 300,
 		clickSelector: '.deployment-setup .primary-action',
 		clickWaitMs: 800,
-		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', disconnectLabel: document.querySelector('.route-header .wallet-button')?.getAttribute('aria-label')?.startsWith('Disconnect wallet 0x') === true, controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
 	},
 	{
 		name: 'deployment-setup-pending-hydration-mobile',
 		width: 390,
 		height: 844,
 		path: '/?qaDeployment=pending#/deploy',
-		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluate: `(async () => { for (let attempt = 0; attempt < 200; attempt++) { const advanced = document.querySelector('.deployment-setup__advanced'); const connect = [...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Connect wallet'); if (advanced === null) { await new Promise(resolve => setTimeout(resolve, 100)); continue } advanced.open = true; const rpc = advanced.querySelector('input[type="url"]'); if (!(rpc instanceof HTMLInputElement)) return false; rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); connect?.click(); return true } throw new Error('setup-wait-timeout: ' + (document.body.textContent ?? '').slice(0, 200) + ' hash ' + location.hash) })()`,
 		evaluateWaitMs: 300,
 		clickSelector: '.deployment-setup .primary-action',
 		clickWaitMs: 800,
-		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
-		scrollY: 420,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', disconnectLabel: document.querySelector('.route-header .wallet-button')?.getAttribute('aria-label')?.startsWith('Disconnect wallet 0x') === true, controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollSelector: '.deployment-setup .primary-action',
 		postScrollAssertExpression: `(() => { const action = document.querySelector('.deployment-setup .primary-action')?.getBoundingClientRect(); return action !== undefined && action.top >= 0 && action.bottom <= innerHeight && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
@@ -555,9 +555,9 @@ try {
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)
 		if ('evaluate' in scenario) {
-			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true })
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true, awaitPromise: true })
 			const result = evaluated.result
-			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}`)
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 			await Bun.sleep('evaluateWaitMs' in scenario ? scenario.evaluateWaitMs : 100)
 		}
 		if ('clickSelector' in scenario) {
@@ -566,12 +566,16 @@ try {
 			await Bun.sleep(scenario.clickWaitMs)
 		}
 		if ('assertExpression' in scenario) {
-			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true })
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true, awaitPromise: true })
 			const result = evaluated.result
 			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 		}
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })
+			await Bun.sleep(300)
+		}
+		if ('scrollSelector' in scenario) {
+			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.scrollSelector)})?.scrollIntoView({ block: 'center' })` })
 			await Bun.sleep(300)
 		}
 		if ('postScrollAssertExpression' in scenario) {

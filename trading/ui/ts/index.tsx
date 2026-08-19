@@ -8,6 +8,7 @@ const qaDeploymentPending = ['127.0.0.1', 'localhost'].includes(window.location.
 const qaCore = {
 	chainId: 1,
 	chainName: 'Ethereum Mainnet',
+	defaultRpcUrl: 'https://rpc.example',
 	id: 'mainnet',
 	proxyDeployer: getAddress('0x7A0D94F55792C434d74a40883C6ed8545E406D12'),
 	securityPoolFactory: getAddress('0x5dae4d3F03A59a51F01e52920a76Cb4013D15c70'),
@@ -30,6 +31,7 @@ function pendingDeploymentFixture() {
 	})
 	const services: TradingDeploymentSetupServices = {
 		createPublicClient: () => client,
+		connectWallet: async () => ({ account: getAddress('0x8ba1f109551bD432803012645Ac136ddd64DBA72'), chainId: qaCore.chainId }),
 		deployStep: async (_publicClient, _plan, _step, onSubmitted) => {
 			onSubmitted(`0x${'ab'.repeat(32)}`)
 			await new Promise<void>(() => undefined)

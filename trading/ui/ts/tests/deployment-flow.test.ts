@@ -7,6 +7,7 @@ function examplePlan() {
 		{
 			chainId: 11_155_111,
 			chainName: 'Sepolia',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'sepolia',
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
@@ -20,6 +21,7 @@ describe('wallet trading deployment plan', () => {
 		const core = {
 			chainId: 11_155_111,
 			chainName: 'Sepolia',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'sepolia',
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
@@ -38,6 +40,7 @@ describe('wallet trading deployment plan', () => {
 		const core = {
 			chainId: 1,
 			chainName: 'Ethereum Mainnet',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'mainnet',
 			proxyDeployer: getAddress(`0x${'56'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'78'.repeat(20)}`),
@@ -50,6 +53,7 @@ describe('wallet trading deployment plan', () => {
 			{
 				chainId: 1,
 				chainName: 'Ethereum Mainnet',
+				defaultRpcUrl: 'https://rpc.example',
 				id: 'mainnet',
 				proxyDeployer: getAddress(`0x${'9a'.repeat(20)}`),
 				securityPoolFactory: getAddress(`0x${'bc'.repeat(20)}`),

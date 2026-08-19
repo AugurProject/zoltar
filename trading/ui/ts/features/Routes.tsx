@@ -427,7 +427,7 @@ export function Help() {
 			<header class='route-header'>
 				<div>
 					<span class='eyebrow'>Project guide</span>
-					<h1>How the two-way market works</h1>
+					<h1>How the market works</h1>
 				</div>
 			</header>
 			<section class='explanation-flow'>
