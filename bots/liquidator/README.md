@@ -409,7 +409,7 @@ bun run check
 The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 retry, and transaction-submission primitives live in `../shared`.
 
-> Live liquidation is experimental. Use a dedicated low-balance signer, begin on
-> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool open interest
+> Use a dedicated low-balance signer, begin on Sepolia, keep dry-run logs, and
+> supervise pool health. Assumed pool open interest
 > remains an economic obligation even when the fixed liquidation bonus is
 > positive.

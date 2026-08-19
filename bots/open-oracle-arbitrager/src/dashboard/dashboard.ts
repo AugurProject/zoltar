@@ -995,8 +995,8 @@ function render(snapshot: PublicOperatorSnapshot) {
 		launchNotice.dataset['tone'] = 'warning'
 	} else {
 		launchNotice.hidden = true
-		setText('launch-notice-title', 'Sepolia rehearsal network')
-		setText('launch-notice-copy', 'Use this network to rehearse execution and recovery. Testnet success is not production approval.')
+		setText('launch-notice-title', 'Sepolia network')
+		setText('launch-notice-copy', 'Use this network to exercise execution and recovery with a dedicated low-balance key and low risk limits.')
 		launchNotice.dataset['tone'] = 'warning'
 	}
 	const notice = element('notice')

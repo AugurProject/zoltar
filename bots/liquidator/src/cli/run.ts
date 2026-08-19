@@ -28,6 +28,7 @@ import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservation
 import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
 import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
+import { createSystemDeploymentGate } from '#core/deployment-gate'
 
 const constantProductPairAbi = [
 	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
@@ -397,6 +398,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		status: 'info',
 	})
 	let lastDryRunKey: string | undefined
+	let missingDeploymentAddress: string | undefined
+	const checkSystemDeployment = createSystemDeploymentGate()
 	await pollUntilStopped(
 		async () => {
 			if (shutdown.isRequested()) return true
@@ -408,6 +411,21 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				const currentChain = chainFor(settings)
 				chain = currentChain
 				client = createPrimaryClient()
+				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
+				if (!deploymentStatus.deployed) {
+					state.status = state.paused ? 'paused' : 'starting'
+					if (missingDeploymentAddress !== deploymentStatus.address) {
+						recordActivity(state, {
+							details: `chain=${settings.network.chainId.toString()} contract=${deploymentStatus.address}`,
+							kind: 'deployment',
+							message: `${deploymentStatus.name} is not deployed; waiting before checking again`,
+							status: 'info',
+						})
+						missingDeploymentAddress = deploymentStatus.address
+					}
+					return 'deferred'
+				}
+				missingDeploymentAddress = undefined
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
