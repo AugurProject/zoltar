@@ -5,7 +5,7 @@ import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, t
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import { compareLogs, type ActiveReport } from '#monitoring/oracle-log-state'
-import { scanRanges } from '#monitoring/block-sync'
+import { fetchLogsWithAdaptiveRanges } from '#monitoring/block-sync'
 import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '#monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
@@ -136,8 +136,12 @@ async function legacyReplacementAmounts(client: ReadClient, openOracle: Address,
 	if (position.entrySubmissionBlockNumber === undefined) return undefined
 	const reportId = BigInt(position.reportId)
 	let foundEntry = false
-	for (const range of scanRanges({ nextBlock: BigInt(position.entrySubmissionBlockNumber) }, blockNumber, LEGACY_REPLACEMENT_LOG_SCAN_RANGE)) {
-		const logs = [...(await client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] }))].sort(compareLogs)
+	let fromBlock = BigInt(position.entrySubmissionBlockNumber)
+	while (fromBlock <= blockNumber) {
+		const toBlock = fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n : blockNumber
+		const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range =>
+			client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] }),
+		))].sort(compareLogs)
 		for (const log of logs) {
 			if (!foundEntry) {
 				foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()
@@ -146,6 +150,7 @@ async function legacyReplacementAmounts(client: ReadClient, openOracle: Address,
 			const replacement = decodeOpenOracleStatePreimage(log.data, reportId)
 			return { amount1: replacement.game.currentAmount1, amount2: replacement.game.currentAmount2 }
 		}
+		fromBlock = toBlock + 1n
 	}
 	return undefined
 }

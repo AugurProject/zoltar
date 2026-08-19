@@ -3,7 +3,7 @@ import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { initialCursor, scanRanges } from '../src/monitoring/block-sync.ts'
+import { fetchLogsWithAdaptiveRanges, initialCursor, logRangeLimitError, LogScanError, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
@@ -11,6 +11,7 @@ import { createSignerOperationGate } from '../src/execution/signer-operation-gat
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
+import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
@@ -91,6 +92,117 @@ describe('shared bot primitives', () => {
 			{ fromBlock: 10n, toBlock: 19n },
 			{ fromBlock: 20n, toBlock: 25n },
 		])
+	})
+
+	test('narrows log scans when a provider rejects the requested block range', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges(initialCursor(13n, 13n), 13n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock > 2n) throw new Error(`You can query up to 3 blocks at a time, but requested ${(range.toBlock - range.fromBlock + 1n).toString()} blocks`)
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-3', 'log-6', 'log-8', 'log-11'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 9n },
+			{ fromBlock: 0n, toBlock: 4n },
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 3n, toBlock: 12n },
+			{ fromBlock: 3n, toBlock: 7n },
+			{ fromBlock: 3n, toBlock: 5n },
+			{ fromBlock: 6n, toBlock: 13n },
+			{ fromBlock: 6n, toBlock: 9n },
+			{ fromBlock: 6n, toBlock: 7n },
+			{ fromBlock: 8n, toBlock: 13n },
+			{ fromBlock: 8n, toBlock: 10n },
+			{ fromBlock: 11n, toBlock: 13n },
+		])
+	})
+
+	test('identifies provider range and payload rejections without retrying other failures', () => {
+		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
+		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
+		expect(logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('log response too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
+		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
+		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
+		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	})
+
+	test('narrows invalid-params range-limit responses without retrying inverted ranges', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		await fetchLogsWithAdaptiveRanges({ nextBlock: 7n }, 10n, 4n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock + 1n > 2n) throw new Error('invalid params: block range is too large')
+			return []
+		})
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 7n, toBlock: 10n },
+			{ fromBlock: 7n, toBlock: 8n },
+			{ fromBlock: 9n, toBlock: 10n },
+		])
+	})
+
+	test('recognizes the bounded transport response error for oversized log payloads', () => {
+		const label = 'RPC eth_getLogs'
+		expect(logRangeLimitError(new Error(`${label} response exceeds ${(LOG_RPC_RESPONSE_BYTES / (1024 * 1024)).toString()} MiB`))).toBe(true)
+	})
+
+	test('narrows the attempted span after a truncated range fails and always makes progress', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: 0n }, 2n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock > range.fromBlock) throw new Error('query returned more than 10000 results')
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-1', 'log-2'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 0n, toBlock: 1n },
+			{ fromBlock: 0n, toBlock: 0n },
+			{ fromBlock: 1n, toBlock: 2n },
+			{ fromBlock: 1n, toBlock: 1n },
+			{ fromBlock: 2n, toBlock: 2n },
+		])
+		const firstAttempt = requestedRanges[0]
+		const secondAttempt = requestedRanges[1]
+		if (firstAttempt === undefined || secondAttempt === undefined) throw new Error('Expected at least two requested ranges')
+		expect(secondAttempt.toBlock - secondAttempt.fromBlock < firstAttempt.toBlock - firstAttempt.fromBlock).toBe(true)
+	})
+
+	test('requests a failing one-block range exactly once', async () => {
+		let attempts = 0
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 5n }, 5n, 10n, async () => {
+				attempts += 1
+				throw new Error('query returned more than 10000 results')
+			})
+		} catch (error) {
+			failure = error
+		}
+		expect(attempts).toBe(1)
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 5n, toBlock: 5n })
+	})
+
+	test('stops narrowing at single-block ranges and reports the failing range', async () => {
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 1n }, 1n, 10n, async () => {
+				throw new Error('HTTP 400 while calling eth_getLogs')
+			})
+		} catch (error) {
+			failure = error
+		}
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 1n, toBlock: 1n })
+		expect(failure.message).toContain('blocks 1 through 1')
+		expect(failure.message).toContain('HTTP 400 while calling eth_getLogs')
 	})
 
 	test('requires independent quorum observations to agree', () => {
