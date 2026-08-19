@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { initialCursor, scanRanges } from '../src/monitoring/block-sync.ts'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { fetchLogsWithAdaptiveRanges, initialCursor, logRangeLimitError, LogScanError, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
@@ -10,6 +11,7 @@ import { createSignerOperationGate } from '../src/execution/signer-operation-gat
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
+import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
@@ -90,6 +92,117 @@ describe('shared bot primitives', () => {
 			{ fromBlock: 10n, toBlock: 19n },
 			{ fromBlock: 20n, toBlock: 25n },
 		])
+	})
+
+	test('narrows log scans when a provider rejects the requested block range', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges(initialCursor(13n, 13n), 13n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock > 2n) throw new Error(`You can query up to 3 blocks at a time, but requested ${(range.toBlock - range.fromBlock + 1n).toString()} blocks`)
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-3', 'log-6', 'log-8', 'log-11'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 9n },
+			{ fromBlock: 0n, toBlock: 4n },
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 3n, toBlock: 12n },
+			{ fromBlock: 3n, toBlock: 7n },
+			{ fromBlock: 3n, toBlock: 5n },
+			{ fromBlock: 6n, toBlock: 13n },
+			{ fromBlock: 6n, toBlock: 9n },
+			{ fromBlock: 6n, toBlock: 7n },
+			{ fromBlock: 8n, toBlock: 13n },
+			{ fromBlock: 8n, toBlock: 10n },
+			{ fromBlock: 11n, toBlock: 13n },
+		])
+	})
+
+	test('identifies provider range and payload rejections without retrying other failures', () => {
+		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
+		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
+		expect(logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('log response too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
+		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
+		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
+		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	})
+
+	test('narrows invalid-params range-limit responses without retrying inverted ranges', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		await fetchLogsWithAdaptiveRanges({ nextBlock: 7n }, 10n, 4n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock + 1n > 2n) throw new Error('invalid params: block range is too large')
+			return []
+		})
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 7n, toBlock: 10n },
+			{ fromBlock: 7n, toBlock: 8n },
+			{ fromBlock: 9n, toBlock: 10n },
+		])
+	})
+
+	test('recognizes the bounded transport response error for oversized log payloads', () => {
+		const label = 'RPC eth_getLogs'
+		expect(logRangeLimitError(new Error(`${label} response exceeds ${(LOG_RPC_RESPONSE_BYTES / (1024 * 1024)).toString()} MiB`))).toBe(true)
+	})
+
+	test('narrows the attempted span after a truncated range fails and always makes progress', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: 0n }, 2n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock > range.fromBlock) throw new Error('query returned more than 10000 results')
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-1', 'log-2'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 0n, toBlock: 1n },
+			{ fromBlock: 0n, toBlock: 0n },
+			{ fromBlock: 1n, toBlock: 2n },
+			{ fromBlock: 1n, toBlock: 1n },
+			{ fromBlock: 2n, toBlock: 2n },
+		])
+		const firstAttempt = requestedRanges[0]
+		const secondAttempt = requestedRanges[1]
+		if (firstAttempt === undefined || secondAttempt === undefined) throw new Error('Expected at least two requested ranges')
+		expect(secondAttempt.toBlock - secondAttempt.fromBlock < firstAttempt.toBlock - firstAttempt.fromBlock).toBe(true)
+	})
+
+	test('requests a failing one-block range exactly once', async () => {
+		let attempts = 0
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 5n }, 5n, 10n, async () => {
+				attempts += 1
+				throw new Error('query returned more than 10000 results')
+			})
+		} catch (error) {
+			failure = error
+		}
+		expect(attempts).toBe(1)
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 5n, toBlock: 5n })
+	})
+
+	test('stops narrowing at single-block ranges and reports the failing range', async () => {
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 1n }, 1n, 10n, async () => {
+				throw new Error('HTTP 400 while calling eth_getLogs')
+			})
+		} catch (error) {
+			failure = error
+		}
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 1n, toBlock: 1n })
+		expect(failure.message).toContain('blocks 1 through 1')
+		expect(failure.message).toContain('HTTP 400 while calling eth_getLogs')
 	})
 
 	test('requires independent quorum observations to agree', () => {
@@ -776,8 +889,7 @@ describe('shared bot primitives', () => {
 		}
 	})
 
-	test('unlinks a failed lock initialization even when closing the handle fails', async () => {
-		let removed = false
+	test('reports cleanup failure when failed lock initialization cannot close its handle', async () => {
 		await expect(
 			acquireExclusiveProcessLock(
 				'operator.lock',
@@ -790,40 +902,110 @@ describe('shared bot primitives', () => {
 						close: async () => {
 							throw new Error('close failed')
 						},
+						fd: 1,
 						sync: async () => undefined,
+						truncate: async () => undefined,
 						writeFile: async () => {
 							throw new Error('write failed')
 						},
 					}),
 					readFile: async () => '',
-					rm: async () => {
-						removed = true
-					},
+					tryLock: () => true,
 				},
 			),
 		).rejects.toThrow('Failed to initialize and clean up process lock')
-		expect(removed).toBe(true)
 	})
 
-	test('retries process-lock cleanup after a transient unlink failure', async () => {
+	test('closes the file handle when native lock acquisition throws', async () => {
+		let closed = false
+		await expect(
+			acquireExclusiveProcessLock(
+				'operator.lock',
+				'Test lock',
+				{},
+				{
+					mkdir: async () => undefined,
+					open: async () => ({
+						chmod: async () => undefined,
+						close: async () => {
+							closed = true
+						},
+						fd: 1,
+						sync: async () => undefined,
+						truncate: async () => undefined,
+						writeFile: async () => undefined,
+					}),
+					readFile: async () => '',
+					tryLock: () => {
+						throw new Error('native lock unavailable')
+					},
+				},
+			),
+		).rejects.toThrow('native lock unavailable')
+		expect(closed).toBe(true)
+	})
+
+	test('retries process-lock cleanup after a transient close failure without replacing the lock inode', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-process-lock-'))
 		temporaryDirectories.push(directory)
 		const lockPath = join(directory, 'operator.lock')
-		let removals = 0
+		let closes = 0
 		const filesystem = {
 			mkdir,
 			open,
 			readFile,
-			rm: async (path: string, options: { force: true }) => {
-				removals += 1
-				if (removals === 1) throw new Error('transient unlink failure')
-				await rm(path, options)
-			},
+			tryLock: () => true,
 		}
-		const lock = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
-		await expect(lock.release()).rejects.toThrow('transient unlink failure')
+		const lock = await acquireExclusiveProcessLock(
+			lockPath,
+			'Test lock',
+			{},
+			{
+				...filesystem,
+				open: async (...arguments_) => {
+					const handle = await open(...arguments_)
+					return {
+						chmod: async mode => await handle.chmod(mode),
+						close: async () => {
+							closes += 1
+							if (closes === 1) throw new Error('transient close failure')
+							await handle.close()
+						},
+						fd: handle.fd,
+						sync: async () => await handle.sync(),
+						truncate: async length => await handle.truncate(length),
+						writeFile: async (data, options) => await handle.writeFile(data, options),
+					}
+				},
+			},
+		)
+		const inode = (await stat(lockPath)).ino
+		await expect(lock.release()).rejects.toThrow('transient close failure')
 		await lock.release()
 		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
+		await replacement.release()
+		expect((await stat(lockPath)).isFile()).toBe(true)
+		expect((await stat(lockPath)).ino).toBe(inode)
+	})
+
+	test('reclaims a process lock after its owner is killed', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-killed-process-lock-'))
+		temporaryDirectories.push(directory)
+		const lockPath = join(directory, 'operator.lock')
+		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/process-lock.ts')).href
+		const child = Bun.spawn([process.execPath, '--eval', `import { acquireExclusiveProcessLock } from ${JSON.stringify(moduleUrl)}; await acquireExclusiveProcessLock(${JSON.stringify(lockPath)}, 'Test lock', {}); console.log('ready'); await Bun.sleep(60_000)`], { stderr: 'pipe', stdout: 'pipe' })
+		try {
+			const reader = child.stdout.getReader()
+			const next = await reader.read()
+			if (next.done || !new TextDecoder().decode(next.value).includes('ready')) throw new Error(`Lock subprocess stopped before acquisition: ${await new Response(child.stderr).text()}`)
+			reader.releaseLock()
+			child.kill('SIGKILL')
+			expect(await child.exited).not.toBe(0)
+		} finally {
+			if (child.exitCode === null) child.kill('SIGKILL')
+			await child.exited
+		}
+		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {})
 		await replacement.release()
 	})
 

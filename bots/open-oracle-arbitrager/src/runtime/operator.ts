@@ -2,7 +2,7 @@ import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, g
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
-import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
+import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, fetchLogsWithAdaptiveRanges, initialCursor, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
@@ -427,20 +427,24 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						applyCoordinatorReports(reports, pendingReports)
 						cachedLogs = []
 					} else {
-						const ranges = scanRanges(scanCursor, blockNumber, MAX_LOG_SCAN_RANGE)
-						for (const range of ranges) {
-							const logs = await contextualRpcRead('eth_getLogs', requestClient =>
-								requestClient.getLogs({
-									address: config.openOracle,
-									fromBlock: range.fromBlock,
-									toBlock: range.toBlock,
-									topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-								}),
+						let fromBlock = scanCursor.nextBlock
+						while (fromBlock <= blockNumber) {
+							const toBlock = fromBlock + MAX_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + MAX_LOG_SCAN_RANGE - 1n : blockNumber
+							const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAX_LOG_SCAN_RANGE, range =>
+								contextualRpcRead('eth_getLogs', requestClient =>
+									requestClient.getLogs({
+										address: config.openOracle,
+										fromBlock: range.fromBlock,
+										toBlock: range.toBlock,
+										topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+									}),
+								),
 							)
-							cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
+							cachedLogs = replaceOverlap(cachedLogs, logs, fromBlock, logBlockNumber, compareLogs)
 							reports.clear()
 							applyLogs(reports, cachedLogs)
-							cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, range.toBlock)
+							cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, toBlock)
+							fromBlock = toBlock + 1n
 						}
 					}
 					if (replacedMarketHead) {
