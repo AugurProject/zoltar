@@ -20,6 +20,14 @@ async function waitForJson(origin: string, path: string) {
 	throw new Error('Dashboard did not become ready')
 }
 
+async function waitForRpcMethod(methods: string[], method: string) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (methods.includes(method)) return
+		await Bun.sleep(20)
+	}
+	throw new Error(`Liquidator did not call ${method}`)
+}
+
 afterEach(async () => {
 	for (const child of children.splice(0)) {
 		child.kill()
@@ -173,4 +181,46 @@ test('rejects a wrong-chain private relay during startup validation', async () =
 	const output = `${await new Response(child.stdout).text()}${await new Response(child.stderr).text()}`
 	expect(exitCode).toBe(1)
 	expect(output).toContain('Expected chain 11155111, received 1')
+})
+
+test('queries only deployment bytecode when the configured system is undeployed', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-undeployed-'))
+	directories.push(directory)
+	const methods: string[] = []
+	const rpc = Bun.serve({
+		async fetch(request) {
+			const body = (await request.json()) as { id: unknown; method: string }
+			methods.push(body.method)
+			return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method === 'eth_chainId' ? '0xaa36a7' : '0x' })
+		},
+		hostname: '127.0.0.1',
+		port: 0,
+	})
+	servers.push(rpc)
+	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
+	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
+	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {
+		connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
+		runtime: { pollMilliseconds: number; stateFile: string; ui: boolean }
+	}
+	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}`
+	configuration.connectivity = { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }
+	Reflect.set(configuration, 'network', { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
+	configuration.runtime.pollMilliseconds = 1_000
+	configuration.runtime.stateFile = join(directory, 'state.json')
+	configuration.runtime.ui = false
+	const configurationPath = join(directory, 'operator.json')
+	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
+	const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')], {
+		cwd: join(import.meta.dir, '..', '..'),
+		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
+		stderr: 'pipe',
+		stdout: 'pipe',
+	})
+	children.push(child)
+
+	await waitForRpcMethod(methods, 'eth_getCode')
+	const deploymentCheckIndex = methods.indexOf('eth_getCode')
+	await Bun.sleep(100)
+	expect(methods.slice(deploymentCheckIndex)).toEqual(['eth_getCode'])
 })

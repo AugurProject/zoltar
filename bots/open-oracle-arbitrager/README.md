@@ -15,10 +15,9 @@ Dry-run is the example default. The bot cannot submit a transaction unless
 `runtime.execute` is enabled in its configuration and a signer is saved in that
 configuration or supplied through the local dashboard.
 
-> **Live execution is experimental.** Mainnet commands below are operator
-> references, not production approval. Rehearse on Sepolia with a dedicated
-> low-balance key, validate current executable liquidity, and supervise every
-> position; no automated strategy can guarantee a profit or prevent every loss.
+> Use a dedicated low-balance key, validate current executable liquidity, and
+> supervise every position; no automated strategy can guarantee a profit or prevent
+> every loss.
 > The [latest pinned market fixture](./docs/market-fixture.html#open-oracle-market-fixture)
 > is dated historical evidence, not a live liquidity or profitability claim.
 
@@ -142,41 +141,6 @@ Do not use a key that controls unrelated protocol or treasury funds. By default,
 dashboard binds to `127.0.0.1`; the host-loopback container setup is documented
 under [Docker](#docker). The execution key still lives in the bot process and must
 be protected like any hot wallet.
-
-## End-user readiness backlog
-
-The repository implementation is a guarded operator tool, not yet a supported
-retail release. Complete these items before declaring or packaging a supported
-end-user release. The commands below remain experimental operator references:
-
-1. Publish separate, reviewed mainnet and Sepolia **execution manifests** containing
-   the deployed executor, OpenOracle, approved coordinators, router, factory,
-   quoter, WETH, and executable tokens with runtime bytecode hashes. The protocol
-   deployment manifests for other projects are not a substitute for this bot trust
-   root.
-2. Deploy and source-verify the stateless executor on each supported network, then
-   reproduce every manifest hash through at least two independently operated RPCs.
-3. Run a funded, low-limit Sepolia rehearsal covering entry, replacement, normal
-   settlement, withdrawal, restart after each journal stage, relay rejection,
-   RPC disagreement, and signer-authorized manual reconciliation. Retain transaction
-   hashes and recovery evidence as release artifacts.
-4. Add an external signer or encrypted-keystore interface so routine operators do
-   not need to paste a raw private key into the dashboard or save it in plaintext.
-   Until then, use a dedicated low-balance key and leave **Save this new key in
-   plaintext for future restarts** off.
-5. Extend the deterministic interrupted-write, partial-relay, same-origin RPC,
-   clock-skew, and deep-reorganization tests with host-level disk-full and
-   provider-specific chaos rehearsals.
-6. Publish a supported relay/RPC compatibility matrix and continuously exercise
-   exact bundle simulation, submission, receipt, and archive-read behavior against
-   those providers.
-7. Package a versioned release with pinned Bun support, checksums or signatures,
-   reproducible installation, default service supervision, log rotation, health
-   checks, and alerts for paused, syncing, error, stale-head, recovery-required,
-   low-inventory, and unconfirmed-bundle states.
-8. Commission an independent review of the final deployed addresses, manifests,
-   signer integration, release package, and funded rehearsal evidence. Repeat the
-   review whenever execution dependencies or token allowlists change.
 
 ## Install
 
@@ -1321,7 +1285,6 @@ entry from depending on wallet inventory already committed to recovery.
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can
   still cause loss. Start on Sepolia, use a dedicated low-balance wallet, set small
   risk limits, and supervise every live position.
-- A profitable dry-run observation is not production approval. Before enabling
-  execution, verify the current pools, relay simulations, inventory, risk limits,
+- Before enabling execution, verify the current pools, relay simulations, inventory, risk limits,
   deployment manifest, settlement path, and recovery procedure with a low-value
-  rehearsal.
+  transaction.
