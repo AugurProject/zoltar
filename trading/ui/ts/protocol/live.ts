@@ -342,13 +342,19 @@ export async function validateLiveDeployment(client: PublicClient, configuration
 	])
 	validateRpcChainId(rpcChainId, configuration.chainId)
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
-	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match deployment.json')
+	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
 }
 
 export async function connectWallet(provider: InjectedEthereum) {
 	const accounts = await provider.request({ method: 'eth_requestAccounts', params: [] })
 	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no account')
+	return getAddress(accounts[0])
+}
+
+export async function connectedWalletAccount(provider: InjectedEthereum) {
+	const accounts = await provider.request({ method: 'eth_accounts', params: [] })
+	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no connected account')
 	return getAddress(accounts[0])
 }
 

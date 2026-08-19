@@ -15,8 +15,7 @@ RUN bun install --frozen-lockfile
 RUN bun run shared:build
 RUN cd trading && bun install --frozen-lockfile
 
-ARG TRADING_UI_DEPLOYMENT
-RUN cd trading && if [ -n "${TRADING_UI_DEPLOYMENT}" ]; then TRADING_UI_DEPLOYMENT="${TRADING_UI_DEPLOYMENT}" bun run ui:build; else bun run ui:build; fi
+RUN cd trading && bun run ui:build
 
 FROM oven/bun:${BUN_VERSION}-alpine AS runtime
 

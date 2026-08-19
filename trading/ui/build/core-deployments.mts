@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { getAddress } from '@zoltar/shared/ethereum'
+import { defaultCoreDeploymentRpcUrls } from '../ts/protocol/coreDeploymentDefaults.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -25,9 +26,13 @@ function deploymentStepAddress(steps: unknown, id: string) {
 
 export function coreDeploymentFromManifest(candidate: unknown) {
 	if (!isRecord(candidate) || !isRecord(candidate.network)) throw new Error('Core deployment manifest network is required')
+	const chainId = requiredChainId(candidate.network.chainId)
+	const rpcUrl = defaultCoreDeploymentRpcUrls[chainId]
+	if (rpcUrl === undefined) throw new Error(`Core deployment manifest chain ${chainId.toString()} has no default RPC URL`)
 	return {
-		chainId: requiredChainId(candidate.network.chainId),
+		chainId,
 		chainName: requiredString(candidate.network.name, 'network.name'),
+		rpcUrl,
 		id: requiredString(candidate.network.id, 'network.id'),
 		proxyDeployer: deploymentStepAddress(candidate.deploymentSteps, 'proxyDeployer'),
 		securityPoolFactory: deploymentStepAddress(candidate.deploymentSteps, 'securityPoolFactory'),

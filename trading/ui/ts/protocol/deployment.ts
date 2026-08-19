@@ -5,6 +5,7 @@ import type { DeploymentConfiguration } from './config.ts'
 export type CoreDeployment = Readonly<{
 	chainId: number
 	chainName: string
+	defaultRpcUrl: string
 	id: string
 	proxyDeployer: Address
 	securityPoolFactory: Address
@@ -59,9 +60,9 @@ export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): 
 	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
 	return {
 		core,
-		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Two-way trading factory' },
+		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
 		feeBps: checkedFeeBps,
-		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Two-way trading router' },
+		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
 	}
 }
 
@@ -106,18 +107,6 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 		await validateTradingRouter(client, plan)
 	}
 	return { factory: factoryDeployed, router: routerDeployed }
-}
-
-export async function validateStoredTradingDeployment(client: Pick<PublicClient, 'getChainId' | 'getCode' | 'readContract'>, configuration: DeploymentConfiguration, coreDeployments: readonly CoreDeployment[]) {
-	const rpcChainId = await client.getChainId()
-	if (rpcChainId !== configuration.chainId) throw new Error(`Stored trading deployment chain ${configuration.chainId.toString()} does not match RPC chain ${rpcChainId.toString()}`)
-	const core = coreDeployments.find(deployment => deployment.chainId === configuration.chainId)
-	if (core === undefined) throw new Error(`Stored trading deployment uses unsupported chain ${configuration.chainId.toString()}`)
-	if (core.securityPoolFactory !== configuration.securityPoolFactory) throw new Error('Stored trading deployment references a noncanonical SecurityPoolFactory')
-	const plan = getTradingDeploymentPlan(core, configuration.feeBps)
-	if (plan.factory.address !== configuration.factory || plan.router.address !== configuration.router) throw new Error('Stored trading deployment addresses do not match the current deterministic contracts')
-	const status = await loadTradingDeploymentStatus(client, plan)
-	if (!status.factory || !status.router) throw new Error('Stored trading deployment is incomplete')
 }
 
 export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean }>) {
