@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xF1bAF1F5Ca9403D4bD23439C87aDCe310BB95Eec"
+			"address": "0xFD11904EeF7947bAc625BfeA12Ad071Da3312344"
 		},
 		{
 			"id": "weth",
@@ -102,6 +102,26 @@
 		}
 	],
 	"derivedContracts": [
+		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0x95780f1A1DB83017Accbc85F3afcfc5057d3BEcB"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "Escalation Claim Checkpoint Delegate",
+			"address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0xFda4f0959819d8e73cdAC8E665Bff73541151ac9"
+		},
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",

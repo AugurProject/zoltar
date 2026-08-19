@@ -5,19 +5,11 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { UI_APP_IDS, getUiAppPaths } from './appPaths.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
-const distRootPath = path.join(repositoryRootPath, 'ui', 'dist')
-const distAssetsPath = path.join(distRootPath, 'assets')
-const appBundlePath = path.join(distAssetsPath, 'app.js')
-const appSourceMapPath = path.join(distAssetsPath, 'app.js.map')
-const workerBundlePath = path.join(distAssetsPath, 'tevmWorker.worker.js')
-const workerSourceMapPath = path.join(distAssetsPath, 'tevmWorker.worker.js.map')
-const productionIndexPath = path.join(distRootPath, 'index.html')
-const productionCssPath = path.join(distRootPath, 'css', 'index.css')
-const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
-const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
+const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
+const repositoryRootPath = path.join(directoryOfThisFile, '..', '..', '..')
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
 const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
@@ -30,21 +22,31 @@ const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
-		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
+		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod:current'], {
 			cwd: repositoryRootPath,
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
 		if (result.exitCode !== 0) {
-			throw new Error(`ui:build:prod failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+			throw new Error(`ui:build:prod:current failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
 		}
 	}
 
 	server = Bun.serve({
 		fetch: async request => {
 			const requestUrl = new URL(request.url)
-			const relativePath = requestUrl.pathname === '/' ? 'index.html' : requestUrl.pathname.replace(/^\/+/, '')
-			const filePath = path.join(distRootPath, relativePath)
+			const matchedAppId = UI_APP_IDS.find(appId => requestUrl.pathname === `/${appId}` || requestUrl.pathname.startsWith(`/${appId}/`))
+			if (matchedAppId === undefined) {
+				return new Response('not found', { status: 404 })
+			}
+			const appPaths = appPathsById.get(matchedAppId)
+			if (appPaths === undefined) throw new Error(`No path information recorded for ${matchedAppId}.`)
+			const appRelativePath = requestUrl.pathname === `/${matchedAppId}` ? '/' : requestUrl.pathname.slice(`/${matchedAppId}`.length)
+			const relativePath = appRelativePath === '/' ? 'index.html' : appRelativePath.replace(/^\/+/, '')
+			const filePath = path.join(appPaths.appDistRoot, relativePath)
+			if (!filePath.startsWith(`${appPaths.appDistRoot}${path.sep}`)) {
+				return new Response('forbidden', { status: 403 })
+			}
 			const file = Bun.file(filePath)
 			if (!(await file.exists())) {
 				return new Response('not found', { status: 404 })
@@ -59,50 +61,82 @@ afterAll(() => {
 	server?.stop(true)
 })
 
-test('production build emits the deployable artifact set', async () => {
-	const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
+for (const appId of UI_APP_IDS) {
+	const appPaths = appPathsById.get(appId)
+	if (appPaths === undefined) throw new Error(`No path information recorded for ${appId}.`)
+	const distRootPath = appPaths.appDistRoot
+	const distAssetsPath = appPaths.appDistAssetsRoot
+	const appBundlePath = path.join(distAssetsPath, 'app.js')
+	const appSourceMapPath = path.join(distAssetsPath, 'app.js.map')
+	const workerBundlePath = path.join(distAssetsPath, 'tevmWorker.worker.js')
+	const workerSourceMapPath = path.join(distAssetsPath, 'tevmWorker.worker.js.map')
+	const productionIndexPath = path.join(distRootPath, 'index.html')
+	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
+	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
+	const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
+	const expectedTitle = appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast'
+	const otherTitle = appId === 'zoltar' ? 'Augur Statoblast' : 'Zoltar'
+	const expectedRoute = appId === 'zoltar' ? '#/zoltar' : '#/security-pools'
+	const otherRoute = appId === 'zoltar' ? '#/security-pools' : '#/zoltar'
 
-	for (const expectedPath of expectedPaths) {
-		await expect(fs.access(expectedPath)).resolves.toBeNull()
-	}
-})
+	test(`${appId} production build emits the deployable artifact set`, async () => {
+		const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
 
-test('production index html references the bundled app and does not use the dev import map', async () => {
-	const html = await fs.readFile(productionIndexPath, 'utf8')
+		for (const expectedPath of expectedPaths) {
+			await expect(fs.access(expectedPath)).resolves.toBeNull()
+		}
+	})
 
-	expect(html).toMatch(/<script\s+async\s+type=["']module["']\s+src=["']\.\/assets\/app\.js["']\s*>\s*<\/script>/)
-	expect(html).not.toContain('importmap')
-	expect(html).not.toContain('./js/')
-	expect(html).not.toContain('./vendor/')
-})
+	test(`${appId} production index html references the bundled app and does not use the dev import map`, async () => {
+		const html = await fs.readFile(productionIndexPath, 'utf8')
 
-test('production javascript is self-contained for deploys', async () => {
-	const appBundle = await fs.readFile(appBundlePath, 'utf8')
-	const workerBundle = await fs.readFile(workerBundlePath, 'utf8')
-	const appSourceMap = JSON.parse(await fs.readFile(appSourceMapPath, 'utf8')) as { sources: string[] }
-	const workerSourceMap = JSON.parse(await fs.readFile(workerSourceMapPath, 'utf8')) as { sources: string[] }
+		expect(html).toMatch(/<script\s+async\s+type=["']module["']\s+src=["']\.\/assets\/app\.js["']\s*>\s*<\/script>/)
+		expect(html).not.toContain('importmap')
+		expect(html).not.toContain('./js/')
+		expect(html).not.toContain('./vendor/')
+		expect(html).toContain(`<title>${expectedTitle}</title>`)
+		expect(html).not.toContain(`<title>${otherTitle}</title>`)
+	})
 
-	expect(appBundle).not.toContain('./vendor/')
-	expect(appBundle).not.toContain('./js/')
-	expect(appBundle).toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
-	expect(workerBundle).not.toContain('./vendor/')
-	expect(workerBundle).not.toContain('./js/')
-	expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
-	expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
-})
+	test(`${appId} production javascript is self-contained for deploys`, async () => {
+		const appBundle = await fs.readFile(appBundlePath, 'utf8')
+		const workerBundle = await fs.readFile(workerBundlePath, 'utf8')
+		const appSourceMap = JSON.parse(await fs.readFile(appSourceMapPath, 'utf8')) as { sources: string[] }
+		const workerSourceMap = JSON.parse(await fs.readFile(workerSourceMapPath, 'utf8')) as { sources: string[] }
 
-test('production build can be served as static files', async () => {
-	if (server === undefined) {
-		throw new Error('Production test server did not start')
-	}
+		expect(appBundle).not.toContain('./vendor/')
+		expect(appBundle).not.toContain('./js/')
+		expect(appBundle).toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
+		expect(workerBundle).not.toContain('./vendor/')
+		expect(workerBundle).not.toContain('./js/')
+		expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
+		expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
+		expect(appBundle).toContain(expectedRoute)
+	})
 
-	const baseUrl = server.url.toString().replace(/\/$/, '')
-	const responses = await Promise.all([fetch(`${baseUrl}/`), fetch(`${baseUrl}/assets/app.js`), fetch(`${baseUrl}/assets/tevmWorker.worker.js`), fetch(`${baseUrl}/css/index.css`), fetch(`${baseUrl}/css/tokens.css`)])
+	test(`${appId} production build can be served as static files`, async () => {
+		if (server === undefined) {
+			throw new Error('Production test server did not start')
+		}
 
-	for (const response of responses) {
-		expect(response.status).toBe(200)
-	}
-})
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		const responses = await Promise.all([fetch(`${baseUrl}/${appId}/`), fetch(`${baseUrl}/${appId}/assets/app.js`), fetch(`${baseUrl}/${appId}/assets/tevmWorker.worker.js`), fetch(`${baseUrl}/${appId}/css/index.css`), fetch(`${baseUrl}/${appId}/css/tokens.css`)])
+
+		for (const response of responses) {
+			expect(response.status).toBe(200)
+		}
+	})
+
+	test(`building ${appId} does not remove the other app's production output`, async () => {
+		const otherAppId = appId === 'zoltar' ? 'statoblast' : 'zoltar'
+		const otherPaths = appPathsById.get(otherAppId)
+		if (otherPaths === undefined) throw new Error(`No path information recorded for ${otherAppId}.`)
+		const otherIndexPath = path.join(otherPaths.appDistRoot, 'index.html')
+		const otherHtml = await fs.readFile(otherIndexPath, 'utf8')
+		expect(otherHtml).toContain('<title>')
+		expect(distRootPath).not.toBe(otherPaths.appDistRoot)
+	})
+}
 
 type BrowserProcessStatus = Pick<Bun.Subprocess, 'exitCode' | 'signalCode'>
 type BrowserProcess = Pick<Bun.Subprocess, 'exitCode' | 'exited' | 'signalCode'>
@@ -674,27 +708,38 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 
 const productionBrowserScenarios = [
 	{
+		appId: 'zoltar',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
 		expected: 'Deploy Contracts',
-		name: 'baseline deployment',
+		name: 'zoltar baseline deployment',
 		viewport: { height: 900, width: 1440 },
 	},
 	{
+		appId: 'zoltar',
 		hash: '#/zoltar?simulate=1&simScenario=deployed',
 		expected: 'Questions',
-		name: 'deployed protocol',
+		name: 'zoltar deployed protocol',
 		viewport: { height: 900, width: 1440 },
 	},
 	{
+		appId: 'statoblast',
+		hash: '#/deploy?simulate=1&simScenario=baseline',
+		expected: 'Deploy Contracts',
+		name: 'statoblast baseline deployment',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=security-pool',
 		expected: 'Security Pools',
-		name: 'seeded pool at narrow width',
+		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
 	},
 	{
+		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=securitypoolx2-auction',
 		expected: 'Truth Auction',
-		name: 'fork and auction',
+		name: 'statoblast fork and auction',
 		viewport: { height: 900, width: 1440 },
 	},
 ] as const
@@ -704,7 +749,7 @@ for (const scenario of productionBrowserScenarios) {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.hash}`, scenario.viewport))
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
@@ -722,7 +767,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
 	const baseUrl = server.url.toString().replace(/\/$/, '')
 	const state = JSON.parse(
-		await loadProductionDocumentInChromium(`${baseUrl}/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
+		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
 			await driver.evaluate('document.body.focus()')
 			await driver.pressTab()
 			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
@@ -732,7 +777,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(deployedBody).not.toContain('Failed to initialize the app environment')
 
 			await driver.resize({ height: 844, width: 390 })
-			await driver.navigate(`${baseUrl}/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
+			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('Open pool')
 			await driver.waitForBodyWithoutText('Loading vault…')
@@ -763,7 +808,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(poolBody).toContain('Manage Pool')
 
 			await driver.resize({ height: 900, width: 1440 })
-			await driver.navigate(`${baseUrl}/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
+			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 year')
 			const reportingPoolOpened = await driver.evaluate(
@@ -872,7 +917,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyText('Vault REP backing and capacity ownership were migrated into the selected child universe.')
 
 			await driver.resize({ height: 900, width: 1440 })
-			await driver.navigate(`${baseUrl}/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
+			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(

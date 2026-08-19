@@ -4,23 +4,28 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
-import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
+import { sharedBrowserArtifactRelativePaths } from '../../../scripts/sharedBrowserArtifacts.ts'
 import { clearVendorOutput, vendor } from './vendor.mts'
+import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
-const uiRootPath = path.join(repositoryRootPath, 'ui')
-const uiProtocolPaths = ['forks.ts', 'openOracle.ts', 'trading.ts'].map(fileName => path.join(repositoryRootPath, 'ui', 'ts', 'protocol', fileName))
-const uiDeploymentHelpersPath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
-const uiReportingDomainPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'reporting', 'lib', 'reportingDomain.ts')
-const uiSepoliaDeploymentConfigPath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'sepoliaDeploymentConfig.ts')
-const uiSimulationBootstrapPath = path.join(repositoryRootPath, 'ui', 'ts', 'simulation', 'bootstrap.ts')
-const uiTruthAuctionBookPath = path.join(repositoryRootPath, 'ui', 'ts', 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
-const uiIndexHtmlPath = path.join(repositoryRootPath, 'ui', 'index.html')
-const uiVendorBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'vendor.mts')
-const uiWatchBuildPath = path.join(repositoryRootPath, 'ui', 'build', 'watch.mts')
-const uiPackageJsonPath = path.join(repositoryRootPath, 'ui', 'package.json')
-const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'index.dev.ts')
+const coreSharedPaths = getUiCoreSharedPaths()
+const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
+const zoltarPaths = appPathsById.get('zoltar')
+const statoblastPaths = appPathsById.get('statoblast')
+if (zoltarPaths === undefined || statoblastPaths === undefined) throw new Error('Failed to resolve the UI application paths.')
+const repositoryRootPath = coreSharedPaths.repositoryRoot
+const uiRootPath = coreSharedPaths.uiRoot
+const uiProtocolPaths = [path.join(zoltarPaths.appSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarPaths.appSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastPaths.appSourceRoot, 'protocol', 'trading.ts')]
+const uiDeploymentHelpersPath = path.join(zoltarPaths.appSourceRoot, 'protocol', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(zoltarPaths.appSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
+const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'lib', 'sepoliaDeploymentConfig.ts')
+const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
+const uiTruthAuctionBookPath = path.join(statoblastPaths.appSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
+const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
+const uiVendorBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'vendor.mts')
+const uiWatchBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'watch.mts')
+const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
@@ -57,15 +62,17 @@ type ResolvedImport = {
 	kind: 'file' | 'vendor'
 }
 
-function readDevelopmentImportMap(): Record<string, string> {
+function readDevelopmentImportMap(appId: (typeof UI_APP_IDS)[number]): Record<string, string> {
+	const uiIndexHtmlPath = uiIndexHtmlPaths.get(appId)
+	if (uiIndexHtmlPath === undefined) throw new Error(`No index.html path recorded for ${appId}.`)
 	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
 	const importMapMatch = uiIndexHtml.match(/<script\s+type=['"]importmap['"][^>]*>([\s\S]*?)<\/script>/)
 	if (importMapMatch === null || importMapMatch[1] === undefined) {
-		throw new Error('Expected ui/index.html to contain a development import map script.')
+		throw new Error(`Expected ${uiIndexHtmlPath} to contain a development import map script.`)
 	}
 	const importMap = JSON.parse(importMapMatch[1]) as ImportMapFile
 	if (importMap.imports === undefined) {
-		throw new Error('Expected development import map to include imports.')
+		throw new Error(`Expected the development import map in ${uiIndexHtmlPath} to include imports.`)
 	}
 	return importMap.imports
 }
@@ -91,7 +98,7 @@ function resolveImportMapSpecifier(specifier: string, imports: Record<string, st
 	return `${matchedPath}${specifier.slice(matchedPrefix.length)}`
 }
 
-function resolveDevelopmentImport(fromPath: string, specifier: string, imports: Record<string, string>) {
+function resolveDevelopmentImport(fromPath: string, specifier: string, imports: Record<string, string>, appRootPath: string) {
 	if (!isBareModuleSpecifier(specifier)) {
 		const resolvedSourcePath = resolveSourceModulePath(fromPath, specifier)
 		if (resolvedSourcePath !== undefined) {
@@ -108,28 +115,41 @@ function resolveDevelopmentImport(fromPath: string, specifier: string, imports: 
 	}
 
 	const mappedSpecifier = resolveImportMapSpecifier(specifier, imports)
-	if (mappedSpecifier === undefined) return undefined
-	if (mappedSpecifier.startsWith('./vendor/')) {
+	if (mappedSpecifier === undefined) {
+		const vendorFallback = resolveSourceModulePath(fromPath, path.join('vendor', specifier))
+		if (vendorFallback !== undefined) return { filePath: vendorFallback, kind: 'vendor' } satisfies ResolvedImport
+		return undefined
+	}
+	const rawResolvedPath = mappedSpecifier.startsWith('/') ? path.join(repositoryRootPath, mappedSpecifier) : mappedSpecifier.startsWith('../shared/') ? path.join(repositoryRootPath, mappedSpecifier.replace(/^\.\.\//, '')) : path.resolve(appRootPath, mappedSpecifier)
+	if (rawResolvedPath.includes(`${path.sep}shared${path.sep}js${path.sep}`)) {
 		return {
-			filePath: path.resolve(uiRootPath, mappedSpecifier),
-			kind: 'vendor',
+			filePath: rawResolvedPath,
+			kind: 'file',
 		} satisfies ResolvedImport
 	}
-
+	const sourceResolvedPath = resolveSourceModulePath(fromPath, rawResolvedPath)
+	if (sourceResolvedPath !== undefined && !sourceResolvedPath.endsWith('.js') && !sourceResolvedPath.endsWith('.mjs')) {
+		return {
+			filePath: sourceResolvedPath,
+			kind: 'file',
+		} satisfies ResolvedImport
+	}
 	return {
-		filePath: path.resolve(uiRootPath, mappedSpecifier),
-		kind: 'file',
+		filePath: rawResolvedPath,
+		kind: mappedSpecifier.startsWith('./vendor/') ? 'vendor' : 'file',
 	} satisfies ResolvedImport
 }
 
 function resolveSourceModulePath(fromPath: string, specifier: string) {
 	const rawResolvedPath = path.resolve(path.dirname(fromPath), specifier)
-	const candidatePaths = [rawResolvedPath]
 	if (rawResolvedPath.endsWith('.js')) {
 		const withoutJavaScriptExtension = rawResolvedPath.slice(0, -'.js'.length)
-		candidatePaths.push(`${withoutJavaScriptExtension}.ts`, `${withoutJavaScriptExtension}.tsx`, `${withoutJavaScriptExtension}.mts`)
+		const siblingSourceCandidates = [`${withoutJavaScriptExtension}.ts`, `${withoutJavaScriptExtension}.tsx`, `${withoutJavaScriptExtension}.mts`]
+		const siblingSource = siblingSourceCandidates.find(candidatePath => fs.existsSync(candidatePath))
+		if (siblingSource !== undefined) return siblingSource
 	}
-	candidatePaths.push(path.join(rawResolvedPath, 'index.ts'), path.join(rawResolvedPath, 'index.tsx'), path.join(rawResolvedPath, 'index.js'))
+	const candidatePaths = [rawResolvedPath]
+	candidatePaths.push(`${rawResolvedPath}.js`, `${rawResolvedPath}.mjs`, path.join(rawResolvedPath, 'index.ts'), path.join(rawResolvedPath, 'index.tsx'), path.join(rawResolvedPath, 'index.js'))
 
 	return candidatePaths.find(candidatePath => fs.existsSync(candidatePath))
 }
@@ -251,15 +271,17 @@ function collectBareBunStringLiterals(sourceFile: ts.SourceFile) {
 	return locations
 }
 
-function getExportedNames(filePath: string, imports: Record<string, string>, exportCache: Map<string, Set<string>>) {
+function getExportedNames(filePath: string, imports: Record<string, string>, exportCache: Map<string, Set<string>>, appRootPath: string) {
 	const cachedExports = exportCache.get(filePath)
 	if (cachedExports !== undefined) return cachedExports
 
 	const exportedNames = new Set<string>()
 	exportCache.set(filePath, exportedNames)
-	if (!fs.existsSync(filePath)) return exportedNames
+	const sourceFilePath = resolveSourceModulePath(filePath, filePath)
+	const effectiveFilePath = sourceFilePath !== undefined && !sourceFilePath.endsWith('.js') && !sourceFilePath.endsWith('.mjs') ? sourceFilePath : filePath
+	if (!fs.existsSync(effectiveFilePath)) return exportedNames
 
-	const sourceFile = parseModule(filePath, fs.readFileSync(filePath, 'utf8'))
+	const sourceFile = parseModule(effectiveFilePath, fs.readFileSync(effectiveFilePath, 'utf8'))
 	for (const statement of sourceFile.statements) {
 		if (ts.isExportDeclaration(statement)) {
 			if (!isRuntimeExportDeclaration(statement)) continue
@@ -278,9 +300,9 @@ function getExportedNames(filePath: string, imports: Record<string, string>, exp
 
 			const specifier = getModuleSpecifierText(statement)
 			if (specifier === undefined) continue
-			const resolvedPath = resolveDevelopmentImport(filePath, specifier, imports)
+			const resolvedPath = resolveDevelopmentImport(filePath, specifier, imports, appRootPath)
 			if (resolvedPath === undefined || !fs.existsSync(resolvedPath.filePath)) continue
-			for (const name of getExportedNames(resolvedPath.filePath, imports, exportCache)) {
+			for (const name of getExportedNames(resolvedPath.filePath, imports, exportCache, appRootPath)) {
 				if (name !== 'default') exportedNames.add(name)
 			}
 			continue
@@ -316,7 +338,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	const deploymentHelpersSource = fs.readFileSync(uiDeploymentHelpersPath, 'utf8')
 	const sepoliaDeploymentConfigSource = fs.readFileSync(uiSepoliaDeploymentConfigPath, 'utf8')
 	const simulationBootstrapSource = fs.readFileSync(uiSimulationBootstrapPath, 'utf8')
-	const uiIndexHtml = fs.readFileSync(uiIndexHtmlPath, 'utf8')
+	const appIndexHtmlSources = [...uiIndexHtmlPaths.values()].map(indexPath => fs.readFileSync(indexPath, 'utf8'))
 
 	expect(protocolSource).toContain("from './helpers.js'")
 	expect(protocolSource).toContain("from './deploymentHelpers.js'")
@@ -331,20 +353,22 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
-	expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
-	expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
+	for (const uiIndexHtml of appIndexHtmlSources) {
+		expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
+		expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
+	}
 	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/scalarOutcome.js')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
@@ -353,23 +377,27 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 })
 
 test('watch build regression scanner catches indirect bare Bun commands', () => {
-	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
+	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'coreShared', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
 
-	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['ui/build/bare-bun-fixture.mts:1:21'])
+	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['ui/coreShared/build/bare-bun-fixture.mts:1:21'])
 })
 
 test('development import map maps browser dependency subpaths', () => {
-	const imports = readDevelopmentImportMap()
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
 	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
 	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
-	const uiPackageJson = JSON.parse(fs.readFileSync(uiPackageJsonPath, 'utf8')) as { scripts?: Record<string, string | undefined> }
+	const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8')) as { scripts?: Record<string, string | undefined> }
 
-	for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
-		expect(imports[specifier]).toBe(mappedPath)
+	for (const appId of UI_APP_IDS) {
+		const imports = readDevelopmentImportMap(appId)
+		for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
+			expect(imports[specifier], `${appId} import map entry for ${specifier}`).toBe(mappedPath)
+		}
 	}
-	expect(uiPackageJson.scripts?.watch).toStartWith('cd .. && bun run generate && cd ui')
-	expect(uiPackageJson.scripts?.serve).toStartWith('cd .. && bun run generate && cd ui')
+	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('build/watch.mts zoltar')
+	expect(rootPackageJson.scripts?.['app:watch:statoblast']).toContain('build/watch.mts statoblast')
+	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
+	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
 	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
 	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
@@ -410,17 +438,24 @@ test('vendor build clears generated output before rebuilding assets', async () =
 	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'copyProjectArtifacts'])
 })
 
-test('development import map resolves all static imports reachable from the dev entrypoint', () => {
-	const imports = readDevelopmentImportMap()
-	const pendingPaths = [uiDevelopmentEntrypointPath]
-	const visitedPaths = new Set<string>()
-	const exportCache = new Map<string, Set<string>>()
-	const unresolvedImports: string[] = []
+for (const appId of UI_APP_IDS) {
+	test(`development import map resolves all static imports reachable from the ${appId} dev entrypoint`, () => {
+		const appPaths = appPathsById.get(appId)
+		if (appPaths === undefined) throw new Error(`No path information recorded for ${appId}.`)
+		const imports = readDevelopmentImportMap(appId)
+		const pendingPaths = [path.join(appPaths.appSourceRoot, 'index.dev.ts')]
+		const visitedPaths = new Set<string>()
+		const exportCache = new Map<string, Set<string>>()
+		const unresolvedImports: string[] = []
 
 	while (pendingPaths.length > 0) {
 		const currentPath = pendingPaths.pop()
-		if (currentPath === undefined || visitedPaths.has(currentPath)) continue
-		visitedPaths.add(currentPath)
+		if (currentPath === undefined) continue
+		const withinSharedGeneratedOutput = currentPath.includes(`${path.sep}shared${path.sep}js${path.sep}`)
+		if (!withinSharedGeneratedOutput) {
+			if (visitedPaths.has(currentPath)) continue
+			visitedPaths.add(currentPath)
+		}
 
 		if (!fs.existsSync(currentPath)) {
 			unresolvedImports.push(`Missing module ${path.relative(repositoryRootPath, currentPath)}`)
@@ -430,7 +465,7 @@ test('development import map resolves all static imports reachable from the dev 
 		const source = fs.readFileSync(currentPath, 'utf8')
 		const sourceFile = parseModule(currentPath, source)
 		for (const specifier of collectRuntimeModuleSpecifiers(sourceFile)) {
-			const resolvedPath = resolveDevelopmentImport(currentPath, specifier, imports)
+			const resolvedPath = resolveDevelopmentImport(currentPath, specifier, imports, appPaths.appRoot)
 			if (resolvedPath === undefined) {
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports unmapped bare specifier ${specifier}`)
 				continue
@@ -443,13 +478,13 @@ test('development import map resolves all static imports reachable from the dev 
 		}
 
 		for (const reference of collectNamedModuleReferences(sourceFile)) {
-			const resolvedPath = resolveDevelopmentImport(currentPath, reference.specifier, imports)
+			const resolvedPath = resolveDevelopmentImport(currentPath, reference.specifier, imports, appPaths.appRoot)
 			if (resolvedPath === undefined) {
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports named bindings from unmapped bare specifier ${reference.specifier}`)
 				continue
 			}
 			if (!fs.existsSync(resolvedPath.filePath)) continue
-			const exportedNames = getExportedNames(resolvedPath.filePath, imports, exportCache)
+			const exportedNames = getExportedNames(resolvedPath.filePath, imports, exportCache, appPaths.appRoot)
 			for (const name of reference.names) {
 				if (exportedNames.has(name)) continue
 				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${name} from ${reference.specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not export it`)
@@ -457,5 +492,6 @@ test('development import map resolves all static imports reachable from the dev 
 		}
 	}
 
-	expect(unresolvedImports).toEqual([])
-})
+		expect(unresolvedImports).toEqual([])
+	})
+}

@@ -113,7 +113,7 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 }
 
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'zoltar', 'ts', 'protocol', 'deployment.ts')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblast', 'ts', 'protocol', 'deployment.ts')
 	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltar', 'ts', 'protocol', 'deploymentHelpers.ts')
 	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'lib', 'networkProfile.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
@@ -137,6 +137,26 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 			protocolConfig: readProtocolConfig(getMainnetProtocolConfig()),
 			deploymentSteps: readDeploymentSteps(getDeploymentSteps(profile)),
 			derivedContracts: [
+				{
+					id: 'securityPoolForker',
+					label: 'Security Pool Forker',
+					address: readStringField(infraContractAddresses, 'securityPoolForker', 'infraContractAddresses.securityPoolForker'),
+				},
+				{
+					id: 'escalationGameClaimDelegate',
+					label: 'Escalation Claim Checkpoint Delegate',
+					address: readStringField(infraContractAddresses, 'escalationGameClaimDelegate', 'infraContractAddresses.escalationGameClaimDelegate'),
+				},
+				{
+					id: 'escalationGameFactory',
+					label: 'Escalation Game Factory',
+					address: readStringField(infraContractAddresses, 'escalationGameFactory', 'infraContractAddresses.escalationGameFactory'),
+				},
+				{
+					id: 'securityPoolFactory',
+					label: 'Security Pool Factory',
+					address: readStringField(infraContractAddresses, 'securityPoolFactory', 'infraContractAddresses.securityPoolFactory'),
+				},
 				{
 					id: 'escalationGameProofVerifier',
 					label: 'Escalation Game Proof Verifier',

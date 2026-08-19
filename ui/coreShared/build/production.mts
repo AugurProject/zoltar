@@ -1,13 +1,12 @@
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
-import * as url from 'node:url'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
+import { parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const DIST_ROOT_PATH = path.join(UI_ROOT_PATH, 'dist')
-const DIST_ASSETS_PATH = path.join(DIST_ROOT_PATH, 'assets')
+const appId = parseUiAppIdFromProcess('the production build')
+const paths = getUiAppPaths(appId)
+
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
 	env: {},
@@ -22,6 +21,11 @@ const process = globalThis.process ?? {
 globalThis.process ??= process
 globalThis.global ??= globalThis
 `.trim()
+
+const APP_TITLES: Record<string, string> = {
+	zoltar: 'Zoltar',
+	statoblast: 'Augur Statoblast',
+}
 
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
@@ -54,39 +58,49 @@ async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await Bun.write(destinationPath, await sourceFile.arrayBuffer())
 }
 
-async function writeProductionIndexHtml() {
-	const templatePath = path.join(UI_ROOT_PATH, 'build', 'index.production.html')
-	const html = await fs.readFile(templatePath, 'utf8')
-	await fs.mkdir(DIST_ROOT_PATH, { recursive: true })
-	await fs.writeFile(path.join(DIST_ROOT_PATH, 'index.html'), html)
+function assertBuildSucceeded(label: string, result: { success: boolean; logs: Array<unknown> }) {
+	if (result.success) return
+	const messages = result.logs.map(log => (typeof log === 'object' && log !== null && 'message' in log ? String(log.message) : String(log))).join('\n')
+	throw new Error(`${label} failed for ${appId}\n${messages}`)
 }
 
-async function buildProductionApp() {
-	await Bun.build({
-		entrypoints: [normalizeBundlerPath(path.join(UI_ROOT_PATH, 'ts', 'index.ts'))],
+async function writeProductionIndexHtml(paths: UiAppPaths) {
+	const templatePath = path.join(paths.coreSharedRoot, 'build', 'index.production.html')
+	let html = await fs.readFile(templatePath, 'utf8')
+	const appTitle = APP_TITLES[appId]
+	if (appTitle === undefined) throw new Error(`No production title recorded for ${appId}`)
+	html = html.replace('Zoltar + Augur Statoblast', appTitle)
+	await fs.mkdir(paths.appDistRoot, { recursive: true })
+	await fs.writeFile(path.join(paths.appDistRoot, 'index.html'), html)
+}
+
+async function buildProductionApp(paths: UiAppPaths) {
+	const result = await Bun.build({
+		entrypoints: [normalizeBundlerPath(paths.appEntrypoint)],
 		naming: {
 			entry: 'app.js',
 			chunk: 'chunks/[name]-[hash].js',
 		},
-		outdir: DIST_ASSETS_PATH,
+		outdir: paths.appDistAssetsRoot,
 		plugins: [createBrowserVendorAliasPlugin()],
 		target: 'browser',
 		sourcemap: 'linked',
 	})
+	assertBuildSucceeded('Production application bundle', result)
 }
 
-async function buildProductionWorker() {
-	const workerEntryPath = path.join(UI_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.ts')
+async function buildProductionWorker(paths: UiAppPaths) {
 	const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
 
 	const result = await Bun.build({
-		entrypoints: [normalizeBundlerPath(workerEntryPath)],
+		entrypoints: [normalizeBundlerPath(paths.workerEntrypoint)],
 		naming: { entry: 'tevmWorker.worker.js' },
-		outdir: DIST_ASSETS_PATH,
+		outdir: paths.appDistAssetsRoot,
 		plugins: [createBrowserVendorAliasPlugin()],
 		target: 'browser',
 		sourcemap: 'linked',
 	})
+	assertBuildSucceeded('Production worker bundle', result)
 
 	for (const output of result.outputs) {
 		if (output.path.endsWith('.js')) {
@@ -125,17 +139,17 @@ async function buildProductionWorker() {
 }
 
 export async function buildProductionBundle() {
-	await fs.rm(DIST_ROOT_PATH, { recursive: true, force: true })
-	await fs.mkdir(DIST_ASSETS_PATH, { recursive: true })
+	await fs.rm(paths.appDistRoot, { recursive: true, force: true })
+	await fs.mkdir(paths.appDistAssetsRoot, { recursive: true })
 
 	await Promise.all([
-		buildProductionApp(),
-		buildProductionWorker(),
-		writeProductionIndexHtml(),
-		copyStaticAsset(path.join(UI_ROOT_PATH, 'css', 'index.css'), path.join(DIST_ROOT_PATH, 'css', 'index.css')),
-		copyStaticAsset(path.join(UI_ROOT_PATH, 'css', 'tokens.css'), path.join(DIST_ROOT_PATH, 'css', 'tokens.css')),
-		copyStaticAsset(path.join(UI_ROOT_PATH, 'favicon.ico'), path.join(DIST_ROOT_PATH, 'favicon.ico')),
-		copyStaticAsset(path.join(UI_ROOT_PATH, 'favicon.svg'), path.join(DIST_ROOT_PATH, 'favicon.svg')),
+		buildProductionApp(paths),
+		buildProductionWorker(paths),
+		writeProductionIndexHtml(paths),
+		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'index.css'), path.join(paths.appDistRoot, 'css', 'index.css')),
+		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'tokens.css'), path.join(paths.appDistRoot, 'css', 'tokens.css')),
+		copyStaticAsset(paths.faviconIco, path.join(paths.appDistRoot, 'favicon.ico')),
+		copyStaticAsset(paths.faviconSvg, path.join(paths.appDistRoot, 'favicon.svg')),
 	])
 }
 

@@ -1,0 +1,16 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+	<defs>
+		<linearGradient id='sky' x1='0%' y1='0%' x2='100%' y2='100%'>
+			<stop offset='0%' stop-color='#f3ede0' />
+			<stop offset='100%' stop-color='#d6c5a3' />
+		</linearGradient>
+		<linearGradient id='frame' x1='0%' y1='0%' x2='100%' y2='100%'>
+			<stop offset='0%' stop-color='#2b2419' />
+			<stop offset='100%' stop-color='#6c5631' />
+		</linearGradient>
+	</defs>
+	<rect width='64' height='64' rx='16' fill='url(#sky)' />
+	<path d='M14 50h36L32 13z' fill='url(#frame)' />
+	<circle cx='32' cy='31' r='8' fill='#efe4cb' />
+	<path d='M25 45h14' stroke='#efe4cb' stroke-linecap='round' stroke-width='3.5' />
+</svg>
