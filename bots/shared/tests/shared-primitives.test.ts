@@ -121,6 +121,8 @@ describe('shared bot primitives', () => {
 		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
 		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
 		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
+		expect(logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('log response too large'))).toBe(true)
 		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
 		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
 		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
@@ -128,6 +130,20 @@ describe('shared bot primitives', () => {
 		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
 		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
 		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	})
+
+	test('narrows invalid-params range-limit responses without retrying inverted ranges', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		await fetchLogsWithAdaptiveRanges({ nextBlock: 7n }, 10n, 4n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock + 1n > 2n) throw new Error('invalid params: block range is too large')
+			return []
+		})
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 7n, toBlock: 10n },
+			{ fromBlock: 7n, toBlock: 8n },
+			{ fromBlock: 9n, toBlock: 10n },
+		])
 	})
 
 	test('recognizes the bounded transport response error for oversized log payloads', () => {

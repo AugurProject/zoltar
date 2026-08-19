@@ -1,6 +1,6 @@
 import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { fetchLogsWithAdaptiveRanges, LogScanError, scanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
+import { fetchLogsWithAdaptiveRanges, scanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -158,22 +158,17 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			const outcomes = await settledQuorumValue(
 				`staged operation ${pending.operationId.toString()} blocks ${range.fromBlock.toString()}-${range.toBlock.toString()}`,
 				clients.map(async ({ client, endpoint }) => {
-					try {
-						const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAXIMUM_RECOVERY_LOG_RANGE, subRange =>
-							client.getLogs({ address: pending.coordinator, fromBlock: subRange.fromBlock, toBlock: subRange.toBlock }),
-						)
-						return {
-							endpoint,
-							value: logs.flatMap(log => {
-								const decoded = stagedOperationOutcome(log, pending.operationId)
-								if (decoded === undefined) return []
-								if (log.blockHash === undefined || log.blockNumber === undefined || log.transactionHash === undefined) throw new Error('Staged-operation outcome log is missing canonical identity')
-								return [{ ...decoded, blockHash: log.blockHash, blockNumber: log.blockNumber, transactionHash: log.transactionHash }]
-							}),
-						}
-					} catch (error) {
-						if (!(error instanceof LogScanError)) throw error
-						throw error.cause === undefined ? error : error.cause
+					const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAXIMUM_RECOVERY_LOG_RANGE, subRange =>
+						client.getLogs({ address: pending.coordinator, fromBlock: subRange.fromBlock, toBlock: subRange.toBlock }),
+					)
+					return {
+						endpoint,
+						value: logs.flatMap(log => {
+							const decoded = stagedOperationOutcome(log, pending.operationId)
+							if (decoded === undefined) return []
+							if (log.blockHash === undefined || log.blockNumber === undefined || log.transactionHash === undefined) throw new Error('Staged-operation outcome log is missing canonical identity')
+							return [{ ...decoded, blockHash: log.blockHash, blockNumber: log.blockNumber, transactionHash: log.transactionHash }]
+						}),
 					}
 				}),
 			)

@@ -220,7 +220,7 @@ describe('configured coordinator report discovery', () => {
 			uncles: [],
 		}
 		const entryLog = { address: openOracle, blockHash, blockNumber: '0x63', data: encodeOpenOracleStatePreimagePacked(reportState(7n, 1_000n, 2_000n)), logIndex: '0x0', removed: false, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, reportTopic], transactionHash: entryTransactionHash, transactionIndex: '0x0' }
-		const successorLog = { address: openOracle, blockHash, blockNumber: '0x64', data: encodeOpenOracleStatePreimagePacked(reportState(7n, 1_400n, 2_300n)), logIndex: '0x0', removed: false, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, reportTopic], transactionHash: successorTransactionHash, transactionIndex: '0x0' }
+		const successorLog = { address: openOracle, blockHash, blockNumber: '0x63', data: encodeOpenOracleStatePreimagePacked(reportState(7n, 1_400n, 2_300n)), logIndex: '0x1', removed: false, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, reportTopic], transactionHash: successorTransactionHash, transactionIndex: '0x1' }
 		const logRanges: { fromBlock: string; toBlock: string }[] = []
 		const provider = (): EIP1193Provider => ({
 			request: async parameters => {
@@ -229,7 +229,7 @@ describe('configured coordinator report discovery', () => {
 				const request = parameters.params[0]
 				if (typeof request !== 'object' || request === null || !('fromBlock' in request) || !('toBlock' in request)) throw new Error('Malformed log filter')
 				logRanges.push({ fromBlock: String(request.fromBlock), toBlock: String(request.toBlock) })
-				if (request.fromBlock !== '0x0') throw new Error('HTTP 400 while calling eth_getLogs')
+				if (request.fromBlock !== '0x0' || request.toBlock !== '0x63') throw new Error('HTTP 400 while calling eth_getLogs')
 				return [entryLog, successorLog]
 			},
 		})

@@ -26,9 +26,9 @@ export function logRangeLimitError(error: unknown) {
 	return walkErrorCauses(error, current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
-		if (message.includes('invalid') || message.includes('fromblock exceeds toblock')) return false
+		if (message.includes('fromblock exceeds toblock')) return false
 		if (message.includes('http 413') || message.includes('range is too large')) return true
-		if (message.includes('response exceeds')) return true
+		if (message.includes('response exceeds') || message.includes('response too large')) return true
 		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')
 		const mentionsExceeding = message.includes('limit') || message.includes('too many') || message.includes('exceed') || message.includes('too large') || message.includes('maximum') || message.includes('up to') || message.includes('more than')
 		return mentionsRangeCap && mentionsExceeding
