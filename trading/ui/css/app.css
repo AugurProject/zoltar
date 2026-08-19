@@ -243,6 +243,10 @@ nav a[aria-current="page"] {
 	cursor: pointer;
 	font-size: 12px;
 }
+.wallet-button:disabled {
+	opacity: 0.58;
+	cursor: not-allowed;
+}
 .wallet-summary {
 	position: relative;
 	min-width: 0;

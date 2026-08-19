@@ -17,6 +17,8 @@ export type TradingDeploymentSetupServices = Readonly<{
 	saveConfiguration(configuration: DeploymentConfiguration): void
 }>
 
+export type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
+
 const defaultServices: TradingDeploymentSetupServices = {
 	createPublicClient: rpcUrl => createPublicClient({ transport: http(rpcUrl) }),
 	connectWallet: async () => {
@@ -97,14 +99,18 @@ export function TradingDeploymentSetup({
 	onComplete,
 	onRetryConfiguration,
 	onWorkflowLockChange = () => undefined,
+	onWalletStateChange,
 	services = defaultServices,
+	walletControlRequestNonce,
 }: {
 	configurationError: string | undefined
 	currentConfiguration?: DeploymentConfiguration
 	onComplete(configuration: DeploymentConfiguration): void
 	onRetryConfiguration?(): void
 	onWorkflowLockChange?(locked: boolean): void
+	onWalletStateChange?(state: DeploymentWalletState): void
 	services?: TradingDeploymentSetupServices
+	walletControlRequestNonce?: number
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
 	const [registryLoading, setRegistryLoading] = useState(true)
@@ -309,6 +315,22 @@ export function TradingDeploymentSetup({
 		setWalletChain(undefined)
 		setWalletConnectionMessage(undefined)
 	}
+	const walletControlRevision = useRef(walletControlRequestNonce)
+	useEffect(() => {
+		onWalletStateChange?.({ account: walletAccount, connecting: walletConnecting, ready: !registryLoading && registryError === undefined && selectedCore !== undefined })
+	}, [onWalletStateChange, registryError, registryLoading, selectedCore, walletAccount, walletConnecting])
+	useEffect(
+		() => () => {
+			onWalletStateChange?.({ account: undefined, connecting: false, ready: false })
+		},
+		[onWalletStateChange],
+	)
+	useEffect(() => {
+		if (walletControlRequestNonce === undefined || walletControlRevision.current === walletControlRequestNonce) return
+		walletControlRevision.current = walletControlRequestNonce
+		if (walletAccount === undefined) void connectDeploymentWallet()
+		else disconnectDeploymentWallet()
+	}, [walletControlRequestNonce])
 	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
 	const deploymentComplete = deploymentStatus?.factory === true && deploymentStatus.router
 	const deploymentSteps =
@@ -323,6 +345,17 @@ export function TradingDeploymentSetup({
 	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const retryConfiguration = !retryChecks && configurationError !== undefined && configurationError !== missingDeploymentConfigurationMessage && onRetryConfiguration !== undefined
+	let standaloneWalletButton
+	if (walletControlRequestNonce === undefined)
+		standaloneWalletButton = walletConnected ? (
+			<button class='wallet-button' type='button' disabled={busy} aria-label={`Disconnect wallet ${walletAccount}`} title='Disconnect wallet' onClick={disconnectDeploymentWallet}>
+				{shortAddress(walletAccount)}
+			</button>
+		) : (
+			<button class='wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
+				{walletConnecting ? 'Connecting wallet…' : 'Connect wallet'}
+			</button>
+		)
 	let retryAction
 	if (retryChecks)
 		retryAction = (
@@ -404,15 +437,7 @@ export function TradingDeploymentSetup({
 					<h1>Set up trading</h1>
 					<p>Select a canonical Zoltar deployment and submit the two deterministic trading contracts from your wallet.</p>
 				</div>
-				{walletConnected ? (
-					<button class='wallet-button' type='button' disabled={busy} aria-label={`Disconnect wallet ${walletAccount}`} title='Disconnect wallet' onClick={disconnectDeploymentWallet}>
-						{shortAddress(walletAccount)}
-					</button>
-				) : (
-					<button class='wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
-						{walletConnecting ? 'Connecting wallet…' : 'Connect wallet'}
-					</button>
-				)}
+				{standaloneWalletButton}
 			</header>
 			<section class='section deployment-setup'>
 				{configurationError === undefined ? null : (

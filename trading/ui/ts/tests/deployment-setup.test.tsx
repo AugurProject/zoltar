@@ -168,6 +168,35 @@ describe('trading deployment setup', () => {
 		expect(listeners.size).toBe(0)
 	})
 
+	test('keeps the persistent wallet control disabled until a deployment network is ready', async () => {
+		let connectCount = 0
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => deploymentClient(),
+			connectWallet: async () => {
+				connectCount += 1
+				return { account: testWalletAccount, chainId: core.chainId }
+			},
+			loadCoreDeployments: async () => await new Promise<readonly (typeof core)[]>(() => undefined),
+			saveConfiguration: () => undefined,
+		}
+		const rendered = await renderIntoDocument(
+			<App
+				deploymentSetupServices={services}
+				loadLiveDeployment={async () => {
+					throw new Error('No deployment configured')
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Loading networks')
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.site-header .wallet-button')
+		if (walletButton === null) throw new Error('Persistent wallet button is unavailable')
+		expect(walletButton.disabled).toBe(true)
+		await act(async () => walletButton.click())
+		expect(connectCount).toBe(0)
+		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
+	})
+
 	test('announces registry loading and clears its error while retrying', async () => {
 		let rejectInitial: ((reason: Error) => void) | undefined
 		let resolveRetry: ((deployments: readonly (typeof core)[]) => void) | undefined
@@ -354,9 +383,18 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<App deploymentSetupServices={{ ...services, ...walletServices }} loadLiveDeployment={async () => await configurationPending} />)
 		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('.site-header .wallet-button')).not.toBeNull()
+		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
 		await waitForText('Ready to deploy')
 		await connectDeploymentWallet(rendered.container)
 		await waitForText('Connected')
+		for (let attempt = 0; attempt < 30; attempt++) {
+			if (rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
+			await act(async () => {
+				await Bun.sleep(10)
+			})
+		}
+		expect(rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
 		await act(async () => {

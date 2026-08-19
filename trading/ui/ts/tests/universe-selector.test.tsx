@@ -316,7 +316,8 @@ describe('universe selector', () => {
 		})
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === 'Retry configuration')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('deployment RPC unavailable')
-		expect(rendered.container.querySelector('.header-actions .wallet-button')).toBeNull()
+		expect(rendered.container.querySelector('.header-actions .wallet-button')).not.toBeNull()
+		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Deployment retry control is unavailable')
 		await act(async () => {
 			retry.click()

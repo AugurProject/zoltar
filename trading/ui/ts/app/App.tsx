@@ -3,7 +3,7 @@ import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoR
 import { MarketDetail } from '../features/MarketDetail.tsx'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.tsx'
-import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
+import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.tsx'
 import { loadDeploymentConfiguration, type DeploymentConfiguration } from '../protocol/config.ts'
 import { loadCoreDeployments } from '../protocol/coreDeployments.ts'
 import { validateStoredTradingDeployment } from '../protocol/deployment.ts'
@@ -265,6 +265,12 @@ function demoUniverseLabel(market: ReturnType<typeof demoMarket>, compactId: str
 	return `Universe ${compactId}`
 }
 
+function deploymentWalletLabel(state: DeploymentWalletState) {
+	if (state.connecting) return 'Connecting wallet…'
+	if (state.account === undefined) return 'Connect wallet'
+	return shortAddress(state.account)
+}
+
 export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveDeployment }: { deploymentSetupServices?: TradingDeploymentSetupServices; loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
 	const query = new URLSearchParams(window.location.search)
 	const demo = query.get('demo') === '1'
@@ -280,6 +286,8 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
+	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
+	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, ready: false })
 	const [deploymentRetryNonce, setDeploymentRetryNonce] = useState(0)
 	const [demoWalletRetrySucceeded, setDemoWalletRetrySucceeded] = useState(false)
 	const routeRef = useRef(route)
@@ -329,6 +337,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		setLiveConfigurationError(undefined)
 		setLiveDeploymentStatus('verified')
 	}, [])
+	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
@@ -371,6 +380,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	}, [demo, deploymentRetryNonce, loadLiveDeployment])
 	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
+	const deploymentSetupActive = !demo && route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	if (!demo) {
 		if (route === 'not-found') content = resolvedContent
 		else if (route === 'help') content = <Help />
@@ -381,12 +391,24 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 					onComplete={completeWalletDeployment}
 					onRetryConfiguration={retryDeployment}
 					onWorkflowLockChange={updateWorkflowLock}
+					onWalletStateChange={updateDeploymentWalletState}
+					walletControlRequestNonce={deploymentWalletRequestNonce}
 					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
 					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 				/>
 			)
 		else if (liveDeploymentStatus === 'unavailable')
-			content = <TradingDeploymentSetup configurationError={liveConfigurationError} onComplete={completeWalletDeployment} onRetryConfiguration={retryDeployment} onWorkflowLockChange={updateWorkflowLock} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
+			content = (
+				<TradingDeploymentSetup
+					configurationError={liveConfigurationError}
+					onComplete={completeWalletDeployment}
+					onRetryConfiguration={retryDeployment}
+					onWorkflowLockChange={updateWorkflowLock}
+					onWalletStateChange={updateDeploymentWalletState}
+					walletControlRequestNonce={deploymentWalletRequestNonce}
+					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
+				/>
+			)
 		else
 			content = (
 				<LiveTrading
@@ -468,6 +490,19 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 						</span>
 						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
+						{deploymentSetupActive ? (
+							<button
+								class='wallet-button'
+								type='button'
+								disabled={workflowLocked || deploymentWalletState.connecting || !deploymentWalletState.ready}
+								aria-busy={deploymentWalletState.connecting}
+								aria-label={deploymentWalletState.account === undefined ? undefined : `Disconnect wallet ${deploymentWalletState.account}`}
+								title={deploymentWalletState.account === undefined ? undefined : 'Disconnect wallet'}
+								onClick={() => setDeploymentWalletRequestNonce(current => current + 1)}
+							>
+								{deploymentWalletLabel(deploymentWalletState)}
+							</button>
+						) : null}
 						{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
 							<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
 								{walletSummary.account === undefined ? 'Connect wallet' : shortAddress(walletSummary.account)}
