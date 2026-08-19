@@ -17,5 +17,6 @@
 !bots/liquidator/README.md
 !bots/liquidator/config/**
 !bots/liquidator/scripts/check-market-sources.mts
+!bots/liquidator/scripts/check-process-lock-runtime.mts
 !bots/liquidator/scripts/docker-entrypoint.sh
 !bots/liquidator/src/**
