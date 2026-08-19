@@ -11,7 +11,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/deploy`. The UI automatically selects the canonical deployment and its default public RPC, then checks the RPC chain, canonical proxy, and core factory. Connect a wallet and review the status shown for the Trading factory and Trading router. Submit the factory transaction, then the router transaction. Progress reaches `2 / 2` after both deterministic contracts and their immutable links have been verified. The flow resumes at the first missing contract when you return with the same settings. To use another supported network, RPC URL, or immutable fee, change it under **Advanced deployment configuration** before connecting, and re-enter those overrides if you return before setup is complete.
+Open `http://localhost:4163/#/deploy`. The UI automatically selects the canonical deployment and its default public RPC, then checks the RPC chain, canonical proxy, and core factory. Connect a wallet and review the status shown for the Trading factory and Trading router. Submit the factory transaction, then the router transaction. Progress reaches `2 / 2` after both deterministic contracts and their immutable links have been verified. The flow resumes at the first missing contract when you return with the same settings. To use another supported network, RPC URL, or immutable fee, open **Settings** beside the wallet before connecting. Trading-pool deployment is not part of this setup: browse SecurityPools after setup and deploy a trading pool only for a selected pool that does not have one.
 
 ## Use local Anvil
 

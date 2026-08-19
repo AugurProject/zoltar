@@ -23,7 +23,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/markets`. When trading contracts are not configured, the deployment screen automatically selects the canonical Zoltar deployment and its default public RPC. Connect a wallet, then deploy the trading factory and router in order. Advanced deployment configuration lets you override the network, RPC URL, or immutable fee. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code and shows each contract's status before it offers a deployment transaction.
+Open `http://localhost:4163/#/markets`. When trading contracts are not configured, the deployment screen automatically selects the canonical Zoltar deployment and its default public RPC. Connect a wallet, then deploy the trading factory and router in order. The **Settings** control beside the wallet lets you override the network, RPC URL, or immutable fee without making configuration part of the setup steps. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code and shows each contract's status before it offers a deployment transaction. SecurityPools remain browseable without a trading pool; deploy and initialize one from the selected pool when needed.
 
 On Windows, run `start.bat` from this directory to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
 

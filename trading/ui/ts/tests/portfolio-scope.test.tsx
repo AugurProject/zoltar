@@ -111,7 +111,17 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} retry={() => undefined} workflowLocked={false} />)
+		let selectedPool: Address | undefined
+		const rendered = await renderIntoDocument(
+			<LiveSecurityPoolDetails
+				market={market}
+				retry={() => undefined}
+				workflowLocked={false}
+				onSelect={selected => {
+					selectedPool = selected.pool
+				}}
+			/>,
+		)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
@@ -119,6 +129,10 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.textContent).not.toContain('OutcomeNone (unresolved)')
+		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Deploy trading pool')
+		expect(rendered.container.textContent).toContain('available to browse')
+		rendered.container.querySelector<HTMLAnchorElement>('a[href="#/liquidity"]')?.click()
+		expect(selectedPool).toBe(pool)
 	})
 
 	test('does not present placeholder operational facts when live pool reads fail', async () => {

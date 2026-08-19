@@ -261,7 +261,7 @@ function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' 
 	)
 }
 
-function PairInitializationAction({ market }: { market: LiveMarket }) {
+export function PairInitializationAction({ market, onSelect = () => undefined }: { market: LiveMarket; onSelect?(market: LiveMarket): void }) {
 	const blocker = marketNewRiskBlocker(market, BigInt(Math.floor(Date.now() / 1_000)))
 	if (blocker !== undefined)
 		return (
@@ -274,15 +274,31 @@ function PairInitializationAction({ market }: { market: LiveMarket }) {
 		)
 	return (
 		<div class='operation-block'>
-			<p>Conditional price unavailable until initialization.</p>
-			<a class='primary-action' href='#/liquidity'>
-				{market.pair === undefined ? 'Create pair and initialize atomically in Liquidity' : 'Initialize this pair in Liquidity'}
+			<p>{market.pair === undefined ? 'This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction.' : 'The trading pool exists but needs initial liquidity before trading can open.'}</p>
+			<a class='primary-action' href='#/liquidity' onClick={() => onSelect(market)}>
+				{market.pair === undefined ? 'Deploy trading pool' : 'Initialize trading pool'}
 			</a>
 		</div>
 	)
 }
 
-export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked, connectionMessage }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean; connectionMessage?: string | undefined }) {
+export function LiveSecurityPoolDetails({
+	market,
+	refreshError,
+	refreshing = false,
+	retry,
+	workflowLocked,
+	connectionMessage,
+	onSelect = () => undefined,
+}: {
+	market: LiveMarket
+	refreshError?: string | undefined
+	refreshing?: boolean
+	retry(): void
+	workflowLocked: boolean
+	connectionMessage?: string | undefined
+	onSelect?(market: LiveMarket): void
+}) {
 	const hasLoadedDetails = market.loadError === undefined
 	let refreshMessage: string | undefined
 	if (refreshing) refreshMessage = hasLoadedDetails ? 'Refreshing security pool; showing the last successful result.' : 'Retrying security pool details…'
@@ -321,55 +337,58 @@ export function LiveSecurityPoolDetails({ market, refreshError, refreshing = fal
 					</>
 				)}
 				{market.loadError === undefined ? (
-					<dl class='fact-list'>
-						<SecurityPoolIdentityRows market={market} />
-						<div>
-							<dt>Question end</dt>
-							<dd>{formatTimestamp(market.endTime)}</dd>
-						</div>
-						<div>
-							<dt>System state</dt>
-							<dd>{systemStateLabel(market.systemState)}</dd>
-						</div>
-						<div>
-							<dt>Universe fork</dt>
-							<dd>{market.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(market.universeForkTime)}`}</dd>
-						</div>
-						{market.questionOutcome === 3 ? null : (
+					<>
+						<dl class='fact-list'>
+							<SecurityPoolIdentityRows market={market} />
 							<div>
-								<dt>Outcome</dt>
-								<dd>{questionOutcomeLabel(market.questionOutcome)}</dd>
+								<dt>Question end</dt>
+								<dd>{formatTimestamp(market.endTime)}</dd>
 							</div>
-						)}
-						<div>
-							<dt>Security multiplier</dt>
-							<dd>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</dd>
-						</div>
-						<div>
-							<dt>Initial report priority fee</dt>
-							<dd>{formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
-						</div>
-						<div>
-							<dt>Registered vaults</dt>
-							<dd>{market.vaultCount.toString()}</dd>
-						</div>
-						<div>
-							<dt>Per-second retention multiplier</dt>
-							<dd>{formatUnits(market.currentRetentionRate, 18, 12)}×</dd>
-						</div>
-						<div>
-							<dt>Total / fee-eligible capacity ownership</dt>
-							<dd>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</dd>
-						</div>
-						<div>
-							<dt>Minting capacity</dt>
-							<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
-						</div>
-						<div>
-							<dt>Checkpointed collateral / share ratio</dt>
-							<dd>{market.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
-						</div>
-					</dl>
+							<div>
+								<dt>System state</dt>
+								<dd>{systemStateLabel(market.systemState)}</dd>
+							</div>
+							<div>
+								<dt>Universe fork</dt>
+								<dd>{market.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(market.universeForkTime)}`}</dd>
+							</div>
+							{market.questionOutcome === 3 ? null : (
+								<div>
+									<dt>Outcome</dt>
+									<dd>{questionOutcomeLabel(market.questionOutcome)}</dd>
+								</div>
+							)}
+							<div>
+								<dt>Security multiplier</dt>
+								<dd>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</dd>
+							</div>
+							<div>
+								<dt>Initial report priority fee</dt>
+								<dd>{formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
+							</div>
+							<div>
+								<dt>Registered vaults</dt>
+								<dd>{market.vaultCount.toString()}</dd>
+							</div>
+							<div>
+								<dt>Per-second retention multiplier</dt>
+								<dd>{formatUnits(market.currentRetentionRate, 18, 12)}×</dd>
+							</div>
+							<div>
+								<dt>Total / fee-eligible capacity ownership</dt>
+								<dd>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</dd>
+							</div>
+							<div>
+								<dt>Minting capacity</dt>
+								<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
+							</div>
+							<div>
+								<dt>Checkpointed collateral / share ratio</dt>
+								<dd>{market.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
+							</div>
+						</dl>
+						{market.pair === undefined ? <PairInitializationAction market={market} onSelect={onSelect} /> : null}
+					</>
 				) : (
 					<dl class='fact-list'>
 						<SecurityPoolIdentityRows market={market} />
@@ -543,7 +562,9 @@ export function LiveTrading({
 	}
 	if (routePool !== undefined) {
 		if (selected !== undefined)
-			return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={connectionMessage} />
+			return (
+				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={connectionMessage} onSelect={selectMarket} />
+			)
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -687,7 +708,7 @@ export function LiveTrading({
 								</div>
 								<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
 							</div>
-							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
+							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} onSelect={selectMarket} /> : null}
 							<dl class='fact-list'>
 								<div>
 									<dt>Security pool</dt>

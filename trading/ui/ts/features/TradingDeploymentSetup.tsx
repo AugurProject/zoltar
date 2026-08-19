@@ -1,4 +1,5 @@
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/ethereum'
+import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { shortAddress } from '../app/format.ts'
 import { AddressValue, Status } from '../components/Status.tsx'
@@ -49,8 +50,6 @@ const defaultServices: TradingDeploymentSetupServices = {
 	saveConfiguration: configuration => saveDeploymentConfiguration(configuration),
 }
 
-const missingDeploymentConfigurationMessage = 'No bundled or wallet-deployed trading configuration was found.'
-
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
 function initialQueryValue(name: string) {
@@ -94,22 +93,20 @@ function walletStatusLabel(connected: boolean, ready: boolean) {
 }
 
 export function TradingDeploymentSetup({
-	configurationError,
 	currentConfiguration,
 	onComplete,
-	onRetryConfiguration,
 	onWorkflowLockChange = () => undefined,
 	onWalletStateChange,
 	services = defaultServices,
+	settingsHost,
 	walletControlRequestNonce,
 }: {
-	configurationError: string | undefined
 	currentConfiguration?: DeploymentConfiguration
 	onComplete(configuration: DeploymentConfiguration): void
-	onRetryConfiguration?(): void
 	onWorkflowLockChange?(locked: boolean): void
 	onWalletStateChange?(state: DeploymentWalletState): void
 	services?: TradingDeploymentSetupServices
+	settingsHost?: HTMLElement
 	walletControlRequestNonce?: number
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
@@ -344,7 +341,6 @@ export function TradingDeploymentSetup({
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
 	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
-	const retryConfiguration = !retryChecks && configurationError !== undefined && configurationError !== missingDeploymentConfigurationMessage && onRetryConfiguration !== undefined
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
@@ -370,12 +366,6 @@ export function TradingDeploymentSetup({
 				}}
 			>
 				Retry checks
-			</button>
-		)
-	else if (retryConfiguration)
-		retryAction = (
-			<button class='secondary-action' type='button' disabled={busy} onClick={onRetryConfiguration}>
-				Retry configuration
 			</button>
 		)
 	async function deployNext() {
@@ -428,90 +418,88 @@ export function TradingDeploymentSetup({
 			onWorkflowLockChange(false)
 		}
 	}
+	const settingsPanel = (
+		<details class='deployment-settings' open={rpcOverride || undefined}>
+			<summary>Settings</summary>
+			<div class='deployment-settings__panel'>
+				<label class='field'>
+					<span>Core network</span>
+					<select
+						value={chainId}
+						disabled={busy || registryLoading || coreDeployments.length === 0}
+						onChange={event => {
+							inputRevision.current += 1
+							setChainId(event.currentTarget.value)
+						}}
+					>
+						{coreDeployments.map(deployment => (
+							<option key={deployment.chainId} value={deployment.chainId.toString()}>
+								{deployment.chainName} · chain {deployment.chainId.toString()}
+							</option>
+						))}
+					</select>
+				</label>
+				<label class='field'>
+					<span>RPC URL</span>
+					<input
+						type='url'
+						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
+						disabled={busy}
+						placeholder={selectedCore?.defaultRpcUrl ?? 'https://…'}
+						spellcheck={false}
+						onInput={event => {
+							inputRevision.current += 1
+							setRpcOverride(true)
+							setRpcUrl(event.currentTarget.value)
+						}}
+					/>
+				</label>
+				{rpcOverride && selectedCore !== undefined ? (
+					<button
+						class='secondary-action'
+						type='button'
+						disabled={busy}
+						onClick={() => {
+							inputRevision.current += 1
+							setRpcOverride(false)
+							setRpcUrl(selectedCore.defaultRpcUrl)
+						}}
+					>
+						Use default RPC
+					</button>
+				) : null}
+				<label class='field'>
+					<span>Immutable trading fee</span>
+					<div class='amount-input'>
+						<input
+							inputMode='numeric'
+							value={feeBps}
+							disabled={busy}
+							onInput={event => {
+								inputRevision.current += 1
+								setFeeBps(event.currentTarget.value)
+							}}
+						/>
+						<span>bps</span>
+					</div>
+				</label>
+			</div>
+		</details>
+	)
 
 	return (
 		<main class='route' id='main-content'>
+			{settingsHost === undefined ? null : createPortal(settingsPanel, settingsHost)}
 			<header class='route-header'>
 				<div>
 					<span class='eyebrow'>Standalone live client</span>
-					<h1>Set up trading</h1>
-					<p>Select a canonical Zoltar deployment and submit the two deterministic trading contracts from your wallet.</p>
+					<h1>Deploy</h1>
+					<p>Deploy and verify the shared deterministic contracts that back the application.</p>
 				</div>
 				{standaloneWalletButton}
 			</header>
 			<section class='section deployment-setup'>
-				{configurationError === undefined ? null : (
-					<p class='deployment-setup__notice' role='alert'>
-						{configurationError}
-					</p>
-				)}
-				<details class='deployment-setup__advanced' open={rpcOverride || undefined}>
-					<summary>Advanced deployment configuration</summary>
-					<div class='deployment-setup__fields'>
-						<label class='field'>
-							<span>Core network</span>
-							<select
-								value={chainId}
-								disabled={busy || registryLoading || coreDeployments.length === 0}
-								onChange={event => {
-									inputRevision.current += 1
-									setChainId(event.currentTarget.value)
-								}}
-							>
-								<option value=''>Select network</option>
-								{coreDeployments.map(deployment => (
-									<option key={deployment.chainId} value={deployment.chainId.toString()}>
-										{deployment.chainName} · chain {deployment.chainId.toString()}
-									</option>
-								))}
-							</select>
-						</label>
-						<label class='field'>
-							<span>Custom RPC URL</span>
-							<input
-								type='url'
-								value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
-								disabled={busy}
-								placeholder={selectedCore?.defaultRpcUrl ?? 'https://…'}
-								spellcheck={false}
-								onInput={event => {
-									inputRevision.current += 1
-									setRpcOverride(true)
-									setRpcUrl(event.currentTarget.value)
-								}}
-							/>
-						</label>
-						{rpcOverride && selectedCore !== undefined ? (
-							<button
-								class='secondary-action'
-								type='button'
-								disabled={busy}
-								onClick={() => {
-									inputRevision.current += 1
-									setRpcOverride(false)
-									setRpcUrl(selectedCore.defaultRpcUrl)
-								}}
-							>
-								Use default RPC
-							</button>
-						) : null}
-						<label class='field'>
-							<span>Immutable trading fee</span>
-							<div class='amount-input'>
-								<input
-									inputMode='numeric'
-									value={feeBps}
-									disabled={busy}
-									onInput={event => {
-										inputRevision.current += 1
-										setFeeBps(event.currentTarget.value)
-									}}
-								/>
-								<span>bps</span>
-							</div>
-						</label>
-					</div>
-				</details>
+				{settingsHost === undefined ? settingsPanel : null}
 				{registryError === undefined ? null : (
 					<p class='error' role='alert'>
 						{registryError}

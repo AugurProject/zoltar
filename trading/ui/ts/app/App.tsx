@@ -288,7 +288,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, ready: false })
-	const [deploymentRetryNonce, setDeploymentRetryNonce] = useState(0)
+	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
 	const [demoWalletRetrySucceeded, setDemoWalletRetrySucceeded] = useState(false)
 	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
@@ -325,12 +325,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 			setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
 			setWalletSummaryRetryNonce(current => current + 1)
 		}
-	}
-	const retryDeployment = () => {
-		setLiveConfiguration(undefined)
-		setLiveConfigurationError(undefined)
-		setLiveDeploymentStatus('loading')
-		setDeploymentRetryNonce(current => current + 1)
 	}
 	const completeWalletDeployment = useCallback((configuration: DeploymentConfiguration) => {
 		setLiveConfiguration(configuration)
@@ -377,7 +371,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		return () => {
 			active = false
 		}
-	}, [demo, deploymentRetryNonce, loadLiveDeployment])
+	}, [demo, loadLiveDeployment])
 	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
 	let content = resolvedContent
 	const deploymentSetupActive = !demo && route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
@@ -387,11 +381,10 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		else if (route === 'deploy')
 			content = (
 				<TradingDeploymentSetup
-					configurationError={liveConfigurationError}
 					onComplete={completeWalletDeployment}
-					onRetryConfiguration={retryDeployment}
 					onWorkflowLockChange={updateWorkflowLock}
 					onWalletStateChange={updateDeploymentWalletState}
+					{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
 					walletControlRequestNonce={deploymentWalletRequestNonce}
 					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
 					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
@@ -400,11 +393,10 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		else if (liveDeploymentStatus === 'unavailable')
 			content = (
 				<TradingDeploymentSetup
-					configurationError={liveConfigurationError}
 					onComplete={completeWalletDeployment}
-					onRetryConfiguration={retryDeployment}
 					onWorkflowLockChange={updateWorkflowLock}
 					onWalletStateChange={updateDeploymentWalletState}
+					{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
 					walletControlRequestNonce={deploymentWalletRequestNonce}
 					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 				/>
@@ -421,7 +413,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 					onWalletSummaryChange={setLiveWalletSummary}
 					walletSummaryRetryNonce={walletSummaryRetryNonce}
 					walletConnectRequestNonce={walletConnectRequestNonce}
-					onDeploymentRetry={retryDeployment}
 				/>
 			)
 	} else if (route !== 'not-found' && scenario === 'loading')
@@ -490,6 +481,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 						</span>
 						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
+						{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
 						{deploymentSetupActive ? (
 							<button
 								class='wallet-button'

@@ -289,24 +289,21 @@ describe('universe selector', () => {
 		expect(walletSummaryDiscoveryRetryStart('ready', true, undefined, 50n)).toBeUndefined()
 	})
 
-	test('recovers from an unavailable deployment through the visible retry control', async () => {
+	test('falls back to canonical setup without exposing stored configuration errors', async () => {
 		window.history.replaceState(undefined, '', '/#/markets')
-		const configuration: DeploymentConfiguration = {
-			chainId: 31_337,
-			chainName: 'Local',
-			rpcUrl: 'http://127.0.0.1:1',
-			securityPoolFactory: `0x${'11'.repeat(20)}`,
-			factory: `0x${'22'.repeat(20)}`,
-			router: `0x${'33'.repeat(20)}`,
-			feeBps: 30,
-		}
 		let attempts = 0
 		const rendered = await renderIntoDocument(
 			<App
+				deploymentSetupServices={{
+					createPublicClient: () => {
+						throw new Error('No deployment client expected')
+					},
+					loadCoreDeployments: async () => [],
+					saveConfiguration: () => undefined,
+				}}
 				loadLiveDeployment={async () => {
 					attempts++
-					if (attempts === 1) throw new Error('deployment RPC unavailable')
-					return configuration
+					throw new Error('stored deployment unavailable')
 				}}
 			/>,
 		)
@@ -314,21 +311,11 @@ describe('universe selector', () => {
 		await act(async () => {
 			await Bun.sleep(0)
 		})
-		const retry = Array.from(rendered.container.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === 'Retry configuration')
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('deployment RPC unavailable')
+		expect(rendered.container.textContent).not.toContain('stored deployment unavailable')
+		expect(rendered.container.textContent).not.toContain('Retry configuration')
+		expect(rendered.container.querySelector('h1')?.textContent).toBe('Deploy')
 		expect(rendered.container.querySelector('.header-actions .wallet-button')).not.toBeNull()
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
-		if (!(retry instanceof HTMLButtonElement)) throw new Error('Deployment retry control is unavailable')
-		await act(async () => {
-			retry.click()
-			await Bun.sleep(10)
-		})
-		await act(async () => {
-			await Bun.sleep(10)
-		})
-		expect(attempts).toBe(2)
-		expect(rendered.container.textContent).toContain('Verified live deployment')
-		expect(rendered.container.textContent).not.toContain('Retry configuration')
-		expect(rendered.container.querySelector('.header-actions .wallet-button')?.textContent).toBe('Connect wallet')
+		expect(attempts).toBe(1)
 	})
 })
