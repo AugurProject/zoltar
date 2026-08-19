@@ -4,7 +4,8 @@ export class LogScanError extends Error {
 	readonly logRange: LogRange
 
 	constructor(logRange: LogRange, options: { cause?: unknown }) {
-		super(`Log scan failed for blocks ${logRange.fromBlock.toString()} through ${logRange.toBlock.toString()}`, options)
+		const causeMessage = options.cause instanceof Error ? options.cause.message : typeof options.cause === 'string' ? options.cause : undefined
+		super(`Log scan failed for blocks ${logRange.fromBlock.toString()} through ${logRange.toBlock.toString()}${causeMessage === undefined ? '' : `: ${causeMessage}`}`, options)
 		this.name = 'LogScanError'
 		this.logRange = logRange
 	}
@@ -25,6 +26,7 @@ export function logRangeLimitError(error: unknown) {
 	return walkErrorCauses(error, current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
+		if (message.includes('invalid') || message.includes('fromblock exceeds toblock')) return false
 		if (message.includes('http 413') || message.includes('range is too large')) return true
 		if (message.includes('response exceeds')) return true
 		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')

@@ -120,7 +120,7 @@ describe('shared bot primitives', () => {
 	test('identifies provider range and payload rejections without retrying other failures', () => {
 		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
 		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
-		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(true)
+		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
 		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
 		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
 		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
@@ -151,8 +151,10 @@ describe('shared bot primitives', () => {
 			{ fromBlock: 1n, toBlock: 1n },
 			{ fromBlock: 2n, toBlock: 2n },
 		])
-		const attemptedSpans = requestedRanges.map(range => range.toBlock - range.fromBlock)
-		expect(attemptedSpans[1]! < attemptedSpans[0]!).toBe(true)
+		const firstAttempt = requestedRanges[0]
+		const secondAttempt = requestedRanges[1]
+		if (firstAttempt === undefined || secondAttempt === undefined) throw new Error('Expected at least two requested ranges')
+		expect(secondAttempt.toBlock - secondAttempt.fromBlock < firstAttempt.toBlock - firstAttempt.fromBlock).toBe(true)
 	})
 
 	test('requests a failing one-block range exactly once', async () => {
@@ -183,6 +185,7 @@ describe('shared bot primitives', () => {
 		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
 		expect(failure.logRange).toEqual({ fromBlock: 1n, toBlock: 1n })
 		expect(failure.message).toContain('blocks 1 through 1')
+		expect(failure.message).toContain('HTTP 400 while calling eth_getLogs')
 	})
 
 	test('requires independent quorum observations to agree', () => {
