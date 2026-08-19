@@ -529,6 +529,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress)),
 		},
 	]
+	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
+}
+
+export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {
 	return steps.map(step => ({
 		...step,
 		...(profile.id === 'sepolia' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),

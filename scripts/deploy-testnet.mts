@@ -11,11 +11,11 @@ import {
 	CANONICAL_DEPLOYER_RAW_GAS_PRICE,
 	CANONICAL_DEPLOYER_RAW_TRANSACTION_COST,
 	EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	getDeploymentSteps,
 	getProxyDeployerActivity,
 	getProxyDeployerFundingShortfall,
 	PROXY_DEPLOYER_RUNTIME_CODE,
 } from '../ui/zoltar/ts/protocol/deployment.ts'
+import { getDeploymentSteps } from '../ui/statoblast/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/coreShared/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'

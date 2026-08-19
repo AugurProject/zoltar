@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { isUiAppId, UI_APP_IDS, type UiAppId } from './appPaths.mts'
+import { isUiAppId, UI_APP_IDS } from './appPaths.mts'
 
 const noStoreFiles = new Set(['/index.html', '/mainnet-deployment-addresses.json', '/sepolia-deployment-addresses.json'])
 

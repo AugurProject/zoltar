@@ -14,7 +14,7 @@ var __export = (target, all) => {
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// node_modules/@noble/hashes/_u64.js
+// ../../node_modules/@noble/hashes/_u64.js
 function fromBig(n2, le = false) {
   if (le)
     return { h: Number(n2 & U32_MASK64), l: Number(n2 >> _32n & U32_MASK64) };
@@ -40,7 +40,7 @@ var init__u64 = __esm(() => {
   _32n = /* @__PURE__ */ BigInt(32);
 });
 
-// node_modules/@noble/hashes/utils.js
+// ../../node_modules/@noble/hashes/utils.js
 function isBytes(a2) {
   return a2 instanceof Uint8Array || ArrayBuffer.isView(a2) && a2.constructor.name === "Uint8Array" && "BYTES_PER_ELEMENT" in a2 && a2.BYTES_PER_ELEMENT === 1;
 }
@@ -212,7 +212,7 @@ var init_utils = __esm(() => {
   asciis = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 };
 });
 
-// node_modules/@noble/hashes/sha3.js
+// ../../node_modules/@noble/hashes/sha3.js
 function keccakP(s2, rounds = 24) {
   anumber(rounds, "rounds");
   if (rounds < 1 || rounds > 24)
@@ -414,7 +414,7 @@ var init_sha3 = __esm(() => {
   keccak_256 = /* @__PURE__ */ genKeccak(1, 136, 32);
 });
 
-// node_modules/@noble/hashes/_md.js
+// ../../node_modules/@noble/hashes/_md.js
 function Chi(a2, b, c2) {
   return a2 & b ^ ~a2 & c2;
 }
@@ -578,7 +578,7 @@ var init__md = __esm(() => {
   ]);
 });
 
-// node_modules/@noble/hashes/sha2.js
+// ../../node_modules/@noble/hashes/sha2.js
 var SHA256_K, SHA256_W, SHA2_32B, _SHA256, _SHA224, K512, SHA512_Kh, SHA512_Kl, SHA512_W_H, SHA512_W_L, SHA2_64B, _SHA512, _SHA384, T224_IV, T256_IV, _SHA512_224, _SHA512_256, sha256;
 var init_sha2 = __esm(() => {
   init__md();
@@ -1042,7 +1042,7 @@ var init_sha2 = __esm(() => {
   sha256 = /* @__PURE__ */ createHasher(() => new _SHA256, /* @__PURE__ */ oidNist(1));
 });
 
-// node_modules/@noble/curves/utils.js
+// ../../node_modules/@noble/curves/utils.js
 function abool(value, title = "") {
   if (typeof value !== "boolean") {
     const prefix = title && `"${title}" `;
@@ -1193,7 +1193,7 @@ var init_utils2 = __esm(() => {
   _1n2 = /* @__PURE__ */ BigInt(1);
 });
 
-// node_modules/@noble/curves/abstract/modular.js
+// ../../node_modules/@noble/curves/abstract/modular.js
 function mod(a2, b) {
   if (b <= _0n3)
     throw new Error("mod: expected positive modulus, got " + b);
@@ -1608,7 +1608,7 @@ var init_modular = __esm(() => {
   Object.freeze(_Field.prototype);
 });
 
-// node_modules/@noble/curves/abstract/curve.js
+// ../../node_modules/@noble/curves/abstract/curve.js
 function negateCt(condition, item) {
   const neg = item.negate();
   return condition ? neg : item;
@@ -1820,7 +1820,7 @@ var init_curve = __esm(() => {
   pointWindowSizes = new WeakMap;
 });
 
-// node_modules/@noble/hashes/hmac.js
+// ../../node_modules/@noble/hashes/hmac.js
 class _HMAC {
   oHash;
   iHash;
@@ -1900,7 +1900,7 @@ var init_hmac = __esm(() => {
   })();
 });
 
-// node_modules/@noble/curves/abstract/weierstrass.js
+// ../../node_modules/@noble/curves/abstract/weierstrass.js
 function _splitEndoScalar(k2, basis, n2) {
   aInRange("scalar", k2, _0n5, n2);
   const [[a1, b1], [a2, b2]] = basis;
@@ -2758,7 +2758,7 @@ var init_weierstrass = __esm(() => {
   _4n2 = /* @__PURE__ */ BigInt(4);
 });
 
-// node_modules/@noble/curves/secp256k1.js
+// ../../node_modules/@noble/curves/secp256k1.js
 function sqrtMod(y2) {
   const P2 = secp256k1_CURVE.p;
   const _3n3 = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
@@ -2812,7 +2812,7 @@ var init_secp256k1 = __esm(() => {
   secp256k1 = /* @__PURE__ */ ecdsa(Pointk1, sha256);
 });
 
-// node_modules/@scure/base/index.js
+// ../../node_modules/@scure/base/index.js
 function isBytes3(a2) {
   return a2 instanceof Uint8Array || ArrayBuffer.isView(a2) && a2.constructor.name === "Uint8Array";
 }
@@ -3220,7 +3220,7 @@ var init_base = __esm(() => {
   }));
 });
 
-// node_modules/micro-packed/index.js
+// ../../node_modules/micro-packed/index.js
 function equalBytes(a2, b) {
   if (a2.length !== b.length)
     return false;
@@ -4278,7 +4278,7 @@ var init_micro_packed = __esm(() => {
   });
 });
 
-// node_modules/micro-eth-signer/utils.js
+// ../../node_modules/micro-eth-signer/utils.js
 function add0x(hex2) {
   return ethHexStartRe.test(hex2) ? hex2 : `0x${hex2}`;
 }
@@ -4345,7 +4345,7 @@ var init_utils3 = __esm(() => {
   weigwei = createDecimal(GWEI_PRECISION);
 });
 
-// node_modules/micro-eth-signer/core/address.js
+// ../../node_modules/micro-eth-signer/core/address.js
 var addr;
 var init_address = __esm(() => {
   init_secp256k1();
@@ -4420,7 +4420,7 @@ var init_address = __esm(() => {
   };
 });
 
-// node_modules/micro-eth-signer/advanced/abi-mapper.js
+// ../../node_modules/micro-eth-signer/advanced/abi-mapper.js
 function EPad(p2) {
   return padLeft(32, p2, ZeroPad);
 }
@@ -4549,13 +4549,13 @@ var init_abi_mapper = __esm(() => {
   U256BE_LEN = PTR;
 });
 
-// node_modules/micro-eth-signer/index.js
+// ../../node_modules/micro-eth-signer/index.js
 var init_micro_eth_signer = __esm(() => {
   init_address();
   init_utils3();
 });
 
-// node_modules/micro-eth-signer/advanced/abi-decoder.js
+// ../../node_modules/micro-eth-signer/advanced/abi-decoder.js
 function fnSignature(o2) {
   if (!o2.type)
     throw new Error("ABI.fnSignature wrong argument");
@@ -4717,12 +4717,12 @@ var init_abi_decoder = __esm(() => {
   init_abi_mapper();
 });
 
-// node_modules/micro-eth-signer/advanced/abi.js
+// ../../node_modules/micro-eth-signer/advanced/abi.js
 var init_abi = __esm(() => {
   init_abi_decoder();
 });
 
-// shared/js/ethereum.js
+// ../../shared/js/ethereum.js
 function defineChain(chain2) {
   return chain2;
 }
@@ -6334,7 +6334,7 @@ var init_ethereum = __esm(() => {
   mainnet = MAINNET_CHAIN;
 });
 
-// ui/coreShared/js/lib/chainId.js
+// ../coreShared/js/lib/chainId.js
 function parseChainId(chainId) {
   if (chainId === undefined)
     return;
@@ -6352,7 +6352,7 @@ function sameChainId(left, right) {
   return parsedLeft !== undefined && parsedRight !== undefined && parsedLeft === parsedRight;
 }
 
-// shared/js/sepoliaRepAllocations.js
+// ../../shared/js/sepoliaRepAllocations.js
 var SEPOLIA_REP_HOLDERS, SEPOLIA_REP_MINT_CAP, SEPOLIA_REP_AMOUNT_PER_HOLDER, SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY;
 var init_sepoliaRepAllocations = __esm(() => {
   init_ethereum();
@@ -6372,7 +6372,7 @@ var init_sepoliaRepAllocations = __esm(() => {
   SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY = SEPOLIA_REP_ALLOCATIONS.reduce((total, allocation) => total + allocation.amount, 0n);
 });
 
-// ui/coreShared/js/contractArtifact.js
+// ../coreShared/js/contractArtifact.js
 var DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, ReputationToken_ReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate, peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_Multicall3_Multicall3, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_WETH9_WETH9, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_tokens_ShareToken_ShareToken, peripherals_openOracle_OpenOracle_OpenOracle;
 var init_contractArtifact = __esm(() => {
   DeploymentStatusOracle_DeploymentStatusOracle = {
@@ -26488,7 +26488,7 @@ var init_contractArtifact = __esm(() => {
   };
 });
 
-// ui/coreShared/js/lib/sepoliaDeploymentConfig.js
+// ../coreShared/js/lib/sepoliaDeploymentConfig.js
 var PROXY_DEPLOYER_ADDRESS = "0x7A0D94F55792C434D74A40883c6ED8545e406D12", ZERO_SALT, SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE, SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS;
 var init_sepoliaDeploymentConfig = __esm(() => {
   init_sepoliaRepAllocations();
@@ -26513,7 +26513,7 @@ var init_sepoliaDeploymentConfig = __esm(() => {
   });
 });
 
-// ui/coreShared/js/lib/networkProfile.js
+// ../coreShared/js/lib/networkProfile.js
 function getPublicNetworkProfile(network) {
   const normalizedNetwork = network?.trim().toLowerCase();
   if (normalizedNetwork === undefined || normalizedNetwork === "" || normalizedNetwork === "mainnet")
@@ -26634,7 +26634,7 @@ var init_networkProfile = __esm(() => {
   };
 });
 
-// shared/js/oracleInitialReport.js
+// ../../shared/js/oracleInitialReport.js
 function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas(parameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, escalationHaltMultiplierBps = ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) {
   if (parameters.gasUnitsForOneDispute <= 0n)
     throw new Error("Dispute gas units must be positive");
@@ -26668,7 +26668,7 @@ var init_oracleInitialReport = __esm(() => {
   MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS = calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas();
 });
 
-// shared/js/deploymentAddresses.js
+// ../../shared/js/deploymentAddresses.js
 function getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, bytecode) {
   return getCreate2Address({
     bytecode,
@@ -26747,7 +26747,7 @@ var init_deploymentAddresses = __esm(() => {
   init_ethereum();
 });
 
-// shared/js/protocolConfig.js
+// ../../shared/js/protocolConfig.js
 var DEFAULT_FORK_BURN_DIVISOR = 5n, DEFAULT_FORK_THRESHOLD_DIVISOR = 20n, DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT, DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH, DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP = 0n, DEFAULT_PROTOCOL_CONFIG;
 var init_protocolConfig = __esm(() => {
   DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT = 10n ** 18n;
@@ -26761,7 +26761,7 @@ var init_protocolConfig = __esm(() => {
   };
 });
 
-// ui/zoltar/js/protocol/helpers.js
+// ../zoltar/js/protocol/helpers.js
 function bigintToAddress(value) {
   return getAddress(`0x${value.toString(16).padStart(40, "0")}`);
 }
@@ -26935,7 +26935,7 @@ var init_helpers = __esm(() => {
   init_ethereum();
 });
 
-// ui/zoltar/js/protocol/activeProtocolAddresses.js
+// ../zoltar/js/protocol/activeProtocolAddresses.js
 function getGenesisReputationTokenAddress() {
   return getRuntimeNetworkProfile().genesisRepTokenAddress;
 }
@@ -26946,7 +26946,7 @@ var init_activeProtocolAddresses = __esm(() => {
   init_networkProfile();
 });
 
-// ui/zoltar/js/protocol/deploymentHelpers.js
+// ../zoltar/js/protocol/deploymentHelpers.js
 function getZoltarAddressHelpers(profile) {
   return createZoltarAddressHelpers({
     getZoltarInitCode: (zoltarQuestionDataAddress) => getZoltarInitCode(zoltarQuestionDataAddress, profile.genesisRepTokenAddress),
@@ -27098,7 +27098,7 @@ var init_deploymentHelpers = __esm(() => {
   ]));
 });
 
-// ui/coreShared/js/abis.js
+// ../coreShared/js/abis.js
 var ABIS;
 var init_abis = __esm(() => {
   ABIS = {
@@ -27318,7 +27318,7 @@ var init_abis = __esm(() => {
   };
 });
 
-// ui/zoltar/js/protocol/contractLabels.js
+// ../zoltar/js/protocol/contractLabels.js
 function getContractLabel(abi, functionName) {
   return CONTRACT_LABEL_BY_ABI.get(abi) ?? (functionName === "deposit" ? "WETH" : undefined);
 }
@@ -27340,7 +27340,7 @@ var init_contractLabels = __esm(() => {
   ]);
 });
 
-// ui/zoltar/js/protocol/core.js
+// ../zoltar/js/protocol/core.js
 var exports_core = {};
 __export(exports_core, {
   writeContractAndWaitForReceipt: () => writeContractAndWaitForReceipt,
@@ -27486,7 +27486,7 @@ var init_core = __esm(() => {
   RPC_STATE_RETRY_DELAYS_MILLISECONDS = [250, 500, 1000, 2000, 4000];
 });
 
-// node_modules/preact/dist/preact.module.js
+// ../../node_modules/preact/dist/preact.module.js
 var n;
 var l;
 var t;
@@ -27831,7 +27831,7 @@ n = v.slice, l = { __e: function(n2, l2, t2, u2) {
   return n2.__v.__b - l2.__v.__b;
 }, $.__r = 0, f = /(PointerCapture)$|Capture$/i, c = 0, s = F(false), a = F(true), h = 0;
 
-// ui/coreShared/js/lib/routing.js
+// ../coreShared/js/lib/routing.js
 var SHARED_ROUTE_QUERY_PARAMETERS = new Set(["network", "rpcUrl", "simScenario", "simState", "simulate", "universe"]);
 function buildRoutingState(config) {
   const routeByHash = {};
@@ -27911,7 +27911,7 @@ function buildRouteHref(routeHash, search) {
   return `${routeHash}${search}`;
 }
 
-// ui/coreShared/js/copy/app.js
+// ../coreShared/js/copy/app.js
 var oracleReports = "Open Oracle";
 var skipToMainContent = "Skip to main content";
 var createOracleReport = "Create Open Oracle Report";
@@ -27956,7 +27956,7 @@ var applicationErrorTitle = "Application error";
 var applicationInitializationErrorFallback = "The application environment could not be initialized.";
 var reloadApplication = "Reload application";
 
-// ui/coreShared/js/lib/errors.js
+// ../coreShared/js/lib/errors.js
 var closeableErrorPatterns = ["user rejected the request", "user rejected request", "user denied transaction signature", "user denied message signature", "user denied account authorization", "action canceled in wallet"];
 var technicalWriteErrorPatterns = ["allowance", "balance", "call reverted", "connector", "erc20", "estimategas", "execution reverted", "fee", "gas", "insufficient funds", "internal json-rpc", "json-rpc", "network", "nonce", "replacement transaction", "reverted", "rpc", "transaction", "transfer", "underpriced"];
 function isObjectRecord(value) {
@@ -28177,26 +28177,26 @@ function isCloseableErrorMessage(message) {
   return closeableErrorPatterns.some((pattern) => normalizedMessage.includes(pattern));
 }
 
-// ui/coreShared/js/lib/chainBackend.js
+// ../coreShared/js/lib/chainBackend.js
 init_ethereum();
 
-// ui/coreShared/js/injectedEthereum.js
+// ../coreShared/js/injectedEthereum.js
 function getInjectedEthereum() {
   if (typeof window === "undefined")
     return;
   return window.ethereum;
 }
 
-// ui/coreShared/js/lib/inputs.js
+// ../coreShared/js/lib/inputs.js
 init_ethereum();
 
-// ui/coreShared/js/lib/tokenApproval.js
+// ../coreShared/js/lib/tokenApproval.js
 init_ethereum();
 
-// ui/coreShared/js/lib/decimal.js
+// ../coreShared/js/lib/decimal.js
 init_ethereum();
 
-// ui/coreShared/js/copy/common.js
+// ../coreShared/js/copy/common.js
 var active = "Active";
 var amount = "Amount";
 var approvingRep = "Approving REP…";
@@ -28329,7 +28329,7 @@ var selectedTick = "Selected Tick";
 var ticks = "Ticks";
 var untitledQuestion = "Untitled question";
 
-// ui/coreShared/js/lib/decimal.js
+// ../coreShared/js/lib/decimal.js
 var DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
 function normalizeDecimalInput(value) {
   const trimmed = value.trim();
@@ -28372,7 +28372,7 @@ function parseDecimalInput(value, label, units = 18) {
   return parsed;
 }
 
-// ui/coreShared/js/lib/formatters.js
+// ../coreShared/js/lib/formatters.js
 init_ethereum();
 var MILLISECONDS_PER_SECOND = 1000;
 var MAX_DATE_TIMESTAMP_SECONDS = 8640000000000n;
@@ -28548,7 +28548,7 @@ function formatDuration(seconds) {
   return `${minutes2}m`;
 }
 
-// ui/coreShared/js/lib/tokenApproval.js
+// ../coreShared/js/lib/tokenApproval.js
 var maxUint200 = 2n ** 200n - 1n;
 function deriveTokenApprovalRequirement(requiredAmount, approvedAmount) {
   if (requiredAmount === undefined)
@@ -28639,7 +28639,7 @@ function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, re
   return `Approving ${formatCurrencyBalance(nextApprovedAmount, tokenUnits)} ${tokenLabel} will still leave ${formatCurrencyBalance(requiredAmount - nextApprovedAmount, tokenUnits)} more ${tokenLabel} needed before ${actionLabel}.`;
 }
 
-// ui/coreShared/js/lib/integerInput.js
+// ../coreShared/js/lib/integerInput.js
 var WHOLE_NUMBER_PATTERN = /^-?\d+$/;
 var HEX_BIGINT_PATTERN = /^0x[0-9a-fA-F]+$/;
 function tryParseBigIntInput(value) {
@@ -28658,7 +28658,7 @@ function parseBigIntInput(value, label) {
   return parsed;
 }
 
-// ui/coreShared/js/lib/inputs.js
+// ../coreShared/js/lib/inputs.js
 function tryParseAddressInput(value) {
   const trimmed = value.trim();
   if (trimmed === "" || !isAddress(trimmed))
@@ -28755,10 +28755,10 @@ function parseReportingOutcomeListInput(value, label) {
   return parseListInput(value, label, (entry) => parseReportingOutcomeInput(entry.toLowerCase()));
 }
 
-// ui/coreShared/js/lib/chainBackend.js
+// ../coreShared/js/lib/chainBackend.js
 init_networkProfile();
 
-// ui/coreShared/js/lib/rpcConfig.js
+// ../coreShared/js/lib/rpcConfig.js
 var DEFAULT_RPC_URL = "https://ethereum.dark.florist";
 var RPC_URL_SEARCH_PARAM = "rpcUrl";
 var RPC_URL_STORAGE_KEY = "zoltar.rpcUrl";
@@ -28878,7 +28878,7 @@ function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, location
   return { source: "default", url: fallbackRpcUrl };
 }
 
-// ui/coreShared/js/lib/chainBackend.js
+// ../coreShared/js/lib/chainBackend.js
 function createReadClientForProfile(profile, transportMode, rpcUrl, ethereum) {
   return createPublicClient({
     chain: profile.chain,
@@ -29053,10 +29053,10 @@ function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUrl } = {
   };
 }
 
-// ui/coreShared/js/lib/activeEnvironment.js
+// ../coreShared/js/lib/activeEnvironment.js
 init_networkProfile();
 
-// ui/coreShared/js/lib/browserStorage.js
+// ../coreShared/js/lib/browserStorage.js
 function getBrowserStorage(storageName) {
   if (typeof window === "undefined")
     return;
@@ -29069,7 +29069,7 @@ function getBrowserStorage(storageName) {
   }
 }
 
-// ui/coreShared/js/simulation/savedStates.js
+// ../coreShared/js/simulation/savedStates.js
 var SAVED_SIMULATION_STATES_STORAGE_KEY = "zoltar.simulation.savedStates";
 var SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY = "zoltar.simulation.savedStates.corruptedBackup";
 var MAX_CORRUPTED_SAVED_STATE_BACKUPS = 5;
@@ -29366,19 +29366,19 @@ function deleteSavedSimulationState(stateId, storage) {
   return true;
 }
 
-// ui/coreShared/js/simulation/tevmBackend.js
+// ../coreShared/js/simulation/tevmBackend.js
 init_ethereum();
 init_networkProfile();
 
-// ui/coreShared/js/simulation/bootstrap.js
+// ../coreShared/js/simulation/bootstrap.js
 init_ethereum();
 init_contractArtifact();
 init_networkProfile();
 
-// ui/coreShared/js/simulation/clock.js
+// ../coreShared/js/simulation/clock.js
 init_ethereum();
 
-// ui/coreShared/js/simulation/bootstrap.js
+// ../coreShared/js/simulation/bootstrap.js
 var ETH_BALANCE_AMOUNT = 10n ** 30n;
 var REP_TOKEN_MINT_AMOUNT = 3000000n * 10n ** 18n;
 var WETH_TOKEN_MINT_AMOUNT = 10000n * 10n ** 18n;
@@ -29389,7 +29389,7 @@ function predictSimulationTokenAddresses(accountAddress) {
   };
 }
 
-// ui/coreShared/js/simulation/tevmBackend.js
+// ../coreShared/js/simulation/tevmBackend.js
 var QA_ACCOUNTS = [normalizeAccount("0x00000000000000000000000000000000000000a1"), normalizeAccount("0x00000000000000000000000000000000000000b2"), normalizeAccount("0x00000000000000000000000000000000000000c3")].filter((account) => account !== undefined);
 function createListenerMap() {
   return {
@@ -29772,12 +29772,12 @@ async function createSimulationBackend({ appId = "zoltar", initialBootstrapError
   return backend;
 }
 
-// ui/coreShared/js/lib/assert.js
+// ../coreShared/js/lib/assert.js
 function assertNever(value) {
   throw new Error(`Unhandled discriminated union member: ${JSON.stringify(value)}`);
 }
 
-// ui/coreShared/js/simulation/scenarios.js
+// ../coreShared/js/simulation/scenarios.js
 var CORE_SIMULATION_SCENARIOS = ["baseline", "deployed"];
 var scenarioPresentations = new Map;
 function registerSimulationScenario(scenario, presentation) {
@@ -29819,7 +29819,7 @@ function getCoreSimulationScenarioDescription(scenario) {
   }
 }
 
-// ui/coreShared/js/lib/activeEnvironment.js
+// ../coreShared/js/lib/activeEnvironment.js
 var defaultInjectedBackend = createInjectedBackend();
 var activeBackend = undefined;
 var activeSimulationController = undefined;
@@ -29948,7 +29948,7 @@ function getActiveNetworkProfile() {
 function getActiveSimulationController() {
   return activeSimulationController;
 }
-// node_modules/preact/jsx-runtime/dist/jsxRuntime.module.js
+// ../../node_modules/preact/jsx-runtime/dist/jsxRuntime.module.js
 var f2 = 0;
 function u2(e2, t2, n2, o2, i2, u3) {
   t2 || (t2 = {});
@@ -29963,7 +29963,7 @@ function u2(e2, t2, n2, o2, i2, u3) {
   return l.vnode && l.vnode(l2), l2;
 }
 
-// node_modules/preact/hooks/dist/hooks.module.js
+// ../../node_modules/preact/hooks/dist/hooks.module.js
 var t2;
 var r2;
 var u3;
@@ -30129,7 +30129,7 @@ function D2(n2, t3) {
   return typeof t3 == "function" ? t3(n2) : t3;
 }
 
-// ui/coreShared/js/app/components/ApplicationErrorNotice.js
+// ../coreShared/js/app/components/ApplicationErrorNotice.js
 function ApplicationErrorNotice({ errorMessage, onRetry }) {
   const retryInProgressRef = A2(false);
   const [retryInProgress, setRetryInProgress] = d2(false);
@@ -30148,7 +30148,7 @@ function ApplicationErrorNotice({ errorMessage, onRetry }) {
   return u2("main", { children: u2("section", { className: "notice error", role: "alert", children: [u2("h1", { children: applicationErrorTitle }), u2("p", { children: errorMessage }), u2("div", { className: "actions", children: [u2("button", { type: "button", disabled: retryInProgress, onClick: retry2, children: retryInProgress ? retrying : retry }), u2("button", { type: "button", className: "secondary", onClick: () => window.location.reload(), children: reloadApplication })] })] }) });
 }
 
-// ui/coreShared/js/app/appRoot.js
+// ../coreShared/js/app/appRoot.js
 async function mountApp(options) {
   const initialize = options.initialize ?? initializeActiveEnvironment;
   const rootOption = options.root;
@@ -30166,20 +30166,20 @@ async function mountApp(options) {
   }
 }
 
-// ui/statoblast/ts/simulation/statoblastScenarios.ts
+// ts/simulation/statoblastScenarios.ts
 init_ethereum();
 init_oracleInitialReport();
 
-// ui/statoblast/ts/protocol/securityPools.ts
+// ts/protocol/securityPools.ts
 init_ethereum();
 init_contractArtifact();
 
-// ui/zoltar/js/protocol/forkActivity.js
+// ../zoltar/js/protocol/forkActivity.js
 function deriveHasForkActivity(source) {
   return source.systemState !== "operational" || source.truthAuctionStartedAt > 0n || source.migratedAttoRep > 0n || source.forkOutcome !== "none";
 }
 
-// ui/coreShared/js/lib/caseInsensitive.js
+// ../coreShared/js/lib/caseInsensitive.js
 function normalizeCaseInsensitiveText(value) {
   return value?.trim().toLowerCase();
 }
@@ -30189,7 +30189,7 @@ function sameCaseInsensitiveText(left, right) {
   return normalizedLeft !== undefined && normalizedLeft === normalizedRight;
 }
 
-// ui/coreShared/js/lib/address.js
+// ../coreShared/js/lib/address.js
 function normalizeAddress2(address) {
   return normalizeCaseInsensitiveText(address);
 }
@@ -30197,10 +30197,10 @@ function sameAddress(left, right) {
   return sameCaseInsensitiveText(left, right);
 }
 
-// ui/statoblast/ts/protocol/securityPools.ts
+// ts/protocol/securityPools.ts
 init_core();
 
-// ui/zoltar/js/protocol/decoders.js
+// ../zoltar/js/protocol/decoders.js
 init_ethereum();
 function requireArrayValue(value, context) {
   if (Array.isArray(value))
@@ -30241,7 +30241,7 @@ function requireObjectValue(value, context) {
   throw new Error(`Unexpected ${context} response`);
 }
 
-// ui/zoltar/js/protocol/forkData.js
+// ../zoltar/js/protocol/forkData.js
 function requireForkDataView(value) {
   const [auctionableAttoRepAtFork, truthAuctionAddress, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, escalationElapsedAtFork, escalationStartBondAtForkAttoRep, escalationNonDecisionThresholdAtForkAttoRep, forkOwnSecurityPool, unresolvedEscalationAtFork, forkOutcomeIndex] = requireTupleValue(value, 11, "security pool fork data");
   return {
@@ -30259,14 +30259,14 @@ function requireForkDataView(value) {
   };
 }
 
-// ui/statoblast/ts/protocol/securityPools.ts
+// ts/protocol/securityPools.ts
 init_helpers();
 
-// ui/statoblast/ts/protocol/deployment.ts
+// ts/protocol/deployment.ts
 init_networkProfile();
 init_ethereum();
 
-// ui/zoltar/js/protocol/deployment.js
+// ../zoltar/js/protocol/deployment.js
 init_ethereum();
 init_abis();
 init_deploymentAddresses();
@@ -30743,7 +30743,7 @@ async function loadErc20Allowance(client, tokenAddress, ownerAddress, spenderAdd
   return typeof allowance === "bigint" ? allowance : BigInt(allowance);
 }
 
-// ui/statoblast/ts/protocol/deployment.ts
+// ts/protocol/deployment.ts
 init_deploymentHelpers();
 init_contractArtifact();
 init_contractArtifact();
@@ -30905,10 +30905,10 @@ async function loadDeploymentStatusOracleSnapshot(client) {
   return snapshot;
 }
 
-// ui/statoblast/ts/protocol/securityPools.ts
+// ts/protocol/securityPools.ts
 init_deploymentHelpers();
 
-// ui/zoltar/js/protocol/zoltar.js
+// ../zoltar/js/protocol/zoltar.js
 init_ethereum();
 init_contractArtifact();
 init_core();
@@ -31239,7 +31239,7 @@ async function createMarket(client, parameters) {
   };
 }
 
-// ui/statoblast/ts/protocol/securityPools.ts
+// ts/protocol/securityPools.ts
 var QUESTION_OUTCOME_ABI = [
   {
     inputs: [{ name: "securityPool", type: "address" }],
@@ -31793,7 +31793,7 @@ async function loadSecurityVaultDetails(client, securityPoolAddress2, vaultAddre
     vaultAddress
   };
 }
-// ui/statoblast/ts/protocol/securityVault.ts
+// ts/protocol/securityVault.ts
 init_contractArtifact();
 init_core();
 async function depositRepToVaultToSecurityPool(client, securityPoolAddress2, amount2, targetHealthFactorBps = 10000n) {
@@ -31848,7 +31848,7 @@ async function redeemRepFromVaultFromSecurityPool(client, securityPoolAddress2, 
     hash
   };
 }
-// ui/statoblast/ts/protocol/tokenActions.ts
+// ts/protocol/tokenActions.ts
 init_abis();
 init_core();
 async function approveErc20(client, tokenAddress, spenderAddress, amount2, action) {
@@ -31860,7 +31860,7 @@ async function approveErc20(client, tokenAddress, spenderAddress, amount2, actio
   }));
   return { action, hash };
 }
-// shared/js/bigInt.js
+// ../../shared/js/bigInt.js
 function compareBigIntAscending(left, right) {
   if (left < right)
     return -1;
@@ -31872,12 +31872,12 @@ function sortBigIntsAscending(values) {
   return [...values].sort(compareBigIntAscending);
 }
 
-// ui/statoblast/ts/protocol/trading.ts
+// ts/protocol/trading.ts
 init_contractArtifact();
 init_helpers();
 init_core();
 
-// ui/coreShared/js/protocol/securityPoolActions.js
+// ../coreShared/js/protocol/securityPoolActions.js
 init_contractArtifact();
 async function readSecurityPoolUniverseId(client, securityPoolAddress2) {
   return await client.readContract({
@@ -31898,7 +31898,7 @@ async function executeForkAuctionAction(client, action, securityPoolAddress2, un
   };
 }
 
-// ui/statoblast/ts/protocol/trading.ts
+// ts/protocol/trading.ts
 async function loadSecurityPoolMintCapacity(client, securityPoolAddress2) {
   const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, questionData, questionId2] = await readRequiredMulticall(client, [
     {
@@ -32104,7 +32104,7 @@ async function redeemCompleteSetInSecurityPool(client, securityPoolAddress2, amo
     universeId
   };
 }
-// ui/statoblast/ts/protocol/truthAuctionActions.ts
+// ts/protocol/truthAuctionActions.ts
 init_contractArtifact();
 init_core();
 init_deploymentHelpers();
@@ -32152,7 +32152,7 @@ async function finalizeSecurityPoolTruthAuction(client, securityPoolAddress2, un
     args: [securityPoolAddress2]
   })));
 }
-// ui/statoblast/ts/protocol/truthAuctions.ts
+// ts/protocol/truthAuctions.ts
 init_contractArtifact();
 init_helpers();
 function requireTruthAuctionTickSummary(value, context) {
@@ -32255,7 +32255,7 @@ async function loadTruthAuctionBidderBidPage(client, truthAuctionAddress, bidder
     bids: bidPage
   };
 }
-// ui/zoltar/js/protocol/reporting.js
+// ../zoltar/js/protocol/reporting.js
 init_ethereum();
 init_contractArtifact();
 init_core();
@@ -33228,11 +33228,11 @@ async function withdrawForkedEscalationDeposits(client, securityPoolAddress2, ou
   })));
 }
 
-// ui/statoblast/ts/protocol/index.ts
+// ts/protocol/index.ts
 init_core();
 init_deploymentHelpers();
 
-// ui/zoltar/js/protocol/forks.js
+// ../zoltar/js/protocol/forks.js
 init_ethereum();
 init_abis();
 init_contractArtifact();
@@ -33651,10 +33651,10 @@ async function forkZoltarUniverse(client, universeId, questionId2) {
     universeId
   };
 }
-// ui/zoltar/js/protocol/openOracle.js
+// ../zoltar/js/protocol/openOracle.js
 init_ethereum();
 
-// shared/js/openOracle.js
+// ../../shared/js/openOracle.js
 init_ethereum();
 var OPEN_ORACLE_FLAG_TIME_TYPE = 1n << 0n;
 var OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1n << 1n;
@@ -33781,10 +33781,10 @@ function hasOpenOracleFlag(game, flag) {
   return (game.flags & flag) !== 0n;
 }
 
-// ui/zoltar/js/protocol/openOracle.js
+// ../zoltar/js/protocol/openOracle.js
 init_abis();
 
-// ui/zoltar/js/protocol/oracleRequestFunding.js
+// ../zoltar/js/protocol/oracleRequestFunding.js
 function resolveOracleOperationEthFunding({ managerDetails, priceUsable }) {
   if (managerDetails === undefined)
     return;
@@ -33813,7 +33813,7 @@ function resolveOracleOperationEthFunding({ managerDetails, priceUsable }) {
   };
 }
 
-// ui/zoltar/js/protocol/oracleTiming.js
+// ../zoltar/js/protocol/oracleTiming.js
 var ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 5n * 60n;
 function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp) {
   if (lastSettlementTimestamp === undefined || lastSettlementTimestamp === 0n)
@@ -33821,7 +33821,7 @@ function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp) {
   return lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS;
 }
 
-// ui/zoltar/js/protocol/openOracleMath.js
+// ../zoltar/js/protocol/openOracleMath.js
 var OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n;
 var OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n;
 var OPEN_ORACLE_INITIAL_REPORT_FUNDING_BUFFER = 2n;
@@ -33839,7 +33839,7 @@ function getOpenOracleDisputeSwapTokenKey({ currentAmount1, currentAmount2, newA
   return newAmount2 * currentAmount1 > currentAmount2 * newAmount1 ? "token2" : "token1";
 }
 
-// ui/zoltar/js/protocol/uniswapQuoter.js
+// ../zoltar/js/protocol/uniswapQuoter.js
 init_ethereum();
 init_networkProfile();
 init_activeProtocolAddresses();
@@ -34194,7 +34194,7 @@ async function quoteRepForUsdcV4WithSource(client, attoRepAmount) {
   return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), attoRepAmount, [REP_USDC_V4_POOL]);
 }
 
-// ui/zoltar/js/protocol/openOraclePricing.js
+// ../zoltar/js/protocol/openOraclePricing.js
 var OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n;
 function calculateOpenOraclePrice(token1Amount, token2Amount) {
   if (token1Amount <= 0n || token2Amount <= 0n)
@@ -34267,7 +34267,7 @@ async function loadOpenOracleInitialReportPrice(client, token1, token2, token1Am
   };
 }
 
-// ui/zoltar/js/protocol/openOracleValidation.js
+// ../zoltar/js/protocol/openOracleValidation.js
 init_ethereum();
 var OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n;
 var OPEN_ORACLE_MULTIPLIER_PRECISION = 100n;
@@ -34335,7 +34335,7 @@ function getOpenOracleCreateParameterValidationMessage(parameters, options = {})
   return getOpenOracleCreateParameterValidation(parameters, options)?.message;
 }
 
-// ui/zoltar/js/protocol/oracleQueueOperation.js
+// ../zoltar/js/protocol/oracleQueueOperation.js
 var LIQUIDATION_OPERATION_TYPE = 0;
 var WITHDRAW_REP_OPERATION_TYPE = 1;
 function decodeOracleQueueOperation(operation) {
@@ -34360,13 +34360,13 @@ function encodeOracleQueueOperation(operation) {
   }
 }
 
-// ui/zoltar/js/protocol/openOracle.js
+// ../zoltar/js/protocol/openOracle.js
 init_contractArtifact();
 init_helpers();
 init_core();
 init_deploymentHelpers();
 
-// ui/zoltar/js/protocol/openOracleState.js
+// ../zoltar/js/protocol/openOracleState.js
 function topicMatches(topic, expected) {
   return topic?.toLowerCase() === expected.toLowerCase();
 }
@@ -34462,7 +34462,7 @@ async function loadOpenOracleEventState(client, openOracleAddress, reportId) {
   return state;
 }
 
-// ui/zoltar/js/protocol/openOracle.js
+// ../zoltar/js/protocol/openOracle.js
 var OPEN_ORACLE_PRICE_UNITS = 30n;
 var ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n;
 var COORDINATOR_PRICE_PRECISION = 10n ** 18n;
@@ -35404,7 +35404,7 @@ async function queueOracleManagerOperation(client, managerAddress, operation, ta
     ...stagedExecution === undefined ? {} : { stagedExecution }
   };
 }
-// shared/js/truthAuctionTickMath.js
+// ../../shared/js/truthAuctionTickMath.js
 var TRUTH_AUCTION_PRICE_PRECISION = 10n ** 18n;
 var TRUTH_AUCTION_MIN_TICK = -524288n;
 var TRUTH_AUCTION_MAX_TICK = 524288n;
@@ -35465,7 +35465,7 @@ function findTruthAuctionMinSupportedTick() {
   return tickToPrice(lowerTick) > 0n ? lowerTick : upperTick;
 }
 
-// ui/coreShared/js/protocol/truthAuctionMath.js
+// ../coreShared/js/protocol/truthAuctionMath.js
 var TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick();
 function assertTruthAuctionTickInRange(tick) {
   if (tick < TRUTH_AUCTION_MIN_SUPPORTED_TICK || tick > TRUTH_AUCTION_MAX_TICK)
@@ -35512,7 +35512,7 @@ function getTruthAuctionTickAtPrice(price) {
   return lowerTick;
 }
 
-// ui/statoblast/ts/simulation/statoblastScenarios.ts
+// ts/simulation/statoblastScenarios.ts
 function getStatoblastScenarioLabel(scenario) {
   switch (scenario) {
     case "security-pool":
@@ -35550,7 +35550,7 @@ var SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1000n * 10n ** 18n;
 var SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)];
 var SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n];
 
-// ui/statoblast/ts/simulation/index.ts
+// ts/simulation/index.ts
 var STATOBLAST_SCENARIOS = ["security-pool", "securitypoolx2", "securitypoolx2-auction"];
 function registerStatoblastSimulationScenarios() {
   for (const scenario of STATOBLAST_SCENARIOS) {
@@ -35561,7 +35561,7 @@ function registerStatoblastSimulationScenarios() {
   }
 }
 
-// node_modules/@preact/signals-core/dist/signals-core.module.js
+// ../../node_modules/@preact/signals-core/dist/signals-core.module.js
 var i3 = Symbol.for("preact-signals");
 function t3() {
   if (!(v3 > 1)) {
@@ -35991,7 +35991,7 @@ function j3(i4, t4) {
   return r4;
 }
 
-// node_modules/@preact/signals/dist/signals.module.js
+// ../../node_modules/@preact/signals/dist/signals.module.js
 var s4;
 var h4;
 var l4;
@@ -36213,7 +36213,7 @@ function A3() {
     (l.requestAnimationFrame || k3)(x4);
 }
 
-// ui/coreShared/js/copy/simulation.js
+// ../coreShared/js/copy/simulation.js
 var deleteSave = "Delete save";
 var deletingSave = "Deleting…";
 var exportingState = "Exporting…";
@@ -36277,7 +36277,7 @@ var builtInScenarioDeletionReason = "Built-in scenarios cannot be deleted.";
 var removeCorruptedSavedStatesTitle = "Remove Corrupted Saved States";
 var invalidSavedStateCleanupHint = "Remove saved simulation state entries that are no longer readable from browser storage. Valid saved states will be kept.";
 
-// ui/coreShared/js/hooks/useCopyToClipboard.js
+// ../coreShared/js/hooks/useCopyToClipboard.js
 class ClipboardWriteError extends Error {
 }
 async function writeClipboardText(text) {
@@ -36351,7 +36351,7 @@ function useCopyToClipboard(valueKey) {
   return { copied: copied2, copyError, copyErrorId, copyText };
 }
 
-// ui/coreShared/js/hooks/useModalFocusIsolation.js
+// ../coreShared/js/hooks/useModalFocusIsolation.js
 var hiddenSiblingStates = new WeakMap;
 var modalScrollLockCount = 0;
 var bodyOverflowBeforeModal;
@@ -36522,7 +36522,7 @@ function useModalFocusIsolation({ dialogRef, initialFocusRef, isOpen, onClose })
   }, [dialogRef, initialFocusRef, isOpen]);
 }
 
-// ui/coreShared/js/components/GlobalTransactionPresentationContext.js
+// ../coreShared/js/components/GlobalTransactionPresentationContext.js
 var GlobalTransactionPresentationContext = K(undefined);
 function GlobalTransactionPresentationProvider({ children, transaction }) {
   return u2(GlobalTransactionPresentationContext.Provider, { value: transaction, children });
@@ -36534,7 +36534,7 @@ function isPendingGlobalTransactionPresentation(transaction) {
   return transaction?.tone === "preparing" || transaction?.tone === "awaiting-wallet" || transaction?.tone === "pending";
 }
 
-// ui/coreShared/js/copy/transaction.js
+// ../coreShared/js/copy/transaction.js
 var pool = "Pool";
 var settleFinalizedRefunds = "Settle Finalized Refunds";
 var undefinedValue = "undefined";
@@ -36612,18 +36612,18 @@ var attention = "Attention";
 var dismiss = "Dismiss";
 var closeStatus = "Close transaction status";
 
-// ui/coreShared/js/components/Badge.js
+// ../coreShared/js/components/Badge.js
 function Badge({ ariaLabel, children, className = "", title, tone = "muted" }) {
   const classes = ["badge", tone, className].filter(Boolean).join(" ");
   return u2("span", { "aria-label": ariaLabel, className: classes, title, children });
 }
 
-// ui/coreShared/js/components/ReadOnlyDetailAccordion.js
+// ../coreShared/js/components/ReadOnlyDetailAccordion.js
 function ReadOnlyDetailAccordion({ children, defaultOpen = false, title }) {
   return u2("details", { className: "read-only-detail-accordion", open: defaultOpen, children: [u2("summary", { children: title }), u2("div", { className: "read-only-detail-accordion-content", children })] });
 }
 
-// ui/coreShared/js/components/TransactionHashLink.js
+// ../coreShared/js/components/TransactionHashLink.js
 init_networkProfile();
 function TransactionHashLink({ hash }) {
   const transactionUrl = buildTransactionExplorerUrl(getActiveNetworkProfile(), hash);
@@ -36632,7 +36632,7 @@ function TransactionHashLink({ hash }) {
   return u2("a", { className: "transaction-hash-link", href: transactionUrl, target: "_blank", rel: "noreferrer", title: viewTransaction, children: hash });
 }
 
-// ui/coreShared/js/components/TransactionPresentationNotice.js
+// ../coreShared/js/components/TransactionPresentationNotice.js
 function getTransactionBadge(tone) {
   if (tone === "preparing")
     return { tone: "pending", label: preparing };
@@ -36656,7 +36656,7 @@ function TransactionPresentationNotice({ className = "", compact = false, dismis
   return u2("div", { ...noticeRef === undefined ? {} : { ref: noticeRef }, className: noticeClassName, role: transaction.tone === "error" ? "alert" : "status", "aria-live": transaction.tone === "error" ? "assertive" : "polite", children: [!dismissible ? undefined : u2("button", { className: "quiet global-transaction-close", type: "button", "aria-label": closeStatus, onClick: onDismiss, children: u2("span", { "aria-hidden": "true", children: "×" }) }), u2("div", { className: "global-transaction-notice-copy", children: [u2("div", { className: "global-transaction-notice-header", children: [u2(Badge, { tone: badge.tone, children: badge.label }), transaction.tone === "awaiting-wallet" ? u2("span", { className: "spinner global-transaction-spinner", "aria-hidden": "true" }) : undefined, u2("strong", { children: transaction.title })] }), compact ? u2("details", { className: "global-transaction-compact-details", children: [u2("summary", { children: viewTransactionDetails }), u2("div", { className: "global-transaction-compact-details-content", children: transactionDetails })] }) : transactionDetails] }), !dismissible || compact ? undefined : u2("div", { className: "global-transaction-actions", children: u2("button", { className: "secondary global-transaction-dismiss", type: "button", onClick: onDismiss, children: dismiss }) })] });
 }
 
-// ui/coreShared/js/components/TransactionObjectContext.js
+// ../coreShared/js/components/TransactionObjectContext.js
 function TransactionObjectContext({ className = "", items, title }) {
   const titleId = g2();
   if (items.length === 0)
@@ -36664,7 +36664,7 @@ function TransactionObjectContext({ className = "", items, title }) {
   return u2("section", { className: `transaction-object-context ${className}`.trim(), ...title === undefined ? {} : { "aria-labelledby": titleId }, children: [title === undefined ? undefined : u2("strong", { id: titleId, children: title }), u2("dl", { children: items.map((item, index) => u2("div", { children: [u2("dt", { children: item.label }), u2("dd", { children: item.value })] }, `${index}`)) })] });
 }
 
-// ui/coreShared/js/components/OperationModal.js
+// ../coreShared/js/components/OperationModal.js
 function getTransactionOperationKey(transaction) {
   return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash;
 }
@@ -36727,7 +36727,7 @@ function OperationModal({ children, closeDisabled = false, closeOnSuccessKey, co
   return u2("div", { className: "modal-backdrop", role: "presentation", onClick: requestClose, children: u2("section", { ref: dialogRef, className: "modal-panel operation-modal-panel", role: "dialog", tabIndex: -1, "aria-busy": closeDisabled || undefined, "aria-modal": "true", "aria-labelledby": titleId, "aria-describedby": descriptionId, onClick: (event) => event.stopPropagation(), children: [u2("div", { className: "modal-header", children: [u2("div", { className: "modal-header-title", children: u2("h3", { id: titleId, children: title }) }), u2("button", { ref: closeButtonRef, className: "quiet modal-close-button", type: "button", "aria-label": close, title: close, disabled: closeDisabled, onClick: requestClose, children: "×" })] }), description === undefined ? undefined : u2("p", { id: descriptionId, className: "detail", children: description }), u2(TransactionObjectContext, { items: context }), !wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current ? undefined : u2(TransactionPresentationNotice, { className: "operation-modal-transaction-notice", transaction: modalTransaction }), u2("div", { className: "operation-modal-body", children })] }) });
 }
 
-// ui/coreShared/js/copy/userMessages.js
+// ../coreShared/js/copy/userMessages.js
 var notChecked = "Not checked";
 var emptyPoolRegistryActionHint = "Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.";
 var emptyPoolRegistryDetail = "No security pools are available in this universe.";
@@ -36736,7 +36736,7 @@ var uncheckedPoolRegistryDetail = "Loading security pools…";
 var retrieving = "retrieving…";
 var formatMissingLookupDetail = (kind) => `No ${kind} matches this ID. Try another ${kind} ID.`;
 
-// ui/coreShared/js/lib/network.js
+// ../coreShared/js/lib/network.js
 var COMMON_CHAIN_NAMES = new Map([
   [1n, "Ethereum"],
   [10n, "Optimism"],
@@ -36781,7 +36781,7 @@ function getWrongNetworkMessage() {
   return formatNetworkRequiredReason(profile.displayName);
 }
 
-// ui/coreShared/js/lib/userCopy.js
+// ../coreShared/js/lib/userCopy.js
 var METRIC_PLACEHOLDER = metricUnavailablePlaceholder;
 function createPresentation(key, presentation) {
   return { key, ...presentation };
@@ -36869,14 +36869,14 @@ function getReportPresentation({ kind, state }) {
   }
 }
 
-// ui/coreShared/js/components/CopyErrorMessage.js
+// ../coreShared/js/components/CopyErrorMessage.js
 function CopyErrorMessage({ id, manualValue, message }) {
   if (message === undefined)
     return;
   return u2("span", { className: "copy-error-recovery-wrap", children: [u2("span", { className: "visually-hidden", id, role: "alert", "aria-live": "assertive", children: message }), u2("details", { className: "copy-error-recovery", children: [u2("summary", { children: copyUnavailable }), u2("span", { className: "copy-error-recovery-panel", children: [u2("span", { className: "copy-error-message", children: message }), manualValue === undefined ? undefined : u2("input", { "aria-label": manualCopyValue, className: "copy-manual-value", onFocus: (event) => event.currentTarget.select(), readOnly: true, type: "text", value: manualValue })] })] })] });
 }
 
-// ui/coreShared/js/components/AddressValue.js
+// ../coreShared/js/components/AddressValue.js
 function abbreviateAddress(address) {
   if (address.length <= 13)
     return address;
@@ -36898,7 +36898,7 @@ function AddressValue({ address, className = "", copyable = true, responsiveAbbr
   return u2("span", { className: "copy-value-wrap", children: [u2("button", { type: "button", className: `address-value copyable ${className}`, title: address, "aria-label": formatCopyAddressValue(address), "aria-describedby": copyError.value === undefined ? undefined : copyErrorId, onClick: () => copyText(address), children: copied2.value ? copied : u2(AddressText, { address, responsiveAbbreviation }) }), u2(CopyErrorMessage, { id: copyErrorId, manualValue: address, message: copyError.value })] });
 }
 
-// ui/coreShared/js/components/LoadingText.js
+// ../coreShared/js/components/LoadingText.js
 function isLoadingText(value) {
   return typeof value === "string" && /^\s*loading\b/i.test(value);
 }
@@ -36909,7 +36909,7 @@ function LoadingAwareText({ children }) {
   return isLoadingText(children) ? u2(LoadingText, { children }) : u2(k, { children });
 }
 
-// ui/coreShared/js/lib/chainTimestamp.js
+// ../coreShared/js/lib/chainTimestamp.js
 var ChainTimestampContext = K(undefined);
 var ChainBlockNumberContext = K(undefined);
 function useChainTimestamp() {
@@ -36919,7 +36919,7 @@ function useChainBlockNumber() {
   return x2(ChainBlockNumberContext);
 }
 
-// ui/coreShared/js/components/TimestampValue.js
+// ../coreShared/js/components/TimestampValue.js
 function TimestampValue({ className = "", currentTimestamp, loading: loading2 = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }) {
   const chainCurrentTimestamp = useChainTimestamp();
   const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp;
@@ -36937,7 +36937,7 @@ function TimestampValue({ className = "", currentTimestamp, loading: loading2 = 
   return u2("time", { className: `timestamp-value ${className}`, dateTime, title: absoluteTimestamp, children: [absoluteTimestamp, relativeTimestamp === undefined ? null : u2(k, { children: [" ", u2("span", { className: "timestamp-value-relative", children: ["(", relativeTimestamp, ")"] })] })] });
 }
 
-// ui/coreShared/js/components/ErrorNotice.js
+// ../coreShared/js/components/ErrorNotice.js
 function ErrorNotice({ id, message }) {
   const [dismissed, setDismissed] = d2(false);
   const isCloseable = isCloseableErrorMessage(message);
@@ -36951,7 +36951,7 @@ function ErrorNotice({ id, message }) {
   return u2("div", { id, className: `notice error${isCloseable ? " closeable" : ""}`, role: "alert", "aria-live": "assertive", "aria-atomic": "true", children: [isCloseable ? u2("button", { type: "button", className: "notice-dismiss", "aria-label": dismissErrorActionLabel, onClick: () => setDismissed(true), children: u2("span", { className: "notice-dismiss-icon", "aria-hidden": "true" }) }) : undefined, u2("p", { children: message })] });
 }
 
-// ui/coreShared/js/components/SimulationBanner.js
+// ../coreShared/js/components/SimulationBanner.js
 var SIMULATION_TIME_PRESETS = [
   { label: plus1Hour, seconds: 60n * 60n },
   { label: plus1Day, seconds: 24n * 60n * 60n },
@@ -37358,7 +37358,7 @@ function SimulationBanner({ controller, onEnvironmentChanged = async () => {
   }, children: removeCorruptedSaves }) })] })] });
 }
 
-// ui/coreShared/js/components/ViewTabs.js
+// ../coreShared/js/components/ViewTabs.js
 function buildGroupedOptions(groups, indexedOptions) {
   if (groups === undefined)
     return;
@@ -37523,7 +37523,7 @@ function ViewTabs({ ariaLabel, className = "", groups, onChange, onOverflowEdges
   return u2("div", { ref: containerRef, className: `view-tabs ${variant} ${overflowEdges.start ? "has-overflow-start" : ""} ${overflowEdges.end ? "has-overflow-end" : ""} ${className}`.trim(), "data-orientation": orientation, "data-size": size, role: containerRole, "aria-label": containerRole === undefined ? undefined : ariaLabel, children: renderOptions() });
 }
 
-// ui/coreShared/js/components/TabNavigation.js
+// ../coreShared/js/components/TabNavigation.js
 function TabNavigation({ route, tabs, onRouteChange }) {
   const options = tabs.map((tab) => ({
     value: tab.route,
@@ -37538,7 +37538,7 @@ function TabNavigation({ route, tabs, onRouteChange }) {
   return u2("nav", { className: "tab-nav", "aria-label": applicationSections, role: "navigation", children: [u2(ViewTabs, { ariaLabel: applicationSections, semantics: "navigation", value: effectiveRoute, variant: "route", onChange: (value) => onRouteChange(value), options }), u2("label", { className: "mobile-route-select", children: [u2("span", { children: currentApplicationSection }), u2("select", { "aria-label": currentApplicationSection, value: effectiveRoute, onChange: (event) => onRouteChange(event.currentTarget.value), children: options.map((option) => u2("option", { value: option.value, disabled: option.disabled, children: option.label }, option.value)) }), disabledReason !== undefined ? u2("span", { className: "detail disabled-reason", children: disabledReason }) : undefined] }), u2("a", { className: "protocol-guide-link", href: protocolGuideHref, target: "_blank", rel: "noreferrer", children: protocolGuide })] });
 }
 
-// ui/coreShared/js/app/components/AppHeaderShell.js
+// ../coreShared/js/app/components/AppHeaderShell.js
 function AppHeaderShell({ overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => {
   return;
 }, onRefresh }) {
@@ -37550,7 +37550,7 @@ function AppHeaderShell({ overview, simulationController, subNavigation, tabNavi
   return u2(k, { children: [u2("button", { className: "skip-link", type: "button", onClick: focusAppContent, children: skipToMainContent }), simulationController === undefined ? undefined : u2(SimulationBanner, { controller: simulationController, onEnvironmentChanged, onRefresh }), u2("div", { className: "top-shell", children: [u2("div", { className: "top-shell-content", children: overview }), u2("div", { className: "app-nav-stack", children: [u2(TabNavigation, { ...tabNavigation }), subNavigation] })] })] });
 }
 
-// ui/coreShared/js/app/components/AppPageHeading.js
+// ../coreShared/js/app/components/AppPageHeading.js
 function AppPageHeading({ formatDocumentTitle, pageTitle }) {
   const headingRef = A2(null);
   const previousPageTitleRef = A2(pageTitle);
@@ -37579,7 +37579,7 @@ function AppPageHeading({ formatDocumentTitle, pageTitle }) {
   return u2("h1", { ref: headingRef, className: "visually-hidden", tabIndex: -1, children: pageTitle });
 }
 
-// ui/coreShared/js/lib/noticeStack.js
+// ../coreShared/js/lib/noticeStack.js
 var TONE_ORDER = {
   blocking: 0,
   warning: 1,
@@ -37590,14 +37590,14 @@ function orderNoticeItems(items) {
   return [...items].sort((left, right) => TONE_ORDER[left.tone] - TONE_ORDER[right.tone]);
 }
 
-// ui/coreShared/js/components/WarningSurface.js
+// ../coreShared/js/components/WarningSurface.js
 function WarningSurface({ ariaLive, as = "section", children, className = "", role, surface = "card", variant = "default" }) {
   const Tag = as;
   const classes = ["warning-surface", variant === "compact" ? "compact" : undefined, surface === "flat" ? "flat" : undefined, className].filter(Boolean).join(" ");
   return u2(Tag, { className: classes, role, "aria-live": ariaLive, children });
 }
 
-// ui/coreShared/js/components/NoticeStack.js
+// ../coreShared/js/components/NoticeStack.js
 function NoticeStack({ items }) {
   if (items.length === 0)
     return;
@@ -37608,7 +37608,7 @@ function NoticeStack({ items }) {
   }) });
 }
 
-// ui/coreShared/js/app/components/AppStatusNotices.js
+// ../coreShared/js/app/components/AppStatusNotices.js
 function formatRpcSourceLabel(source) {
   if (source === "url")
     return pageUrl;
@@ -37686,7 +37686,7 @@ function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUnive
   return u2(NoticeStack, { items });
 }
 
-// ui/coreShared/js/app/components/GlobalTransactionTray.js
+// ../coreShared/js/app/components/GlobalTransactionTray.js
 var dismissedKeys = new Set;
 var MAX_REMEMBERED_DISMISSALS = 100;
 function getTransactionKey(transaction) {
@@ -37780,7 +37780,7 @@ function GlobalTransactionTray({ routeKey, transaction }) {
   return u2("div", { className: "global-transaction-tray", children: u2(TransactionPresentationNotice, { compact, dismissible: canDismiss, noticeRef, onDismiss: dismiss2, transaction }) });
 }
 
-// ui/coreShared/js/app/components/RouteSubNavigation.js
+// ../coreShared/js/app/components/RouteSubNavigation.js
 function RouteSubNavigation({ ariaLabel, onChange, options, value }) {
   const navigationRef = A2(null);
   const [overflowEdges, setOverflowEdges] = d2({ end: false, start: false });
@@ -37809,7 +37809,7 @@ function RouteSubNavigation({ ariaLabel, onChange, options, value }) {
   return u2("div", { className: "route-subnav-region", children: [u2("nav", { ref: navigationRef, className: `route-subnav-shell ${overflowEdges.start ? "has-overflow-start" : ""} ${overflowEdges.end ? "has-overflow-end" : ""}`.trim(), "aria-label": ariaLabel, role: "navigation", children: [u2("label", { className: "route-subnav-mobile-select", children: [u2("span", { children: ariaLabel }), u2("select", { "aria-label": ariaLabel, value, onChange: (event) => onChange(event.currentTarget.value), children: options.map((option) => u2("option", { value: option.value, disabled: option.disabled, children: option.label }, option.value)) })] }), overflowEdges.start ? u2("button", { className: "quiet route-subnav-overflow-control route-subnav-overflow-start", type: "button", "aria-label": formatShowEarlierNavigationItems(ariaLabel), onClick: () => scrollOptions(-1), children: u2("span", { "aria-hidden": "true", children: "‹" }) }) : undefined, u2(ViewTabs, { ariaLabel, className: "route-subtab-nav", semantics: "navigation", size: "compact", value, variant: "subroute", onChange, onOverflowEdgesChange, options }), overflowEdges.end ? u2("button", { className: "quiet route-subnav-overflow-control route-subnav-overflow-end", type: "button", "aria-label": formatShowLaterNavigationItems(ariaLabel), onClick: () => scrollOptions(1), children: u2("span", { "aria-hidden": "true", children: "›" }) }) : undefined] }), unavailableOptions.length === 0 ? undefined : u2("div", { className: "route-subnav-unavailable", children: unavailableOptions.map((option) => u2("p", { className: "detail", children: [u2("strong", { children: [option.label, ":"] }), " ", option.reason] }, option.value)) })] });
 }
 
-// ui/zoltar/js/copy/deployment.js
+// ../zoltar/js/copy/deployment.js
 var deploying = "Deploying…";
 var deploymentReadyStatus = "Can deploy now.";
 var deploymentRunningStatus = "Deployment in progress.";
@@ -37830,12 +37830,12 @@ var loadingDeploymentStatus = "Loading deployment status…";
 var deploymentStatusUnavailableReason = "Deployment status is unavailable.";
 var nextDeployable = "Next deployable";
 
-// ui/coreShared/js/components/LoadableValue.js
+// ../coreShared/js/components/LoadableValue.js
 function LoadableValue({ children, loading: loading2, placeholder = loadingWithEllipsis }) {
   return loading2 ? u2(LoadingText, { children: placeholder }) : u2(k, { children });
 }
 
-// ui/coreShared/js/components/SectionBlock.js
+// ../coreShared/js/components/SectionBlock.js
 function getSectionBlockHeadingTag(headingLevel) {
   if (headingLevel === 2)
     return "h2";
@@ -37849,7 +37849,7 @@ function SectionBlock({ actions: actions2, badge, children, className = "", desc
   return u2("section", { className: classes, children: [title === undefined && badge === undefined && actions2 === undefined && description === undefined ? undefined : u2("div", { className: "section-block-header", children: [u2("div", { className: "section-block-copy", children: [u2("div", { className: "section-block-title-row", children: title === undefined ? undefined : u2(HeadingTag, { children: title }) }), description === undefined ? undefined : u2("p", { className: "detail", children: description })] }), badge === undefined ? undefined : u2("div", { className: "section-block-badge", children: badge }), actions2 === undefined ? undefined : u2("div", { className: "section-block-actions", children: actions2 })] }), u2("div", { className: "section-block-body", children })] });
 }
 
-// ui/coreShared/js/components/TransactionActionButton.js
+// ../coreShared/js/components/TransactionActionButton.js
 var TransactionActionButtonLockContext = K(undefined);
 function TransactionActionButtonLockProvider({ children, disabledReason }) {
   return u2(TransactionActionButtonLockContext.Provider, { value: disabledReason, children });
@@ -37875,7 +37875,7 @@ function TransactionActionButton({ ariaLabel, availability, className = "", disa
   return u2("div", { className: `tx-action ${className}`.trim(), children: [u2("button", { "aria-label": ariaLabel, className: `tx-action-button ${tone}`, type, onClick: handleClick, disabled: isDisabled, title: disabledReason, "aria-describedby": describedBy, children: pending2 ? u2(LoadingText, { announce: !isPendingGlobalTransactionPresentation(globalTransaction), children: pendingLabel }) : idleLabel }), shouldShowDisabledReason ? u2("p", { id: disabledReasonId, className: "detail disabled-reason", children: u2(LoadingAwareText, { children: disabledReason }) }) : undefined] });
 }
 
-// ui/coreShared/js/lib/actionGuards.js
+// ../coreShared/js/lib/actionGuards.js
 function getWalletRequiredReason(walletRequiredReason) {
   return walletRequiredReason ?? walletConnectionRequired;
 }
@@ -37900,7 +37900,7 @@ function getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveA
   return { disabled: true, reason: guardState.reason };
 }
 
-// ui/zoltar/js/features/deployment/lib/deployment.js
+// ../zoltar/js/features/deployment/lib/deployment.js
 var DEPLOYMENT_SECTIONS = [
   {
     title: "Utilities",
@@ -37962,7 +37962,7 @@ function getDeploymentSections(steps) {
   }));
 }
 
-// ui/zoltar/js/features/deployment/components/DeploymentSection.js
+// ../zoltar/js/features/deployment/components/DeploymentSection.js
 function getStepStatus(stepDeployed, prerequisiteLabel, isBusy, accountAddress, isOnActiveAppChain) {
   if (stepDeployed)
     return {
@@ -38027,18 +38027,18 @@ function DeploymentSection({ title, completedGroup = false, steps, allSteps, acc
   }) }) });
 }
 
-// ui/coreShared/js/components/RouteHeader.js
+// ../coreShared/js/components/RouteHeader.js
 function RouteHeader({ actions: actions2, badge, className = "", description, eyebrow, summary, title }) {
   return u2("header", { className: `route-header ${className}`.trim(), children: [u2("div", { className: "route-header-main", children: [u2("div", { className: "route-header-copy", children: [eyebrow === undefined ? undefined : u2("p", { className: "route-eyebrow", children: eyebrow }), u2("div", { className: "route-title-row", children: u2("h2", { children: title }) }), description === undefined ? undefined : u2("p", { className: "detail route-description", children: description })] }), badge === undefined ? undefined : u2("div", { className: "route-header-badge", children: badge }), actions2 === undefined ? undefined : u2("div", { className: "route-header-actions", children: actions2 })] }), summary === undefined ? undefined : u2("div", { className: "route-summary-strip", children: summary })] });
 }
 
-// ui/coreShared/js/components/DataGrid.js
+// ../coreShared/js/components/DataGrid.js
 function DataGrid({ children, className = "", columns = "auto", dense = false }) {
   const classes = ["data-grid", dense ? "is-dense" : "", className].filter(Boolean).join(" ");
   return u2("div", { className: classes, "data-columns": columns, children });
 }
 
-// ui/coreShared/js/lib/urlParams.js
+// ../coreShared/js/lib/urlParams.js
 var UNIVERSE_QUERY_PARAM = "universe";
 var SECURITY_POOL_QUERY_PARAM = "securityPool";
 var SECURITY_POOL_QUESTION_ID_QUERY_PARAM = "questionId";
@@ -38181,7 +38181,7 @@ function writeOpenOracleReportIdQueryParam(search, reportId) {
   return nextSearch === "" ? "" : `?${nextSearch}`;
 }
 
-// ui/zoltar/js/features/deployment/components/DeploymentRouteContent.js
+// ../zoltar/js/features/deployment/components/DeploymentRouteContent.js
 function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, deploymentCompleteHref, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }) {
   const deploymentStatusReasonId = g2();
   const nextMissingStep = findNextDeployableStep(deploymentStatuses);
@@ -38218,12 +38218,12 @@ function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateRea
   }) })] })] });
 }
 
-// ui/coreShared/js/app/components/NotFoundSection.js
+// ../coreShared/js/app/components/NotFoundSection.js
 function NotFoundSection() {
   return u2(SectionBlock, { className: "not-found-shell", title: pageNotFoundTitle, children: u2("div", { className: "actions", children: [u2("a", { className: "button-link", href: "#/deploy", children: deploy }), u2("a", { className: "button-link secondary-link", href: "#/zoltar", children: zoltar }), u2("a", { className: "button-link secondary-link", href: "#/security-pools", children: securityPools })] }) });
 }
 
-// ui/zoltar/js/copy/openOracle.js
+// ../zoltar/js/copy/openOracle.js
 var settleReport = "Settle Report";
 var settleReportAction = "Settle report";
 var disputeAndSwap = "Dispute & Swap";
@@ -38366,7 +38366,7 @@ var reporter = "Reporter";
 var parameterDetails = "Parameter Details";
 var standaloneParameterDetails = "Exact report and escalation-halt amounts use base-token decimals. ETH funding must cover required funding and the settler reward. Dispute settings determine escalation timing and economics.";
 
-// ui/coreShared/js/copy/transactionReview.js
+// ../coreShared/js/copy/transactionReview.js
 var transactionReview = "Transaction Review";
 var risksAndConsequences = "Risks and Consequences";
 var youPay = "You Pay";
@@ -38375,10 +38375,10 @@ var network = "Network";
 var resultingEthBalance = "Resulting ETH Balance";
 var amountUnavailable = "Enter a valid amount to preview";
 
-// ui/zoltar/js/features/open-oracle/components/OpenOracleSection.js
+// ../zoltar/js/features/open-oracle/components/OpenOracleSection.js
 init_ethereum();
 
-// ui/coreShared/js/components/ActionLauncherButton.js
+// ../coreShared/js/components/ActionLauncherButton.js
 function ActionLauncherButton({ availability, className = "", describedBy, disabled = false, idleLabel, onClick, pending: pending2 = false, pendingLabel, showDisabledReason = false, tone = "primary", type = "button" }) {
   const disabledReasonId = g2();
   const globalTransaction = useGlobalTransactionPresentation();
@@ -38395,7 +38395,7 @@ function ActionLauncherButton({ availability, className = "", describedBy, disab
   })()] });
 }
 
-// ui/coreShared/js/components/ActionLauncherCard.js
+// ../coreShared/js/components/ActionLauncherCard.js
 function ActionLauncherCard({ action, children, pending: pending2 = false, pendingLabel = opening, tone = "secondary" }) {
   if (action.onAction === undefined && action.blocker === undefined && action.readiness !== "blocked")
     return;
@@ -38405,12 +38405,12 @@ function ActionLauncherCard({ action, children, pending: pending2 = false, pendi
   return u2("section", { className: `action-launcher-card ${action.readiness} ${showCopy ? "" : "compact"}`.trim(), children: [showCopy ? u2("div", { className: "action-launcher-card-copy", children: [showTitle ? u2("h4", { children: action.title }) : undefined, action.description === undefined ? undefined : u2("p", { className: "detail", children: action.description }), children] }) : undefined, u2("div", { className: "action-launcher-card-actions", children: u2(ActionLauncherButton, { ...action.disabledReasonId === undefined ? {} : { describedBy: action.disabledReasonId }, idleLabel: action.actionLabel, pendingLabel, onClick: () => action.onAction?.(), pending: pending2, tone, availability: { disabled, reason: action.blocker }, showDisabledReason: true }) })] });
 }
 
-// ui/coreShared/js/components/ComparisonRecord.js
+// ../coreShared/js/components/ComparisonRecord.js
 function ComparisonRecord({ action, badge, children, metrics, title }) {
   return u2("article", { className: "comparison-record record-card", children: [u2("header", { className: "comparison-record-header", children: [u2("div", { className: "comparison-record-identity", children: [u2("h3", { children: title }), badge === undefined ? undefined : u2("div", { className: "comparison-record-badge", children: badge })] }), action === undefined ? undefined : u2("div", { className: "comparison-record-action", children: action })] }), u2("dl", { className: "comparison-record-metrics", children: metrics.map((metric, index) => u2("div", { children: [u2("dt", { children: metric.label }), u2("dd", { children: metric.value })] }, `${index}`)) }), children === undefined ? undefined : u2("div", { className: "comparison-record-details", children })] });
 }
 
-// ui/coreShared/js/copy/pricing.js
+// ../coreShared/js/copy/pricing.js
 var formatWrappedValue = (value) => `(${value})`;
 var repPriceUnavailableDetail = "REP/ETH price source is unavailable until a quote loads.";
 var simulationPriceSourceDetail = "Uses the simulation REP/ETH mock price.";
@@ -38431,7 +38431,7 @@ var uniswapV3RepEth = "Uniswap V3 REP / ETH";
 var targetCollateralization = "Target Collateralization";
 var formatCopyExactCurrencyValue = (exactValue) => `Copy exact value ${exactValue}`;
 
-// ui/coreShared/js/components/CurrencyValue.js
+// ../coreShared/js/components/CurrencyValue.js
 function CurrencyValue({ className = "", compactWhenOverflow = false, copyable = true, decimals = 2, loading: loading2 = false, precision = "rounded", suffix = "", units = 18, value }) {
   const buttonRef = A2(null);
   const spanRef = A2(null);
@@ -38495,7 +38495,7 @@ function CurrencyValue({ className = "", compactWhenOverflow = false, copyable =
   return u2("span", { className: "currency-value-wrap", children: [u2("button", { ref: buttonRef, type: "button", className: valueClassName, title: exactTitle, "aria-label": formatCopyExactCurrencyValue(exactValue), "aria-describedby": copyError.value === undefined ? undefined : copyErrorId, onClick: () => copyText(exactValue), children: copiedValue ? copied : resolvedDisplayValue }), u2(CopyErrorMessage, { id: copyErrorId, manualValue: exactValue, message: copyError.value }), u2("span", { ref: measureRef, "aria-hidden": "true", className: measureClassName })] });
 }
 
-// ui/coreShared/js/components/EnumDropdown.js
+// ../coreShared/js/components/EnumDropdown.js
 function EnumDropdown({ ariaDescribedBy, ariaLabel, disabled = false, invalid: invalid2 = false, onChange, options, placeholder, value }) {
   const [open, setOpen] = d2(false);
   const rootRef = A2(null);
@@ -38605,13 +38605,13 @@ function EnumDropdown({ ariaDescribedBy, ariaLabel, disabled = false, invalid: i
   }, children: option.label }, option.value)) }) : undefined] });
 }
 
-// ui/coreShared/js/components/FormInput.js
+// ../coreShared/js/components/FormInput.js
 function FormInput({ className = "", invalid: invalid2 = false, ...props }) {
   const nextClassName = ["form-input", invalid2 ? "is-invalid" : "", className].filter(Boolean).join(" ");
   return u2("input", { ...props, "aria-invalid": invalid2 ? "true" : undefined, className: nextClassName });
 }
 
-// ui/coreShared/js/components/LifecycleStageBanner.js
+// ../coreShared/js/components/LifecycleStageBanner.js
 function renderStageActionGroup(label, items, tone) {
   if (items.length === 0)
     return;
@@ -38627,13 +38627,13 @@ function LifecycleStageBanner({ detailId, flat = false, stage }) {
   return u2("section", { className: `lifecycle-stage-banner ${stage.tone}${flat ? " flat" : ""}`, children: [u2("div", { className: "lifecycle-stage-banner-main", children: [u2("h3", { children: stage.label }), stage.detail === undefined ? undefined : u2("p", { className: "detail", id: detailId, children: u2(LoadingAwareText, { children: stage.detail }) })] }), actions2] });
 }
 
-// ui/coreShared/js/components/LookupFieldRow.js
+// ../coreShared/js/components/LookupFieldRow.js
 function LookupFieldRow({ action, disabled = false, inputClassName = "", inputMode, invalid: invalid2 = false, label, onInput, placeholder, resolvedValue, resolvedValueLabel, value }) {
   const inputId = g2();
   return u2("div", { className: "field lookup-field-row", children: [u2("label", { className: "lookup-field-label", for: inputId, children: label }), u2("div", { className: `lookup-field-controls ${action === undefined ? "" : "has-action"}`.trim(), children: [u2(FormInput, { id: inputId, className: inputClassName, value, inputMode, invalid: invalid2, disabled, onInput: (event) => onInput(event.currentTarget.value), placeholder }), action === undefined ? undefined : u2("div", { className: "actions", children: action })] }), resolvedValue === undefined ? undefined : u2("div", { className: "lookup-field-resolved-value", children: [resolvedValueLabel === undefined ? undefined : u2("span", { className: "lookup-field-resolved-label", children: resolvedValueLabel }), resolvedValue] })] });
 }
 
-// ui/coreShared/js/components/MetricGrid.js
+// ../coreShared/js/components/MetricGrid.js
 function getMetricGridVariantClassName(variant = "default") {
   switch (variant) {
     case "context":
@@ -38655,14 +38655,14 @@ function MetricGrid({ children, className = "", columns = "auto", dense = false,
   return u2(DataGrid, { className: classes, columns, dense, children });
 }
 
-// ui/coreShared/js/components/MetricField.js
+// ../coreShared/js/components/MetricField.js
 function MetricField({ children, className = "", label, valueClassName = "", valueTagName = "strong" }) {
   const ValueTag = valueTagName;
   const resolvedValueClassName = ["metric-field-value", valueClassName].filter((value) => value !== "").join(" ");
   return u2("div", { className: className === "" ? undefined : className, children: [u2("span", { className: "metric-label", children: label }), u2(ValueTag, { className: resolvedValueClassName, children: u2(LoadingAwareText, { children }) })] });
 }
 
-// ui/coreShared/js/components/PaginationControls.js
+// ../coreShared/js/components/PaginationControls.js
 function PaginationControls({ hasNextPage = false, hasPreviousPage = false, loading: loading2 = false, loadMoreLabel = loadMore, nextLabel = nextPage, onLoadMore, onNextPage, onPreviousPage, previousLabel = previousPage, summary }) {
   const hasPageNavigation = onPreviousPage !== undefined || onNextPage !== undefined;
   const hasLoadMore = onLoadMore !== undefined;
@@ -38671,13 +38671,13 @@ function PaginationControls({ hasNextPage = false, hasPreviousPage = false, load
   return u2("div", { className: "actions", children: [summary === undefined ? undefined : u2("span", { className: "detail", children: summary }), onPreviousPage === undefined ? undefined : u2("button", { className: "secondary", type: "button", onClick: onPreviousPage, disabled: !hasPreviousPage || loading2, children: previousLabel }), onNextPage === undefined ? undefined : u2("button", { className: "secondary", type: "button", onClick: onNextPage, disabled: !hasNextPage || loading2, children: nextLabel }), onLoadMore === undefined ? undefined : u2("button", { className: "secondary", type: "button", onClick: onLoadMore, disabled: !hasLoadMore || !hasNextPage || loading2, children: loadMoreLabel })] });
 }
 
-// ui/coreShared/js/components/StickyObjectContext.js
+// ../coreShared/js/components/StickyObjectContext.js
 function StickyObjectContext({ badge, children, eyebrow, items, sticky = true, title, variant = "default" }) {
   const classes = ["sticky-object-context", sticky ? "" : "static", variant === "context-strip" || variant === "embedded-context-strip" ? "context-strip" : "", variant === "embedded-context-strip" ? "embedded-context-strip" : ""].filter(Boolean).join(" ");
   return u2("section", { className: classes, children: [u2("div", { className: "sticky-object-context-summary", children: [u2("div", { className: "sticky-object-context-header", children: [u2("div", { className: "sticky-object-context-copy", children: [eyebrow === undefined ? undefined : u2("p", { className: "panel-label", children: eyebrow }), u2("h3", { children: title })] }), badge === undefined ? undefined : u2("div", { className: "sticky-object-context-badge", children: badge })] }), items.length === 0 ? undefined : u2("div", { className: "sticky-object-context-items", children: items.map((item) => u2("div", { className: "sticky-object-context-item", children: [u2("span", { children: item.label }), u2("strong", { children: item.value })] }, `${item.label}`)) })] }), children === undefined ? undefined : u2("div", { className: "sticky-object-context-body", children })] });
 }
 
-// ui/coreShared/js/components/StateHint.js
+// ../coreShared/js/components/StateHint.js
 function StateHint({ actions: actions2, announcement, className = "", id, presentation, title }) {
   const hasVisibleCopy = title !== undefined || presentation.detail !== undefined || presentation.actionHint !== undefined || actions2 !== undefined;
   const fallbackTitle = hasVisibleCopy ? undefined : presentation.badgeLabel;
@@ -38689,7 +38689,7 @@ function StateHint({ actions: actions2, announcement, className = "", id, presen
   return u2("div", { id, "aria-atomic": announcement === undefined ? undefined : "true", "aria-live": announcement, className: `state-hint ${className}`.trim(), role: announcementRole, children: [title === undefined ? undefined : u2("h3", { children: title }), fallbackTitle === undefined ? undefined : u2("h3", { children: fallbackTitle }), presentation.detail === undefined ? undefined : u2("p", { className: "detail", children: presentation.detailIsLoading ? u2(LoadingText, { children: presentation.detail }) : u2(LoadingAwareText, { children: presentation.detail }) }), presentation.actionHint === undefined ? undefined : u2("p", { className: "detail", children: u2(LoadingAwareText, { children: presentation.actionHint }) }), actions2 === undefined ? undefined : u2("div", { className: "actions state-hint-actions", children: actions2 })] });
 }
 
-// ui/coreShared/js/components/ApprovedAmountValue.js
+// ../coreShared/js/components/ApprovedAmountValue.js
 var APPROVAL_MAX_DISPLAY_THRESHOLD = (1n << 200n) - 1n;
 function isApprovalAmountMaxDisplay(value) {
   return value !== undefined && value > APPROVAL_MAX_DISPLAY_THRESHOLD;
@@ -38706,7 +38706,7 @@ function ApprovedAmountValue({ className = "", copyable = true, decimals = 2, lo
   return u2(CurrencyValue, { className: [toneClassName === undefined ? "" : `approval-${toneClassName}`, className].filter(Boolean).join(" "), copyable, decimals, loading: loading2, suffix, units, value });
 }
 
-// ui/coreShared/js/components/TokenApprovalControl.js
+// ../coreShared/js/components/TokenApprovalControl.js
 function resolveApprovalButtonLabel({ guardMessage, isCustomAmount, isMaxAmount, nextApprovalAmount, pending: pending2, pendingLabel, requirementSatisfied, tokenSymbol, tokenUnits }) {
   if (pending2)
     return u2(LoadingText, { children: pendingLabel });
@@ -38773,13 +38773,13 @@ function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, a
   return u2("div", { className: "form-grid", children: [u2(MetricGrid, { children: [u2(MetricField, { label: formatRequiredValue(tokenSymbol), children: u2(CurrencyValue, { value: requiredAmount, units: tokenUnits, suffix: tokenSymbol, copyable: false }) }), u2(MetricField, { label: formatApprovedValue(tokenSymbol), children: u2(ApprovedAmountValue, { loading: allowanceLoading, value: approvedAmount, requiredAmount, units: tokenUnits, suffix: tokenSymbol, copyable: false }) })] }), u2("label", { className: "field approval-amount-field", children: [u2("span", { className: "approval-amount-label", children: formatValueApprovalAmount(tokenSymbol) }), u2("div", { className: "field-inline approval-amount-controls", children: [u2(FormInput, { "aria-describedby": amountValidationMessage === undefined ? undefined : amountValidationMessageId, className: "field-inline-input", value: draftAmount, onInput: (event) => setDraftAmount(event.currentTarget.value), placeholder: leaveBlankForRequiredTotal, invalid: amountValidationMessage !== undefined, disabled: controlsDisabled }), u2("button", { className: "quiet field-inline-action", type: "button", onClick: () => setDraftAmount("max"), disabled: controlsDisabled, children: max })] })] }), amountValidationMessage === undefined ? undefined : u2("p", { className: "field-error", id: amountValidationMessageId, role: "alert", children: amountValidationMessage }), u2("div", { className: "actions", children: u2(TransactionActionButton, { idleLabel: buttonLabel, pendingLabel, onClick: () => onApprove(nextApprovalAmount), pending: pending2, tone: "secondary", availability: { disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }, disabledReasonElementId: allowanceMessage === undefined && amountValidationMessage !== undefined ? amountValidationMessageId : undefined, showDisabledReason: allowanceMessage === undefined && amountValidationMessage === undefined }) }), allowanceMessage === undefined ? undefined : u2(ErrorNotice, { message: allowanceMessage }), allowanceMessage !== undefined || visibleStatusMessage === undefined || !canApprove ? undefined : u2("p", { className: "detail", children: visibleStatusMessage })] });
 }
 
-// ui/coreShared/js/components/TransactionNetworkValue.js
+// ../coreShared/js/components/TransactionNetworkValue.js
 init_networkProfile();
 function TransactionNetworkValue() {
   return u2(k, { children: formatTransactionNetworkLabel(getActiveNetworkProfile()) });
 }
 
-// ui/coreShared/js/components/TransactionReview.js
+// ../coreShared/js/components/TransactionReview.js
 function renderDetailRows(rows) {
   return u2("div", { className: "transaction-review-details", role: "list", children: rows.map((row, index) => u2("div", { className: "transaction-review-detail-row", role: "listitem", children: [u2("span", { children: row.label }), u2("strong", { children: row.value })] }, `${index}`)) });
 }
@@ -38791,7 +38791,7 @@ function TransactionReview({ className = "", context = [], details = [], disclos
   return u2("section", { className: `transaction-review ${className}`.trim(), "aria-labelledby": titleId, children: [u2("div", { className: "transaction-review-header", children: u2("h4", { id: titleId, children: transactionReview }) }), contents] });
 }
 
-// ui/coreShared/js/lib/loadState.js
+// ../coreShared/js/lib/loadState.js
 function resolveRequestedLoadableValueState({ currentKey, isLoading, resolvedKey, value }) {
   if (value !== undefined)
     return "ready";
@@ -38856,7 +38856,7 @@ function createLoadController() {
   };
 }
 
-// ui/coreShared/js/hooks/useLoadController.js
+// ../coreShared/js/hooks/useLoadController.js
 function useLoadController() {
   const controllerRef = A2(undefined);
   if (controllerRef.current === undefined)
@@ -38864,7 +38864,7 @@ function useLoadController() {
   return controllerRef.current;
 }
 
-// ui/coreShared/js/lib/clients.js
+// ../coreShared/js/lib/clients.js
 function createConnectedReadClient() {
   return getActiveBackend().createReadClient();
 }
@@ -38872,17 +38872,17 @@ function createWalletWriteClient(accountAddress, callbacks = {}) {
   return getActiveBackend().createWriteClient(accountAddress, callbacks);
 }
 
-// ui/zoltar/js/features/open-oracle/lib/openOracle.js
+// ../zoltar/js/features/open-oracle/lib/openOracle.js
 init_ethereum();
 
-// ui/coreShared/js/lib/time.js
+// ../coreShared/js/lib/time.js
 function getTimeRemaining(targetTime, currentTime) {
   if (targetTime === undefined)
     return;
   return targetTime <= currentTime ? 0n : targetTime - currentTime;
 }
 
-// ui/zoltar/js/features/open-oracle/lib/openOracle.js
+// ../zoltar/js/features/open-oracle/lib/openOracle.js
 var OPEN_ORACLE_DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
 function formatOpenOracleSettleWriteErrorMessage(error2, fallbackMessage = "Failed to settle report") {
   const genericMessage = formatWriteErrorMessage(error2, fallbackMessage);
@@ -39472,7 +39472,7 @@ function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTi
   return { text: `(Valid for ${formatDuration(timeRemaining)})`, tone: "success" };
 }
 
-// ui/zoltar/js/features/open-oracle/lib/openOracleReadiness.js
+// ../zoltar/js/features/open-oracle/lib/openOracleReadiness.js
 function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }) {
   const baseBlocker = !hasReport ? "Select a report first." : undefined;
   const actions2 = [];
@@ -39508,7 +39508,7 @@ function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, 
   return actions2;
 }
 
-// ui/zoltar/js/features/open-oracle/lib/openOracleStage.js
+// ../zoltar/js/features/open-oracle/lib/openOracleStage.js
 function getDisputeWindowPendingPresentation(report2) {
   const currentClock = report2.timeType ? report2.currentTime : report2.currentBlockNumber;
   const disputeStart = report2.reportTimestamp + report2.disputeDelay;
@@ -39561,7 +39561,7 @@ function getOpenOracleStagePresentation(actionMode, report2) {
   }
 }
 
-// ui/coreShared/js/lib/pagination.js
+// ../coreShared/js/lib/pagination.js
 init_ethereum();
 var SECURITY_POOL_PAGE_SIZE = 6;
 function getPageSizeBigInt(pageSize) {
@@ -39604,11 +39604,11 @@ function formatPaginationSummary(pageIndex, pageCount) {
   return `Page ${currentPage.toString()} of ${displayedPageCount.toString()}`;
 }
 
-// ui/zoltar/js/protocol/index.js
+// ../zoltar/js/protocol/index.js
 init_core();
 init_deploymentHelpers();
 
-// ui/zoltar/js/protocol/tokenActions.js
+// ../zoltar/js/protocol/tokenActions.js
 init_abis();
 init_core();
 async function approveErc202(client, tokenAddress, spenderAddress, amount2, action) {
@@ -39620,7 +39620,7 @@ async function approveErc202(client, tokenAddress, spenderAddress, amount2, acti
   }));
   return { action, hash };
 }
-// ui/zoltar/js/features/open-oracle/components/OpenOracleSection.js
+// ../zoltar/js/features/open-oracle/components/OpenOracleSection.js
 var BROWSE_PAGE_SIZE = 10;
 var OPEN_ORACLE_PRICE_UNITS2 = 30;
 var DISPUTE_REPORT_MODAL = "dispute";
@@ -40271,7 +40271,7 @@ function OpenOracleSection({ activeView, accountState, environmentReady, environ
   ], risks: [standaloneFundingRisk, standaloneDisputeSettingsRisk] }), u2("div", { className: "actions", children: u2(TransactionActionButton, { idleLabel: createStandaloneOracleGame, pendingLabel: creating, onClick: onCreateOpenOracleGame, pending: loadingOpenOracleCreate, availability: { disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }, disabledReasonElementId: createDisabledReasonElementId, showDisabledReason: createDisabledReasonElementId === undefined }) })] })] }), u2(ErrorNotice, { message: openOracleError })] }) : undefined, view2 === "selected-report" ? u2("div", { className: "workflow-stack route-workflow-stack open-oracle-report-stack", children: renderReportDetailsCard(effectiveOpenOracleReportDetails, openOracleForm, openOracleTokenAccessState, openOracleDisputeSubmission, openOracleActiveAction, openOracleActiveWithdrawalBalance, openOracleResult, openOracleReportLookupState, openOracleWithdrawalBalanceChecking, openOracleWithdrawalReviewMessage, accountState.address, isConnected, isOnActiveAppChain, selectedReportModal, onApproveToken1, onApproveToken2, onDisputeReport, onLoadOracleReport, onOpenOracleFormChange, changeSelectedReportModal, onSettleReport, onWithdrawOpenOracleBalance, openOracleWithdrawableBalances, openOracleWithdrawableBalancesError, openOracleWithdrawableBalancesLoading) }) : undefined, u2(ErrorNotice, { message: openOracleError })] });
 }
 
-// ui/zoltar/js/copy/securityPool.js
+// ../zoltar/js/copy/securityPool.js
 var annualFee = "Annual Fee";
 var badDebt = "Bad Debt";
 var depositRepToVault = "Deposit REP";
@@ -40479,24 +40479,24 @@ var vaultSummary = "Vault Summary";
 var withdrawableAttoRep = "Withdrawable REP";
 var withdrawingRep = "Withdrawing REP…";
 
-// ui/coreShared/js/components/EntityCard.js
+// ../coreShared/js/components/EntityCard.js
 function EntityCard({ actions: actions2, badge, children, className = "", surface = "card", title, variant = "record" }) {
   return u2("article", { className: `entity-card record-card ${variant === "compact" ? "compact" : ""} ${surface === "flat" ? "flat" : ""} ${className}`.trim(), children: [u2("div", { className: "entity-card-header", children: [u2("div", { className: "entity-card-copy", children: u2("h3", { children: title }) }), badge === undefined ? undefined : u2("div", { className: "entity-card-badge", children: badge })] }), u2("div", { className: "entity-card-body", children }), actions2 === undefined ? undefined : u2("div", { className: "entity-card-actions", children: actions2 })] });
 }
 
-// ui/coreShared/js/components/IdentifierValue.js
+// ../coreShared/js/components/IdentifierValue.js
 function IdentifierValue({ className = "", value }) {
   const { copied: copied2, copyError, copyErrorId, copyText } = useCopyToClipboard(value);
   const classes = ["identifier-value", "copyable", className].filter(Boolean).join(" ");
   return u2("span", { className: "copy-value-wrap", children: [u2("button", { className: classes, type: "button", title: value, "aria-label": formatCopyIdentifierValue(value), "aria-describedby": copyError.value === undefined ? undefined : copyErrorId, onClick: () => copyText(value), children: copied2.value ? copied : value }), u2(CopyErrorMessage, { id: copyErrorId, manualValue: value, message: copyError.value })] });
 }
 
-// ui/coreShared/js/components/OutcomeChipRow.js
+// ../coreShared/js/components/OutcomeChipRow.js
 function OutcomeChipRow({ className = "", items }) {
   return u2("div", { className: ["outcome-chip-row", className].filter(Boolean).join(" "), children: items.map((item) => u2("span", { className: ["outcome-chip", `tone-${item.tone ?? "default"}`].join(" "), children: item.label }, item.key)) });
 }
 
-// ui/coreShared/js/lib/outcomeLabels.js
+// ../coreShared/js/lib/outcomeLabels.js
 function isInvalidOutcomeLabel(outcome2) {
   return sameCaseInsensitiveText(outcome2, "invalid");
 }
@@ -40504,12 +40504,12 @@ function appendInvalidOutcomeLabelIfMissing(outcomes2) {
   return outcomes2.some(isInvalidOutcomeLabel) ? [...outcomes2] : [...outcomes2, "Invalid"];
 }
 
-// ui/coreShared/js/copy/marketType.js
+// ../coreShared/js/copy/marketType.js
 var binary = "Binary";
 var categorical = "Categorical";
 var scalar = "Scalar";
 
-// ui/coreShared/js/lib/marketType.js
+// ../coreShared/js/lib/marketType.js
 function getMarketTypeLabel(marketType) {
   switch (marketType) {
     case "binary":
@@ -40523,7 +40523,7 @@ function getMarketTypeLabel(marketType) {
   }
 }
 
-// ui/coreShared/js/lib/visualMetrics.js
+// ../coreShared/js/lib/visualMetrics.js
 init_ethereum();
 var VISUAL_RATIO_SCALE = 1000000n;
 function clampVisualRatio(value) {
@@ -40564,7 +40564,7 @@ function takeTopRankedItems({ items, limit }) {
   }).slice(0, limit);
 }
 
-// shared/js/scalarOutcome.js
+// ../../shared/js/scalarOutcome.js
 var SCALAR_DECIMAL_PLACES = 18;
 var SCALAR_DECIMAL_BASE = 10n ** BigInt(SCALAR_DECIMAL_PLACES);
 var SCALAR_PART_BIT_LENGTH = 120n;
@@ -40646,7 +40646,7 @@ function formatScalarOutcomeIndexLabel(question2, outcomeIndex2) {
   return formatScalarOutcomeLabel(question2, descriptor.tickIndex);
 }
 
-// ui/coreShared/js/lib/scalarOutcome.js
+// ../coreShared/js/lib/scalarOutcome.js
 var SCALAR_DECIMAL_PLACES2 = 18;
 var SCALAR_PART_BIT_LENGTH2 = 120n;
 var SCALAR_PART_MASK2 = (1n << SCALAR_PART_BIT_LENGTH2) - 1n;
@@ -40685,7 +40685,7 @@ function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }) {
   };
 }
 
-// ui/coreShared/js/components/Question.js
+// ../coreShared/js/components/Question.js
 function getQuestionTitle(question2) {
   return question2.title.trim() === "" ? untitledQuestion : question2.title;
 }
@@ -40747,12 +40747,12 @@ function Question({ className = "", loading: loading2 = false, question: questio
   return u2("div", { className: `question-summary ${className}`, children: [showTitle ? u2("div", { className: "question-summary-heading", children: [u2("strong", { children: title }), descriptionNode] }) : descriptionNode, u2(MetricGrid, { variant: "question", children: summaryFields.map(renderQuestionSummaryField) })] });
 }
 
-// ui/coreShared/js/components/RouteWorkflowPanel.js
+// ../coreShared/js/components/RouteWorkflowPanel.js
 function RouteWorkflowPanel({ children, className = "", description, showHeader = true, title }) {
   return u2(SectionBlock, { className: ["panel", "market-panel", className].filter(Boolean).join(" "), description: showHeader ? description : undefined, headingLevel: 2, title: showHeader ? title : undefined, variant: "surface", children: u2("div", { className: "workflow-stack route-workflow-stack", children }) });
 }
 
-// ui/zoltar/js/features/universes/lib/universe.js
+// ../zoltar/js/features/universes/lib/universe.js
 init_activeProtocolAddresses();
 function formatUniverseLabel(universeId) {
   return universeId === 0n ? `Genesis (${formatUniverseIdHex(universeId)})` : `Universe ${formatUniverseIdHex(universeId)}`;
@@ -40791,7 +40791,7 @@ function formatUniverseCollectionLabel(universeIds) {
   return `Multiple (${uniqueUniverseIds.map(formatUniverseIdHex).join(", ")})`;
 }
 
-// ui/zoltar/js/features/universes/components/UniverseLink.js
+// ../zoltar/js/features/universes/components/UniverseLink.js
 function UniverseLink({ children, className = "", format = "default", universeId }) {
   const href = getUniverseLinkHref(universeId);
   const fullLabel = format === "hex" ? formatUniverseIdHex(universeId) : formatUniverseLabel(universeId);
@@ -40805,7 +40805,7 @@ function UniverseLink({ children, className = "", format = "default", universeId
   }, children: label });
 }
 
-// ui/statoblast/ts/features/security-pools/lib/retentionRate.ts
+// ts/features/security-pools/lib/retentionRate.ts
 init_ethereum();
 var PRICE_PRECISION = 1000000000000000000n;
 var PRICE_PRECISION_AS_NUMBER = 1000000000000000000;
@@ -40839,10 +40839,10 @@ function openInterestFeePerYearBigint(retentionRate) {
   return BigInt(Math.round(annualFeePercent * PRICE_PRECISION_AS_NUMBER));
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolCreationGuards.ts
+// ts/features/security-pools/lib/securityPoolCreationGuards.ts
 init_oracleInitialReport();
 
-// ui/statoblast/ts/features/markets/lib/marketForm.ts
+// ts/features/markets/lib/marketForm.ts
 init_oracleInitialReport();
 var STATOBLAST_SECURITY_MULTIPLIER_DECIMALS = 4;
 function getDefaultMarketFormState() {
@@ -40910,7 +40910,7 @@ function getDefaultForkAuctionFormState() {
   };
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolCreationGuards.ts
+// ts/features/security-pools/lib/securityPoolCreationGuards.ts
 function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier) {
   const input = statoblastSecurityMultiplier.trim();
   if (input === "")
@@ -40967,7 +40967,7 @@ function getSecurityPoolCreateDisabledReason({
   return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei);
 }
 
-// ui/coreShared/js/lib/formInputs.js
+// ../coreShared/js/lib/formInputs.js
 function parseRepAmountInput(value, label) {
   return parseDecimalInput(value, label, 18);
 }
@@ -41022,7 +41022,7 @@ function parseTimestampInput(value, label) {
   return timestamp;
 }
 
-// shared/js/escalationMath.js
+// ../../shared/js/escalationMath.js
 var ESCALATION_TIME_LENGTH = 4233600n;
 var SCALE = 1000000n;
 var LN2_SCALED = 693147n;
@@ -41190,14 +41190,14 @@ function getWinningImportedEscalationDepositClaimAmount({ bindingCapitalAttoRep,
   });
 }
 
-// ui/coreShared/js/lib/required.js
+// ../coreShared/js/lib/required.js
 function requireDefined(value, message) {
   if (value === undefined)
     throw new Error(message);
   return value;
 }
 
-// ui/zoltar/js/features/reporting/lib/reportingDomain.js
+// ../zoltar/js/features/reporting/lib/reportingDomain.js
 var REP_UNIT = 10n ** 18n;
 var ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n;
 var LOAD_REPORTING_PRESETS_REASON = "Loading reporting details.";
@@ -41596,7 +41596,7 @@ function previewReportingContribution(details, outcome2, amount2) {
   return previewEscalationContribution(details, outcome2, amount2);
 }
 
-// ui/zoltar/js/features/reporting/lib/reporting.js
+// ../zoltar/js/features/reporting/lib/reporting.js
 var REPORTING_OUTCOME_OPTIONS = [
   { key: "invalid", label: "Invalid" },
   { key: "yes", label: "Yes" },
@@ -41663,7 +41663,7 @@ function isWithdrawEscalationEnabled(stage) {
   return stage === "activeWithdrawable" || stage === "resolved";
 }
 
-// ui/statoblast/ts/features/markets/lib/trading.ts
+// ts/features/markets/lib/trading.ts
 var PRICE_PRECISION2 = 10n ** 18n;
 var BPS_DENOMINATOR2 = 10000n;
 var NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = "No mint capacity. No active capacity ownership.";
@@ -41951,7 +41951,7 @@ function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, i
   return;
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolSection.tsx
+// ts/features/security-pools/components/SecurityPoolSection.tsx
 function SecurityPoolSection({
   accountState,
   availableQuestionsContextKey,
@@ -42346,10 +42346,10 @@ function SecurityPoolSection({
   }, undefined, false, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
+// ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
 init_ethereum();
 
-// ui/zoltar/js/copy/forkAuction.js
+// ../zoltar/js/copy/forkAuction.js
 var bidAmountEth = "Bid Amount (ETH)";
 var scrollableAuctionBidHistory = "Scrollable auction bid history";
 var scrollableMyBids = "Scrollable wallet bid history";
@@ -42595,10 +42595,10 @@ var priceLevel = "Price level";
 var formatSubmissionsLabel = (count) => `${count} submissions`;
 var visibleDepth = "Visible Depth";
 
-// ui/statoblast/ts/features/truth-auctions/components/ForkAuctionSection.tsx
+// ts/features/truth-auctions/components/ForkAuctionSection.tsx
 init_ethereum();
 
-// ui/zoltar/js/features/reporting/components/EscalationDepositSelectionList.js
+// ../zoltar/js/features/reporting/components/EscalationDepositSelectionList.js
 var ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE = 25;
 function EscalationDepositSelectionList({ disabled = false, items, onSelectionChange, selectedDepositIndexes }) {
   const [pageIndex, setPageIndex] = d2(0);
@@ -42625,7 +42625,7 @@ function EscalationDepositSelectionList({ disabled = false, items, onSelectionCh
   }) }), paginationSummary === undefined ? undefined : u2(PaginationControls, { hasNextPage, hasPreviousPage, nextLabel: nextDeposits, onNextPage: () => setPageIndex((currentPageIndex) => currentPageIndex + 1), onPreviousPage: () => setPageIndex((currentPageIndex) => Math.max(0, currentPageIndex - 1)), previousLabel: previousDeposits, summary: paginationSummary })] });
 }
 
-// ui/zoltar/js/features/reporting/components/ImportedForkSettlementSection.js
+// ../zoltar/js/features/reporting/components/ImportedForkSettlementSection.js
 var IMPORTED_FORK_SETTLEMENT_PAGE_SIZE = 25;
 function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexes, side }) {
   const [pageIndex, setPageIndex] = d2(0);
@@ -42666,7 +42666,7 @@ function ImportedForkSettlementSection({ activeReportingDetails, disabled, onDep
   return u2(SectionBlock, { density: "compact", title: settleForkCarriedEscalationDeposits, variant: "embedded", children: [u2("p", { className: "detail", children: importedDepositSettlementDetail }), resolved ? undefined : u2("p", { className: "detail", children: forkDepositSettlementAvailabilityDetail }), u2("p", { className: "detail", children: escalationAuctionHaircutDetail }), settleableSides.map((side) => u2(ImportedForkSettlementSide, { activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexes: selectedDepositIndexesByOutcome[side.key], side }, side.key))] });
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolNavigation.ts
+// ts/features/security-pools/lib/securityPoolNavigation.ts
 function getSecurityPoolLinkHref(securityPoolAddress2, selectedPoolView, universeId) {
   const currentSearch = getRouteHashSearch();
   const nextSelectedPoolView = selectedPoolView ?? readSelectedPoolViewQueryParam(currentSearch);
@@ -42684,7 +42684,7 @@ function navigateToSecurityPool(securityPoolAddress2, selectedPoolView, universe
   window.dispatchEvent(new Event("hashchange"));
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolLink.tsx
+// ts/features/security-pools/components/SecurityPoolLink.tsx
 function SecurityPoolLink({ ariaLabel, children, className = "", securityPoolAddress: securityPoolAddress2, selectedPoolView, universeId }) {
   const href = getSecurityPoolLinkHref(securityPoolAddress2, selectedPoolView, universeId);
   const label = children ?? securityPoolAddress2;
@@ -42703,12 +42703,12 @@ function SecurityPoolLink({ ariaLabel, children, className = "", securityPoolAdd
   }, undefined, false, undefined, this);
 }
 
-// ui/zoltar/js/features/universes/components/TransactionUniverseValue.js
+// ../zoltar/js/features/universes/components/TransactionUniverseValue.js
 function TransactionUniverseValue({ universeId }) {
   return u2(k, { children: universeId === undefined ? unavailable : formatUniverseLabel(universeId) });
 }
 
-// ui/statoblast/ts/features/truth-auctions/components/TruthAuctionBidsSection.tsx
+// ts/features/truth-auctions/components/TruthAuctionBidsSection.tsx
 function AuctionBidsHeader() {
   return /* @__PURE__ */ u2("div", {
     className: "truth-auction-bid-row is-wide is-no-actions is-header",
@@ -42997,7 +42997,7 @@ function ViewerTruthAuctionBidsSection({ accountAddress, error: error2, hasLoade
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/truth-auctions/components/TruthAuctionDepthChart.tsx
+// ts/features/truth-auctions/components/TruthAuctionDepthChart.tsx
 var CHART_WIDTH = 560;
 var CHART_HEIGHT = 180;
 var CHART_PADDING = {
@@ -43241,7 +43241,7 @@ function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }) {
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/truth-auctions/lib/truthAuctionBook.ts
+// ts/features/truth-auctions/lib/truthAuctionBook.ts
 function estimateRepPurchased(bidAmountAttoEth, price2) {
   if (bidAmountAttoEth <= 0n || price2 <= 0n)
     return 0n;
@@ -43721,7 +43721,7 @@ function getTruthAuctionBidGuardMessage({
   return;
 }
 
-// ui/statoblast/ts/features/truth-auctions/components/TruthAuctionMarketViewSection.tsx
+// ts/features/truth-auctions/components/TruthAuctionMarketViewSection.tsx
 function clampPercentage(value, maxValue2) {
   return (getVisualRatio({ value, maxValue: maxValue2 }) ?? 0) * 100;
 }
@@ -43888,7 +43888,7 @@ function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loa
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/truth-auctions/lib/forkAuction.ts
+// ts/features/truth-auctions/lib/forkAuction.ts
 var SECONDS_PER_WEEK = 7n * 24n * 60n * 60n;
 var AUCTION_TIME_SECONDS = SECONDS_PER_WEEK;
 var AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL = "Auctioned capacity ownership";
@@ -43924,7 +43924,7 @@ function getTimeRemaining2(targetTime, currentTime) {
   return getTimeRemaining(targetTime, currentTime);
 }
 
-// ui/statoblast/ts/features/truth-auctions/components/TruthAuctionSummaryCard.tsx
+// ts/features/truth-auctions/components/TruthAuctionSummaryCard.tsx
 function TruthAuctionSummaryCard({
   auctionedCapacityOwnershipAttoRepDisplay,
   badge,
@@ -44056,7 +44056,7 @@ function TruthAuctionSummaryCard({
   }, undefined, false, undefined, this);
 }
 
-// ui/coreShared/js/lib/actionAvailability.js
+// ../coreShared/js/lib/actionAvailability.js
 function pickFirstReason(...reasons) {
   for (const reason of reasons) {
     if (reason !== undefined)
@@ -44072,7 +44072,7 @@ function createActionAvailability(...reasons) {
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/lib/truthAuctionSettlement.ts
+// ts/features/truth-auctions/lib/truthAuctionSettlement.ts
 function getTruthAuctionSettlementBidKey(bid) {
   return `${bid.tick.toString()}:${bid.bidIndex.toString()}`;
 }
@@ -44185,7 +44185,7 @@ function getTruthAuctionSettlementActionAvailabilityMessage({
   return bidActionAvailability;
 }
 
-// ui/statoblast/ts/features/truth-auctions/lib/truthAuctionBidViewModels.ts
+// ts/features/truth-auctions/lib/truthAuctionBidViewModels.ts
 function buildTruthAuctionBidRows({ bids, truthAuction: truthAuction2 }) {
   if (truthAuction2 === undefined)
     return [];
@@ -44272,7 +44272,7 @@ function updateTruthAuctionSettlementBidSelection(currentKeys, bidKey, checked) 
   return currentKeys.filter((currentKey) => currentKey !== bidKey);
 }
 
-// ui/statoblast/ts/features/truth-auctions/lib/truthAuctionSettlementActionState.ts
+// ts/features/truth-auctions/lib/truthAuctionSettlementActionState.ts
 function getTruthAuctionSettlementAction({ selectionHasClaims, selectionHasRefunds, truthAuctionFinalized }) {
   if (selectionHasClaims)
     return "claimAuctionProceeds";
@@ -44420,7 +44420,7 @@ function reduceTruthAuctionSettlementActionState(state, event) {
   }
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolState/axes.ts
+// ts/features/security-pools/lib/securityPoolState/axes.ts
 function isSecurityPoolEnded({
   hasForkActivity: hasForkActivity2,
   isChildPool,
@@ -44480,7 +44480,7 @@ function deriveSecurityPoolForkStage({ currentStage, workflowDisabled }) {
     return;
   return currentStage;
 }
-// ui/statoblast/ts/features/security-pools/lib/securityPoolState/matrix.ts
+// ts/features/security-pools/lib/securityPoolState/matrix.ts
 var ALL_SECURITY_POOL_ACTIONS = [
   "approveRep",
   "depositRepToVault",
@@ -44555,7 +44555,7 @@ var ENABLED_ACTIONS_BY_FORK_STAGE = {
 var UNIVERSE_FORKED_ENABLE = ["migrateShares"];
 var UNIVERSE_FORKED_DISABLE = ["createCompleteSet", "redeemCompleteSet", "redeemShares"];
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolState/engine.ts
+// ts/features/security-pools/lib/securityPoolState/engine.ts
 function isLifecycleAction(actionId) {
   return LIFECYCLE_ACTIONS.includes(actionId);
 }
@@ -44606,7 +44606,7 @@ function evaluateSecurityPoolState(input) {
     universeHasForked
   };
 }
-// ui/coreShared/js/lib/viewState.js
+// ../coreShared/js/lib/viewState.js
 function resolveEnumValue(value, fallback, allowedValues) {
   if (value !== undefined && allowedValues.includes(value))
     return value;
@@ -44620,7 +44620,7 @@ function resolveFirstMatchingValue(entries, fallback) {
   return fallback;
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolWorkflow.ts
+// ts/features/security-pools/lib/securityPoolWorkflow.ts
 var SELECTED_POOL_PRIMARY_VIEWS = ["vaults", "trading", "reporting", "fork-workflow"];
 var SELECTED_POOL_SECONDARY_VIEWS = ["staged-operations", "price-oracle"];
 var SELECTED_POOL_VIEWS = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS];
@@ -44898,7 +44898,7 @@ function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettleme
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useForkAuctionInteractionState.ts
+// ts/features/truth-auctions/hooks/useForkAuctionInteractionState.ts
 function useForkAuctionInteractionState({ accountAddress, connectedWalletDisputeStakedAttoRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress: securityPoolAddress2, startTruthAuctionSecurityPoolAddress }) {
   const [pendingStartTruthAuctionSecurityPoolAddress, setPendingStartTruthAuctionSecurityPoolAddress] = d2(undefined);
   const isStartTruthAuctionInProgressState = startTruthAuctionSecurityPoolAddress !== undefined && sameAddress(pendingStartTruthAuctionSecurityPoolAddress, startTruthAuctionSecurityPoolAddress);
@@ -45010,7 +45010,7 @@ function useForkAuctionInteractionState({ accountAddress, connectedWalletDispute
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useSelectedAuctionReadState.ts
+// ts/features/truth-auctions/hooks/useSelectedAuctionReadState.ts
 function useSelectedAuctionReadState({
   accountAddress,
   currentSelectedOutcomePool,
@@ -45216,10 +45216,10 @@ function useSelectedAuctionReadState({
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useTruthAuctionBookData.ts
+// ts/features/truth-auctions/hooks/useTruthAuctionBookData.ts
 init_ethereum();
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useTruthAuctionPaginationState.ts
+// ts/features/truth-auctions/hooks/useTruthAuctionPaginationState.ts
 function useTruthAuctionPaginationState({ accountAddress, truthAuctionAddress: truthAuctionAddress2 }) {
   const [loadedTickPageCount, setLoadedTickPageCount] = d2(1);
   const [loadedViewerBidPageCount, setLoadedViewerBidPageCount] = d2(1);
@@ -45239,7 +45239,7 @@ function useTruthAuctionPaginationState({ accountAddress, truthAuctionAddress: t
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useTruthAuctionBookData.ts
+// ts/features/truth-auctions/hooks/useTruthAuctionBookData.ts
 var TRUTH_AUCTION_TICK_PAGE_SIZE = 25;
 var TRUTH_AUCTION_BID_PAGE_SIZE = 25;
 async function loadTruthAuctionActiveTickPages(client, truthAuctionAddress2, pageCount) {
@@ -45545,7 +45545,7 @@ function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAuctionRe
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.ts
+// ts/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.ts
 function getSettlementBidsFromKeys(settlementBidRows, selectedBidKeys) {
   const selectedBidKeySet = new Set(selectedBidKeys);
   return settlementBidRows.filter(({ bid }) => selectedBidKeySet.has(getTruthAuctionSettlementBidKey(bid))).map(({ bid }) => ({ bidIndex: bid.bidIndex, tick: bid.tick }));
@@ -45685,7 +45685,7 @@ function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/components/ForkAuctionSection.tsx
+// ts/features/truth-auctions/components/ForkAuctionSection.tsx
 function sameBigIntArray(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -47947,7 +47947,7 @@ function ForkAuctionSection({
   }, undefined, false, undefined, this);
 }
 
-// ui/zoltar/js/copy/liquidation.js
+// ../zoltar/js/copy/liquidation.js
 var queueLiquidation = "Queue liquidation";
 var operator = "Operator";
 var receiverVault = "Receiver vault";
@@ -48053,13 +48053,13 @@ var retryPriceStatus = "Retry price status";
 var queuedFundingSequenceRisk = "Oracle request funding may require multiple wallet transactions: wrap ETH to WETH, approve REP and WETH, lock the initial report, then queue the liquidation.";
 var fundingDetails = "Funding Details";
 
-// ui/coreShared/js/components/AddressInfo.js
+// ../coreShared/js/components/AddressInfo.js
 function AddressInfo({ address, label, unavailableLabel = unknown }) {
   const fallbackLabel = unavailableLabel === unknown ? getMetricPlaceholderPresentation(address)?.placeholder : unavailableLabel;
   return u2(MetricField, { label, children: address === undefined ? fallbackLabel : u2(AddressValue, { address }) });
 }
 
-// ui/zoltar/js/features/open-oracle/components/OpenOraclePriceValue.js
+// ../zoltar/js/features/open-oracle/components/OpenOraclePriceValue.js
 function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }) {
   if (lastPrice === undefined || lastSettlementTimestamp === 0n)
     return unavailable;
@@ -48073,12 +48073,12 @@ function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimes
   return u2("span", { className: "oracle-price-value", children: [u2("span", { children: getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }) }), validityPresentation === undefined ? null : u2("span", { className: `oracle-price-validity ${validityPresentation.tone}`, children: validityPresentation.text })] });
 }
 
-// ui/coreShared/js/components/TransactionStatusCard.js
+// ../coreShared/js/components/TransactionStatusCard.js
 function TransactionStatusCard({ actions: actions2, badge, className = "", detail, metrics, secondaryDetail, surface = "card", title }) {
   return u2(EntityCard, { actions: actions2, badge, className: `transaction-status-card ${className}`.trim(), surface, title, variant: "compact", children: [detail === undefined ? undefined : u2("p", { className: "detail", children: detail }), secondaryDetail === undefined ? undefined : u2("p", { className: "detail", children: secondaryDetail }), metrics] });
 }
 
-// shared/js/liquidation.js
+// ../../shared/js/liquidation.js
 var LIQUIDATION_PRICE_PRECISION = 10n ** 18n;
 var LIQUIDATION_BPS_DENOMINATOR = 10000n;
 var LIQUIDATION_REP_BONUS_BPS = 500n;
@@ -48093,7 +48093,7 @@ function getMaximumFundedDebtAttoEth(transferableVaultRepBackingAttoRep, repPerE
   return transferableVaultRepBackingAttoRep * LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR / (repPerEthPrice * (LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS));
 }
 
-// ui/statoblast/ts/features/security-pools/lib/liquidation.ts
+// ts/features/security-pools/lib/liquidation.ts
 init_protocolConfig();
 var DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH2 = DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth;
 var DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP2 = 10n * 10n ** 18n;
@@ -48446,7 +48446,7 @@ function getLiquidationFailureReason({
   return;
 }
 
-// ui/zoltar/js/features/open-oracle/lib/oracleRequestEth.js
+// ../zoltar/js/features/open-oracle/lib/oracleRequestEth.js
 function getBufferedOracleRequestEthValue(requestPriceCostAttoEth) {
   if (requestPriceCostAttoEth === undefined)
     return;
@@ -48465,7 +48465,7 @@ function getOracleRequestEthGuardMessage({ actionLabel, includeBuffer = false, r
   return `Need ${formatCurrencyBalance(requiredEthValue - walletBalanceAttoEth)} more ETH in this wallet to ${actionLabel}.`;
 }
 
-// ui/zoltar/js/features/open-oracle/lib/repPriceSource.js
+// ../zoltar/js/features/open-oracle/lib/repPriceSource.js
 function getRepPriceSourceCopy(source) {
   switch (source) {
     case "mock":
@@ -48513,7 +48513,7 @@ function renderRepPriceSourceLabel(source, sourceUrl) {
   return u2("a", { href: sourceUrl, title: copy.linkTitle, target: "_blank", rel: "noreferrer", children: formatWrappedValue(copy.badgeLabel) });
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityVault.ts
+// ts/features/security-pools/lib/securityVault.ts
 var MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n;
 var DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n;
 var MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n;
@@ -48642,7 +48642,7 @@ function isOracleManagerPriceUsable(oracleManagerDetails, currentTimestamp) {
   return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp;
 }
 
-// ui/statoblast/ts/features/security-pools/components/LiquidationModal.tsx
+// ts/features/security-pools/components/LiquidationModal.tsx
 function formatHealthFactorBps(healthFactorBps) {
   const whole = healthFactorBps / 10000n;
   const fractional = (healthFactorBps % 10000n).toString().padStart(4, "0").replace(/0+$/, "");
@@ -49537,7 +49537,7 @@ function LiquidationModal({
   }, undefined, false, undefined, this);
 }
 
-// ui/zoltar/js/copy/reporting.js
+// ../zoltar/js/copy/reporting.js
 var timeoutResolutionDetail = "Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals.";
 var escalationMetrics = "Escalation Metrics";
 var loadingEscalationDeposits = "Loading escalation deposits.";
@@ -49632,7 +49632,7 @@ var escalationClaimNonTradeableDetail = "Escalation claims are not tradeable and
 var walletUnsettledDepositsEmpty = "Connected wallet has no unsettled escalation deposits.";
 var forkCarriedSettlementRedirectDetail = "This pool also has fork-carried escalation positions. Settle those in Fork & Migration.";
 
-// ui/zoltar/js/features/reporting/components/EscalationSide.js
+// ../zoltar/js/features/reporting/components/EscalationSide.js
 function getChartRatio(value, maxValue2) {
   if (value === undefined || value <= 0n || maxValue2 <= 0n)
     return "0%";
@@ -49680,7 +49680,7 @@ function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isLea
   }, tabIndex, type: "button", children: u2("div", { className: "escalation-side-row", children: [u2("div", { className: "escalation-side-copy", children: u2("div", { className: "escalation-side-title-row", children: [u2("span", { className: "panel-label", children: side.label }), isLeading || isSelected ? u2("div", { className: "escalation-side-badges", children: [isSelected ? u2(Badge, { className: "escalation-side-selected-badge", children: selected }) : undefined, isLeading ? u2(Badge, { tone: "ok", children: leading }) : undefined] }) : undefined] }) }), u2("div", { "aria-hidden": "true", className: "escalation-side-chart", children: u2("div", { className: "escalation-side-track", children: [u2("div", { className: "escalation-side-total-bar" }), u2("div", { className: "escalation-side-user-bar" }), u2("div", { className: "escalation-side-binding-marker" })] }) }), u2("div", { className: "escalation-side-values", children: [u2("div", { className: "escalation-side-value", children: [u2("span", { className: "metric-label", children: totalDisputeStakedRep }), u2(CurrencyValue, { copyable: false, value: side.balance, suffix: rep })] }), u2("div", { className: "escalation-side-value", children: [u2("span", { className: "metric-label", children: yourDisputeStakedRep }), u2(CurrencyValue, { copyable: false, value: side.userStake, suffix: rep })] })] })] }) });
 }
 
-// ui/zoltar/js/features/reporting/lib/reportingGuards.js
+// ../zoltar/js/features/reporting/lib/reportingGuards.js
 function getReportingReportGuardMessage({ actualDepositAmount, accountAddress, contributionPreviewReason, isOnActiveAppChain, remainingSelectedOutcomeCapacity, reportAmount, reportingStatus, selectedOutcome: selectedOutcome2, selectedAmount, viewerPoolHeldVaultRepBackingAttoRep, viewerVaultExists }) {
   const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: "Connect a wallet before reporting on a question." });
   if (walletGuardState.blocked)
@@ -49719,7 +49719,7 @@ function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, 
   return;
 }
 
-// ui/zoltar/js/features/reporting/components/ReportingSection.js
+// ../zoltar/js/features/reporting/components/ReportingSection.js
 var LOAD_REPORTING_PRESETS_REASON2 = presetDetailsRequired;
 var MAX_PROFIT_NOT_STARTED_REASON2 = maxProfitPrestartReason;
 var SELECT_OUTCOME_PRESET_REASON = presetOutcomeSelectionRequired;
@@ -50143,13 +50143,13 @@ function ReportingSection({ accountState, currentTimestamp, embedInCard = false,
   return u2(RouteWorkflowPanel, { showHeader, title: reportingWorkflow, children: sections });
 }
 
-// ui/coreShared/js/components/ProgressMeter.js
+// ../coreShared/js/components/ProgressMeter.js
 function ProgressMeter({ className = "", detail, label, maxValue: maxValue2, secondaryValue, tone = "default", value, valueText }) {
   const ratio = clampVisualRatio(getVisualRatio({ value, maxValue: maxValue2 }));
   return u2("div", { className: ["progress-meter", `tone-${tone}`, className].filter(Boolean).join(" "), children: [u2("div", { className: "progress-meter-header", children: [u2("span", { className: "progress-meter-label", children: label }), u2("strong", { className: "progress-meter-value", children: valueText })] }), u2("div", { className: "progress-meter-track", "aria-hidden": "true", children: u2("div", { className: "progress-meter-fill", style: { width: `${(ratio * 100).toFixed(2)}%` } }) }), secondaryValue === undefined && detail === undefined ? undefined : u2("div", { className: "progress-meter-footer", children: [secondaryValue === undefined ? undefined : u2("span", { className: "progress-meter-secondary", children: secondaryValue }), detail === undefined ? undefined : u2("span", { className: "progress-meter-detail", children: detail })] })] });
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolSummaryMetrics.tsx
+// ts/features/security-pools/components/SecurityPoolSummaryMetrics.tsx
 function SecurityPoolSummaryMetrics({ children, className = "", currentTimestamp, metricVariant = "default", pool: pool2, showPoolAddress = false, showTotalBacking = false, showUniverse = false, variant = "embedded" }) {
   const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool2.totalCapacityOwnershipAttoRep, pool2.lastOraclePrice, pool2.statoblastSecurityMultiplierBps);
   if (variant === "embedded")
@@ -50363,7 +50363,7 @@ function SecurityPoolSummaryMetrics({ children, className = "", currentTimestamp
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/components/VaultMetricGrid.tsx
+// ts/features/security-pools/components/VaultMetricGrid.tsx
 function VaultPrimaryMetric({ className, label, suffix, value }) {
   return /* @__PURE__ */ u2("div", {
     className,
@@ -50484,7 +50484,7 @@ function VaultMetricGrid({ badDebtAttoEth, className = "", layout = "grid", disp
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolVaultDirectory.tsx
+// ts/features/security-pools/components/SecurityPoolVaultDirectory.tsx
 function SecurityPoolVaultDirectory({ emptyState, pool: pool2, renderActions, renderBadge, renderTitle, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }) {
   if (pool2 === undefined)
     return /* @__PURE__ */ u2(k, {
@@ -50548,12 +50548,12 @@ function SecurityPoolVaultDirectory({ emptyState, pool: pool2, renderActions, re
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolReadiness.ts
+// ts/features/security-pools/lib/securityPoolReadiness.ts
 function getSecurityPoolVaultReadinessActions(actions2) {
   return actions2;
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityPoolLabels.ts
+// ts/features/security-pools/lib/securityPoolLabels.ts
 function formatSecurityPoolPageSummary(matchingPoolCount, loadedPoolCount) {
   const poolLabel = loadedPoolCount === 1 ? poolCountSingular : poolCountPlural;
   const matchVerb = matchingPoolCount === 1 ? poolSummarySingularVerb : poolSummaryPluralVerb;
@@ -50612,7 +50612,7 @@ function getSecurityPoolStatusBadgeLabel({ hasForkActivity: hasForkActivity2, qu
   return getSecurityPoolLifecycleLabel(lifecycleState);
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityVaultGuards.ts
+// ts/features/security-pools/lib/securityVaultGuards.ts
 function getTargetHealthFactorGuardMessage(targetHealthFactor2) {
   try {
     parseTargetHealthFactorBps(targetHealthFactor2);
@@ -50732,7 +50732,7 @@ function getVaultExecutePendingOperationGuardMessage({
   return;
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityVaultSection.tsx
+// ts/features/security-pools/components/SecurityVaultSection.tsx
 function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep: capacityOwnershipAttoRep2, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = "record" }) {
   const summaryTitle = /* @__PURE__ */ u2("span", {
     children: vaultSummary
@@ -51979,7 +51979,7 @@ function SecurityVaultSection({
   }, undefined, false, undefined, this);
 }
 
-// ui/zoltar/js/copy/trading.js
+// ../zoltar/js/copy/trading.js
 var migrateShares = "Migrate shares";
 var mintCompleteSets = "Mint Complete Sets";
 var redeemCompleteSets = "Redeem Complete Sets";
@@ -52059,10 +52059,10 @@ var retentionFeeEstimateDetail = "Estimate may change when accrued fees are chec
 var walletEth = "Wallet ETH";
 var availableToMint = "Available to Mint";
 
-// ui/statoblast/ts/features/markets/components/TradingSection.tsx
+// ts/features/markets/components/TradingSection.tsx
 init_ethereum();
 
-// ui/coreShared/js/components/RankedBarList.js
+// ../coreShared/js/components/RankedBarList.js
 function RankedBarList({ className = "", emptyMessage = emptyStateDetail, items }) {
   if (items.length === 0)
     return u2("p", { className: ["ranked-bar-list-empty", className].filter(Boolean).join(" "), children: emptyMessage });
@@ -52077,14 +52077,14 @@ function RankedBarList({ className = "", emptyMessage = emptyStateDetail, items 
   return u2("div", { className: ["ranked-bar-list", className].filter(Boolean).join(" "), children: rankedItems.map((item) => u2("div", { className: ["ranked-bar-item", `tone-${item.tone ?? "default"}`].join(" "), children: [u2("div", { className: "ranked-bar-item-header", children: [u2("span", { className: "ranked-bar-item-label", children: item.label }), u2("strong", { className: "ranked-bar-item-value", children: item.valueText })] }), u2("div", { className: "ranked-bar-item-track", "aria-hidden": "true", children: u2("div", { className: "ranked-bar-item-fill", style: { width: `${(clampVisualRatio(getVisualRatio({ value: item.value, maxValue: maxValue2 })) * 100).toFixed(2)}%` } }) }), item.detail === undefined ? undefined : u2("p", { className: "ranked-bar-item-detail", children: item.detail })] }, item.key)) });
 }
 
-// ui/coreShared/js/components/OutcomeSelectionList.js
+// ../coreShared/js/components/OutcomeSelectionList.js
 function OutcomeSelectionList({ className = "", emptyMessage, items }) {
   if (items.length === 0)
     return emptyMessage === undefined ? undefined : u2("p", { className: "detail", children: emptyMessage });
   return u2("div", { className: ["migration-outcome-list", className].filter(Boolean).join(" "), children: items.map((item) => u2("button", { "aria-pressed": item.selected, className: `migration-outcome-row ${item.selected ? "active" : ""}`, disabled: item.disabled, onClick: item.onSelect, type: "button", children: u2("span", { className: "migration-outcome-copy", children: [u2("span", { className: "migration-outcome-label", children: item.label }), item.details === undefined ? undefined : u2("span", { className: "migration-outcome-metrics", children: item.details })] }) }, item.key)) });
 }
 
-// ui/coreShared/js/components/ScalarOutcomePicker.js
+// ../coreShared/js/components/ScalarOutcomePicker.js
 function getSafeSelectedTickValue(selectedTick2) {
   return selectedTick2.trim() === "" ? 0n : tryParseBigIntInput(selectedTick2) ?? 0n;
 }
@@ -52107,12 +52107,12 @@ function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, lab
   } }), u2("span", { className: "scalar-or-divider", children: or }), u2("label", { className: "scalar-invalid-toggle", children: [u2("input", { type: "checkbox", disabled, checked: isInvalid, onChange: (event) => onInvalidChange(event.currentTarget.checked) }), u2("span", { children: invalid })] })] })] }), u2(DataGrid, { className: "scalar-slider-stats", children: [showMinMax ? u2(MetricField, { label: minValue, children: details.minValueLabel }) : undefined, u2(MetricField, { label: selectedTick, children: selectedTickLabel }), u2(MetricField, { label: showMinMax ? selectedOutcome : currentValue, children: selectedOutcomeLabel }), showMinMax ? u2(MetricField, { label: maxValue, children: details.maxValueLabel }) : undefined] }), action === undefined ? undefined : u2("div", { className: "actions", children: action })] });
 }
 
-// ui/coreShared/js/components/WorkflowSubsection.js
+// ../coreShared/js/components/WorkflowSubsection.js
 function WorkflowSubsection({ badge, children, className = "", title }) {
   return u2(SectionBlock, { badge, className: `workflow-subsection ${className}`.trim(), headingLevel: 4, title, variant: "embedded", children });
 }
 
-// ui/zoltar/js/features/universes/components/ShareMigrationTargetsSection.js
+// ../zoltar/js/features/universes/components/ShareMigrationTargetsSection.js
 function getTargetOutcomeBadgeLabel(target) {
   return target.exists ? childDeployed : childNotDeployed;
 }
@@ -52185,7 +52185,7 @@ function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOutcomeIn
   }, disabled, isInvalid: scalarOutcomeInvalid, label: selectScalarTarget, onInvalidChange: setScalarOutcomeInvalid, onSelectedTickChange: setScalarOutcomeTick, selectedOutcomeLabel: candidateOutcomeLabel, selectedTick: clampedScalarOutcomeTick, selectedTickLabel: scalarOutcomeInvalid ? invalid : formatSelectedTickLabel(clampedScalarOutcomeTick, scalarQuestion.numTicks.toString()) })] }), u2("button", { className: "quiet", type: "button", onClick: onClearOutcomeIndexes, disabled: disabled || selectedOutcomeIndexes.length === 0, children: clear }));
 }
 
-// ui/statoblast/ts/features/markets/components/TradingSection.tsx
+// ts/features/markets/components/TradingSection.tsx
 function TradingSection({
   accountState,
   embedInCard = false,
@@ -52882,7 +52882,7 @@ function TradingSection({
   }, undefined, false, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/lib/liquidationStatus.ts
+// ts/features/security-pools/lib/liquidationStatus.ts
 function getLiquidationNoticeState({
   currentTimestamp,
   currentPoolOracleManagerDetails,
@@ -52905,7 +52905,7 @@ function getLiquidationNoticeState({
   return "submitted";
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useForkWorkflowSelectionState.ts
+// ts/features/truth-auctions/hooks/useForkWorkflowSelectionState.ts
 function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, onSelectedStageViewChange, selectedPoolAddress, view: view2 }) {
   const previousSelectedPoolViewRef = A2(undefined);
   const previousForkWorkflowPoolKeyRef = A2(undefined);
@@ -52986,7 +52986,7 @@ function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, lega
   };
 }
 
-// ui/statoblast/ts/features/security-pools/hooks/useSelectedVaultWorkflowState.ts
+// ts/features/security-pools/hooks/useSelectedVaultWorkflowState.ts
 function useSelectedVaultWorkflowState({
   accountAddress,
   hasLoadedCurrentVault,
@@ -53038,7 +53038,7 @@ function useSelectedVaultWorkflowState({
   };
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
+// ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
 function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool: selectedPool2 }) {
   if (selectedPool2 === undefined)
     return;
@@ -54436,7 +54436,7 @@ function SecurityPoolWorkflowSection({
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolsOverviewSection.tsx
+// ts/features/security-pools/components/SecurityPoolsOverviewSection.tsx
 init_ethereum();
 function SecurityPoolsOverviewSection({ accountState, environmentRefreshKey, hasLoadedSecurityPoolPage, loadingSecurityPoolPage, onCreateSecurityPool, onLoadSecurityPoolPage, onSelectSecurityPool, securityPoolBrowseCount, securityPoolPage, securityPoolOverviewError }) {
   const [pageIndex, setPageIndex] = d2(0);
@@ -54765,7 +54765,7 @@ function SecurityPoolsOverviewSection({ accountState, environmentRefreshKey, has
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/features/security-pools/components/SecurityPoolsSection.tsx
+// ts/features/security-pools/components/SecurityPoolsSection.tsx
 function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }) {
   if (nextView !== "operate")
     return false;
@@ -54812,7 +54812,7 @@ function SecurityPoolsSection({ activeView, createPool: createPool2, onActiveUni
   }, undefined, true, undefined, this);
 }
 
-// ui/statoblast/ts/app/components/AppRouteContent.tsx
+// ts/app/components/AppRouteContent.tsx
 function shouldRenderRouteContent({ readBackendMessage, route }) {
   if (route !== "deploy" && readBackendMessage !== undefined)
     return false;
@@ -54841,7 +54841,7 @@ function AppRouteContent({ deploy: deploy2, openOracle: openOracle3, readBackend
   }
 }
 
-// ui/statoblast/ts/app/useAppRouteEffects.ts
+// ts/app/useAppRouteEffects.ts
 function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId }) {
   return environmentReady && route === "open-oracle" && urlOpenOracleReportId !== "";
 }
@@ -55008,7 +55008,7 @@ function useAppRouteEffects({
   }, [augurStatoblastDeploymentMissing, route]);
 }
 
-// ui/coreShared/js/lib/actionFeedback.js
+// ../coreShared/js/lib/actionFeedback.js
 function createPendingActionFeedback(action, title, detail = "Waiting for confirmation.") {
   return {
     action,
@@ -55052,11 +55052,11 @@ function createErrorActionFeedback(action, title, detail) {
   };
 }
 
-// ui/zoltar/js/copy/market.js
+// ../zoltar/js/copy/market.js
 var questionType2 = "Question Type";
 var title = "Title";
 
-// ui/coreShared/js/lib/transactionPresentations.js
+// ../coreShared/js/lib/transactionPresentations.js
 function buildPresentation({ detail, hash, rows, title: title2, tone }) {
   return {
     dismissKey: hash,
@@ -55161,7 +55161,7 @@ function createTransactionFailurePresentation(intent, message, dismissKey) {
   });
 }
 
-// ui/zoltar/js/features/transactionPresentations.js
+// ../zoltar/js/features/transactionPresentations.js
 function humanizeAction(action) {
   return action.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase()).replaceAll(/\bRep\b/g, rep).replaceAll(/\bEth\b/g, eth).replaceAll(/\bWeth\b/g, weth);
 }
@@ -55419,7 +55419,7 @@ function createOpenOracleWarningPresentation(result, message, context) {
   return withWarning(createOpenOracleSuccessPresentation(result, context), message);
 }
 
-// ui/coreShared/js/lib/requireWalletConnection.js
+// ../coreShared/js/lib/requireWalletConnection.js
 function requireWallet(accountAddress, setError, _actionLabel) {
   if (!getActiveBackend().hasWallet()) {
     setError("Connect wallet to continue.");
@@ -55432,7 +55432,7 @@ function requireWallet(accountAddress, setError, _actionLabel) {
   return true;
 }
 
-// ui/coreShared/js/lib/assertActiveWallet.js
+// ../coreShared/js/lib/assertActiveWallet.js
 async function assertActiveWallet(accountAddress) {
   const backend = getActiveBackend();
   if (!backend.hasWallet())
@@ -55452,7 +55452,7 @@ async function assertActiveWallet(accountAddress) {
   };
 }
 
-// ui/zoltar/js/features/deployment/hooks/useDeploymentFlow.js
+// ../zoltar/js/features/deployment/hooks/useDeploymentFlow.js
 init_core();
 function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }) {
   const busyStepId = useSignal(undefined);
@@ -55529,7 +55529,7 @@ function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFa
   };
 }
 
-// ui/coreShared/js/app/hooks/useHashRoute.js
+// ../coreShared/js/app/hooks/useHashRoute.js
 function useHashRoute() {
   const route = useSignal(getCurrentRoute());
   const navigate = (nextRoute, preservedParameters = new Set) => {
@@ -55551,7 +55551,7 @@ function useHashRoute() {
     route: route.value
   };
 }
-// ui/statoblast/ts/features/transactionPresentations.tsx
+// ts/features/transactionPresentations.tsx
 function humanizeAction2(action) {
   return action.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase()).replaceAll(/\bRep\b/g, rep).replaceAll(/\bEth\b/g, eth).replaceAll(/\bWeth\b/g, weth);
 }
@@ -55820,7 +55820,7 @@ function createForkAuctionWarningPresentation(result, message) {
   return withWarning(createForkAuctionSuccessPresentation(result), message);
 }
 
-// ui/coreShared/js/lib/refreshState.js
+// ../coreShared/js/lib/refreshState.js
 var WALLET_STATE_ONLY_REFRESH_OPTIONS = {
   loadChainClock: false,
   loadDeploymentState: false
@@ -55829,7 +55829,7 @@ async function refreshWalletStateOnly(refreshState) {
   await refreshState(WALLET_STATE_ONLY_REFRESH_OPTIONS);
 }
 
-// ui/coreShared/js/lib/writeAction.js
+// ../coreShared/js/lib/writeAction.js
 function buildWriteActionConfig(params, errorSignal, missingWalletMessage, transactionIntent) {
   return {
     accountAddress: params.accountAddress,
@@ -55893,7 +55893,7 @@ async function runWriteAction(parameters, action, errorFallback, onSuccess) {
   }
 }
 
-// shared/js/sortStringArrayByKeccak.js
+// ../../shared/js/sortStringArrayByKeccak.js
 init_ethereum();
 function getStringHash(value) {
   return keccak256(encodeAbiParameters([{ type: "string" }], [value]));
@@ -55910,7 +55910,7 @@ function sortStringArrayByKeccak(inputStrings) {
   });
 }
 
-// ui/statoblast/ts/features/markets/lib/marketCreation.ts
+// ts/features/markets/lib/marketCreation.ts
 function getScalarQuestionData(form) {
   return {
     answerUnit: form.answerUnit.trim(),
@@ -56015,17 +56015,17 @@ function createSecurityPoolParameters(form) {
   };
 }
 
-// ui/coreShared/js/lib/deploymentStatus.js
+// ../coreShared/js/lib/deploymentStatus.js
 function hasDeployedStep(steps, stepId) {
   return steps.some((step) => step.id === stepId && step.deployed);
 }
 
-// ui/zoltar/js/features/universes/hooks/useZoltarFork.js
+// ../zoltar/js/features/universes/hooks/useZoltarFork.js
 init_ethereum();
 init_abis();
 init_contractArtifact();
 
-// ui/coreShared/js/lib/requestGuard.js
+// ../coreShared/js/lib/requestGuard.js
 function useRequestGuard() {
   const requestId = A2(0);
   y2(() => () => {
@@ -56038,7 +56038,7 @@ function useRequestGuard() {
   }, []);
 }
 
-// ui/zoltar/js/features/universes/hooks/useZoltarFork.js
+// ../zoltar/js/features/universes/hooks/useZoltarFork.js
 var defaultUseZoltarForkDependencies = {
   approveForkRep: async (accountAddress, callbacks, reputationToken, amount2, questionId2, universeId) => {
     const approval = await approveErc202(createWalletWriteClient(accountAddress, callbacks), reputationToken, getZoltarAddress(), amount2, "approveForkRep");
@@ -56305,7 +56305,7 @@ function useZoltarFork({ accountAddress, activeUniverseId, environmentRefreshKey
   };
 }
 
-// ui/coreShared/js/hooks/useFormState.js
+// ../coreShared/js/hooks/useFormState.js
 function useFormState(defaultState) {
   const state = useSignal(defaultState);
   const setState = (updater) => {
@@ -56314,7 +56314,7 @@ function useFormState(defaultState) {
   return { state, setState };
 }
 
-// ui/zoltar/js/lib/formDefaults.js
+// ../zoltar/js/lib/formDefaults.js
 var DEFAULT_OPEN_ORACLE_DISPUTE_DELAY_SECONDS = "3600";
 var DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS = "86400";
 function getDefaultOpenOracleFormState() {
@@ -56366,7 +56366,7 @@ function getDefaultZoltarMigrationFormState() {
   };
 }
 
-// ui/zoltar/js/features/universes/hooks/useZoltarMigration.js
+// ../zoltar/js/features/universes/hooks/useZoltarMigration.js
 function resolvePrepareMigrationAmount(amountAttoRep, preparedRepBalanceAttoRep, repBalanceAttoRep) {
   const currentPreparedBalanceAttoRep = preparedRepBalanceAttoRep ?? 0n;
   const missingAmountAttoRep = amountAttoRep > currentPreparedBalanceAttoRep ? amountAttoRep - currentPreparedBalanceAttoRep : 0n;
@@ -56494,7 +56494,7 @@ function useZoltarMigration({ accountAddress, activeUniverseId, ensureZoltarUniv
   };
 }
 
-// ui/coreShared/js/lib/questionId.js
+// ../coreShared/js/lib/questionId.js
 var MAX_UINT256 = (1n << 256n) - 1n;
 function normalizeQuestionId(value) {
   const trimmedValue = value.trim();
@@ -56506,7 +56506,7 @@ function normalizeQuestionId(value) {
   return `0x${questionId2.toString(16)}`;
 }
 
-// ui/zoltar/js/features/universes/hooks/useZoltarUniverse.js
+// ../zoltar/js/features/universes/hooks/useZoltarUniverse.js
 function buildQuestionPageFromQuestions(questions, currentPage) {
   const questionCount = BigInt(questions.length);
   const startIndex = currentPage.pageIndex * currentPage.pageSize;
@@ -56929,7 +56929,7 @@ function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialDa
   };
 }
 
-// ui/zoltar/js/features/universes/hooks/useZoltarOperations.js
+// ../zoltar/js/features/universes/hooks/useZoltarOperations.js
 function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }) {
   const { createChildUniverse: createUniverseChildUniverse, ...universe2 } = useZoltarUniverse({
     accountAddress,
@@ -56994,7 +56994,7 @@ function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarVie
   }, [createChildUniverse, fork, migration2, universe2]);
 }
 
-// ui/statoblast/ts/features/markets/hooks/useMarketCreation.ts
+// ts/features/markets/hooks/useMarketCreation.ts
 var defaultUseMarketCreationDependencies = {
   createMarket: async (accountAddress, callbacks, parameters) => {
     const result = await createMarket(createWalletWriteClient(accountAddress, callbacks), parameters);
@@ -57199,7 +57199,7 @@ function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView,
   };
 }
 
-// ui/coreShared/js/app/hooks/useOnchainState.js
+// ../coreShared/js/app/hooks/useOnchainState.js
 init_networkProfile();
 function getExpectedReadChainId(backend) {
   return backend.profile.chain.id;
@@ -57839,7 +57839,7 @@ function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, 
   };
 }
 
-// ui/zoltar/js/features/open-oracle/hooks/useOpenOracleOperations.js
+// ../zoltar/js/features/open-oracle/hooks/useOpenOracleOperations.js
 init_ethereum();
 init_abis();
 var defaultUseOpenOracleOperationsDependencies = {
@@ -58684,7 +58684,7 @@ function useOpenOracleOperations(parameters, dependencies) {
   return useOpenOracleOperationsWithDependencies(parameters, dependencies);
 }
 
-// ui/zoltar/js/features/open-oracle/hooks/usePriceOracleManager.js
+// ../zoltar/js/features/open-oracle/hooks/usePriceOracleManager.js
 var defaultUsePriceOracleManagerDependencies = {
   createConnectedReadClient,
   createWalletWriteClient,
@@ -58857,7 +58857,7 @@ function usePriceOracleManager(parameters, dependencies) {
   return usePriceOracleManagerWithDependencies(parameters, dependencies);
 }
 
-// ui/zoltar/js/features/open-oracle/hooks/useRepPrices.js
+// ../zoltar/js/features/open-oracle/hooks/useRepPrices.js
 function getRepPriceQuoter() {
   return globalThis.__zoltarRepPriceQuoterOverride__ ?? { getRepAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource };
 }
@@ -59088,7 +59088,7 @@ function useRepPrices({ enabled = true } = {}) {
   };
 }
 
-// ui/zoltar/js/features/reporting/hooks/useReportingOperations.js
+// ../zoltar/js/features/reporting/hooks/useReportingOperations.js
 var defaultUseReportingOperationsDependencies = {
   loadReportingDetails: async (securityPoolAddress2, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress2, accountAddress),
   reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress2, outcome2, amount2) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress2, outcome2, amount2),
@@ -59294,7 +59294,7 @@ function useReportingOperations({ accountAddress, onTransactionCanceled, onTrans
   };
 }
 
-// ui/statoblast/ts/features/truth-auctions/hooks/useForkAuctionOperations.ts
+// ts/features/truth-auctions/hooks/useForkAuctionOperations.ts
 var defaultUseForkAuctionOperationsDependencies = {
   buildForkCarriedEscalationProofs: async (securityPoolAddress2, outcome2, parentDepositIndexes) => await buildForkCarriedEscalationProofs(createConnectedReadClient(), securityPoolAddress2, outcome2, parentDepositIndexes),
   createChildUniverseFromSecurityPool: async (client, securityPoolAddress2, universeId, outcome2) => await createChildUniverseFromSecurityPool(client, securityPoolAddress2, universeId, outcome2),
@@ -59606,7 +59606,7 @@ function useForkAuctionOperations(parameters, dependencies) {
   return useForkAuctionOperationsWithDependencies(parameters, dependencies);
 }
 
-// ui/statoblast/ts/features/security-pools/hooks/useSecurityPoolCreation.ts
+// ts/features/security-pools/hooks/useSecurityPoolCreation.ts
 function resolveSecurityPoolQuestionLookupInput(marketIdInput) {
   const marketId = marketIdInput.trim();
   if (marketId === "")
@@ -59821,7 +59821,7 @@ function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, 
   };
 }
 
-// ui/statoblast/ts/features/security-pools/hooks/useSecurityPoolsOverview.ts
+// ts/features/security-pools/hooks/useSecurityPoolsOverview.ts
 var SECURITY_POOL_PAGE_FALLBACK_DETAILS = ["no contract data was returned", "returned no data"];
 function shouldFallbackToAllSecurityPoolsPage(error2) {
   const detail = getErrorDetail(error2);
@@ -60397,14 +60397,14 @@ function useSecurityPoolsOverview(parameters, dependencies) {
   return useSecurityPoolsOverviewWithDependencies(parameters, dependencies);
 }
 
-// ui/statoblast/ts/features/security-pools/lib/securityVaultHandlers.ts
+// ts/features/security-pools/lib/securityVaultHandlers.ts
 function createLoadSecurityVaultHandler(loadSecurityVault) {
   return (vaultAddress) => {
     loadSecurityVault(vaultAddress);
   };
 }
 
-// ui/coreShared/js/hooks/useErc20Loader.js
+// ../coreShared/js/hooks/useErc20Loader.js
 function useErc20Loader(loadFn) {
   const signal = useSignal({ error: undefined, loading: false, value: undefined });
   const nextLoad = useRequestGuard();
@@ -60473,7 +60473,7 @@ function useErc20AllowanceLoader(loadErc20Allowance2) {
   return { invalidate, signal, reload };
 }
 
-// ui/statoblast/ts/features/security-pools/hooks/useSecurityVaultOperations.ts
+// ts/features/security-pools/hooks/useSecurityVaultOperations.ts
 var defaultUseSecurityVaultOperationsDependencies = {
   approveErc20: async (client, tokenAddress, spenderAddress, amount2, action) => await approveErc20(client, tokenAddress, spenderAddress, amount2, action),
   createConnectedReadClient: () => createConnectedReadClient(),
@@ -60946,7 +60946,7 @@ function useSecurityVaultOperations(parameters, dependencies) {
   return useSecurityVaultOperationsWithDependencies(parameters, dependencies);
 }
 
-// ui/statoblast/ts/features/markets/hooks/useTradingOperations.ts
+// ts/features/markets/hooks/useTradingOperations.ts
 var defaultUseTradingOperationsDependencies = {
   createCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress2, amount2) => await createCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress2, amount2),
   getWalletEthBalance: async (walletAddress) => await createConnectedReadClient().getBalance({ address: walletAddress }),
@@ -61269,7 +61269,7 @@ function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onT
   };
 }
 
-// ui/coreShared/js/app/hooks/useUrlState.js
+// ../coreShared/js/app/hooks/useUrlState.js
 function readUrlState(search) {
   return {
     activeUniverseId: readUniverseQueryParam(search) ?? 0n,
@@ -61362,7 +61362,7 @@ function useUrlState() {
   };
 }
 
-// ui/statoblast/ts/app/appPageTitle.ts
+// ts/app/appPageTitle.ts
 function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route }) {
   if (route === "deploy")
     return deployContracts;
@@ -61387,7 +61387,7 @@ function formatAppDocumentTitle(pageTitle) {
   return `${pageTitle} | ${statoblastDocumentTitleSuffix}`;
 }
 
-// ui/coreShared/js/app/lib/supportedNetworkChange.js
+// ../coreShared/js/app/lib/supportedNetworkChange.js
 function createSupportedNetworkChangeCoordinator({ getInFlightCount, replaceEnvironment }) {
   let replacementPending = false;
   let replacementPromise;
@@ -61422,7 +61422,7 @@ function createSupportedNetworkChangeCoordinator({ getInFlightCount, replaceEnvi
   };
 }
 
-// ui/zoltar/js/features/reporting/lib/reportingForm.js
+// ../zoltar/js/features/reporting/lib/reportingForm.js
 function applyReportingFormUpdate(current, update) {
   const securityPoolAddressChanged = update.securityPoolAddress !== undefined && !sameCaseInsensitiveText(current.securityPoolAddress, update.securityPoolAddress);
   const nextForm = {
@@ -61443,7 +61443,7 @@ function applyReportingFormUpdate(current, update) {
   return nextForm;
 }
 
-// ui/coreShared/js/lib/transactionTray.js
+// ../coreShared/js/lib/transactionTray.js
 var TRANSACTION_ACTION_LOCK_REASON = "Finish the current transaction before starting another transaction.";
 function createInitialTransactionTrayState() {
   return {
@@ -61593,7 +61593,7 @@ function markTransactionFinished(state) {
   };
 }
 
-// ui/statoblast/ts/app/App.tsx
+// ts/app/App.tsx
 var onchainStateDependencies = { getDeploymentSteps: getDeploymentSteps2, getWethAddress, loadDeploymentStatusOracleSnapshot, loadErc20Balance };
 var getRouteHashForRoute = (route) => {
   if (route === "deploy")
@@ -62353,7 +62353,7 @@ function App() {
   }, undefined, false, undefined, this);
 }
 
-// ui/statoblast/ts/index.ts
+// ts/index.ts
 installRouting({
   defaultRoute: "security-pools",
   routes: [
@@ -62365,5 +62365,5 @@ installRouting({
 registerStatoblastSimulationScenarios();
 mountApp({ initialize: () => initializeActiveEnvironment(window.location, { appId: "statoblast" }), root: () => _(App, {}) });
 
-//# debugId=9313FC23B3CEEFE364756E2164756E21
+//# debugId=E6584EE5F5B4C19564756E2164756E21
 //# sourceMappingURL=app.js.map

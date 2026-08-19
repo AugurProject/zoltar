@@ -151,11 +151,14 @@
 		"knip:fix": "bun x knip --fix",
 		"ui:publish:ipfs": "docker build --target publisher -f ui/Dockerfile . -t zoltar-ui-publisher && docker run --rm --add-host=host.docker.internal:host-gateway zoltar-ui-publisher",
 		"anvil:docker": "docker run --rm --name anvil -p 8545:8545 --entrypoint anvil ghcr.io/foundry-rs/foundry:v1.5.1 --host 0.0.0.0 --port 8545 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee --chain-id 1",
-		"ui:build:apps": "cd ui/zoltar && bun run build && cd ../statoblast && bun run build",
+		"ui:build:apps": "cd ui/coreShared && bun run tsc && cd ../zoltar && bun run build && cd ../statoblast && bun run build",
 		"ui:build:tests": "cd ui/zoltar && bun run build:tests && cd ../statoblast && bun run build:tests",
 		"app:watch:zoltar": "bun run app:build && bun ./ui/coreShared/build/watch.mts zoltar",
 		"app:watch:statoblast": "bun run app:build && bun ./ui/coreShared/build/watch.mts statoblast",
 		"app:serve:zoltar": "bun run app:build && bun ./ui/coreShared/dev-server.ts zoltar",
-		"app:serve:statoblast": "bun run app:build && bun ./ui/coreShared/dev-server.ts statoblast"
+		"app:serve:statoblast": "bun run app:build && bun ./ui/coreShared/dev-server.ts statoblast",
+		"ui:browser-smoke:zoltar": "bun ./ui/coreShared/build/browserSmoke.mts zoltar",
+		"ui:browser-smoke:statoblast": "bun ./ui/coreShared/build/browserSmoke.mts statoblast",
+		"ui:browser-smoke": "bun run ui:browser-smoke:zoltar && bun run ui:browser-smoke:statoblast"
 	}
 }

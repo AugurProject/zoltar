@@ -898,29 +898,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.clickButton('Open fork & migration')
 			await driver.waitForBodyText('Fork & Migration')
 
-			const zoltarOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Zoltar'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
-			expect(zoltarOpened).toBe(true)
-			const missingUniverseOpened = await driver.evaluate(
-				`(() => { const [route, search = ''] = window.location.hash.split('?'); const params = new URLSearchParams(search); params.set('universe', '999999'); window.history.pushState({}, '', route + '?' + params.toString()); window.dispatchEvent(new PopStateEvent('popstate')); return true })()`,
-			)
-			expect(missingUniverseOpened).toBe(true)
-			await driver.waitForButtonEnabled('Go to Genesis universe')
-			await driver.clickButton('Go to Genesis universe')
-			await driver.waitForBodyText('Forked')
-			await driver.waitForBodyText('Child Universes')
-			await driver.waitForButtonEnabled('Create child universe', 1)
-			await driver.clickButton('Create child universe', 1)
-			await driver.waitForBodyText('Create Child Universe')
-			await driver.waitForButtonEnabled('Deploy universe')
-			await driver.clickButton('Deploy universe')
-			await driver.waitForBodyText('Child Universe Deployed')
-
-			const poolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
-			expect(poolsOpened).toBe(true)
-			await driver.waitForButtonEnabled('Open pool')
-			await driver.clickButton('Open pool')
-			await driver.waitForButtonEnabled('Fork & Migration')
-			await driver.clickButton('Fork & Migration')
+			// The fork workflow view now owns the full migration flow; drive it directly.
 			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
 			await driver.clickButton('Migrate pool to Yes universe')
 			await driver.waitForBodyText('Pool-held REP was migrated into the selected child universe.')
