@@ -6,8 +6,9 @@ export function isKnownDefaultRpcUrl(rpcUrl: string) {
 	let normalizedRpcUrl: string
 	try {
 		normalizedRpcUrl = new URL(rpcUrl).toString()
-	} catch {
-		return false
+	} catch (error) {
+		if (error instanceof TypeError) return false
+		throw error
 	}
 	return Object.values(defaultCoreDeploymentRpcUrls).some(defaultRpcUrl => new URL(defaultRpcUrl).toString() === normalizedRpcUrl)
 }
