@@ -60,7 +60,7 @@ jobs:
         run: |
           bun install --frozen-lockfile
           (cd solidity && bun install --frozen-lockfile)
-          (cd ui && bun install --frozen-lockfile)
+          (cd ui/coreShared && bun install --frozen-lockfile)
 
       - name: Prepare contract artifacts
         run: bun run ensure-contract-artifacts

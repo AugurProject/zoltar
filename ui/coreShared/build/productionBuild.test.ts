@@ -5,7 +5,7 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { UI_APP_IDS, getUiAppPaths } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppPaths, isUiAppId } from './appPaths.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
@@ -35,13 +35,23 @@ beforeAll(async () => {
 	server = Bun.serve({
 		fetch: async request => {
 			const requestUrl = new URL(request.url)
-			const matchedAppId = UI_APP_IDS.find(appId => requestUrl.pathname === `/${appId}` || requestUrl.pathname.startsWith(`/${appId}/`))
+			// The CI prepare job uploads the app dist directories preserving their full
+			// ui/<app>/dist layout, so serve both layouts: /zoltar/... and /ui/zoltar/dist/...
+			// resolve to the app dist root, and unprefixed / falls back to zoltar.
+			const uiLayoutMatch = /^\/ui\/([a-z]+)\/dist(\/.*)?$/.exec(requestUrl.pathname)
+			const uiLayoutAppId = uiLayoutMatch?.[1]
+			const pathname = uiLayoutMatch?.[2] ?? requestUrl.pathname
+			const matchedAppId =
+				uiLayoutAppId !== undefined && isUiAppId(uiLayoutAppId)
+					? uiLayoutAppId
+					: (UI_APP_IDS.find(appId => pathname === `/${appId}` || pathname.startsWith(`/${appId}/`)) ??
+						(pathname === '/' || pathname.startsWith('/assets/') || pathname.startsWith('/css/') ? 'zoltar' : undefined))
 			if (matchedAppId === undefined) {
 				return new Response('not found', { status: 404 })
 			}
 			const appPaths = appPathsById.get(matchedAppId)
 			if (appPaths === undefined) throw new Error(`No path information recorded for ${matchedAppId}.`)
-			const appRelativePath = requestUrl.pathname === `/${matchedAppId}` ? '/' : requestUrl.pathname.slice(`/${matchedAppId}`.length)
+			const appRelativePath = pathname === `/${matchedAppId}` || pathname === '/' ? '/' : pathname.startsWith(`/${matchedAppId}/`) ? pathname.slice(`/${matchedAppId}`.length) : pathname
 			const relativePath = appRelativePath === '/' ? 'index.html' : appRelativePath.replace(/^\/+/, '')
 			const filePath = path.join(appPaths.appDistRoot, relativePath)
 			if (!filePath.startsWith(`${appPaths.appDistRoot}${path.sep}`)) {
@@ -53,6 +63,7 @@ beforeAll(async () => {
 			}
 			return new Response(file)
 		},
+		hostname: '127.0.0.1',
 		port: 0,
 	})
 })

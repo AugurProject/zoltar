@@ -664,7 +664,7 @@ function size2(value) {
 var init_size = () => {};
 
 // ui/coreShared/node_modules/viem/_esm/errors/version.js
-var version = "2.55.17";
+var version = "2.55.19";
 
 // ui/coreShared/node_modules/viem/_esm/errors/base.js
 function walk(err, fn) {
@@ -125854,15 +125854,20 @@ async function seedWrappedEthBalances(createWriteClient, accounts, wethAddress, 
 }
 async function deploySimulationAppContracts(primaryWriteClient, memoryClient, onProgress, profile, range2 = { start: 0.32, end: 0.8 }, getDeploymentSteps2) {
   const steps = getDeploymentSteps2(profile);
+  console.log("[diag] deploySimulationAppContracts start", steps.length);
   for (const [index2, step2] of steps.entries()) {
     const code2 = await memoryClient.getCode({ address: step2.address });
     if (code2 !== undefined && code2 !== "0x") {
+      console.log("[diag] skip deployed", step2.id);
       await reportBootstrapProgress(onProgress, `Checking ${step2.label}`, range2.start + (index2 + 1) / Math.max(steps.length, 1) * (range2.end - range2.start));
       continue;
     }
+    console.log("[diag] deploying", step2.id);
     await step2.deploy(primaryWriteClient);
+    console.log("[diag] deployed", step2.id);
     await reportBootstrapProgress(onProgress, `Deploying ${step2.label}`, range2.start + (index2 + 1) / Math.max(steps.length, 1) * (range2.end - range2.start));
   }
+  console.log("[diag] deploySimulationAppContracts done");
 }
 function requireQaAccount(account3, label) {
   if (account3 === undefined)
@@ -126922,5 +126927,5 @@ var dependencies = {
 };
 globalThis.zoltarSimulationEngineDependencies = dependencies;
 
-//# debugId=178C5F3E0B23605164756E2164756E21
+//# debugId=EAA9B126CD356F9E64756E2164756E21
 //# sourceMappingURL=tevmWorker.worker.js.map

@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .tsbuildinfo
-          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/ts/**') }}
+          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/*/ts/**') }}
           restore-keys: |
             ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-
 
@@ -106,7 +106,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-ui
-          path: ui/dist
+          path: |
+            ui/zoltar/dist
+            ui/statoblast/dist
           if-no-files-found: error
           retention-days: 1
 
@@ -147,7 +149,9 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: production-ui
-          path: ui/dist
+          path: |
+            ui/zoltar/dist
+            ui/statoblast/dist
 
       - name: Restore historical test timings
         uses: actions/cache/restore@v5
@@ -272,7 +276,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Run dependency audits
-        run: bun audit && (cd ui && bun audit) && (cd solidity && bun audit)
+        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd solidity && bun audit)
 
   required:
     name: Required

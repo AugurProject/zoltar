@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { isUiAppId, UI_APP_IDS } from './appPaths.mts'
 import { createAssetHandler } from './dockerServe.mts'
 
 let fixtureRoot = ''
@@ -68,5 +69,13 @@ describe('Docker static UI server', () => {
 		} finally {
 			await server.stop(true)
 		}
+	})
+
+	test('app selection accepts both app IDs and rejects unknown IDs', () => {
+		expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast'])
+		expect(isUiAppId('zoltar')).toBe(true)
+		expect(isUiAppId('statoblast')).toBe(true)
+		expect(isUiAppId('monolith')).toBe(false)
+		expect(isUiAppId('')).toBe(false)
 	})
 })

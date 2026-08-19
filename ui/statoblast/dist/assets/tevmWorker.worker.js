@@ -28962,7 +28962,7 @@ function size2(value) {
 var init_size = () => {};
 
 // ui/coreShared/node_modules/viem/_esm/errors/version.js
-var version = "2.55.17";
+var version = "2.55.19";
 
 // ui/coreShared/node_modules/viem/_esm/errors/base.js
 function walk(err, fn) {
@@ -49276,7 +49276,11 @@ init_deploymentHelpers();
 function getDeploymentSteps2(profile = getRuntimeNetworkProfile(), wait) {
   const addresses = getInfraContractAddresses(profile);
   return [
-    ...getDeploymentSteps(profile, wait),
+    ...getDeploymentSteps(profile, wait).map((step) => step.id === "deploymentStatusOracle" ? {
+      ...step,
+      address: getDeploymentStatusOracleAddress2(profile),
+      deploy: async (client) => await deployViaProxy2(client, getDeploymentStatusOracleByteCode2(profile))
+    } : step),
     {
       id: "securityPoolForker",
       label: "Security Pool Forker",
@@ -53529,15 +53533,20 @@ async function seedWrappedEthBalances(createWriteClient, accounts, wethAddress, 
 }
 async function deploySimulationAppContracts(primaryWriteClient, memoryClient, onProgress, profile, range = { start: 0.32, end: 0.8 }, getDeploymentSteps3) {
   const steps = getDeploymentSteps3(profile);
+  console.log("[diag] deploySimulationAppContracts start", steps.length);
   for (const [index, step] of steps.entries()) {
     const code = await memoryClient.getCode({ address: step.address });
     if (code !== undefined && code !== "0x") {
+      console.log("[diag] skip deployed", step.id);
       await reportBootstrapProgress(onProgress, `Checking ${step.label}`, range.start + (index + 1) / Math.max(steps.length, 1) * (range.end - range.start));
       continue;
     }
+    console.log("[diag] deploying", step.id);
     await step.deploy(primaryWriteClient);
+    console.log("[diag] deployed", step.id);
     await reportBootstrapProgress(onProgress, `Deploying ${step.label}`, range.start + (index + 1) / Math.max(steps.length, 1) * (range.end - range.start));
   }
+  console.log("[diag] deploySimulationAppContracts done");
 }
 function createRangeProgressReporter(onProgress, range, stepCount) {
   let completedStepCount = 0;
@@ -137173,5 +137182,5 @@ var dependencies = {
 };
 globalThis.zoltarSimulationEngineDependencies = dependencies;
 
-//# debugId=19CD3BB556CD4BD264756E2164756E21
+//# debugId=3F40E8DED98D879564756E2164756E21
 //# sourceMappingURL=tevmWorker.worker.js.map

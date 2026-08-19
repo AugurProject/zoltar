@@ -41,9 +41,12 @@ RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast
 
 # Install UI dependencies and vendor browser packages after the cached contract build.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
+COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
 COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
+COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
-RUN cd /source/ui/coreShared && bun install && cd ../zoltar && bun install && cd ../statoblast && bun install
+COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
+RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile
 COPY ./ui/coreShared/tsconfig.vendor.json /source/ui/coreShared/tsconfig.vendor.json
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
 RUN cd /source/ui/coreShared && bun run vendor
@@ -84,9 +87,11 @@ COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
 
 USER bun
 EXPOSE 8080
+# Select the application the runtime serves; override with `docker run -e UI_APP=statoblast`.
+ENV UI_APP=zoltar
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
 
-CMD [ "bun", "/app/dockerServe.mts", "zoltar" ]
+CMD [ "bun", "/app/dockerServe.mts" ]
 
 # -------------------------------------------------
 # Publisher: Upload the production UI to host IPFS

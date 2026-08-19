@@ -14,7 +14,18 @@ export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
 	return [
-		...getZoltarDeploymentSteps(profile, wait),
+		// Statoblast replaces the deployment status oracle step: the statoblast oracle
+		// must monitor the four additional statoblast contracts, so it is deployed with
+		// a different constructor argument list (and therefore a different address).
+		...getZoltarDeploymentSteps(profile, wait).map(step =>
+			step.id === 'deploymentStatusOracle'
+				? {
+						...step,
+						address: getDeploymentStatusOracleAddress(profile),
+						deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
+					}
+				: step,
+		),
 		{
 			id: 'securityPoolForker',
 			label: 'Security Pool Forker',

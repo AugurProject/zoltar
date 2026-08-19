@@ -79,7 +79,7 @@
 		"ui:watch": "bun run app:watch",
 		"app:serve": "bun run app:serve:zoltar",
 		"ui:serve": "bun run app:serve",
-		"ui:vendor": "cd ui/coreShared && bun run vendor",
+		"ui:vendor": "bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast",
 		"cleanup:foundry-anvil-state": "bun ./scripts/cleanup-foundry-anvil-state.mts",
 		"deploy:testnet": "bun run ensure-contract-artifacts && bun run refresh:shared-dependencies && bun ./scripts/deploy-testnet.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",

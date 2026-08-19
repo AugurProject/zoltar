@@ -1,12 +1,29 @@
 import * as path from 'path'
-import * as url from 'url'
 import { promises as fs } from 'fs'
 import * as process from 'node:process'
+import { getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const TEST_SOURCE_ROOT_PATH = path.join(UI_ROOT_PATH, 'ts', 'tests')
-const TEST_OUTPUT_ROOT_PATH = path.join(UI_ROOT_PATH, 'js', 'tests')
+export type TestBuildTarget = UiAppId | 'coreShared'
+
+export const TEST_BUILD_TARGET_IDS = ['coreShared', 'zoltar', 'statoblast'] as const
+
+export function isTestBuildTarget(candidate: string): candidate is TestBuildTarget {
+	return candidate === 'coreShared' || isUiAppId(candidate)
+}
+
+export function parseTestBuildTarget(candidate: string | undefined, context: string): TestBuildTarget {
+	if (candidate === 'coreShared') return candidate
+	return parseUiAppId(candidate, context)
+}
+
+export function getTestBuildRoots(target: TestBuildTarget) {
+	if (target === 'coreShared') {
+		const { coreSharedTestSourceRoot, coreSharedTestOutputRoot } = getUiCoreSharedPaths()
+		return { testSourceRoot: coreSharedTestSourceRoot, testOutputRoot: coreSharedTestOutputRoot }
+	}
+	const { appSourceRoot, appGeneratedJsRoot } = getUiAppPaths(target)
+	return { testSourceRoot: path.join(appSourceRoot, 'tests'), testOutputRoot: path.join(appGeneratedJsRoot, 'tests') }
+}
 
 async function getAllFiles(dirPath: string, fileList: string[] = []) {
 	const entries = await fs.readdir(dirPath, { withFileTypes: true })
@@ -21,10 +38,11 @@ async function getAllFiles(dirPath: string, fileList: string[] = []) {
 	return fileList
 }
 
-async function buildTests() {
-	const testFiles = (await getAllFiles(TEST_SOURCE_ROOT_PATH)).filter(filePath => filePath.endsWith('.ts') || filePath.endsWith('.tsx'))
-	await fs.rm(TEST_OUTPUT_ROOT_PATH, { recursive: true, force: true })
-	await fs.mkdir(TEST_OUTPUT_ROOT_PATH, { recursive: true })
+export async function buildTests(target: TestBuildTarget) {
+	const { testSourceRoot, testOutputRoot } = getTestBuildRoots(target)
+	const testFiles = (await getAllFiles(testSourceRoot)).filter(filePath => filePath.endsWith('.ts') || filePath.endsWith('.tsx'))
+	await fs.rm(testOutputRoot, { recursive: true, force: true })
+	await fs.mkdir(testOutputRoot, { recursive: true })
 	for (const testFile of testFiles) {
 		const source = await fs.readFile(testFile, 'utf8')
 		const loader = path.extname(testFile) === '.tsx' ? 'tsx' : 'ts'
@@ -50,13 +68,21 @@ async function buildTests() {
 				},
 			},
 		}).transform(transformSource)
-		const outputFile = path.join(TEST_OUTPUT_ROOT_PATH, `${path.relative(TEST_SOURCE_ROOT_PATH, testFile).replace(/\.[^.]+$/, '')}.js`)
+		const outputFile = path.join(testOutputRoot, `${path.relative(testSourceRoot, testFile).replace(/\.[^.]+$/, '')}.js`)
 		await fs.mkdir(path.dirname(outputFile), { recursive: true })
 		await fs.writeFile(outputFile, code)
 	}
+	return testFiles.length
 }
 
-buildTests().catch(error => {
-	console.error(error)
-	process.exit(1)
-})
+if (import.meta.main) {
+	const target = parseTestBuildTarget(process.argv[2] ?? process.env['UI_APP'], 'the UI test build')
+	buildTests(target)
+		.then(count => {
+			console.log(`Built ${count.toString()} ${target} UI test file(s)`)
+		})
+		.catch(error => {
+			console.error(error)
+			process.exit(1)
+		})
+}

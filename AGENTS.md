@@ -22,7 +22,7 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 
 - Preserve unrelated staged, unstaged, and untracked user changes. Do not rewrite or remove them to simplify the task.
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
-- Never edit `ui/js/**` or `shared/js/**` directly.
+- Never edit `ui/*/js/**` or `shared/js/**` directly.
 - Do not modify imported compatibility contracts:
   - `solidity/contracts/peripherals/openOracle/OpenOracle.sol`
   - `solidity/contracts/peripherals/WETH9.sol`
@@ -55,13 +55,13 @@ Run `bun run tsc` when any of these change:
 - Solidity contracts or generated contract outputs
 - anything that can change generated TypeScript imports
 
-UI app-only exception: when changes are limited to `ui/ts/**/*.ts` or `ui/ts/**/*.tsx`, excluding `ui/ts/tests`, and do not touch contracts, `ui/build`, `ui/dev-server.ts`, generated artifacts, or consumers of refreshed contract output, run:
+UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `ui/coreShared/build`, `ui/coreShared/dev-server.ts`, generated artifacts, or consumers of refreshed contract output, run:
 
 ```bash
-cd ui && bun x tsc --project tsconfig.json
+cd ui/zoltar && bun x tsc --project tsconfig.json
 ```
 
-Use full `bun run tsc` for UI tests, UI build scripts, `ui/dev-server.ts`, `ui/tsconfig.json`, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
+(or the matching `ui/statoblast`/`ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts, `ui/coreShared/dev-server.ts`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
 Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
@@ -120,9 +120,9 @@ pins the deployment input and prevents its large upstream packages from entering
 | `shared/js/**` | `bun run shared:build` |
 | `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
-| `ui/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
-| `ui/js/**` | UI TypeScript build |
-| `ui/vendor/**` | `bun run ui:vendor` |
+| `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
+| `ui/*/js/**` | UI TypeScript build per package |
+| `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
@@ -133,7 +133,7 @@ Do not regenerate or commit these outputs unless the task requires them or a req
 
 ### 7. UI manual QA
 
-For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run ui:serve` and `http://localhost:12345/?simulate=1` for walletless testing.
+For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:12346/?simulate=1`) or `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`) for walletless testing.
 
 Choose the smallest relevant scenario:
 

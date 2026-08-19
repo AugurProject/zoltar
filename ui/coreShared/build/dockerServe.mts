@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { isUiAppId, UI_APP_IDS, type UiAppId } from './appPaths.mts'
 
 const noStoreFiles = new Set(['/index.html', '/mainnet-deployment-addresses.json', '/sepolia-deployment-addresses.json'])
 
@@ -38,11 +39,15 @@ export const createAssetHandler = (root: string) => {
 }
 
 if (import.meta.main) {
+	const appId = process.argv[2] ?? process.env['UI_APP']
+	if (appId === undefined || appId === '') throw new Error(`Missing UI app ID for the local runtime server; pass one of: ${UI_APP_IDS.join(', ')}`)
+	if (!isUiAppId(appId)) throw new Error(`Unknown UI app ID '${appId}' for the local runtime server; expected one of: ${UI_APP_IDS.join(', ')}`)
 	const configuredPort = process.env['PORT'] ?? '8080'
 	const port = Number(configuredPort)
 	if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error(`Invalid PORT value: ${configuredPort}`)
 
-	Bun.serve({ hostname: '0.0.0.0', port, fetch: createAssetHandler('/app/ui') })
-	console.log('Zoltar UI is available at:')
+	const appDistRoot = `/app/ui/${appId}`
+	Bun.serve({ hostname: '0.0.0.0', port, fetch: createAssetHandler(appDistRoot) })
+	console.log(`${appId} UI is available at:`)
 	console.log(`http://localhost:${port}/`)
 }

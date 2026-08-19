@@ -30752,7 +30752,11 @@ init_deploymentHelpers();
 function getDeploymentSteps2(profile = getRuntimeNetworkProfile(), wait) {
   const addresses = getInfraContractAddresses(profile);
   return [
-    ...getDeploymentSteps(profile, wait),
+    ...getDeploymentSteps(profile, wait).map((step) => step.id === "deploymentStatusOracle" ? {
+      ...step,
+      address: getDeploymentStatusOracleAddress2(profile),
+      deploy: async (client) => await deployViaProxy2(client, getDeploymentStatusOracleByteCode2(profile))
+    } : step),
     {
       id: "securityPoolForker",
       label: "Security Pool Forker",
@@ -35560,21 +35564,25 @@ function registerStatoblastSimulationScenarios() {
 // node_modules/@preact/signals-core/dist/signals-core.module.js
 var i3 = Symbol.for("preact-signals");
 function t3() {
-  if (!(s3 > 1)) {
+  if (!(v3 > 1)) {
     var i4, t4 = false;
     (function() {
       var i5 = c3;
       c3 = undefined;
       while (i5 !== undefined) {
-        if (i5.S.v === i5.v)
-          i5.S.i = i5.i;
+        var t5 = i5.S;
+        if (t5.v === i5.v) {
+          for (var n3 = t5.t;n3 !== undefined; n3 = n3.x)
+            if (n3.i === i5.i)
+              n3.i = t5.i;
+        }
         i5 = i5.o;
       }
     })();
     while (h3 !== undefined) {
       var n2 = h3;
       h3 = undefined;
-      v3++;
+      s3++;
       while (n2 !== undefined) {
         var r3 = n2.u;
         n2.u = undefined;
@@ -35591,52 +35599,54 @@ function t3() {
         n2 = r3;
       }
     }
-    v3 = 0;
-    s3--;
+    s3 = 0;
+    v3--;
     if (t4)
       throw i4;
   } else
-    s3--;
+    v3--;
 }
 function n2(i4) {
-  if (s3 > 0)
+  if (v3 > 0)
     return i4();
   e3 = ++u4;
-  s3++;
+  v3++;
   try {
     return i4();
   } finally {
     t3();
   }
 }
-var r3 = undefined;
-function o3(i4) {
-  var t4 = r3;
+var r3;
+var o3 = undefined;
+function f4(i4) {
+  var t4 = o3, n3 = r3;
+  o3 = undefined;
   r3 = undefined;
   try {
     return i4();
   } finally {
-    r3 = t4;
+    o3 = t4;
+    r3 = n3;
   }
 }
-var f4;
 var h3 = undefined;
-var s3 = 0;
 var v3 = 0;
+var s3 = 0;
 var u4 = 0;
 var e3 = 0;
 var c3 = undefined;
 var d3 = 0;
 function a3(i4) {
-  if (r3 !== undefined) {
+  if (o3 !== undefined) {
     var t4 = i4.n;
-    if (t4 === undefined || t4.t !== r3) {
-      t4 = { i: 0, S: i4, p: r3.s, n: undefined, t: r3, e: undefined, x: undefined, r: t4 };
-      if (r3.s !== undefined)
-        r3.s.n = t4;
-      r3.s = t4;
+    if (t4 === undefined || t4.t !== o3) {
+      t4 = { i: 0, S: i4, p: o3.s, n: undefined, t: o3, e: undefined, x: undefined, r: t4 };
+      if (o3.s !== undefined)
+        o3.s.n = t4;
+      o3.s = t4;
       i4.n = t4;
-      if (32 & r3.f)
+      if (32 & o3.f)
         i4.S(t4);
       return t4;
     } else if (t4.i === -1) {
@@ -35645,10 +35655,10 @@ function a3(i4) {
         t4.n.p = t4.p;
         if (t4.p !== undefined)
           t4.p.n = t4.n;
-        t4.p = r3.s;
+        t4.p = o3.s;
         t4.n = undefined;
-        r3.s.n = t4;
-        r3.s = t4;
+        o3.s.n = t4;
+        o3.s = t4;
       }
       return t4;
     }
@@ -35676,7 +35686,7 @@ l3.prototype.S = function(i4) {
     if (n3 !== undefined)
       n3.e = i4;
     else
-      o3(function() {
+      f4(function() {
         var i5;
         (i5 = t4.W) == null || i5.call(t4);
       });
@@ -35697,7 +35707,7 @@ l3.prototype.U = function(i4) {
     if (i4 === this.t) {
       this.t = r4;
       if (r4 === undefined)
-        o3(function() {
+        f4(function() {
           var i5;
           (i5 = t4.Z) == null || i5.call(t4);
         });
@@ -35708,7 +35718,7 @@ l3.prototype.subscribe = function(i4) {
   var t4 = this;
   return j3(function() {
     var n3 = t4.value;
-    o3(function() {
+    f4(function() {
       return i4(n3);
     });
   }, { name: "sub" });
@@ -35724,7 +35734,7 @@ l3.prototype.toJSON = function() {
 };
 l3.prototype.peek = function() {
   var i4 = this;
-  return o3(function() {
+  return f4(function() {
     return i4.value;
   });
 };
@@ -35735,10 +35745,10 @@ Object.defineProperty(l3.prototype, "value", { get: function() {
   return this.v;
 }, set: function(i4) {
   if (i4 !== this.v) {
-    if (v3 > 100)
+    if (s3 > 100)
       throw new Error("Cycle detected");
     (function(i5) {
-      if (s3 !== 0 && v3 === 0) {
+      if (v3 !== 0 && s3 === 0) {
         if (i5.l !== e3) {
           i5.l = e3;
           c3 = { S: i5, v: i5.v, i: i5.i, o: c3 };
@@ -35748,7 +35758,7 @@ Object.defineProperty(l3.prototype, "value", { get: function() {
     this.v = i4;
     this.i++;
     d3++;
-    s3++;
+    v3++;
     try {
       for (var n3 = this.t;n3 !== undefined; n3 = n3.x)
         n3.t.N();
@@ -35821,10 +35831,10 @@ p3.prototype.h = function() {
     this.f &= -2;
     return true;
   }
-  var i4 = r3;
+  var i4 = o3;
   try {
     _3(this);
-    r3 = this;
+    o3 = this;
     var t4 = this.x();
     if (16 & this.f || this.v !== t4 || this.i === 0) {
       this.v = t4;
@@ -35836,7 +35846,7 @@ p3.prototype.h = function() {
     this.f |= 16;
     this.i++;
   }
-  r3 = i4;
+  o3 = i4;
   b(this);
   this.f &= -2;
   return true;
@@ -35884,9 +35894,9 @@ function S2(i4) {
   var n3 = i4.m;
   i4.m = undefined;
   if (typeof n3 == "function") {
-    s3++;
-    var o4 = r3;
-    r3 = undefined;
+    v3++;
+    var r4 = o3;
+    o3 = undefined;
     try {
       n3();
     } catch (t4) {
@@ -35895,7 +35905,7 @@ function S2(i4) {
       m3(i4);
       throw t4;
     } finally {
-      r3 = o4;
+      o3 = r4;
       t3();
     }
   }
@@ -35908,10 +35918,10 @@ function m3(i4) {
   S2(i4);
 }
 function x3(i4) {
-  if (r3 !== this)
+  if (o3 !== this)
     throw new Error("Out-of-order effect");
   b(this);
-  r3 = i4;
+  o3 = i4;
   this.f &= -2;
   if (8 & this.f)
     m3(this);
@@ -35924,8 +35934,8 @@ function E2(i4, t4) {
   this.u = undefined;
   this.f = 32;
   this.name = t4 == null ? undefined : t4.name;
-  if (f4)
-    f4.push(this);
+  if (r3)
+    r3.push(this);
 }
 E2.prototype.c = function() {
   var i4 = this.S();
@@ -35948,9 +35958,9 @@ E2.prototype.S = function() {
   this.f &= -9;
   S2(this);
   _3(this);
-  s3++;
-  var i4 = r3;
-  r3 = this;
+  v3++;
+  var i4 = o3;
+  o3 = this;
   return x3.bind(this, i4);
 };
 E2.prototype.N = function() {
@@ -62355,5 +62365,5 @@ installRouting({
 registerStatoblastSimulationScenarios();
 mountApp({ initialize: () => initializeActiveEnvironment(window.location, { appId: "statoblast" }), root: () => _(App, {}) });
 
-//# debugId=93F67E149A3CC9A364756E2164756E21
+//# debugId=9313FC23B3CEEFE364756E2164756E21
 //# sourceMappingURL=app.js.map
