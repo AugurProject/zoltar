@@ -20,9 +20,7 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 
 ## Working boundaries
 
-- Preserve unrelated staged, unstaged, and untracked user changes. Do not rewrite or remove them to simplify the task.
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
-- Never edit `ui/js/**` or `shared/js/**` directly.
 - Do not modify imported compatibility contracts:
   - `solidity/contracts/peripherals/openOracle/OpenOracle.sol`
   - `solidity/contracts/peripherals/WETH9.sol`
@@ -174,8 +172,8 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
-- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there; `docs/AGENTS.md` is the sole repository-instruction exception.
-- Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
+- Documentation under `docs/` uses HTML as its canonical source format.
+- Do not create standalone tests that asserts text in the documentation
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
 
