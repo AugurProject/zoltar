@@ -109,7 +109,7 @@ export function TradingDeploymentSetup({
 	const [chainId, setChainId] = useState(initialQueryValue('chainId') || currentConfiguration?.chainId.toString() || '')
 	const [rpcUrl, setRpcUrl] = useState(initialQueryValue('rpcUrl') || currentConfiguration?.rpcUrl || '')
 	const [rpcOverride, setRpcOverride] = useState(initialQueryValue('rpcUrl') !== '' || (currentConfiguration !== undefined && !isKnownDefaultRpcUrl(currentConfiguration.rpcUrl)))
-	const [feeBps, setFeeBps] = useState(initialQueryValue('feeBps') || currentConfiguration?.feeBps.toString() || '30')
+	const feeBps = '30'
 	const [walletAccount, setWalletAccount] = useState<string>()
 	const [walletChain, setWalletChain] = useState<number>()
 	const [walletConnectionMessage, setWalletConnectionMessage] = useState<string>()
@@ -145,7 +145,6 @@ export function TradingDeploymentSetup({
 		setChainId(currentConfiguration.chainId.toString())
 		setRpcUrl(currentConfiguration.rpcUrl)
 		setRpcOverride(!isKnownDefaultRpcUrl(currentConfiguration.rpcUrl))
-		setFeeBps(currentConfiguration.feeBps.toString())
 	}, [busy, currentConfiguration])
 	const selectedCore = coreDeployments.find(deployment => deployment.chainId.toString() === chainId)
 	useEffect(() => {
@@ -162,7 +161,7 @@ export function TradingDeploymentSetup({
 	const walletConnected = walletAccount !== undefined
 	const walletReady = walletConnected && selectedCore !== undefined && walletChain === selectedCore.chainId
 	let inputError: string | undefined
-	if (chainId !== '' && rpcUrl !== '' && feeBps !== '') {
+	if (chainId !== '' && rpcUrl !== '') {
 		try {
 			parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
 		} catch (error) {
@@ -200,7 +199,7 @@ export function TradingDeploymentSetup({
 		setActionMessage(undefined)
 		setActionError(false)
 		setInspectedRevision(undefined)
-		if (selectedCore === undefined || chainId === '' || effectiveRpcUrl === '' || feeBps === '' || inputError !== undefined) {
+		if (selectedCore === undefined || chainId === '' || effectiveRpcUrl === '' || inputError !== undefined) {
 			setInspectionState('idle')
 			setInspectionError(undefined)
 			return
@@ -461,21 +460,6 @@ export function TradingDeploymentSetup({
 						Use default RPC
 					</button>
 				) : null}
-				<label class='field'>
-					<span>Immutable trading fee</span>
-					<div class='amount-input'>
-						<input
-							inputMode='numeric'
-							value={feeBps}
-							disabled={busy}
-							onInput={event => {
-								inputRevision.current += 1
-								setFeeBps(event.currentTarget.value)
-							}}
-						/>
-						<span>bps</span>
-					</div>
-				</label>
 			</div>
 		</details>
 	)

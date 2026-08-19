@@ -139,13 +139,18 @@ function stateLabel(state: TransactionState, action = 'Transaction') {
 	return 'Ready to simulate after wallet balances and inputs are valid'
 }
 
-function renderLiveTradeSummary(quote: Quote, side: 'YES' | 'NO') {
+type LiveTradeSummaryQuote =
+	| Readonly<{ kind: 'entry'; value: Readonly<{ amount: bigint; market: Pick<LiveMarket, 'feeBps'>; result: Readonly<{ totalLongShares: bigint; invalidInsurance: bigint }> }> }>
+	| Readonly<{ kind: 'exit'; value: Readonly<{ market: Pick<LiveMarket, 'feeBps'>; result: Readonly<{ totalLongShares: bigint; invalidInsurance: bigint; ethOut: bigint }> }> }>
+
+export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES' | 'NO') {
 	if (quote.kind === 'entry')
 		return (
 			<div class='trade-summary' aria-label='Trade summary'>
 				<div>
 					<span>You pay</span>
 					<strong>{formatUnits(quote.value.amount)} ETH</strong>
+					<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
 				</div>
 				<span class='trade-summary__arrow' aria-hidden='true'>
 					→
@@ -163,6 +168,7 @@ function renderLiveTradeSummary(quote: Quote, side: 'YES' | 'NO') {
 				<span>You use</span>
 				<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
 				<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
+				<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
 			</div>
 			<span class='trade-summary__arrow' aria-hidden='true'>
 				→
@@ -274,7 +280,11 @@ export function PairInitializationAction({ market, onSelect = () => undefined }:
 		)
 	return (
 		<div class='operation-block'>
-			<p>{market.pair === undefined ? 'This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction.' : 'The trading pool exists but needs initial liquidity before trading can open.'}</p>
+			<p>
+				{market.pair === undefined
+					? `This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`
+					: `The trading pool exists but needs initial liquidity before trading can open. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`}
+			</p>
 			<a class='primary-action' href='#/liquidity' onClick={() => onSelect(market)}>
 				{market.pair === undefined ? 'Deploy trading pool' : 'Initialize trading pool'}
 			</a>

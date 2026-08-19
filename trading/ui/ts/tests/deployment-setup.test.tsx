@@ -330,16 +330,16 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, ...walletServices }} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => await Bun.sleep(0))
-		const feeInput = rendered.container.querySelector<HTMLInputElement>('.amount-input input')
-		if (feeInput === null) throw new Error('Deployment setup fields are unavailable')
+		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
+		if (rpcInput === null) throw new Error('Deployment RPC setting is unavailable')
 		await waitForText('Ready to deploy')
 		await connectDeploymentWallet(rendered.container)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
 		await act(async () => {
 			rpcAvailable = false
-			feeInput.value = '31'
-			feeInput.dispatchEvent(new Event('input', { bubbles: true }))
+			rpcInput.value = 'https://changed.example'
+			rpcInput.dispatchEvent(new Event('input', { bubbles: true }))
 			action.click()
 		})
 		expect(deployCount).toBe(0)
@@ -443,9 +443,9 @@ describe('trading deployment setup', () => {
 	})
 
 	test('hydrates the deploy route from asynchronously resolved configuration', async () => {
-		window.history.replaceState(undefined, '', '/#/deploy')
-		const plan = getTradingDeploymentPlan(core, 47)
-		const configuration = deploymentConfigurationForPlan(plan, 'https://rpc.example/')
+		window.history.replaceState(undefined, '', '/?feeBps=99#/deploy')
+		const plan = getTradingDeploymentPlan(core, 30)
+		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 47), 'https://rpc.example/')
 		let contractReadCount = 0
 		const client = createPublicClient({
 			transport: custom({
@@ -484,10 +484,9 @@ describe('trading deployment setup', () => {
 		await waitForText('Deployment complete')
 		const select = rendered.container.querySelector<HTMLSelectElement>('.deployment-settings select')
 		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
-		const feeInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings .amount-input input')
 		expect(select?.value).toBe(core.chainId.toString())
 		expect(rpcInput?.value).toBe(configuration.rpcUrl)
-		expect(feeInput?.value).toBe('47')
+		expect(rendered.container.textContent).not.toContain('Immutable trading fee')
 		expect(rendered.container.textContent).toContain('2 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deployment complete')).toBe(false)

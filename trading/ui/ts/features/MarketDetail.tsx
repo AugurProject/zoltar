@@ -56,7 +56,7 @@ export function transactionMessage(transactionState: TransactionState, mode: 'en
 	return undefined
 }
 
-function renderTradeSummary(quote: EnterPositionQuote | ExitPositionQuote | undefined, amountAtto: bigint | undefined, side: 'YES' | 'NO', unavailableMessage: string | undefined, estimatedExitAttoEth: bigint | undefined) {
+function renderTradeSummary(quote: EnterPositionQuote | ExitPositionQuote | undefined, amountAtto: bigint | undefined, side: 'YES' | 'NO', feeBps: bigint, unavailableMessage: string | undefined, estimatedExitAttoEth: bigint | undefined) {
 	if (quote === undefined || amountAtto === undefined)
 		return (
 			<div class='trade-summary trade-summary--unavailable'>
@@ -73,6 +73,7 @@ function renderTradeSummary(quote: EnterPositionQuote | ExitPositionQuote | unde
 				<div>
 					<span>You pay</span>
 					<strong>{formatUnits(amountAtto, 18, 8)} ETH</strong>
+					<small>Trading fee {formatUnits(feeBps, 2, 2)}%</small>
 				</div>
 				<span class='trade-summary__arrow' aria-hidden='true'>
 					→
@@ -90,6 +91,7 @@ function renderTradeSummary(quote: EnterPositionQuote | ExitPositionQuote | unde
 				<span>You use</span>
 				<strong>{formatOutcomeAmount(quote.totalLongShares, side)}</strong>
 				<small>+ {formatOutcomeAmount(quote.invalidRequired, 'INVALID')}</small>
+				<small>Trading fee {formatUnits(feeBps, 2, 2)}%</small>
 			</div>
 			<span class='trade-summary__arrow' aria-hidden='true'>
 				→
@@ -441,7 +443,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 							</div>
 						) : null}
 						<div aria-live='polite'>
-							{renderTradeSummary(quote, parsed.value, side, displayedQuoteStatus.message, estimatedExitAttoEth)}
+							{renderTradeSummary(quote, parsed.value, side, market.feeBps, displayedQuoteStatus.message, estimatedExitAttoEth)}
 							{displayedQuoteStatus.label === undefined ? null : <Status tone={displayedQuoteStatus.tone}>{displayedQuoteStatus.label}</Status>}
 						</div>
 						<div class='trade-action'>{primaryAction}</div>
