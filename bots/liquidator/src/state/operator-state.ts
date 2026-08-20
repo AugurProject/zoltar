@@ -156,6 +156,10 @@ export type RuntimeState = {
 	walletRepByToken: Map<string, bigint>
 }
 
+function isHash(value: unknown): value is Hex {
+	return typeof value === 'string' && isHex(value) && value.length === 66
+}
+
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined): RuntimeState {
 	return {
 		activities: [],
@@ -575,7 +579,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				const candidateOperationId = Reflect.get(rawCandidateOutcome, 'operationId')
 				const success = Reflect.get(rawCandidateOutcome, 'success')
 				const transactionHash = Reflect.get(rawCandidateOutcome, 'transactionHash')
-				if (!isHex(blockHash) || blockHash.length !== 66 || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHex(transactionHash) || transactionHash.length !== 66)
+				if (!isHash(blockHash) || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHash(transactionHash))
 					throw new Error('Pending staged operation candidate outcome is invalid')
 				candidateOutcome = {
 					blockHash,
@@ -588,7 +592,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				}
 			}
 			if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
-			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHex(recoveryAnchorHash) || recoveryAnchorHash.length !== 66))) throw new Error('Pending staged operation recovery anchor is invalid')
+			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHash(recoveryAnchorHash)))) throw new Error('Pending staged operation recovery anchor is invalid')
 			return {
 				...(candidateOutcome === undefined ? {} : { candidateOutcome }),
 				coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
@@ -597,7 +601,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				...(typeof nextHistoricalBlock === 'string' ? { nextHistoricalBlock: BigInt(nextHistoricalBlock) } : {}),
 				operationId: BigInt(operationId),
 				queuedBlock: BigInt(queuedBlock),
-				...(typeof recoveryAnchorBlock === 'string' && isHex(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
+				...(typeof recoveryAnchorBlock === 'string' && isHash(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
 				target: getAddress(String(Reflect.get(operation, 'target'))),
 			}
 		}),

@@ -63,7 +63,7 @@ export function tokenUpdateForDeployment(value: readonly string[], previousRep: 
 	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 }
 
-export function requireSafeDeploymentTransition(state: Pick<OperatorState, 'positions'>, current: DeploymentSettings, next: DeploymentSettings) {
+export function requireSafeDeploymentTransition(state: { positions: readonly Pick<PositionRecord, 'status'>[] }, current: DeploymentSettings, next: DeploymentSettings) {
 	if (deploymentUpdateMustWait(current, next, state.positions)) {
 		throw new Error('OpenOracle, executor, REP, and WETH deployment identities cannot change while a position still consumes risk')
 	}
@@ -208,8 +208,9 @@ export function startOperatorControlPlane(parameters: {
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
+				const revision = value.revision
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
-				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
+				if (latest === undefined || latest.revision !== revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
 				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
@@ -249,7 +250,7 @@ export function startOperatorControlPlane(parameters: {
 					}
 					await persistSignerSettingsWithProvisionalLock(
 						async () => {
-							savedRevision = await persistSettings(normalizedNext, value.revision)
+							savedRevision = await persistSettings(normalizedNext, revision)
 						},
 						acquiredSignerLock,
 						lockManager,
@@ -580,11 +581,15 @@ export function startOperatorControlPlane(parameters: {
 			})
 		},
 		updateTokens: value => {
-			if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) throw new Error('Token configuration must be an array of addresses')
+			if (!Array.isArray(value)) throw new Error('Token configuration must be an array of addresses')
+			const tokenAddresses = value.map(address => {
+				if (typeof address !== 'string') throw new Error('Token configuration must be an array of addresses')
+				return address
+			})
 			return queueSettingsUpdate(async () => {
 				const effectiveDeployment = pending.deployment ?? fixedState.deployment
 				const executionEnabled = pending.execute ?? config.execute
-				const next = tokenUpdateForDeployment(value, fixedState.deployment.rep, effectiveDeployment, executionEnabled)
+				const next = tokenUpdateForDeployment(tokenAddresses, fixedState.deployment.rep, effectiveDeployment, executionEnabled)
 				await persistFocusedSettings(settings => ({
 					...settings,
 					tokenAddresses: next,

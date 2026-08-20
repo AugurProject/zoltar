@@ -18,13 +18,21 @@ describe('queued operator execution settings', () => {
 		expect(applyLookbackBlockSetting(config, 256n)).toBe(true)
 		expect(config.lookbackBlocks).toBe(256n)
 		const reports = new Map([[1n, { reportId: 1n }]])
-		const state = {
+		const state: {
+			activeReportCount: number
+			marketConsensus?: unknown
+			marketObservations?: unknown[]
+			opportunities: unknown[]
+			reportPaths: unknown[]
+			status: 'running' | 'syncing'
+			tokenMarkets: unknown[]
+		} = {
 			activeReportCount: 1,
 			marketConsensus: { reliable: true },
 			marketObservations: [{ sourceId: 'source-a' }],
 			opportunities: [{ reportId: '1' }],
 			reportPaths: [{ reportId: '1' }],
-			status: 'running' as const,
+			status: 'running',
 			tokenMarkets: [{ token: 'REP' }],
 		}
 		const reset = resetReportScanState<{ blockNumber: bigint }>(state, reports)

@@ -537,11 +537,12 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
+					const activeWallet = wallet
 					if (
 						await recoveryWorkBlocksExecution(
 							state,
-							() => recoverPendingTransactions(settings, wallet, state, readPool),
-							() => reconcilePendingStagedOperations(settings, wallet, state, readPool),
+							() => recoverPendingTransactions(settings, activeWallet, state, readPool),
+							() => reconcilePendingStagedOperations(settings, activeWallet, state, readPool),
 						)
 					) {
 						await saveDurableState(settings.runtime.stateFile, state)

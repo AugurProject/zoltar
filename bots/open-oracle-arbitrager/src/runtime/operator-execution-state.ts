@@ -5,12 +5,12 @@ import { clearWalletDerivedState, type OperatorSnapshotFixedState, type Operator
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
-export function clearMarketEvidenceForSourceChange(state: { marketConsensus: unknown; marketObservations?: unknown[] | undefined }) {
+export function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
 	state.marketObservations = []
 	state.marketConsensus = undefined
 }
 
-export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
+export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
 	config.centralizedMarkets = nextSettings
 	clearMarketEvidenceForSourceChange(state)
 }
@@ -21,7 +21,18 @@ export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, ne
 	return changed
 }
 
-export function resetReportScanState<TLog>(state: Pick<OperatorState, 'activeReportCount' | 'marketConsensus' | 'marketObservations' | 'opportunities' | 'reportPaths' | 'status' | 'tokenMarkets'>, reports: { clear: () => void }) {
+export function resetReportScanState<TLog>(
+	state: {
+		activeReportCount: number
+		marketConsensus?: unknown
+		marketObservations?: unknown[] | undefined
+		opportunities: unknown[]
+		reportPaths: unknown[]
+		status: OperatorState['status']
+		tokenMarkets: unknown[]
+	},
+	reports: { clear: () => void },
+) {
 	reports.clear()
 	state.activeReportCount = 0
 	state.opportunities = []

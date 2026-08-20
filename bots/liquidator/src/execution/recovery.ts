@@ -237,7 +237,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 		let observedRecoveryAnchor: Hex | undefined
 		if (pending.recoveryAnchorBlock !== undefined && pending.recoveryAnchorBlock <= toBlock) observedRecoveryAnchor = await canonicalRecoveryHash(pending.recoveryAnchorBlock)
 		if (!stagedRecoveryAnchorMatches(pending, toBlock, observedRecoveryAnchor)) {
-			pending.candidateOutcome = undefined
+			delete pending.candidateOutcome
 			pending.historicalRecoveryComplete = undefined
 			pending.latestRecoveryBlock = undefined
 			pending.nextHistoricalBlock = undefined
@@ -327,12 +327,12 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			)
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.includes('receipt is no longer canonical')) throw error
-			pending.candidateOutcome = undefined
+				delete pending.candidateOutcome
 			await saveDurableState(settings.runtime.stateFile, state)
 			continue
 		}
 		if (!finalized) continue
-		pending.candidateOutcome = undefined
+		delete pending.candidateOutcome
 		state.pendingStagedOperations = state.pendingStagedOperations.filter(operation => operation.coordinator.toLowerCase() !== pending.coordinator.toLowerCase() || operation.operationId !== pending.operationId)
 		recordActivity(state, {
 			details: `coordinator=${pending.coordinator} operation=${pending.operationId.toString()} target=${pending.target}`,
