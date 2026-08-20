@@ -62,8 +62,6 @@ function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[]
 			}
 	return result
 }
-const isAugurScanIntegrationPath = (filePath: string): boolean => filePath.startsWith('augurScan/') && !filePath.startsWith('augurScan/docs/') && !filePath.endsWith('.md')
-
 export function getCiChangedFiles(baseRef: string, cwd: string = process.cwd()): string[] {
 	const fields = execFileSync('git', ['diff', '--name-status', '-z', '--find-renames', '--diff-filter=ACMRTUXBD', `${baseRef}...HEAD`], { cwd, encoding: 'utf8' }).split('\0')
 	const paths: string[] = []
@@ -96,7 +94,7 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	const expandedScopes = ordered(expanded)
 	const packageMatrix = expandedScopes.flatMap(scope => packageEntries[scope] ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
-	const augurScanIntegration = forcedFull || changedFiles.some(isAugurScanIntegrationPath)
+	const augurScanIntegration = false
 	let reason = 'Selected direct scopes and expanded their verified local consumers.'
 	if (forcedFull) reason = 'A global or unknown path requires the full ordinary CI matrix.'
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'

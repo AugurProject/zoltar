@@ -36,15 +36,11 @@ test('empty input and explicit full mode use the full matrix', () => {
 	expect(classifyCiChange(['README.md'], { full: true }).expandedScopes).toEqual(ciScopes)
 })
 
-test('selects augurScan integration only for database-sensitive or full changes', () => {
+test('keeps the unreliable augurScan integration route disabled', () => {
 	expect(classifyCiChange(['augurScan/README.md']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange(['augurScan/src/server.ts']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/src/api.ts']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/migrations/001.sql']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/package.json']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/bun.lock']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(false)
+	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(false)
+	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(false)
 })
 
 test('matrices are valid, deterministic JSON for empty and non-empty selections', () => {
