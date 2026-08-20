@@ -134,7 +134,7 @@ type UniswapPriceProjection = {
 
 type DomainEventProjection = {
 	type: 'domainEvent'
-	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'trading' | 'fork'
+	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'approval' | 'trading' | 'fork'
 	entityType: string
 	entityIdentity: string
 	semanticEventKind: string
@@ -575,6 +575,19 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		],
 		['vault', 'targetVault'],
 	),
+	...definitions(
+		'approval',
+		'liquidation-approval',
+		[
+			'LiquidationApprovalSet',
+			'LiquidationApprovalReserved',
+			'LiquidationApprovalReleased',
+			'LiquidationApprovalConsumed',
+			'LiquidationApprovalRevoked',
+			'LiquidationApprovalNonceInvalidated',
+		],
+		['approvalId', 'receiverVault'],
+	),
 	...definitions('trading', 'amm', ['LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync']),
 	...definitions(
 		'fork',
@@ -610,7 +623,28 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
+	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4
+	// also emit an event named Swap, but their sqrt-price shape belongs to the
+	// dedicated Uniswap projection and cannot be interpreted as Augur reserves.
+	if (
+		eventName === 'Swap' &&
+		!(
+			typeof data['yesForNo'] === 'boolean' &&
+			typeof data['amountIn'] === 'string' &&
+			typeof data['amountOut'] === 'string' &&
+			typeof data['resultingYesReserve'] === 'string' &&
+			typeof data['resultingNoReserve'] === 'string'
+		)
+	)
+		return undefined
 	const reportId = data['reportId']
+	const approvalId = data['approvalId']
+	const approvalIdentity =
+		typeof approvalId === 'string'
+			? approvalId.toLowerCase()
+			: typeof data['receiverVault'] === 'string'
+				? `nonce:${data['receiverVault'].toLowerCase()}`
+				: undefined
 	const fieldIdentity = definition.identityFields?.map((field) => data[field]).find((value) => typeof value === 'string')
 	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
 	const entityIdentity =
@@ -618,9 +652,11 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 			? `${log.address.toLowerCase()}:${reportId}`
 			: definition.entityType === 'vault' && identitySuffix !== undefined
 				? `${log.address.toLowerCase()}:${identitySuffix}`
-				: definition.domain === 'fork' && identitySuffix !== undefined
-					? identitySuffix
-					: log.address.toLowerCase()
+				: definition.entityType === 'liquidation-approval' && approvalIdentity !== undefined
+					? `${log.address.toLowerCase()}:${approvalIdentity}`
+					: definition.domain === 'fork' && identitySuffix !== undefined
+						? identitySuffix
+						: log.address.toLowerCase()
 	return {
 		type: 'domainEvent',
 		domain: definition.domain,

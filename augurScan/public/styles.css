@@ -409,6 +409,10 @@ main {
 	display: grid;
 	gap: 0.55rem;
 }
+.operations-panel .state-placeholder {
+	min-height: auto;
+	padding: 2rem 0;
+}
 .operations-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -472,6 +476,9 @@ a.operations-row:focus-visible {
 .operations-row span,
 .operations-row small {
 	display: block;
+}
+.operations-row strong {
+	overflow-wrap: anywhere;
 }
 .operations-row span,
 .operations-row small {

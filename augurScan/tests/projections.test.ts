@@ -211,6 +211,13 @@ describe('state projections', () => {
 		])
 	})
 
+	test('does not classify Uniswap-shaped Swap events as Augur AMM trades', () => {
+		const projected = projectionsFrom(
+			log('Swap', { sender: pool, recipient: vault, amount0: '-1', amount1: '2', sqrtPriceX96: String(2n ** 96n), liquidity: '100' }),
+		)
+		expect(projected.some((item) => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
+	})
+
 	test('distinguishes initialization seeds from accepted REP per ETH coordinator prices', () => {
 		const [originSeed] = projectionsFrom(log('RepEthPriceSet', { price: '0' }, vault))
 		expect(originSeed).toEqual({
@@ -323,6 +330,19 @@ describe('state projections', () => {
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
 		})
+		for (const eventName of [
+			'LiquidationApprovalSet',
+			'LiquidationApprovalReserved',
+			'LiquidationApprovalReleased',
+			'LiquidationApprovalConsumed',
+			'LiquidationApprovalRevoked',
+			'LiquidationApprovalNonceInvalidated',
+		])
+			expect(projectionsFrom(log(eventName, { approvalId: `0x${'a'.repeat(64)}`, receiverVault: vault })).at(-1)).toMatchObject({
+				domain: 'approval',
+				entityType: 'liquidation-approval',
+				semanticEventKind: eventName,
+			})
 		expect(projectionsFrom(log('PredeploymentSharesQuarantined', { invalidAmount: '1' })).at(-1)).toMatchObject({
 			domain: 'trading',
 			entityType: 'amm',

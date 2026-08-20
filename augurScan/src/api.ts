@@ -241,7 +241,14 @@ const operationsAsOf = async (sql: SQL, chainId: number): Promise<Record<string,
 	`
 	const row = rows[0]
 	if (row === undefined) throw new ApiRequestError('chainId is not configured')
-	return row
+	return {
+		...row,
+		blockNumber: row['blockNumber'] ?? '0',
+		blockHash: row['blockHash'] ?? `0x${'0'.repeat(64)}`,
+		blockTimestamp: row['blockTimestamp'] ?? '0',
+		observedHead: row['observedHead'] ?? '0',
+		availability: row['blockNumber'] === null || row['blockNumber'] === undefined ? 'Awaiting indexed evidence' : 'available',
+	}
 }
 
 const reportCatalogData = async (
@@ -367,8 +374,13 @@ const auctionCatalogData = async (
 	})
 }
 
-const riskCatalogData = async (sql: SQL, chainId: number) => {
-	const [pools, vaults, liquidations] = await Promise.all([
+const riskCatalogData = async (
+	sql: SQL,
+	chainId: number,
+	options: { poolAddress?: string; vaultAddress?: string; poolAfter?: string; vaultAfter?: string; limit?: number } = {},
+) => {
+	const queryLimit = (options.limit ?? 250) + 1
+	const [pools, vaults, liquidations, approvalEvents] = await Promise.all([
 		sql`
 			WITH identities AS (SELECT DISTINCT pool_address FROM pools WHERE chain_id = ${chainId} AND canonical)
 			SELECT identity.pool_address, snapshot.block_number::text AS block_number, snapshot.block_hash,
@@ -380,7 +392,10 @@ const riskCatalogData = async (sql: SQL, chainId: number) => {
 				WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool'
 					AND state.entity_identity = identity.pool_address AND state.canonical
 				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
-			) snapshot ON true ORDER BY identity.pool_address
+			) snapshot ON true
+			WHERE (${options.poolAddress ?? null}::text IS NULL OR identity.pool_address = ${options.poolAddress ?? null})
+				AND (${options.poolAfter ?? null}::text IS NULL OR identity.pool_address > ${options.poolAfter ?? null})
+			ORDER BY identity.pool_address LIMIT ${queryLimit}
 		`,
 		sql`
 			WITH identities AS (
@@ -406,11 +421,32 @@ const riskCatalogData = async (sql: SQL, chainId: number) => {
 				WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool'
 					AND state.entity_identity = identity.pool_address AND state.canonical
 				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
-			) pool ON true ORDER BY identity.pool_address, identity.vault_address
+			) pool ON true
+			WHERE (${options.poolAddress ?? null}::text IS NULL OR identity.pool_address = ${options.poolAddress ?? null})
+				AND (${options.vaultAddress ?? null}::text IS NULL OR identity.vault_address = ${options.vaultAddress ?? null})
+				AND (${options.vaultAfter ?? null}::text IS NULL OR identity.pool_address || ':' || identity.vault_address > ${options.vaultAfter ?? null})
+			ORDER BY identity.pool_address, identity.vault_address LIMIT ${queryLimit}
 		`,
 		sql`SELECT * FROM protocol_timeline_entries WHERE chain_id = ${chainId} AND canonical AND semantic_event_kind = 'VaultLiquidated' ORDER BY block_number DESC, log_index DESC LIMIT 25`,
+		sql`
+			SELECT approval.*, COALESCE(approval.receiver_vault, installed.receiver_vault) AS receiver_vault,
+				block.timestamp AS block_timestamp
+			FROM liquidation_approval_events approval
+			JOIN blocks block ON block.chain_id = approval.chain_id AND block.hash = approval.block_hash AND block.canonical
+			LEFT JOIN LATERAL (
+				SELECT candidate.receiver_vault, candidate.event_data FROM liquidation_approval_events candidate
+				WHERE candidate.chain_id = approval.chain_id AND candidate.approval_identity = approval.approval_identity
+					AND candidate.event_name = 'LiquidationApprovalSet' AND candidate.canonical
+				ORDER BY candidate.block_number DESC, candidate.transaction_index DESC, candidate.log_index DESC LIMIT 1
+			) installed ON true
+			WHERE approval.chain_id = ${chainId} AND approval.canonical
+				AND (${options.poolAddress ?? null}::text IS NULL OR COALESCE(approval.event_data->>'securityPool', installed.event_data->>'securityPool') = ${options.poolAddress ?? null})
+				AND (${options.vaultAddress ?? null}::text IS NULL OR COALESCE(approval.receiver_vault, installed.receiver_vault) = ${options.vaultAddress ?? null}
+					OR COALESCE(approval.event_data->>'targetVault', installed.event_data->>'targetVault') = ${options.vaultAddress ?? null})
+			ORDER BY approval.block_number DESC, approval.transaction_index DESC, approval.log_index DESC LIMIT 100
+		`,
 	])
-	const poolData = pools.map((row: Record<string, unknown>) => {
+	const poolData = pools.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {
 		const state = jsonRecord(row['read_result'])
 		if (row['read_status'] !== 'success')
 			return {
@@ -421,16 +457,25 @@ const riskCatalogData = async (sql: SQL, chainId: number) => {
 			}
 		const capacity = poolCapacity(String(state['settlementCollateralAttoEth']), String(state['currentMintingCapacityAttoEth']))
 		const badDebt = BigInt(String(state['totalBadDebtAttoEth'] ?? '0'))
+		const price = jsonRecord(state['price'])
+		const priceRequired = BigInt(String(state['settlementCollateralAttoEth'] ?? '0')) > 0n || BigInt(String(state['currentMintingCapacityAttoEth'] ?? '0')) > 0n
+		const priceValid = price['protocolValid'] === true
 		return {
 			...row,
 			read_result: state,
 			capacity,
-			protocol_state: badDebt > 0n ? 'bad-debt' : String(state['systemState'] ?? '0'),
-			scanner_severity: badDebt > 0n ? 'critical' : 'healthy',
-			scanner_reason: badDebt > 0n ? 'Pool has recorded bad debt' : 'Tagged pool accounting read completed',
+			price_provenance: price,
+			protocol_state: priceRequired && !priceValid ? 'unavailable' : badDebt > 0n ? 'bad-debt' : String(state['systemState'] ?? '0'),
+			scanner_severity: priceRequired && !priceValid ? 'unavailable' : badDebt > 0n ? 'critical' : 'healthy',
+			scanner_reason:
+				priceRequired && !priceValid
+					? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions'
+					: badDebt > 0n
+						? 'Pool has recorded bad debt'
+						: 'Tagged pool accounting read completed',
 		}
 	})
-	const vaultData = vaults.map((row: Record<string, unknown>) => {
+	const vaultData = vaults.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {
 		const state = jsonRecord(row['read_result'])
 		const poolState = jsonRecord(row['pool_read_result'])
 		const price = jsonRecord(poolState['price'])
@@ -449,6 +494,16 @@ const riskCatalogData = async (sql: SQL, chainId: number) => {
 					(row['read_status'] === 'success' && row['pool_read_status'] === 'success'
 						? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion'
 						: 'Coherent tagged vault and pool reads are awaiting completion'),
+			}
+		if (BigInt(String(state['openInterestAttoEth'] ?? '0')) > 0n && price['protocolValid'] !== true)
+			return {
+				...row,
+				read_result: state,
+				price_provenance: price,
+				snapshot_evidence: snapshotEvidence,
+				protocol_state: 'unavailable',
+				scanner_severity: 'unavailable',
+				scanner_reason: 'Vault health is unavailable because its nonzero open interest depends on an invalid accounting price',
 			}
 		const risk = vaultRisk({
 			poolHeldBackingAttoRep: String(state['poolHeldBackingAttoRep']),
@@ -469,7 +524,23 @@ const riskCatalogData = async (sql: SQL, chainId: number) => {
 			scanner_reason: risk.scannerReason,
 		}
 	})
-	return { pools: poolData, vaults: vaultData, recentLiquidations: liquidations }
+	const lastPool = poolData.at(-1)
+	const lastVault = vaultData.at(-1)
+	return {
+		pools: poolData,
+		vaults: vaultData,
+		recentLiquidations: liquidations,
+		approvalEvents,
+		pagination: {
+			poolHasMore: pools.length > (options.limit ?? 250),
+			poolNextCursor: pools.length > (options.limit ?? 250) && lastPool !== undefined ? String(lastPool['pool_address']) : undefined,
+			vaultHasMore: vaults.length > (options.limit ?? 250),
+			vaultNextCursor:
+				vaults.length > (options.limit ?? 250) && lastVault !== undefined
+					? `${String(lastVault['pool_address'])}:${String(lastVault['vault_address'])}`
+					: undefined,
+		},
+	}
 }
 
 const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
@@ -492,7 +563,26 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	const asOf = await operationsAsOf(sql, chainId)
-	if (domain === 'risk') return json({ chainId, asOf, data: await riskCatalogData(sql, chainId) })
+	if (domain === 'risk') {
+		const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+		const limit = Math.min(Math.max(requestedLimit, 1), 250)
+		const poolAfter = parseRiskCursor(url.searchParams.get('poolCursor'), chainId, 'pool', asOf)
+		const vaultAfter = parseRiskCursor(url.searchParams.get('vaultCursor'), chainId, 'vault', asOf)
+		const data = await riskCatalogData(sql, chainId, { limit, poolAfter, vaultAfter })
+		const pagination = jsonRecord(data.pagination)
+		return json({
+			chainId,
+			asOf,
+			data: {
+				...data,
+				pagination: {
+					...pagination,
+					poolNextCursor: typeof pagination['poolNextCursor'] === 'string' ? riskCursorFor(chainId, 'pool', asOf, pagination['poolNextCursor']) : undefined,
+					vaultNextCursor: typeof pagination['vaultNextCursor'] === 'string' ? riskCursorFor(chainId, 'vault', asOf, pagination['vaultNextCursor']) : undefined,
+				},
+			},
+		})
+	}
 	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf)
 	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
@@ -519,6 +609,31 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 }
 
 type ProtocolCursor = readonly [number, string, string, string, string, string, string, number]
+
+type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string]
+const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>): string | undefined => {
+	if (value === null) return undefined
+	try {
+		const parsed = JSON.parse(atob(value)) as unknown
+		const parts = Array.isArray(parsed) ? parsed : []
+		if (
+			parts.length !== 5 ||
+			parts[0] !== chainId ||
+			parts[1] !== kind ||
+			parts[2] !== String(asOf['blockNumber']) ||
+			parts[3] !== String(asOf['blockHash']) ||
+			typeof parts[4] !== 'string' ||
+			(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[4]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[4]))
+		)
+			throw new Error('shape')
+		return parts[4]
+	} catch (error) {
+		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
+	}
+}
+
+const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string =>
+	btoa(JSON.stringify([chainId, kind, String(asOf['blockNumber']), String(asOf['blockHash']), key] satisfies RiskCursor))
 
 const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
@@ -674,16 +789,18 @@ const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url
 	if (domain === 'auction') {
 		const [bids, finalizations] = await Promise.all([
 			sql`
-			SELECT event_data->>'tick' AS tick, event_data->>'bidAmountAttoEth' AS amount_atto_eth
+			SELECT event_data->>'tick' AS tick, sum((event_data->>'bidAmountAttoEth')::numeric)::text AS amount_atto_eth
 			FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
-				AND canonical AND event_name = 'BidSubmitted' ORDER BY block_number, log_index
+				AND canonical AND event_name = 'BidSubmitted'
+			GROUP BY event_data->>'tick' ORDER BY (event_data->>'tick')::numeric DESC LIMIT 1001
 			`,
 			sql`SELECT * FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
 				AND canonical AND event_name = 'AuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 		])
 		result['demandCurve'] = auctionDemandCurve(
-			bids.map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })),
+			bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })),
 		)
+		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalizations[0]
 	} else {
 		result['deposits'] = rows.filter((row) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
@@ -745,6 +862,8 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 			EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds
 		FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
 		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+			AND (event.event_name <> 'Swap' OR (event.event_data ? 'yesForNo' AND event.event_data ? 'amountIn'
+				AND event.event_data ? 'amountOut' AND event.event_data ? 'resultingYesReserve' AND event.event_data ? 'resultingNoReserve'))
 			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
 		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
 	`
@@ -772,14 +891,16 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 				event.block_number, event.tx_hash, event.log_index
 			FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
 			WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
-				AND event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
+				AND event.event_name = 'Swap' AND event.event_data ? 'resultingNoReserve' AND event.event_data ? 'resultingYesReserve'
+				AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
 		), prior_observation AS (
 			SELECT EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds,
 				event.event_data->>'resultingNoReserve' AS numerator, event.event_data->>'resultingYesReserve' AS denominator,
 				event.block_number, event.tx_hash, event.log_index
 			FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
 			WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
-				AND event.event_name = 'Swap' AND block.timestamp < to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
+				AND event.event_name = 'Swap' AND event.event_data ? 'resultingNoReserve' AND event.event_data ? 'resultingYesReserve'
+				AND block.timestamp < to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
 			ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
 		)
 		SELECT * FROM (
@@ -798,6 +919,8 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 			count(*) FILTER (WHERE event.event_name IN ('LiquidityInitialized', 'LiquidityAdded', 'LiquidityRemoved') AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800))::integer AS liquidity_events_7d
 		FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
 		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+			AND (event.event_name <> 'Swap' OR (event.event_data ? 'amountIn' AND event.event_data ? 'feeAmount'
+				AND event.event_data ? 'resultingYesReserve' AND event.event_data ? 'resultingNoReserve'))
 	`
 	const exactObservations = observations.slice(-10_000).map((row: Record<string, unknown>) => ({
 		timestamp: String(row['timestamp_seconds']),
@@ -842,13 +965,17 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[]): Promise<R
 	)
 		return json({ error: 'Invalid risk entity identifier' }, 400)
 	const asOf = await operationsAsOf(sql, chainId)
-	const risk = await riskCatalogData(sql, chainId)
+	const risk = await riskCatalogData(sql, chainId, {
+		poolAddress,
+		...(kind === 'vaults' && vaultAddress !== undefined ? { vaultAddress } : {}),
+		limit: 1,
+	})
 	const entity =
 		kind === 'pools'
 			? risk.pools.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress)
 			: risk.vaults.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress && row['vault_address'] === vaultAddress)
 	if (entity === undefined) return json({ error: `${kind === 'pools' ? 'Pool' : 'Vault'} risk state not found` }, 404)
-	return json({ chainId, asOf, data: entity })
+	return json({ chainId, asOf, data: { ...entity, approvalEvents: risk.approvalEvents } })
 }
 
 const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {

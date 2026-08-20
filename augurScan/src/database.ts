@@ -577,6 +577,7 @@ export class ScannerDatabase {
 					'truth_auction_events',
 					'amm_trade_events',
 					'fork_migration_events',
+					'liquidation_approval_events',
 					'address_activity',
 					'address_balance_snapshots',
 					'token_metadata',
@@ -928,6 +929,7 @@ export class ScannerDatabase {
 			await transaction`UPDATE truth_auction_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE amm_trade_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE fork_migration_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE liquidation_approval_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
@@ -1122,6 +1124,15 @@ export class ScannerDatabase {
 								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
 								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, universe_identity) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
 							`
+						if (projection.domain === 'approval') {
+							const approvalId = projection.data['approvalId']
+							const receiverVault = projection.data['receiverVault']
+							await transaction`
+								INSERT INTO liquidation_approval_events (chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address, approval_identity, receiver_vault, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${item.transactionIndex}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${typeof approvalId === 'string' ? approvalId.toLowerCase() : `nonce:${String(receiverVault ?? 'unknown').toLowerCase()}`}, ${typeof receiverVault === 'string' ? receiverVault.toLowerCase() : null}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, registry_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						}
 						continue
 					}
 					if (projection.type === 'question') {

@@ -4,7 +4,7 @@ The state dashboard is an event-derived view of the canonical chain through the 
 
 ## Operations evidence model
 
-Migrations 008 and 009 add append-only domain evidence for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks all affected domain and timeline rows noncanonical; replay uses the source log position as its idempotency key.
+Migrations 008 and 009 add replayable domain projections for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks affected projection and timeline rows noncanonical; replay uses the source log position as its idempotency key. Raw logs remain the retained evidence layer. Derived projections may be rebuilt or corrected: migration 010 deletes only `amm_trade_events` and AMM timeline rows that were misclassified from Uniswap-shaped `Swap` logs, while leaving those raw logs and dedicated Uniswap observations intact.
 
 | Value | Source classification |
 | --- | --- |
@@ -16,7 +16,7 @@ Migrations 008 and 009 add append-only domain evidence for OpenOracle reports, e
 | Related addresses carried by one event | Direct event fields; augurScan does not currently claim cross-record inferred relationships |
 | Warning or urgency | Scanner presentation state, separate from protocol state |
 
-Every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. A value absent from indexed events or a failed tagged read is unavailable evidence, never numeric zero.
+After indexing begins, every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. Before the first block is indexed, Operations endpoints return empty evidence with a synthetic zero block/timestamp boundary and `availability: "Awaiting indexed evidence"`; zero is only the loading anchor, not a claimed deployment or protocol value. A value absent from indexed events or a failed tagged read is unavailable evidence, never numeric zero.
 
 When the indexer is caught up, it samples at most 25 least-recently observed pools, vaults, escalation games, and truth auctions per polling cycle, with four concurrent entity-snapshot jobs using the shared five-operation RPC queue. Every call is tagged to the same indexed block. The canonical block hash is checked before and after the reads and again inside the database transaction. Repeated cycles at a static head continue through unsampled entities; once every entity has a snapshot at that block, the sampler stops until the indexed boundary advances. Failed reads are retained as bounded availability evidence, and a reorg marks snapshots tied to displaced blocks stale and noncanonical.
 
@@ -38,6 +38,10 @@ Auction state uses the canonical indexed timestamp and exact `AuctionStarted`, `
 Catalog and detail pagination is newest first and stable on `(block_number, tx_hash, log_index)`. Its opaque cursor is bound to the chain, domain, entity, indexed block, and indexed hash. A head change invalidates the cursor instead of silently mixing evidence boundaries.
 
 ### Risk and trading calculations
+
+Liquidation approval events are retained as a separate chain-scoped lifecycle keyed by the registry and approval ID (or receiver-vault nonce identity for nonce invalidations). Set, reserve, release, consume, revoke, and nonce-invalidation transitions remain canonical evidence and are linked into risk responses and semantic timelines. They describe authorization state; they are not inferred liquidation executions.
+
+Pool capacity remains visible as an exact tagged value, but it is marked unusable for risk decisions when `protocolValid` is false and either settlement collateral or current minting capacity is nonzero. Vault health is unavailable when its open interest is nonzero and the coherent pool snapshot has the same invalid price. These invalid-price responses expose price provenance and remain unavailable until the protocol price becomes valid. Separately, vault risk is unavailable when the pool and vault snapshots have different block hashes; that response exposes both snapshot boundaries until coherent sampling catches up. Scanner severity does not reinterpret an expired protocol price as healthy or liquidatable.
 
 Pool capacity is the exact current minting capacity less settlement collateral, floored at zero; utilization retains the exact basis-point integer. Vault health reproduces both `SecurityPoolUtils.isVaultHealthyAtFactor` constraints: associated backing includes dispute-staked REP, while the migration-safety constraint uses only pool-held backing and the greater of the half-excess security multiplier or liquidation-bonus multiplier. Protocol state (`healthy`, `liquidatable`, or `bad-debt`) is stored separately from the scanner's named 12,000-bps warning band.
 
