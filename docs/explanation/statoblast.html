@@ -42,7 +42,7 @@
 				<p>Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders use it and vault owners fund its security vaults, trying to resolve disputes locally, and only then turning to fork.</p>
 				<ol>
 					<li>A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe.</li>
-					<li>Vault owners deposit REP into security vaults and select a target health factor. Their REP-denominated capacity ownership is price independent; the current REP/ETH price converts the pool's aggregate ownership into live ETH minting capacity without iterating through vaults.</li>
+					<li>Vault owners deposit REP into security vaults and select a target factor for each deposit. That instruction determines only the incremental REP-denominated capacity created by that deposit. The current REP/ETH price converts the pool's aggregate ownership into live ETH minting capacity without iterating through vaults.</li>
 					<li>After the market ends, REP reporters try to resolve the market outcome locally through the escalation game.</li>
 					<li>In the unfortunate case where the escalation game raises sufficient amount of REP without reaching a decision, Statoblast triggers a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution.</li>
 					<li>After a fork occurs in Zoltar, a migration period begins in each Statoblast pool. Each vault holder chooses a market outcome, converts the parent backing-unit claim to REP in that child, and routes a proportional share of that pool's <a href="#term-settlement-collateral">settlement collateral</a>.</li>
@@ -102,8 +102,11 @@
 
 				<section>
 					<h3>Liquidation receivers and operators</h3>
-					<p>A receiver vault accepts moved security-bond debt and receives the REP backing-unit and capacity-ownership award. An operator monitors vault health, submits the liquidation, and pays its gas and oracle costs; the protocol does not compensate the operator merely for submitting. The same account can fill both roles through the self-receiving route, or a receiver can grant a bounded approval for a separate operator. See <a href="liquidations.html">Capacity and delegated liquidation</a> for the complete role, approval, and execution lifecycle. A target becomes liquidatable when it no longer satisfies the protocol's required backing condition:</p>
-					<pre><code>value of REP backing ≥ security multiplier × open interest secured</code></pre>
+					<p>A receiver vault accepts moved security-bond debt and receives the REP backing-unit and capacity-ownership award. An operator monitors vault health, submits the liquidation, and pays its gas and oracle costs; the protocol does not compensate the operator merely for submitting. The same account can fill both roles through the self-receiving route, or a receiver can grant a bounded approval for a separate operator. See <a href="liquidations.html">Capacity and delegated liquidation</a> for the complete role, approval, price-distance, and execution lifecycle.</p>
+					<p>Base required REP is the vault's live proportional open interest multiplied by the settled REP-per-ETH price, rounded upward. A target fails ordinary health when either required backing branch fails:</p>
+					<pre><code>pool-held REP + dispute-staked REP ≥ pool security multiplier × base required REP
+pool-held REP ≥ max(migration security multiplier, liquidation reserve multiplier) × base required REP</code></pre>
+					<p>The implementation rounds each required-REP branch upward. The ordinary target-health check applies a <code>10,000 BPS</code> factor. Liquidation eligibility additionally requires the configured minimum price distance and the operation's other live guards. A delegated approval may demand a higher factor on both branches for the receiver's post-transfer health; it does not raise the target's liquidation threshold.</p>
 				</section>
 			</section>
 
@@ -112,14 +115,15 @@
 					<h2>3. Security Pools</h2>
 					<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 				</div>
-				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP backing: <code>value of REP backing ≥ security multiplier × secured open interest</code>.</p>
+				<p>The purpose of security pools is to ensure that all open interest is supported by sufficient REP. Aggregate capacity limits new minting, while each vault's live safety independently requires both the associated-REP and pool-held-REP backing branches described below.</p>
 
 				<p>This requirement protects outcome-share holders by making dishonest behavior economically unprofitable. If a vault owner attempts to manipulate the market's resolution, the REP they risk losing should be worth more than any potential gain. The protocol therefore rewards behavior that supports correct resolution and penalizes behavior that threatens it.</p>
 
-				<h3 id="dynamic-capacity">Target Health Factor and Dynamic Capacity</h3>
-				<p>Each REP deposit made for fee-earning capacity includes a target health factor of at least <code>10,000 BPS</code>. The deposit adds <code>⌊deposited REP × 10,000 / target health factor⌋</code> of REP-denominated capacity ownership. Solidity rounds this quotient downward, so an extremely high target factor can make a valid deposit add zero attoREP of ownership. Capacity ownership aggregates at pool level in constant time and determines the vault's fee share.</p>
+				<h3 id="dynamic-capacity">Deposit Target and Dynamic Capacity</h3>
+				<p>Each positive REP deposit made for fee-earning capacity includes a deposit target factor of at least <code>10,000 BPS</code>. The deposit adds <code>⌊deposited REP × 10,000 / deposit target factor⌋</code> of REP-denominated capacity ownership. Solidity rounds this quotient downward, so an extremely high target factor can make a valid deposit add zero attoREP of ownership. Deposits with different targets combine in one vault; the latest instruction is not a vault-wide target or health measurement. Capacity ownership aggregates at pool level in constant time and determines the vault's fee share.</p>
 				<p>The pool's one Statoblast security multiplier and the current REP/ETH oracle quote convert total capacity ownership into ETH minting capacity: <code>capacity ownership ÷ REP per ETH ÷ security multiplier</code>. A higher REP-per-ETH quote means each REP is worth less ETH and therefore lowers live ETH capacity; a lower quote raises it. Neither change rewrites vaults or erases existing open interest. Vault health and liquidation instead compare live obligations against the vault's actual REP and proportional capacity ownership at the current price.</p>
-				<p>Withdrawals burn capacity ownership in proportion to the REP removed. Vault owners maintain a chosen health target through deposits rather than continually editing an ETH-denominated allowance.</p>
+				<p>The associated-REP-per-capacity ratio counts pool-held REP plus REP attributed to the vault in the current escalation game. That dispute stake is at-risk security, not liquid collateral with a known payout. The pool-held-REP-per-capacity ratio counts only REP immediately held by the pool. Neither ratio is current vault health: current health also depends on proportional open interest, the REP/ETH price, the security multiplier, and both the associated-REP and pool-held-REP constraints.</p>
+				<p>Withdrawals burn capacity ownership in proportion to the REP removed. They update backing and capacity without selecting a new deposit target.</p>
 
 				<h3>Fee Extraction and Retention Rate</h3>
 				<p>Being vault holder is valuable as it gives a permission to earn fees from traders that are holding complete sets or share tokens. Simply by holding REP, you are not entitled any fees in the system.</p>
@@ -359,7 +363,7 @@
 					<h2>Glossary</h2>
 					<dl>
 						<dt id="term-capacity-ownership">Capacity ownership</dt>
-						<dd>A REP-denominated, price-independent share of pool minting capacity and fee eligibility created from deposited REP and the selected target health factor. The live oracle quote converts it into ETH minting capacity; it is not the vault's ETH debt.</dd>
+						<dd>A REP-denominated, price-independent share of pool minting capacity and fee eligibility. Each deposit creates incremental ownership from its own deposit target factor; a vault has no authoritative aggregate target. The live oracle quote converts ownership into ETH minting capacity; it is not the vault's ETH debt.</dd>
 						<dt id="term-settlement-collateral">Settlement collateral</dt>
 						<dd>ETH held by a security pool to redeem complete sets and settle the winning outcome.</dd>
 					</dl>

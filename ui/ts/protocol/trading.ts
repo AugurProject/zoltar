@@ -1,7 +1,7 @@
 import { type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from '../lib/assert.js'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from './core.js'
@@ -26,56 +26,56 @@ type SecurityPoolMintCapacity = {
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
 	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, questionData, questionId] = await readRequiredMulticall(client, [
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'shareTokenSupplyAttoShares',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getCurrentMintingCapacityAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'priceOracleManagerAndOperatorQueuer',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'questionData',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
 			address: securityPoolAddress,
 			args: [],
 		},
 	])
 	const [priceValidity, questionEnd, currentBlock] = await Promise.all([
-		readRequiredMulticall(client, [{ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]),
+		readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]),
 		readRequiredMulticall(client, [{ abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', address: questionData, args: [questionId] }]),
 		client.getBlock(),
 	])
@@ -109,20 +109,20 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	const [universeId, shareTokenAddress] = await readRequiredMulticall(client, [
 		{
 			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'universeId',
 			args: [],
 		},
 		{
 			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'shareToken',
 			args: [],
 		},
 	])
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,
-		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		abi: statoblast_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		args: [universeId, accountAddress],
 	})
@@ -158,7 +158,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemShares',
 		args: [],
 	}))
@@ -175,14 +175,14 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
 			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'shareToken',
 			args: [],
 		}),
 	])
 	const hash = await writeContractAndWait(client, () => ({
 		address: shareTokenAddress,
-		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		abi: statoblast_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],
 	}))
@@ -199,7 +199,7 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const callParams = {
 		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
 		args: [],
 		value: amount,
@@ -216,7 +216,7 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
 		args: [amount],
 	}))

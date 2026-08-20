@@ -17,5 +17,5 @@ export const TEST_ADDRESSES = [
 
 export const DAY = 86400n
 
-// High-gas peripheral setup paths can outgrow Anvil/viem estimates in tests.
+// High-gas statoblast setup paths can outgrow Anvil/viem estimates in tests.
 export const HIGH_GAS_SIMULATOR_WRITE_GAS = 25_000_000n

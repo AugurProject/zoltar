@@ -12,7 +12,7 @@ type SourceRange = {
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
 const projectRoot = path.join(scriptDirectory, '..')
 const contractsRoot = path.join(projectRoot, 'solidity', 'contracts')
-const excludedProjectPaths = new Set(['solidity/contracts/peripherals/Multicall3.sol', 'solidity/contracts/peripherals/WETH9.sol', 'solidity/contracts/peripherals/openOracle/OpenOracle.sol'])
+const excludedProjectPaths = new Set(['solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/WETH9.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'])
 
 function projectPath(filePath: string): string {
 	return path.relative(projectRoot, filePath).replaceAll('\\', '/')

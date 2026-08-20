@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { coordinatorAbi, escalationGameAbi, securityPoolAbi, securityPoolForkerAbi } from '../../src/contracts/abi.ts'
 import {
-	peripherals_EscalationGame_EscalationGame as escalationGameArtifact,
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
-	peripherals_SecurityPool_SecurityPool as securityPoolArtifact,
-	peripherals_SecurityPoolForker_SecurityPoolForker as securityPoolForkerArtifact,
+	statoblast_EscalationGame_EscalationGame as escalationGameArtifact,
+	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForker_SecurityPoolForker as securityPoolForkerArtifact,
 } from '../../../../solidity/ts/types/contractArtifact.ts'
 
 type AbiParameter = {

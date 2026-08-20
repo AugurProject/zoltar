@@ -1,15 +1,15 @@
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import { balanceOfShares, OperationType } from '../testSupport/simulator/utils/contracts/peripherals'
+import { balanceOfShares, OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
 import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
-import { peripherals_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
-import { usePeripheralsVaultAccountingFixture } from './peripherals/fixture'
+import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 describe('Audit regression: escalation start configuration liveness', () => {
-	const fixture = usePeripheralsVaultAccountingFixture()
+	const fixture = useStatoblastVaultAccountingFixture()
 	const { assert, deployOriginSecurityPool, getSecurityPoolsEscalationGame, getSecurityVault, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, backingUnitsToAttoRep, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
@@ -28,7 +28,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.strictEqual(statoblastSecurityMultiplierBps, 20_000n, 'the fixture must use the normal origin-pool security multiplier')
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
@@ -85,7 +85,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.notStrictEqual(escalationGame, zeroAddress, 'the pool must deploy a live escalation game')
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
@@ -95,7 +95,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: fixture.peripherals_EscalationGame_EscalationGame.abi,
+				abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'startBondAttoRep',
 				args: [],
@@ -105,7 +105,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: fixture.peripherals_EscalationGame_EscalationGame.abi,
+				abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'nonDecisionThresholdAttoRep',
 				args: [],
@@ -114,7 +114,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the game must preserve the live non-decision threshold',
 		)
 		const escalationEndTime = await client.readContract({
-			abi: fixture.peripherals_EscalationGame_EscalationGame.abi,
+			abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getEscalationGameEndDate',
 			args: [],

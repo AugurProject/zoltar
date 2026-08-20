@@ -40,7 +40,7 @@ import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/l
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../../contractArtifact.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../../contractArtifact.js'
 import type { InjectedEthereum } from '../../../injectedEthereum.js'
 import type { WriteContractClient } from '../../../protocol/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
@@ -49,10 +49,10 @@ import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../s
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -354,7 +354,7 @@ describe('Open Oracle helpers', () => {
 		] as const) {
 			expect(
 				await client.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: getOpenOracleAddress(),
 					functionName: 'tokenHolder',
 					args: [holder, token],

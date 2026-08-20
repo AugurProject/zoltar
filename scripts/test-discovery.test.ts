@@ -45,7 +45,7 @@ describe('canonical test discovery', () => {
 	})
 
 	test('explicit source files and directories suppress canonical full-suite injection', () => {
-		expect(isExplicitTestPath('solidity/ts/tests/peripherals')).toBe(true)
+		expect(isExplicitTestPath('solidity/ts/tests/statoblast')).toBe(true)
 		expect(isExplicitTestPath('./solidity/ts/fuzz/auctionTickMath.fuzz.ts')).toBe(true)
 		expect(isExplicitTestPath('--test-name-pattern')).toBe(false)
 		expect(isExplicitTestPath('not-a-repository-path')).toBe(false)

@@ -22,7 +22,7 @@ import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../s
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'

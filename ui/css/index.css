@@ -6874,6 +6874,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.45rem;
 }
 
+.vault-detail-meta .metric-label {
+	display: inline-block;
+	margin-right: 0.45rem;
+}
+
 .vault-detail-health {
 	grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.8fr);
 	align-items: start;

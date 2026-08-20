@@ -2,12 +2,12 @@ import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/shared/ethereum'
 import { getVaultCount, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { backingUnitsToAttoRep as forkerBackingUnitsToAttoRep, getOwnForkRepBuckets } from '../testSupport/simulator/utils/contracts/securityPoolForker'
-import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './peripherals/fixture'
+import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
 
 describe('Own-fork continuation residual settlement regression', () => {
-	const fixture = usePeripheralsEscalationMigrationFixture()
-	const assert: PeripheralsEscalationMigrationFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: PeripheralsEscalationMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
+	const fixture = useStatoblastEscalationMigrationFixture()
+	const assert: StatoblastEscalationMigrationFixture['assert'] = fixture.assert
+	const strictEqualTypeSafe: StatoblastEscalationMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 	const {
 		DAY,
 		QuestionOutcome,
@@ -29,17 +29,17 @@ describe('Own-fork continuation residual settlement regression', () => {
 		getTotalTheoreticalSupplyAttoRep,
 		getZoltarForkThreshold,
 		manipulatePriceOracle,
-		peripherals_EscalationGame_EscalationGame,
+		statoblast_EscalationGame_EscalationGame,
 		backingUnitsToAttoRep,
 		startTruthAuction,
 		genesisUniverse,
 		statoblastSecurityMultiplierBps,
 	} = fixture
 
-	let mockWindow: PeripheralsEscalationMigrationFixture['mockWindow']
-	let client: PeripheralsEscalationMigrationFixture['client']
-	let securityPoolAddresses: PeripheralsEscalationMigrationFixture['securityPoolAddresses']
-	let questionId: PeripheralsEscalationMigrationFixture['questionId']
+	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
+	let client: StatoblastEscalationMigrationFixture['client']
+	let securityPoolAddresses: StatoblastEscalationMigrationFixture['securityPoolAddresses']
+	let questionId: StatoblastEscalationMigrationFixture['questionId']
 
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
@@ -91,7 +91,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 		await startTruthAuction(client, yesPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesPool.securityPool), SystemState.Operational, 'zero vault-held REP should finalize the child without an auction')
 		const continuationEndTime = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: yesGame,
 			functionName: 'getEscalationGameEndDate',
 			args: [],
@@ -100,7 +100,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 
 		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupplyAttoRep(client, yesRepToken)
 		const sweepHash = await client.writeContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: yesGame,
 			functionName: 'sweepResidualRepToSecurityPool',
 			args: [],
@@ -111,7 +111,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 			.map(
 				log =>
 					decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					}).eventName,

@@ -217,7 +217,7 @@ describe('coverage summary markdown', () => {
 				imported: metric(0),
 				all: metric(99),
 				uncoveredFirstPartyLines: ['solidity/contracts/Protocol.sol:2'],
-				uncoveredImportedLines: ['solidity/contracts/peripherals/WETH9.sol:9'],
+				uncoveredImportedLines: ['solidity/contracts/statoblast/WETH9.sol:9'],
 			},
 		}
 		const markdown = renderMarkdown(report, 1, { failures: [], passed: true })
@@ -225,7 +225,7 @@ describe('coverage summary markdown', () => {
 		expect(markdown).toContain('## Uncovered first-party Solidity lines')
 		expect(markdown).toContain('- `solidity/contracts/Protocol.sol:2`')
 		expect(markdown).toContain('## Uncovered imported Solidity lines')
-		expect(markdown).toContain('- `solidity/contracts/peripherals/WETH9.sol:9`')
+		expect(markdown).toContain('- `solidity/contracts/statoblast/WETH9.sol:9`')
 	})
 })
 
@@ -328,8 +328,8 @@ end_of_record
 						coveredLines: 1,
 						lineHits: { '1': 1, '2': 0 },
 					},
-					'/repo/solidity/contracts/peripherals/WETH9.sol': {
-						file: '/repo/solidity/contracts/peripherals/WETH9.sol',
+					'/repo/solidity/contracts/statoblast/WETH9.sol': {
+						file: '/repo/solidity/contracts/statoblast/WETH9.sol',
 						totalLines: 1,
 						coveredLines: 0,
 						lineHits: { '1': 0 },

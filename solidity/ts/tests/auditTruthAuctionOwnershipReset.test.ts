@@ -2,12 +2,12 @@ import { beforeEach, describe, test } from 'bun:test'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { addRepToMigrationBalance, getZoltarForkThreshold, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './peripherals/fixture'
+import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './statoblast/fixture'
 
 describe('Recursive truth-auction ownership regression', () => {
-	const fixture = usePeripheralsTruthAuctionFixture()
-	const assert: PeripheralsTruthAuctionFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: PeripheralsTruthAuctionFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
+	const fixture = useStatoblastTruthAuctionFixture()
+	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
+	const strictEqualTypeSafe: StatoblastTruthAuctionFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 
 	const {
 		DAY,
@@ -56,11 +56,11 @@ describe('Recursive truth-auction ownership regression', () => {
 		statoblastSecurityMultiplierBps,
 	} = fixture
 
-	let client: PeripheralsTruthAuctionFixture['client']
-	let mockWindow: PeripheralsTruthAuctionFixture['mockWindow']
-	let questionData: PeripheralsTruthAuctionFixture['questionData']
-	let questionId: PeripheralsTruthAuctionFixture['questionId']
-	let securityPoolAddresses: PeripheralsTruthAuctionFixture['securityPoolAddresses']
+	let client: StatoblastTruthAuctionFixture['client']
+	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
+	let questionData: StatoblastTruthAuctionFixture['questionData']
+	let questionId: StatoblastTruthAuctionFixture['questionId']
+	let securityPoolAddresses: StatoblastTruthAuctionFixture['securityPoolAddresses']
 
 	beforeEach(() => {
 		client = fixture.client

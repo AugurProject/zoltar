@@ -6,7 +6,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
-import { test_peripherals_EscalationClaimSourcesHarness_EscalationClaimSourceNode as sourceNodeArtifact, test_peripherals_EscalationClaimSourcesHarness_EscalationClaimSourcesHarness as sourcesHarnessArtifact } from '../types/contractArtifact'
+import { test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourceNode as sourceNodeArtifact, test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourcesHarness as sourcesHarnessArtifact } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

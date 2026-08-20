@@ -126,11 +126,11 @@ const writeCoverageSummary = async (summary: SolidityCoverageSummary): Promise<v
 }
 
 const bytecodeCoverageWeights = new Map<string, number>([
-	['solidity/ts/tests/peripherals/forkMigration.test.ts', 30],
-	['solidity/ts/tests/peripherals/truthAuction.test.ts', 24],
+	['solidity/ts/tests/statoblast/forkMigration.test.ts', 30],
+	['solidity/ts/tests/statoblast/truthAuction.test.ts', 24],
 	['solidity/ts/tests/escalationGame.test.ts', 18],
-	['solidity/ts/tests/peripherals/escalationMigration.test.ts', 18],
-	['solidity/ts/tests/peripheralsInvariant.test.ts', 12],
+	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 18],
+	['solidity/ts/tests/statoblastInvariant.test.ts', 12],
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 10],
 	['solidity/ts/tests/openOracleDispute.test.ts', 5],
 ])

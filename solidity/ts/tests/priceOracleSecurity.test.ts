@@ -9,8 +9,8 @@ import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/c
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -40,17 +40,17 @@ import {
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
 	wrapWeth,
-} from '../testSupport/simulator/utils/contracts/peripherals'
+} from '../testSupport/simulator/utils/contracts/statoblast'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getSecurityVault, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
-	peripherals_openOracle_OpenOracle_OpenOracle,
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_tokens_ShareToken_ShareToken,
-	peripherals_WETH9_WETH9,
+	statoblast_openOracle_OpenOracle_OpenOracle,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_tokens_ShareToken_ShareToken,
+	statoblast_WETH9_WETH9,
 	ReputationToken_ReputationToken,
-	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
+	test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
 } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
@@ -66,7 +66,7 @@ const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -82,7 +82,7 @@ const findExecutedStagedOperationLogs = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -98,7 +98,7 @@ const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -114,7 +114,7 @@ const findPriceReportedLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -130,7 +130,7 @@ const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -145,8 +145,8 @@ type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, numb
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		bytecode: applyLibraries(peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		bytecode: applyLibraries(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
 		args,
 	})
 }
@@ -161,7 +161,7 @@ function getMappingStorageSlot(key: bigint, mappingSlot: bigint) {
 
 const getOpenOracleHeldBalance = async (client: WriteClient, holder: Address, token: Address) =>
 	await client.readContract({
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'tokenHolder',
 		address: getInfraContractAddresses().openOracle,
 		args: [holder, token],
@@ -255,7 +255,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await client.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'settle',
 			args: [pendingReportId, getOpenOracleGameTuple(overriddenPreimage.game), getOpenOracleHelperTuple(overriddenPreimage.helper)],
@@ -313,19 +313,19 @@ describe('Price Oracle Refund Security Tests', () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		return {
 			escalationGame: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPool,
 				functionName: 'escalationGame',
 				args: [],
 			}),
 			poolAccounting: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPool,
 				functionName: 'getPoolAccountingSnapshot',
 				args: [],
 			}),
 			totalRepBackingUnits: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPool,
 				functionName: 'totalRepBackingUnits',
 				args: [],
@@ -349,7 +349,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			let decoded: ReturnType<typeof decodeEventLog>
 			try {
 				decoded = decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -391,7 +391,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
 			getPendingReportId(client, priceOracle),
 			client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'pendingReportSponsor',
 				address: priceOracle,
 				args: [],
@@ -400,13 +400,13 @@ describe('Price Oracle Refund Security Tests', () => {
 			getPendingReportMaxSettlementBaseFee(client, priceOracle),
 			getLastPrice(client, priceOracle),
 			client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'lastSettlementTimestamp',
 				address: priceOracle,
 				args: [],
 			}),
 			client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'stagedOperationCounter',
 				address: priceOracle,
 				args: [],
@@ -458,7 +458,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(openOracleSecurityMultiplierBps, 100000n, 'the initial Open Oracle Security multiplier should be ten times gas cost')
 
 		const minimumToken1ReportAttoEth = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -480,7 +480,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const sizedForBaseFee = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -503,7 +503,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await createCompleteSet(client, securityPool, openInterest)
 
 		const minimumToken1ReportAttoEth = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -592,7 +592,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const openOracle = getInfraContractAddresses().openOracle
 		await wrapWeth(donor, donatedWeth)
 		const wethDonationHash = await donor.writeContract({
-			abi: peripherals_WETH9_WETH9.abi,
+			abi: statoblast_WETH9_WETH9.abi,
 			functionName: 'transfer',
 			address: WETH_ADDRESS,
 			args: [priceOracle, donatedWeth],
@@ -634,7 +634,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			[addressString(GENESIS_REPUTATION_TOKEN), openOracleDonatedRep],
 		] as const) {
 			const depositHash = await donor.writeContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'deposit',
 				address: openOracle,
 				args: [token, amount, priceOracle],
@@ -673,13 +673,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const requestMinimumWethReport = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
 		})
 		const requestHash = await client.writeContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, 0n],
@@ -703,7 +703,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'targetPriceErrorForDispute',
 				address: tunedCoordinator,
 				args: [],
@@ -712,7 +712,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'openOracleSecurityMultiplierBps',
 				address: tunedCoordinator,
 				args: [],
@@ -728,7 +728,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'minimumToken1ReportAttoEth',
 				address: tunedCoordinator,
 				args: [],
@@ -747,7 +747,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		maximumArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
 		const maximumCoordinator = await deployContract(encodeOracleCoordinatorDeployData(maximumArgs))
 		const maximumMinimumReport = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: maximumCoordinator,
 			args: [],
@@ -857,7 +857,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('coordinator setup and price seeding reject repeated or unauthorized callers without changing state', async () => {
-		const coordinatorAbi = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const configuredPool = await client.readContract({
 			abi: coordinatorAbi,
 			address: priceOracle,
@@ -899,7 +899,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('request and callback guards cover funding, empty recovery, duplicate reports, caller identity, and fixed-width bounds', async () => {
-		const coordinatorAbi = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 
 		await assert.rejects(
@@ -982,7 +982,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('staged operation public guards cover argument geometry, request funding, and execution prerequisites', async () => {
-		const coordinatorAbi = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const otherVault = addressString(TEST_ADDRESSES[1])
 		const stage = (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) =>
 			client.writeContract({
@@ -1048,7 +1048,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('rejecting sponsors roll back direct bounty refunds and staged-operation unused ETH refunds', async () => {
-		const coordinatorAbi = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const receiver = await deployContract(
 			encodeDeployData({
 				abi: rejectingEthReceiverArtifact.abi,
@@ -1071,7 +1071,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			receiver,
 			WETH_ADDRESS,
 			encodeFunctionData({
-				abi: peripherals_WETH9_WETH9.abi,
+				abi: statoblast_WETH9_WETH9.abi,
 				functionName: 'deposit',
 				args: [],
 			}),
@@ -1088,7 +1088,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			receiver,
 			WETH_ADDRESS,
 			encodeFunctionData({
-				abi: peripherals_WETH9_WETH9.abi,
+				abi: statoblast_WETH9_WETH9.abi,
 				functionName: 'approve',
 				args: [priceOracle, initialWethReport],
 			}),
@@ -1104,7 +1104,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 
 		const nextReportIdBefore = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: getInfraContractAddresses().openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -1127,7 +1127,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'failed direct refund must roll back the pending report')
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: getInfraContractAddresses().openOracle,
 				functionName: 'nextReportId',
 				args: [],
@@ -1179,7 +1179,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const coordinator = await deployContract(encodeOracleCoordinatorDeployData(args))
 		await assert.rejects(
 			client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				address: coordinator,
 				functionName: 'getSettlementCallbackGasLimit',
 				args: [],
@@ -1189,7 +1189,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('request pricing rejects a settler reward above uint96 without persisting request state', async () => {
-		const coordinatorAbi = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const maximumSettlerReward = (1n << 96n) - 1n
 		const overflowArgs = getOracleCoordinatorConstructorArgs()
 		overflowArgs[3] = maximumSettlerReward
@@ -1209,7 +1209,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const pendingReportBefore = await getPendingReportId(client, overflowCoordinator)
 		const nextReportIdBefore = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: getInfraContractAddresses().openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -1239,7 +1239,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getPendingReportId(client, overflowCoordinator), pendingReportBefore, 'overflowing settler reward must not create a pending request')
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: getInfraContractAddresses().openOracle,
 				functionName: 'nextReportId',
 				args: [],
@@ -1270,7 +1270,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
 			})
 			const requestHash = await client.writeContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPrice',
 				address: priceOracle,
 				args: [proposedRepPerEthPrice, 0n],
@@ -1287,7 +1287,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const acceptedReportId = await requestAtConfiguredBaseFee()
 		const acceptedReportMeta = await getOpenOracleReportMeta(client, acceptedReportId)
 		const initialHistoryRecord = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'disputeHistory',
 			address: getInfraContractAddresses().openOracle,
 			args: [acceptedReportId, 0n],
@@ -1351,7 +1351,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
 		})
 		const requestHash = await client.writeContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, 0n],
@@ -1371,7 +1371,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${finalReportBaseFeeAttoEthPerGas.toString(16)}`],
 		})
 		const disputeHash = await counterpartyClient.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
 			address: openOracle,
 			args: [reportId, disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(reportState.game), getOpenOracleHelperTuple(reportState.helper), [0n, 0n, 0n, 0n]],
@@ -1379,7 +1379,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
 		const finalHistoryRecord = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'disputeHistory',
 			address: openOracle,
 			args: [reportId, 1n],
@@ -1426,7 +1426,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
 		})
 		const requestHash = await client.writeContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, 0n],
@@ -1447,7 +1447,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				params: [`0x${disputeBaseFeeAttoEthPerGas.toString(16)}`],
 			})
 			const disputeHash = await counterpartyClient.writeContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'dispute',
 				address: openOracle,
 				args: [reportId, newAmount1, newAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(reportState.game), getOpenOracleHelperTuple(reportState.helper), [0n, 0n, 0n, 0n]],
@@ -1455,7 +1455,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			})
 			await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
 			const historyRecord = await client.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'disputeHistory',
 				address: openOracle,
 				args: [reportId, disputeIndex],
@@ -1504,7 +1504,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await mockWindow.advanceTime(reportMeta.settlementTime + 1n)
 		const settlementHash = await client.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: getInfraContractAddresses().openOracle,
 			functionName: 'settle',
 			args: [reportId, getOpenOracleGameTuple(saturatedPreimage.game), getOpenOracleHelperTuple(saturatedPreimage.helper)],
@@ -1536,7 +1536,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingMaxSettlementBaseFee, 0n, 'zero-basefee request should only settle under zero basefee')
 		const lastPriceBeforeSettlement = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestampBeforeSettlement = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],
@@ -1588,7 +1588,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const overpayment = costAttoEth * 2n
 		const minimumWethReport = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -1639,7 +1639,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			[0n, 1n, 2n].map(
 				async outcome =>
 					await client.readContract({
-						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareToken,
 						functionName: 'getTokenId',
 						args: [genesisUniverse, outcome],
@@ -1650,7 +1650,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			collateral: await getSettlementCollateralAttoEth(client, securityPool),
 			poolEth: await getETHBalance(client, securityPool),
 			shareBalances: await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareToken,
 				functionName: 'balanceOfBatch',
 				args: [tokenIds.map(() => client.account.address), tokenIds],
@@ -1660,7 +1660,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 		const stateBefore = await readGuardState()
 		const mintingCapacityAttoEth = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,
 			functionName: 'getCurrentMintingCapacityAttoEth',
 			args: [],
@@ -1668,7 +1668,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPool,
 				functionName: 'createCompleteSet',
 				args: [],
@@ -1680,7 +1680,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPool,
 				functionName: 'withdrawFromEscalationGame',
 				args: [1, []],
@@ -1706,7 +1706,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit minimum REP failure rolls back escrow accounting', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const minimumVaultRepDepositAttoRep = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,
 			functionName: 'minimumVaultRepDepositAttoRep',
 			args: [],
@@ -1715,13 +1715,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit)
 		const escalationGame = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,
 			functionName: 'escalationGame',
 			args: [],
 		})
 		const [requiredDepositAttoRep] = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'previewDepositOnOutcome',
 			args: [QuestionOutcome.No, repDeposit],
@@ -1751,7 +1751,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			receiver,
 			securityPool,
 			encodeFunctionData({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'createCompleteSet',
 				args: [],
 			}),
@@ -1761,7 +1761,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			[0n, 1n, 2n].map(
 				async outcome =>
 					await client.readContract({
-						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareToken,
 						functionName: 'getTokenId',
 						args: [genesisUniverse, outcome],
@@ -1773,7 +1773,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			feeLiabilities: await getTotalClaimableVaultFeesAttoEth(client, securityPool),
 			poolEth: await getETHBalance(client, securityPool),
 			receiverShares: await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareToken,
 				functionName: 'balanceOfBatch',
 				args: [tokenIds.map(() => receiver), tokenIds],
@@ -1789,7 +1789,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				receiver,
 				securityPool,
 				encodeFunctionData({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
+					abi: statoblast_SecurityPool_SecurityPool.abi,
 					functionName: 'redeemCompleteSet',
 					args: [collateral * 10n ** 18n],
 				}),
@@ -1818,7 +1818,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
 		const zeroCostJoinRejected = await counterpartyClient
 			.simulateContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.WithdrawRep, counterpartyClient.account.address, counterpartyCapacityOwnershipAttoRep, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
@@ -1870,7 +1870,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const counterpartyRepBalanceBeforeDispute = await getERC20Balance(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), counterpartyClient.account.address)
 		const counterpartyWethBalanceAttoEthBeforeDispute = await getERC20Balance(counterpartyClient, WETH_ADDRESS, counterpartyClient.account.address)
 		const disputeHash = await counterpartyClient.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
 			address: openOracle,
 			args: [reportId, disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(preimageBeforeDispute.game), getOpenOracleHelperTuple(preimageBeforeDispute.helper), [0n, 0n, 0n, 0n]],
@@ -1900,7 +1900,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		await assert.rejects(
 			counterpartyClient.simulateContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
@@ -1934,7 +1934,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const overflowRejected = await counterpartyClient
 			.simulateContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
 				args: [OperationType.WithdrawRep, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
@@ -2009,7 +2009,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
 		const lastPriceAfterRecovery = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestampAfterRecovery = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],

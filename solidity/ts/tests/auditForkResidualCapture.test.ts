@@ -1,13 +1,13 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/shared/ethereum'
 import { createCarryProof, SparseNullifierTree } from './carryProofHelpers'
-import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './peripherals/fixture'
+import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
 import { getTotalRepBackingUnits, getTotalPoolHeldAttoRep, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 describe('Fork-continuation residual settlement regression', () => {
-	const fixture = usePeripheralsEscalationMigrationFixture()
+	const fixture = useStatoblastEscalationMigrationFixture()
 	const {
 		assert,
 		strictEqualTypeSafe,
@@ -41,17 +41,17 @@ describe('Fork-continuation residual settlement regression', () => {
 		getTotalTheoreticalSupplyAttoRep,
 		manipulatePriceOracle,
 		backingUnitsToAttoRep,
-		peripherals_EscalationGame_EscalationGame,
+		statoblast_EscalationGame_EscalationGame,
 		genesisUniverse,
 		statoblastSecurityMultiplierBps,
 		outcomes,
 	} = fixture
 
-	let mockWindow: PeripheralsEscalationMigrationFixture['mockWindow']
-	let client: PeripheralsEscalationMigrationFixture['client']
-	let securityPoolAddresses: PeripheralsEscalationMigrationFixture['securityPoolAddresses']
-	let questionData: PeripheralsEscalationMigrationFixture['questionData']
-	let questionId: PeripheralsEscalationMigrationFixture['questionId']
+	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
+	let client: StatoblastEscalationMigrationFixture['client']
+	let securityPoolAddresses: StatoblastEscalationMigrationFixture['securityPoolAddresses']
+	let questionData: StatoblastEscalationMigrationFixture['questionData']
+	let questionId: StatoblastEscalationMigrationFixture['questionId']
 
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
@@ -103,7 +103,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		const childRepToken = getRepTokenAddress(childUniverse)
 		const childGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
 		const seedRep = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: childPool.securityPool,
 			functionName: 'minimumVaultRepDepositAttoRep',
 			args: [],
@@ -124,7 +124,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		strictEqualTypeSafe(await backingUnitsToAttoRep(client, childPool.securityPool, attackerVault.repBackingUnits), seedRep, 'the late depositor must become the sole child-pool owner')
 
 		const continuationEnd = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: childGame,
 			functionName: 'getEscalationGameEndDate',
 			args: [],
@@ -141,7 +141,7 @@ describe('Fork-continuation residual settlement regression', () => {
 			sourceNodeId: 3n,
 		})
 		const claimHash = await client.writeContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: childPool.securityPool,
 			functionName: 'withdrawForkedEscalationDeposits',
 			args: [QuestionOutcome.Yes, [winningProof]],
@@ -154,7 +154,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), expectedResidual, 'the lower losing side must remain as sweepable continuation residual')
 		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
 		const sweepHash = await client.writeContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: childGame,
 			functionName: 'sweepResidualRepToSecurityPool',
 			args: [],
@@ -165,7 +165,7 @@ describe('Fork-continuation residual settlement regression', () => {
 			.map(
 				log =>
 					decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					}).eventName,

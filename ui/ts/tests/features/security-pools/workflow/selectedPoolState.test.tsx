@@ -293,17 +293,15 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
-		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: /Vault Summary/ })
+		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
 		expect(vaultSummaryHeading).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
 		expect(documentQueries.getByText('Vault owner address')).not.toBeNull()
-		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim fees' }).length).toBeGreaterThan(0)
-		const vaultSummarySection = vaultSummaryHeading.closest('section')
-		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a vault summary section')
+		const vaultSummarySection = vaultSummaryHeading.closest('.entity-card')
+		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		expect(within(vaultSummarySection).queryByText('Approved REP')).toBeNull()
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
@@ -362,11 +360,18 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					disputeStakedAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
 				}),
+				securityVaultForm: {
+					depositAmount: '1',
+					repWithdrawAmount: '1',
+					securityPoolAddress: zeroAddress,
+					selectedVaultOwner: zeroAddress,
+					targetHealthFactor: '1',
+				},
 			}),
 		})
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Selected Vault' })).not.toBeNull()
 		expect(documentQueries.getByText('Bad Debt')).not.toBeNull()
 		expect(documentQueries.queryByText('This vault does not exist.')).toBeNull()
 	})
@@ -864,7 +869,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Selected Vault' })).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Review liquidation')
 	})
 

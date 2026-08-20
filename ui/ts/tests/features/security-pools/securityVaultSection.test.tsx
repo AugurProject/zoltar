@@ -25,10 +25,13 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
+		associatedRepPerCapacityBps: 75_000n,
 		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
+		openInterestAttoEth: 1n * 10n ** 18n,
+		poolHeldRepPerCapacityBps: 60_000n,
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 12n * 10n ** 18n,
 		repToken: zeroAddress,
@@ -131,7 +134,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('renders the shared selected-vault metric summary', async () => {
-		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps()} />)
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ repPerEthPrice: 3n * 10n ** 18n })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -142,6 +145,52 @@ describe('SecurityVaultSection', () => {
 		expect(selectedVaultQueries.getByText('Vault REP backing')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
 		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Associated REP per capacity')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('7.5×')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('Pool-held REP per capacity')).not.toBeNull()
+		expect(selectedVaultQueries.getByText('6×')).not.toBeNull()
+	})
+
+	test('distinguishes authoritative current vault health from REP-per-capacity ratios', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				currentVaultIsHealthy
+				securityVaultDetails={createSecurityVaultDetails()}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Current vault health')).not.toBeNull()
+		expect(documentQueries.getByText('Healthy')).not.toBeNull()
+		expect(documentQueries.getByText('Associated REP per capacity')).not.toBeNull()
+		expect(documentQueries.getByText('Pool-held REP per capacity')).not.toBeNull()
+	})
+
+	test('labels failed health as unhealthy without implying complete liquidation eligibility', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				currentVaultIsHealthy={false}
+				securityVaultDetails={createSecurityVaultDetails()}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Unhealthy')).not.toBeNull()
+		expect(documentQueries.queryByText('Liquidatable')).toBeNull()
 	})
 
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
@@ -584,7 +633,7 @@ describe('SecurityVaultSection', () => {
 		).toBe(true)
 	})
 
-	test('associates invalid target health factor guidance in embedded and modal deposit layouts', async () => {
+	test('associates invalid deposit target factor guidance in embedded and modal deposit layouts', async () => {
 		for (const modalFirst of [false, true]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityVaultSection
@@ -603,9 +652,9 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = scope.getByText('Target health factor').parentElement?.querySelector('input')
+			const factorInput = scope.getByText('Deposit target factor').parentElement?.querySelector('input')
 			expect(factorInput).not.toBeNull()
-			const factorError = scope.getByText('Target health factor must be a number with at most four decimal places')
+			const factorError = scope.getByText('Deposit target factor must be a number with at most four decimal places')
 			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
 			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
 			renderedComponent.cleanup()

@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_SecurityPoolForker_SecurityPoolForker,
-	peripherals_tokens_ShareToken_ShareToken,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
 import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
-import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from '../peripherals/fixture'
+import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from '../statoblast/fixture'
 import { getCanonicalEventIdentity, replayZoltarEvents, type ReplayLog } from './eventReplayModel'
 
 const poolAccountingCheckpointEvent = {
@@ -1300,11 +1300,11 @@ describe('event-only replay', () => {
 		if (replayed.coordinatorOperations.get(coordinator)?.get(3n)?.status !== 'Succeeded') throw new Error('coordinator terminal state mismatch')
 	})
 
-	const fixture = usePeripheralsForkMigrationFixture()
-	const strictEqualTypeSafe: PeripheralsForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-	let client: PeripheralsForkMigrationFixture['client']
-	let mockWindow: PeripheralsForkMigrationFixture['mockWindow']
-	let securityPoolAddresses: PeripheralsForkMigrationFixture['securityPoolAddresses']
+	const fixture = useStatoblastForkMigrationFixture()
+	const strictEqualTypeSafe: StatoblastForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
+	let client: StatoblastForkMigrationFixture['client']
+	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
+	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
 
 	beforeEach(() => {
 		client = fixture.client
@@ -1363,7 +1363,7 @@ describe('event-only replay', () => {
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
 		const deploymentHash = await client.writeContract({
 			address: factory,
-			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
 			args: [fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps, 10n * 10n ** 9n],
 		})
@@ -1373,10 +1373,10 @@ describe('event-only replay', () => {
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
-				getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.shareToken, peripherals_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.priceOracleManagerAndOperatorQueuer, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
+				getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.priceOracleManagerAndOperatorQueuer, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
 			])
 		)
 			.flat()
@@ -1396,7 +1396,7 @@ describe('event-only replay', () => {
 		if (replayed.poolDeployments.get(addresses.securityPool)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
 		const storedOriginPriorityFee = await client.readContract({
 			address: addresses.priceOracleManagerAndOperatorQueuer,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
 		})
@@ -1413,7 +1413,7 @@ describe('event-only replay', () => {
 		const validForSeconds = 300n
 		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-		const replayLogs = (await getContractReplayLogs(coordinator, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
+		const replayLogs = (await getContractReplayLogs(coordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
 		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
 		if (queuedLog === undefined) throw new Error('queued operation event missing')
 		const operationId = queuedLog.args['operationId']
@@ -1423,7 +1423,7 @@ describe('event-only replay', () => {
 		if (operation === undefined) throw new Error('queued operation replay missing')
 		const storedOperation = await client.readContract({
 			address: coordinator,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'stagedOperations',
 			args: [operationId],
 		})
@@ -1440,7 +1440,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[12], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getPendingSettlementOperationIds',
 			args: [],
 		})
@@ -1454,13 +1454,13 @@ describe('event-only replay', () => {
 		const depositHash = await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
-		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
 			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase()
 		})
 		const receiptLogs = (
-			await Promise.all([getContractReplayLogs(securityPoolAddresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(securityPoolAddresses.escalationGame, peripherals_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
+			await Promise.all([getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
 		)
 			.flat()
 			.filter(log => log.transactionHash === depositHash)
@@ -1491,18 +1491,18 @@ describe('event-only replay', () => {
 		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
 		const forker = fixture.getInfraContractAddresses().securityPoolForker
-		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
 		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
 			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
 		})
 		const [sourcePoolLogs, sourceGameLogs, forkerLogs] = await Promise.all([
-			getContractReplayLogs(securityPoolAddresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(securityPoolAddresses.escalationGame, peripherals_EscalationGame_EscalationGame.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(forker, peripherals_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, receipt.blockNumber),
 		])
-		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, peripherals_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, peripherals_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
+		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
 			.flat()
 			.filter(log => log.transactionHash === childDeploymentHash)
 		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
@@ -1518,25 +1518,25 @@ describe('event-only replay', () => {
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
 		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
+			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.priceOracleManagerAndOperatorQueuer,
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', args: [] }),
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
-			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
-			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
+			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
+			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', args: [] }),
+			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
+			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
+			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
 		])
 		const storedOutcomeStates = await Promise.all(
 			([0, 1, 2] as const).map(
 				async outcome =>
 					await client.readContract({
 						address: child.escalationGame,
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						functionName: 'getOutcomeState',
 						args: [outcome],
 					}),
@@ -1644,7 +1644,7 @@ describe('event-only replay', () => {
 		for (const vault of checkpointVaults) await fixture.redeemFees(client, scenario.yesSecurityPool.securityPool, vault)
 
 		const toBlock = await client.getBlockNumber()
-		const replayLogs = await getContractReplayLogs(scenario.yesSecurityPool.securityPool, peripherals_SecurityPool_SecurityPool.abi, fromBlock, toBlock)
+		const replayLogs = await getContractReplayLogs(scenario.yesSecurityPool.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, toBlock)
 		const replayedState = replayZoltarEvents(replayLogs)
 		const replayedPool = replayedState.pools.get(scenario.yesSecurityPool.securityPool)
 		if (replayedPool === undefined) throw new Error('seeded pool accounting replay state missing')
@@ -1667,7 +1667,7 @@ describe('event-only replay', () => {
 			const storedVault = await fixture.getSecurityVault(client, scenario.yesSecurityPool.securityPool, vault)
 			const storedVaultFeeRemainder = await client.readContract({
 				address: scenario.yesSecurityPool.securityPool,
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'getVaultFeeRemainder',
 				args: [vault],
 			})
@@ -1679,11 +1679,11 @@ describe('event-only replay', () => {
 		}
 		const replayedPoolState = replayedState.poolStates.get(scenario.yesSecurityPool.securityPool)
 		if (replayedPoolState === undefined) throw new Error('seeded child pool state replay missing')
-		const storedShareSupply = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'shareTokenSupplyAttoShares', args: [] })
-		const storedBackingUnitsDenominator = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] })
-		const storedSystemState = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] })
-		const storedAwaitingContinuation = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'awaitingForkContinuation', args: [] })
-		const storedEscalationGame = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })
+		const storedShareSupply = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'shareTokenSupplyAttoShares', args: [] })
+		const storedBackingUnitsDenominator = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] })
+		const storedSystemState = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] })
+		const storedAwaitingContinuation = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'awaitingForkContinuation', args: [] })
+		const storedEscalationGame = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })
 		strictEqualTypeSafe(replayedPoolState.shareTokenSupplyAttoShares, storedShareSupply, 'seeded child share supply replay mismatch')
 		strictEqualTypeSafe(replayedPoolState.totalRepBackingUnits, storedBackingUnitsDenominator, 'seeded child backingUnits denominator replay mismatch')
 		strictEqualTypeSafe(replayedPoolState.systemState, storedSystemState, 'seeded child system state replay mismatch')
@@ -1717,7 +1717,7 @@ describe('event-only replay', () => {
 		const firstCheckpointReceipt = await client.getTransactionReceipt({ hash: firstCheckpointHash })
 		const remainderAfterFirstCheckpoint = await client.readContract({
 			address: pool,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getVaultFeeRemainder',
 			args: [vault],
 		})
@@ -1736,13 +1736,13 @@ describe('event-only replay', () => {
 		})
 		const secondCheckpointHash = await fixture.updateVaultFees(client, pool, vault)
 		const secondCheckpointReceipt = await client.getTransactionReceipt({ hash: secondCheckpointHash })
-		const replayLogs = await getContractReplayLogs(pool, peripherals_SecurityPool_SecurityPool.abi, firstCheckpointReceipt.blockNumber, secondCheckpointReceipt.blockNumber)
+		const replayLogs = await getContractReplayLogs(pool, statoblast_SecurityPool_SecurityPool.abi, firstCheckpointReceipt.blockNumber, secondCheckpointReceipt.blockNumber)
 		const replayedVault = replayZoltarEvents(replayLogs).vaults.get(pool)?.get(vault)
 		if (replayedVault === undefined) throw new Error('fractional vault checkpoint replay state missing')
 		const storedVaultAfter = await fixture.getSecurityVault(client, pool, vault)
 		const storedRemainderAfter = await client.readContract({
 			address: pool,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getVaultFeeRemainder',
 			args: [vault],
 		})

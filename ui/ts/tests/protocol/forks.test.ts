@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { depositRepToVaultToSecurityPool, finalizeSecurityPoolTruthAuction, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
 import { getForkOutcomeKey } from '../../protocol/helpers.js'
-import { peripherals_tokens_ShareToken_ShareToken } from '../../contractArtifact.js'
+import { statoblast_tokens_ShareToken_ShareToken } from '../../contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
@@ -50,7 +50,7 @@ describe('forks protocol client', () => {
 		expect(capturedTo).toBe(shareTokenAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			abi: statoblast_tokens_ShareToken_ShareToken.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('migrate')

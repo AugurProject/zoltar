@@ -1,11 +1,11 @@
 import { bigintToSafeNumber, zeroAddress } from '@zoltar/shared/ethereum'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployPeripherals'
-import { getPendingReportId, getRequestPriceCostAttoEth, migrateShares, openOracleSettle, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice, wrapWeth } from './testSupport/simulator/utils/contracts/peripherals'
-import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
+import { getPendingReportId, getRequestPriceCostAttoEth, migrateShares, openOracleSettle, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice, wrapWeth } from './testSupport/simulator/utils/contracts/statoblast'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRepFromVault, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
 import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
@@ -237,7 +237,7 @@ const prepareDirectOpenOracleInitialReport = async () => {
 	const openOracleAddress = getInfraContractAddresses().openOracle
 	const reportId: bigint = await alice.readContract({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'nextReportId',
 		args: [],
 	})
@@ -253,7 +253,7 @@ const prepareDirectOpenOracleInitialReport = async () => {
 		writeContractAndWait(alice, () =>
 			alice.writeContract({
 				address: openOracleAddress,
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'report',
 				args: [
 					{
@@ -328,8 +328,8 @@ const scenarios: Scenario[] = [
 			}),
 	},
 	{
-		section: '2. Peripheral Deployment',
-		label: 'deploy peripheral contracts',
+		section: '2. Statoblast Deployment',
+		label: 'deploy statoblast contracts',
 		init: { deployZoltar: true, deployInfra: false },
 		run: async () =>
 			await measureActionGas(alice, async () => {
