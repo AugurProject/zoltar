@@ -12,6 +12,8 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 	expect(() => schemaInitializationAction(undefined, ['legacy_sequence'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 	expect(() => schemaInitializationAction(undefined, ['type:legacy_enum'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 	expect(() => schemaInitializationAction(undefined, ['routine:legacy_function'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+	expect(() => schemaInitializationAction(undefined, ['collation:legacy_collation'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+	expect(() => schemaInitializationAction(undefined, ['operator:legacy_operator'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 	expect(() => schemaInitializationAction('0', ['augurscan_schema'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 })
 

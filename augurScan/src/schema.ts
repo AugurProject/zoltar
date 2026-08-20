@@ -66,23 +66,13 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			markerVersion = markers[0].schema_version
 		}
 		const objects = await connection`
-			SELECT object_name FROM (
-				SELECT 'relation:' || class.relname AS object_name
-				FROM pg_catalog.pg_class class
-				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
-				WHERE namespace.nspname = 'public' AND class.relkind IN ('r', 'p', 'v', 'm', 'S', 'f', 'c')
-				UNION ALL
-				SELECT 'type:' || type_entry.typname AS object_name
-				FROM pg_catalog.pg_type type_entry
-				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = type_entry.typnamespace
-				WHERE namespace.nspname = 'public'
-				UNION ALL
-				SELECT 'routine:' || procedure_entry.proname AS object_name
-				FROM pg_catalog.pg_proc procedure_entry
-				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure_entry.pronamespace
-				WHERE namespace.nspname = 'public'
-			) public_objects
-			ORDER BY object_name
+			SELECT dependency.classid::regclass::text || ':' || dependency.objid::text AS object_name
+			FROM pg_catalog.pg_depend dependency
+			JOIN pg_catalog.pg_namespace namespace ON namespace.oid = dependency.refobjid
+			WHERE dependency.refclassid = 'pg_catalog.pg_namespace'::regclass
+				AND dependency.deptype = 'n'
+				AND namespace.nspname = 'public'
+			ORDER BY dependency.classid, dependency.objid
 		`
 		const publicObjects = objects.flatMap((row: { object_name?: unknown }) => (typeof row.object_name === 'string' ? [row.object_name] : []))
 		if (schemaInitializationAction(markerVersion, publicObjects) === 'current') return
