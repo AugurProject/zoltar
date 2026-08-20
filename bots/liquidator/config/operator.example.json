@@ -43,6 +43,8 @@
 	},
 	"runtime": {
 		"execute": false,
+		"historicalLogRecovery": false,
+		"logLookbackBlocks": 256,
 		"once": false,
 		"pollMilliseconds": 12000,
 		"ui": true,

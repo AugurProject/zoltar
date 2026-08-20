@@ -14,7 +14,7 @@ import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, execu
 import { scanPools } from '#monitoring/pool-monitor'
 import { clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
-import { PRIVATE_INTENT_FINALITY_BLOCKS, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
@@ -351,7 +351,12 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				setStrategy: value =>
 					configurationMutationGate.run(async () => {
 						const strategy = parseStrategy(value)
-						await persistSettings(current => ({ ...current, strategy }))
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Strategy settings must be an object')
+						const logLookbackBlocks = Number(Reflect.get(value, 'logLookbackBlocks'))
+						const historicalLogRecovery = Reflect.get(value, 'historicalLogRecovery')
+						if (!Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks < 1 || logLookbackBlocks > 256) throw new Error('Latest log blocks must be an integer from 1 through 256')
+						if (typeof historicalLogRecovery !== 'boolean') throw new Error('Historical log recovery must be enabled or disabled explicitly')
+						await persistSettings(current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy }))
 						recordActivity(state, {
 							kind: 'configuration',
 							message: 'Liquidation strategy saved',
@@ -532,8 +537,13 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
 				if (!state.paused && settings.runtime.execute) {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
-					await reconcilePendingStagedOperations(settings, wallet, state, readPool)
-					if (await recoverPendingTransactions(settings, wallet, state, readPool)) {
+					if (
+						await recoveryWorkBlocksExecution(
+							state,
+							() => recoverPendingTransactions(settings, wallet, state, readPool),
+							() => reconcilePendingStagedOperations(settings, wallet, state, readPool),
+						)
+					) {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}

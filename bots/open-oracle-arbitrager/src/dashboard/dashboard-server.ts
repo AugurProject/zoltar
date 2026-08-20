@@ -121,6 +121,13 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const documentationDirectory = join(projectDirectory, 'docs')
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
+	const dashboardPages = new Set(['overview', 'operations', 'games', 'markets', 'settings'])
+	const dashboardPage = async (pathname: string) => {
+		const page = pathname === '/' ? 'overview' : pathname.slice(1)
+		if (!dashboardPages.has(page)) return undefined
+		const source = await Bun.file(join(directory, 'index.html')).text()
+		return source.replace('<body>', `<body data-page="${page}">`)
+	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
 	validateDashboardAuthentication(hostname, controller.password, controller.loopbackPublished)
@@ -135,7 +142,10 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
 			const url = new URL(request.url)
-			if (request.method === 'GET' && url.pathname === '/') return new Response(Bun.file(join(directory, 'index.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			if (request.method === 'GET') {
+				const page = await dashboardPage(url.pathname)
+				if (page !== undefined) return new Response(page, { headers: securityHeaders('text/html; charset=utf-8') })
+			}
 			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
 				return new Response(Bun.file(join(documentationDirectory, 'operator-guide.html')), { headers: securityHeaders('text/html; charset=utf-8') })
 			}

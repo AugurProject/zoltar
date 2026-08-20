@@ -27,10 +27,10 @@ export async function updateOperatorConnectivity(parameters: {
 	const { value } = parameters
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 3 || !('connectivity' in value) || !('network' in value) || !('rpcQuorum' in value) || typeof value.network !== 'string') throw new Error('Network, RPC, and quorum settings are required')
 	if (value.rpcQuorum !== 1 && value.rpcQuorum !== 2) throw new Error('RPC quorum must be 1 or 2')
-	const rpcQuorum = value.rpcQuorum
+	const rpcQuorum: RpcQuorumRequirement = value.rpcQuorum === 2 ? 2 : 1
 	const networkName = parseNetworkName(value.network)
-	const restartRequired = parameters.activeNetwork === undefined || networkName !== parameters.activeNetwork
-	if (parameters.activeNetwork !== undefined && restartRequired) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+	const initializesNetwork = parameters.activeNetwork === undefined
+	if (parameters.activeNetwork !== undefined && networkName !== parameters.activeNetwork) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
 	const selectedNetwork = networkConfiguration(networkName, {
 		factory: parameters.deployment.uniswapFactory,
 		quoter: parameters.deployment.uniswapQuoter,
@@ -40,8 +40,8 @@ export async function updateOperatorConnectivity(parameters: {
 	const connectivity = validateConnectivitySettingsForQuorum(value.connectivity, parameters.deployment.quorumRpcUrls)
 	if (parameters.execute && parameters.deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	const runCheck = () => (parameters.check ?? checkConnectivity)(connectivity, selectedNetwork.chain.id)
-	const rpcQuorumRestartRequired = rpcQuorum !== parameters.activeRpcQuorum
-	if (restartRequired || rpcQuorumRestartRequired) await runCheck()
+	const rpcQuorumChanged = rpcQuorum !== parameters.activeRpcQuorum
+	if (initializesNetwork || rpcQuorumChanged) await runCheck()
 	else await updateConnectivityEndpointChecks(parameters.endpointState, runCheck)
 	await checkIndependentRpcChains(parameters.deployment.quorumRpcUrls, selectedNetwork.chain.id, parameters.readChainId ?? readRpcChainId)
 	await checkSubmissionEndpoints(parameters.submission, selectedNetwork.chain.id)
@@ -49,5 +49,5 @@ export async function updateOperatorConnectivity(parameters: {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
 		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
 	})
-	return { connectivity, network: networkName, restartRequired, rpcQuorum, rpcQuorumRestartRequired }
+	return { connectivity, network: networkName, rpcQuorum, rpcQuorumChanged }
 }

@@ -2,6 +2,12 @@ export function shouldStopAfterSuccessfulCycle(once: boolean) {
 	return once
 }
 
+export async function recoveryWorkBlocksExecution(state: { pendingStagedOperations: readonly unknown[]; pendingTransactions: readonly unknown[] }, recoverTransactions: () => Promise<boolean>, reconcileStagedOperations: () => Promise<void>) {
+	if (await recoverTransactions()) return true
+	await reconcileStagedOperations()
+	return state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0
+}
+
 export function requireRecoveredTransactionSuccess(status: 'reverted' | 'success', hash: string) {
 	if (status === 'reverted') throw new Error(`Recovered transaction ${hash} reverted`)
 }

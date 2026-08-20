@@ -147,7 +147,7 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, selectedPools, strategy }
+	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
 }
 
 const server = startDashboardServer(4183, {
@@ -159,7 +159,10 @@ const server = startDashboardServer(4183, {
 	},
 	getState: () => ({
 		activities,
-		alerts: [{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }],
+		alerts: [
+			{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' },
+			{ message: '1 staged operation requires outcome recovery before execution can continue', severity: 'error' },
+		],
 		centralizedMarket: {
 			assetId: '0x0000000000000000000000000000000000000abc',
 			askDepthEth: '6.3',
@@ -213,6 +216,17 @@ const server = startDashboardServer(4183, {
 				nonce: '19',
 				requiresMarketEvidence: true,
 				submissionBlock: '8842011',
+			},
+		],
+		pendingStagedOperations: [
+			{
+				coordinator: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+				historicalRecoveryComplete: false,
+				latestRecoveryBlock: '8842011',
+				nextHistoricalBlock: '8841755',
+				operationId: '27',
+				queuedBlock: '8841500',
+				target: '0x4444444444444444444444444444444444444444',
 			},
 		],
 		pools: [

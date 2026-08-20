@@ -6,6 +6,40 @@ import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
 export function applyQueuedExecutionSettings(config: Configuration, state: OperatorState, pending: PendingOperatorUpdates) {
+	if (pending.centralizedMarkets !== undefined) {
+		config.centralizedMarkets = pending.centralizedMarkets
+		pending.centralizedMarkets = undefined
+	}
+	if (pending.lookbackBlocks !== undefined) {
+		config.lookbackBlocks = pending.lookbackBlocks
+		pending.lookbackBlocks = undefined
+	}
+	if (pending.maxHedgeSlippageBps !== undefined) {
+		config.maxHedgeSlippageBps = pending.maxHedgeSlippageBps
+		pending.maxHedgeSlippageBps = undefined
+	}
+	if (pending.operatorSettings !== undefined) {
+		config.operatorSettings = pending.operatorSettings
+		pending.operatorSettings = undefined
+	}
+	if (pending.paused !== undefined) {
+		config.paused = pending.paused
+		state.paused = pending.paused
+		pending.paused = undefined
+	}
+	if (pending.persistedPrivateKey !== undefined || pending.signerUpdate) {
+		config.persistedPrivateKey = pending.persistedPrivateKey
+		pending.persistedPrivateKey = undefined
+	}
+	if (pending.riskLimits !== undefined) {
+		config.riskLimits = pending.riskLimits
+		pending.riskLimits = undefined
+	}
+	if (pending.rpcQuorum !== undefined) {
+		config.rpcQuorum = pending.rpcQuorum
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = pending.rpcQuorum.toString()
+		pending.rpcQuorum = undefined
+	}
 	if (pending.strategy !== undefined) {
 		applyStrategy(config, pending.strategy)
 		pending.strategy = undefined
@@ -18,6 +52,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		config.tokenAddresses = pending.tokenAddresses
 		state.tokenAddresses = pending.tokenAddresses
 		pending.tokenAddresses = undefined
+		pending.persistedTokenAddresses = undefined
 	}
 }
 

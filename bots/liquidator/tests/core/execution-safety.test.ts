@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { coordinatorAbi } from '../../src/contracts/abi.ts'
-import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
+import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import {
@@ -18,7 +18,7 @@ import {
 	validateReceiptExpectation,
 } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
-import { stagedOperationRecoveryRanges } from '../../src/execution/recovery.ts'
+import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedOperationRecoveryRanges, stagedRecoveryAnchorMatches } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
@@ -153,11 +153,70 @@ describe('liquidator execution safety', () => {
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }))).toThrow('RPC disagreement')
 	})
 	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
-		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([
-			{ fromBlock: 5n, toBlock: 10_004n },
-			{ fromBlock: 10_005n, toBlock: 20_004n },
-			{ fromBlock: 20_005n, toBlock: 25_005n },
-		])
+		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([{ fromBlock: 24_750n, toBlock: 25_005n }])
+	})
+
+	test('invalidates a staged-operation recovery cursor when its canonical anchor changes or moves above the head', () => {
+		const pending = { recoveryAnchorBlock: 100n, recoveryAnchorHash: `0x${'11'.repeat(32)}` as const }
+		expect(stagedRecoveryAnchorMatches(pending, 110n, `0x${'11'.repeat(32)}`)).toBe(true)
+		expect(stagedRecoveryAnchorMatches(pending, 110n, `0x${'22'.repeat(32)}`)).toBe(false)
+		expect(stagedRecoveryAnchorMatches(pending, 99n, undefined)).toBe(false)
+	})
+
+	test('retains a provisional staged outcome without advancing past it and marks exhausted history complete', () => {
+		const pending = {
+			coordinator,
+			operationId: 1n,
+			queuedBlock: 1n,
+			target: getAddress('0x0000000000000000000000000000000000000030'),
+		}
+		const candidate = {
+			blockHash: `0x${'11'.repeat(32)}` as const,
+			blockNumber: 10n,
+			errorMessage: '',
+			operation: 0n,
+			operationId: 1n,
+			success: true,
+			transactionHash: `0x${'22'.repeat(32)}` as const,
+		}
+		recordStagedRecoveryChunk(pending, { fromBlock: 10n, toBlock: 20n }, candidate, false)
+		expect(pending).toMatchObject({ candidateOutcome: candidate })
+		expect(Reflect.has(pending, 'latestRecoveryBlock')).toBe(false)
+		recordStagedRecoveryChunk(pending, { fromBlock: 1n, toBlock: 9n }, undefined, true)
+		expect(pending).toMatchObject({ historicalRecoveryComplete: true })
+		expect(Reflect.has(pending, 'nextHistoricalBlock')).toBe(true)
+		expect(Reflect.get(pending, 'nextHistoricalBlock')).toBeUndefined()
+	})
+
+	test('adds a head-jump gap above an active historical backfill without losing coverage', () => {
+		const pending = {
+			coordinator,
+			historicalRecoveryComplete: false,
+			latestRecoveryBlock: 1_000n,
+			nextHistoricalBlock: 488n,
+			operationId: 1n,
+			queuedBlock: 1n,
+			target: getAddress('0x0000000000000000000000000000000000000030'),
+		}
+		recordStagedRecoveryGap(pending, 1_001n, 1_745n)
+		expect(pending.nextHistoricalBlock).toBe(1_744n)
+
+		const covered = [{ fromBlock: 1_745n, toBlock: 2_000n }]
+		for (;;) {
+			const range = nextStagedHistoricalRecoveryRange(pending, 256n)
+			if (range === undefined) break
+			covered.push(range)
+			recordStagedRecoveryChunk(pending, range, undefined, true)
+		}
+		const ascending = covered.toSorted((left, right) => (left.fromBlock < right.fromBlock ? -1 : 1))
+		expect(ascending[0]?.fromBlock).toBe(1n)
+		expect(ascending.at(-1)?.toBlock).toBe(2_000n)
+		for (let index = 1; index < ascending.length; index++) expect(ascending[index]?.fromBlock).toBe((ascending[index - 1]?.toBlock ?? 0n) + 1n)
+
+		const recovery = { ...pending, historicalRecoveryComplete: false, nextHistoricalBlock: 1_744n }
+		const gapRange = nextStagedHistoricalRecoveryRange(recovery, 256n)
+		expect(gapRange).toEqual({ fromBlock: 1_489n, toBlock: 1_744n })
+		expect(gapRange !== undefined && gapRange.fromBlock <= 1_600n && gapRange.toBlock >= 1_600n).toBe(true)
 	})
 	test('rechecks market consensus immediately before price-dependent submission', async () => {
 		await expect(assertMarketPriceStillAllowed(async () => true)).resolves.toBeUndefined()
@@ -396,6 +455,38 @@ describe('liquidator execution safety', () => {
 		})
 		expect(stagedOperationOutcome(successfulLog, 1n)?.success).toBe(true)
 		expect(stagedOperationOutcome(successfulLog, 2n)).toBeUndefined()
+	})
+
+	test('blocks new execution until transaction and staged-operation recovery both finish', async () => {
+		const state: { pendingStagedOperations: object[]; pendingTransactions: object[] } = {
+			pendingStagedOperations: [],
+			pendingTransactions: [{}],
+		}
+		const order: string[] = []
+		const blocked = await recoveryWorkBlocksExecution(
+			state,
+			async () => {
+				order.push('transactions')
+				state.pendingTransactions = []
+				state.pendingStagedOperations = [{}]
+				return false
+			},
+			async () => {
+				order.push('staged')
+			},
+		)
+
+		expect(blocked).toBe(true)
+		expect(order).toEqual(['transactions', 'staged'])
+
+		const recovered = await recoveryWorkBlocksExecution(
+			state,
+			async () => false,
+			async () => {
+				state.pendingStagedOperations = []
+			},
+		)
+		expect(recovered).toBe(false)
 	})
 
 	test('suppresses a liquidation already staged by this bot across later cycles', () => {

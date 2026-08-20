@@ -30,6 +30,14 @@ body {
 	background: radial-gradient(circle at 18% -10%, #173c2f 0, transparent 32rem), var(--bg);
 }
 
+body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
+body[data-page="pools"] [data-page-content]:not([data-page-content="pools"]):not([data-page-content="all"]),
+body[data-page="markets"] [data-page-content]:not([data-page-content="markets"]):not([data-page-content="all"]),
+body[data-page="operations"] [data-page-content]:not([data-page-content="operations"]):not([data-page-content="all"]),
+body[data-page="settings"] [data-page-content]:not([data-page-content="settings"]):not([data-page-content="all"]) {
+	display: none;
+}
+
 button,
 input,
 select {

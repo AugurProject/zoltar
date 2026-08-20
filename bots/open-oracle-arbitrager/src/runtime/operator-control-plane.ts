@@ -1,6 +1,7 @@
+import { resolve } from 'node:path'
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
-import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -10,24 +11,61 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
-import { authenticatedExecutionToken } from '#config/runtime-deployment'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
 import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import type { ExclusiveProcessLock } from '#state/position-store'
+import type { ExclusiveProcessLock, PositionRecord } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
-import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { networkConfiguration } from '#config/network'
+import { positionConsumesRisk, type RiskLimits } from '#core/safety-controls'
+import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 
 export type PendingOperatorUpdates = {
+	centralizedMarkets: CentralizedMarketSettings | undefined
 	connectivity: ConnectivitySettings | undefined
 	deployment: DeploymentSettings | undefined
+	execute: boolean | undefined
+	lookbackBlocks: bigint | undefined
+	maxHedgeSlippageBps: bigint | undefined
+	operatorSettings: PersistedOperatorSettings | undefined
+	paused: boolean | undefined
 	privateKey: Hex | undefined
-	restartTokenAddresses: Address[] | undefined
+	persistedPrivateKey: Hex | undefined
+	persistedTokenAddresses: Address[] | undefined
+	riskLimits: RiskLimits | undefined
+	rpcQuorum: RpcQuorumRequirement | undefined
 	signerLock: ExclusiveProcessLock | undefined
 	signerUpdate: boolean
 	strategy: MutableStrategy | undefined
 	submission: SubmissionSettings | undefined
 	tokenAddresses: Address[] | undefined
+}
+
+export function deploymentIdentityChanged(current: DeploymentSettings, next: DeploymentSettings) {
+	return current.openOracle.toLowerCase() !== next.openOracle.toLowerCase() || current.executor?.toLowerCase() !== next.executor?.toLowerCase() || current.rep.toLowerCase() !== next.rep.toLowerCase() || current.weth.toLowerCase() !== next.weth.toLowerCase()
+}
+
+export function deploymentUpdateMustWait(current: DeploymentSettings, next: DeploymentSettings, positions: readonly Pick<PositionRecord, 'status'>[]) {
+	return deploymentIdentityChanged(current, next) && positions.some(position => positionConsumesRisk(position.status))
+}
+
+export function tokenUpdateForDeployment(value: readonly string[], previousRep: Address, deployment: DeploymentSettings, execute: boolean) {
+	const parsedAddresses: Address[] = [deployment.rep]
+	for (const address of value) {
+		const token = getAddress(address)
+		if (token.toLowerCase() === previousRep.toLowerCase() && token.toLowerCase() !== deployment.rep.toLowerCase()) continue
+		const authenticated = !execute || deployment.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
+		if (!authenticated) throw new Error(`Execution token ${token} is not authenticated by the deployment manifest`)
+		parsedAddresses.push(token)
+	}
+	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
+}
+
+export function requireSafeDeploymentTransition(state: Pick<OperatorState, 'positions'>, current: DeploymentSettings, next: DeploymentSettings) {
+	if (deploymentUpdateMustWait(current, next, state.positions)) {
+		throw new Error('OpenOracle, executor, REP, and WETH deployment identities cannot change while a position still consumes risk')
+	}
 }
 
 export async function deployExecutorFromConnectivity(
@@ -46,15 +84,23 @@ export async function deployExecutorFromConnectivity(
 	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
 	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
 	if (readRpcUrls.length < configuredReadRpcEndpointMinimum(parameters.rpcQuorum)) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
-	return await deploy({ chain: parameters.chain, existingIntent: parameters.existingIntent, persistIntent: parameters.persistIntent, privateKey: parameters.privateKey, readRpcUrls, rpcUrls: parameters.connectivity.publicRpcUrls, salt: parameters.salt })
+	return await deploy({
+		chain: parameters.chain,
+		existingIntent: parameters.existingIntent,
+		persistIntent: parameters.persistIntent,
+		privateKey: parameters.privateKey,
+		readRpcUrls,
+		rpcUrls: parameters.connectivity.publicRpcUrls,
+		salt: parameters.salt,
+	})
 }
 
 export function requireActivePersistedNetwork(activeNetwork: Configuration['network']['name'], persistedNetwork: PersistedOperatorSettings['network']) {
-	if (persistedNetwork !== activeNetwork) throw new Error('Restart to apply the saved network before deploying the executor')
+	if (persistedNetwork !== activeNetwork) throw new Error('Wait for the saved network to apply at the next scan boundary before deploying the executor')
 }
 
 export function requireActivePersistedRpcQuorum(activeRpcQuorum: Configuration['rpcQuorum'], persistedRpcQuorum: PersistedOperatorSettings['rpcQuorum']) {
-	if (persistedRpcQuorum !== activeRpcQuorum) throw new Error('Restart to apply the saved RPC agreement requirement before deploying the executor')
+	if (persistedRpcQuorum !== activeRpcQuorum) throw new Error('Wait for the saved RPC agreement requirement to apply at the next scan boundary before deploying the executor')
 }
 
 export function requirePausedExecutorDeployment(execute: boolean, paused: boolean) {
@@ -87,6 +133,10 @@ export async function acquireScanSignerOperation(signerOperationGate: SignerOper
 	}
 }
 
+export async function acquireConfigurationSignerOperation(signerOperationGate: SignerOperationGate) {
+	while (!signerOperationGate.acquire('configuration')) await Bun.sleep(10)
+}
+
 export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
 	deploymentRecovery.pending = true
 	await saveExecutorDeploymentIntent(path, intent)
@@ -103,10 +153,19 @@ export function startOperatorControlPlane(parameters: {
 }) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const pending: PendingOperatorUpdates = {
+		centralizedMarkets: undefined,
 		connectivity: undefined,
 		deployment: undefined,
+		execute: undefined,
+		lookbackBlocks: undefined,
+		maxHedgeSlippageBps: undefined,
+		operatorSettings: undefined,
+		paused: undefined,
 		privateKey: undefined,
-		restartTokenAddresses: undefined,
+		persistedPrivateKey: undefined,
+		persistedTokenAddresses: undefined,
+		riskLimits: undefined,
+		rpcQuorum: undefined,
 		signerLock: undefined,
 		signerUpdate: false,
 		strategy: undefined,
@@ -135,7 +194,10 @@ export function startOperatorControlPlane(parameters: {
 		getConfiguration: async () => {
 			const loaded = await loadOperatorSettingsWithRevision(config.settingsFile)
 			if (loaded === undefined) throw new Error('Operator configuration file is missing')
-			return { configuration: serializeOperatorSettings(loaded.settings, true), revision: loaded.revision }
+			return {
+				configuration: serializeOperatorSettings(loaded.settings, true),
+				revision: loaded.revision,
+			}
 		},
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
 		hostname: config.uiHost,
@@ -143,43 +205,118 @@ export function startOperatorControlPlane(parameters: {
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
-				const queuedConnectivity = pending.connectivity
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined || latest.revision !== value.revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
 				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+				if (
+					resolve(next.runtime.historyFile) !== config.historyFile ||
+					next.runtime.once !== config.once ||
+					resolve(next.runtime.positionFile) !== config.positionFile ||
+					resolve(next.runtime.priceHistoryFile) !== config.priceHistoryFile ||
+					next.runtime.ui !== config.ui ||
+					next.runtime.uiHost !== config.uiHost ||
+					next.runtime.uiPort !== config.uiPort
+				)
+					throw new Error('Process mode, persistence paths, and dashboard binding cannot be changed while this operator is running')
 				const expectedChainId = next.network === 'mainnet' ? 1 : 11_155_111
 				if (next.networkConfigured) {
 					await checkConnectivity(next.connectivity, expectedChainId)
 					await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
 					await checkSubmissionEndpoints(next.submission, expectedChainId)
 				}
-				const savedRevision = await persistSettings(next, value.revision)
-				pending.connectivity = queuedConnectivity
-				pending.deployment = undefined
-				pending.strategy = undefined
-				pending.submission = undefined
-				pending.tokenAddresses = undefined
-				pending.restartTokenAddresses = undefined
-				config.persistedPrivateKey = next.privateKey
-				fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
-				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined })
-				return { configuration: serializeOperatorSettings(next, true), revision: savedRevision }
+				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile)
+				const signer = next.privateKey === undefined ? { address: undefined, privateKey: undefined } : signerCandidate(next.privateKey)
+				if (next.runtime.execute && signer.address === undefined) throw new Error('Execution requires an active signer')
+				const keepsActiveSigner = fixedState.execute && signer.address !== undefined && fixedState.wallet !== undefined && signer.address.toLowerCase() === fixedState.wallet.toLowerCase()
+				const keepsPendingSigner = signer.address !== undefined && fixedState.queuedWallet !== undefined && fixedState.queuedWallet !== null && signer.address.toLowerCase() === fixedState.queuedWallet.toLowerCase() && pending.signerLock !== undefined
+				const tokens = prepareDeploymentTokenTransition(next.tokenAddresses, undefined, latest.settings.deployment.rep, next.deployment.rep)
+				const normalizedNext = { ...next, tokenAddresses: tokens.persisted }
+				const previousPendingSignerLock = pending.signerLock
+				await acquireConfigurationSignerOperation(signerOperationGate)
+				let acquiredSignerLock: ExclusiveProcessLock | undefined
+				let nextPendingSignerLock: ExclusiveProcessLock | undefined
+				let savedRevision = ''
+				try {
+					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, next.deployment)
+					if (next.runtime.execute && signer.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
+						if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
+						acquiredSignerLock = await lockManager.acquireSigner(signer.address)
+					}
+					await persistSignerSettingsWithProvisionalLock(
+						async () => {
+							savedRevision = await persistSettings(normalizedNext, value.revision)
+						},
+						acquiredSignerLock,
+						lockManager,
+					)
+					nextPendingSignerLock = acquiredSignerLock
+					if (keepsActiveSigner) nextPendingSignerLock = undefined
+					else if (keepsPendingSigner) nextPendingSignerLock = previousPendingSignerLock
+					pending.centralizedMarkets = next.centralizedMarkets
+					pending.connectivity = next.connectivity
+					pending.deployment = next.deployment
+					pending.execute = next.runtime.execute
+					pending.lookbackBlocks = next.runtime.lookbackBlocks
+					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
+					pending.operatorSettings = normalizedNext
+					pending.paused = next.paused
+					pending.persistedPrivateKey = next.privateKey
+					pending.persistedTokenAddresses = tokens.persisted
+					pending.privateKey = signer.privateKey
+					pending.riskLimits = next.runtime.riskLimits
+					pending.rpcQuorum = next.rpcQuorum
+					pending.signerLock = nextPendingSignerLock
+					pending.signerUpdate = true
+					pending.strategy = mutableStrategy(next.strategy)
+					pending.submission = next.submission
+					pending.tokenAddresses = tokens.active
+					fixedState.queuedWallet = signer.address ?? null
+					fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
+				} finally {
+					signerOperationGate.release('configuration')
+				}
+				if (previousPendingSignerLock !== undefined && previousPendingSignerLock !== nextPendingSignerLock && lockManager !== undefined) await lockManager.release(previousPendingSignerLock)
+				if (next.paused) {
+					state.paused = true
+					state.status = operatorStatusAfterPause(true, parameters.getCursor()?.initial === false, state.lastError !== undefined)
+				}
+				recordOperation(state, {
+					category: 'configuration',
+					details: undefined,
+					level: 'info',
+					message: 'Complete operator configuration saved',
+					reason: 'Live settings apply automatically at scan boundaries',
+					reportId: undefined,
+				})
+				return {
+					configuration: serializeOperatorSettings(normalizedNext, true),
+					revision: savedRevision,
+				}
 			}),
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
-				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints, then restart before resuming')
+				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
 				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
-				state.paused = paused
-				state.status = operatorStatusAfterPause(paused, parameters.getCursor()?.initial === false, state.lastError !== undefined)
-				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Applied immediately and saved for future starts', reportId: undefined })
+				pending.paused = paused
+				if (paused) {
+					state.paused = true
+					state.status = operatorStatusAfterPause(true, parameters.getCursor()?.initial === false, state.lastError !== undefined)
+				}
+				recordOperation(state, {
+					category: 'configuration',
+					details: undefined,
+					level: 'info',
+					message: paused ? 'Operator paused' : 'Operator resume queued',
+					reason: paused ? 'Execution stopped immediately and the preference was saved' : 'Saved and queued for the next scan boundary',
+					reportId: undefined,
+				})
 			}),
 		updateConnectivity: async value => {
 			return queueSettingsUpdate(async () => {
-				if (pending.deployment !== undefined) throw new Error('Restart to apply the saved deployment and quorum RPC changes before updating active connectivity')
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				if (latest.settings.networkConfigured) {
@@ -197,17 +334,34 @@ export function startOperatorControlPlane(parameters: {
 					submission: latest.settings.submission,
 					value,
 				})
-				const restartRequired = next.restartRequired || next.rpcQuorumRestartRequired
-				pending.connectivity = restartRequired ? pending.connectivity : next.connectivity
+				if (!config.networkConfigured) {
+					config.network = networkConfiguration(next.network, {
+						factory: latest.settings.deployment.uniswapFactory,
+						quoter: latest.settings.deployment.uniswapQuoter,
+						rep: latest.settings.deployment.rep,
+						weth: latest.settings.deployment.weth,
+					})
+					config.networkConfigured = true
+					fixedState.network = config.network.name
+					fixedState.expectedChainId = config.network.chain.id
+					fixedState.explorerUrl = config.network.explorerUrl
+					fixedState.networkConfigured = true
+				}
+				pending.rpcQuorum = next.rpcQuorum
+				pending.connectivity = next.connectivity
 				recordOperation(state, {
 					category: 'configuration',
 					details: next.connectivity.publicRpcUrls.map(endpointLabel).join(', '),
 					level: 'info',
 					message: 'Network and RPC configuration verified and saved',
-					reason: restartRequired ? 'Saved settings apply after restart' : `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}`,
+					reason: `Read RPC ${endpointLabel(next.connectivity.readRpcUrl)}; applies at the next scan boundary`,
 					reportId: undefined,
 				})
-				return { connectivity: next.connectivity, network: next.network, rpcQuorum: next.rpcQuorum, restartRequired }
+				return {
+					connectivity: next.connectivity,
+					network: next.network,
+					rpcQuorum: next.rpcQuorum,
+				}
 			})
 		},
 		updateDeployment: value => {
@@ -221,14 +375,33 @@ export function startOperatorControlPlane(parameters: {
 				const expectedChainId = latest.settings.network === 'mainnet' ? 1 : 11_155_111
 				await checkIndependentRpcChains(next.quorumRpcUrls, expectedChainId)
 				const persistedTokens = prepareDeploymentTokenTransition(latest.settings.tokenAddresses, undefined, latest.settings.deployment.rep, next.rep)
-				await persistSettings({ ...latest.settings, deployment: next, tokenAddresses: persistedTokens.restart }, latest.revision)
+				await acquireConfigurationSignerOperation(signerOperationGate)
+				try {
+					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, next)
+					await persistSettings(
+						{
+							...latest.settings,
+							deployment: next,
+							tokenAddresses: persistedTokens.persisted,
+						},
+						latest.revision,
+					)
+				} finally {
+					signerOperationGate.release('configuration')
+				}
 				const activeDeployment = pending.deployment ?? fixedState.deployment
-				const activeTokens = prepareDeploymentTokenTransition(pending.tokenAddresses ?? config.tokenAddresses, pending.restartTokenAddresses, activeDeployment.rep, next.rep)
+				const activeTokens = prepareDeploymentTokenTransition(pending.tokenAddresses ?? config.tokenAddresses, pending.persistedTokenAddresses, activeDeployment.rep, next.rep)
 				pending.deployment = next
 				pending.tokenAddresses = activeTokens.active
-				pending.restartTokenAddresses = persistedTokens.restart
-				fixedState.deployment = next
-				recordOperation(state, { category: 'configuration', details: `OpenOracle ${next.openOracle}; executor ${next.executor ?? 'not configured'}`, level: 'info', message: 'Deployment configuration saved', reason: 'Protocol identities and independent RPCs apply after restart', reportId: undefined })
+				pending.persistedTokenAddresses = persistedTokens.persisted
+				recordOperation(state, {
+					category: 'configuration',
+					details: `OpenOracle ${next.openOracle}; executor ${next.executor ?? 'not configured'}`,
+					level: 'info',
+					message: 'Deployment configuration saved',
+					reason: 'Applies at the next scan boundary',
+					reportId: undefined,
+				})
 				return next
 			})
 		},
@@ -258,6 +431,12 @@ export function startOperatorControlPlane(parameters: {
 					if (!config.execute) deploymentSignerLock = await lockManager.acquireSigner(privateKeyToAccount(privateKey).address)
 					if (!signerOperationGate.acquire('deployment')) throw new Error('Wait for the active signer operation to finish before deploying the executor')
 					signerOperationAcquired = true
+					const plannedDeployment = {
+						...latest.settings.deployment,
+						deploymentManifest: undefined,
+						executor: plan.address,
+					}
+					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, plannedDeployment)
 					const existingIntent = await loadExecutorDeploymentIntent(intentPath)
 					const deployed = await deployExecutorFromConnectivity({
 						chain: config.network.chain,
@@ -269,18 +448,17 @@ export function startOperatorControlPlane(parameters: {
 						rpcQuorum: latest.settings.rpcQuorum,
 						salt: plan.salt,
 					})
-					const next = { ...latest.settings.deployment, deploymentManifest: undefined, executor: deployed.address }
+					const next = { ...plannedDeployment, executor: deployed.address }
 					await persistSettings({ ...latest.settings, deployment: next }, latest.revision)
 					await clearExecutorDeploymentIntent(intentPath)
 					parameters.deploymentRecovery.pending = false
 					pending.deployment = next
-					fixedState.deployment = next
 					recordOperation(state, {
 						category: 'transaction',
 						details: deployed.transactionHash,
 						level: 'info',
 						message: deployed.alreadyDeployed ? 'CREATE2 executor already deployed and verified' : 'CREATE2 executor deployed and verified',
-						reason: `Saved predictable executor ${deployed.address} for restart`,
+						reason: `Saved and queued predictable executor ${deployed.address}`,
 						reportId: undefined,
 					})
 					return deployed
@@ -298,10 +476,26 @@ export function startOperatorControlPlane(parameters: {
 			const signerRecord = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 			if (signerRecord !== undefined && Object.keys(signerRecord).length === 1 && signerRecord['forgetSavedSigner'] === true) {
 				return queueSettingsUpdate(async () => {
-					await persistFocusedSettings(settings => ({ ...settings, privateKey: undefined }))
-					config.persistedPrivateKey = undefined
-					fixedState.savedWallet = undefined
-					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Saved signer forgotten', reason: 'Active in-memory signer unchanged', reportId: undefined })
+					await acquireConfigurationSignerOperation(signerOperationGate)
+					try {
+						await persistFocusedSettings(settings => ({
+							...settings,
+							privateKey: undefined,
+						}))
+						config.persistedPrivateKey = undefined
+						pending.persistedPrivateKey = undefined
+						fixedState.savedWallet = undefined
+					} finally {
+						signerOperationGate.release('configuration')
+					}
+					recordOperation(state, {
+						category: 'configuration',
+						details: undefined,
+						level: 'info',
+						message: 'Saved signer forgotten',
+						reason: 'Active in-memory signer unchanged',
+						reportId: undefined,
+					})
 					return { wallet: fixedState.wallet }
 				})
 			}
@@ -309,28 +503,52 @@ export function startOperatorControlPlane(parameters: {
 			const candidate = signerCandidate(value['privateKey'])
 			const rememberSigner = candidate.privateKey !== undefined && value['rememberSigner']
 			return queueSettingsUpdate(async () => {
-				const keepsActiveSigner = candidate.address !== undefined && fixedState.wallet !== undefined && candidate.address.toLowerCase() === fixedState.wallet.toLowerCase()
+				const effectiveExecute = pending.execute ?? config.execute
+				if (effectiveExecute && candidate.address === undefined) throw new Error('Execution requires an active signer')
+				const keepsActiveSigner = fixedState.execute && candidate.address !== undefined && fixedState.wallet !== undefined && candidate.address.toLowerCase() === fixedState.wallet.toLowerCase()
 				const keepsPendingSigner = candidate.address !== undefined && fixedState.queuedWallet !== undefined && fixedState.queuedWallet !== null && candidate.address.toLowerCase() === fixedState.queuedWallet.toLowerCase() && pending.signerLock !== undefined
+				const previousPendingSignerLock = pending.signerLock
+				await acquireConfigurationSignerOperation(signerOperationGate)
 				let acquiredSignerLock: ExclusiveProcessLock | undefined
-				if (config.execute && candidate.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
-					if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
-					acquiredSignerLock = await lockManager.acquireSigner(candidate.address)
-				}
-				let persistedPrivateKey = config.persistedPrivateKey
+				let nextPendingSignerLock: ExclusiveProcessLock | undefined
+				let persistedPrivateKey = pending.signerUpdate ? pending.persistedPrivateKey : config.persistedPrivateKey
 				if (candidate.privateKey === undefined) persistedPrivateKey = undefined
 				else if (rememberSigner) persistedPrivateKey = candidate.privateKey
-				await persistSignerSettingsWithProvisionalLock(() => persistFocusedSettings(settings => ({ ...settings, privateKey: persistedPrivateKey })).then(() => undefined), acquiredSignerLock, lockManager)
-				let nextPendingSignerLock = acquiredSignerLock
-				if (keepsActiveSigner) nextPendingSignerLock = undefined
-				else if (keepsPendingSigner) nextPendingSignerLock = pending.signerLock
-				if (pending.signerLock !== undefined && pending.signerLock !== nextPendingSignerLock && lockManager !== undefined) await lockManager.release(pending.signerLock)
-				pending.signerLock = nextPendingSignerLock
-				config.persistedPrivateKey = persistedPrivateKey
-				pending.privateKey = candidate.privateKey
-				pending.signerUpdate = true
-				fixedState.queuedWallet = candidate.address ?? null
-				fixedState.savedWallet = persistedPrivateKey === undefined ? undefined : privateKeyToAccount(persistedPrivateKey).address
-				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: candidate.address === undefined ? 'Signer clear queued and saved' : `Signer ${candidate.address} queued${rememberSigner ? ' and remembered' : ''}`, reason: 'Applied at the next scan boundary', reportId: undefined })
+				try {
+					if (effectiveExecute && candidate.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
+						if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
+						acquiredSignerLock = await lockManager.acquireSigner(candidate.address)
+					}
+					await persistSignerSettingsWithProvisionalLock(
+						() =>
+							persistFocusedSettings(settings => ({
+								...settings,
+								privateKey: persistedPrivateKey,
+							})).then(() => undefined),
+						acquiredSignerLock,
+						lockManager,
+					)
+					nextPendingSignerLock = acquiredSignerLock
+					if (keepsActiveSigner) nextPendingSignerLock = undefined
+					else if (keepsPendingSigner) nextPendingSignerLock = previousPendingSignerLock
+					pending.persistedPrivateKey = persistedPrivateKey
+					pending.privateKey = candidate.privateKey
+					pending.signerLock = nextPendingSignerLock
+					pending.signerUpdate = true
+					fixedState.queuedWallet = candidate.address ?? null
+					fixedState.savedWallet = persistedPrivateKey === undefined ? undefined : privateKeyToAccount(persistedPrivateKey).address
+				} finally {
+					signerOperationGate.release('configuration')
+				}
+				if (previousPendingSignerLock !== undefined && previousPendingSignerLock !== nextPendingSignerLock && lockManager !== undefined) await lockManager.release(previousPendingSignerLock)
+				recordOperation(state, {
+					category: 'configuration',
+					details: undefined,
+					level: 'info',
+					message: candidate.address === undefined ? 'Signer clear queued and saved' : `Signer ${candidate.address} queued${rememberSigner ? ' and remembered' : ''}`,
+					reason: 'Applied at the next scan boundary',
+					reportId: undefined,
+				})
 				return { wallet: candidate.address }
 			})
 		},
@@ -349,7 +567,7 @@ export function startOperatorControlPlane(parameters: {
 					details: next.relayUrls.map(endpointLabel).join(', ') || undefined,
 					level: 'info',
 					message: `Submission mode ${next.mode} verified and saved`,
-					reason: latest.settings.network === config.network.name ? 'Applied at the next scan boundary' : 'Applies after restart with the saved network',
+					reason: 'Applied at the next scan boundary',
 					reportId: undefined,
 				})
 				return next
@@ -357,20 +575,24 @@ export function startOperatorControlPlane(parameters: {
 		},
 		updateTokens: value => {
 			if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) throw new Error('Token configuration must be an array of addresses')
-			const parsedAddresses: Address[] = [config.network.rep]
-			for (const address of value) {
-				if (typeof address !== 'string') throw new Error('Token configuration must be an array of addresses')
-				const token = getAddress(address)
-				if (!authenticatedExecutionToken(config, token)) throw new Error(`Execution token ${token} is not authenticated by the deployment manifest`)
-				parsedAddresses.push(token)
-			}
-			const next = [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 			return queueSettingsUpdate(async () => {
-				const restartTokens = pending.deployment === undefined ? next : replacePrimaryRepToken(next, config.network.rep, pending.deployment.rep)
-				await persistFocusedSettings(settings => ({ ...settings, tokenAddresses: restartTokens }))
+				const effectiveDeployment = pending.deployment ?? fixedState.deployment
+				const executionEnabled = pending.execute ?? config.execute
+				const next = tokenUpdateForDeployment(value, fixedState.deployment.rep, effectiveDeployment, executionEnabled)
+				await persistFocusedSettings(settings => ({
+					...settings,
+					tokenAddresses: next,
+				}))
 				pending.tokenAddresses = next
-				pending.restartTokenAddresses = restartTokens
-				recordOperation(state, { category: 'configuration', details: next.join(', '), level: 'info', message: 'Execution token allowlist saved and queued', reason: 'Explicitly configured tokens become executable at the next block scan', reportId: undefined })
+				pending.persistedTokenAddresses = next
+				recordOperation(state, {
+					category: 'configuration',
+					details: next.join(', '),
+					level: 'info',
+					message: 'Execution token allowlist saved and queued',
+					reason: 'Explicitly configured tokens become executable at the next block scan',
+					reportId: undefined,
+				})
 				return next
 			})
 		},
@@ -378,9 +600,19 @@ export function startOperatorControlPlane(parameters: {
 			const next = mutableStrategy(pending.strategy ?? config)
 			updateStrategyFromRequest(next, value)
 			return queueSettingsUpdate(async () => {
-				await persistFocusedSettings(settings => ({ ...settings, strategy: next }))
+				await persistFocusedSettings(settings => ({
+					...settings,
+					strategy: next,
+				}))
 				pending.strategy = next
-				recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Strategy update saved and queued', reason: 'Applied at the next scan boundary', reportId: undefined })
+				recordOperation(state, {
+					category: 'configuration',
+					details: undefined,
+					level: 'info',
+					message: 'Strategy update saved and queued',
+					reason: 'Applied at the next scan boundary',
+					reportId: undefined,
+				})
 				return strategySettings(next)
 			})
 		},

@@ -2,7 +2,7 @@ import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, g
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
-import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, fetchLogsWithAdaptiveRanges, initialCursor, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
+import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
@@ -16,7 +16,7 @@ import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservation
 import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
-import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
+import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '#monitoring/resilience'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
@@ -30,12 +30,12 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
-import { acquireScanSignerOperation, startOperatorControlPlane } from './operator-control-plane.ts'
+import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorControlPlane } from './operator-control-plane.ts'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-execution-state.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
-const MAX_LOG_SCAN_RANGE = 100n
+const MAX_LOG_SCAN_RANGE = 256n
 
 type SuccessfulPollState = Pick<OperatorState, 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
 
@@ -53,7 +53,7 @@ export function completeUnconfiguredPoll(state: SuccessfulPollState) {
 }
 
 export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined) {
-	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
+	if (config.lookbackBlocks < 0n || config.lookbackBlocks > MAX_LOG_SCAN_RANGE) throw new Error('lookbackBlocks must be from 0 through 256')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('runtime.ui cannot be combined with runtime.once')
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
@@ -65,6 +65,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let clientRpcUrl: string | undefined
 	const createClient = (rpcUrl?: string) => createContextualPublicClient(config.network.chain, readPool, config.execute ? rpcUrl : undefined)
 	const contextualRpcRead = async <Value>(_method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => await request(createClient(explicitRpcUrl))
+	const contextualLogRead = async <Value>(request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>) => await request(createContextualPublicClient(config.network.chain, readPool))
 	const createWallet = () =>
 		config.privateKey === undefined
 			? undefined
@@ -156,7 +157,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
 	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorDeploymentIntentPath(config.settingsFile))
-	const deploymentRecovery = { pending: pendingExecutorDeployment !== undefined }
+	const deploymentRecovery = {
+		pending: pendingExecutorDeployment !== undefined,
+	}
 	if (pendingExecutorDeployment !== undefined) {
 		state.paused = true
 		state.status = 'paused'
@@ -180,7 +183,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			reportId: activity.reportId,
 		})
 	}
-	const controlPlane = startOperatorControlPlane({ config, deploymentRecovery, fixedState, getCursor: () => cursor, lockManager, signerOperationGate, state })
+	const controlPlane = startOperatorControlPlane({
+		config,
+		deploymentRecovery,
+		fixedState,
+		getCursor: () => cursor,
+		lockManager,
+		signerOperationGate,
+		state,
+	})
 	const { dashboard, pending } = controlPlane
 	const reports = new Map<bigint, ActiveReport>()
 	const persistPosition = async (position: PositionRecord) => {
@@ -199,7 +210,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		}
 	}
 	let cachedLogs: TransactionLog[] = []
-	const catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+	let catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
 	recordOperation(state, {
 		category: 'scan',
 		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
@@ -223,9 +234,74 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				state.retryInProgress = consecutiveFailures > 0
 				if (state.retryInProgress) state.lastRetryAt = new Date().toISOString()
 				try {
+					let executionActivationPending = false
 					state.rpcEndpointHealth = readPool.snapshot()
-					applyQueuedExecutionSettings(config, state, pending)
-					if (pending.connectivity !== undefined) {
+					const deploymentSettingsDeferred = pending.deployment !== undefined && deploymentUpdateMustWait(fixedState.deployment, pending.deployment, positions)
+					if (deploymentSettingsDeferred) {
+						state.paused = true
+						state.status = 'paused'
+						if (!state.operationLog.some(entry => entry.message === 'Deployment update waiting for open positions'))
+							recordOperation(state, {
+								category: 'configuration',
+								details: undefined,
+								level: 'warning',
+								message: 'Deployment update waiting for open positions',
+								reason: 'OpenOracle, executor, REP, and WETH identities remain unchanged until every risk-consuming position is closed',
+								reportId: undefined,
+							})
+					} else applyQueuedExecutionSettings(config, state, pending)
+					if (!deploymentSettingsDeferred && pending.execute !== undefined) {
+						executionActivationPending = pending.execute && !fixedState.execute
+						if (executionActivationPending) {
+							if (lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
+							await ensureExecutionHistoryWritable(config.historyFile)
+							await savePositionJournal(config.positionFile, positions)
+							config.execute = true
+							state.paused = true
+							startupValidated = false
+						} else {
+							config.execute = pending.execute
+							fixedState.execute = pending.execute
+							pending.execute = undefined
+						}
+					}
+					if (!deploymentSettingsDeferred && pending.deployment !== undefined) {
+						const deployment = pending.deployment
+						pending.deployment = undefined
+						config.coordinatorAddresses = [...deployment.coordinatorAddresses]
+						config.deploymentManifest = deployment.deploymentManifest
+						config.executor = deployment.executor
+						config.openOracle = deployment.openOracle
+						config.quorumRpcUrls = [...deployment.quorumRpcUrls]
+						config.router = deployment.uniswapRouter
+						config.v2Router = deployment.uniswapV2Router
+						config.v4PoolManager = deployment.uniswapV4PoolManager
+						config.v4Quoter = deployment.uniswapV4Quoter
+						fixedState.deployment = deployment
+						fixedState.executor = deployment.executor
+						fixedState.openOracle = deployment.openOracle
+						config.network.factory = deployment.uniswapFactory
+						config.network.quoter = deployment.uniswapQuoter
+						config.network.rep = deployment.rep
+						config.network.weth = deployment.weth
+						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+						client = createClient()
+						clientRpcUrl = undefined
+						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
+						wallet = createWallet()
+						startupValidated = false
+						cursor = undefined
+						reports.clear()
+						cachedLogs = []
+						state.activeReportCount = 0
+						state.opportunities = []
+						state.reportPaths = []
+						state.tokenMarkets = []
+						state.marketObservations = []
+						state.marketConsensus = undefined
+						catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+					}
+					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
 						config.connectivity = pending.connectivity
 						pending.connectivity = undefined
 						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
@@ -235,10 +311,26 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						wallet = createWallet()
 						startupValidated = false
 					}
-					if (pending.signerUpdate) {
-						const appliedSigner = await applyQueuedSigner({ activeSignerLock, config, createWallet, fixedState, lockManager, pending, state, walletAddress: current => current?.account.address })
+					if (!deploymentSettingsDeferred && pending.signerUpdate) {
+						const appliedSigner = await applyQueuedSigner({
+							activeSignerLock,
+							config,
+							createWallet,
+							fixedState,
+							lockManager,
+							pending,
+							state,
+							walletAddress: current => current?.account.address,
+						})
 						activeSignerLock = appliedSigner.activeSignerLock
 						wallet = appliedSigner.wallet
+					}
+					if (executionActivationPending) {
+						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+						client = createClient()
+						clientRpcUrl = undefined
+						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
+						wallet = createWallet()
 					}
 					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
 					if (!startupValidated) {
@@ -246,7 +338,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							const chainReads = readClients.map(async (_, index) => {
 								const endpoint = index === 0 ? endpointLabel(config.connectivity.readRpcUrl) : endpointLabel(config.quorumRpcUrls[index - 1] ?? '')
 								const rpcUrl = index === 0 ? config.connectivity.readRpcUrl : (config.quorumRpcUrls[index - 1] ?? '')
-								return { endpoint, index, value: await contextualRpcRead('eth_chainId', requestClient => requestClient.getChainId(), rpcUrl) }
+								return {
+									endpoint,
+									index,
+									value: await contextualRpcRead('eth_chainId', requestClient => requestClient.getChainId(), rpcUrl),
+								}
 							})
 							const observedChainId = await settledQuorumValue('configured chain id', chainReads)
 							if (observedChainId !== config.network.chain.id)
@@ -266,6 +362,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
 						startupValidated = true
+						if (executionActivationPending) {
+							fixedState.execute = true
+							pending.execute = undefined
+							state.paused = config.paused
+						}
 					}
 					let nextError: string | undefined
 					if (positions.some(position => position.historyOutbox !== undefined)) {
@@ -283,7 +384,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const settledHeads = await Promise.allSettled(
 							readClients.map(async (_, index) => {
 								const endpoint = endpointLabel(endpoints[index] ?? '')
-								return { endpoint, head: await contextualRpcRead('eth_blockNumber', requestClient => requestClient.getBlockNumber(), endpoints[index]), index }
+								return {
+									endpoint,
+									head: await contextualRpcRead('eth_blockNumber', requestClient => requestClient.getBlockNumber(), endpoints[index]),
+									index,
+								}
 							}),
 						)
 						const availableHeads = availableSettledValues(settledHeads)
@@ -300,13 +405,19 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								const fixedBlock = await contextualRpcRead(
 									'eth_getBlockByNumber',
 									async requestClient => {
-										const value = await requestClient.getBlock({ blockNumber: sharedHead })
+										const value = await requestClient.getBlock({
+											blockNumber: sharedHead,
+										})
 										if (value.hash === undefined) throw new Error('Canonical head block is missing its hash')
 										return { ...value, hash: value.hash }
 									},
 									endpoints[observation.index],
 								)
-								return { block: fixedBlock, endpoint: observation.endpoint, index: observation.index }
+								return {
+									block: fixedBlock,
+									endpoint: observation.endpoint,
+									index: observation.index,
+								}
 							}),
 						)
 						const availableBlocks = availableSettledValues(settledBlocks)
@@ -316,7 +427,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						quorumValue(
 							`canonical head ${sharedHead.toString()}`,
-							availableBlocks.map(observation => ({ endpoint: observation.endpoint, value: observation.block.hash })),
+							availableBlocks.map(observation => ({
+								endpoint: observation.endpoint,
+								value: observation.block.hash,
+							})),
 							quorumRequirement,
 						)
 						const selected = availableBlocks[0]
@@ -332,7 +446,12 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
 					})
 					const block = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-						const value = fixedHeadNumber === undefined ? await requestClient.getBlock() : await requestClient.getBlock({ blockNumber: fixedHeadNumber })
+						const value =
+							fixedHeadNumber === undefined
+								? await requestClient.getBlock()
+								: await requestClient.getBlock({
+										blockNumber: fixedHeadNumber,
+									})
 						if (value.number === undefined) throw new Error('Latest block is missing its number')
 						if (value.hash === undefined) throw new Error('Latest block is missing its hash')
 						return { ...value, hash: value.hash, number: value.number }
@@ -340,14 +459,50 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					const blockNumber = block.number
 					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
-					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
-						const anchorNumber = cursor.finalityAnchorNumber
+					const finalityAnchorForHead = async () => {
+						const number = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
 						const anchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-							const value = await requestClient.getBlock({ blockNumber: anchorNumber })
+							const value = await requestClient.getBlock({ blockNumber: number })
 							if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
 							return { ...value, hash: value.hash }
 						})
-						assertFinalityAnchor(cursor, anchorNumber, anchor.hash)
+						return { hash: anchor.hash, number }
+					}
+					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
+						const anchorNumber = cursor.finalityAnchorNumber
+						let observedAnchorHash: string | undefined
+						if (anchorNumber <= blockNumber) {
+							const anchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
+								const value = await requestClient.getBlock({
+									blockNumber: anchorNumber,
+								})
+								if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+								return { ...value, hash: value.hash }
+							})
+							observedAnchorHash = anchor.hash
+						}
+						if (finalityAnchorRequiresReset(cursor, blockNumber, observedAnchorHash)) {
+							cachedLogs = []
+							reports.clear()
+							state.activeReportCount = 0
+							state.opportunities = []
+							state.reportPaths = []
+							state.tokenMarkets = []
+							state.marketObservations = []
+							state.marketConsensus = undefined
+							catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+							cursor = config.coordinatorAddresses.length !== 0 || config.lookbackBlocks === 0n ? initialCursor(blockNumber, 0n) : { ...initialCursor(blockNumber, 0n), nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock }
+							state.status = 'syncing'
+							recordOperation(state, {
+								category: 'scan',
+								details: `anchor=${anchorNumber.toString()}`,
+								level: 'warning',
+								message: 'Canonical history changed beyond the retained overlap',
+								reason: 'Execution stayed blocked while report and market caches were cleared; the latest bounded window will rebuild on the next scan',
+								reportId: undefined,
+							})
+							return 'deferred'
+						}
 					}
 					let lifecycleProcessed = false
 					if (config.execute && wallet !== undefined) {
@@ -369,7 +524,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
 								nextError = message
-								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
+								recordOperation(state, {
+									category: 'transaction',
+									details: undefined,
+									level: 'error',
+									message: 'Expired transaction monitoring failed closed',
+									reason: message,
+									reportId: position.reportId,
+								})
 							}
 						}
 						for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
@@ -402,7 +564,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
 								nextError = message
-								recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Position lifecycle failed closed', reason: message, reportId: position.reportId })
+								recordOperation(state, {
+									category: 'transaction',
+									details: undefined,
+									level: 'error',
+									message: 'Position lifecycle failed closed',
+									reason: message,
+									reportId: position.reportId,
+								})
 							}
 						}
 					}
@@ -412,7 +581,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					}
 					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
 					const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
-					cursor ??= initialCursor(blockNumber, discoversReportsFromCoordinators ? 0n : config.lookbackBlocks)
+					cursor ??=
+						discoversReportsFromCoordinators || config.lookbackBlocks === 0n
+							? initialCursor(blockNumber, 0n)
+							: {
+									...initialCursor(blockNumber, 0n),
+									nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock,
+								}
 					const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
 						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber),
 					)
@@ -426,60 +601,73 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(readClients, config, blockNumber) : await pendingCoordinatorReports(client, config, blockNumber)
 						applyCoordinatorReports(reports, pendingReports)
 						cachedLogs = []
-					} else {
-						let fromBlock = scanCursor.nextBlock
-						while (fromBlock <= blockNumber) {
-							const toBlock = fromBlock + MAX_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + MAX_LOG_SCAN_RANGE - 1n : blockNumber
-							const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAX_LOG_SCAN_RANGE, range =>
-								contextualRpcRead('eth_getLogs', requestClient =>
+					} else if (config.lookbackBlocks > 0n) {
+						const recentRange = latestLogRange(blockNumber, config.lookbackBlocks)
+						const fromBlock = scanCursor.nextBlock > recentRange.fromBlock ? scanCursor.nextBlock : recentRange.fromBlock
+						for (const range of newestFirstScanRanges(fromBlock, blockNumber, MAX_LOG_SCAN_RANGE)) {
+							const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAX_LOG_SCAN_RANGE, requestedRange =>
+								contextualLogRead(requestClient =>
 									requestClient.getLogs({
 										address: config.openOracle,
-										fromBlock: range.fromBlock,
-										toBlock: range.toBlock,
+										fromBlock: requestedRange.fromBlock,
+										toBlock: requestedRange.toBlock,
 										topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
 									}),
 								),
 							)
-							cachedLogs = replaceOverlap(cachedLogs, logs, fromBlock, logBlockNumber, compareLogs)
-							reports.clear()
-							applyLogs(reports, cachedLogs)
-							cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, toBlock)
-							fromBlock = toBlock + 1n
+							cachedLogs = [...cachedLogs.filter(log => logBlockNumber(log) < range.fromBlock || logBlockNumber(log) > range.toBlock), ...logs].sort(compareLogs)
 						}
+						reports.clear()
+						applyLogs(reports, cachedLogs)
+						cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, blockNumber)
+					} else {
+						cachedLogs = []
+						reports.clear()
 					}
 					if (replacedMarketHead) {
-						cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {})
-						const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-						const finalityAnchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-							const value = await requestClient.getBlock({ blockNumber: finalityAnchorNumber })
-							if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-							return { ...value, hash: value.hash }
-						})
-						cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
-						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
-						state.blockNumber = blockNumber.toString()
-						state.blockTimestamp = block.timestamp.toString()
-						state.lastPollAt = new Date().toISOString()
-						state.reportPaths = discoversReportsFromCoordinators ? [] : [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
 						recordOperation(state, {
 							category: 'decision',
 							details: `block=${blockNumber.toString()}`,
 							level: 'warning',
 							message: 'Market evidence reset after canonical head replacement',
-							reason: 'DEX evidence from the replaced block was discarded; price-dependent evaluation resumes on the next poll',
+							reason: 'DEX evidence from the replaced block was discarded before this poll re-evaluated every report',
 							reportId: undefined,
 						})
-						return completeSuccessfulPoll(state, nextError, config.once)
 					}
 					let completedOpportunityCount = 0
-					cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
+					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
+					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
 						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
 							const [token0, token1, reserves] = await contextualRpcRead('eth_call', requestClient =>
 								Promise.all([
-									readContractAtBlock(requestClient, { address: pair, abi: constantProductPairAbi, functionName: 'token0' }, blockNumber),
-									readContractAtBlock(requestClient, { address: pair, abi: constantProductPairAbi, functionName: 'token1' }, blockNumber),
-									readContractAtBlock(requestClient, { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' }, blockNumber),
+									readContractAtBlock(
+										requestClient,
+										{
+											address: pair,
+											abi: constantProductPairAbi,
+											functionName: 'token0',
+										},
+										blockNumber,
+									),
+									readContractAtBlock(
+										requestClient,
+										{
+											address: pair,
+											abi: constantProductPairAbi,
+											functionName: 'token1',
+										},
+										blockNumber,
+									),
+									readContractAtBlock(
+										requestClient,
+										{
+											address: pair,
+											abi: constantProductPairAbi,
+											functionName: 'getReserves',
+										},
+										blockNumber,
+									),
 								]),
 							)
 							const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
@@ -497,7 +685,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						try {
 							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => {
 								const canonicalBlock = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-									const value = await requestClient.getBlock({ blockNumber: canonicalBlockNumber })
+									const value = await requestClient.getBlock({
+										blockNumber: canonicalBlockNumber,
+									})
 									if (value.hash == null) throw new Error('Canonical block is missing its hash')
 									return { ...value, hash: value.hash }
 								})
@@ -514,6 +704,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							.slice(-2_000)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
+						state.tokenAddresses = [...executionTokens]
 						state.tokenMarkets = await loadTokenMarkets(client, {
 							chainId: config.network.chain.id,
 							explorerUrl: config.network.explorerUrl,
@@ -555,7 +746,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									executionReady,
 									state.paused,
 									coordinatorPolicies,
-									(message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }),
+									(message, reason) =>
+										recordOperation(state, {
+											category: 'decision',
+											details: undefined,
+											level: 'info',
+											message,
+											reason,
+											reportId,
+										}),
 								)
 								if (evaluated !== undefined) {
 									cycleDexObservations.push(...evaluated.dexObservations)
@@ -622,7 +821,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										if (mismatch === undefined) candidates.push(evaluated.candidate)
 										else {
 											evaluated.opportunity.decision = 'risk-limit'
-											recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Risk limit blocked report', reason: mismatch, reportId: evaluated.opportunity.reportId })
+											recordOperation(state, {
+												category: 'decision',
+												details: undefined,
+												level: 'warning',
+												message: 'Risk limit blocked report',
+												reason: mismatch,
+												reportId: evaluated.opportunity.reportId,
+											})
 										}
 									}
 								}
@@ -635,7 +841,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									throw error
 								}
 								console.error(`report=${reportId} skipped=${message}`)
-								recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
+								recordOperation(state, {
+									category: 'decision',
+									details: undefined,
+									level: 'warning',
+									message: 'Report evaluation failed',
+									reason: message,
+									reportId,
+								})
+								throw error
 							}
 						}
 						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
@@ -649,7 +863,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 										config.network.rep,
 										config.network.chain.id,
 									)
-						state.reportPaths = discoversReportsFromCoordinators ? [] : [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+						state.reportPaths = discoversReportsFromCoordinators
+							? []
+							: [...reports.entries()].map(([id, report]) => ({
+									reportId: id.toString(),
+									settled: report.settled,
+									steps: report.steps,
+								}))
 						state.balances = balances?.snapshot
 						state.blockNumber = blockNumber.toString()
 						state.blockTimestamp = block.timestamp.toString()
@@ -717,14 +937,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						state.priceHistory = state.priceHistory.slice(-2_000)
 						completedOpportunityCount = opportunities.length
+						completedFinalityAnchor = await finalityAnchorForHead()
 					})
-					const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-					const finalityAnchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-						const value = await requestClient.getBlock({ blockNumber: finalityAnchorNumber })
-						if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-						return { ...value, hash: value.hash }
-					})
-					cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
+					if (completedFinalityAnchor === undefined) throw new Error('Successful scan did not produce a finality anchor')
+					cursor = withFinalityAnchor(completedCursor, completedFinalityAnchor.number, completedFinalityAnchor.hash)
 					const settledReportIds = new Set(
 						[...reports.entries()]
 							.filter(([, report]) => {
@@ -737,7 +953,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						for (const id of settledReportIds) reports.delete(id)
 						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
-					recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
+					recordOperation(state, {
+						category: 'scan',
+						details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`,
+						level: nextError === undefined ? 'info' : 'warning',
+						message: 'Scan completed',
+						reason: `Block ${blockNumber.toString()}`,
+						reportId: undefined,
+					})
 					return completeSuccessfulPoll(state, nextError, config.once)
 				} finally {
 					try {
@@ -762,7 +985,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				state.lastPollFailureAt = new Date().toISOString()
 				state.retryInProgress = false
 				state.status = operationalFailureDisposition(error) === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
-				recordOperation(state, { category: 'scan', details: undefined, level: 'error', message: 'Scan failed', reason: message, reportId: undefined })
+				recordOperation(state, {
+					category: 'scan',
+					details: undefined,
+					level: 'error',
+					message: 'Scan failed',
+					reason: message,
+					reportId: undefined,
+				})
 				console.error(`pollFailed=${message}`)
 			},
 		)
