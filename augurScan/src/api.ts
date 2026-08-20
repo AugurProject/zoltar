@@ -436,6 +436,7 @@ const riskCatalogData = async (
 			LEFT JOIN LATERAL (
 				SELECT candidate.receiver_vault, candidate.event_data FROM liquidation_approval_events candidate
 				WHERE candidate.chain_id = approval.chain_id AND candidate.approval_identity = approval.approval_identity
+					AND candidate.registry_address = approval.registry_address
 					AND candidate.event_name = 'LiquidationApprovalSet' AND candidate.canonical
 				ORDER BY candidate.block_number DESC, candidate.transaction_index DESC, candidate.log_index DESC LIMIT 1
 			) installed ON true

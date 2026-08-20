@@ -1568,6 +1568,13 @@ postgresTest(
 					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${uniswapOnlyMarket},
 					${linkedApprovalId}, NULL, 'LiquidationApprovalReserved',
 					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'operationId', '42'), true
+				),
+				(
+					${operationsChainId}, ${`0x${(10003).toString(16).padStart(64, '0')}`},
+					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${oracle.toLowerCase()},
+					${linkedApprovalId}, ${uniswapOnlyMarket}, 'LiquidationApprovalSet',
+					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'receiverVault', ${uniswapOnlyMarket}::text,
+						'securityPool', ${uniswapOnlyMarket}::text, 'targetVault', ${uniswapOnlyMarket}::text), true
 				)
 			`
 			const boundedApprovalsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)

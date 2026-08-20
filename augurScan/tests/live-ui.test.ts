@@ -3,6 +3,7 @@ import { requiredElementRole } from '../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
+	approvalTransitionFields,
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
@@ -26,6 +27,7 @@ import {
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailRecordKey,
+	operationsLoadDisposition,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -98,6 +100,47 @@ test('orders lifecycle evidence by canonical block, transaction, and log positio
 		'LiquidationApprovalReleased',
 		'LiquidationApprovalConsumed',
 	])
+})
+
+test('labels every approval transition field without hiding consumed debt', () => {
+	const maxCumulativeDebtAttoEth = '10'
+	const maxDebtPerLiquidationAttoEth = '7'
+	const consumedDebtAttoEth = '6'
+	const releasedDebtAttoEth = '2'
+	const resultingAvailableDebtAttoEth = '4'
+	const resultingReservedDebtAttoEth = '0'
+	const resultingConsumedDebtAttoEth = '6'
+	expect(approvalTransitionFields({ maxCumulativeDebtAttoEth, maxDebtPerLiquidationAttoEth })).toEqual([
+		{ label: 'maximum cumulative debt', value: '10', unit: 'attoETH' },
+		{ label: 'maximum debt per liquidation', value: '7', unit: 'attoETH' },
+	])
+	expect(
+		approvalTransitionFields({
+			consumedDebtAttoEth,
+			releasedDebtAttoEth,
+			resultingAvailableDebtAttoEth,
+			resultingReservedDebtAttoEth,
+			resultingConsumedDebtAttoEth,
+		}),
+	).toEqual([
+		{ label: 'consumed debt', value: '6', unit: 'attoETH' },
+		{ label: 'released debt', value: '2', unit: 'attoETH' },
+		{ label: 'resulting available debt', value: '4', unit: 'attoETH' },
+		{ label: 'resulting reserved debt', value: '0', unit: 'attoETH' },
+		{ label: 'resulting consumed debt', value: '6', unit: 'attoETH' },
+	])
+	expect(approvalTransitionFields({ receiverVault: '0xvault' })).toEqual([])
+	expect(approvalTransitionFields({ previousNonce: '41', newNonce: '42' })).toEqual([
+		{ label: 'previous nonce', value: '41', unit: '' },
+		{ label: 'new nonce', value: '42', unit: '' },
+	])
+})
+
+test('supersedes cross-network catalog appends and queues same-route live refreshes', () => {
+	expect(operationsLoadDisposition('1:/operations/reports', '11155111:/operations/reports', false, false)).toBe('supersede')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', true, false)).toBe('queue')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, true)).toBe('queue')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, false)).toBe('join')
 })
 
 const unexpectedCall = (): never => {

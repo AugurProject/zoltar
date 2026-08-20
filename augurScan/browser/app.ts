@@ -25,6 +25,7 @@ import { requiredElementRole } from './dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
+	approvalTransitionFields,
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
@@ -46,6 +47,7 @@ import {
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailRecordKey,
+	operationsLoadDisposition,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -473,6 +475,7 @@ let demoTransactionAppendErrorConsumed = false
 let demoNetworkFallbackErrorConsumed = false
 let operationsRequestVersion = 0
 let operationsLoadPromise: Promise<boolean> | undefined
+let operationsLoadContext: string | undefined
 let operationsCatalogState:
 	| {
 			readonly chainId: string
@@ -1603,7 +1606,14 @@ const demoOperations = (chainId: string) => {
 				block_number: asOf.blockNumber,
 				transaction_index: 8,
 				log_index: 3,
-				event_data: { operationId: '42', consumedDebtAttoEth: (2n * 10n ** 18n).toString() },
+				event_data: {
+					operationId: '42',
+					consumedDebtAttoEth: (2n * 10n ** 18n).toString(),
+					releasedDebtAttoEth: (3n * 10n ** 17n).toString(),
+					resultingAvailableDebtAttoEth: (8n * 10n ** 18n).toString(),
+					resultingReservedDebtAttoEth: (0n).toString(),
+					resultingConsumedDebtAttoEth: (2n * 10n ** 18n).toString(),
+				},
 			},
 			{
 				event_name: 'LiquidationApprovalReserved',
@@ -2475,9 +2485,10 @@ const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): str
 	const eventData = isRecord(item['event_data']) ? item['event_data'] : {}
 	const receiver = String(item['receiver_vault'] ?? eventData['receiverVault'] ?? '')
 	const operation = typeof eventData['operationId'] === 'string' ? `operation ${shortIdentifier(eventData['operationId'])}` : undefined
-	const amountEntry = ['reservedDebtAttoEth', 'releasedDebtAttoEth', 'consumedDebtAttoEth', 'maxDebtAttoEth'].find((key) => typeof eventData[key] === 'string')
-	const amount = amountEntry === undefined ? undefined : `${operationNumber(eventData[amountEntry])} attoETH`
-	const details = [operation, amount, receiver === '' ? undefined : `receiver ${shortIdentifier(receiver, 10, 6)}`].filter(
+	const fields = approvalTransitionFields(eventData).map(
+		(field) => `${field.label} ${operationNumber(field.value)}${field.unit === '' ? '' : ` ${field.unit}`}`,
+	)
+	const details = [operation, ...fields, receiver === '' ? undefined : `receiver ${shortIdentifier(receiver, 10, 6)}`].filter(
 		(value): value is string => value !== undefined,
 	)
 	return details.length === 0 ? 'Authorization lifecycle transition' : details.join(' · ')
@@ -2749,20 +2760,18 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			loadMore.disabled = true
 			loadMore.setAttribute('aria-busy', 'true')
 			loadMoreStatus.textContent = 'Loading older canonical records…'
-			try {
-				const section = operationsCatalogSection()
-				if (section === undefined) return
-				const next = decodeOperationsResponse(await api(operationsCatalogEndpoint(section, String(catalogPage['nextCursor']))))
-				const nextPage = next.data
-				const combined = mergeUniqueRecords(operationRecords(data[section]), operationRecords(nextPage['items']), (item) =>
-					operationsCatalogRecordKey(section, item),
-				)
-				renderOperations(catalogOperationsResponse(next, section, combined), paginationContext)
-			} catch (error) {
+			const section = operationsCatalogSection()
+			if (section === undefined) return
+			const loaded = await loadOperations({
+				live: true,
+				catalogTargetCount: operationRecords(data[section]).length + 100,
+				preservedContext: paginationContext,
+			})
+			if (!loaded && loadMore.isConnected) {
 				loadMore.disabled = false
 				loadMore.removeAttribute('aria-busy')
 				loadMore.textContent = 'Retry older records'
-				loadMoreStatus.textContent = error instanceof Error ? error.message : 'Older canonical records could not be loaded.'
+				loadMoreStatus.textContent = 'Older canonical records could not be loaded.'
 				loadMore.focus({ preventScroll: true })
 			}
 		})
@@ -3144,17 +3153,28 @@ const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount:
 
 const loadOperations = async ({
 	live = false,
+	catalogTargetCount,
 	detailTargetCount,
 	preservedContext,
 }: {
 	live?: boolean
+	catalogTargetCount?: number
 	detailTargetCount?: number
 	preservedContext?: OperationsRenderContext
 } = {}): Promise<boolean> => {
+	const requestedContext = `${requiredChainId()}:${location.pathname}`
 	if (operationsLoadPromise !== undefined) {
+		const disposition = operationsLoadDisposition(
+			operationsLoadContext ?? '',
+			requestedContext,
+			live,
+			catalogTargetCount !== undefined || detailTargetCount !== undefined,
+		)
+		if (disposition === 'supersede') operationsRequestVersion++
 		const activeResult = await operationsLoadPromise
-		if (detailTargetCount === undefined) return activeResult
+		if (disposition === 'join') return activeResult
 	}
+	const requestContext = `${requiredChainId()}:${location.pathname}`
 	const requestVersion = ++operationsRequestVersion
 	const run = (async () => {
 		const status = $('#operations-status')
@@ -3182,9 +3202,9 @@ const loadOperations = async ({
 					? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount)
 					: catalogSection === undefined
 						? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
-						: await loadOperationsCatalog(catalogSection, retainedCatalogCount)
+						: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
 			if (requestVersion !== operationsRequestVersion) return false
-			if (detailRoute === undefined) renderOperations(response)
+			if (detailRoute === undefined) renderOperations(response, preservedContext)
 			else renderOperationsDetail(response, detailRoute, preservedContext)
 			return true
 		} catch (error) {
@@ -3203,9 +3223,13 @@ const loadOperations = async ({
 		}
 	})()
 	const tracked = run.finally(() => {
-		if (operationsLoadPromise === tracked) operationsLoadPromise = undefined
+		if (operationsLoadPromise === tracked) {
+			operationsLoadPromise = undefined
+			operationsLoadContext = undefined
+		}
 	})
 	operationsLoadPromise = tracked
+	operationsLoadContext = requestContext
 	return await tracked
 }
 
