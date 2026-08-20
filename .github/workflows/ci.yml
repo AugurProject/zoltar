@@ -255,7 +255,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
       - run: bun run check:solidity-format
-      - run: cd solidity && bun run test
+      - run: bun run tsc:solidity:current
+      - run: bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ./solidity/ts/tests/
       - run: cd solidity && bun audit
 
   packages:

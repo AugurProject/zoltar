@@ -22,7 +22,16 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ hashFiles(format('{0}/bun.lock', inputs.directory), format('{0}/package.json', inputs.directory), 'shared/package.json', 'shared/ts/**') }}
+        key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ hashFiles(format('{0}/bun.lock', inputs.directory), format('{0}/package.json', inputs.directory), 'bun.lock', 'package.json', 'bots/shared/bun.lock', 'bots/shared/package.json', 'shared/package.json', 'shared/ts/**') }}
+
+    - name: Install local dependency inputs
+      if: inputs.directory != 'trading'
+      shell: bash
+      run: |
+        bun install --frozen-lockfile
+        if [[ "${{ inputs.directory }}" == "bots/open-oracle-arbitrager" || "${{ inputs.directory }}" == "bots/liquidator" ]]; then
+          (cd bots/shared && bun install --frozen-lockfile)
+        fi
 
     - name: Install component dependencies
       shell: bash
@@ -33,6 +42,5 @@ runs:
       if: inputs.artifacts == 'true'
       shell: bash
       run: |
-        bun install --frozen-lockfile
         (cd ui && bun install --frozen-lockfile)
         (cd solidity && bun install --frozen-lockfile)
