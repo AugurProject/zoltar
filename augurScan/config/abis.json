@@ -1,5 +1,5 @@
 {
-  "sourceHash": "4f881980ad971ff49cd3dda577cc3c996c3348b807bbaa97da6751324b9bf7c0",
+  "sourceHash": "6d393eafaa25644756ca6b1149603242d7528b6615e7209d92d481d486d5af36",
   "contracts": {
     "IERC1363": {
       "source": "contracts/statoblast/openOracle/openzeppelin/contracts/interfaces/IERC1363.sol",
@@ -20564,6 +20564,35 @@
           "inputs": [
             {
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPosition",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
               "name": "parent",
               "type": "address"
             },
@@ -23053,6 +23082,11 @@
             },
             {
               "internalType": "uint256",
+              "name": "badDebtToAssignAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
               "name": "totalAttoRepPurchased",
               "type": "uint256"
             }
@@ -24141,45 +24175,6 @@
           "inputs": [
             {
               "internalType": "uint256",
-              "name": "auctionedBadDebtAttoEth",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nextClaimedCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "auctionedCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "previouslyClaimedBadDebtAttoEth",
-              "type": "uint256"
-            }
-          ],
-          "name": "calculateCumulativeAuctionBadDebt",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "badDebtToAssignAttoEth",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nextClaimedBadDebtAttoEth",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "pure",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
               "name": "settlementCollateralAttoEth",
               "type": "uint256"
             },
@@ -24509,6 +24504,29 @@
             }
           ],
           "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "ISecurityPool"
+            },
+            {
+              "internalType": "address",
+              "name": "securityPoolForker",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "settlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "requireUnassignedPositionHealthy",
+          "outputs": [],
+          "stateMutability": "view",
           "type": "function"
         }
       ]
@@ -25494,6 +25512,11 @@
               "internalType": "uint256",
               "name": "proRataTotal",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "secondaryProRataTotal",
+              "type": "uint256"
             }
           ],
           "name": "withdrawBids",
@@ -25511,6 +25534,11 @@
             {
               "internalType": "uint256",
               "name": "totalProRataAllocation",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalSecondaryProRataAllocation",
               "type": "uint256"
             }
           ],
@@ -33416,6 +33444,35 @@
               "type": "address"
             }
           ],
+          "name": "getUnassignedPosition",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
           "name": "initiateSecurityPoolFork",
           "outputs": [],
           "stateMutability": "nonpayable",
@@ -35341,6 +35398,11 @@
               "internalType": "uint256",
               "name": "proRataTotal",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "secondaryProRataTotal",
+              "type": "uint256"
             }
           ],
           "name": "withdrawBids",
@@ -35358,6 +35420,11 @@
             {
               "internalType": "uint256",
               "name": "totalProRataAllocation",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalSecondaryProRataAllocation",
               "type": "uint256"
             }
           ],

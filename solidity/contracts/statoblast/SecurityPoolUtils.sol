@@ -28,15 +28,6 @@ library SecurityPoolUtils {
 		return configuredMinimumAttoRep == 0 ? theoreticalSupplyAttoRep / 100_000 : configuredMinimumAttoRep;
 	}
 
-	function calculateCumulativeAuctionBadDebt(uint256 auctionedBadDebtAttoEth, uint256 nextClaimedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep, uint256 previouslyClaimedBadDebtAttoEth) external pure returns (uint256 badDebtToAssignAttoEth, uint256 nextClaimedBadDebtAttoEth) {
-		if (nextClaimedCapacityOwnershipAttoRep == 0 || auctionedCapacityOwnershipAttoRep == 0) return (0, 0);
-		nextClaimedBadDebtAttoEth =
-			nextClaimedCapacityOwnershipAttoRep == auctionedCapacityOwnershipAttoRep
-				? auctionedBadDebtAttoEth
-				: Math.mulDiv(auctionedBadDebtAttoEth, nextClaimedCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep);
-		badDebtToAssignAttoEth = nextClaimedBadDebtAttoEth - previouslyClaimedBadDebtAttoEth;
-	}
-
 	function configureForkMigratedVault(ISecurityPool parent, ISecurityPool child, address vault, uint256 childRepBackingUnits, uint256 childCapacityOwnershipAttoRep, uint256 childFeeIndex, uint256 parentFeeIndex)
 		external
 		returns (

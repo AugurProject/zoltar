@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x502DbA8834b623989a8F0384430E5caa39BA74C0"
+			"address": "0xf5F5Ade2b81f9e43B77BD77526dCEc77F40AbD85"
 		},
 		{
 			"id": "weth",
@@ -43,7 +43,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x77b5791C5ac213ac27Eb83C458Ae03750E58f08d"
+			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -53,7 +53,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x8383a0db22a03fce13Bcd2D55Bb10A1bF6ceb798"
+			"address": "0x6a41996668aD797d6aA2Fc17C2fbE536eb1F2137"
 		},
 		{
 			"id": "openOracle",
@@ -83,7 +83,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x7F016B9b5Fc8A955c3E6821E0F647b42922E37ea"
+			"address": "0xd2fC48c2819D98C25e6533982bAF3B4cF4359fec"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -98,7 +98,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x1387b26a7ca295266E38F1a57F643a321693472d"
+			"address": "0xB4c8bC967641CF236743A33AE41544577074b63D"
 		}
 	],
 	"derivedContracts": [

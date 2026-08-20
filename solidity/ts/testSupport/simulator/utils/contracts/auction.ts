@@ -112,24 +112,24 @@ export const refundLosingBids = async (client: WriteClient, auctionAddress: Addr
 		}),
 	)
 
-export const withdrawBids = async (client: WriteClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n) =>
+export const withdrawBids = async (client: WriteClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n, secondaryProRataTotal = 0n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'withdrawBids',
 			address: auctionAddress,
-			args: [withdrawFor, tickIndex, proRataTotal],
+			args: [withdrawFor, tickIndex, proRataTotal, secondaryProRataTotal],
 		}),
 	)
 
-export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n) => {
+export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n, secondaryProRataTotal = 0n) => {
 	const result = requireArray(
 		(
 			await client.simulateContract({
 				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'withdrawBids',
 				address: auctionAddress,
-				args: [withdrawFor, tickIndex, proRataTotal],
+				args: [withdrawFor, tickIndex, proRataTotal, secondaryProRataTotal],
 			})
 		).result,
 		'Auction withdraw simulation',
@@ -138,6 +138,7 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 		totalFilledAttoRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
 		totalRefundAttoEth: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
 		totalProRataAllocation: requireBigInt(result[2], 'Auction withdraw simulation pro-rata allocation'),
+		totalSecondaryProRataAllocation: requireBigInt(result[3], 'Auction withdraw simulation secondary pro-rata allocation'),
 	}
 }
 

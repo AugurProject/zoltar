@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '87cfbe1a0ed5afaeab6fb9efec3c28ddcca3c62708a7cad91c7897566ead76cb'
+export const expectedProductionSoliditySourceFingerprint = 'abd60d05410adf49dd34cbac615a024fc8338246617674ef1e4bf7b1249ddad6'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -458,7 +458,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		refundLosingBidsFor: ['external(address,IUniformPriceDualCapBatchAuction.TickIndex[])'],
 		startAuction: ['public(uint256,uint256)'],
 		submitBid: ['external(int256)'],
-		withdrawBids: ['external(address,IUniformPriceDualCapBatchAuction.TickIndex[],uint256)'],
+		withdrawBids: ['external(address,IUniformPriceDualCapBatchAuction.TickIndex[],uint256,uint256)'],
 		withdrawPendingEthRefund: ['external()'],
 	},
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': {
@@ -494,7 +494,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol': 'af052a0723644556a488b365d578205eb331e53a1e47fff8b869ff77fab9c7ef',
+	'solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol': 'a4d296a3492395cae1b914a62ee6cbe8fb98962be7c43a46e445ec2dd50aa2ff',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '618aed7f3f8bdfd50267b9d7533db3f489f45715f1cd448f5107f67631814d34',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '2a3339ca5db0ccabc2bc10318ff3baf52273b90837f01683d3e5147a13fd2d0d',
@@ -1146,7 +1146,7 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'settleAuctionBids' }],
 				effect:
-					"Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and transfers each claim's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bidder vault. Intermediate cumulative shares round down and the final capacity claim receives the exact residual, so claim order cannot change the total. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid may receive capacity ownership even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.",
+					"Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and transfers each claim's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bidder vault. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid may receive capacity ownership even when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.",
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault owner and remain unsettled.',
 				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` with cumulative claimed and total auctioned bad debt when REP backing, capacity ownership, or bad debt is credited',
 			},
@@ -1155,7 +1155,7 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect:
-					"For a nonempty list, withdraws finalized bid settlements and transfers each claim's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bidder vault. Intermediate cumulative shares round down and the final capacity claim receives the exact residual, so claim order cannot change the total. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.",
+					"For a nonempty list, withdraws finalized bid settlements and transfers each claim's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bidder vault. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns four zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.",
 				preconditions: 'Auction finalized. A nonempty list additionally requires every index to belong to the named vault owner and remain unsettled.',
 				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` with cumulative claimed and total auctioned bad debt when REP backing, capacity ownership, or bad debt is credited; no event for an empty list',
 			},
@@ -1710,7 +1710,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '0f7cbe10566e33d0de1300b8613ef64fff72b11845bff8c4f2aa470d1ee1eb16',
+		compiledAbiFingerprint: '7f8e3a156ea1b286628b95a387a696bd86c7f8365411a6c9c39b5dca8644cb76',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose:
 			'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. AVL, cumulative-allocation, and refund-prefix mechanics live in [UniformPriceDualCapBatchAuctionStorage](../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol), an internal storage library.',
@@ -1792,10 +1792,10 @@ export const contractReferences: ContractReference[] = [
 				signals: '`AuctionFinalized`',
 			},
 			{
-				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal)`',
+				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal)`',
 				caller: 'Auction owner only',
 				effect:
-					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit REP backing units and capacity ownership. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and capacity-ownership settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
+					'For a nonempty list, returns refunds, purchased REP, and two companion pro-rata allocations for the selected beneficiary bids so the forker can credit REP backing units, capacity ownership, and bad debt. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP, capacity-ownership, and bad-debt settlement. An empty list returns four zeros without changing bids, emitting events, or calling the beneficiary.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled.',
 				signals: '`BidSettled` per processed bid; `EthRefundDeferred` when a positive push fails',

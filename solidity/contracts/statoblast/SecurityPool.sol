@@ -265,6 +265,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function updateVaultFees(address vault) public {
 		updateSettlementCollateral();
+		bool hadUncheckpointedFeeEligibleCapacity = uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0;
 		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
 		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
 		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(securityVaults[vault].capacityOwnershipAttoRep, feeIndex - securityVaults[vault].feeIndex, previousVaultFeeRemainder);
@@ -281,7 +282,8 @@ contract SecurityPool is SecurityPoolStorage {
 		unallocatedAccruedFeesAttoEth -= fees;
 		totalClaimableVaultFeesAttoEth += fees;
 		securityVaults[vault].claimableFeesAttoEth += fees;
-		if (_releaseUnassignableFeeReserveIfComplete()) poolAccountingChanged = true;
+		if (!hadUncheckpointedFeeEligibleCapacity && _releaseUnassignableFeeReserveIfComplete())
+			poolAccountingChanged = true;
 		_registerVault(vault);
 		if (vaultAccountingChanged) _emitVaultAccountingCheckpoint(vault);
 		if (poolAccountingChanged) _emitPoolAccountingCheckpoint(AccountingReason.VaultCheckpoint, vault);

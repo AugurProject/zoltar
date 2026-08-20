@@ -18,14 +18,8 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 {
 	constructor(Zoltar _zoltar) SecurityPoolForkerAuctionSettlementBase(_zoltar) {}
 
-	function _assignAuctionBadDebt(ISecurityPool securityPool, uint256 nextClaimedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep) internal override returns (uint256 badDebtToAssignAttoEth) {
-		uint256 nextClaimedBadDebtAttoEth;
-		(badDebtToAssignAttoEth, nextClaimedBadDebtAttoEth) = SecurityPoolUtils.calculateCumulativeAuctionBadDebt(auctionedBadDebtByPool[securityPool], nextClaimedCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool]);
-		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedBadDebtAttoEth;
-	}
-
-	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 totalAttoRepPurchased) public {
-		_creditAuctionProceeds(securityPool, vault, forkDataByPool[securityPool], amountAttoRep, newCapacityOwnershipAttoRep, totalAttoRepPurchased);
+	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased) public {
+		_creditAuctionProceeds(securityPool, vault, forkDataByPool[securityPool], amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, totalAttoRepPurchased);
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {

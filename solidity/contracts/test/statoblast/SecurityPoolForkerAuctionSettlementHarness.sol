@@ -5,7 +5,6 @@ import { Zoltar } from '../../Zoltar.sol';
 import { SecurityPoolForkerAuctionSettlementBase } from '../../statoblast/SecurityPoolForkerAuctionSettlementBase.sol';
 import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
 import { SecurityPoolForkerForkData } from '../../statoblast/SecurityPoolForkerTypes.sol';
-import { SecurityPoolUtils } from '../../statoblast/SecurityPoolUtils.sol';
 
 contract AuctionSettlementPoolHarness {
 	struct Vault {
@@ -43,20 +42,14 @@ contract AuctionSettlementPoolHarness {
 contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuctionSettlementBase {
 	constructor(Zoltar zoltar) SecurityPoolForkerAuctionSettlementBase(zoltar) {}
 
-	function _assignAuctionBadDebt(ISecurityPool securityPool, uint256 nextClaimedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep) internal override returns (uint256 badDebtToAssignAttoEth) {
-		uint256 nextClaimedBadDebtAttoEth;
-		(badDebtToAssignAttoEth, nextClaimedBadDebtAttoEth) = SecurityPoolUtils.calculateCumulativeAuctionBadDebt(auctionedBadDebtByPool[securityPool], nextClaimedCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool]);
-		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedBadDebtAttoEth;
-	}
-
 	function configureAuctionBadDebt(ISecurityPool securityPool, uint256 badDebtAttoEth) external {
 		auctionedBadDebtByPool[securityPool] = badDebtAttoEth;
 	}
 
-	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep) external {
+	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.auctionRepBackingUnitsPerAttoRep = 10;
 		data.auctionedCapacityOwnershipAttoRep = 3;
-		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, 1);
+		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, 1);
 	}
 }

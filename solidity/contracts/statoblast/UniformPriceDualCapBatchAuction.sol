@@ -197,7 +197,15 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			UniformPriceDualCapBatchAuctionStorage.computeClearing(nodes, root, UniformPriceDualCapBatchAuctionStorage.ClearingConfig({attoEthRaiseCap: attoEthRaiseCap, maxAttoRepBeingSold: maxAttoRepBeingSold, underfundedThreshold: underfundedThreshold}));
 	}
 
-	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal) external returns (uint256 totalFilledAttoRep, uint256 totalRefundAttoEth, uint256 totalProRataAllocation) {
+	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal)
+		external
+		returns (
+			uint256 totalFilledAttoRep,
+			uint256 totalRefundAttoEth,
+			uint256 totalProRataAllocation,
+			uint256 totalSecondaryProRataAllocation
+		)
+	{
 		require(finalized, 'Auction must be finalized before withdrawing bids');
 		// The owner is expected to be the coordinating forker contract for truth auctions,
 		// not the bidder directly. That contract calls this and then accounts the returned
@@ -264,6 +272,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			}
 			totalFilledAttoRep += attoRepFilled;
 			totalProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);
+			totalSecondaryProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, secondaryProRataTotal, attoEthRaised);
 			totalRefundAttoEth += refundAttoEth;
 			bid.claimed = true;
 			emit BidSettled(withdrawFor, tick, index, bid.bidAmountAttoEth, bidUsedAttoEth, attoRepFilled, refundAttoEth, status);

@@ -714,11 +714,6 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>calculateCumulativeAuctionBadDebt(auctionedBadDebtAttoEth, nextClaimedCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, previouslyClaimedBadDebtAttoEth)</code></td>
-							<td>Assigns auctioned bad debt from cumulative claimed capacity ownership, so claim order cannot change the total. Intermediate claims round down; the final claim receives the exact residual.</td>
-							<td><a href="../explanation/truth-auctions.html">Truth-auction settlement</a></td>
-						</tr>
-						<tr>
 							<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
 							<td>Applies fixed-point retention over elapsed time, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Canonical callers avoid zero eligible capacity ownership before this division.</td>
 							<td><a href="../explanation/statoblast.html#pools">Fee accrual</a></td>

@@ -2102,7 +2102,7 @@
 						<summary><code>AUC-04</code><span class="invariant-title">Claim-order independence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, and capacity ownership results independent of post-finalization claim order.</div>
+							<div class="invariant-property">Cumulative allocation math makes per-bid REP, refund, capacity ownership, and bad-debt results independent of post-finalization claim order.</div>
 							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and capacity ownership as Bob claiming before Alice.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2150,7 +2150,7 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim keeps purchased REP pool-held and transfers the bid's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bid's recorded vault. Each decrease in unassigned backing, capacity, and bad debt equals the corresponding vault credit. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership and bad-debt rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero. Claiming does not change total capacity ownership, fee-eligible capacity ownership, active open interest, total bad debt, retention rate, or aggregate accrued fees.</div>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and transfers the bid's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bid's recorded vault. Each decrease in unassigned backing, capacity, and bad debt equals the corresponding vault credit. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, while capacity-ownership and bad-debt division dust follows each bid's fixed cumulative ETH position. This makes each winner's allocation independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero. Claiming does not change total capacity ownership, fee-eligible capacity ownership, active open interest, total bad debt, retention rate, or aggregate accrued fees.</div>
 							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid. The claim moves the bid's backing units, deterministic capacity share, proportional bad debt, and accrued fees into that vault while leaving every pool aggregate unchanged. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
 							<dl class="invariant-metadata">
 								<div>

@@ -44,7 +44,7 @@
 				<h3>Bidding end</h3>
 				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders.</p>
 
-				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive REP backing units plus their proportional share of auctioned capacity ownership, rather than a direct REP token transfer. The same capacity share carries its cumulative portion of auctioned bad debt into the winner's vault. Intermediate claims round down, and the final capacity claim receives the exact residual, so settlement order cannot change the total bad debt assigned.</p>
+				<p>After finalization, winning bids are written into child-pool vault accounting. Winners receive REP backing units plus their proportional share of auctioned capacity ownership, rather than a direct REP token transfer. Capacity ownership and bad debt are allocated from each bid's fixed cumulative ETH position, so division dust and each winner's balance are independent of claim order.</p>
 				<p>The forker tracks collateral received through migration and the auction separately from the child contract's raw ETH balance. ETH forced into the child does not count toward the repair target. Finalization activates the child with migrated collateral plus accepted auction ETH and rejects nonzero finalizer contribution ETH.</p>
 			</section>
 

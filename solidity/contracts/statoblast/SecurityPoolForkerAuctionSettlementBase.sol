@@ -11,9 +11,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
-	function _assignAuctionBadDebt(ISecurityPool securityPool, uint256 nextClaimedAuctionedCapacityOwnershipAttoRep, uint256 auctionedCapacityOwnershipAttoRep) internal virtual returns (uint256);
-
-	function _creditAuctionProceeds(ISecurityPool securityPool, address vault, SecurityPoolForkerForkData storage data, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 totalAttoRepPurchased) internal {
+	function _creditAuctionProceeds(ISecurityPool securityPool, address vault, SecurityPoolForkerForkData storage data, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased) internal {
 		if (amountAttoRep == 0 && newCapacityOwnershipAttoRep == 0) return;
 		uint256 auctionRepBackingUnitsPerAttoRep = data.auctionRepBackingUnitsPerAttoRep;
 		if (amountAttoRep > 0) require(auctionRepBackingUnitsPerAttoRep > 0, 'Rate');
@@ -26,7 +24,10 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 		data.claimedAuctionRepPurchasedAttoRep += amountAttoRep;
 		data.claimedAuctionedCapacityOwnershipAttoRep = nextClaimedAuctionedCapacityOwnershipAttoRep;
 		data.claimedAuctionRepBackingUnits = nextClaimedAuctionRepBackingUnits;
-		uint256 badDebtToAssignAttoEth = _assignAuctionBadDebt(securityPool, nextClaimedAuctionedCapacityOwnershipAttoRep, data.auctionedCapacityOwnershipAttoRep);
+		uint256 nextClaimedAuctionedBadDebtAttoEth =
+			claimedAuctionedBadDebtByPool[securityPool] + badDebtToAssignAttoEth;
+		require(nextClaimedAuctionedBadDebtAttoEth <= auctionedBadDebtByPool[securityPool], 'Bad debt');
+		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedAuctionedBadDebtAttoEth;
 		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.auctionFeeIndexAtFinalization);
 		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
 	}

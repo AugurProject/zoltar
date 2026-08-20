@@ -1444,50 +1444,52 @@ describe('Statoblast: truth auction', () => {
 			}
 		}
 
-		test('the final auction claim preserves aggregate fees before a later checkpoint returns unassignable residue to collateral', async () => {
+		test('terminal fee residue waits for a later checkpoint regardless of auction and vault reconciliation order', async () => {
 			const { auctionParticipant, auctionTick, auctionedCapacityOwnershipAttoRep, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep('final auction fee residue source')
+			const migratedCapacityOwnershipAttoRep = (await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).capacityOwnershipAttoRep
 			const auctionFeesAtIndexOne = auctionedCapacityOwnershipAttoRep / PRICE_PRECISION
+			const migratedFeesAtIndexOne = migratedCapacityOwnershipAttoRep / PRICE_PRECISION
+			const aggregateOnlyReserveAttoEth = PRICE_PRECISION
 			const migratedVaultFeeIndexSlot = getMappingStorageSlot(client.account.address, 16n) + 3n
 			await mockWindow.addStateOverrides({
 				[yesSecurityPool.securityPool]: {
 					stateDiff: {
 						[formatStorageSlot(8n)]: 1n,
-						[formatStorageSlot(11n)]: auctionFeesAtIndexOne + 1n,
-						[formatStorageSlot(13n)]: auctionedCapacityOwnershipAttoRep,
+						[formatStorageSlot(11n)]: auctionFeesAtIndexOne + migratedFeesAtIndexOne + aggregateOnlyReserveAttoEth,
+						[formatStorageSlot(13n)]: auctionedCapacityOwnershipAttoRep + migratedCapacityOwnershipAttoRep,
 						[formatStorageSlot(20n)]: BigInt(SystemState.PoolForked),
-						[formatStorageSlot(migratedVaultFeeIndexSlot)]: 1n,
+						[formatStorageSlot(migratedVaultFeeIndexSlot)]: 0n,
 					},
 				},
 			})
 
-			const collateralBeforeClaim = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
-			const snapshotBeforeClaim = await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'getPoolAccountingSnapshot',
-				args: [],
-			})
-			strictEqualTypeSafe(snapshotBeforeClaim.unallocatedAccruedFeesAttoEth, auctionFeesAtIndexOne + 1n, 'test setup should leave one aggregate-only reserve attoETH beyond the auction allocation fee credit')
-			strictEqualTypeSafe(snapshotBeforeClaim.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, auctionedCapacityOwnershipAttoRep, 'the auction allocation should be the only ownership awaiting the final fee index')
-			strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).feeIndex, snapshotBeforeClaim.feeIndex, 'the migrated vault must already be checkpointed before the final auction claim')
+			const collateralBeforeReconciliation = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
+			const readAccounting = async () =>
+				await client.readContract({
+					abi: statoblast_SecurityPool_SecurityPool.abi,
+					address: yesSecurityPool.securityPool,
+					functionName: 'getPoolAccountingSnapshot',
+					args: [],
+				})
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
-
-			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			const snapshotAfterClaim = await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'getPoolAccountingSnapshot',
-				args: [],
-			})
-			strictEqualTypeSafe(participantVault.claimableFeesAttoEth, auctionFeesAtIndexOne, 'the final auction claim should preserve the winner fee credit')
-			strictEqualTypeSafe(snapshotAfterClaim.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 0n, 'the final auction claim should reconcile the last outstanding fee-eligible ownership')
-			strictEqualTypeSafe(snapshotAfterClaim.unallocatedAccruedFeesAttoEth, 1n, 'the final auction claim should leave aggregate-only reserve attoETH for a separate checkpoint')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeClaim, 'the final auction claim should preserve settlement collateral')
-			strictEqualTypeSafe(await getTotalAccruedFees(client, yesSecurityPool.securityPool), snapshotBeforeClaim.unallocatedAccruedFeesAttoEth, 'the final auction claim should preserve aggregate accrued fees')
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeClaim + 1n, 'a subsequent migrated-vault checkpoint should release the unassignable residue')
-			strictEqualTypeSafe(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 'all forked-pool fees should reconcile after the final auction claim')
+			const auctionFirstAccounting = await readAccounting()
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
+			const vaultFirstAccounting = await readAccounting()
+
+			strictEqualTypeSafe(auctionFirstAccounting.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, 0n, 'both ownership slices should be reconciled')
+			assert.ok(auctionFirstAccounting.unallocatedAccruedFeesAttoEth > 0n, 'the last vault reconciliation should leave residue for a separate checkpoint')
+			strictEqualTypeSafe(vaultFirstAccounting.unallocatedAccruedFeesAttoEth, auctionFirstAccounting.unallocatedAccruedFeesAttoEth, 'terminal reserve must not depend on reconciliation order')
+			strictEqualTypeSafe(vaultFirstAccounting.totalClaimableVaultFeesAttoEth, auctionFirstAccounting.totalClaimableVaultFeesAttoEth, 'claimable fees must not depend on reconciliation order')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeReconciliation, 'terminal reconciliation should preserve collateral until a later checkpoint')
+			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeReconciliation + vaultFirstAccounting.unallocatedAccruedFeesAttoEth, 'a subsequent checkpoint should release the unassignable residue')
+			strictEqualTypeSafe(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 'all forked-pool fees should reconcile after the later checkpoint')
 		})
 
 		test('simple truth auction: participant buys rep and can claim proceeds', async () => {
@@ -2517,7 +2519,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(secondVaultReverseOrder.capacityOwnershipAttoRep, secondVaultFirstOrder.capacityOwnershipAttoRep, 'capacity ownership')
 		})
 
-		test('capacity ownership', async () => {
+		test('auction settlement assigns deterministic bad-debt dust independent of claim order', async () => {
 			const poolDeploymentHash = await client.sendTransaction({
 				data: `0x${test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.evm.bytecode.object}`,
 			})
@@ -2538,12 +2540,12 @@ describe('Statoblast: truth auction', () => {
 
 			const zeroRepVault = addressString(TEST_ADDRESSES[1])
 			const positiveRepVault = addressString(TEST_ADDRESSES[2])
-			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, capacityOwnershipAttoRepAmount: bigint) => {
+			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, capacityOwnershipAttoRepAmount: bigint, badDebtAttoEth: bigint) => {
 				const hash = await client.writeContract({
 					address: forkerAddress,
 					abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
 					functionName: 'creditAuctionProceeds',
-					args: [poolAddress, vault, attoRepAmount, capacityOwnershipAttoRepAmount],
+					args: [poolAddress, vault, attoRepAmount, capacityOwnershipAttoRepAmount, badDebtAttoEth],
 				})
 				await client.waitForTransactionReceipt({ hash })
 			}
@@ -2554,7 +2556,7 @@ describe('Statoblast: truth auction', () => {
 					functionName: 'securityVaults',
 					args: [vault],
 				})
-			const auctionedBadDebtAttoEth = 9n
+			const auctionedBadDebtAttoEth = 1n
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					address: poolAddress,
@@ -2573,26 +2575,34 @@ describe('Statoblast: truth auction', () => {
 			)
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
-			await credit(zeroRepVault, 0n, 1n)
-			await credit(positiveRepVault, 1n, 2n)
+			await credit(zeroRepVault, 0n, 1n, 0n)
+			await credit(positiveRepVault, 1n, 2n, 1n)
 			const zeroRepForward = await readVault(zeroRepVault)
 			const positiveRepForward = await readVault(positiveRepVault)
 			strictEqualTypeSafe(zeroRepForward[0], 0n, 'capacity ownership')
 			strictEqualTypeSafe(zeroRepForward[1], 1n, 'capacity ownership')
 			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
 			strictEqualTypeSafe(positiveRepForward[1], 2n, 'capacity ownership')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 3n, 'auctioned bad debt should follow the first vault capacity award')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }), 6n, 'auctioned bad debt should follow the second vault capacity award')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 0n, 'the earlier auction position should receive no indivisible bad-debt residue')
+			strictEqualTypeSafe(
+				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),
+				1n,
+				'the later auction position should receive the indivisible bad-debt residue',
+			)
 
 			await mockWindow.anvilRevert(settlementSnapshot)
-			await credit(positiveRepVault, 1n, 2n)
-			await credit(zeroRepVault, 0n, 1n)
+			await credit(positiveRepVault, 1n, 2n, 1n)
+			await credit(zeroRepVault, 0n, 1n, 0n)
 			const zeroRepReverse = await readVault(zeroRepVault)
 			const positiveRepReverse = await readVault(positiveRepVault)
 			strictEqualTypeSafe(zeroRepReverse[1], zeroRepForward[1], 'capacity ownership')
 			strictEqualTypeSafe(positiveRepReverse[1], positiveRepForward[1], 'capacity ownership')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 3n, 'auctioned bad-debt allocation should be independent of claim order')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }), 6n, 'auctioned bad-debt allocation should consume the full cumulative amount')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 0n, 'auctioned bad-debt allocation should be independent of claim order')
+			strictEqualTypeSafe(
+				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),
+				1n,
+				'the deterministic later auction position should consume the indivisible residue',
+			)
 
 			const totalEligibleCapacityOwnershipAttoRep = await client.readContract({
 				address: poolAddress,

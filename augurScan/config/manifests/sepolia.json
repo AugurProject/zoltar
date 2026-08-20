@@ -6,7 +6,7 @@
       "proxyDeployer"
     ],
     [
-      "0xbdbcb20634F800dA6f26D496C9c2A17C3e9A733E",
+      "0x502DbA8834b623989a8F0384430E5caa39BA74C0",
       "Deployment Status Oracle",
       "deploymentStatusOracle"
     ],
@@ -26,7 +26,7 @@
       "scalarOutcomes"
     ],
     [
-      "0x37AD93e86875869373D9cEF002Ca97B970D01a68",
+      "0x8383a0db22a03fce13Bcd2D55Bb10A1bF6ceb798",
       "SecurityPoolUtils",
       "securityPoolUtils"
     ],
@@ -56,7 +56,7 @@
       "priceCoordinatorFactory"
     ],
     [
-      "0xF89eCd2310688612639d618C7fcBb8b67465D653",
+      "0x7F016B9b5Fc8A955c3E6821E0F647b42922E37ea",
       "Security Pool Forker",
       "securityPoolForker"
     ],
@@ -71,7 +71,7 @@
       "escalationGameFactory"
     ],
     [
-      "0x5e9E8495015eed6C0FA1b926BabDDE311d2004eD",
+      "0x1387b26a7ca295266E38F1a57F643a321693472d",
       "Security Pool Factory",
       "securityPoolFactory"
     ],

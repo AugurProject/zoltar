@@ -1576,7 +1576,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, securityPoolAddresses.securityPool), 0n, 'pool fee accounting should fully clear once every credited vault fee is redeemed')
 		})
 
-		test('final fork checkpoint returns aggregate-only fee dust to collateral after every vault syncs', async () => {
+		test('a checkpoint after every vault syncs returns aggregate-only fee dust to collateral', async () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 1n * 10n ** 18n)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId)
@@ -1609,7 +1609,10 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), 1n, 'aggregate-only reserve must remain protected until every eligible vault checkpoints')
 			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
 
-			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), 0n, 'final checkpoint should clear reserve attoETH that no vault can individually claim')
+			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), 1n, 'the final ownership reconciliation should preserve reserve accounting until a later checkpoint')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), collateralBeforeCheckpoints, 'the final ownership reconciliation should not classify reserve dust based on which vault ran last')
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), 0n, 'a later checkpoint should clear reserve attoETH that no vault can individually claim')
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), collateralBeforeCheckpoints + 1n, 'non-claimable final reserve should return to parent collateral')
 		})
 
