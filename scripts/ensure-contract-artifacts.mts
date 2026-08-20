@@ -17,7 +17,13 @@ const contractFreshnessCachePath = path.join(solidityRoot, 'artifacts', '.freshn
 const sharedFreshnessCachePath = path.join(sharedRoot, 'js', '.freshness-hash')
 const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifact.ts']
 
-const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'abis.ts')]
+const requiredOutputs = [
+	path.join(solidityRoot, 'artifacts', 'Contracts.json'),
+	path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'),
+	path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'contractArtifact.ts'),
+	path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'abis.ts'),
+	path.join(repositoryRoot, 'ui', 'trading', 'ts', 'generated', 'contractArtifact.ts'),
+]
 const freshnessInputs = [
 	path.join(solidityRoot, 'bun.lock'),
 	path.join(solidityRoot, 'package.json'),

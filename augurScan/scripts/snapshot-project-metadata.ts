@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import solc from 'solc'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
 const contractsRoot = path.join(projectRoot, 'solidity/contracts')
+const compiledArtifactPath = path.join(projectRoot, 'solidity/artifacts/Contracts.json')
 const outputPath = path.resolve(import.meta.dir, '../config/abis.json')
 const manifestsRoot = path.resolve(import.meta.dir, '../config/manifests')
 
@@ -31,74 +31,64 @@ const vendorPrefix = 'contracts/peripherals/openOracle/openzeppelin/contracts/'
 for (const [name, source] of Object.entries(sources)) {
 	if (name.startsWith(vendorPrefix)) sources[`@openzeppelin/contracts/${name.slice(vendorPrefix.length)}`] = source
 }
-const input = {
-	language: 'Solidity',
-	sources,
-	settings: {
-		outputSelection: {
-			'*': {
-				'*': ['abi'],
-			},
-		},
-	},
+const result = JSON.parse(await readFile(compiledArtifactPath, 'utf8')) as {
+	contracts?: Record<string, Record<string, { abi?: readonly unknown[] }>>
+}
+if (result.contracts === undefined) throw new Error(`Canonical Solidity artifact has no contracts: ${compiledArtifactPath}`)
+
+const abiKeyOrder = ['anonymous', 'indexed', 'components', 'inputs', 'internalType', 'name', 'outputs', 'stateMutability', 'type'] as const
+const abiKeyPriorities = new Map<string, number>(abiKeyOrder.map((key, index) => [key, index]))
+function canonicalizeAbiValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(canonicalizeAbiValue)
+	if (typeof value !== 'object' || value === null) return value
+	const entries = Object.entries(value).sort(([left], [right]) => {
+		const leftIndex = abiKeyPriorities.get(left)
+		const rightIndex = abiKeyPriorities.get(right)
+		if (leftIndex === undefined && rightIndex === undefined) return left.localeCompare(right)
+		if (leftIndex === undefined) return 1
+		if (rightIndex === undefined) return -1
+		return leftIndex - rightIndex
+	})
+	return Object.fromEntries(entries.map(([key, entryValue]) => [key, canonicalizeAbiValue(entryValue)]))
 }
 
-const result = JSON.parse(solc.compile(JSON.stringify(input))) as {
-	contracts?: Record<string, Record<string, { abi: readonly unknown[] }>>
-	errors?: readonly { severity: string; formattedMessage: string }[]
+function canonicalizeAbi(abi: readonly unknown[]): readonly unknown[] {
+	const canonical = canonicalizeAbiValue(abi)
+	if (!Array.isArray(canonical)) throw new Error('ABI canonicalization did not return an array')
+	return canonical
 }
-const errors = result.errors?.filter((error) => error.severity === 'error') ?? []
-if (errors.length > 0) throw new Error(errors.map((error) => error.formattedMessage).join('\n'))
-if (result.contracts === undefined) throw new Error('Solidity compiler returned no contracts')
 
 const contracts: Record<string, { source: string; abi: readonly unknown[] }> = {}
 for (const source of Object.keys(result.contracts).sort()) {
+	if (sources[source] === undefined) continue
 	const sourceContracts = result.contracts[source]
 	if (sourceContracts === undefined) continue
 	for (const name of Object.keys(sourceContracts).sort()) {
 		const artifact = sourceContracts[name]
-		if (artifact === undefined || artifact.abi.length === 0) continue
+		if (artifact?.abi === undefined || artifact.abi.length === 0) continue
+		const abi = canonicalizeAbi(artifact.abi)
 		const existing = contracts[name]
-		if (existing !== undefined && JSON.stringify(existing.abi) !== JSON.stringify(artifact.abi)) {
-			contracts[`${source}:${name}`] = { source, abi: artifact.abi }
+		if (existing !== undefined && JSON.stringify(existing.abi) !== JSON.stringify(abi)) {
+			contracts[`${source}:${name}`] = { source, abi }
 			continue
 		}
-		contracts[name] = { source, abi: artifact.abi }
+		contracts[name] = { source, abi }
 	}
 }
 
-const tradingSources = {
-	...(await collectSources(contractsRoot, projectRoot)),
-	...(await collectSources(path.join(projectRoot, 'trading/contracts'), projectRoot)),
-}
-const tradingVendorPrefix = 'solidity/contracts/peripherals/openOracle/openzeppelin/contracts/'
-for (const [name, source] of Object.entries(tradingSources)) {
-	if (name.startsWith(tradingVendorPrefix)) tradingSources[`@openzeppelin/contracts/${name.slice(tradingVendorPrefix.length)}`] = source
-}
-const tradingResult = JSON.parse(
-	solc.compile(
-		JSON.stringify({
-			language: 'Solidity',
-			sources: tradingSources,
-			settings: { outputSelection: { '*': { '*': ['abi'] } } },
-		}),
-	),
-) as typeof result
-const tradingErrors = tradingResult.errors?.filter((error) => error.severity === 'error') ?? []
-if (tradingErrors.length > 0) throw new Error(tradingErrors.map((error) => error.formattedMessage).join('\n'))
 for (const [source, name] of [
-	['trading/contracts/TwoWayConstantProductFactory.sol', 'TwoWayConstantProductFactory'],
-	['trading/contracts/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair'],
+	['contracts/trading/TwoWayConstantProductFactory.sol', 'TwoWayConstantProductFactory'],
+	['contracts/trading/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair'],
 ] as const) {
-	const artifact = tradingResult.contracts?.[source]?.[name]
-	if (artifact === undefined) throw new Error(`Solidity compiler returned no ${name} ABI`)
-	contracts[name] = { source, abi: artifact.abi }
+	const artifact = result.contracts?.[source]?.[name]
+	if (artifact?.abi === undefined) throw new Error(`Canonical Solidity artifact has no ${name} ABI`)
+	contracts[name] = { source, abi: canonicalizeAbi(artifact.abi) }
 }
 
 const payload = {
 	sourceHash: createHash('sha256')
 		.update(
-			Object.entries(tradingSources)
+			Object.entries(sources)
 				.filter(([name]) => !name.startsWith('@openzeppelin/'))
 				.sort(([left], [right]) => left.localeCompare(right))
 				.map(([name, source]) => `${name}\0${source.content}`)

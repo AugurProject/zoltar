@@ -20,6 +20,7 @@ const generatedFixtureFiles = [
 	'solidity/ts/types/contractArtifact.ts',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/trading/ts/generated/contractArtifact.ts',
 	'ui/coreShared/js/index.js',
 	'ui/zoltar/dist/index.html',
 	'ui/zoltar/tsconfig.tsbuildinfo',

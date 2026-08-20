@@ -35,6 +35,10 @@ const allowedImmutableContractWarnings = [
 		message: 'Unnamed return variable can remain unassigned',
 	},
 	{
+		sourcePath: 'contracts/trading/test/TradingProtocolMocks.sol',
+		message: '"selfdestruct" has been deprecated',
+	},
+	{
 		sourcePath: OPEN_ORACLE_UPSTREAM_PATH,
 		message: 'Unnamed return variable can remain unassigned',
 	},
@@ -91,6 +95,7 @@ const CompileResult = funtypes.ReadonlyObject({
 	contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
+	compilerProfiles: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 })
 
 const HashCache = funtypes.ReadonlyPartial({
@@ -207,7 +212,7 @@ async function computeContractHash(sourceFiles: Map<string, string>, openOracleC
 	hasher.update('\n')
 	hasher.update(
 		JSON.stringify({
-			artifactMergeVersion: 2,
+			artifactMergeVersion: 3,
 			mainCompilerSettings,
 			openOracleCompilerSettings,
 			openOracleLocalPath: OPEN_ORACLE_LOCAL_PATH,
@@ -457,7 +462,7 @@ function mergeCompileSources(mainSources: unknown, openOracleSources: unknown, s
 	return Object.keys(mergedSources).length > 0 ? mergedSources : undefined
 }
 
-function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, openOracleResult: funtypes.Static<typeof CompileResult>) {
+function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, openOracleResult: funtypes.Static<typeof CompileResult>, openOracleCompiler: SolcCompiler) {
 	const mergedContracts: Record<string, Record<string, unknown>> = {}
 	const openOracleSourceIdOffset = getOpenOracleSourceIdOffset(mainResult.sources)
 
@@ -480,6 +485,10 @@ function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, 
 	}
 
 	return {
+		compilerProfiles: {
+			main: { settings: mainCompilerSettings, version: getCompilerVersion(solc) },
+			openOracle: { settings: openOracleCompilerSettings, version: getCompilerVersion(openOracleCompiler) },
+		},
 		contracts: mergedContracts,
 		sources: mergeCompileSources(mainResult.sources, openOracleResult.sources, openOracleSourceIdOffset),
 	}
@@ -516,7 +525,7 @@ const compileContracts = async () => {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
 		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
 		const openOracleResult = compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings)
-		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult))
+		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult, openOracleCompiler))
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 		await fs.writeFile(ARTIFACTS_JSON, JSON.stringify(mergedResult))

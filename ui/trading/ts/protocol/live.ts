@@ -131,9 +131,9 @@ const shareTokenAbi = [
 	},
 ] as const satisfies Abi
 
-const tradingFactory = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
-const pair = tradingContracts['trading/contracts/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
-const router = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
+const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 const UI_SLIPPAGE_BPS = 50n
 
 export function requireTransactionSlippageBps(slippageBps: bigint) {

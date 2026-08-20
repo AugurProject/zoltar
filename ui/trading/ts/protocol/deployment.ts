@@ -33,8 +33,8 @@ type TradingDeploymentWallet = Readonly<{
 	waitForTransactionReceipt(parameters: Readonly<{ hash: Hash }>): Promise<Readonly<{ status: 'success' | 'reverted' }>>
 }>
 
-const factoryContract = tradingContracts['trading/contracts/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
-const routerContract = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 const zeroSalt = toHex(0, { size: 32 })
 const rpcStateRetryDelaysMilliseconds = [250, 500, 1_000, 2_000, 4_000] as const
 export const CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex

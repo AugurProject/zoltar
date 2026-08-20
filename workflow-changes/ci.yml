@@ -140,6 +140,7 @@ jobs:
           path: |
             ui/zoltar/dist
             ui/statoblast/dist
+            ui/trading/dist
           if-no-files-found: error
           retention-days: 1
       - name: Upload component build inputs
@@ -262,7 +263,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Run dependency audits
-        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd solidity && bun audit)
+        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd ui/trading && bun audit) && (cd solidity && bun audit)
 
   infrastructure-checks:
     name: Infrastructure checks

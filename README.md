@@ -12,7 +12,7 @@ The codebase is split into these main areas:
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
-- `trading/` contains the Trading contracts, SDK, deployment tooling, and their tests
+- `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `scripts/` contains repository-wide build, validation, and test orchestration

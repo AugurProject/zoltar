@@ -21,7 +21,16 @@ export type GeneratedArtifactCheckOptions = {
 	runGit?: GitRunner
 }
 
-const explicitlyRequiredGeneratedOutputs = ['shared/js/.freshness-hash', 'solidity/artifacts/Contracts.json', 'solidity/artifacts/.freshness-hash', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts']
+const explicitlyRequiredGeneratedOutputs = [
+	'shared/js/.freshness-hash',
+	'solidity/artifacts/Contracts.json',
+	'solidity/artifacts/.freshness-hash',
+	'solidity/.contract-hash.json',
+	'solidity/ts/types/contractArtifact.ts',
+	'ui/coreShared/ts/abis.ts',
+	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/trading/ts/generated/contractArtifact.ts',
+]
 
 const generatedReviewPaths = [
 	'shared/js',
@@ -41,6 +50,7 @@ const generatedReviewPaths = [
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
 	'ui/coreShared/ts/deploymentArtifacts.ts',
+	'ui/trading/ts/generated',
 	'ui/zoltar/vendor',
 	'ui/statoblast/vendor',
 	'ui/trading/vendor',

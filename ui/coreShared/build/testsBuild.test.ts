@@ -11,7 +11,7 @@ describe('UI test build target parsing', () => {
 	})
 
 	test('rejects missing and unknown IDs with a clear error', () => {
-		expect(() => parseTestBuildTarget(undefined, 'the UI test build')).toThrow(/Missing UI app ID.*zoltar, statoblast/)
+		expect(() => parseTestBuildTarget(undefined, 'the UI test build')).toThrow(/Missing UI app ID.*zoltar, statoblast, trading/)
 		expect(() => parseTestBuildTarget('', 'the UI test build')).toThrow(/Missing UI app ID/)
 		expect(() => parseTestBuildTarget('core-shared', 'the UI test build')).toThrow(/Unknown UI app ID 'core-shared'/)
 		expect(() => parseTestBuildTarget('ui', 'the UI test build')).toThrow(/Unknown UI app ID 'ui'/)
@@ -21,6 +21,7 @@ describe('UI test build target parsing', () => {
 		expect(isTestBuildTarget('coreShared')).toBe(true)
 		expect(isTestBuildTarget('zoltar')).toBe(true)
 		expect(isTestBuildTarget('statoblast')).toBe(true)
+		expect(isTestBuildTarget('trading')).toBe(true)
 		expect(isTestBuildTarget('monolith')).toBe(false)
 	})
 })

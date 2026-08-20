@@ -11,7 +11,7 @@ const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
-const routerAbi = tradingContracts['trading/contracts/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
+const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
 const migrateAbi = [
 	{
 		type: 'function',

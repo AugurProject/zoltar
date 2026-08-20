@@ -63,6 +63,7 @@ jobs:
           (cd ui/coreShared && bun install --frozen-lockfile)
           (cd ui/zoltar && bun install --frozen-lockfile)
           (cd ui/statoblast && bun install --frozen-lockfile)
+          (cd ui/trading && bun install --frozen-lockfile)
 
       - name: Prepare contract artifacts
         run: bun run ensure-contract-artifacts

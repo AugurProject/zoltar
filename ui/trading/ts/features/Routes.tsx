@@ -1,11 +1,11 @@
 import { useState } from 'preact/hooks'
-import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '@zoltar/trading/sdk/math.js'
+import { quoteAddLiquidity, quoteInitialLiquidity, quoteRemoveLiquidity } from '@zoltar/shared/trading/math'
 import type { DemoMarket } from '../demo/markets.js'
 import { demoAttoEthToAttoShares, demoWalletBalances, lifecycleLabel } from '../demo/markets.js'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.js'
-import { maximumInsuredExit } from '@zoltar/trading/sdk/positions.js'
+import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { shareBalanceScope } from '../protocol/live.js'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
@@ -461,7 +461,7 @@ export function Help() {
 					collateral only if their outcome won.
 				</p>
 				<p>
-					The complete developer and protocol documentation is included in <code>trading/docs/</code>.
+					The complete developer and protocol documentation is included in <code>solidity/docs/trading/</code>.
 				</p>
 			</section>
 		</main>

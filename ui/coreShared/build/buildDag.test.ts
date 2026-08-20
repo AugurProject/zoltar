@@ -45,10 +45,9 @@ describe('UI build dependency direction', () => {
 			if (script === undefined) throw new Error(`${name} script is missing`)
 			const appsIndex = script.indexOf('bun run ui:build:apps')
 			const testsIndex = script.indexOf('bun run ui:build:tests')
-			const tradingSdkInstallIndex = script.indexOf('install-frozen.mts trading')
 			const tradingUiInstallIndex = script.indexOf('install-frozen.mts ui/trading')
-			expect(tradingSdkInstallIndex).toBeGreaterThan(0)
-			expect(tradingUiInstallIndex).toBeGreaterThan(tradingSdkInstallIndex)
+			expect(script).not.toContain('install-frozen.mts trading')
+			expect(tradingUiInstallIndex).toBeGreaterThan(0)
 			expect(appsIndex).toBeGreaterThan(0)
 			expect(appsIndex).toBeGreaterThan(tradingUiInstallIndex)
 			expect(testsIndex).toBeGreaterThan(appsIndex)
@@ -72,6 +71,7 @@ describe('UI build dependency direction', () => {
 		expect(tradingPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/trading']).toBeUndefined()
 	})
 
 	test('watch mode starts every TypeScript project required by the selected app', () => {
@@ -80,14 +80,14 @@ describe('UI build dependency direction', () => {
 		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltar', 'statoblast', 'trading'])
 	})
 
-	test('Trading watch mode rebuilds its SDK and contracts and reloads app CSS', () => {
+	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {
 		const { coreSharedRoot } = getUiCoreSharedPaths()
 		const watchSource = fs.readFileSync(`${coreSharedRoot}/build/watch.mts`, 'utf8')
-		expect(watchSource).toContain("path.join(TRADING_PACKAGE_ROOT_PATH, 'contracts')")
-		expect(watchSource).toContain("path.join(TRADING_PACKAGE_ROOT_PATH, 'ts', 'sdk')")
-		expect(watchSource).toContain("spawn(BUN_EXECUTABLE_PATH, ['run', 'compile']")
+		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')")
+		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')")
+		expect(watchSource).toContain("spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:contracts']")
 		expect(watchSource).toContain("path.join(APP_ROOT_PATH, 'css')")
-		expect(watchSource).toContain("appId === 'trading' ? [path.join(TRADING_PACKAGE_ROOT_PATH, 'js')]")
+		expect(watchSource).not.toContain('TRADING_PACKAGE_ROOT_PATH')
 	})
 
 	test('ui:build:tests compiles each package test tree exactly once', () => {

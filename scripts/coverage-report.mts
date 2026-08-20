@@ -245,7 +245,7 @@ function unloadedSourceCoverage(file: string, source: string) {
 }
 
 function isGeneratedSource(file: string) {
-	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast|trading)\/(?:vendor|js)\//.test(file) || file.startsWith('shared/js/') || file.startsWith('trading/js/')
+	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast|trading)\/(?:vendor|js)\//.test(file) || file.startsWith('shared/js/')
 }
 
 export function classifyTypeScriptSource(filePath: string, source: string): TypeScriptSurfaceName | undefined {

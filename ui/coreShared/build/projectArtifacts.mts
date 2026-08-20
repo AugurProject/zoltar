@@ -10,6 +10,7 @@ const ABI_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'abis.ts')
 const ABI_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'contractArtifact.ts')
 const CONTRACT_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
+const TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, '..', 'trading', 'ts', 'generated', 'contractArtifact.ts')
 
 type CompiledContract = {
 	readonly abi?: unknown
@@ -42,6 +43,10 @@ export async function copyProjectArtifacts() {
 	})
 
 	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${contracts.join('\n\n')}\n`)
+
+	const tradingContracts = Object.fromEntries(Object.entries(compiledArtifacts.contracts).filter(([filename]) => filename.startsWith('contracts/trading/')))
+	await fs.mkdir(path.dirname(TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH), { recursive: true })
+	await fs.writeFile(TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH, `// Generated from solidity/artifacts/Contracts.json by ui/coreShared/build/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)

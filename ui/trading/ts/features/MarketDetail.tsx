@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading/sdk/positions.js'
-import { conditionalYesProbability } from '@zoltar/trading/sdk/math.js'
+import { quoteEnterPosition, quoteExitPosition, maximumInsuredExit, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/shared/trading/positions'
+import { conditionalYesProbability } from '@zoltar/shared/trading/math'
 import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import type { DemoMarket } from '../demo/markets.js'
 import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../demo/markets.js'

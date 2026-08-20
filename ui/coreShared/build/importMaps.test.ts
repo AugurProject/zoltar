@@ -51,7 +51,9 @@ for (const appId of UI_APP_IDS) {
 		}
 		if (appId === 'trading') {
 			expect(imports['@zoltar/ui-statoblast/']).toBe('/ui/statoblast/js/')
-			expect(imports['@zoltar/trading/']).toBe('/trading/js/')
+			expect(imports['@zoltar/shared/trading/math']).toBe('../shared/js/trading/math.js')
+			expect(imports['@zoltar/shared/trading/positions']).toBe('../shared/js/trading/positions.js')
+			expect(imports['@zoltar/shared/trading/transactions']).toBe('../shared/js/trading/transactions.js')
 		}
 
 		for (const mappedPath of Object.values(imports)) {

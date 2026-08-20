@@ -120,8 +120,8 @@ pins the deployment input and prevents its large upstream packages from entering
 | `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
 | `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
-| `ui/*/js/**` and `trading/js/**` | UI and Trading SDK TypeScript builds per package |
-| `ui/trading/ts/generated/contractArtifact.ts` | `bun run trading:build` or `bun run trading:ui:build` |
+| `ui/*/js/**` | UI TypeScript builds per package |
+| `ui/trading/ts/generated/contractArtifact.ts` | `bun run compile-contracts`, `bun run generate`, or `bun run trading:ui:build` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |

@@ -43,6 +43,7 @@ runs:
         (cd ui/coreShared && bun install --frozen-lockfile)
         (cd ui/zoltar && bun install --frozen-lockfile)
         (cd ui/statoblast && bun install --frozen-lockfile)
+        (cd ui/trading && bun install --frozen-lockfile)
         (cd solidity && bun install --frozen-lockfile)
 
     - name: Cache generated shared package
@@ -72,6 +73,7 @@ runs:
         path: |
           ui/zoltar/vendor
           ui/statoblast/vendor
+          ui/trading/vendor
         key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'ui/coreShared/build/bundlerPaths.mts', 'ui/coreShared/build/vendor.mts') }}
 
     - name: Generate and verify generated artifacts

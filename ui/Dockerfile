@@ -37,7 +37,7 @@ COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
-RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast/ts && bun run compile-contracts
+RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts && bun run compile-contracts
 
 # Install UI dependencies and vendor browser packages after the cached contract build.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
@@ -48,8 +48,7 @@ COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
-COPY ./trading/package.json ./trading/bun.lock ./trading/tsconfig.json ./trading/tsconfig.build.json /source/trading/
-RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile && cd ../trading && bun install --frozen-lockfile && cd ../../trading && bun install --frozen-lockfile
+RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile && cd ../trading && bun install --frozen-lockfile
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
 RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast && bun ./ui/coreShared/build/vendor.mts trading
 
@@ -71,8 +70,6 @@ COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-COPY ./trading/contracts/ /source/trading/contracts/
-COPY ./trading/ts/ /source/trading/ts/
 COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
 COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 
@@ -80,7 +77,6 @@ COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
 RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
-RUN cd /source/trading && bun run compile
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
 
 # ----------------------------------------------------

@@ -13,7 +13,6 @@
 	"dependencies": {
 		"@preact/signals": "2.0.1",
 		"@zoltar/shared": "file:../../shared",
-		"@zoltar/trading": "file:../../trading",
 		"@zoltar/ui-core-shared": "file:../coreShared",
 		"@zoltar/ui-statoblast": "file:../statoblast",
 		"@zoltar/ui-zoltar": "file:../zoltar",
@@ -30,7 +29,7 @@
 		"ws": "8.21.0"
 	},
 	"scripts": {
-		"generate": "cd ../../trading && bun run compile && cd ../ui/trading && bun ../coreShared/build/vendor.mts trading",
+		"generate": "cd ../.. && bun run ensure-contract-artifacts && cd ui/trading && bun ../coreShared/build/vendor.mts trading",
 		"vendor": "bun ../coreShared/build/vendor.mts trading",
 		"build:workers": "bun ../coreShared/build/workers.mts trading",
 		"build:tests": "bun ../coreShared/build/tests.mts trading",
@@ -38,6 +37,9 @@
 		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
 		"build:prod": "bun run generate && bun ../coreShared/build/production.mts trading",
 		"watch": "bun ../coreShared/build/watch.mts trading",
-		"serve": "bun ../coreShared/dev-server.ts trading"
+		"serve": "bun ../coreShared/dev-server.ts trading",
+		"qa:browser": "bun ./scripts/browser-qa.mts",
+		"docker:build": "docker build --file ../Dockerfile --target local-runtime --tag zoltar-trading ../..",
+		"docker:run": "docker run --rm --env UI_APP=trading --publish 4163:8080 zoltar-trading"
 	}
 }

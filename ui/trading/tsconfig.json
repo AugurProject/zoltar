@@ -4,7 +4,6 @@
 		"baseUrl": ".",
 		"paths": {
 			"@zoltar/shared/*": ["../../shared/js/*"],
-			"@zoltar/trading/*": ["../../trading/js/*"],
 			"@zoltar/ui-core-shared/*": ["../coreShared/js/*"],
 			"@zoltar/ui-statoblast/*": ["../statoblast/js/*"],
 			"@zoltar/ui-zoltar/*": ["../zoltar/js/*"]

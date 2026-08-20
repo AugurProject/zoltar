@@ -51,7 +51,7 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/trading/sdk/positions.js'
+import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/liveTradingController.js'
 
 describe('standalone trading UI model', () => {

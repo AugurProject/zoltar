@@ -27,7 +27,7 @@ import {
 	type SettlementOperation,
 	type ShareOutcome,
 } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/trading/sdk/positions.js'
+import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
 import {
