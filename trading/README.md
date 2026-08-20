@@ -54,13 +54,14 @@ Without Docker, `bun run ui:build` includes the same deterministic wallet deploy
 | `bun run tsc` | Type-check SDK, tooling, and UI |
 | `bun run test` | Compile, type-check, and run SDK/UI tests |
 | `bun run coverage` | Bun coverage for TypeScript tests |
+| `bun run coverage:contracts` | Trace Solidity execution and require at least 99% production-contract line coverage |
 | `bun run check` | Formatting, types, and tests |
 | `bun run format:check` / `format` | Check or apply project formatting |
 | `bun run ui:build` / `ui:serve` | Build or serve the standalone UI |
 | `bun run deploy:local` | Deploy against an existing local Zoltar manifest |
 | `bun run docker:build` / `docker:run` | Build or run the standalone UI container from `trading/` |
 | `bun run gas-costs` | Report bytecode sizes and funded-fixture operation gas |
-| `bun run ci` | Run the AMM-local frozen install, build, tests, formatting, and dependency audit |
+| `bun run ci` | Run the AMM-local frozen install, build, tests, Solidity coverage gate, formatting, and dependency audit |
 
 Root aliases use the `trading:*` prefix.
 
