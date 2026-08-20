@@ -34,10 +34,10 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
 import assert from '../testSupport/simulator/utils/assert'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
+import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
 
 // ============ MODULE-LEVEL CONSTANTS ============
 const ATTOETH_PER_ETH = 10n ** 18n
@@ -156,7 +156,7 @@ describe('Auction', () => {
 			.filter(log => log.address.toLowerCase() === auctionAddress.toLowerCase())
 			.map(log =>
 				decodeEventLog({
-					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 					data: log.data,
 					topics: log.topics,
 				}),
@@ -200,7 +200,7 @@ describe('Auction', () => {
 
 	async function previewFinalization(client: WriteClient, auctionAddress: Address) {
 		return await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'previewFinalization',
 			address: auctionAddress,
 			args: [],
@@ -336,10 +336,10 @@ describe('Auction', () => {
 		await finalizeAndVerify(ownerClient, localAuctionAddress)
 
 		return await ownerClient.estimateContractGas({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'withdrawBids',
 			address: localAuctionAddress,
-			args: [ownerClient.account.address, [{ bidIndex: bidCount - 1n, tick: sameTick }], 0n],
+			args: [ownerClient.account.address, [{ bidIndex: bidCount - 1n, tick: sameTick }], 0n, 0n],
 		})
 	}
 
@@ -359,7 +359,7 @@ describe('Auction', () => {
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 
 		return await ownerClient.estimateContractGas({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'finalize',
 			address: localAuctionAddress,
 			args: [],
@@ -429,7 +429,7 @@ describe('Auction', () => {
 		})
 
 		return await ownerClient.estimateContractGas({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'finalize',
 			address: localAuctionAddress,
 			args: [],
@@ -455,7 +455,7 @@ describe('Auction', () => {
 		})
 
 		return await ownerClient.estimateContractGas({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'finalize',
 			address: localAuctionAddress,
 			args: [],
@@ -495,19 +495,19 @@ describe('Auction', () => {
 				const bidder = createTestClient(index + 3)
 				await startAuction(client, auctionAddress, 10n * ATTOETH_PER_ETH, 10n * ATTOETH_PER_ETH)
 				const auctionStarted = await client.readContract({
-					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 					address: auctionAddress,
 					functionName: 'auctionStarted',
 					args: [],
 				})
 				const bidValue = await getMinBidSizeAttoEth(client, auctionAddress)
 				const bidData = encodeFunctionData({
-					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 					functionName: 'submitBid',
 					args: [0n],
 				})
 				const finalizeData = encodeFunctionData({
-					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 					functionName: 'finalize',
 					args: [],
 				})
@@ -987,19 +987,19 @@ describe('Auction', () => {
 			strictEqualTypeSafe(ownerBalanceAfterFinalize - ownerBalanceBeforeFinalize, 0n, 'no-winning-prefix auctions should not forward ETH to the owner')
 
 			const underfunded = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfunded',
 				address: auctionAddress,
 				args: [],
 			})
 			const underfundedWinningAttoEth = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedWinningAttoEth',
 				address: auctionAddress,
 				args: [],
 			})
 			const underfundedThreshold = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedThreshold',
 				address: auctionAddress,
 				args: [],
@@ -1024,13 +1024,13 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const underfundedWinningAttoEth = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedWinningAttoEth',
 				address: auctionAddress,
 				args: [],
 			})
 			const underfundedThreshold = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedThreshold',
 				address: auctionAddress,
 				args: [],
@@ -1238,22 +1238,26 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
-			const aliceForward = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
+			const aliceForward = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n, 1n)
 			strictEqualTypeSafe(aliceForward.totalFilledAttoRep, 0n, 'the first winning bid should exercise zero REP rounding')
 			strictEqualTypeSafe(aliceForward.totalProRataAllocation, 1n, 'zero REP rounding must not discard the bid positional companion allocation')
-			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
-			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
+			strictEqualTypeSafe(aliceForward.totalSecondaryProRataAllocation, 0n, 'the earlier position should receive no indivisible secondary allocation')
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n, 1n)
+			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n, 1n)
 			strictEqualTypeSafe(bobForward.totalFilledAttoRep, 1n, 'the final winning bid should receive the REP rounding unit')
 			strictEqualTypeSafe(bobForward.totalProRataAllocation, 2n, 'the final winning bid should receive the remaining companion allocation')
+			strictEqualTypeSafe(bobForward.totalSecondaryProRataAllocation, 1n, 'the later position should receive the indivisible secondary allocation')
 
 			await mockWindow.anvilRevert(settlementSnapshot)
-			const bobReverse = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
-			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
-			const aliceReverse = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
+			const bobReverse = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n, 1n)
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n, 1n)
+			const aliceReverse = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n, 1n)
 
 			strictEqualTypeSafe(aliceReverse.totalProRataAllocation, aliceForward.totalProRataAllocation, 'zero-REP companion allocation must not depend on withdrawal order')
 			strictEqualTypeSafe(bobReverse.totalProRataAllocation, bobForward.totalProRataAllocation, 'positive-REP companion allocation must not depend on withdrawal order')
 			strictEqualTypeSafe(aliceReverse.totalProRataAllocation + bobReverse.totalProRataAllocation, 3n, 'all companion allocation units should reconcile across separately settled bids')
+			strictEqualTypeSafe(aliceReverse.totalSecondaryProRataAllocation, aliceForward.totalSecondaryProRataAllocation, 'earlier-position secondary allocation must not depend on withdrawal order')
+			strictEqualTypeSafe(bobReverse.totalSecondaryProRataAllocation, bobForward.totalSecondaryProRataAllocation, 'later-position secondary allocation must not depend on withdrawal order')
 		})
 
 		test('rounded intermediate prefixes do not hide a later valid underfunded prefix', async () => {
@@ -2151,7 +2155,7 @@ describe('Auction', () => {
 			const attacker = createTestClient(1)
 			const losingBidder = createTestClient(2)
 			const tickIndices = [{ tick: -10_000n, bidIndex: 0n }]
-			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 
 			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction must be started before refunding losing bids/)
 			await startAuction(client, auctionAddress, 2n * ATTOETH_PER_ETH, 10n * ATTOETH_PER_ETH)
@@ -2196,7 +2200,7 @@ describe('Auction', () => {
 		})
 
 		test('rejecting ETH bidders defer refunds without rolling back settlement while owner rejection still rolls back finalization', async () => {
-			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const rejectingReceiver = await deployRejectingEthReceiver()
 			await deployUniformPriceDualCapBatchAuction(client, rejectingReceiver)
 			const rejectingOwnerAuction = getUniformPriceDualCapBatchAuctionAddress(rejectingReceiver)
@@ -2241,7 +2245,7 @@ describe('Auction', () => {
 				encodeFunctionData({
 					abi: auctionAbi,
 					functionName: 'withdrawBids',
-					args: [rejectingReceiver, [{ tick: losingTick, bidIndex: 0n }], 0n],
+					args: [rejectingReceiver, [{ tick: losingTick, bidIndex: 0n }], 0n, 0n],
 				}),
 			)
 			const losingBidAfterWithdrawal = ensureDefined((await getBidPageAtTick(client, rejectingOwnerAuction, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after withdrawal')
@@ -2348,7 +2352,7 @@ describe('Auction', () => {
 		})
 
 		test('gas-exhausting losing bidders cannot block pre-finalization refund accounting', async () => {
-			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const gasExhaustingReceiver = await deployRejectingEthReceiver()
 			const winningBid = 2n * ATTOETH_PER_ETH
 			const losingBid = ATTOETH_PER_ETH
@@ -2392,7 +2396,7 @@ describe('Auction', () => {
 		})
 
 		test('separate rejected refunds accumulate until the bidder pulls the complete balance', async () => {
-			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const rejectingReceiver = await deployRejectingEthReceiver()
 			const winningBid = 3n * ATTOETH_PER_ETH
 			const firstLosingBid = ATTOETH_PER_ETH
@@ -2462,7 +2466,7 @@ describe('Auction', () => {
 		})
 
 		test('deferred-refund events remain reducer-safe when a pull callback defers another bid', async () => {
-			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const reentrantReceiver = await deployRejectingEthReceiver()
 			const winningBid = 2n * ATTOETH_PER_ETH
 			const firstLosingBid = ATTOETH_PER_ETH

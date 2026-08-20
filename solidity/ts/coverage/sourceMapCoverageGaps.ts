@@ -17,18 +17,18 @@ interface KnownSourceMapCoverageGapFileRule {
 // Source-map ranges with adjacent executed PCs but no traceable PC for the line itself.
 export const knownSourceMapCoverageGaps = [
 	{
-		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol',
+		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol',
 		lineRules: [{ currentSourceMatches: 0, linePattern: /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*_[A-Za-z_][A-Za-z0-9_]*;$/ }],
 	},
 	{
-		sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol',
+		sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
 		lineRules: [
 			{ currentSourceMatches: 1, linePattern: /^return\s+[A-Za-z_][A-Za-z0-9_]*;$/ },
 			{ currentSourceMatches: 2, linePattern: /^_transferFrom\s*\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*''\s*\);$/ },
 		],
 	},
 	{
-		sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol',
+		sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',
 		lineRules: [
 			{
 				currentSourceMatches: 3,
@@ -41,7 +41,7 @@ export const knownSourceMapCoverageGaps = [
 		],
 	},
 	{
-		sourcePath: 'solidity/contracts/peripherals/EscalationGameCarry.sol',
+		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 		lineRules: [
 			{ currentSourceMatches: 1, linePattern: /^if\s*\([A-Za-z_][A-Za-z0-9_]*\s*!=\s*bytes32\(0\)\)\s*return\s+[A-Za-z_][A-Za-z0-9_]*;$/ },
 			{ currentSourceMatches: 1, linePattern: /^require\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\.length\s*==\s*NULLIFIER_DEPTH,\s*'Bad nullifier length'\s*\);$/ },

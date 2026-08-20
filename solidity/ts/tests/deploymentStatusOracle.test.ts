@@ -6,14 +6,14 @@ import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/c
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../testSupport/simulator/utils/utilities'
-import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { ScalarOutcomes_ScalarOutcomes, peripherals_Multicall3_Multicall3, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
+import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { ScalarOutcomes_ScalarOutcomes, statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { PROXY_DEPLOYER_ADDRESS } from '../testSupport/simulator/utils/constants'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
+const MULTICALL3_BYTECODE = `0x${statoblast_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 
 describe('Deployment Status Oracle Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -48,7 +48,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 		await deployViaProxy(MULTICALL3_BYTECODE)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
-		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+		await deployViaProxy(`0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
@@ -56,9 +56,9 @@ describe('Deployment Status Oracle Test Suite', () => {
 	})
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {
-		await deployViaProxy(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
-		await deployViaProxy(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
+		await deployViaProxy(`0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
+		await deployViaProxy(`0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+		await deployViaProxy(`0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 
 		await ensureInfraDeployed(client)

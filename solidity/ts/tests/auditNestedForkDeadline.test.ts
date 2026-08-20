@@ -1,11 +1,11 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { addRepToMigrationBalance, deployChild, getUniverseData, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './peripherals/fixture'
+import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
 import { getForkActivationTime } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 
 describe('Nested fork migration deadline', () => {
-	const fixture = usePeripheralsForkMigrationFixture()
-	const assert: PeripheralsForkMigrationFixture['assert'] = fixture.assert
+	const fixture = useStatoblastForkMigrationFixture()
+	const assert: StatoblastForkMigrationFixture['assert'] = fixture.assert
 	const {
 		DAY,
 		approveToken,
@@ -40,10 +40,10 @@ describe('Nested fork migration deadline', () => {
 		triggerExternalForkForSecurityPool,
 	} = fixture
 
-	let mockWindow: PeripheralsForkMigrationFixture['mockWindow']
-	let client: PeripheralsForkMigrationFixture['client']
-	let securityPoolAddresses: PeripheralsForkMigrationFixture['securityPoolAddresses']
-	let questionId: PeripheralsForkMigrationFixture['questionId']
+	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
+	let client: StatoblastForkMigrationFixture['client']
+	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
+	let questionId: StatoblastForkMigrationFixture['questionId']
 
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow

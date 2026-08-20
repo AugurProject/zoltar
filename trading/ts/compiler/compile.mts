@@ -29,7 +29,7 @@ async function collectSource(file: string, sources: Map<string, { content: strin
 		if (importName === undefined) throw new Error(`Malformed import in ${sourceName}`)
 		if (importName.startsWith('@openzeppelin/contracts/')) {
 			const vendorRelative = importName.slice('@openzeppelin/contracts/'.length)
-			const vendorFile = path.join(repositoryRoot, 'solidity/contracts/peripherals/openOracle/openzeppelin/contracts', vendorRelative)
+			const vendorFile = path.join(repositoryRoot, 'solidity/contracts/statoblast/openOracle/openzeppelin/contracts', vendorRelative)
 			await collectSource(vendorFile, sources, importName)
 			continue
 		}

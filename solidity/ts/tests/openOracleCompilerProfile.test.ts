@@ -8,8 +8,8 @@ describe('OpenOracle compiler profile', () => {
 	test('normalizes Windows line endings before compiling vendored sources', () => {
 		const sources = createOpenOracleCompilerSources(
 			new Map([
-				['contracts/peripherals/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28;\r\ncontract OpenOracle {}\r\n'],
-				['contracts/peripherals/openOracle/libraries/Errors.sol', 'pragma solidity 0.8.28;\r\nlibrary Errors {}\r\n'],
+				['contracts/statoblast/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28;\r\ncontract OpenOracle {}\r\n'],
+				['contracts/statoblast/openOracle/libraries/Errors.sol', 'pragma solidity 0.8.28;\r\nlibrary Errors {}\r\n'],
 			]),
 		)
 
@@ -21,8 +21,8 @@ describe('OpenOracle compiler profile', () => {
 		const compiler = await loadOpenOracleCompiler()
 		const sources = createOpenOracleCompilerSources(
 			new Map([
-				['contracts/peripherals/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28; contract OpenOracle {}'],
-				['contracts/peripherals/openOracle/libraries/Errors.sol', 'pragma solidity 0.8.28; library Errors {}'],
+				['contracts/statoblast/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28; contract OpenOracle {}'],
+				['contracts/statoblast/openOracle/libraries/Errors.sol', 'pragma solidity 0.8.28; library Errors {}'],
 			]),
 		)
 

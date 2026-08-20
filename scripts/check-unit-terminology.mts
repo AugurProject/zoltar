@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 const sourceFilesResult = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], { stdout: 'pipe' })
 if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repository files for unit terminology validation')
 
-const protectedVendorPath = 'solidity/contracts/peripherals/openOracle/OpenOracle.sol'
+const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'scripts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
@@ -32,14 +32,14 @@ const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) col
 const uiEscrowAccountingAlias = /\b(?:escalationEscrowedAttoRep|connectedWalletEscrowedAttoRep)\b/
 const uiDirectRepTruthAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
 const docsDirectRepTruthAuctionClaimAlias = /\bbought locked REP and security commitments\b/i
-const invalidSecurityPoolInterfaceCapacityUnits = /Capacity ownership[^\n]*denominated in attoETH|REP backing units, commitments and fees use attoETH|addFeeEligibleCapacityOwnershipAttoRep\(address vault, uint256 amountAttoEth\)/
+const invalidSecurityPoolInterfaceCapacityUnits = /Capacity ownership[^\n]*denominated in attoETH|REP backing units, commitments and fees use attoETH|assignFinalizedAuctionFees\(address vault, uint256 amountAttoEth/
 const capacityOwnershipIdentifierWithAttoEthUnits = /\b(?:capacityOwnership|CapacityOwnership)[A-Za-z0-9]*AttoEth\b/
 const legacyLiquidatorCoverageModel = /\b(?:coverageCommitment|CoverageCommitment|totalCoverageCommitmentAttoEth|initiatorVault)\b|coverage commitment/i
 const uiLegacyDisputeStakeCopy = /\b(?:Total side stake|Your side stake|Total stake|Your stake|current stakes|escrow attributed to this vault)\b/i
 const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],
-	['solidity/contracts/peripherals/EscalationGameCalculations.sol', /\battritionCost\b/],
-	['solidity/contracts/test/peripherals/EscalationGameForkThresholdHarness.sol', /\b(?:winningBalance|depositAmount|cumulativeAmount|burnAmount)\b/],
+	['solidity/contracts/statoblast/EscalationGameCalculations.sol', /\battritionCost\b/],
+	['solidity/contracts/test/statoblast/EscalationGameForkThresholdHarness.sol', /\b(?:winningBalance|depositAmount|cumulativeAmount|burnAmount)\b/],
 	['shared/ts/escalationMath.ts', /\b(?:balances|bindingCapital|depositAmount|depositEnd|depositStart|cumulativeAmount|postDepositCumulativeAmount|winningOutcomeBalance|attritionCost|acceptedAmount|projectedBalances)\b/],
 	['docs/charts/chartModels.ts', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*number|[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*)\b/],
 	['docs/charts/chartRuntime.ts', /\b[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*\b/],
@@ -51,7 +51,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['docs/explanation/escalation-game.html', /\b(?:currentCarryTotal|effectiveInheritedUnresolvedTotal|localUnresolvedTotal)\b/],
 	['docs/explanation/liquidations.html', /\bbonusRepQuote\b/],
 	['docs/explanation/truth-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],
-	['solidity/contracts/peripherals/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|forkCarryBackingExportedBeforeResume|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
+	['solidity/contracts/statoblast/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|forkCarryBackingExportedBeforeResume|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
 	['bots/shared/src/monitoring/constant-product-markets.ts', /\bethReceived\b/],
 	['ui/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
 	['ui/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
@@ -76,7 +76,7 @@ if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new 
 if (!vaultContainerActingAsCaller.test('the vault invokes migration')) throw new Error('Unit terminology checker negative fixture did not detect a vault container acting as a caller')
 if (!unsuffixedAtomicEthEquationSymbol.test('<math data-source="rawEthBalance = settlementCollateralAttoEth"><mi>rawEthBalance</mi></math>')) throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed attoETH equation symbol')
 if (!docsDirectRepTruthAuctionClaimAlias.test('participants claim their bought locked REP and security commitments')) throw new Error('Unit terminology checker negative fixture did not detect obsolete truth-auction settlement terminology')
-if (!invalidSecurityPoolInterfaceCapacityUnits.test('function addFeeEligibleCapacityOwnershipAttoRep(address vault, uint256 amountAttoEth)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in ISecurityPool')
+if (!invalidSecurityPoolInterfaceCapacityUnits.test('function assignFinalizedAuctionFees(address vault, uint256 amountAttoEth, uint256 feeIndex)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in ISecurityPool')
 if (!capacityOwnershipIdentifierWithAttoEthUnits.test('const capacityOwnershipTransferAttoEth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an attoETH capacity-ownership identifier')
 if (!legacyLiquidatorCoverageModel.test('totalCoverageCommitmentAttoEth')) throw new Error('Unit terminology checker negative fixture did not detect the legacy liquidator coverage model')
 
@@ -112,7 +112,7 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 	if (path.startsWith('ui/ts/') && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
 	if (path.startsWith('ui/ts/') && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
 	if (path === 'docs/explanation/statoblast.html' && docsDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction settlement as direct locked REP and undefined security commitments`)
-	if (path === 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol' && invalidSecurityPoolInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
+	if (path === 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol' && invalidSecurityPoolInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
 	if (path !== terminologyCheckPath && capacityOwnershipIdentifierWithAttoEthUnits.test(source)) failures.push(`${path}: uses attoETH units in a capacity-ownership identifier; use attoREP for ownership or an explicit debt/capacity-value name`)
 	if (path.startsWith('bots/liquidator/') && legacyLiquidatorCoverageModel.test(source)) failures.push(`${path}: uses the removed fixed-coverage liquidator model`)
 	if (path.startsWith('ui/ts/') && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)

@@ -60,7 +60,7 @@
 			<section id="report-lifecycle">
 				<h2>Price request lifecycle</h2>
 
-				<p>A liquidation or REP withdrawal begins at the pool's coordinator. REP deposits create capacity ownership directly from the selected target health factor and do not use this staged oracle path. The coordinator first validates and stages a withdrawal or liquidation, then either uses a cached price or opens an OpenOracle report.</p>
+				<p>A liquidation or REP withdrawal begins at the pool's coordinator. REP deposits create capacity ownership directly from that deposit's selected target factor and do not use this staged oracle path. The coordinator first validates and stages a withdrawal or liquidation, then either uses a cached price or opens an OpenOracle report.</p>
 
 				<ol>
 					<li><strong>Validate and stage the operation.</strong> The coordinator checks the caller, target vault, requested amount, and validity window before any report is requested.</li>

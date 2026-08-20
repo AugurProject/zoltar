@@ -870,8 +870,21 @@ const operatorReferenceText = htmlToDocumentationText(await readFile('docs/refer
 assert.match(operatorReferenceText, /parent vault is checkpointed before its capacity ownership is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
 assert.match(operatorReferenceText, /statoblast\.html#migration/i, 'operator reference should delegate migration derivations to the whitepaper')
 assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
-assert.match(operatorReferenceText, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to settlement collateral/i, 'operator reference should document final aggregate-only fee reserve release')
-assert.match(operatorReferenceText, /each claimed auction capacity ownership joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
+assert.match(
+	operatorReferenceText,
+	/once every eligible vault and auction allocation is reconciled[\s\S]*subsequent permissionless vault fee checkpoint returns[\s\S]*no vault can individually claim[\s\S]*settlement collateral/i,
+	'operator reference should document the separate final aggregate-only fee reserve release',
+)
+assert.match(
+	operatorReferenceText,
+	/index carry is cleared when pool financials are installed[\s\S]*ordinary vault capacity ownership changes[\s\S]*liquidation transfers capacity ownership[\s\S]*assigning finalized-auction ownership[\s\S]*preserves that carry/i,
+	'operator reference should distinguish ordinary carry-clearing paths from finalized-auction vault assignment',
+)
+assert.match(
+	operatorReferenceText,
+	/sold truth-auction ownership enter the fee denominator at finalization[\s\S]*later auction claim assigns[\s\S]*fees accrued from the saved finalization index[\s\S]*without changing the pool’s live eligible total/i,
+	'operator reference should document finalization-time fee eligibility for delayed auction claims',
+)
 assert.match(operatorReferenceText, /Security Pool Guardrails[\s\S]*totalClaimableVaultFeesAttoEth[\s\S]*totalAccruedFeesAttoEth\(\)[\s\S]*Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
 const contractInteractionReferenceText = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))

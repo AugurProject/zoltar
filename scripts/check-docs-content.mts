@@ -448,7 +448,7 @@ assert.doesNotMatch(merkleMountainRange, /Binds the proof to the beneficiary vau
 assert.match(merkleMountainRange, /Binds the proof and payout to the original depositor[\s\S]*ownership[\s\S]*is immutable[\s\S]*liquidation moves only pool-held vault REP backing/)
 assert.match(escalationGameArchitecture, /Optional parent-vault cleanup stays constant-size because it clears three outcome totals without scanning deposit history/)
 assert.match(escalationGameArchitecture, /Child continuation claims use aggregate game backing rather than copied per-vault escrow/)
-assert.match(invariantsHtml, /<code>ESC-06<\/code>[\s\S]*?href="\.\.\/\.\.\/solidity\/contracts\/peripherals\/EscalationGameEscrow\.sol"[\s\S]*?<code>exportVaultUnresolvedTotalsWithoutTransfer<\/code>[\s\S]*?<code>ESC-07<\/code>/)
+assert.match(invariantsHtml, /<code>ESC-06<\/code>[\s\S]*?href="\.\.\/\.\.\/solidity\/contracts\/statoblast\/EscalationGameEscrow\.sol"[\s\S]*?<code>exportVaultUnresolvedTotalsWithoutTransfer<\/code>[\s\S]*?<code>ESC-07<\/code>/)
 assert.ok(!whitepaper.includes('MAX_UNRESOLVED_EXPORT_REFS'))
 assert.ok(!whitepaper.includes('Paged Export'))
 assert.ok(!operatorReference.includes('Local carry batching'))

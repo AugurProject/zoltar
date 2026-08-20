@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 3,
 	"scope": "complete-coordinator-state-and-public-ABI-index",
-	"source": "solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol",
+	"source": "solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol",
 	"observablePredicates": {
 		"cache": ["fresh-cache", "stale-cache"],
 		"report": ["no-pending-report", "pending-report"],

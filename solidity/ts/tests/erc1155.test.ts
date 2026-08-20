@@ -4,13 +4,13 @@ import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, typ
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, getChildUniverseId, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock, test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
+import { statoblast_tokens_ShareToken_ShareToken, test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver, test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock, test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -31,8 +31,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 	const deployShareToken = async (questionId = 1n) =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 				args: [client.account.address, getZoltarAddress(), questionId],
 			}),
 		)
@@ -40,16 +40,16 @@ describe('ERC1155 Compliance Test Suite', () => {
 	const deployReceiver = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.evm.bytecode.object}`,
 			}),
 		)
 
 	const deployNonReceiver = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver.evm.bytecode.object}`,
 			}),
 		)
 
@@ -58,7 +58,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'mintCompleteSets',
 					args: [0n, account, amount],
@@ -67,7 +67,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	const readTokenId = async (shareTokenAddress: Address, outcome: 0 | 1 | 2) =>
 		await client.readContract({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			abi: statoblast_tokens_ShareToken_ShareToken.abi,
 			address: shareTokenAddress,
 			functionName: 'getTokenId',
 			args: [0n, outcome],
@@ -94,7 +94,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		const shareTokenAddress = await deployShareToken()
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'supportsInterface',
 				args: ['0x01ffc9a7'],
@@ -104,7 +104,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'supportsInterface',
 				args: ['0xd9b67a26'],
@@ -116,7 +116,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	test('balance queries and operator approval expose every public ERC1155 guard reason', async () => {
 		const shareTokenAddress = await deployShareToken()
-		const shareTokenAbi = peripherals_tokens_ShareToken_ShareToken.abi
+		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 
 		await assert.rejects(
 			client.readContract({
@@ -160,7 +160,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	test('single and batch transfers expose target, authorization, and array-shape guard reasons', async () => {
 		const shareTokenAddress = await deployShareToken()
-		const shareTokenAbi = peripherals_tokens_ShareToken_ShareToken.abi
+		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 		await mintCompleteSets(shareTokenAddress, client.account.address, 1n)
 		const yesTokenId = await readTokenId(shareTokenAddress, 1)
 
@@ -228,7 +228,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'burnCompleteSets',
 					args: [0n, zeroAddress, 1n],
@@ -241,8 +241,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 	test('authorization events identify constructor and chained authorization actors', async () => {
 		const deploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 				args: [client.account.address, getZoltarAddress(), 2n],
 			}),
 		})
@@ -255,7 +255,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			.filter(log => log.address.toLowerCase() === shareTokenAddress.toLowerCase())
 			.map(log =>
 				decodeEventLog({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					data: log.data,
 					topics: log.topics,
 				}),
@@ -268,28 +268,28 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		const firstPool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
 				args: [shareTokenAddress, 0n],
 			}),
 		)
 		const chainedPool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
 				args: [shareTokenAddress, 1n],
 			}),
 		)
 		const collidingPool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
 				args: [shareTokenAddress, 0n],
 			}),
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'authorize',
 				args: [firstPool],
@@ -298,7 +298,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'authorize',
 					args: [collidingPool],
@@ -308,7 +308,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'canonicalPoolByUniverse',
 				args: [0n],
@@ -317,7 +317,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'isAuthorized',
 				args: [firstPool],
@@ -326,7 +326,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'isAuthorized',
 				args: [collidingPool],
@@ -335,7 +335,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		const chainedHash = await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				address: firstPool,
 				functionName: 'authorizePool',
 				args: [chainedPool],
@@ -347,7 +347,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		const chainedLog = chainedReceipt.logs
 			.map(log =>
 				decodeEventLog({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					data: log.data,
 					topics: log.topics,
 				}),
@@ -359,7 +359,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		assert.strictEqual(chainedLog.args.authorized, true)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'isAuthorized',
 				args: [chainedPool],
@@ -373,12 +373,12 @@ describe('ERC1155 Compliance Test Suite', () => {
 		const otherShareTokenAddress = await deployShareToken(2n)
 		const wrongShareTokenPool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
 				args: [otherShareTokenAddress, 0n],
 			}),
 		)
-		const tokenAbi = peripherals_tokens_ShareToken_ShareToken.abi
+		const tokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 		const tokenId = await readTokenId(shareTokenAddress, 1)
 
 		await assert.rejects(
@@ -473,7 +473,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	test('share migration exposes precondition errors before canonical-pool migration begins', async () => {
 		const shareTokenAddress = await deployShareToken()
-		const tokenAbi = peripherals_tokens_ShareToken_ShareToken.abi
+		const tokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 		const sourceTokenId = await readTokenId(shareTokenAddress, 1)
 		const unforkedTokenId = (999n << 8n) | 1n
 
@@ -542,8 +542,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		const nonMigratableSourcePool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
-				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
 				args: [shareTokenAddress, 0n],
 			}),
 		)
@@ -600,7 +600,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 				[invalidTokenId, yesTokenId].map(
 					async tokenId =>
 						await client.readContract({
-							abi: peripherals_tokens_ShareToken_ShareToken.abi,
+							abi: statoblast_tokens_ShareToken_ShareToken.abi,
 							address: shareTokenAddress,
 							functionName: 'balanceOf',
 							args: [account, tokenId],
@@ -613,7 +613,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 				client,
 				async () =>
 					await client.writeContract({
-						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareTokenAddress,
 						functionName: 'safeTransferFrom',
 						args: [client.account.address, nonReceiverAddress, yesTokenId, 1n, '0x1234'],
@@ -626,7 +626,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
 					args: [client.account.address, nonReceiverAddress, [invalidTokenId, yesTokenId], [1n, 1n]],
@@ -641,8 +641,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 	test('receiver rejection, revert, and panic paths expose canonical single and batch errors', async () => {
 		const shareTokenAddress = await deployShareToken()
 		const receiverAddress = await deployReceiver()
-		const shareTokenAbi = peripherals_tokens_ShareToken_ShareToken.abi
-		const receiverAbi = test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi
+		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
+		const receiverAbi = test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi
 		await mintCompleteSets(shareTokenAddress, client.account.address, 1n)
 		const invalidTokenId = await readTokenId(shareTokenAddress, 0)
 		const yesTokenId = await readTokenId(shareTokenAddress, 1)
@@ -758,7 +758,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
 					args: [client.account.address, receiverAddress, yesTokenId, 1n, '0x1234'],
@@ -767,7 +767,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'balanceOf',
 				args: [receiverAddress, yesTokenId],
@@ -777,7 +777,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'singleReceiveCount',
 				args: [],
@@ -787,7 +787,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'lastData',
 				args: [],
@@ -800,7 +800,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'batchReceiveCount',
 				args: [],
@@ -822,7 +822,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'setApprovalForAll',
 					args: [operatorClient.account.address, true],
@@ -833,7 +833,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			operatorClient,
 			async () =>
 				await operatorClient.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
 					args: [client.account.address, receiverAddress, yesTokenId, 1n],
@@ -844,7 +844,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			operatorClient,
 			async () =>
 				await operatorClient.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
 					args: [client.account.address, receiverAddress, [invalidTokenId, noTokenId], [1n, 2n], '0xbeef'],
@@ -853,7 +853,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'singleReceiveCount',
 				args: [],
@@ -863,7 +863,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'batchReceiveCount',
 				args: [],
@@ -873,7 +873,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
+				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				address: receiverAddress,
 				functionName: 'lastData',
 				args: [],
@@ -892,7 +892,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'burnCompleteSets',
 					args: [0n, client.account.address, 2n],
@@ -900,7 +900,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'totalSupply',
 				args: [yesTokenId],
@@ -913,7 +913,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'burnTokenIdAndGetRemainingSupply',
 					args: [yesTokenId, client.account.address],
@@ -921,7 +921,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'totalSupply',
 				args: [yesTokenId],
@@ -947,7 +947,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 				const holderBalances = await Promise.all(
 					holders.map(holder =>
 						client.readContract({
-							abi: peripherals_tokens_ShareToken_ShareToken.abi,
+							abi: statoblast_tokens_ShareToken_ShareToken.abi,
 							address: shareTokenAddress,
 							functionName: 'balanceOf',
 							args: [holder, tokenId],
@@ -959,7 +959,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 				assert.deepStrictEqual(holderBalances, expectedBalances, `${label}: holder balances should match the model for outcome ${outcomeIndex.toString()}`)
 				assert.strictEqual(
 					await client.readContract({
-						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareTokenAddress,
 						functionName: 'totalSupply',
 						args: [tokenId],
@@ -982,7 +982,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
 					args: [client.account.address, operatorClient.account.address, tokenIds[1], 2n],
@@ -996,7 +996,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			operatorClient,
 			async () =>
 				await operatorClient.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
 					args: [operatorClient.account.address, thirdClient.account.address, [tokenIds[0], tokenIds[2]], [1n, 2n], '0x'],
@@ -1012,7 +1012,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'burnCompleteSets',
 					args: [0n, client.account.address, 1n],
@@ -1025,7 +1025,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'burnTokenIdAndGetRemainingSupply',
 					args: [tokenIds[2], thirdClient.account.address],
@@ -1046,7 +1046,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'supportsInterface',
 				args: ['0xd9b67a26'],
 			}),
@@ -1054,7 +1054,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'balanceOf',
 				args: [client.account.address, yesTokenId],
 			}),
@@ -1062,7 +1062,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'totalSupply',
 				args: [yesTokenId],
 			}),
@@ -1070,7 +1070,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'balanceOfBatch',
 				args: [
 					[client.account.address, client.account.address, client.account.address],
@@ -1081,7 +1081,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'isApprovedForAll',
 				args: [client.account.address, operatorClient.account.address],
 			}),
@@ -1089,7 +1089,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'getTokenIds',
 				args: [0n, [0, 1, 2]],
 			}),
@@ -1097,7 +1097,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'unpackTokenId',
 				args: [yesTokenId],
 			}),
@@ -1105,7 +1105,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'totalSupplyForOutcome',
 				args: [0n, 1],
 			}),
@@ -1113,7 +1113,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'balanceOfOutcome',
 				args: [0n, 1, client.account.address],
 			}),
@@ -1121,7 +1121,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		await transactWithShareToken(
 			shareTokenAddress,
 			encodeFunctionData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'balanceOfShares',
 				args: [0n, client.account.address],
 			}),
@@ -1129,7 +1129,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'balanceOf',
 				args: [client.account.address, yesTokenId],

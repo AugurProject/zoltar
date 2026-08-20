@@ -7,7 +7,7 @@ import { Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../../../abi/abis'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
-import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_WETH9_WETH9 } from '../../../types/contractArtifact'
 export { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 const TOTAL_REP_SUPPLY_ATTO_REP = 11_000_000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
@@ -152,7 +152,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 
 	// Deploy WETH9 at its expected address
 	const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
-	const wethBytecodeHex = peripherals_WETH9_WETH9.evm.deployedBytecode.object
+	const wethBytecodeHex = statoblast_WETH9_WETH9.evm.deployedBytecode.object
 	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${wethBytecodeHex}`)
 	if (!wethBytes) throw new Error('Failed to convert WETH bytecode to bytes')
 	await anvilWindowEthereum.addStateOverrides({

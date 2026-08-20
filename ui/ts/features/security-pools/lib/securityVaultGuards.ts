@@ -9,7 +9,7 @@ export function getTargetHealthFactorGuardMessage(targetHealthFactor: string) {
 		parseTargetHealthFactorBps(targetHealthFactor)
 		return undefined
 	} catch (error) {
-		return error instanceof Error ? error.message : 'Enter a valid target health factor.'
+		return error instanceof Error ? error.message : 'Enter a valid deposit target factor.'
 	}
 }
 

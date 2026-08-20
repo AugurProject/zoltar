@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { BinaryOutcomes } from '../../solidity/contracts/peripherals/BinaryOutcomes.sol';
-import { ISecurityPool, SystemState } from '../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
-import { ISecurityPoolForker } from '../../solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol';
-import { IERC1155Receiver } from '../../solidity/contracts/peripherals/interfaces/IERC1155Receiver.sol';
-import { Math } from '../../solidity/contracts/peripherals/openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { BinaryOutcomes } from '../../solidity/contracts/statoblast/BinaryOutcomes.sol';
+import { ISecurityPool, SystemState } from '../../solidity/contracts/statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPoolForker } from '../../solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol';
+import { IERC1155Receiver } from '../../solidity/contracts/statoblast/interfaces/IERC1155Receiver.sol';
+import { Math } from '../../solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';

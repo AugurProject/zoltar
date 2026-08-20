@@ -1,7 +1,7 @@
 import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
-import { getInfraContractAddresses } from './deployPeripherals'
+import { getInfraContractAddresses } from './deployStatoblast'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 
 type QuestionData = {
