@@ -142,6 +142,11 @@ contract TradingMockShareToken {
 			);
 	}
 
+	function forceMintWithoutCallback(address account, uint256 id, uint256 amount) external {
+		balances[id][account] += amount;
+		emit TransferSingle(msg.sender, address(0), account, id, amount);
+	}
+
 	function _transfer(address from, address to, uint256 id, uint256 value) private {
 		require(to != address(0), 'ERC1155 recipient');
 		require(balances[id][from] >= value, 'ERC1155 balance');
