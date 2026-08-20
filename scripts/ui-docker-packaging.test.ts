@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 const dockerfile = join(import.meta.dir, '..', 'ui', 'Dockerfile')
 const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'ipfs-deploy.yml')
+const versionDeployWorkflow = join(import.meta.dir, '..', 'github-actions', '.github', 'workflows', 'version-deploy.yml')
 const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'scripts', 'docker-entrypoint.sh')
 const rootPackage = join(import.meta.dir, '..', 'package.json')
 const staticServer = join(import.meta.dir, '..', 'ui', 'build', 'dockerServe.mts')
@@ -51,10 +52,10 @@ describe('UI Docker packaging', () => {
 	})
 
 	test('keeps the default release image on the final IPFS publisher target', async () => {
-		const workflow = await readFile(ipfsDeployWorkflow, 'utf8')
-		expect(workflow).toContain('file: ui/Dockerfile')
-		expect(workflow).not.toContain('target: local-runtime')
-		expect(workflow).toContain('cat /ipfs_hash.txt')
+		const workflows = await Promise.all([ipfsDeployWorkflow, versionDeployWorkflow].map(path => readFile(path, 'utf8')))
+		expect(workflows.every(workflow => workflow.includes('file: ui/Dockerfile'))).toBe(true)
+		expect(workflows.every(workflow => !workflow.includes('target: local-runtime'))).toBe(true)
+		expect(workflows.some(workflow => workflow.includes('cat /ipfs_hash.txt'))).toBe(true)
 		const dockerSource = await readFile(dockerfile, 'utf8')
 		expect(dockerSource.lastIndexOf('AS publisher')).toBeGreaterThan(dockerSource.lastIndexOf('AS local-runtime'))
 		expect(dockerSource.lastIndexOf('ENTRYPOINT [ "/entrypoint.sh" ]')).toBeGreaterThan(dockerSource.lastIndexOf('CMD [ "bun", "/app/dockerServe.mts" ]'))
