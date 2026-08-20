@@ -188,6 +188,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(referenceSource).toContain('<pre tabindex="0" aria-label="Scrollable code or command example">')
 	expect(referenceSource).toContain('href="/documentation#math"')
 	expect(referenceSource).toContain('href="/market-fixture.html#open-oracle-market-fixture"')
+	expect(referenceSource).toContain('href="https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint" target="_blank" rel="noreferrer"')
 	const fixture = await fetch(`${origin}/market-fixture.html`)
 	expect(fixture.status).toBe(200)
 	const fixtureSource = await fixture.text()

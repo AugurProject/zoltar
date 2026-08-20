@@ -237,6 +237,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					let executionActivationPending = false
 					state.rpcEndpointHealth = readPool.snapshot()
 					const deploymentSettingsDeferred = pending.deployment !== undefined && deploymentUpdateMustWait(fixedState.deployment, pending.deployment, positions)
+					const networkInitializationPending = pending.network !== undefined
 					if (deploymentSettingsDeferred) {
 						state.paused = true
 						state.status = 'paused'
@@ -249,7 +250,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								reason: 'OpenOracle, executor, REP, and WETH identities remain unchanged until every risk-consuming position is closed',
 								reportId: undefined,
 							})
-					} else {
+					} else if (!networkInitializationPending) {
 						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
 						if (appliedSettings.reportScanReset) {
 							const reset = resetReportScanState<TransactionLog>(state, reports)
@@ -307,6 +308,23 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.marketObservations = []
 						state.marketConsensus = undefined
 						catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+					}
+					if (!deploymentSettingsDeferred && networkInitializationPending) {
+						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
+						if (appliedSettings.reportScanReset) {
+							const reset = resetReportScanState<TransactionLog>(state, reports)
+							cursor = reset.cursor
+							cachedLogs = reset.cachedLogs
+						}
+						const network = pending.network
+						if (network === undefined) throw new Error('Queued network initialization is missing its network identity')
+						config.network = network
+						config.networkConfigured = true
+						fixedState.network = network.name
+						fixedState.expectedChainId = network.chain.id
+						fixedState.explorerUrl = network.explorerUrl
+						fixedState.networkConfigured = true
+						pending.network = undefined
 					}
 					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
 						config.connectivity = pending.connectivity

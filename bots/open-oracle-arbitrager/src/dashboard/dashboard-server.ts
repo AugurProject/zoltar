@@ -93,6 +93,12 @@ function renderReadme(markdown: string) {
 		.replaceAll('<pre>', '<pre tabindex="0" aria-label="Scrollable code or command example">')
 		.replaceAll('href="./docs/operator-guide.html', 'href="/documentation')
 		.replaceAll('href="./docs/market-fixture.html', 'href="/market-fixture.html')
+		.replace(/<a href="(https?:\/\/[^\"]+)"([^>]*)>/g, (_match, ...captures) => {
+			const [href, attributes] = captures
+			if (typeof href !== 'string' || typeof attributes !== 'string') throw new Error('README external link render was malformed')
+			const safeAttributes = attributes.replace(/\s+target="[^"]*"/g, '').replace(/\s+rel="[^"]*"/g, '')
+			return `<a href="${href}"${safeAttributes} target="_blank" rel="noreferrer">`
+		})
 	if (headingIndex !== headingIds.length) throw new Error('README heading render count did not match its Markdown source')
 	return `<!doctype html>
 <html lang="en">

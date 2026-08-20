@@ -28,6 +28,7 @@ export type PendingOperatorUpdates = {
 	execute: boolean | undefined
 	lookbackBlocks: bigint | undefined
 	maxHedgeSlippageBps: bigint | undefined
+	network: Configuration['network'] | undefined
 	operatorSettings: PersistedOperatorSettings | undefined
 	paused: boolean | undefined
 	privateKey: Hex | undefined
@@ -159,6 +160,7 @@ export function startOperatorControlPlane(parameters: {
 		execute: undefined,
 		lookbackBlocks: undefined,
 		maxHedgeSlippageBps: undefined,
+		network: undefined,
 		operatorSettings: undefined,
 		paused: undefined,
 		privateKey: undefined,
@@ -261,6 +263,14 @@ export function startOperatorControlPlane(parameters: {
 					pending.execute = next.runtime.execute
 					pending.lookbackBlocks = next.runtime.lookbackBlocks
 					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
+					if (!config.networkConfigured && next.networkConfigured) {
+						pending.network = networkConfiguration(next.network, {
+							factory: next.deployment.uniswapFactory,
+							quoter: next.deployment.uniswapQuoter,
+							rep: next.deployment.rep,
+							weth: next.deployment.weth,
+						})
+					}
 					pending.operatorSettings = normalizedNext
 					pending.paused = next.paused
 					pending.persistedPrivateKey = next.privateKey
@@ -273,19 +283,6 @@ export function startOperatorControlPlane(parameters: {
 					pending.strategy = mutableStrategy(next.strategy)
 					pending.submission = next.submission
 					pending.tokenAddresses = tokens.active
-					if (!config.networkConfigured && next.networkConfigured) {
-						config.network = networkConfiguration(next.network, {
-							factory: next.deployment.uniswapFactory,
-							quoter: next.deployment.uniswapQuoter,
-							rep: next.deployment.rep,
-							weth: next.deployment.weth,
-						})
-						config.networkConfigured = true
-						fixedState.network = config.network.name
-						fixedState.expectedChainId = config.network.chain.id
-						fixedState.explorerUrl = config.network.explorerUrl
-						fixedState.networkConfigured = true
-					}
 					fixedState.queuedWallet = signer.address ?? null
 					fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
 				} finally {
@@ -348,17 +345,12 @@ export function startOperatorControlPlane(parameters: {
 					value,
 				})
 				if (!config.networkConfigured) {
-					config.network = networkConfiguration(next.network, {
+					pending.network = networkConfiguration(next.network, {
 						factory: latest.settings.deployment.uniswapFactory,
 						quoter: latest.settings.deployment.uniswapQuoter,
 						rep: latest.settings.deployment.rep,
 						weth: latest.settings.deployment.weth,
 					})
-					config.networkConfigured = true
-					fixedState.network = config.network.name
-					fixedState.expectedChainId = config.network.chain.id
-					fixedState.explorerUrl = config.network.explorerUrl
-					fixedState.networkConfigured = true
 				}
 				pending.centralizedMarkets = next.centralizedMarkets
 				pending.rpcQuorum = next.rpcQuorum

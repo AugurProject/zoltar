@@ -345,8 +345,11 @@ describe('file-only startup configuration', () => {
 		const configuredEnvelopeFromCompleteSave = (await response.json()) as Record<string, unknown>
 		expect(configuredEnvelopeFromCompleteSave['revision']).toEqual(expect.any(String))
 		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
+		const queuedState = await waitForJson(origin, '/api/state')
+		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false, status: 'paused' })
+		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
 		await waitForStateValue(origin, 'networkConfigured', true)
-		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		let configuredState = await waitForJson(origin, '/api/state')
 		const rpcOrigin = new URL(rpcUrl).origin
 		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
@@ -391,6 +394,50 @@ describe('file-only startup configuration', () => {
 		})
 		expect(removal.status).toBe(400)
 		expect(await Bun.file(path).text()).toBe(configuredContents)
+	})
+
+	test('applies focused initial network, market chain, and RPC identity together at a scan boundary', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpc = Bun.serve({
+			async fetch(request) {
+				const body = (await request.json()) as { id: unknown }
+				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
+			},
+			hostname: '127.0.0.1',
+			port: 0,
+		})
+		servers.push(rpc)
+		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		const configuration = (await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json()) as Record<string, unknown>
+		const runtime = Reflect.get(configuration, 'runtime')
+		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
+		Reflect.set(runtime, 'historyFile', join(directory, 'history.jsonl'))
+		Reflect.set(runtime, 'positionFile', join(directory, 'positions.json'))
+		Reflect.set(runtime, 'priceHistoryFile', join(directory, 'prices.jsonl'))
+		Reflect.set(runtime, 'uiPort', dashboardPort)
+		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+		const path = join(directory, 'operator.json')
+		await writeFile(path, JSON.stringify(configuration), 'utf8')
+		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(child)
+		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
+		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
+		const response = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(response.status, await response.clone().text()).toBe(200)
+		expect(await response.json()).toMatchObject({ network: 'sepolia', rpcQuorum: 1 })
+		expect(await loadOperatorSettings(path)).toMatchObject({ centralizedMarkets: { assetChainId: 11_155_111 }, network: 'sepolia', networkConfigured: true, rpcQuorum: 1 })
+		const queuedState = await waitForJson(origin, '/api/state')
+		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
+		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
+		const activeState = await waitForStateValue(origin, 'networkConfigured', true)
+		expect(activeState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
+		expect(JSON.stringify(activeState['rpcEndpointHealth']) ?? '').toContain(new URL(rpcUrl).origin)
 	})
 
 	test('keeps executor deployment guarded while a newly saved quorum applies live', async () => {
