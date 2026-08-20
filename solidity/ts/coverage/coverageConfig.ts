@@ -23,9 +23,11 @@ const getProjectRoot = (): string => {
 export const isSolidityBytecodeCoverageEnabled = (): boolean => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
 
 export const getSolidityBytecodeCoverageConfig = (): SolidityBytecodeCoverageConfig => {
-	const rootPath = getProjectRoot()
-	const artifactsPath = path.join(rootPath, 'solidity', 'artifacts', 'Contracts.json')
-	const coverageDirectory = path.join(rootPath, 'solidity', 'coverage')
+	const rootPath = process.env['SOLIDITY_BYTECODE_COVERAGE_ROOT_PATH'] ?? getProjectRoot()
+	const configuredArtifactsPath = process.env['SOLIDITY_BYTECODE_COVERAGE_ARTIFACTS_PATH']
+	const configuredCoverageDirectory = process.env['SOLIDITY_BYTECODE_COVERAGE_DIRECTORY']
+	const artifactsPath = configuredArtifactsPath ?? path.join(rootPath, 'solidity', 'artifacts', 'Contracts.json')
+	const coverageDirectory = configuredCoverageDirectory ?? path.join(rootPath, 'solidity', 'coverage')
 
 	return {
 		enabled: isSolidityBytecodeCoverageEnabled(),

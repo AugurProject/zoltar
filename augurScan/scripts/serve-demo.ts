@@ -5,6 +5,7 @@ const server = Bun.serve({
 	port: Number(process.env['PORT'] ?? '3001'),
 	async fetch(request, server) {
 		const url = new URL(request.url)
+		if (url.pathname === '/health/live') return Response.json({ status: 'ok' })
 		if (url.pathname === '/api/v1/stream') {
 			server.timeout(request, 0)
 			const emitReorg = url.searchParams.get('reorg') === '1'

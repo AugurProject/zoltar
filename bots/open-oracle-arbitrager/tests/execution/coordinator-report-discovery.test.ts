@@ -234,7 +234,12 @@ describe('configured coordinator report discovery', () => {
 			},
 		})
 
-		const replacement = await legacyReplacementAmountsWithQuorum([createPublicClient({ chain: mainnet, transport: custom(provider()) })], { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: [] }, { entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' }, 250n)
+		const replacement = await legacyReplacementAmountsWithQuorum(
+			[createPublicClient({ chain: mainnet, transport: custom(provider()) })],
+			{ connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: [] },
+			{ entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' },
+			250n,
+		)
 
 		expect(replacement).toEqual({ amounts: { amount1: 1_400n, amount2: 2_300n }, blockHash })
 		expect(logRanges).toEqual([{ fromBlock: '0x0', toBlock: '0x63' }])

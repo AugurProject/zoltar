@@ -485,12 +485,12 @@ export async function loadPositionJournal(path: string) {
 	return positions
 }
 
-export function acquirePositionJournalLock(path: string, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
-	return acquireFileProcessLock(path, 'Position journal', filesystem)
+export function acquirePositionJournalLock(path: string) {
+	return acquireFileProcessLock(path, 'Position journal')
 }
 
-export function acquireExecutionSignerLock(chainId: number, account: Address, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
-	return acquireSharedExecutionSignerLock(chainId, account, filesystem)
+export function acquireExecutionSignerLock(chainId: number, account: Address) {
+	return acquireSharedExecutionSignerLock(chainId, account)
 }
 
 export async function savePositionJournal(path: string, positions: readonly PositionRecord[], filesystem: PositionJournalFilesystem = positionJournalFilesystem) {

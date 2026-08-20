@@ -4,14 +4,16 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "bun --watch src/server.ts",
-		"start": "bun src/server.ts",
+		"build": "bun scripts/build-browser.ts",
+		"dev": "bun scripts/dev.ts",
+		"start": "bun run build && bun src/server.ts",
 		"migrate": "bun src/migrate.ts",
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
-		"qa:serve": "bun scripts/serve-demo.ts",
+		"qa:serve": "bun run build && bun scripts/serve-demo.ts",
 		"test": "bun test",
+		"test:unit": "bun test tests/api-validation.test.ts tests/api.test.ts tests/chart-values.test.ts tests/config.test.ts tests/demo-fixtures.test.ts tests/docker-packaging.test.ts tests/http.test.ts tests/indexer-lifecycle.test.ts tests/limits.test.ts tests/live-ui.test.ts tests/live.test.ts tests/metadata.test.ts tests/projections.test.ts tests/time.test.ts",
 		"test:integration": "bun test tests/postgres.integration.test.ts",
-		"typecheck": "bun x tsc --noEmit",
+		"typecheck": "cd .. && bun install --frozen-lockfile && cd augurScan && bun x tsc --noEmit",
 		"check:ethereum-imports": "bun scripts/check-ethereum-imports.ts",
 		"check": "bun run check:ethereum-imports && bun x biome check .",
 		"format": "bun x biome check --write ."
@@ -29,13 +31,13 @@
 	"knip": {
 		"entry": [
 			"scripts/*.ts",
-			"public/app.js",
+			"browser/app.ts",
 			"tests/*.test.ts"
 		],
 		"project": [
 			"src/**/*.ts",
 			"scripts/**/*.ts",
-			"public/**/*.js",
+			"browser/**/*.ts",
 			"tests/**/*.ts"
 		]
 	}

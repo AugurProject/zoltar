@@ -8,7 +8,7 @@ import * as url from 'node:url'
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(scriptDirectoryPath, '..')
 const sharedPackagePath = path.join(repositoryRootPath, 'shared')
-const sharedRefreshScriptPath = path.join(scriptDirectoryPath, 'ensure-shared-package-fresh.mjs')
+const sharedRefreshScriptPath = path.join(scriptDirectoryPath, 'ensure-shared-package-fresh.mts')
 
 async function writeFixtureFile(rootPath: string, relativePath: string, contents: string) {
 	const filePath = path.join(rootPath, relativePath)
