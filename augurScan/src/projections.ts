@@ -637,6 +637,10 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 		)
 	)
 		return undefined
+	// Uniswap V2 also emits Sync, but its reserve0/reserve1 payload does not
+	// describe Augur YES/NO reserves and must remain in the dedicated Uniswap
+	// observation path only.
+	if (eventName === 'Sync' && !(typeof data['yesReserve'] === 'string' && typeof data['noReserve'] === 'string')) return undefined
 	const reportId = data['reportId']
 	const approvalId = data['approvalId']
 	const approvalIdentity =

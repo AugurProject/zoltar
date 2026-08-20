@@ -25,6 +25,7 @@ import {
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
+	operationsDetailRecordKey,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -60,6 +61,31 @@ test('retains every distinct catalog record across a delayed 251-record live ref
 	expect(requestedLimits).toEqual([100, 100, 51])
 	expect(snapshot.items).toHaveLength(251)
 	expect(new Set(snapshot.items.map(key)).size).toBe(251)
+	expect(snapshot.nextCursor).toBeUndefined()
+})
+
+test('retains detail evidence to the prior visible depth using canonical log identity', async () => {
+	const records = Array.from({ length: 151 }, (_, index) => ({
+		block_hash: '0xblock',
+		tx_hash: `0x${Math.floor(index / 3)
+			.toString(16)
+			.padStart(64, '0')}`,
+		log_index: index % 3,
+		event_name: index % 2 === 0 ? 'ReportSubmitted' : 'ReportDisputed',
+	}))
+	const requestedLimits: number[] = []
+	const snapshot = await collectCanonicalPages<Readonly<Record<string, unknown>>, number>(
+		async (cursor = 0, limit = 100) => {
+			requestedLimits.push(limit)
+			const items = records.slice(cursor, cursor + limit)
+			return { items, ...(cursor + limit < records.length ? { nextCursor: cursor + limit } : {}) }
+		},
+		151,
+		operationsDetailRecordKey,
+	)
+	expect(requestedLimits).toEqual([100, 51])
+	expect(snapshot.items).toHaveLength(151)
+	expect(new Set(snapshot.items.map(operationsDetailRecordKey)).size).toBe(151)
 	expect(snapshot.nextCursor).toBeUndefined()
 })
 

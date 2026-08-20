@@ -60,6 +60,9 @@ export const operationsCatalogRecordKey = (section: 'auctions' | 'escalations' |
 	return String(record[section === 'auctions' ? 'auction_address' : 'game_address'] ?? '')
 }
 
+export const operationsDetailRecordKey = (record: Readonly<Record<string, unknown>>): string =>
+	`${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['event_name'] ?? record['semantic_event_kind'] ?? '')}`
+
 const canonicalEventPosition = (record: Readonly<Record<string, unknown>>, key: 'block_number' | 'transaction_index' | 'log_index'): bigint => {
 	const value = record[key]
 	return (typeof value === 'string' && /^\d+$/.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value)) ? BigInt(value) : 0n

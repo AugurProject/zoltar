@@ -1499,6 +1499,41 @@ postgresTest(
 			const uniswapOnlyResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapOnlyMarket}`), database.sql)
 			expect(uniswapOnlyResponse?.status).toBe(404)
 
+			const uniswapSyncOnlyMarket = getAddress('0x9999999999999999999999999999999999999998').toLowerCase()
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				) VALUES (${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0,
+					${uniswapSyncOnlyMarket}, 'Sync', jsonb_build_object('reserve0', '300', 'reserve1', '700'), true)
+			`
+			await database.sql`
+				INSERT INTO protocol_timeline_entries (
+					chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity,
+					semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical
+				) VALUES
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'trading', ${uniswapSyncOnlyMarket},
+						'Sync', jsonb_build_object('reserve0', '300', 'reserve1', '700'), '[]'::jsonb, ${uniswapSyncOnlyMarket}, 'Sync', true),
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'amm', ${uniswapOnlyMarket},
+						'Swap', jsonb_build_object('sqrtPriceX96', '79228162514264337593543950336'), '[]'::jsonb, ${uniswapOnlyMarket}, 'Swap', true)
+			`
+			const uniswapSyncOnlyResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapSyncOnlyMarket}`),
+				database.sql,
+			)
+			expect(uniswapSyncOnlyResponse?.status).toBe(404)
+			const cleanupMigration = await Bun.file(new URL('../migrations/011_amm_projection_cleanup.sql', import.meta.url)).text()
+			await database.sql.unsafe(cleanupMigration)
+			const invalidDerivedRows = await database.sql`
+				SELECT
+					(SELECT count(*)::integer FROM amm_trade_events WHERE chain_id = ${operationsChainId}
+						AND market_address IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})) AS trade_count,
+					(SELECT count(*)::integer FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId}
+						AND entity_identity IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket}) AND entity_type IN ('amm', 'trading')) AS timeline_count,
+					(SELECT count(*)::integer FROM logs WHERE chain_id = ${operationsChainId} AND block_hash = ${`0x${'f'.repeat(64)}`}
+						AND tx_hash = ${`0x${'d'.repeat(64)}`} AND log_index = 0) AS raw_log_count
+			`
+			expect(invalidDerivedRows[0]).toMatchObject({ trade_count: 0, timeline_count: 0, raw_log_count: 1 })
+
 			await database.sql`
 				INSERT INTO liquidation_approval_events (
 					chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address,
@@ -1580,6 +1615,28 @@ postgresTest(
 			const invalidPrice = (await invalidPriceResponse.json()) as { data: Record<string, unknown> }
 			expect(invalidPrice.data).toMatchObject({ protocol_state: 'unavailable', scanner_severity: 'unavailable' })
 			expect(invalidPrice.data['scanner_reason']).toContain('invalid accounting price')
+
+			await database.sql`
+				UPDATE entity_state_snapshots SET read_result =
+					CASE entity_type
+						WHEN 'pool' THEN jsonb_set(read_result, '{totalBadDebtAttoEth}', '"7"'::jsonb, true)
+						ELSE jsonb_set(read_result, '{badDebtAttoEth}', '"9"'::jsonb, true)
+					END
+				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+			`
+			const badDebtPoolResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`),
+				database.sql,
+			)
+			const badDebtVaultResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
+				database.sql,
+			)
+			if (badDebtPoolResponse === undefined || badDebtVaultResponse === undefined) throw new Error('bad-debt risk endpoint did not return a response')
+			const badDebtPool = (await badDebtPoolResponse.json()) as { data: Record<string, unknown> }
+			const badDebtVault = (await badDebtVaultResponse.json()) as { data: Record<string, unknown> }
+			expect(badDebtPool.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
+			expect(badDebtVault.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
 
 			const snapshotRows = await database.sql`
 			SELECT read_status, read_result, canonical FROM entity_state_snapshots

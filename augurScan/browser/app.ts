@@ -45,6 +45,7 @@ import {
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
+	operationsDetailRecordKey,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -476,6 +477,13 @@ let operationsCatalogState:
 	| {
 			readonly chainId: string
 			readonly section: OperationsCatalogSection
+			readonly items: readonly Record<string, unknown>[]
+	  }
+	| undefined
+let operationsDetailState:
+	| {
+			readonly chainId: string
+			readonly routeKey: string
 			readonly items: readonly Record<string, unknown>[]
 	  }
 	| undefined
@@ -1651,6 +1659,16 @@ const demoOperationsDetail = (path: string): unknown => {
 		log_index: 7,
 		canonical: true,
 	})
+	const evidencePage = (item: Record<string, unknown>) => {
+		const continuationFixture = pageUrl.searchParams.get('detailMore') === '1'
+		if (continuationFixture && request.searchParams.has('cursor'))
+			return {
+				items: [{ ...item, block_number: String(BigInt(operations.asOf.blockNumber) - 1n), log_index: 2, tx_hash: `0x${'d'.repeat(64)}` }],
+				limit: 100,
+				hasMore: false,
+			}
+		return { items: [item], limit: 100, hasMore: continuationFixture, ...(continuationFixture ? { nextCursor: 'demo-detail-older' } : {}) }
+	}
 	if (domain === 'reports') {
 		const report = operations.data.reports.find(
 			(item) => item.open_oracle_address.toLowerCase() === identity[0]?.toLowerCase() && item.report_id === identity[1],
@@ -1663,7 +1681,7 @@ const demoOperationsDetail = (path: string): unknown => {
 		return {
 			chainId,
 			asOf: operations.asOf,
-			data: { identity: { openOracleAddress: identity[0], reportId: identity[1] }, current, rounds: { items: [current], limit: 100, hasMore: false } },
+			data: { identity: { openOracleAddress: identity[0], reportId: identity[1] }, current, rounds: evidencePage(current) },
 		}
 	}
 	if (domain === 'escalations') {
@@ -1686,7 +1704,7 @@ const demoOperationsDetail = (path: string): unknown => {
 				},
 				deposits: [event],
 				claims: [],
-				events: { items: [event], limit: 100, hasMore: false },
+				events: evidencePage(event),
 			},
 		}
 	}
@@ -1705,7 +1723,7 @@ const demoOperationsDetail = (path: string): unknown => {
 					read_result: { state: 'Open' },
 				},
 				demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
-				events: { items: [bid], limit: 100, hasMore: false },
+				events: evidencePage(bid),
 			},
 		}
 	}
@@ -1754,7 +1772,7 @@ const demoOperationsDetail = (path: string): unknown => {
 						observations: 12,
 					},
 				],
-				events: { items: [swap], limit: 100, hasMore: false },
+				events: evidencePage(swap),
 			},
 		}
 	}
@@ -1771,7 +1789,7 @@ const demoOperationsDetail = (path: string): unknown => {
 		data: {
 			identity: identity[0],
 			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
-			events: { items: [migration], limit: 100, hasMore: false },
+			events: evidencePage(migration),
 		},
 	}
 }
@@ -1840,6 +1858,11 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|risk\/(?:pools|vaults))\//.test(path)) {
 			if (demoState === 'loading') return await new Promise(() => {})
 			if (demoState === 'error') throw new Error('Operations detail could not be loaded')
+			const request = new URL(path, location.origin)
+			if (request.searchParams.has('cursor') && pageUrl.searchParams.get('detailAppendDelay') === '1')
+				await new Promise((resolve) => setTimeout(resolve, 2_500))
+			if (request.searchParams.has('cursor') && pageUrl.searchParams.get('detailAppendError') === '1')
+				throw new Error('Older canonical evidence could not be loaded')
 			return demoOperationsDetail(path)
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
@@ -2471,19 +2494,24 @@ const captureOperationsRenderContext = (): OperationsRenderContext => {
 	const active = document.activeElement
 	return {
 		...(active instanceof HTMLAnchorElement && content.contains(active) ? { focusHref: active.href } : {}),
-		focusLoadMore: active instanceof HTMLButtonElement && active.classList.contains('operations-catalog-more'),
+		focusLoadMore:
+			active instanceof HTMLElement &&
+			(active.classList.contains('operations-catalog-more') ||
+				active.classList.contains('operations-detail-more') ||
+				active.classList.contains('operations-pagination-complete')),
 		scrollY: window.scrollY,
 	}
 }
 
 const restoreOperationsRenderContext = (snapshot: OperationsRenderContext) => {
 	const content = $('#operations-content')
-	const continuation = content.querySelector<HTMLButtonElement>('.operations-catalog-more')
+	const continuation = content.querySelector<HTMLButtonElement>('.operations-catalog-more, .operations-detail-more')
+	const completion = content.querySelector<HTMLElement>('.operations-pagination-complete')
 	const catalogRows = [...content.querySelectorAll<HTMLAnchorElement>('a.operations-row')]
 	const target =
 		snapshot.focusHref === undefined
 			? snapshot.focusLoadMore
-				? (continuation ?? catalogRows.at(-1))
+				? (continuation ?? completion ?? catalogRows.at(-1))
 				: undefined
 			: catalogRows.find((candidate) => candidate.href === snapshot.focusHref)
 	target?.focus({ preventScroll: true })
@@ -2776,7 +2804,7 @@ const operationsDetailRoute = (): OperationsDetailRoute | undefined => {
 	return undefined
 }
 
-const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string): string => {
+const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string, limit = 100): string => {
 	const chainId = encodeURIComponent(requiredChainId())
 	const identity = route.identity.map(encodeURIComponent).join('/')
 	const resource =
@@ -2793,10 +2821,12 @@ const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string)
 							: route.kind === 'trading'
 								? 'trading'
 								: 'forks'
-	const query = new URLSearchParams({ limit: '100' })
+	const query = new URLSearchParams({ limit: String(limit) })
 	if (cursor !== undefined) query.set('cursor', cursor)
 	return `/api/v1/state/${resource}/${chainId}/${identity}?${query.toString()}`
 }
+
+const operationsDetailRouteKey = (route: OperationsDetailRoute): string => `${route.kind}:${route.identity.join(':').toLowerCase()}`
 
 const rawEvidence = (value: unknown) => {
 	const disclosure = document.createElement('details')
@@ -2819,8 +2849,9 @@ const detailEvidenceRows = (items: readonly Record<string, unknown>[]) =>
 
 const detailPageRecord = (data: Record<string, unknown>, key: string): Record<string, unknown> => (isRecord(data[key]) ? data[key] : {})
 
-const renderOperationsDetail = (response: OperationsResponse, route: OperationsDetailRoute) => {
+const renderOperationsDetail = (response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext) => {
 	const content = $('#operations-content')
+	const renderContext = preservedContext ?? captureOperationsRenderContext()
 	const data = response.data
 	const asOf = response.asOf
 	const header = element('section', 'operations-detail-header')
@@ -3003,6 +3034,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 		)
 	const evidencePage = detailPageRecord(data, route.kind === 'report' ? 'rounds' : 'events')
 	const evidenceItems = operationRecords(evidencePage['items'])
+	operationsDetailState = { chainId: requiredChainId(), routeKey: operationsDetailRouteKey(route), items: evidenceItems }
 	const evidencePanel = operationsPanel(
 		route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline',
 		detailEvidenceRows(evidenceItems),
@@ -3011,28 +3043,37 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	if (evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string') {
 		const loadMore = document.createElement('button')
 		loadMore.type = 'button'
-		loadMore.className = 'secondary compact'
+		loadMore.className = 'secondary compact operations-detail-more'
 		loadMore.textContent = 'Show older evidence'
+		loadMore.setAttribute('aria-label', 'Show older canonical evidence')
+		const loadMoreStatus = element('p', 'activity-summary')
+		loadMoreStatus.setAttribute('role', 'status')
+		loadMoreStatus.setAttribute('aria-live', 'polite')
 		loadMore.addEventListener('click', async () => {
+			const paginationContext = captureOperationsRenderContext()
 			loadMore.disabled = true
-			loadMore.textContent = 'Loading…'
-			try {
-				const next = decodeOperationsResponse(await api(operationsDetailEndpoint(route, String(evidencePage['nextCursor']))))
-				const nextPage = detailPageRecord(next.data, route.kind === 'report' ? 'rounds' : 'events')
-				const list = evidencePanel.querySelector('.operations-list')
-				list?.append(...detailEvidenceRows(operationRecords(nextPage['items'])))
-				if (nextPage['hasMore'] === true && typeof nextPage['nextCursor'] === 'string') {
-					evidencePage['nextCursor'] = nextPage['nextCursor']
-					loadMore.disabled = false
-					loadMore.textContent = 'Show older evidence'
-				} else loadMore.remove()
-			} catch (error) {
+			loadMore.setAttribute('aria-busy', 'true')
+			loadMoreStatus.textContent = 'Loading older canonical evidence…'
+			const loaded = await loadOperations({
+				live: true,
+				detailTargetCount: evidenceItems.length + 100,
+				preservedContext: paginationContext,
+			})
+			if (!loaded && loadMore.isConnected) {
 				loadMore.disabled = false
+				loadMore.removeAttribute('aria-busy')
 				loadMore.textContent = 'Retry older evidence'
-				loadMore.title = error instanceof Error ? error.message : 'Unable to load older evidence'
+				loadMoreStatus.textContent = 'Older canonical evidence could not be loaded.'
+				loadMore.focus({ preventScroll: true })
 			}
 		})
-		evidencePanel.append(loadMore)
+		evidencePanel.append(loadMore, loadMoreStatus)
+	} else if (renderContext.focusLoadMore) {
+		const completeStatus = element('p', 'activity-summary operations-pagination-complete', 'All indexed evidence is shown.')
+		completeStatus.setAttribute('role', 'status')
+		completeStatus.setAttribute('aria-live', 'polite')
+		completeStatus.tabIndex = -1
+		evidencePanel.append(completeStatus)
 	}
 	panels.push(evidencePanel)
 	const grid = element('div', 'operations-grid operations-grid-single')
@@ -3040,6 +3081,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	content.replaceChildren(header, summary, grid)
 	content.setAttribute('aria-busy', 'false')
 	$('#operations-status').hidden = true
+	restoreOperationsRenderContext(renderContext)
 }
 
 const loadOperationsCatalog = async (section: OperationsCatalogSection, retainedCount: number): Promise<OperationsResponse> => {
@@ -3066,8 +3108,53 @@ const loadOperationsCatalog = async (section: OperationsCatalogSection, retained
 	)
 }
 
-const loadOperations = async ({ live = false }: { live?: boolean } = {}): Promise<boolean> => {
-	if (operationsLoadPromise !== undefined) return await operationsLoadPromise
+const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount: number): Promise<OperationsResponse> => {
+	const pageKey = route.kind === 'report' ? 'rounds' : 'events'
+	let first: OperationsResponse | undefined
+	let last: OperationsResponse | undefined
+	const snapshot = await collectCanonicalPages(
+		async (cursor?: string, limit = 100) => {
+			const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, cursor, limit)))
+			first ??= response
+			last = response
+			const page = detailPageRecord(response.data, pageKey)
+			return {
+				items: operationRecords(page['items']),
+				...(page['hasMore'] === true && typeof page['nextCursor'] === 'string' ? { nextCursor: page['nextCursor'] } : {}),
+			}
+		},
+		retainedCount,
+		operationsDetailRecordKey,
+	)
+	if (first === undefined || last === undefined) throw new Error('Operations detail returned no page')
+	const lastPage = detailPageRecord(last.data, pageKey)
+	return {
+		...first,
+		data: {
+			...first.data,
+			[pageKey]: {
+				...lastPage,
+				items: snapshot.items,
+				hasMore: snapshot.nextCursor !== undefined,
+				...(snapshot.nextCursor === undefined ? {} : { nextCursor: snapshot.nextCursor }),
+			},
+		},
+	}
+}
+
+const loadOperations = async ({
+	live = false,
+	detailTargetCount,
+	preservedContext,
+}: {
+	live?: boolean
+	detailTargetCount?: number
+	preservedContext?: OperationsRenderContext
+} = {}): Promise<boolean> => {
+	if (operationsLoadPromise !== undefined) {
+		const activeResult = await operationsLoadPromise
+		if (detailTargetCount === undefined) return activeResult
+	}
 	const requestVersion = ++operationsRequestVersion
 	const run = (async () => {
 		const status = $('#operations-status')
@@ -3084,17 +3171,21 @@ const loadOperations = async ({ live = false }: { live?: boolean } = {}): Promis
 				catalogSection !== undefined && operationsCatalogState?.chainId === requiredChainId() && operationsCatalogState.section === catalogSection
 					? operationsCatalogState.items.length
 					: 0
+			const retainedDetailCount =
+				detailRoute !== undefined &&
+				operationsDetailState?.chainId === requiredChainId() &&
+				operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
+					? operationsDetailState.items.length
+					: 0
 			const response =
-				catalogSection === undefined
-					? decodeOperationsResponse(
-							await api(
-								detailRoute === undefined ? `/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}` : operationsDetailEndpoint(detailRoute),
-							),
-						)
-					: await loadOperationsCatalog(catalogSection, retainedCatalogCount)
+				detailRoute !== undefined
+					? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount)
+					: catalogSection === undefined
+						? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+						: await loadOperationsCatalog(catalogSection, retainedCatalogCount)
 			if (requestVersion !== operationsRequestVersion) return false
 			if (detailRoute === undefined) renderOperations(response)
-			else renderOperationsDetail(response, detailRoute)
+			else renderOperationsDetail(response, detailRoute, preservedContext)
 			return true
 		} catch (error) {
 			if (requestVersion !== operationsRequestVersion) return false

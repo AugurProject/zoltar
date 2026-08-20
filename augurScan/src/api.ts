@@ -465,13 +465,13 @@ const riskCatalogData = async (
 			read_result: state,
 			capacity,
 			price_provenance: price,
-			protocol_state: priceRequired && !priceValid ? 'unavailable' : badDebt > 0n ? 'bad-debt' : String(state['systemState'] ?? '0'),
-			scanner_severity: priceRequired && !priceValid ? 'unavailable' : badDebt > 0n ? 'critical' : 'healthy',
+			protocol_state: badDebt > 0n ? 'bad-debt' : priceRequired && !priceValid ? 'unavailable' : String(state['systemState'] ?? '0'),
+			scanner_severity: badDebt > 0n ? 'critical' : priceRequired && !priceValid ? 'unavailable' : 'healthy',
 			scanner_reason:
-				priceRequired && !priceValid
-					? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions'
-					: badDebt > 0n
-						? 'Pool has recorded bad debt'
+				badDebt > 0n
+					? 'Pool has recorded bad debt'
+					: priceRequired && !priceValid
+						? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions'
 						: 'Tagged pool accounting read completed',
 		}
 	})
@@ -494,6 +494,17 @@ const riskCatalogData = async (
 					(row['read_status'] === 'success' && row['pool_read_status'] === 'success'
 						? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion'
 						: 'Coherent tagged vault and pool reads are awaiting completion'),
+			}
+		const badDebt = BigInt(String(state['badDebtAttoEth'] ?? '0'))
+		if (badDebt > 0n)
+			return {
+				...row,
+				read_result: state,
+				price_provenance: price,
+				snapshot_evidence: snapshotEvidence,
+				protocol_state: 'bad-debt',
+				scanner_severity: 'critical',
+				scanner_reason: 'Vault has recorded bad debt',
 			}
 		if (BigInt(String(state['openInterestAttoEth'] ?? '0')) > 0n && price['protocolValid'] !== true)
 			return {
@@ -864,6 +875,7 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
 			AND (event.event_name <> 'Swap' OR (event.event_data ? 'yesForNo' AND event.event_data ? 'amountIn'
 				AND event.event_data ? 'amountOut' AND event.event_data ? 'resultingYesReserve' AND event.event_data ? 'resultingNoReserve'))
+			AND (event.event_name <> 'Sync' OR (event.event_data ? 'yesReserve' AND event.event_data ? 'noReserve'))
 			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
 		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
 	`
@@ -921,6 +933,7 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
 			AND (event.event_name <> 'Swap' OR (event.event_data ? 'amountIn' AND event.event_data ? 'feeAmount'
 				AND event.event_data ? 'resultingYesReserve' AND event.event_data ? 'resultingNoReserve'))
+			AND (event.event_name <> 'Sync' OR (event.event_data ? 'yesReserve' AND event.event_data ? 'noReserve'))
 	`
 	const exactObservations = observations.slice(-10_000).map((row: Record<string, unknown>) => ({
 		timestamp: String(row['timestamp_seconds']),

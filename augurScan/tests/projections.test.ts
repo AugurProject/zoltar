@@ -218,6 +218,12 @@ describe('state projections', () => {
 		expect(projected.some((item) => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
 	})
 
+	test('does not classify Uniswap V2 Sync events as Augur AMM trades', () => {
+		const projected = projectionsFrom(log('Sync', { reserve0: '300', reserve1: '700' }))
+		expect(projected.some((item) => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
+		expect(projected.some((item) => item.type === 'ammPrice')).toBe(false)
+	})
+
 	test('distinguishes initialization seeds from accepted REP per ETH coordinator prices', () => {
 		const [originSeed] = projectionsFrom(log('RepEthPriceSet', { price: '0' }, vault))
 		expect(originSeed).toEqual({
