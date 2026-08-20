@@ -2,6 +2,37 @@
 
 The state dashboard is an event-derived view of the canonical chain through the selected network's indexed block. It never overwrites raw log evidence. Every projection row retains its block-hash occurrence and canonical flag, so a reorganization preserves the orphaned observation while removing it from the current view.
 
+## Operations evidence model
+
+Migration 008 adds append-only domain evidence for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks all affected domain and timeline rows noncanonical; replay uses the source log position as its idempotency key.
+
+| Value | Source classification |
+| --- | --- |
+| Report amounts, reporter, tokens, flags, fees, clock inputs, and round number | Direct event fields decoded from the canonical 235-byte packed report |
+| Report dispute and settlement boundaries | Deterministic calculation from event fields using the indexed block or indexed timestamp selected by the report flag |
+| Escalation deposits and per-outcome totals | Direct event fields plus deterministic canonical aggregation |
+| Auction schedule, bids, clearing result, settlements, and refunds | Direct event fields plus deterministic canonical aggregation |
+| Current values absent from events | Unavailable in the current event-only projection; `entity_state_snapshots` reserves a reorg-aware schema for a future tagged-read sampler but is not populated yet |
+| Related addresses carried by one event | Direct event fields; augurScan does not currently claim cross-record inferred relationships |
+| Warning or urgency | Scanner presentation state, separate from protocol state |
+
+Every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. A value absent from indexed events is unavailable evidence, never numeric zero. Risk responses therefore expose unavailable protocol and scanner state until a tagged-read sampler is implemented.
+
+### OpenOracle reports
+
+A report is identified by `(chain_id, open_oracle_address, report_id)`. `ReportSubmitted` and every `ReportDisputed` event preserve a separate round. `ReportSettled` closes the lifecycle without overwriting the last round. Flag bit 0 selects timestamp time when set and block time when clear:
+
+```text
+dispute boundary  = reportTimestamp + disputeDelay
+settlement boundary = reportTimestamp + settlementTime
+```
+
+The exact boundary is inclusive for the new state: at the dispute boundary the dispute window is open, and at the settlement boundary the report is settleable. Settlement evidence takes precedence over clock-derived state.
+
+### Auctions and escalations
+
+Auction state uses the canonical indexed timestamp and exact `AuctionStarted`, `AuctionFinalized`, `BidSubmitted`, and `BidSettled` evidence. A finalized auction remains “bid settlements outstanding” while fewer bid settlements than submitted bids are observed. Escalation stake totals sum exact canonical `DepositOnOutcome.attoRepAmount` values by INVALID, NO, and YES; no floating-point arithmetic enters the projection.
+
 ## Questions
 
 `ZoltarQuestionData.QuestionCreated` contains the complete question definition. The question ID is the hash of this definition and its outcome options, and none of these fields changes afterward.
@@ -35,20 +66,20 @@ conditional_no_bps  = 10,000 - conditional_yes_bps
 
 The first calculation floors integer division and the second is its exact complement, so the stored values always total 10,000 basis points. Conceptually, the two ratios are NO reserve / total reserve for conditional YES and YES reserve / total reserve for conditional NO. The database retains the exact reserves and basis-point observations. The chart uses a shared 0–100% axis because the two conditional values are complementary. These values are conditional on a valid resolution and remain manipulable spot prices; historical display does not turn them into a TWAP or manipulation-resistant oracle. A configured AMM factory must be indexed from at or before its deployment to provide complete pair and reserve history.
 
-Configured Uniswap venues add a separate universe-scoped spot-price history. V2 and V3 markets must pair the pool's exact universe REP ERC-20 with the configured WETH contract. V4 markets must pair that REP with native ETH, use no hook, and use one of the repository's four standard fee/tick-spacing configurations. This identity check prevents a parent REP pool or a sibling child-universe REP pool from supplying the displayed series.
+Configured Uniswap venues add a separate universe-scoped spot-price history. V2 and V3 markets must pair the pool's exact universe REP ERC-20 with a configured WETH or USDC contract. V4 markets must pair that REP with native ETH or configured USDC, use no hook, and use one of the repository's four standard fee/tick-spacing configurations. V4 ERC-20 currencies are ordered by address when deriving the pool ID; native ETH uses the zero-address currency. This identity check prevents a parent REP pool or a sibling child-universe REP pool from supplying the displayed series, and the configured USDC identity supplies its fixed 6-decimal quote scale.
 
-For scale `S = 10^18`, `Q = 2^96`, and V3/V4 `x = sqrtPriceX96`, augurScan derives REP per quote asset as follows:
+For quote-token base-unit scale `D = 10^quoteDecimals`, `Q = 2^96`, and V3/V4 `x = sqrtPriceX96`, augurScan derives a 1e18-scaled REP-per-quote value as follows. `D` is `10^18` for WETH or native ETH and `10^6` for USDC:
 
 ```text
-V2, REP is token0: floor(reserve0 * S / reserve1)
-V2, REP is token1: floor(reserve1 * S / reserve0)
-V3/V4, REP is token0: floor(Q^2 * S / x^2)
-V3/V4, REP is token1: floor(x^2 * S / Q^2)
+V2, REP is token0: floor(reserve0 * D / reserve1)
+V2, REP is token1: floor(reserve1 * D / reserve0)
+V3/V4, REP is token0: floor(Q^2 * D / x^2)
+V3/V4, REP is token1: floor(x^2 * D / Q^2)
 ```
 
-Only positive reserve or square-root-price inputs create returned chart points, and every division uses positive integer arithmetic that floors the result. Each pool and fee tier remains a distinct line on one shared value axis.
+Only positive reserve or square-root-price inputs create returned chart points, and every division uses positive integer arithmetic that floors the result. Each pool and fee tier remains a distinct line. When every returned line has the same quote symbol, the lines share one numeric range. When the result mixes quote symbols, the renderer scales every line independently; labels and exact point values carry the WETH, native ETH, or USDC unit, so line height is not a cross-quote comparison.
 
-The observations are event-time marginal prices used only for historical display. They are not inputs to the Open Oracle, the coordinator, or protocol settlement. They do not use V2 cumulative-price fields, calculate a TWAP, enforce minimum liquidity, or prove resistance to same-block manipulation. V2/V3 WETH is displayed separately from V4 native ETH rather than silently claiming the assets are identical. The indexer retains raw reserves or square-root prices, event and transaction identity, token order, pool ID/address, fee, tick spacing, and hook address so every derived chart point is auditable.
+The observations are event-time marginal prices used only for historical display. They are not inputs to the Open Oracle, the coordinator, or protocol settlement. They do not use V2 cumulative-price fields, calculate a TWAP, enforce minimum liquidity, or prove resistance to same-block manipulation. REP/WETH, REP/native ETH, and REP/USDC are explicitly labeled and are not placed on one shared numeric axis. Quote-token decimals are applied before producing the 1e18-scaled REP-per-quote ratio. The indexer retains raw reserves or square-root prices, exact emitted liquidity, event and transaction identity, token order, pool ID/address, fee, tick spacing, and hook address.
 
 ## Vaults
 

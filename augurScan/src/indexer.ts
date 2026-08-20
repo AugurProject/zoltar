@@ -109,7 +109,7 @@ import {
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
-import { uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
+import { uniswapV2V3TokenPairs, uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
 
 type RpcBlockHeader = {
 	readonly hash: Hash
@@ -147,7 +147,10 @@ const uniswapV4SwapEvent = parseAbiItem(
 export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata>): readonly Hex[] =>
 	[...contracts.values()]
 		.filter(({ kind }) => kind === 'reputationToken')
-		.flatMap(({ address }) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing)))
+		.flatMap(({ address }) => {
+			const quotes = [zeroAddress, ...[...contracts.values()].filter(({ kind }) => kind === 'usdc').map(({ address: quote }) => quote)]
+			return quotes.flatMap((quote) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing, quote)))
+		})
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
 	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)
@@ -192,12 +195,22 @@ export const findContractDeploymentBlock = async (
 	codeAt: (block: bigint) => Promise<Hex | undefined>,
 	startBlockKnownAbsent = false,
 ): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+	// A single block cannot establish an absent-to-present code boundary. Some
+	// lagging or non-archive RPC nodes report head #0 while answering historical
+	// eth_getCode calls from newer state, which previously produced a false #0
+	// deployment observation. Wait for a later head so the result is evidence.
+	if (observedHead <= startBlock) return undefined
 	const hasCode = async (block: bigint): Promise<boolean> => {
 		const code = await codeAt(block)
 		return code !== undefined && code !== '0x'
 	}
 	if (!(await hasCode(observedHead))) return undefined
-	if (!startBlockKnownAbsent && (await hasCode(startBlock))) return { block: startBlock, exact: false }
+	if (!startBlockKnownAbsent && (await hasCode(startBlock))) {
+		// Code at genesis for these manifest contracts is overwhelmingly evidence
+		// that the RPC ignored or could not serve the historical block selector.
+		// A genuine genesis deployment can still be configured explicitly.
+		return startBlock === 0n ? undefined : { block: startBlock, exact: false }
+	}
 	let lower = startBlock
 	let upper = observedHead
 	while (lower + 1n < upper) {
@@ -303,7 +316,7 @@ export const logScanCursorUpdates = (
 ): readonly LogScanCursor[] =>
 	[...contracts.values()].flatMap((contract) => {
 		const scanInput = scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())
-		const tracksFilteredHistory = contract.kind === 'reputationToken' || contract.kind === 'weth'
+		const tracksFilteredHistory = contract.kind === 'reputationToken' || contract.kind === 'weth' || contract.kind === 'usdc'
 		if (!tracksFilteredHistory && (!isProtocolActivitySource(contract) || (scanInput === undefined && contract.discoveryBlock === undefined))) return []
 		const startBlock =
 			scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
@@ -948,14 +961,7 @@ class NetworkIndexer {
 		const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
 		const groups = rpcLogQueryGroups(ordinaryInputs)
 		const ordinaryPages = await mapLimit(groups, 3, (group) => this.#client.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
-		const repTokens = [...contracts.values()].filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
-		const wethTokens = [...contracts.values()].filter(({ kind }) => kind === 'weth').map(({ address }) => address)
-		const tokenPairs = repTokens.flatMap((rep) =>
-			wethTokens.flatMap((weth) => [
-				{ token0: rep, token1: weth },
-				{ token0: weth, token1: rep },
-			]),
-		)
+		const tokenPairs = uniswapV2V3TokenPairs(contracts.values())
 		const v2Queries = inputsOfKind('uniswapV2Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
 		const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) =>
 			this.#client.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
@@ -1251,7 +1257,8 @@ class NetworkIndexer {
 		const tokenCandidates = new Set<Address>()
 		for (const metadata of tokenMetadata.values()) if (metadata.decimals === undefined) tokenCandidates.add(metadata.address)
 		for (const contract of contracts.values()) {
-			if (contract.kind === 'reputationToken' || contract.kind === 'shareToken' || contract.kind === 'weth') tokenCandidates.add(contract.address)
+			if (contract.kind === 'reputationToken' || contract.kind === 'shareToken' || contract.kind === 'weth' || contract.kind === 'usdc')
+				tokenCandidates.add(contract.address)
 		}
 		for (const receipt of receipts) {
 			for (const item of receipt.logs) {

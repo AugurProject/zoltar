@@ -24,7 +24,7 @@ Each block transaction commits atomically with its receipt, top-level protocol a
 
 Logs and top-level calls involving protocol activity sources select receipts for indexing and dynamic discovery. Shared WETH, REP, Multicall3, and proxy-deployer contracts never select unrelated receipts, but their known logs are retained when either activity-source path selected the receipt. Registration events add pools, share tokens, price coordinators, truth auctions, escalation games, and child reputation tokens. A fixed-point receipt pass retains initializer logs that occur before their registration log. Unknown or malformed events keep their topics, data, and decode error.
 
-Token display rules are keyed by contract kind, event/function, and argument. Semantic `atto*` fields, the OpenOracle ETH sentinel, and known REP/share/WETH kinds use fixed 18-decimal protocol units. Arbitrary token values use canonical metadata read at an indexed block and fall back to exact base units only when that metadata is unavailable. Failed metadata reads retry with bounded block backoff and follow canonical reorg state.
+Token display rules are keyed by contract kind, event/function, and argument. Semantic `atto*` fields, the OpenOracle ETH sentinel, and known REP/share/WETH kinds use fixed 18-decimal protocol units; configured USDC uses a fixed 6-decimal unit. Arbitrary token values use canonical metadata read at an indexed block and fall back to exact base units only when that metadata is unavailable. Failed metadata reads retry with bounded block backoff and follow canonical reorg state.
 
 Before extending a chain, the indexer verifies parent hashes. A mismatch searches the configured 64-block window for a common ancestor, marks old branch evidence noncanonical, invalidates its derived state, and replays the replacement branch. If no retained ancestor matches, canonical state is rebuilt from the configured start boundary. Orphaned blocks, actions, receipts, and logs remain queryable as debugging evidence.
 
@@ -39,6 +39,9 @@ The browser provides:
 - deep-linked evidence with contract provenance, complete receipt, related logs, decoded action/event schemas, exact raw values, copy controls, and explorer links;
 - searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts;
 - a single-network rich list ranked by ETH or SepoliaETH, WETH, or sent transactions, with bounded per-token REP balances, pool/vault participation, and explicit pending or partial balance state.
+- an Operations destination with freshness, report, escalation, auction, accounting-evidence, fork/migration, price-provenance, and semantic-change views; snapshot-dependent health, liquidation, and severity remain explicitly unavailable until tagged reads are implemented;
+- canonical domain projections and unified timelines for reports, games, auctions, AMM activity, forks, and migrations;
+- pool-level OpenOracle coordinator history plus REP/WETH, REP/native-ETH, REP/USDC, and liquidity histories.
 
 ## Delivery and validation
 
@@ -54,4 +57,4 @@ Acceptance requires an empty-volume Compose start to expose the UI and begin eac
 
 ## Deferred scope
 
-Provider-specific internal-call tracing, automatic re-decoding after an ABI snapshot change, arbitrary historical state-at-block queries, very large deployment load testing, and automated backup/restore drills remain future work. A production operator must still choose archival-capable RPC providers, verified deployment start blocks, credentials, resource limits, backup schedules, and external access controls.
+Provider-specific internal-call tracing, automatic re-decoding after an ABI snapshot change, arbitrary user-selected historical state-at-block queries, normalized cross-venue liquidity, manipulation-resistant TWAP claims, very large deployment load testing, and automated backup/restore drills remain future work. A production operator must still choose archival-capable RPC providers, verified deployment start blocks, credentials, resource limits, backup schedules, and external access controls.

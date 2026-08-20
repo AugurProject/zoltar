@@ -1,5 +1,5 @@
 import { type ReservedSQL, SQL, type TransactionSQL } from 'bun'
-import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
+import { type Address, getAddress, type Hash, type Hex, zeroAddress } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
 import type { ContractMetadata, DecodedRecord, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { isSupportedUniswapV4Market } from './uniswap.ts'
@@ -569,11 +569,18 @@ export class ScannerDatabase {
 					'rep_eth_price_snapshots',
 					'uniswap_rep_eth_markets',
 					'uniswap_rep_eth_price_observations',
+					'protocol_timeline_entries',
+					'open_oracle_report_events',
+					'escalation_game_events',
+					'truth_auction_events',
+					'amm_trade_events',
+					'fork_migration_events',
 					'address_activity',
 					'address_balance_snapshots',
 					'token_metadata',
 				])
 					await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [network.chainId])
+				await transaction`UPDATE entity_state_snapshots SET read_status = 'stale' WHERE chain_id = ${network.chainId} AND read_status <> 'stale'`
 				await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${network.chainId}`
@@ -831,6 +838,13 @@ export class ScannerDatabase {
 			await transaction`UPDATE rep_eth_price_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE uniswap_rep_eth_markets SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE uniswap_rep_eth_price_observations SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE protocol_timeline_entries SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE open_oracle_report_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE escalation_game_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE truth_auction_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE amm_trade_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE fork_migration_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE entity_state_snapshots SET read_status = 'stale' WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND read_status <> 'stale'`
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
@@ -984,6 +998,48 @@ export class ScannerDatabase {
 				`
 				for (const projection of projectionsFrom(item)) {
 					const position = [chainId, item.blockHash, item.transactionHash, item.logIndex, item.blockNumber.toString()] as const
+					if (projection.type === 'domainEvent') {
+						await transaction`
+							INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityType}, ${projection.entityIdentity}, ${projection.semanticEventKind}, ${JSON.stringify(projection.data)}, ${JSON.stringify(projection.relatedEntities)}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, entity_type, entity_identity) DO UPDATE SET canonical = true, summary_data = EXCLUDED.summary_data, related_entities = EXCLUDED.related_entities
+						`
+						if (projection.domain === 'report') {
+							const reportId = projection.data['reportId']
+							const roundNumber = projection.data['numReports']
+							if (typeof reportId !== 'string') throw new Error(`${projection.semanticEventKind} is missing reportId`)
+							await transaction`
+								INSERT INTO open_oracle_report_events (chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address, report_id, event_name, round_number, report_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${reportId}, ${projection.semanticEventKind}, ${typeof roundNumber === 'string' ? roundNumber : null}, ${JSON.stringify(projection.data)}, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, open_oracle_address, report_id) DO UPDATE SET canonical = true, report_data = EXCLUDED.report_data
+							`
+						}
+						if (projection.domain === 'escalation')
+							await transaction`
+								INSERT INTO escalation_game_events (chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, ${JSON.stringify(projection.data)}, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, game_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'auction')
+							await transaction`
+								INSERT INTO truth_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, ${JSON.stringify(projection.data)}, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, auction_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'trading')
+							await transaction`
+								INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, ${JSON.stringify(projection.data)}, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'fork')
+							await transaction`
+								INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, ${JSON.stringify(projection.data)}, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, universe_identity) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						continue
+					}
 					if (projection.type === 'question') {
 						await transaction`
 							INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, created_timestamp, title, description, start_time, end_time, num_ticks, display_value_min, display_value_max, answer_unit, outcome_options, canonical)
@@ -1056,24 +1112,31 @@ export class ScannerDatabase {
 							WHERE (
 								${projection.venue} IN ('v2', 'v3') AND (
 									EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'reputationToken' AND canonical)
-									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'weth' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind IN ('weth', 'usdc') AND canonical)
 									OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
-									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'weth' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind IN ('weth', 'usdc') AND canonical)
 								)
-							) OR (
-								${projection.venue} = 'v4'
-								AND ${supportedV4Market}
-								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.contractAddress} AND kind = 'uniswapV4PoolManager' AND canonical)
-								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
-							)
+								) OR (
+									${projection.venue} = 'v4'
+									AND ${supportedV4Market}
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.contractAddress} AND kind = 'uniswapV4PoolManager' AND canonical)
+									AND (
+										${projection.token0Address} = ${zeroAddress}
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+										OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'reputationToken' AND canonical)
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'usdc' AND canonical)
+										OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'usdc' AND canonical)
+									)
+								)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_id) DO UPDATE SET canonical = true
 						`
 						continue
 					}
 					if (projection.type === 'uniswapPrice') {
 						await transaction`
-							INSERT INTO uniswap_rep_eth_price_observations (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, event_name, reserve0, reserve1, sqrt_price_x96, canonical)
-							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.eventName}, ${projection.reserve0 ?? null}, ${projection.reserve1 ?? null}, ${projection.sqrtPriceX96 ?? null}, true
+							INSERT INTO uniswap_rep_eth_price_observations (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, event_name, reserve0, reserve1, sqrt_price_x96, liquidity, canonical)
+							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.eventName}, ${projection.reserve0 ?? null}, ${projection.reserve1 ?? null}, ${projection.sqrtPriceX96 ?? null}, ${projection.liquidity ?? null}, true
 							WHERE EXISTS (
 								SELECT 1 FROM uniswap_rep_eth_markets
 								WHERE chain_id = ${chainId} AND venue = ${projection.venue} AND market_id = ${projection.marketId} AND canonical

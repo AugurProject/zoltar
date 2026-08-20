@@ -95,6 +95,8 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 	databases.push(database)
 	for (const path of [
 		'logs?chainId=1e2',
+		'operations?chainId=1e2',
+		'state/reports?chainId=0x10',
 		'logs?limit=0x10',
 		'state/catalog?chainId=0x10',
 		'state/catalog?limit=-1',
@@ -107,6 +109,21 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
+	}
+})
+
+test('validates operations catalogs and timeline identities before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of ['operations', 'state/reports', 'state/escalations', 'state/auctions', 'state/risk', 'state/forks']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'chainId is required' })
+	}
+	for (const path of ['state/timeline/not-a-chain/report/id', 'state/timeline/1/INVALID/id', 'state/timeline/1/report']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'Invalid timeline identifier' })
 	}
 })
 

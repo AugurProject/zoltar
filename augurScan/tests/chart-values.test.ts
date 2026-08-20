@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from '../browser/chart-values.ts'
+import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../browser/chart-values.ts'
 
 test('uses consistent nonnegative bounds for an all-zero price series', () => {
 	expect(chartValueBounds([0], undefined)).toEqual({ minimum: 0, maximum: 1 })
@@ -64,4 +64,46 @@ test('keeps each Uniswap pool as a provenance-preserving sparse series on one va
 	expect(model.sharedRange).toEqual([18, 19])
 	expect(model.latestObservation).toMatchObject({ market_id: '0xpool-b', rep_per_eth_1e18: '19000000000000000000' })
 	expect(uniswapPriceProvenance(model.latestObservation)).toBe('V3 · 0.3% · WETH · 0xpool-b')
+})
+
+test('does not put unlike ETH and USDC quote units on one numeric axis', () => {
+	const common = {
+		timestamp: '2026-08-10T00:00:00.000Z',
+		block_number: '12',
+		venue: 'v3',
+		contract_address: '0xcontract',
+		fee_hundredths_bip: '500',
+		event_name: 'Swap',
+	}
+	const model = uniswapPriceChartModel([
+		{ ...common, market_id: '0xeth', quote_symbol: 'WETH', rep_per_eth_1e18: '19000000000000000000' },
+		{ ...common, market_id: '0xusd', quote_symbol: 'USDC', rep_per_eth_1e18: '4200000000000000' },
+	])
+	expect(model.sharedRange).toBeUndefined()
+})
+
+test('keeps incompatible Uniswap liquidity measures in provenance-labeled sparse series', () => {
+	const common = {
+		timestamp: '2026-08-10T00:00:00.000Z',
+		block_number: '12',
+		contract_address: '0xcontract',
+		fee_hundredths_bip: '3000',
+		quote_symbol: 'WETH',
+		event_name: 'Swap',
+		rep_per_eth_1e18: '19000000000000000000',
+	}
+	const model = uniswapLiquidityChartModel([
+		{ ...common, venue: 'v2', market_id: '0xv2', event_name: 'Sync', liquidity_value: '900' },
+		{ ...common, venue: 'v3', market_id: '0xv3', liquidity_value: '1200' },
+	])
+	expect(model.definitions.map(({ label, unit, decimals }) => ({ label, unit, decimals }))).toEqual([
+		{ label: 'V2 · 0.3% · WETH · 0xv2 liquidity', unit: 'reserve product', decimals: 0 },
+		{ label: 'V3 · 0.3% · WETH · 0xv3 liquidity', unit: 'active liquidity', decimals: 0 },
+	])
+	expect(model.rows[0]).toMatchObject({ market_id: '0xv2', uniswap_liquidity_0: '900' })
+	expect(model.rows[0]?.uniswap_liquidity_1).toBeUndefined()
+	expect(model.rows[1]).toMatchObject({ market_id: '0xv3', uniswap_liquidity_1: '1200' })
+	const v3Row = model.rows[1]
+	if (v3Row === undefined) throw new Error('Expected a V3 liquidity row')
+	expect(model.definitions[1]?.pointLabel(v3Row)).toContain('V3 Swap')
 })

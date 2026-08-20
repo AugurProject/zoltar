@@ -129,6 +129,17 @@ type UniswapPriceProjection = {
 	reserve0?: string
 	reserve1?: string
 	sqrtPriceX96?: string
+	liquidity?: string
+}
+
+type DomainEventProjection = {
+	type: 'domainEvent'
+	domain: 'report' | 'escalation' | 'auction' | 'risk' | 'trading' | 'fork'
+	entityType: string
+	entityIdentity: string
+	semanticEventKind: string
+	data: Readonly<Record<string, unknown>>
+	relatedEntities: readonly string[]
 }
 
 export type Projection =
@@ -143,6 +154,7 @@ export type Projection =
 	| RepEthPriceProjection
 	| UniswapMarketProjection
 	| UniswapPriceProjection
+	| DomainEventProjection
 
 const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
@@ -195,7 +207,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	TotalRepBackingUnitsSet: ['totalRepBackingUnits'],
 }
 
-export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
+const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 	const name = log.decoded.name
 	const args = log.decoded.arguments
 	if (name === undefined || args === undefined || log.decoded.status !== 'decoded') return []
@@ -343,6 +355,7 @@ export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
 				marketId: args['id'] === undefined ? log.address.toLowerCase() : bytes32(args['id'], 'id'),
 				eventName: 'Swap',
 				sqrtPriceX96: integerString(args['sqrtPriceX96'], 'sqrtPriceX96'),
+				...(args['liquidity'] === undefined ? {} : { liquidity: integerString(args['liquidity'], 'liquidity') }),
 			},
 		]
 	if (name === 'Swap') return []
@@ -482,4 +495,75 @@ export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
 			},
 		]
 	return []
+}
+
+const eventDomains: Readonly<Record<string, DomainEventProjection['domain']>> = {
+	ReportSubmitted: 'report',
+	ReportDisputed: 'report',
+	ReportSettled: 'report',
+	DepositOnOutcome: 'escalation',
+	LocalDepositAppended: 'escalation',
+	ClaimDeposit: 'escalation',
+	NonDecisionReached: 'escalation',
+	InheritedThresholdTie: 'escalation',
+	GameContinuedFromFork: 'escalation',
+	ForkCarryCheckpoint: 'escalation',
+	CarryDepositConsumed: 'escalation',
+	AuctionStarted: 'auction',
+	BidSubmitted: 'auction',
+	AuctionFinalized: 'auction',
+	BidSettled: 'auction',
+	EthRefundDeferred: 'auction',
+	PendingEthRefundWithdrawn: 'auction',
+	VaultLiquidated: 'risk',
+	VaultBadDebtMigrated: 'risk',
+	PoolAccountingCheckpoint: 'risk',
+	VaultAccountingCheckpoint: 'risk',
+	CompleteSetCreated: 'risk',
+	CompleteSetRedeemed: 'risk',
+	SharesRedeemed: 'risk',
+	Swap: 'trading',
+	Sync: 'trading',
+	LiquidityAdded: 'trading',
+	LiquidityInitialized: 'trading',
+	LiquidityRemoved: 'trading',
+	UniverseForked: 'fork',
+	DeployChild: 'fork',
+	MigrationRepAdded: 'fork',
+	MigrationRepSplit: 'fork',
+	RepBurned: 'fork',
+	ChildPoolLinked: 'fork',
+	VaultMigrationCheckpoint: 'fork',
+	ChildDisputeStakedRepMaterialized: 'fork',
+}
+
+const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
+	const eventName = log.decoded.name
+	const data = log.decoded.arguments
+	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
+	const domain = eventDomains[eventName]
+	if (domain === undefined) return undefined
+	const reportId = data['reportId']
+	const universeId = data['childUniverseId'] ?? data['universeId']
+	const entityIdentity =
+		domain === 'report' && typeof reportId === 'string'
+			? `${log.address.toLowerCase()}:${reportId}`
+			: domain === 'fork' && typeof universeId === 'string'
+				? universeId
+				: log.address.toLowerCase()
+	return {
+		type: 'domainEvent',
+		domain,
+		entityType: domain === 'report' ? 'open-oracle-report' : domain,
+		entityIdentity,
+		semanticEventKind: eventName,
+		data,
+		relatedEntities: log.decoded.referencedAddresses?.map((item) => item.toLowerCase()) ?? [],
+	}
+}
+
+export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
+	const eventProjections = eventProjectionsFrom(log)
+	const domainProjection = domainProjectionFrom(log)
+	return domainProjection === undefined ? eventProjections : [...eventProjections, domainProjection]
 }

@@ -2,6 +2,27 @@ import path from 'node:path'
 import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 
+export const runMigrationTransaction = async <T>(
+	begin: () => Promise<unknown>,
+	commit: () => Promise<unknown>,
+	rollback: () => Promise<unknown>,
+	operation: () => Promise<T>,
+): Promise<T> => {
+	await begin()
+	try {
+		const result = await operation()
+		await commit()
+		return result
+	} catch (error) {
+		try {
+			await rollback()
+		} catch (rollbackError) {
+			throw new AggregateError([error, rollbackError], 'Migration failed and its transaction could not be rolled back')
+		}
+		throw error
+	}
+}
+
 export const migrate = async (sql: SQL): Promise<void> => {
 	const connection = await sql.reserve()
 	try {
@@ -12,10 +33,18 @@ export const migrate = async (sql: SQL): Promise<void> => {
 			const existing = await connection`SELECT name FROM schema_migrations WHERE name = ${filename}`
 			if (existing.length > 0) continue
 			const migration = await Bun.file(path.join(directory, filename)).text()
-			await connection.begin(async (transaction) => {
-				await transaction.unsafe(migration)
-				await transaction`INSERT INTO schema_migrations (name) VALUES (${filename})`
-			})
+			// Keep the reserved advisory-lock connection on one explicit transaction
+			// boundary. Nesting the transaction helper around a multi-statement unsafe
+			// query made PostgreSQL receive duplicate BEGIN/COMMIT commands on startup.
+			await runMigrationTransaction(
+				async () => await connection.unsafe('BEGIN'),
+				async () => await connection.unsafe('COMMIT'),
+				async () => await connection.unsafe('ROLLBACK'),
+				async () => {
+					await connection.unsafe(migration)
+					await connection`INSERT INTO schema_migrations (name) VALUES (${filename})`
+				},
+			)
 		}
 	} finally {
 		try {

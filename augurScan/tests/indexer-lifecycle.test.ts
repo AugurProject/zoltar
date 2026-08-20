@@ -63,7 +63,7 @@ import {
 } from '../src/indexer.ts'
 import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
-import { isSupportedUniswapV4Market, uniswapV4PoolId } from '../src/uniswap.ts'
+import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
 
 const tokenMetadata: TokenMetadata = {
 	address: '0x1000000000000000000000000000000000000001',
@@ -494,7 +494,8 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
-	test('derives four distinct standard V4 pool IDs for each known universe REP token', () => {
+	test('derives V2/V3 and V4 filters for WETH, USDC, and native ETH quotes', () => {
+		const usdc = '0x3000000000000000000000000000000000000003'
 		const contracts = new Map<string, ContractMetadata>([
 			[address, { address, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
 			[
@@ -506,10 +507,18 @@ describe('network indexer lifecycle', () => {
 					provenance: 'manifest',
 				},
 			],
+			[usdc, { address: usdc, kind: 'usdc', label: 'USDC', provenance: 'manifest' }],
+		])
+		expect(uniswapV2V3TokenPairs(contracts.values())).toEqual([
+			{ token0: address, token1: '0x2000000000000000000000000000000000000002' },
+			{ token0: '0x2000000000000000000000000000000000000002', token1: address },
+			{ token0: address, token1: usdc },
+			{ token0: usdc, token1: address },
 		])
 		const ids = uniswapV4PoolIds(contracts)
-		expect(ids).toHaveLength(4)
-		expect(new Set(ids).size).toBe(4)
+		expect(ids).toHaveLength(8)
+		expect(new Set(ids).size).toBe(8)
+		expect(ids).toContain(uniswapV4PoolId(address, 3_000, 60, usdc))
 		expect(ids.every((id) => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
 	})
 
@@ -523,6 +532,16 @@ describe('network indexer lifecycle', () => {
 			hooksAddress: '0x0000000000000000000000000000000000000000',
 		}
 		expect(isSupportedUniswapV4Market(standard)).toBeTrue()
+		const usdc = '0x3000000000000000000000000000000000000003'
+		const [currency0, currency1] = BigInt(address) < BigInt(usdc) ? [address, usdc] : [usdc, address]
+		expect(
+			isSupportedUniswapV4Market({
+				...standard,
+				marketId: uniswapV4PoolId(address, 3_000, 60, usdc),
+				token0Address: currency0,
+				token1Address: currency1,
+			}),
+		).toBeTrue()
 		expect(
 			isSupportedUniswapV4Market({
 				...standard,
@@ -831,6 +850,8 @@ describe('network indexer lifecycle', () => {
 		expect(await findContractDeploymentBlock(50n, 100n, async () => '0x01')).toEqual({ block: 50n, exact: false })
 		expect(await findContractDeploymentBlock(50n, 100n, async (block) => (block >= 51n ? '0x01' : undefined), true)).toEqual({ block: 51n, exact: true })
 		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
+		expect(await findContractDeploymentBlock(0n, 0n, async () => '0x01')).toBeUndefined()
+		expect(await findContractDeploymentBlock(0n, 100n, async () => '0x01')).toBeUndefined()
 	})
 
 	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
@@ -932,7 +953,7 @@ describe('network indexer lifecycle', () => {
 				50n,
 				100n,
 				0n,
-				async () => '0x01',
+				async (_candidate, block) => (block >= 42n ? '0x01' : undefined),
 				async () => {
 					throw timestampFailure
 				},
@@ -1073,17 +1094,19 @@ describe('network indexer lifecycle', () => {
 
 	test('backfills a newly configured token because it changes historical market filters', async () => {
 		const tokenAddress = '0x3000000000000000000000000000000000000003'
-		const contract = { address: tokenAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' } satisfies ContractMetadata
-		expect(
-			await planManifestBackfill(
-				[[tokenAddress, contract.label, contract.kind, 70n]],
-				new Map([[tokenAddress, contract]]),
-				new Map(),
-				100n,
-				0n,
-				mock(async () => undefined),
-			),
-		).toBe(70n)
+		for (const kind of ['reputationToken', 'usdc'] as const) {
+			const contract = { address: tokenAddress, label: kind, kind, provenance: 'manifest' } satisfies ContractMetadata
+			expect(
+				await planManifestBackfill(
+					[[tokenAddress, contract.label, contract.kind, 70n]],
+					new Map([[tokenAddress, contract]]),
+					new Map(),
+					100n,
+					0n,
+					mock(async () => undefined),
+				),
+			).toBe(70n)
+		}
 	})
 
 	test('requires a rebuild when newly tracked history predates the stored index start', () => {
@@ -2305,6 +2328,7 @@ describe('network indexer lifecycle', () => {
 		})
 
 		expect(isProtocolActivitySource(contract('weth'))).toBe(false)
+		expect(isProtocolActivitySource(contract('usdc'))).toBe(false)
 		expect(isProtocolActivitySource(contract('reputationToken'))).toBe(false)
 		expect(isProtocolActivitySource(contract('multicall3'))).toBe(false)
 		expect(isProtocolActivitySource(contract('proxyDeployer'))).toBe(false)

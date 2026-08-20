@@ -482,10 +482,10 @@ test('schedules the stale-head transition without waiting for another network re
 
 test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: true })).toEqual({ label: 'Deployed', tone: 'live' })
-	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Code present at #42', tone: 'live' })
+	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Deployed at or before #42', tone: 'live' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'No code at #100', tone: 'error' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: null })).toEqual({ label: 'Checking deployment', tone: 'pending' })
-	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Code present at')
+	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Deployed at or before')
 	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')

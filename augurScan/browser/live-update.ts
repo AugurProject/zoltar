@@ -327,7 +327,7 @@ export const indexerProgressEstimate = (
 export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => {
 	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
 		return contract.deployment_block_exact === false
-			? { label: `Code present at #${contract.deployment_block}`, tone: 'live' }
+			? { label: `Deployed at or before #${contract.deployment_block}`, tone: 'live' }
 			: { label: 'Deployed', tone: 'live' }
 	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
 		return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
@@ -335,7 +335,7 @@ export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => 
 }
 
 export const contractDeploymentTimestampLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Code present at' : 'Deployed at'
+	contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'
 
 export const contractDeploymentBlockActionLabel = (contract: ContractDeploymentRecord): string =>
 	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'

@@ -19,7 +19,7 @@ import {
 	isVaultStateEntityValue,
 	type JsonValue,
 } from './api-validation.ts'
-import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
+import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
 import { requiredElementRole } from './dom-elements.ts'
 import {
@@ -188,6 +188,8 @@ interface RichListRecord {
 		claimableFeesAttoEth: SerializedAtomicInteger
 		blockNumber: string
 	}>
+	escalation_claims?: Array<Record<string, unknown>>
+	auction_claims?: Array<Record<string, unknown>>
 	[key: string]: unknown
 }
 type PoolRecord = (typeof demoCatalog.pools)[number] & { current_state?: Record<string, JsonValue> }
@@ -315,6 +317,7 @@ interface EntityHistory {
 	ammPrices: ReturnType<typeof demoAmmPriceHistory>
 	repEthPrices: ReturnType<typeof demoRepEthPriceHistory>
 	uniswapRepEthPrices: ReturnType<typeof demoUniswapRepEthPriceHistory>
+	openOracleHistory: ChartRow[]
 	market?: { pair_address?: string | null; fee_bps?: string | number | null } | null
 	pools: JsonValue[]
 	forks: JsonValue[]
@@ -435,10 +438,11 @@ const detailState = pageUrl.searchParams.get('detailState')
 const deploymentState = pageUrl.searchParams.get('deploymentState')
 const networkState = pageUrl.searchParams.get('networkState')
 const isSystem = location.pathname === '/system'
+const isOperations = location.pathname === '/operations' || location.pathname.startsWith('/operations/')
 const isContracts = location.pathname === '/contracts'
 const isRichList = location.pathname === '/richlist'
 const isAddress = location.pathname === '/address'
-const isActivity = !isSystem && !isContracts && !isRichList && !isAddress
+const isActivity = !isSystem && !isOperations && !isContracts && !isRichList && !isAddress
 const initialChainId = pageUrl.searchParams.get('chainId') ?? ''
 const initialActivityFilters = {
 	event: pageUrl.searchParams.get('event') ?? '',
@@ -464,6 +468,8 @@ let demoCanonicalRouteRefreshErrorConsumed = false
 let demoTransactionRestoreErrorConsumed = false
 let demoTransactionAppendErrorConsumed = false
 let demoNetworkFallbackErrorConsumed = false
+let operationsRequestVersion = 0
+let operationsLoadPromise: Promise<boolean> | undefined
 let demoRouteRefreshErrorConsumed = false
 let logsRequestVersion = 0
 let activityPaginationIntentVersion = 0
@@ -1207,6 +1213,15 @@ const demoHistory = (path: string) => {
 			ammPrices: hasAmm ? demoAmmPriceHistory() : [],
 			repEthPrices: hasRepEthPrices ? displayedRepEthPrices : [],
 			uniswapRepEthPrices: hasRepEthPrices ? (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory()) : [],
+			openOracleHistory: hasRepEthPrices
+				? displayedRepEthPrices.slice(-3).map((price, index) => ({
+						timestamp: price.timestamp,
+						block_number: price.block_number,
+						event_name: index === 0 ? 'ReportSubmitted' : index === 1 ? 'ReportDisputed' : 'PriceReported',
+						summary: index === 0 ? 'REP/ETH report submitted' : index === 1 ? 'Replacement round accepted' : 'Coordinator accepted the settled price',
+						coordinator_address: poolItem.coordinator_address,
+					}))
+				: [],
 		}
 	}
 	if (type === 'vaults') {
@@ -1455,6 +1470,7 @@ const decodeEntityHistory = (value: unknown): EntityHistory => {
 	const ammPrices = value['ammPrices'] ?? []
 	const repEthPrices = value['repEthPrices'] ?? []
 	const uniswapRepEthPrices = value['uniswapRepEthPrices'] ?? []
+	const openOracleHistory = value['openOracleHistory'] ?? []
 	const pools = value['pools'] ?? []
 	const forks = value['forks'] ?? []
 	if (!Array.isArray(snapshots) || !snapshots.every(isChartRow)) throw new Error('State history snapshots are malformed')
@@ -1462,6 +1478,7 @@ const decodeEntityHistory = (value: unknown): EntityHistory => {
 	if (!Array.isArray(ammPrices) || !ammPrices.every(isAmmPrice)) throw new Error('AMM price history is malformed')
 	if (!Array.isArray(repEthPrices) || !repEthPrices.every(isRepEthPrice)) throw new Error('REP/ETH price history is malformed')
 	if (!Array.isArray(uniswapRepEthPrices) || !uniswapRepEthPrices.every(isUniswapPrice)) throw new Error('Uniswap price history is malformed')
+	if (!Array.isArray(openOracleHistory) || !openOracleHistory.every(isChartRow)) throw new Error('OpenOracle history is malformed')
 	if (!Array.isArray(pools) || !pools.every(isJsonValue)) throw new Error('Question pool history is malformed')
 	if (!Array.isArray(forks) || !forks.every(isJsonValue)) throw new Error('Question fork history is malformed')
 	const market = value['market']
@@ -1473,7 +1490,98 @@ const decodeEntityHistory = (value: unknown): EntityHistory => {
 			(market['fee_bps'] !== undefined && market['fee_bps'] !== null && typeof market['fee_bps'] !== 'string' && typeof market['fee_bps'] !== 'number'))
 	)
 		throw new Error('State market history is malformed')
-	return { snapshots, events, ammPrices, repEthPrices, uniswapRepEthPrices, pools, forks, ...(market === undefined ? {} : { market }) }
+	return { snapshots, events, ammPrices, repEthPrices, uniswapRepEthPrices, openOracleHistory, pools, forks, ...(market === undefined ? {} : { market }) }
+}
+
+const demoOperations = (chainId: string) => {
+	const network = demoNetworks.find((item) => item.chain_id === chainId) ?? demoNetworks[0]
+	const asOf = {
+		blockNumber: network?.indexed_block ?? '0',
+		blockHash: network?.indexed_hash ?? demoHash,
+		blockTimestamp: String(Math.floor(new Date(network?.indexed_timestamp ?? Date.now()).getTime() / 1_000)),
+		observedHead: network?.observed_block ?? network?.indexed_block ?? '0',
+		lagBlocks: '0',
+		phase: network?.phase ?? 'live',
+		lastSuccessfulRefresh: network?.last_success_at ?? new Date().toISOString(),
+	}
+	const reports = [
+		{
+			open_oracle_address: '0x529dcaC57677451CBfe766d88CcC133D082500df',
+			report_id: '1842',
+			observed_rounds: 3,
+			block_number: asOf.blockNumber,
+			report_data: {
+				token1: '0x0000000000000000000000000000000000000000',
+				token2: '0x221657776846890989a759ba2973e427dff5c9bb',
+				currentAmount1: '1000000000000000000',
+				currentAmount2: '233590000000000000000',
+				currentReporter: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			},
+			lifecycle: { state: 'Dispute window open', clock: 'timestamp', nextTransition: String(Number(asOf.blockTimestamp) + 1_800) },
+		},
+		{
+			open_oracle_address: '0x529dcaC57677451CBfe766d88CcC133D082500df',
+			report_id: '1841',
+			observed_rounds: 1,
+			block_number: String(BigInt(asOf.blockNumber) - 12n),
+			report_data: { token1: '0x221657776846890989a759ba2973e427dff5c9bb', token2: '0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
+			lifecycle: { state: 'Settleable', clock: 'block' },
+		},
+	]
+	const escalations = [
+		{
+			game_address: '0x7777777777777777777777777777777777777777',
+			event_name: 'DepositOnOutcome',
+			block_number: asOf.blockNumber,
+			invalid_stake_atto_rep: '400000000000000000000',
+			no_stake_atto_rep: '900000000000000000000',
+			yes_stake_atto_rep: '1250000000000000000000',
+		},
+	]
+	const auctions = [
+		{
+			auction_address: '0x8888888888888888888888888888888888888888',
+			status: 'Open',
+			bid_count: 18,
+			bidder_count: 11,
+			block_number: asOf.blockNumber,
+			start_data: { attoEthRaiseCap: String(20_000_000_000_000_000_000n), maxAttoRepBeingSold: String(5_000_000_000_000_000_000_000n) },
+		},
+	]
+	const risk = {
+		pools: [
+			{
+				pool_address: '0x9999999999999999999999999999999999999999',
+				settlement_collateral_atto_eth: '42000000000000000000',
+				total_capacity_ownership_atto_rep: '9000000000000000000000',
+			},
+		],
+		vaults: [
+			{
+				pool_address: '0x9999999999999999999999999999999999999999',
+				vault_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+				rep_backing_units: '6100000000000000000000',
+				claimable_fees_atto_eth: '170000000000000000',
+			},
+		],
+		recentLiquidations: [],
+	}
+	return {
+		chainId,
+		asOf,
+		data: {
+			reports,
+			escalations,
+			auctions,
+			risk,
+			prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
+			forks: [{ universe_identity: '0', event_name: 'MigrationRepSplit', block_number: asOf.blockNumber }],
+			recentChanges: [
+				{ semantic_event_kind: 'ReportDisputed', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber },
+				{ semantic_event_kind: 'DepositOnOutcome', entity_identity: '0x777777…', block_number: asOf.blockNumber },
+			],
+		},
+	}
 }
 
 const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Promise<unknown> => {
@@ -1500,6 +1608,11 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 			if (deploymentState === 'absent' && items[0] !== undefined)
 				items[0] = { ...items[0], deployment_block: null, deployment_block_exact: null, deployment_timestamp: null, deployment_checked_block: '0' }
 			return { items }
+		}
+		if (path.startsWith('/api/v1/operations')) {
+			if (demoState === 'loading') return await new Promise(() => {})
+			if (demoState === 'error') throw new Error('Operations could not be loaded')
+			return demoOperations(new URL(path, location.origin).searchParams.get('chainId') ?? '1')
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
@@ -2076,16 +2189,244 @@ const requiredChainId = () => {
 	return chainId
 }
 
+type OperationsResponse = {
+	readonly chainId: string | number
+	readonly asOf: Record<string, unknown>
+	readonly data: Record<string, unknown>
+}
+
+const decodeOperationsResponse = (value: unknown): OperationsResponse => {
+	if (!isRecord(value) || (!isString(value['chainId']) && typeof value['chainId'] !== 'number') || !isRecord(value['asOf']) || !isRecord(value['data']))
+		throw new Error('Operations response is malformed')
+	return { chainId: value['chainId'], asOf: value['asOf'], data: value['data'] }
+}
+
+const operationRecords = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : [])
+const operationNumber = (value: unknown): string =>
+	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? number(value) : number(undefined)
+const operationCounted = (value: unknown, singular: string, plural?: string): string =>
+	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? counted(value, singular, plural) : counted(undefined, singular, plural)
+
+const operationCard = (label: string, value: string, detail?: string) => {
+	const card = element('div', 'operations-card')
+	card.append(element('span', '', label), element('strong', '', value))
+	if (detail !== undefined) card.append(element('small', '', detail))
+	return card
+}
+
+const operationRow = (title: string, status: string, identity: string, block: unknown) => {
+	const row = element('div', 'operations-row')
+	const copy = element('div')
+	copy.append(element('strong', '', title), element('span', '', status), element('code', '', shortIdentifier(identity, 12, 8)))
+	row.append(copy)
+	if (typeof block === 'string' || typeof block === 'number') {
+		const evidence = element('div', 'operations-evidence')
+		evidence.append(element('small', '', `Indexed #${number(block)}`))
+		row.append(evidence)
+	}
+	return row
+}
+
+const operationsPanel = (title: string, rows: HTMLElement[], empty: string) => {
+	const panel = element('section', 'operations-panel')
+	panel.append(element('h3', '', title))
+	const list = element('div', 'operations-list')
+	list.append(...(rows.length === 0 ? [element('div', 'state-placeholder', empty)] : rows))
+	panel.append(list)
+	return panel
+}
+
+const renderOperations = (response: OperationsResponse) => {
+	const content = $('#operations-content')
+	const { asOf, data } = response
+	const selected = location.pathname.split('/')[2] ?? 'overview'
+	const reports = operationRecords(data['reports'])
+	const escalations = operationRecords(data['escalations'])
+	const auctions = operationRecords(data['auctions'])
+	const forks = operationRecords(data['forks'])
+	const changes = operationRecords(data['recentChanges'])
+	const prices = operationRecords(data['prices'])
+	const risk = isRecord(data['risk']) ? data['risk'] : {}
+	const pools = operationRecords(risk['pools'])
+	const vaults = operationRecords(risk['vaults'])
+	const freshness = element('div', 'operations-freshness')
+	freshness.append(
+		operationCard(
+			'Indexed head',
+			`#${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)}`,
+			shortIdentifier(String(asOf['blockHash'] ?? 'Unavailable')),
+		),
+		operationCard('Observed head', `#${number(typeof asOf['observedHead'] === 'string' ? asOf['observedHead'] : undefined)}`),
+		operationCard('Block lag', number(typeof asOf['lagBlocks'] === 'string' ? asOf['lagBlocks'] : undefined), String(asOf['phase'] ?? 'Unavailable')),
+		operationCard('Indexed timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000)),
+		operationCard('Live updates', connection.classList.contains('live') ? 'Connected' : 'Reconnecting', 'Canonical commits only'),
+	)
+	const metrics = element('div', 'operations-metrics')
+	metrics.append(
+		operationCard(
+			'OpenOracle reports',
+			number(reports.length),
+			counted(reports.filter((item) => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length, 'settleable'),
+		),
+		operationCard('Escalation games', number(escalations.length), 'Canonical event projections'),
+		operationCard('Truth auctions', number(auctions.length), counted(auctions.filter((item) => item['status'] === 'Open').length, 'open')),
+		operationCard('Pool / vault snapshots', `${number(pools.length)} / ${number(vaults.length)}`, 'Latest canonical accounting'),
+	)
+	const reportRows = reports.map((item) => {
+		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}
+		const reportData = isRecord(item['report_data']) ? item['report_data'] : {}
+		return operationRow(
+			`Report ${String(item['report_id'] ?? '—')}`,
+			`${String(lifecycle['state'] ?? 'Awaiting indexed evidence')} · ${operationNumber(item['observed_rounds'])} rounds · ${String(reportData['token1'] ?? 'token 1')} / ${String(reportData['token2'] ?? 'token 2')}`,
+			`${String(item['open_oracle_address'] ?? '')}:${String(item['report_id'] ?? '')}`,
+			item['block_number'],
+		)
+	})
+	const escalationRows = escalations.map((item) =>
+		operationRow(
+			'Escalation game',
+			`${String(item['event_name'] ?? 'Active')} · INVALID ${operationNumber(item['invalid_stake_atto_rep'])} · NO ${operationNumber(item['no_stake_atto_rep'])} · YES ${operationNumber(item['yes_stake_atto_rep'])} attoREP`,
+			String(item['game_address'] ?? ''),
+			item['block_number'],
+		),
+	)
+	const auctionRows = auctions.map((item) =>
+		operationRow(
+			'Truth auction',
+			`${String(item['status'] ?? 'Awaiting indexed evidence')} · ${operationCounted(item['bid_count'], 'bid')} · ${operationCounted(item['bidder_count'], 'bidder')}`,
+			String(item['auction_address'] ?? ''),
+			item['block_number'],
+		),
+	)
+	const riskRows = [
+		...pools.map((item) =>
+			operationRow(
+				'Pool accounting',
+				`${operationNumber(item['settlement_collateral_atto_eth'])} attoETH collateral`,
+				String(item['pool_address'] ?? ''),
+				item['block_number'],
+			),
+		),
+		...vaults.map((item) =>
+			operationRow(
+				'Vault position',
+				`${operationNumber(item['rep_backing_units'])} REP backing units`,
+				String(item['vault_address'] ?? ''),
+				item['block_number'],
+			),
+		),
+	]
+	const forkRows = forks.map((item) =>
+		operationRow('Fork / migration', String(item['event_name'] ?? 'Migration evidence'), String(item['universe_identity'] ?? ''), item['block_number']),
+	)
+	const changeRows = changes.map((item) =>
+		operationRow(
+			String(item['semantic_event_kind'] ?? 'Protocol transition'),
+			'Canonical semantic evidence',
+			String(item['entity_identity'] ?? ''),
+			item['block_number'],
+		),
+	)
+	const priceRows = prices.map((item) =>
+		operationRow(
+			'Coordinator REP / ETH',
+			`${operationNumber(item['value'])} scaled 1e18 · ${String(item['source_event'] ?? 'Unavailable')}`,
+			String(item['source_contract'] ?? ''),
+			item['block_number'],
+		),
+	)
+	const attentionReportRows: HTMLElement[] = []
+	for (const [index, item] of reports.entries()) {
+		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}
+		const row = reportRows[index]
+		if ((lifecycle['state'] === 'Dispute window open' || lifecycle['state'] === 'Settleable') && row !== undefined) attentionReportRows.push(row)
+	}
+	const concludedEscalationEvents = new Set(['NonDecisionReached', 'GameContinuedFromFork', 'InheritedThresholdTie'])
+	const activeEscalationRows: HTMLElement[] = []
+	for (const [index, item] of escalations.entries()) {
+		const row = escalationRows[index]
+		if (!concludedEscalationEvents.has(String(item['event_name'] ?? '')) && row !== undefined) activeEscalationRows.push(row)
+	}
+	const activeAuctionRows: HTMLElement[] = []
+	for (const [index, item] of auctions.entries()) {
+		const row = auctionRows[index]
+		if (['Open', 'Awaiting finalization', 'Bid settlements outstanding'].includes(String(item['status'] ?? '')) && row !== undefined)
+			activeAuctionRows.push(row)
+	}
+	const panels =
+		selected === 'reports'
+			? [operationsPanel('OpenOracle reports', reportRows, 'No canonical report evidence has been indexed.')]
+			: selected === 'escalations'
+				? [operationsPanel('Escalation games', escalationRows, 'No canonical escalation evidence has been indexed.')]
+				: selected === 'auctions'
+					? [operationsPanel('Truth auctions', auctionRows, 'No canonical auction evidence has been indexed.')]
+					: selected === 'risk'
+						? [operationsPanel('Pool and vault risk evidence', riskRows, 'No canonical accounting snapshots have been indexed.')]
+						: [
+								operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
+								operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
+								operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
+								operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
+								operationsPanel('Fork and migration progress', forkRows, 'No fork or migration evidence has been indexed.'),
+								operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
+								operationsPanel('Recent semantic changes', changeRows, 'No semantic changes have been indexed.'),
+							]
+	const grid = element('div', panels.length === 1 ? 'operations-grid operations-grid-single' : 'operations-grid')
+	grid.append(...panels)
+	if (selected === 'overview') content.replaceChildren(freshness, metrics, grid)
+	else {
+		const routeFreshness = element('p', 'operations-route-freshness')
+		routeFreshness.textContent = `As of indexed block #${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)} · ${number(
+			typeof asOf['lagBlocks'] === 'string' ? asOf['lagBlocks'] : undefined,
+		)} blocks behind · ${connection.classList.contains('live') ? 'live updates connected' : 'live updates reconnecting'}`
+		content.replaceChildren(routeFreshness, grid)
+	}
+	content.setAttribute('aria-busy', 'false')
+	$('#operations-status').hidden = true
+}
+
+const loadOperations = async (): Promise<boolean> => {
+	if (operationsLoadPromise !== undefined) return await operationsLoadPromise
+	const requestVersion = ++operationsRequestVersion
+	const run = (async () => {
+		const status = $('#operations-status')
+		const content = $('#operations-content')
+		status.hidden = false
+		status.className = 'system-status'
+		status.textContent = 'Loading canonical protocol operations…'
+		content.setAttribute('aria-busy', 'true')
+		try {
+			const response = decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+			if (requestVersion !== operationsRequestVersion) return false
+			renderOperations(response)
+			return true
+		} catch (error) {
+			if (requestVersion !== operationsRequestVersion) return false
+			status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations request failure'
+			renderRetryStatus(status, 'Could not load protocol operations.', loadOperations)
+			content.replaceChildren()
+			content.setAttribute('aria-busy', 'false')
+			return false
+		}
+	})()
+	const tracked = run.finally(() => {
+		if (operationsLoadPromise === tracked) operationsLoadPromise = undefined
+	})
+	operationsLoadPromise = tracked
+	return await tracked
+}
+
 const syncNetworkUrl = () => {
 	const url = new URL(location.href)
 	const chainId = selectedChainId()
 	if (chainId) url.searchParams.set('chainId', chainId)
 	else url.searchParams.delete('chainId')
 	history.replaceState(null, '', url)
-	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a')) {
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a, .operations-nav a')) {
 		const destination = new URL(link.href)
 		if (chainId) destination.searchParams.set('chainId', chainId)
 		else destination.searchParams.delete('chainId')
+		if (isDemo) destination.searchParams.set('demo', '1')
 		link.href = destination.href
 	}
 }
@@ -2140,6 +2481,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 				await loadLogs()
 			}
 			if (isSystem && synchronizeActivity && previousNetwork !== selectedChainId()) await loadSystemState()
+			if (isOperations && synchronizeActivity && previousNetwork !== selectedChainId()) await loadOperations()
 			if (isContracts && synchronizeActivity && previousNetwork !== selectedChainId()) await loadContracts()
 			if (isRichList && synchronizeActivity && previousNetwork !== selectedChainId()) await loadRichList()
 			if (isAddress && synchronizeActivity && previousNetwork !== selectedChainId()) await loadAddressProfile()
@@ -3444,6 +3786,18 @@ const chartCard = <T extends { timestamp: string }>(
 	card.append(heading)
 	if (rows.length === 0) card.append(element('p', 'data-note', emptyMessage))
 	else {
+		const independentlyScaled = definitions.length > 1 && sharedRange === undefined
+		if (independentlyScaled) {
+			const currentValues = element('dl', 'chart-current-values')
+			for (const { key, label, decimals = 18, unit = '' } of definitions) {
+				const latest = rows.findLast((row) => row[key] !== undefined)
+				if (latest === undefined) continue
+				const item = element('div')
+				item.append(element('dt', '', label), element('dd', '', exactUnit(chartNumericValue(latest[key]), decimals, unit, decimals)))
+				currentValues.append(item)
+			}
+			card.append(currentValues)
+		}
 		const viewport = element('div', 'chart-scroll')
 		viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
 		card.append(
@@ -3451,7 +3805,7 @@ const chartCard = <T extends { timestamp: string }>(
 			element(
 				'p',
 				'data-note',
-				`${note}${definitions.length > 1 && sharedRange === undefined ? ' Each line is independently scaled to its observed range so every trend remains visible; exact current values are shown above.' : ''}`,
+				`${note}${independentlyScaled ? ' Each line is independently scaled to its observed range so every trend remains visible; exact latest values are listed above.' : ''}`,
 			),
 		)
 	}
@@ -3490,7 +3844,6 @@ const renderContractDetail = (contract: ContractRecord | undefined) => {
 	head.append(identity, statusNode)
 	const grid = element('div', 'contract-detail-grid')
 	grid.append(
-		detailCard('Registry source', contract.provenance),
 		detailCard(
 			'Deployment block',
 			contract.deployment_block === null || contract.deployment_block === undefined
@@ -3498,7 +3851,6 @@ const renderContractDetail = (contract: ContractRecord | undefined) => {
 				: `${contract.deployment_block_exact === false ? 'Search boundary ' : ''}#${number(contract.deployment_block)}`,
 		),
 		detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
-		detailCard('First protocol discovery block', contract.discovery_block ? `#${number(contract.discovery_block)}` : 'Configured contract', true),
 	)
 	const actions = element('div', 'detail-tools')
 	const copyAddress = copyButton(contract.address, 'address')
@@ -4045,6 +4397,30 @@ const renderAddressProfile = (
 	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or vault involvement has been indexed.'))
 	involvement.append(involvementGrid)
 	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
+	const escalationClaims = operationsPanel(
+		'Escalation interactions',
+		(item.escalation_claims ?? []).map((claim) =>
+			operationRow(
+				String(claim['type'] ?? 'Escalation position'),
+				`${String(claim['provenance'] ?? 'historical interaction')} · current claimability is unavailable`,
+				String(claim['entity'] ?? ''),
+				claim['blockNumber'],
+			),
+		),
+		'No escalation interactions are associated with this address.',
+	)
+	const auctionClaims = operationsPanel(
+		'Auction interactions',
+		(item.auction_claims ?? []).map((claim) =>
+			operationRow(
+				String(claim['type'] ?? 'Auction position'),
+				`${String(claim['provenance'] ?? 'historical interaction')} · current entitlement is unavailable`,
+				String(claim['entity'] ?? ''),
+				claim['blockNumber'],
+			),
+		),
+		'No truth-auction interactions are associated with this address.',
+	)
 	const activity = element('section', 'address-profile-panel')
 	const activityHeader = element('div', 'address-section-heading')
 	const activityCopy = element('div')
@@ -4109,7 +4485,7 @@ const renderAddressProfile = (
 	interactionPanel.append(interactionList)
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
-	content.replaceChildren(header, metrics, balances, involvement, interactionPanel, activity)
+	content.replaceChildren(header, metrics, balances, involvement, escalationClaims, auctionClaims, interactionPanel, activity)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }
@@ -4232,7 +4608,9 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 	const ammPrices = history.ammPrices ?? []
 	const repEthPrices = history.repEthPrices ?? []
 	const uniswapRepEthPrices = history.uniswapRepEthPrices ?? []
+	const openOracleHistory = history.openOracleHistory ?? []
 	const uniswapChart = uniswapPriceChartModel(uniswapRepEthPrices)
+	const uniswapLiquidity = uniswapLiquidityChartModel(uniswapRepEthPrices)
 	const latestAmmPrice = ammPrices.at(-1)
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
@@ -4243,6 +4621,20 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 			poolItem.question_title ?? 'Unknown question',
 			`${poolItem.pool_address} · universe ${shortIdentifier(poolItem.universe_id, 8, 6)}`,
 			'Latest indexed',
+		),
+	)
+	fragment.append(
+		operationsPanel(
+			'OpenOracle coordinator state and history',
+			openOracleHistory.map((observation) =>
+				operationRow(
+					String(observation['event_name'] ?? 'Coordinator transition'),
+					String(observation['summary'] ?? 'Canonical OpenOracle coordinator evidence'),
+					String(observation['coordinator_address'] ?? poolItem.coordinator_address),
+					observation['block_number'],
+				),
+			),
+			'No OpenOracle coordinator state transitions have been indexed for this pool.',
 		),
 	)
 	const metrics = element('div', 'metric-grid')
@@ -4277,14 +4669,21 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 			'Authoritative PoolAccountingCheckpoint results. Collateral and fees use attoETH; capacity ownership uses attoREP.',
 		),
 		chartCard(
-			'Uniswap REP / ETH spot price history',
+			'Uniswap REP price curves',
 			uniswapChart.rows,
 			uniswapChart.definitions,
-			'Event-time marginal prices derived from V2 Sync reserves and V3/V4 Initialize or Swap sqrt prices. V2/V3 quote REP per WETH; V4 quotes REP per native ETH. These values can be manipulated within a block and are not a TWAP or protocol oracle.',
+			'Event-time marginal prices derived from V2 Sync reserves and V3/V4 Initialize or Swap sqrt prices. Curves retain their explicit WETH, native ETH, or USDC quote orientation. These values can be manipulated within a block and are not a TWAP or protocol oracle.',
 			{
 				sharedRange: uniswapChart.sharedRange,
-				emptyMessage: 'No Uniswap REP / ETH pool observations have been indexed for this universe.',
+				emptyMessage: 'No Uniswap REP / ETH or REP / USDC pool observations have been indexed for this universe.',
 			},
+		),
+		chartCard(
+			'Uniswap liquidity over time',
+			uniswapLiquidity.rows,
+			uniswapLiquidity.definitions,
+			'V2 points preserve the exact reserve product. V3 and V4 points preserve the exact active-liquidity integer emitted by Swap. Each venue is raw protocol evidence and is not silently normalized across token decimal systems.',
+			{ emptyMessage: 'No Uniswap liquidity observations have been indexed for this universe.' },
 		),
 	)
 	fragment.append(
@@ -5034,6 +5433,7 @@ const retryCanonicalRefresh = async (button: HTMLButtonElement) => {
 		} else {
 			await loadNetworks({ refreshAfterCurrent: true })
 			if (isSystem) await loadSystemState()
+			else if (isOperations) await loadOperations()
 			else if (isContracts) await loadContracts()
 			else if (isRichList) await loadRichList()
 			else if (isAddress) await loadAddressProfile()
@@ -5169,6 +5569,11 @@ const resetSelectedNetworkContext = () => {
 	} else if (isAddress) {
 		currentAddressProfile = undefined
 		$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
+	} else if (isOperations) {
+		operationsRequestVersion++
+		operationsLoadPromise = undefined
+		$('#operations-content').replaceChildren()
+		$('#operations-content').setAttribute('aria-busy', 'true')
 	}
 }
 
@@ -5180,6 +5585,8 @@ globalNetworkFilter.addEventListener('change', async () => {
 	updateFreshness()
 	if (isSystem) {
 		await loadSystemState()
+	} else if (isOperations) {
+		await loadOperations()
 	} else if (isContracts) {
 		await loadContracts()
 	} else if (isRichList) {
@@ -5215,6 +5622,11 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
+		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
+		return contentRefreshed
+	}
+	if (isOperations) {
+		const [, contentRefreshed] = await Promise.all([networkRefresh, loadOperations()])
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
@@ -5507,11 +5919,25 @@ if (!isRichList && accountDeepLink !== null) {
 }
 $('#activity').hidden = !isActivity
 $('#system').hidden = !isSystem
+$('#operations').hidden = !isOperations
 $('#contracts').hidden = !isContracts
 $('#richlist').hidden = !isRichList
 $('#address-profile').hidden = !isAddress
-$('.skip-link').href = isSystem ? '#system' : isContracts ? '#contracts' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
+$('.skip-link').href = isSystem
+	? '#system'
+	: isOperations
+		? '#operations'
+		: isContracts
+			? '#contracts'
+			: isRichList
+				? '#richlist'
+				: isAddress
+					? '#address-profile'
+					: '#activity'
 for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a'))
+	if (new URL(link.href).pathname === location.pathname || (isOperations && new URL(link.href).pathname === '/operations'))
+		link.setAttribute('aria-current', 'page')
+for (const link of document.querySelectorAll<HTMLAnchorElement>('.operations-nav a'))
 	if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
 const requestedTab = pageUrl.searchParams.get('tab')
@@ -5521,6 +5947,7 @@ if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefine
 const initialDashboardLoad = (async () => {
 	await loadNetworks({ synchronizeActivity: false })
 	if (isSystem) await loadSystemState()
+	else if (isOperations) await loadOperations()
 	else if (isContracts) await loadContracts()
 	else if (isRichList) await loadRichList()
 	else if (isAddress) await loadAddressProfile()

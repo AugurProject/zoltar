@@ -172,10 +172,12 @@ describe('state projections', () => {
 		})
 		const [roundedPrice] = projectionsFrom(log('Sync', { yesReserve: '1', noReserve: '2' }, pair))
 		expect(roundedPrice).toMatchObject({ conditionalYesBps: '6666', conditionalNoBps: '3334' })
-		expect(projectionsFrom(log('Sync', { yesReserve: '0', noReserve: '0' }, pair))).toEqual([])
+		expect(projectionsFrom(log('Sync', { yesReserve: '0', noReserve: '0' }, pair))).toEqual([
+			expect.objectContaining({ type: 'domainEvent', domain: 'trading', semanticEventKind: 'Sync' }),
+		])
 	})
 
-	test('ignores an Augur AMM Swap and still projects its following Sync', () => {
+	test('retains an Augur AMM Swap as trading evidence without treating it as a reserve snapshot', () => {
 		const pair = getAddress('0x3333333333333333333333333333333333333333')
 		expect(
 			projectionsFrom(
@@ -195,7 +197,7 @@ describe('state projections', () => {
 					pair,
 				),
 			),
-		).toEqual([])
+		).toEqual([expect.objectContaining({ type: 'domainEvent', domain: 'trading', semanticEventKind: 'Swap' })])
 		expect(projectionsFrom(log('Sync', { yesReserve: '400', noReserve: '600' }, pair))).toEqual([
 			{
 				type: 'ammPrice',
@@ -205,6 +207,7 @@ describe('state projections', () => {
 				conditionalYesBps: '6000',
 				conditionalNoBps: '4000',
 			},
+			expect.objectContaining({ type: 'domainEvent', domain: 'trading', semanticEventKind: 'Sync' }),
 		])
 	})
 
@@ -281,5 +284,26 @@ describe('state projections', () => {
 			expect.objectContaining({ type: 'uniswapMarket', venue: 'v4', marketId }),
 			expect.objectContaining({ type: 'uniswapPrice', venue: 'v4', marketId, eventName: 'Initialize' }),
 		])
+	})
+
+	test('adds typed domain evidence for operations and unified timelines', () => {
+		const report = projectionsFrom(
+			log('ReportSubmitted', {
+				reportId: '42',
+				numReports: '1',
+				currentReporter: vault,
+				currentAmount1: '10',
+				currentAmount2: '20',
+			}),
+		).at(-1)
+		expect(report).toMatchObject({
+			type: 'domainEvent',
+			domain: 'report',
+			entityType: 'open-oracle-report',
+			entityIdentity: `${pool.toLowerCase()}:42`,
+			semanticEventKind: 'ReportSubmitted',
+		})
+		const auction = projectionsFrom(log('BidSubmitted', { bidder: vault, tick: '-3', bidIndex: '0', bidAmountAttoEth: atomic(10n) })).at(-1)
+		expect(auction).toMatchObject({ type: 'domainEvent', domain: 'auction', semanticEventKind: 'BidSubmitted' })
 	})
 })
