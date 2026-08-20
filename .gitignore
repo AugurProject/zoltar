@@ -42,9 +42,9 @@ ui/*/ts/**/*.d.ts.map
 /trading/artifacts
 /trading/node_modules
 /trading/ts/artifacts/contractArtifact.ts
-/trading/ui/ts/generated/contractArtifact.ts
-/trading/ui/dist
+/ui/trading/ts/generated/contractArtifact.ts
 /trading/deployments/local.json
+/trading/js
 # Hand-written ambient declarations are allowed
 !solidity/ts/types/bun-test.d.ts
 !solidity/ts/types/index.d.ts

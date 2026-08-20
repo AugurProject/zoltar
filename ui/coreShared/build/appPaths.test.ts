@@ -2,32 +2,35 @@ import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
-import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
 const repositoryRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', '..')
 
 test('UI_APP_IDS lists exactly the supported applications', () => {
-	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast'])
+	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading'])
 })
 
 test('getUiAppDependencyOrder preserves the UI package DAG', () => {
 	expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltar'])
 	expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltar', 'statoblast'])
+	expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltar', 'statoblast', 'trading'])
 })
 
 test('isUiAppId accepts supported applications and rejects unknown values', () => {
 	expect(isUiAppId('zoltar')).toBe(true)
 	expect(isUiAppId('statoblast')).toBe(true)
+	expect(isUiAppId('trading')).toBe(true)
 	expect(isUiAppId('')).toBe(false)
 	expect(isUiAppId('coreShared')).toBe(false)
 	expect(isUiAppId('Zoltar')).toBe(false)
 })
 
 test('parseUiAppId rejects missing and unknown IDs with the supported list', () => {
-	expect(() => parseUiAppId(undefined, 'the test')).toThrow(/Missing UI app ID for the test.*zoltar, statoblast/)
-	expect(() => parseUiAppId('coreShared', 'the test')).toThrow(/Unknown UI app ID 'coreShared'.*zoltar, statoblast/)
+	expect(() => parseUiAppId(undefined, 'the test')).toThrow(/Missing UI app ID for the test.*zoltar, statoblast, trading/)
+	expect(() => parseUiAppId('coreShared', 'the test')).toThrow(/Unknown UI app ID 'coreShared'.*zoltar, statoblast, trading/)
 	expect(parseUiAppId('zoltar', 'the test')).toBe('zoltar')
 	expect(parseUiAppId('statoblast', 'the test')).toBe('statoblast')
+	expect(parseUiAppId('trading', 'the test')).toBe('trading')
 })
 
 for (const appId of UI_APP_IDS) {
@@ -81,13 +84,15 @@ describe('split development server paths', () => {
 	for (const [appId, port] of [
 		['zoltar', 12346],
 		['statoblast', 12347],
+		['trading', 4163],
 	] as const) {
 		test(`serves the ${appId} application root`, async () => {
+			const titles: Record<UiAppId, string> = { statoblast: '<title>Augur Statoblast</title>', trading: '<title>Statoblast trading</title>', zoltar: '<title>Zoltar</title>' }
 			const paths = getUiAppPaths(appId)
 			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { stderr: 'pipe', stdout: 'pipe' })
 			try {
 				const html = await waitForDevelopmentServer(`http://127.0.0.1:${port.toString()}/`)
-				expect(html).toContain(appId === 'zoltar' ? '<title>Zoltar</title>' : '<title>Augur Statoblast</title>')
+				expect(html).toContain(titles[appId])
 			} finally {
 				processHandle.kill()
 				await processHandle.exited

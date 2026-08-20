@@ -27,9 +27,7 @@ function AddressText({ address, responsiveAbbreviation }: { address: string; res
 	)
 }
 
-export function AddressValue({ address, className = '', copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
-	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
-
+export function ReadOnlyAddressValue({ address, className = '', responsiveAbbreviation = false }: Omit<AddressValueProps, 'copyable'>) {
 	if (address === undefined) {
 		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
 		return (
@@ -38,13 +36,17 @@ export function AddressValue({ address, className = '', copyable = true, respons
 			</span>
 		)
 	}
+	return (
+		<span className={`address-value ${className}`} title={address}>
+			<AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />
+		</span>
+	)
+}
 
-	if (!copyable)
-		return (
-			<span className={`address-value ${className}`} title={address}>
-				<AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />
-			</span>
-		)
+export function AddressValue({ address, className = '', copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
+
+	if (address === undefined || !copyable) return <ReadOnlyAddressValue address={address} className={className} responsiveAbbreviation={responsiveAbbreviation} />
 
 	return (
 		<span className='copy-value-wrap'>

@@ -10,13 +10,13 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 - `ts/sdk/` — exact bigint quote math, maximum insured-exit search, transaction builders, simulations, and result extraction.
 - `ts/compiler/` — Solidity 0.8.35 compiler and project-local artifact generation.
 - `ts/deploy/` — deployment from an existing Zoltar core manifest.
-- `ui/` — standalone Preact application and walletless demo mode.
+- `../ui/trading/` — standalone Preact application, deterministic visual fixtures, and walletless TEVM simulation.
 - `docs/` — tutorials, task guides, reference, and design explanation.
 - `deployments/` — local and reviewed network manifests; no invented public addresses.
 
 ## Quick setup
 
-From this directory, build and start the live UI:
+From this directory, build and start the live UI after completing the repository-root setup:
 
 ```bash
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
@@ -29,35 +29,39 @@ On Windows, run `start.bat` from this directory to start the same Compose comman
 
 ### Local development and demo
 
+From the repository root, install and build the complete workspace first:
+
 ```bash
 bun install --frozen-lockfile
-bun run compile
-bun run test
-bun run ui:build
-bun run ui:serve
+bun run setup
+bun run trading:test
+bun run trading:ui:build
+bun run app:serve:trading
 ```
 
-Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled and makes no live-chain claims.
+Open `http://localhost:4163/?simulate=1#/markets` for the shared browser-local TEVM simulator. Use `?demo=1` for the deterministic visual fixtures used by browser QA.
+
+See [Local development](docs/tutorials/local-development.md) for the package-specific compile and external-node workflow.
 
 The Docker image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests. The live UI uses the installed core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading.
 
 ### Live deployment
 
-Without Docker, `bun run ui:build` includes the same deterministic wallet deployment setup. The live client derives and verifies the canonical trading contracts, discovers SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
+Without Docker, `bun run trading:ui:build` includes the same deterministic wallet deployment setup. The live client derives and verifies the canonical trading contracts, discovers SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
-| `bun run setup` | Frozen install, compile, and UI build |
+| `bun run setup` | Frozen install and compile |
 | `bun run compile` / `generate` | Compile contracts and produce local JSON/TypeScript artifacts |
-| `bun run tsc` | Type-check SDK, tooling, and UI |
-| `bun run test` | Compile, type-check, and run SDK/UI tests |
+| `bun run tsc` | Type-check SDK and tooling |
+| `bun run test` | Compile, type-check, and run SDK and relocated UI tests |
 | `bun run coverage` | Bun coverage for TypeScript tests |
 | `bun run coverage:contracts` | Trace Solidity execution and require at least 99% production-contract line coverage |
 | `bun run check` | Formatting, types, and tests |
 | `bun run format:check` / `format` | Check or apply project formatting |
-| `bun run ui:build` / `ui:serve` | Build or serve the standalone UI |
+| Root `bun run trading:ui:build` / `app:serve:trading` | Build or serve `ui/trading` |
 | `bun run deploy:local` | Deploy against an existing local Zoltar manifest |
 | `bun run docker:build` / `docker:run` | Build or run the standalone UI container from `trading/` |
 | `bun run gas-costs` | Report bytecode sizes and funded-fixture operation gas |

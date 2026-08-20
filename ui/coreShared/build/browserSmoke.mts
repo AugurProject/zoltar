@@ -6,7 +6,6 @@ import * as process from 'node:process'
 import { getChromiumPath } from './chromiumPath.js'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
-const SIMULATION_SCENARIO = process.env['UI_SIMULATION_SCENARIO'] ?? 'baseline'
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
 
 type PageIssue = {
@@ -27,16 +26,18 @@ type BrowserSmokeState = {
 }
 
 export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, readyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
+	const normalizedBody = state.body.toLocaleLowerCase()
+	const includesText = (text: string) => normalizedBody.includes(text.toLocaleLowerCase())
+	const explicitReadyStateReached = readyText !== undefined && includesText(readyText)
 	return (
 		state.hasMain &&
 		state.width === viewport.width &&
 		state.height === viewport.height &&
 		state.body !== '' &&
 		state.body !== 'Loading...' &&
-		state.body.includes(applicationTitle) &&
-		!state.body.includes('BOOTSTRAPPING') &&
-		!state.body.includes('Starting simulation bootstrap') &&
-		(readyText === undefined || state.body.includes(readyText))
+		includesText(applicationTitle) &&
+		(explicitReadyStateReached || (!state.body.includes('BOOTSTRAPPING') && !state.body.includes('Starting simulation bootstrap'))) &&
+		(readyText === undefined || includesText(readyText))
 	)
 }
 
@@ -209,12 +210,14 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the browser smoke check. Set CHROMIUM_PATH or install Chromium.')
 	const route = process.env['UI_BROWSER_ROUTE'] ?? ''
 	if (route !== '' && !route.startsWith('#')) throw new Error(`Invalid UI_BROWSER_ROUTE '${route}'; expected an empty value or a hash route.`)
-	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&simScenario=${encodeURIComponent(SIMULATION_SCENARIO)}${route}`
+	const simulationScenario = process.env['UI_SIMULATION_SCENARIO'] ?? (appId === 'trading' ? 'trading' : 'baseline')
+	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&simScenario=${encodeURIComponent(simulationScenario)}${route}`
 	const viewport = parseViewport(process.env['UI_VIEWPORT'])
 	const session = await createDevToolsSession(chromiumPath, pageUrl, viewport)
 	try {
 		const { send, issues } = session
-		const applicationTitle = appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast'
+		const applicationTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
+		const applicationTitle = applicationTitles[appId]
 		const readyText = process.env['UI_BROWSER_READY_TEXT']
 		await send('Runtime.enable')
 		await send('Page.enable')
@@ -227,6 +230,7 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 
 		const start = Date.now()
 		let mounted = false
+		let lastObservedState: BrowserSmokeState | undefined
 		const mountTimeoutMilliseconds = options.mountTimeoutMilliseconds ?? MOUNT_TIMEOUT_MILLISECONDS
 		while (Date.now() - start < mountTimeoutMilliseconds) {
 			const result = (await send('Runtime.evaluate', {
@@ -236,6 +240,7 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 			const raw = result.result?.value
 			if (typeof raw === 'string') {
 				const state = JSON.parse(raw) as BrowserSmokeState
+				lastObservedState = state
 				if (isBrowserSmokeReady(state, applicationTitle, readyText, viewport)) {
 					mounted = true
 					break
@@ -243,7 +248,8 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 			}
 			await Bun.sleep(100)
 		}
-		if (!mounted) issues.push({ kind: 'mount', detail: `The ${appId} application root did not reach its expected ${applicationTitle}${readyText === undefined ? '' : ` / ${readyText}`} state within ${(mountTimeoutMilliseconds / 1000).toFixed(0)}s at ${pageUrl}` })
+		if (!mounted)
+			issues.push({ kind: 'mount', detail: `The ${appId} application root did not reach its expected ${applicationTitle}${readyText === undefined ? '' : ` / ${readyText}`} state within ${(mountTimeoutMilliseconds / 1000).toFixed(0)}s at ${pageUrl}. Last observed state: ${JSON.stringify(lastObservedState)}` })
 
 		if (mounted) {
 			const settleDeadline = Date.now() + Math.min(5_000, mountTimeoutMilliseconds)
@@ -278,7 +284,7 @@ async function main() {
 	const appId = parseUiAppIdFromProcess('the browser smoke check')
 	const paths = getUiAppPaths(appId)
 	void paths
-	const ports: Record<UiAppId, number> = { statoblast: 12347, zoltar: 12346 }
+	const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 12346 }
 	const explicitBaseUrl = process.env['UI_DEV_SERVER_URL']
 	if (appId !== undefined && explicitBaseUrl === undefined) {
 		throw new Error(`Set UI_DEV_SERVER_URL to the running ${appId} dev server base URL (expected http://localhost:${ports[appId]} from bun run app:serve:${appId}).`)

@@ -25,6 +25,7 @@ const generatedFixtureFiles = [
 	'ui/zoltar/tsconfig.tsbuildinfo',
 	'ui/zoltar/vendor/isows/native.js',
 	'ui/statoblast/vendor/isows/native.js',
+	'ui/trading/vendor/isows/native.js',
 ]
 
 async function writeFixtureFile(repositoryRoot: string, relativePath: string, contents: string) {
@@ -51,6 +52,18 @@ async function createGeneratedArtifactFixture() {
 	await writeFixtureFile(
 		repositoryRoot,
 		'ui/statoblast/index.html',
+		`<script type='importmap'>
+{
+	"imports": {
+		"@zoltar/shared/foo": "../shared/js/foo.js",
+		"isows": "./vendor/isows/native.js"
+	}
+}
+</script>`,
+	)
+	await writeFixtureFile(
+		repositoryRoot,
+		'ui/trading/index.html',
 		`<script type='importmap'>
 {
 	"imports": {

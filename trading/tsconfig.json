@@ -16,5 +16,5 @@
 		"lib": ["ESNext", "DOM"],
 		"types": ["bun-types"]
 	},
-	"include": ["scripts/**/*.mts", "ts/**/*.ts", "ts/**/*.mts", "ui/ts/**/*.ts", "ui/ts/**/*.tsx", "ui/build/**/*.mts"]
+	"include": ["scripts/**/*.mts", "ts/**/*.ts", "ts/**/*.mts"]
 }

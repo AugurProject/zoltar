@@ -1,7 +1,7 @@
 import { existsSync, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
-export const TEST_ROOTS = ['scripts', 'shared/ts', 'solidity/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts'] as const
+export const TEST_ROOTS = ['scripts', 'shared/ts', 'solidity/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
 export const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
 export const MAXIMUM_TEST_PARALLELISM = 2
 

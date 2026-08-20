@@ -46,9 +46,12 @@ COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
 COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
-RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile
+COPY ./ui/trading/package.json /source/ui/trading/package.json
+COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
+COPY ./trading/package.json ./trading/bun.lock ./trading/tsconfig.json ./trading/tsconfig.build.json /source/trading/
+RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile && cd ../trading && bun install --frozen-lockfile && cd ../../trading && bun install --frozen-lockfile
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
-RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast
+RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast && bun ./ui/coreShared/build/vendor.mts trading
 
 # UI TypeScript source
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
@@ -57,12 +60,19 @@ COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
+COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
+COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
 COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
+COPY ./ui/trading/ts/ /source/ui/trading/ts/
+COPY ./ui/trading/css/ /source/ui/trading/css/
+COPY ./ui/trading/build/ /source/ui/trading/build/
+COPY ./trading/contracts/ /source/trading/contracts/
+COPY ./trading/ts/ /source/trading/ts/
 COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
 COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 
@@ -70,6 +80,8 @@ COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
 RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
+RUN cd /source/trading && bun run compile
+RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
 
 # ----------------------------------------------------
 # Local runtime: Serve the production UI over plain HTTP
@@ -82,6 +94,7 @@ WORKDIR /app
 
 COPY --from=builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
 COPY --from=builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
+COPY --from=builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
 COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
 
 USER bun
@@ -122,6 +135,12 @@ COPY --from=builder /source/ui/statoblast/dist/favicon.ico /export/statoblast/fa
 COPY --from=builder /source/ui/statoblast/dist/favicon.svg /export/statoblast/favicon.svg
 COPY --from=builder /source/ui/statoblast/dist/assets/ /export/statoblast/assets/
 COPY --from=builder /source/ui/statoblast/dist/css/ /export/statoblast/css/
+COPY --from=builder /source/ui/trading/dist/index.html /export/trading/index.html
+COPY --from=builder /source/ui/trading/dist/favicon.ico /export/trading/favicon.ico
+COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.svg
+COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
+COPY --from=builder /source/ui/trading/dist/assets/ /export/trading/assets/
+COPY --from=builder /source/ui/trading/dist/css/ /export/trading/css/
 
 RUN ipfs init
 

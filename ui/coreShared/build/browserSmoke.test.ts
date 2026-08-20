@@ -21,6 +21,12 @@ test('browser smoke readiness can wait for route-specific loaded content', () =>
 	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen pool` }, 'Augur Statoblast', 'Open pool', viewport)).toBe(true)
 })
 
+test('an explicit route-ready marker overrides stale bootstrap copy outside the route', () => {
+	const routeReadyState = { ...mountedState, body: `${mountedState.body}\nBOOTSTRAPPING\nDEPLOYMENT COMPLETE` }
+	expect(isBrowserSmokeReady(routeReadyState, 'Augur Statoblast', 'Deployment complete', viewport)).toBe(true)
+	expect(isBrowserSmokeReady(routeReadyState, 'Augur Statoblast', undefined, viewport)).toBe(false)
+})
+
 test('browser smoke readiness requires the exact requested CSS viewport', () => {
 	expect(isBrowserSmokeReady({ ...mountedState, width: 500 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 	expect(isBrowserSmokeReady({ ...mountedState, height: 701 }, 'Augur Statoblast', undefined, viewport)).toBe(false)

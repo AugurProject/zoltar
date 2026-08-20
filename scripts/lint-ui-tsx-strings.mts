@@ -4,8 +4,8 @@ import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from './changed-files.mts'
 
-const UI_TSX_ROOTS = [path.join('ui', 'coreShared', 'ts'), path.join('ui', 'zoltar', 'ts'), path.join('ui', 'statoblast', 'ts')]
-const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltar|statoblast)\/ts\/.+\.tsx$/
+const UI_TSX_ROOTS = [path.join('ui', 'coreShared', 'ts'), path.join('ui', 'zoltar', 'ts'), path.join('ui', 'statoblast', 'ts'), path.join('ui', 'trading', 'ts')]
+const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\/.+\.tsx$/
 const MAX_COPY_EXPORT_NAME_LENGTH = 48
 const SENTENCE_STYLE_EXPORT_NAME_PATTERN =
 	/^(?:approvalAmountMustBeADecimalNumber$|connectAWalletBefore|connectWalletTo|enterA|failedTo|format[A-Z].*BasedOnValue|formatMissing(?![A-Za-z]*(?:Detail|Error)$)|loadAPoolBefore|loadA[A-Z]|no[A-Z].*Were[A-Z]|selectA(?:n|t)?[A-Z]|selectedTickIsInvalid$|the[A-Z]|this[A-Z]|usesThe[A-Z]|writeThe[A-Z])/u
@@ -90,6 +90,15 @@ function parseChangedLineNumbers(diffText: string) {
 export function getChangedLineNumbers(filePath: string, runGitFn: (args: string[]) => string = runGit) {
 	const untrackedPath = runGitFn(['ls-files', '--others', '--exclude-standard', '--', filePath])
 	if (untrackedPath === filePath) return undefined
+	const relocatedTradingPrefix = 'ui/trading/ts/'
+	if (filePath.startsWith(relocatedTradingPrefix)) {
+		const legacyPath = `trading/ui/ts/${filePath.slice(relocatedTradingPrefix.length)}`
+		const legacyCommit = runGitFn(['log', '--diff-filter=AM', '-1', '--format=%H', '--all', '--', legacyPath])
+		if (legacyCommit !== '') {
+			const relocationDiff = runGitFn(['diff', '--find-renames=20%', '--no-color', '--unified=0', legacyCommit, '--', legacyPath, filePath])
+			return parseChangedLineNumbers(relocationDiff)
+		}
+	}
 	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
 	const diffTexts = [runGitFn(['diff', '--no-color', '--unified=0', mergeBase, '--', filePath])]
 	const changedLines = new Set<number>()

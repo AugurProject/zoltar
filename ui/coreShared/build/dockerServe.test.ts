@@ -71,8 +71,8 @@ describe('Docker static UI server', () => {
 		}
 	})
 
-	test('app selection accepts both app IDs and rejects unknown IDs', () => {
-		expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast'])
+	test('app selection accepts every app ID and rejects unknown IDs', () => {
+		expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading'])
 		expect(isUiAppId('zoltar')).toBe(true)
 		expect(isUiAppId('statoblast')).toBe(true)
 		expect(isUiAppId('monolith')).toBe(false)

@@ -44,10 +44,14 @@ for (const appId of UI_APP_IDS) {
 		expect(imports['@zoltar/shared/ethereum']).toBe('../shared/js/ethereum.js')
 		expect(imports['tevm']).toBe('./vendor/tevm/index.js')
 		expect(imports['@zoltar/ui-core-shared/']).toBe('/ui/coreShared/js/')
-		if (appId === 'statoblast') {
+		if (appId === 'statoblast' || appId === 'trading') {
 			expect(imports['@zoltar/ui-zoltar/']).toBe('/ui/zoltar/js/')
 		} else {
 			expect(imports['@zoltar/ui-zoltar/']).toBeUndefined()
+		}
+		if (appId === 'trading') {
+			expect(imports['@zoltar/ui-statoblast/']).toBe('/ui/statoblast/js/')
+			expect(imports['@zoltar/trading/']).toBe('/trading/js/')
 		}
 
 		for (const mappedPath of Object.values(imports)) {

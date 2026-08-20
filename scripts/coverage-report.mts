@@ -245,7 +245,7 @@ function unloadedSourceCoverage(file: string, source: string) {
 }
 
 function isGeneratedSource(file: string) {
-	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast)\/(?:vendor|js)\//.test(file) || file.startsWith('shared/js/')
+	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast|trading)\/(?:vendor|js)\//.test(file) || file.startsWith('shared/js/') || file.startsWith('trading/js/')
 }
 
 export function classifyTypeScriptSource(filePath: string, source: string): TypeScriptSurfaceName | undefined {
@@ -258,9 +258,9 @@ export function classifyTypeScriptSource(filePath: string, source: string): Type
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, scriptKind)
 	if (!sourceFile.statements.some(hasRuntimeStatement)) return undefined
 
-	if (/^ui\/(?:coreShared|zoltar|statoblast)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
+	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
 	if (file.startsWith('shared/ts/')) return 'shared'
-	if (file.startsWith('scripts/') || file.startsWith('ui/coreShared/build/') || file === 'ui/coreShared/dev-server.ts' || /^ui\/(?:zoltar|statoblast)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
+	if (file.startsWith('scripts/') || file.startsWith('ui/coreShared/build/') || file === 'ui/coreShared/dev-server.ts' || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
 	return undefined
 }
 

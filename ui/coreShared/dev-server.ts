@@ -1,7 +1,7 @@
 import * as http from 'node:http'
 import * as filesystem from 'node:fs/promises'
 import * as path from 'node:path'
-import { getUiAppPaths, parseUiAppIdFromProcess } from './build/appPaths.mts'
+import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './build/appPaths.mts'
 
 const appId = parseUiAppIdFromProcess('the development server')
 const { appRoot: uiRootDirectory, repositoryRoot: repositoryRootDirectory } = getUiAppPaths(appId)
@@ -109,7 +109,8 @@ server.on('request', async (request, response) => {
 })
 
 // Initiate the server on `port` and print a message
-const port = appId === 'statoblast' ? 12347 : 12346
+const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 12346 }
+const port = ports[appId]
 server.listen(port)
 server.on('listening', () => {
 	const address = server.address()

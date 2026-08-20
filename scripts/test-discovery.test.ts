@@ -24,7 +24,7 @@ describe('canonical test discovery', () => {
 
 	test('Bun default discovery ignores every generated UI test tree', async () => {
 		const bunfig = await readFile('bunfig.toml', 'utf8')
-		for (const packageId of ['coreShared', 'zoltar', 'statoblast']) {
+		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
 			expect(bunfig).toContain(`ui/${packageId}/js/tests/**`)
 		}
 	})

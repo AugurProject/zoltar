@@ -5,7 +5,7 @@ import { getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAp
 
 export type TestBuildTarget = UiAppId | 'coreShared'
 
-export const TEST_BUILD_TARGET_IDS = ['coreShared', 'zoltar', 'statoblast'] as const
+export const TEST_BUILD_TARGET_IDS = ['coreShared', 'zoltar', 'statoblast', 'trading'] as const
 
 export function isTestBuildTarget(candidate: string): candidate is TestBuildTarget {
 	return candidate === 'coreShared' || isUiAppId(candidate)

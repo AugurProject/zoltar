@@ -22,11 +22,13 @@ describe('UI build dependency direction', () => {
 		expect(coreSharedIndex).toBeGreaterThanOrEqual(0)
 		expect(zoltarIndex).toBeGreaterThan(coreSharedIndex)
 		expect(statoblastIndex).toBeGreaterThan(zoltarIndex)
+		const tradingIndex = buildAppsScript.indexOf('trading && bun run build')
+		expect(tradingIndex).toBeGreaterThan(statoblastIndex)
 	})
 
 	test('app serve/watch scripts build the full DAG before starting', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		for (const name of ['app:serve:zoltar', 'app:serve:statoblast', 'app:watch:zoltar', 'app:watch:statoblast']) {
+		for (const name of ['app:serve:zoltar', 'app:serve:statoblast', 'app:serve:trading', 'app:watch:zoltar', 'app:watch:statoblast', 'app:watch:trading']) {
 			const script = scripts[name]
 			if (script === undefined) throw new Error(`${name} script is missing`)
 			expect(script.startsWith('bun run app:build')).toBe(true)
@@ -43,38 +45,59 @@ describe('UI build dependency direction', () => {
 			if (script === undefined) throw new Error(`${name} script is missing`)
 			const appsIndex = script.indexOf('bun run ui:build:apps')
 			const testsIndex = script.indexOf('bun run ui:build:tests')
+			const tradingSdkInstallIndex = script.indexOf('install-frozen.mts trading')
+			const tradingUiInstallIndex = script.indexOf('install-frozen.mts ui/trading')
+			expect(tradingSdkInstallIndex).toBeGreaterThan(0)
+			expect(tradingUiInstallIndex).toBeGreaterThan(tradingSdkInstallIndex)
 			expect(appsIndex).toBeGreaterThan(0)
+			expect(appsIndex).toBeGreaterThan(tradingUiInstallIndex)
 			expect(testsIndex).toBeGreaterThan(appsIndex)
 			expect(script).not.toContain('cd ui/coreShared && bun x tsc')
 		}
 	})
 
-	test('package dependency direction stays coreShared <- zoltar <- statoblast', () => {
+	test('package dependency direction stays coreShared <- zoltar <- statoblast <- trading', () => {
 		const { uiRoot } = getUiCoreSharedPaths()
 		const coreSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/coreShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const zoltarPackage = JSON.parse(fs.readFileSync(`${uiRoot}/zoltar/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const statoblastPackage = JSON.parse(fs.readFileSync(`${uiRoot}/statoblast/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
+		const tradingPackage = JSON.parse(fs.readFileSync(`${uiRoot}/trading/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 
-		expect(coreSharedPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
-		expect(coreSharedPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
+		for (const dependency of ['@zoltar/ui-zoltar', '@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(coreSharedPackage.dependencies?.[dependency]).toBeUndefined()
 		expect(zoltarPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
-		expect(zoltarPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
+		for (const dependency of ['@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(zoltarPackage.dependencies?.[dependency]).toBeUndefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
+		expect(statoblastPackage.dependencies?.['@zoltar/ui-trading']).toBeUndefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeDefined()
 	})
 
 	test('watch mode starts every TypeScript project required by the selected app', () => {
 		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltar'])
 		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltar', 'statoblast'])
+		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltar', 'statoblast', 'trading'])
+	})
+
+	test('Trading watch mode rebuilds its SDK and contracts and reloads app CSS', () => {
+		const { coreSharedRoot } = getUiCoreSharedPaths()
+		const watchSource = fs.readFileSync(`${coreSharedRoot}/build/watch.mts`, 'utf8')
+		expect(watchSource).toContain("path.join(TRADING_PACKAGE_ROOT_PATH, 'contracts')")
+		expect(watchSource).toContain("path.join(TRADING_PACKAGE_ROOT_PATH, 'ts', 'sdk')")
+		expect(watchSource).toContain("spawn(BUN_EXECUTABLE_PATH, ['run', 'compile']")
+		expect(watchSource).toContain("path.join(APP_ROOT_PATH, 'css')")
+		expect(watchSource).toContain("appId === 'trading' ? [path.join(TRADING_PACKAGE_ROOT_PATH, 'js')]")
 	})
 
 	test('ui:build:tests compiles each package test tree exactly once', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildTestsScript = scripts['ui:build:tests']
 		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
-		expect(buildTestsScript.match(/bun run build:tests/g)).toHaveLength(3)
+		expect(buildTestsScript.match(/bun run build:tests/g)).toHaveLength(4)
 		expect(buildTestsScript).toContain('cd ui/coreShared')
 		expect(buildTestsScript).toContain('cd ../zoltar')
 		expect(buildTestsScript).toContain('cd ../statoblast')
+		expect(buildTestsScript).toContain('cd ../trading')
 	})
 })

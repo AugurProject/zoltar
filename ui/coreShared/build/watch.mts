@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { getUiAppDependencyOrder, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
+import { getUiAppDependencyOrder, getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const appId = parseUiAppIdFromProcess('the UI watch process')
 const appPaths = getUiAppPaths(appId)
@@ -17,16 +17,21 @@ const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity',
 const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
 const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
+const TRADING_PACKAGE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'trading')
+const TRADING_SOURCE_ROOT_PATHS = [path.join(TRADING_PACKAGE_ROOT_PATH, 'contracts'), path.join(TRADING_PACKAGE_ROOT_PATH, 'ts', 'compiler'), path.join(TRADING_PACKAGE_ROOT_PATH, 'ts', 'sdk')]
+const TRADING_BUILD_INPUT_PATHS = [path.join(TRADING_PACKAGE_ROOT_PATH, 'package.json'), path.join(TRADING_PACKAGE_ROOT_PATH, 'tsconfig.build.json')]
+const TRADING_ARTIFACT_PATH = path.join(TRADING_PACKAGE_ROOT_PATH, 'artifacts', 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = appPaths.projectArtifactsScript
 const BUNDLER_PATHS_BUILD_PATH = appPaths.bundlerPathsScript
 const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => path.join(appPaths.uiRoot, packageId))
-const TYPE_SCRIPT_OUTPUT_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'js'))
+const TYPE_SCRIPT_OUTPUT_PATHS = [...TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'js')), ...(appId === 'trading' ? [path.join(TRADING_PACKAGE_ROOT_PATH, 'js')] : [])]
 const TYPE_SCRIPT_SOURCE_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'ts'))
 const VENDOR_BUILD_PATH = appPaths.vendorBuildScript
 const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
 const WORKER_BUILD_PATH = appPaths.workersBuildScript
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
-const LIVE_RELOAD_ENDPOINT = appId === 'statoblast' ? 'http://127.0.0.1:12347/__live-reload' : 'http://127.0.0.1:12346/__live-reload'
+const liveReloadEndpoints: Record<UiAppId, string> = { statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:12346/__live-reload' }
+const LIVE_RELOAD_ENDPOINT = liveReloadEndpoints[appId]
 const BUN_EXECUTABLE_PATH = process.execPath
 
 type ManagedProcess = ReturnType<typeof spawn>
@@ -50,6 +55,9 @@ let contractBuildQueued = false
 let projectArtifactBuildProcess: ManagedProcess | undefined
 let projectArtifactBuildRunning = false
 let projectArtifactBuildQueued = false
+let tradingBuildProcess: ManagedProcess | undefined
+let tradingBuildRunning = false
+let tradingBuildQueued = false
 let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
@@ -58,6 +66,7 @@ let sharedSourceUnwatchCallbacks: Array<() => void> = []
 let typeScriptOutputUnwatchCallbacks: Array<() => void> = []
 let typeScriptSourceUnwatchCallbacks: Array<() => void> = []
 let contractSourceUnwatchCallbacks: Array<() => void> = []
+let tradingSourceUnwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
 	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
@@ -246,6 +255,13 @@ const clearContractSourceWatchers = () => {
 	contractSourceUnwatchCallbacks = []
 }
 
+const clearTradingSourceWatchers = () => {
+	for (const unwatch of tradingSourceUnwatchCallbacks) {
+		unwatch()
+	}
+	tradingSourceUnwatchCallbacks = []
+}
+
 const watchDirectoryForTypeScriptOutputs = (directoryPath: string, refreshWatchers: () => void) => {
 	let debounceTimeout: NodeJS.Timeout | undefined
 	const watcher = fs.watch(directoryPath, (_eventType, filename) => {
@@ -309,6 +325,24 @@ const watchDirectoryForContractSources = (directoryPath: string, refreshWatchers
 		}, 120)
 	})
 	contractSourceUnwatchCallbacks.push(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		watcher.close()
+	})
+}
+
+const watchDirectoryForTradingSources = (directoryPath: string, refreshWatchers: () => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const watcher = fs.watch(directoryPath, (eventType, filename) => {
+		if (eventType !== 'rename') return
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			refreshWatchers()
+			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
+			void runTradingBuild(path.relative(REPOSITORY_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+		}, 120)
+	})
+	tradingSourceUnwatchCallbacks.push(() => {
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		watcher.close()
 	})
@@ -403,6 +437,30 @@ const refreshContractSourceWatchers = async () => {
 				contractSourceUnwatchCallbacks.push(callback)
 			},
 		)
+	}
+}
+
+const refreshTradingSourceWatchers = async () => {
+	clearTradingSourceWatchers()
+	for (const sourceRootPath of TRADING_SOURCE_ROOT_PATHS) {
+		const directories = await getAllDirectories(sourceRootPath)
+		for (const directoryPath of directories) {
+			watchDirectoryForTradingSources(directoryPath, () => {
+				void refreshTradingSourceWatchers()
+			})
+		}
+		const files = await getAllFiles(sourceRootPath)
+		for (const filePath of files) {
+			watchFileWithCleanup(
+				filePath,
+				relativePath => {
+					void runTradingBuild(relativePath)
+				},
+				callback => {
+					tradingSourceUnwatchCallbacks.push(callback)
+				},
+			)
+		}
 	}
 }
 
@@ -671,6 +729,57 @@ const runContractBuild = async (reason: string) => {
 	queueLiveReload(reason)
 }
 
+const runTradingBuild = async (reason: string) => {
+	if (shuttingDown || appId !== 'trading') return
+	if (tradingBuildRunning) {
+		tradingBuildQueued = true
+		return
+	}
+	tradingBuildRunning = true
+	console.log(`[ui:watch] Rebuilding Trading contracts and SDK because ${reason} changed`)
+	try {
+		tradingBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['run', 'compile'], {
+			cwd: TRADING_PACKAGE_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		tradingBuildRunning = false
+		console.error('[ui:watch] Failed to start Trading rebuild')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
+	const childProcess = tradingBuildProcess
+	attachProcessErrorHandler(childProcess, 'Trading rebuild')
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error('[ui:watch] Trading rebuild failed to start')
+		console.error(error)
+		tradingBuildRunning = false
+		tradingBuildProcess = undefined
+		await shutdown(1)
+		return
+	}
+	tradingBuildRunning = false
+	tradingBuildProcess = undefined
+	if (exitCode !== 0) {
+		const failureCode = exitCode ?? 1
+		console.error(`[ui:watch] Trading rebuild failed (${signalCode ?? failureCode})`)
+		await shutdown(failureCode)
+		return
+	}
+	await runWorkerBuild(reason)
+	if (tradingBuildQueued) {
+		tradingBuildQueued = false
+		await runTradingBuild('queued Trading input')
+		return
+	}
+	queueLiveReload(reason)
+}
+
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
 	watchFileWithCleanup(filePath, onChange, callback => {
 		unwatchCallbacks.push(callback)
@@ -687,11 +796,13 @@ const shutdown = async (exitCode: number) => {
 	clearTypeScriptOutputWatchers()
 	clearTypeScriptSourceWatchers()
 	clearContractSourceWatchers()
+	clearTradingSourceWatchers()
 	await stopProcess(sharedBuildProcess)
 	await stopProcess(vendorBuildProcess)
 	await stopProcess(workerBuildProcess)
 	await stopProcess(contractBuildProcess)
 	await stopProcess(projectArtifactBuildProcess)
+	await stopProcess(tradingBuildProcess)
 	await stopProcess(serverProcess)
 	for (const typeScriptWatchProcess of typeScriptWatchProcesses) await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)
@@ -757,6 +868,17 @@ const main = () => {
 	watchFile(SOLIDITY_ARTIFACTS_JSON_PATH, relativePath => {
 		void runProjectArtifactBuild(relativePath)
 	})
+	if (appId === 'trading') {
+		for (const inputPath of TRADING_BUILD_INPUT_PATHS) {
+			watchFile(inputPath, relativePath => {
+				void runTradingBuild(relativePath)
+			})
+		}
+		watchFile(TRADING_ARTIFACT_PATH, relativePath => {
+			if (!tradingBuildRunning) void runWorkerBuild(relativePath)
+			queueLiveReload(relativePath)
+		})
+	}
 
 	void refreshTypeScriptOutputWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch TypeScript output files')
@@ -785,14 +907,24 @@ const main = () => {
 		console.error(error)
 		void shutdown(1)
 	})
+	if (appId === 'trading') {
+		void refreshTradingSourceWatchers().catch(error => {
+			console.error('[ui:watch] Failed to watch Trading contract and SDK source files')
+			console.error(error)
+			void shutdown(1)
+		})
+	}
 
 	void (async () => {
 		try {
-			const cssFiles = await getAllFiles(path.join(UI_ROOT_PATH, 'css'))
-			for (const cssFile of cssFiles) {
-				watchFile(cssFile, relativePath => {
-					queueLiveReload(relativePath)
-				})
+			const cssRootPaths = [path.join(UI_ROOT_PATH, 'css'), path.join(APP_ROOT_PATH, 'css')].filter(cssRootPath => fs.existsSync(cssRootPath))
+			for (const cssRootPath of new Set(cssRootPaths)) {
+				const cssFiles = await getAllFiles(cssRootPath)
+				for (const cssFile of cssFiles) {
+					watchFile(cssFile, relativePath => {
+						queueLiveReload(relativePath)
+					})
+				}
 			}
 		} catch (error) {
 			console.error('[ui:watch] Failed to load CSS files for watching')

@@ -2,11 +2,12 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 
-export const UI_APP_IDS = ['zoltar', 'statoblast'] as const
+export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
 export type UiPackageId = 'coreShared' | UiAppId
 
 export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] {
+	if (appId === 'trading') return ['coreShared', 'zoltar', 'statoblast', 'trading']
 	return appId === 'statoblast' ? ['coreShared', 'zoltar', 'statoblast'] : ['coreShared', 'zoltar']
 }
 

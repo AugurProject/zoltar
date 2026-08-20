@@ -33,6 +33,8 @@ const generatedReviewPaths = [
 	'ui/zoltar/js',
 	'ui/statoblast/dist',
 	'ui/statoblast/js',
+	'ui/trading/dist',
+	'ui/trading/js',
 	':(glob)**/*.tsbuildinfo',
 	':(glob)ui/*/ts/**/*.d.ts',
 	':(glob)ui/*/ts/**/*.d.ts.map',
@@ -41,6 +43,7 @@ const generatedReviewPaths = [
 	'ui/coreShared/ts/deploymentArtifacts.ts',
 	'ui/zoltar/vendor',
 	'ui/statoblast/vendor',
+	'ui/trading/vendor',
 ]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -161,7 +164,13 @@ function assertNoTrackedGeneratedPaths(trackedGeneratedPaths: readonly string[])
 export async function assertGeneratedArtifactsClean(options: GeneratedArtifactCheckOptions = {}) {
 	const repositoryRoot = options.repositoryRoot ?? defaultRepositoryRoot
 	const runGit = options.runGit ?? createGitRunner(repositoryRoot)
-	const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'zoltar')), ...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'statoblast'))])
+	const requiredGeneratedOutputs = new Set([
+		...explicitlyRequiredGeneratedOutputs,
+		...(await getSharedPackageGeneratedOutputs(repositoryRoot)),
+		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'zoltar')),
+		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'statoblast')),
+		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'trading')),
+	])
 
 	for (const relativePath of requiredGeneratedOutputs) {
 		await assertExists(repositoryRoot, relativePath)

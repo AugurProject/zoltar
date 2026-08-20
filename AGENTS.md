@@ -60,7 +60,7 @@ UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.t
 cd ui/zoltar && bun x tsc --project tsconfig.json
 ```
 
-(or the matching `ui/statoblast`/`ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts, `ui/coreShared/dev-server.ts`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
+(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts, `ui/coreShared/dev-server.ts`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
 Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
@@ -120,7 +120,8 @@ pins the deployment input and prevents its large upstream packages from entering
 | `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
 | `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
-| `ui/*/js/**` | UI TypeScript build per package |
+| `ui/*/js/**` and `trading/js/**` | UI and Trading SDK TypeScript builds per package |
+| `ui/trading/ts/generated/contractArtifact.ts` | `bun run trading:build` or `bun run trading:ui:build` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
@@ -138,7 +139,7 @@ Do not regenerate or commit these outputs unless the task requires them or a req
 
 ### 7. UI manual QA
 
-For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:12346/?simulate=1`) or `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`) for walletless testing.
+For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:12346/?simulate=1`), `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`), or `bun run app:serve:trading` (`http://localhost:4163/?simulate=1`) for walletless testing.
 
 Choose the smallest relevant scenario:
 
@@ -146,6 +147,7 @@ Choose the smallest relevant scenario:
 - `simScenario=deployed`
 - `simScenario=security-pool`
 - `simScenario=securitypoolx2`
+- `simScenario=trading`
 
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 

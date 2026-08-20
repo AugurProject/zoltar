@@ -55,7 +55,7 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 	}
 }
 
-function resolveWorkerPath(appId: 'zoltar' | 'statoblast' = 'zoltar') {
+function resolveWorkerPath(appId: 'zoltar' | 'statoblast' | 'trading' = 'zoltar') {
 	const currentUrl = new URL(import.meta.url)
 	if (currentUrl.protocol === 'file:') return new URL(`../../../${appId}/ts/simulation/tevmWorker.ts`, import.meta.url)
 	if (currentUrl.pathname.includes('/assets/')) return new URL('./tevmWorker.worker.js', import.meta.url)
@@ -94,7 +94,7 @@ function createSimulationProvider(requestRpc: (parameters: RequestArguments) => 
 }
 
 export async function createSimulationBackend(
-	{ appId = 'zoltar', initialBootstrapError, savedState, savedStateId, scenario }: { appId?: 'zoltar' | 'statoblast'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
+	{ appId = 'zoltar', initialBootstrapError, savedState, savedStateId, scenario }: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]

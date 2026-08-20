@@ -55,7 +55,7 @@ function compilerOptions(): ts.CompilerOptions {
 function validateDetectorFixtures() {
 	const sources = new Map([
 		['/virtual/ui/forbidden.ts', 'const blockNumber: bigint = 1n\nNumber(blockNumber)'],
-		['/virtual/trading/ui/forbidden.ts', 'const reserve = 2n\nNumber(reserve)'],
+		['/virtual/ui/trading/forbidden.ts', 'const reserve = 2n\nNumber(reserve)'],
 		['/virtual/ui/allowed.ts', "const input: string = '12'\nNumber(input)"],
 	])
 	const host = ts.createCompilerHost(compilerOptions())
@@ -67,7 +67,7 @@ function validateDetectorFixtures() {
 	host.fileExists = fileName => sources.has(fileName) || ts.sys.fileExists(fileName)
 	host.readFile = fileName => sources.get(fileName) ?? ts.sys.readFile(fileName)
 	const violations = numberCastViolations(ts.createProgram([...sources.keys()], compilerOptions(), host))
-	if (violations.length !== 2 || !violations.some(value => value.includes('ui/forbidden.ts')) || !violations.some(value => value.includes('trading/ui/forbidden.ts'))) throw new Error('Number(bigint) detector fixtures failed')
+	if (violations.length !== 2 || !violations.some(value => value.includes('ui/forbidden.ts')) || !violations.some(value => value.includes('ui/trading/forbidden.ts'))) throw new Error('Number(bigint) detector fixtures failed')
 }
 
 validateDetectorFixtures()

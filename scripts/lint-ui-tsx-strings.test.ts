@@ -1,4 +1,8 @@
 import { expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getChangedLineNumbers, getChangedUiTsxFiles, lintCopySourceText, lintSourceText } from './lint-ui-tsx-strings.mts'
 
 test('lint-ui-tsx-strings enforces semantic copy names, template parameters, and ellipsis style', () => {
@@ -320,6 +324,15 @@ test('lint-ui-tsx-strings includes committed branch changes from origin/main', (
 	expect(changedFiles).toEqual(['ui/zoltar/ts/components/CommittedBranchFile.tsx'])
 })
 
+test('lint-ui-tsx-strings includes changed Trading components', () => {
+	const changedFiles = getChangedUiTsxFiles(args => {
+		if (args.includes('origin/main...HEAD')) return 'ui/trading/ts/features/LiveTrading.tsx\nui/trading/ts/tests/app/sharedIntegration.test.tsx\n'
+		return ''
+	})
+
+	expect(changedFiles).toEqual(['ui/trading/ts/features/LiveTrading.tsx'])
+})
+
 test('lint-ui-tsx-strings only reports direct copy on changed lines for tracked files', () => {
 	const failures = lintSourceText('ui/zoltar/ts/components/TestChangedLines.tsx', ['export function TestChangedLines() {', "\treturn <Panel title='Legacy Title' detail='Changed detail' />", '}'].join('\n'), new Set([2]))
 
@@ -362,6 +375,49 @@ test('lint-ui-tsx-strings derives tracked changed lines from the merge-base diff
 	})
 
 	expect(changedLines).toEqual(new Set([14, 15]))
+})
+
+test('lint-ui-tsx-strings compares relocated Trading components with their legacy source', () => {
+	const changedLines = getChangedLineNumbers('ui/trading/ts/features/LiveTrading.tsx', args => {
+		if (args[0] === 'ls-files') return ''
+		if (args[0] === 'log') {
+			expect(args).toEqual(['log', '--diff-filter=AM', '-1', '--format=%H', '--all', '--', 'trading/ui/ts/features/LiveTrading.tsx'])
+			return 'legacy123'
+		}
+		if (args[0] === 'diff') {
+			expect(args).toEqual(['diff', '--find-renames=20%', '--no-color', '--unified=0', 'legacy123', '--', 'trading/ui/ts/features/LiveTrading.tsx', 'ui/trading/ts/features/LiveTrading.tsx'])
+			return '@@ -80,0 +86,4 @@\n'
+		}
+		throw new Error(`unexpected git args: ${args.join(' ')}`)
+	})
+
+	expect(changedLines).toEqual(new Set([86, 87, 88, 89]))
+})
+
+test('lint-ui-tsx-strings compares against the legacy blob after the relocation is committed', () => {
+	const repositoryPath = mkdtempSync(join(tmpdir(), 'zoltar-ui-copy-relocation-'))
+	const runRepositoryGit = (args: string[]) => execFileSync('git', args, { cwd: repositoryPath, encoding: 'utf8' }).trim()
+	try {
+		runRepositoryGit(['init', '--quiet'])
+		runRepositoryGit(['config', 'user.email', 'regression@example.com'])
+		runRepositoryGit(['config', 'user.name', 'Regression Test'])
+		const legacyDirectory = join(repositoryPath, 'trading/ui/ts/features')
+		mkdirSync(legacyDirectory, { recursive: true })
+		writeFileSync(join(legacyDirectory, 'LiveTrading.tsx'), "export const title = 'Legacy title'\n")
+		runRepositoryGit(['add', '.'])
+		runRepositoryGit(['commit', '--quiet', '-m', 'legacy trading UI'])
+
+		const relocatedDirectory = join(repositoryPath, 'ui/trading/ts/features')
+		mkdirSync(relocatedDirectory, { recursive: true })
+		runRepositoryGit(['mv', 'trading/ui/ts/features/LiveTrading.tsx', 'ui/trading/ts/features/LiveTrading.tsx'])
+		runRepositoryGit(['commit', '--quiet', '-m', 'relocate trading UI'])
+		writeFileSync(join(relocatedDirectory, 'LiveTrading.tsx'), "export const title = 'Current title'\n")
+
+		const changedLines = getChangedLineNumbers('ui/trading/ts/features/LiveTrading.tsx', runRepositoryGit)
+		expect(changedLines).toEqual(new Set([1]))
+	} finally {
+		rmSync(repositoryPath, { recursive: true, force: true })
+	}
 })
 
 test('lint-ui-tsx-strings rejects user-facing object properties and array literals', () => {

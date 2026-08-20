@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { usePeripheralsVaultAccountingFixture } from '../../../solidity/ts/tests/peripherals/fixture.ts'
 import { writeContractAndWait } from '../../../solidity/ts/testSupport/simulator/utils/clients.ts'
-import { loadLiveSecurityPoolSettings } from '../../ui/ts/protocol/live.ts'
+import { loadLiveSecurityPoolSettings } from '../../../ui/trading/ts/protocol/live.ts'
 import { compileArtifactsForTests } from './compileArtifactsForTests.ts'
 
 type TradingContracts = typeof import('../artifacts/contractArtifact.ts').tradingContracts

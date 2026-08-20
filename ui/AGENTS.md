@@ -117,6 +117,6 @@ For relevant UI changes, verify:
 - transaction prerequisite and duplicate-submission guards
 - desktop and narrow/mobile layouts
 - long values and dense data
-- no edits to generated `ui/zoltar/js/**` or `ui/statoblast/js/**`
+- no edits to generated `ui/zoltar/js/**`, `ui/statoblast/js/**`, or `ui/trading/js/**`
 
 Use the browser-local simulation harness described in root `AGENTS.md`. Capture the current screenshots and record the route, scenario, exact viewport dimensions, states, browser, evidence paths or identifiers, intentional differences, and console or runtime errors for the visual-review handoff. Include trustworthy baseline or before evidence when available. Record the tested coverage in the final response. If browser QA or visual review is skipped, give a concrete reason the changed files cannot affect rendered or interactive behavior.

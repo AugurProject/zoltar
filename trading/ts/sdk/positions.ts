@@ -1,4 +1,4 @@
-import { BPS_DENOMINATOR, quoteExactInput, quoteExactOutput, type SwapQuote } from './math.ts'
+import { BPS_DENOMINATOR, quoteExactInput, quoteExactOutput, type SwapQuote } from './math.js'
 
 export type EnterPositionQuote = Readonly<{
 	longOutcome: 'YES' | 'NO'

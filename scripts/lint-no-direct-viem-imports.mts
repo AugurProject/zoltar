@@ -12,7 +12,25 @@ type DirectViemImportFinding = {
 
 const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
-const ignoredPathPrefixes = ['.git', 'coverage', 'node_modules', 'shared/js', 'shared/node_modules', 'solidity/artifacts', 'solidity/js', 'solidity/node_modules', 'ui/zoltar/dist', 'ui/zoltar/js', 'ui/zoltar/vendor', 'ui/statoblast/dist', 'ui/statoblast/js', 'ui/statoblast/vendor']
+const ignoredPathPrefixes = [
+	'.git',
+	'coverage',
+	'node_modules',
+	'shared/js',
+	'shared/node_modules',
+	'solidity/artifacts',
+	'solidity/js',
+	'solidity/node_modules',
+	'ui/zoltar/dist',
+	'ui/zoltar/js',
+	'ui/zoltar/vendor',
+	'ui/statoblast/dist',
+	'ui/statoblast/js',
+	'ui/statoblast/vendor',
+	'ui/trading/dist',
+	'ui/trading/js',
+	'ui/trading/vendor',
+]
 const ignoredFiles = new Set(['solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts'])
 
 function toProjectPath(filePath: string): string {

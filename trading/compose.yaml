@@ -4,10 +4,13 @@ services:
   trading:
     build:
       context: ..
-      dockerfile: trading/Dockerfile
+      dockerfile: ui/Dockerfile
+      target: local-runtime
     image: zoltar-trading
     ports:
-      - 127.0.0.1:4163:4163
+      - 127.0.0.1:4163:8080
+    environment:
+      UI_APP: trading
 
 networks:
   default:

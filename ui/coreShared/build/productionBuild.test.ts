@@ -4,7 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
@@ -81,12 +81,14 @@ for (const appId of UI_APP_IDS) {
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 	const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
-	const expectedTitle = appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast'
-	const otherTitle = appId === 'zoltar' ? 'Augur Statoblast' : 'Zoltar'
-	const expectedRoute = appId === 'zoltar' ? '#/zoltar' : '#/security-pools'
+	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
+	const expectedTitle = expectedTitles[appId]
+	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast trading'].filter(title => title !== expectedTitle)
+	const expectedRoutes: Record<UiAppId, string> = { statoblast: '#/security-pools', trading: '#/markets', zoltar: '#/zoltar' }
+	const expectedRoute = expectedRoutes[appId]
 
 	test(`${appId} production build emits the deployable artifact set`, async () => {
-		const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
+		const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths, ...(appId === 'trading' ? [path.join(distRootPath, 'css', 'app.css'), path.join(distRootPath, 'core-deployments.json')] : [])]
 
 		for (const expectedPath of expectedPaths) {
 			await expect(fs.access(expectedPath)).resolves.toBeNull()
@@ -101,7 +103,7 @@ for (const appId of UI_APP_IDS) {
 		expect(html).not.toContain('./js/')
 		expect(html).not.toContain('./vendor/')
 		expect(html).toContain(`<title>${expectedTitle}</title>`)
-		expect(html).not.toContain(`<title>${otherTitle}</title>`)
+		for (const otherTitle of otherTitles) expect(html).not.toContain(`<title>${otherTitle}</title>`)
 	})
 
 	test(`${appId} production javascript is self-contained for deploys`, async () => {

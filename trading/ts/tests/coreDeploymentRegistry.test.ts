@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { coreDeploymentFromManifest } from '../../ui/build/core-deployments.mts'
-import { defaultCoreDeploymentRpcUrls } from '../../ui/ts/protocol/coreDeploymentDefaults.ts'
-import { parseCoreDeployments } from '../../ui/ts/protocol/coreDeployments.ts'
+import { coreDeploymentFromManifest } from '../../../ui/trading/build/core-deployments.mts'
+import { defaultCoreDeploymentRpcUrls } from '../../../ui/trading/ts/protocol/coreDeploymentDefaults.ts'
+import { parseCoreDeployments } from '../../../ui/trading/ts/protocol/coreDeployments.ts'
 
 describe('trading core deployment registry', () => {
 	test('copies the canonical deployment proxy and SecurityPoolFactory from a Zoltar manifest', () => {

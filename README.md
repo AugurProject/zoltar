@@ -8,15 +8,17 @@ This repository contains two protocol layers:
 The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
-- `ui/coreShared/` contains the shared Preact primitives, application-shell framework, simulation engine, and per-app build tooling used by both interfaces
+- `ui/coreShared/` contains the shared Preact primitives, application-shell framework, simulation engine, and per-app build tooling used by all three interfaces
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
+- `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
+- `trading/` contains the Trading contracts, SDK, deployment tooling, and their tests
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `scripts/` contains repository-wide build, validation, and test orchestration
 - `bots/` contains liquidator and open oracle arbitrager bots
 
-Each interface package (`ui/zoltar`, `ui/statoblast`) keeps route-specific code under `ts/features/<domain>`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. The two apps are independent packages: `ui/statoblast` depends on `ui/zoltar` and `ui/coreShared`, and `ui/zoltar` depends on `ui/coreShared`; `ui/coreShared` depends on neither.
+Each interface package (`ui/zoltar`, `ui/statoblast`, `ui/trading`) keeps route-specific code under `ts/features`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. Imports point inward along `coreShared ← Zoltar ← Statoblast ← Trading`; shared packages never import an application that consumes them.
 
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 
@@ -51,13 +53,14 @@ Important:
 After completing [Setup](#setup), start a local chain and launch the app:
 
 1. Start the repository-pinned local chain with `bun run anvil`
-1. Run `bun run app:serve:zoltar` for the Zoltar interface (http://localhost:12346) or `bun run app:serve:statoblast` for the Statoblast interface (http://localhost:12347)
+1. Run `bun run app:serve:zoltar` for Zoltar (http://localhost:12346), `bun run app:serve:statoblast` for Statoblast (http://localhost:12347), or `bun run app:serve:trading` for Trading (http://localhost:4163)
 
 If you are iterating on the app and want rebuilds, use:
 
 ```bash
 bun run app:watch:zoltar
 bun run app:watch:statoblast
+bun run app:watch:trading
 ```
 
 ## RPC Configuration
@@ -200,17 +203,17 @@ those features are used.
 The UI also supports a walletless browser-local simulation mode for manual QA.
 After completing [Setup](#setup):
 
-1. Run `bun run app:serve:zoltar` (Zoltar on port 12346) or `bun run app:serve:statoblast` (Statoblast on port 12347)
-1. Open `http://localhost:12346/?simulate=1` or `http://localhost:12347/?simulate=1`
+1. Run `bun run app:serve:zoltar` (Zoltar on port 12346), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
+1. Open `http://localhost:12346/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
 
-This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain, seeds the QA accounts with ETH, WETH, and REP, and leaves the application contracts undeployed so the UI starts on the deploy flow.
+This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. Trading defaults to `simScenario=trading`, which deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable.
 
 Simulation mode details:
 
 - The activation flag is `?simulate=1`
 - The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
-- Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, and `simScenario=securitypoolx2-auction`
+- Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading`
 - The live simulation chain is ephemeral and exists only in the current brow
 
 ## Common Commands
@@ -220,6 +223,7 @@ Run each interface in development mode. Each command first builds the complete d
 ```bash
 bun run app:serve:zoltar      # Zoltar on http://localhost:12346
 bun run app:serve:statoblast  # Statoblast on http://localhost:12347
+bun run app:serve:trading     # Trading on http://localhost:4163
 ```
 
 Watch the selected app and its dependencies after the complete workspace build:
@@ -227,9 +231,10 @@ Watch the selected app and its dependencies after the complete workspace build:
 ```bash
 bun run app:watch:zoltar
 bun run app:watch:statoblast
+bun run app:watch:trading
 ```
 
-Build both apps:
+Build all UI apps:
 
 ```bash
 bun run app:build
