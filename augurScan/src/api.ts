@@ -275,17 +275,17 @@ const reportCatalogData = async (
 		JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id AND evidence.canonical
-			ORDER BY evidence.block_number DESC, evidence.tx_hash DESC, evidence.log_index DESC LIMIT 1
+			ORDER BY evidence.block_number DESC, evidence.log_index DESC, evidence.tx_hash DESC LIMIT 1
 		) latest ON true
 		LEFT JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id
 				AND evidence.canonical AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed')
-			ORDER BY evidence.block_number DESC, evidence.tx_hash DESC, evidence.log_index DESC LIMIT 1
+			ORDER BY evidence.block_number DESC, evidence.log_index DESC, evidence.tx_hash DESC LIMIT 1
 		) round ON true
 		JOIN blocks block ON block.chain_id = ${chainId} AND block.hash = latest.block_hash
-		WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
+		WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
 	const indexedBlock = String(asOf['blockNumber'] ?? '')
 	const indexedTimestamp = String(asOf['blockTimestamp'] ?? '')
@@ -328,9 +328,9 @@ const escalationCatalogData = async (
 				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.yes}), '0') AS yes_stake_atto_rep
 		FROM games game JOIN LATERAL (
 			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
-			ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1
-		) latest ON true WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
+			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
+		) latest ON true WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
 
 const auctionCatalogData = async (
@@ -351,11 +351,11 @@ const auctionCatalogData = async (
 			(SELECT count(DISTINCT event.event_data->>'bidder') FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
 			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSettled')::integer AS settlement_count
 		FROM auctions auction
-		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) latest ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionStarted' ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) started ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionFinalized' ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) finalized ON true
-		WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
+		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) latest ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionStarted' ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) started ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionFinalized' ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) finalized ON true
+		WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
 	return rows.map((row: Record<string, unknown>) => {
 		const startData = jsonRecord(row['start_data'])
@@ -610,8 +610,8 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 						SELECT universe_identity, event_name, event_data, block_number::text AS block_number,
 							block_hash, tx_hash, log_index FROM fork_migration_events
 						WHERE chain_id = ${chainId} AND canonical
-							AND (block_number, tx_hash, log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-						ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT ${page.queryLimit}
+							AND (block_number, log_index, tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+						ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT ${page.queryLimit}
 					`
 	return json({
 		chainId,
@@ -740,8 +740,8 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
 		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
 			AND event.report_id = ${reportId} AND event.canonical
-			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+			AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}
 	`
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
 	const currentRows = await sql`
@@ -789,8 +789,8 @@ const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
 	const rows: readonly Record<string, unknown>[] =
 		domain === 'auction'
-			? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer) ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}`
-			: await sql`SELECT event.*, block.timestamp AS block_timestamp FROM escalation_game_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.game_address = ${address} AND event.canonical AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer) ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}`
+			? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}`
+			: await sql`SELECT event.*, block.timestamp AS block_timestamp FROM escalation_game_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.game_address = ${address} AND event.canonical AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}`
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: `${domain === 'auction' ? 'Auction' : 'Escalation game'} not found` }, 404)
 	const snapshot = await snapshotFor(sql, chainId, domain, address)
 	const result: Record<string, unknown> = {
@@ -837,8 +837,8 @@ const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 		WHERE event.chain_id = ${chainId} AND event.canonical
 			AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
 				OR event.event_data->>'childUniverseId' = ${identity})
-			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+			AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}
 	`
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Fork not found' }, 404)
 	const branches = await sql`
@@ -877,8 +877,8 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 			AND (event.event_name <> 'Swap' OR (event.event_data ? 'yesForNo' AND event.event_data ? 'amountIn'
 				AND event.event_data ? 'amountOut' AND event.event_data ? 'resultingYesReserve' AND event.event_data ? 'resultingNoReserve'))
 			AND (event.event_name <> 'Sync' OR (event.event_data ? 'yesReserve' AND event.event_data ? 'noReserve'))
-			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+			AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}
 	`
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'AMM not found' }, 404)
 	const eventRows = rows.map((row: Record<string, unknown>) => {
@@ -918,8 +918,8 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 		)
 		SELECT * FROM (
 			SELECT * FROM (SELECT * FROM window_observations UNION ALL SELECT * FROM prior_observation) candidate
-			ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 10001
-		) retained ORDER BY block_number, tx_hash, log_index
+			ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 10001
+		) retained ORDER BY block_number, log_index, tx_hash
 	`
 	const summaries = await sql`
 		SELECT
@@ -1018,8 +1018,8 @@ const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): P
 		JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 		WHERE timeline.chain_id = ${chainId} AND timeline.entity_type = ${entityType}
 			AND timeline.entity_identity = ${entityIdentity} AND timeline.canonical
-			AND (timeline.block_number, timeline.tx_hash, timeline.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
-		ORDER BY timeline.block_number DESC, timeline.tx_hash DESC, timeline.log_index DESC LIMIT ${page.queryLimit}
+			AND (timeline.block_number, timeline.log_index, timeline.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC LIMIT ${page.queryLimit}
 	`
 	return json({ chainId, asOf, data: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'timeline', identity, asOf, row)) })
 }

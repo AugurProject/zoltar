@@ -16,27 +16,27 @@ CREATE INDEX IF NOT EXISTS entity_state_snapshot_canonical_latest
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS open_oracle_report_round_page
-	ON open_oracle_report_events(chain_id, open_oracle_address, report_id, block_number DESC, tx_hash DESC, log_index DESC)
+	ON open_oracle_report_events(chain_id, open_oracle_address, report_id, block_number DESC, log_index DESC, tx_hash DESC)
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS escalation_game_event_page
-	ON escalation_game_events(chain_id, game_address, block_number DESC, tx_hash DESC, log_index DESC)
+	ON escalation_game_events(chain_id, game_address, block_number DESC, log_index DESC, tx_hash DESC)
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS truth_auction_event_page
-	ON truth_auction_events(chain_id, auction_address, block_number DESC, tx_hash DESC, log_index DESC)
+	ON truth_auction_events(chain_id, auction_address, block_number DESC, log_index DESC, tx_hash DESC)
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS amm_trade_interval
-	ON amm_trade_events(chain_id, market_address, block_number, tx_hash, log_index)
+	ON amm_trade_events(chain_id, market_address, block_number, log_index, tx_hash)
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS fork_migration_page
-	ON fork_migration_events(chain_id, universe_identity, block_number DESC, tx_hash DESC, log_index DESC)
+	ON fork_migration_events(chain_id, universe_identity, block_number DESC, log_index DESC, tx_hash DESC)
 	WHERE canonical;
 
 CREATE INDEX IF NOT EXISTS protocol_timeline_page
-	ON protocol_timeline_entries(chain_id, entity_type, entity_identity, block_number DESC, tx_hash DESC, log_index DESC)
+	ON protocol_timeline_entries(chain_id, entity_type, entity_identity, block_number DESC, log_index DESC, tx_hash DESC)
 	WHERE canonical;
 
 -- Older rows predate the explicit snapshot canonicality column. Their block is

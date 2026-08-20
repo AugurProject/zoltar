@@ -583,7 +583,7 @@ export class ScannerDatabase {
 					'token_metadata',
 				])
 					await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [network.chainId])
-				await transaction`UPDATE entity_state_snapshots SET read_status = 'stale' WHERE chain_id = ${network.chainId} AND read_status <> 'stale'`
+				await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${network.chainId} AND canonical`
 				await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${network.chainId}`

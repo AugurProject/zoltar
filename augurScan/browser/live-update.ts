@@ -91,6 +91,36 @@ export const operationsLoadDisposition = (
 	return live || hasPaginationTarget ? 'queue' : 'join'
 }
 
+export type OperationsLoadState = { promise?: Promise<boolean>; context?: string }
+
+export const runSerializedOperationsLoad = async (
+	state: OperationsLoadState,
+	requestedContext: string,
+	live: boolean,
+	hasPaginationTarget: boolean,
+	currentContext: () => string,
+	supersede: () => void,
+	run: () => Promise<boolean>,
+): Promise<boolean> => {
+	while (state.promise !== undefined) {
+		const active = state.promise
+		const disposition = operationsLoadDisposition(state.context ?? '', requestedContext, live, hasPaginationTarget)
+		if (disposition === 'supersede') supersede()
+		const activeResult = await active
+		if (disposition === 'join') return activeResult
+		if (currentContext() !== requestedContext) return false
+	}
+	const promise = run().finally(() => {
+		if (state.promise === promise) {
+			state.promise = undefined
+			state.context = undefined
+		}
+	})
+	state.promise = promise
+	state.context = requestedContext
+	return await promise
+}
+
 const canonicalEventPosition = (record: Readonly<Record<string, unknown>>, key: 'block_number' | 'transaction_index' | 'log_index'): bigint => {
 	const value = record[key]
 	return (typeof value === 'string' && /^\d+$/.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value)) ? BigInt(value) : 0n

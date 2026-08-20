@@ -1395,28 +1395,28 @@ postgresTest(
 				chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address,
 				value, input, status, gas_used, receipt, canonical
 			) VALUES
-			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 1, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true),
-			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 2, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
+			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 2, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true),
+			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 1, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
 		`
 			await database.sql`
 			INSERT INTO logs (
 				chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address,
 				topics, data, event_name, arguments, argument_schema, decode_status, summary, canonical, finalized
 			) VALUES
-			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 1, 1, ${oracle.toLowerCase()}, '[]'::jsonb,
-				'0x', 'ReportSubmitted', jsonb_build_object('reportId', '8'), '[]'::jsonb, 'decoded', 'Report 8', true, true),
-			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 2, 1, ${oracle.toLowerCase()}, '[]'::jsonb,
-				'0x', 'ReportSettled', jsonb_build_object('reportId', '7'), '[]'::jsonb, 'decoded', 'Report 7 settled', true, true)
+			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 2, 2, ${oracle.toLowerCase()}, '[]'::jsonb,
+				'0x', 'ReportSettled', jsonb_build_object('reportId', '7'), '[]'::jsonb, 'decoded', 'Report 7 settled', true, true),
+			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 1, 1, ${oracle.toLowerCase()}, '[]'::jsonb,
+				'0x', 'ReportSubmitted', jsonb_build_object('reportId', '8'), '[]'::jsonb, 'decoded', 'Report 8', true, true)
 		`
 			await database.sql`
 			INSERT INTO open_oracle_report_events (
 				chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address,
 				report_id, event_name, round_number, report_data, canonical
 			) VALUES
-			(${operationsChainId}, ${hash}, ${`0x${'e'.repeat(64)}`}, 1, 1, ${oracle.toLowerCase()}, 8,
-				'ReportSubmitted', 1, jsonb_build_object('reportId', '8'), true),
-			(${operationsChainId}, ${hash}, ${`0x${'f'.repeat(64)}`}, 1, 1, ${oracle.toLowerCase()}, 7,
-				'ReportSettled', 2, jsonb_build_object('reportId', '7'), true)
+			(${operationsChainId}, ${hash}, ${`0x${'e'.repeat(64)}`}, 2, 1, ${oracle.toLowerCase()}, 7,
+				'ReportSettled', 2, jsonb_build_object('reportId', '7'), true),
+			(${operationsChainId}, ${hash}, ${`0x${'f'.repeat(64)}`}, 1, 1, ${oracle.toLowerCase()}, 8,
+				'ReportSubmitted', 1, jsonb_build_object('reportId', '8'), true)
 		`
 			const firstCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1`), database.sql)
 			if (firstCatalogResponse === undefined) throw new Error('report catalog did not return a response')
@@ -1424,7 +1424,7 @@ postgresTest(
 				data: { items: Array<{ report_id: string; tx_hash: string }>; nextCursor: string }
 			}
 			expect(firstCatalog.data.items).toHaveLength(1)
-			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '7', tx_hash: `0x${'f'.repeat(64)}` })
+			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '7', tx_hash: `0x${'e'.repeat(64)}` })
 			const secondCatalogResponse = await handleApi(
 				new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`),
 				database.sql,
@@ -1533,6 +1533,32 @@ postgresTest(
 						AND tx_hash = ${`0x${'d'.repeat(64)}`} AND log_index = 0) AS raw_log_count
 			`
 			expect(invalidDerivedRows[0]).toMatchObject({ trade_count: 0, timeline_count: 0, raw_log_count: 1 })
+
+			await database.sql`
+				INSERT INTO protocol_timeline_entries (
+					chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity,
+					semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical
+				) VALUES
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'trading', ${oracle.toLowerCase()},
+						'Swap', jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1',
+							'resultingYesReserve', '1', 'resultingNoReserve', '2'), '[]'::jsonb, ${oracle.toLowerCase()}, 'Swap', true),
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'amm', ${oracle.toLowerCase()},
+						'Swap', jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1',
+							'resultingYesReserve', '1', 'resultingNoReserve', '2'), '[]'::jsonb, ${oracle.toLowerCase()}, 'Swap', true),
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'risk', ${oracle.toLowerCase()},
+						'PoolAccountingCheckpoint', '{}'::jsonb, '[]'::jsonb, ${oracle.toLowerCase()}, 'PoolAccountingCheckpoint', true),
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'pool', ${oracle.toLowerCase()},
+						'PoolAccountingCheckpoint', '{}'::jsonb, '[]'::jsonb, ${oracle.toLowerCase()}, 'PoolAccountingCheckpoint', true)
+			`
+			const canonicalOrderMigration = await Bun.file(new URL('../migrations/012_operations_canonical_order.sql', import.meta.url)).text()
+			await database.sql.unsafe(canonicalOrderMigration)
+			const normalizedTimelineTypes = await database.sql`
+				SELECT entity_type FROM protocol_timeline_entries
+				WHERE chain_id = ${operationsChainId} AND entity_identity = ${oracle.toLowerCase()}
+					AND semantic_event_kind IN ('Swap', 'PoolAccountingCheckpoint')
+				ORDER BY entity_type
+			`
+			expect(normalizedTimelineTypes).toEqual([{ entity_type: 'amm' }, { entity_type: 'pool' }])
 
 			await database.sql`
 				INSERT INTO liquidation_approval_events (
@@ -1652,17 +1678,32 @@ postgresTest(
 			expect(snapshotRows[0]).toMatchObject({ read_status: 'success', canonical: true, read_result: { finalized: false, activeTickCount: '2' } })
 
 			const explainQueries = [
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM open_oracle_report_events WHERE chain_id = ${operationsChainId} AND open_oracle_address = ${oracle.toLowerCase()} AND report_id = 7 AND canonical ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 100`,
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM escalation_game_events WHERE chain_id = ${operationsChainId} AND game_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 100`,
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM truth_auction_events WHERE chain_id = ${operationsChainId} AND auction_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 100`,
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId} AND entity_type = 'open-oracle-report' AND entity_identity = ${`${oracle.toLowerCase()}:7`} AND canonical ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 100`,
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND market_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number, tx_hash, log_index LIMIT 100`,
-				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM fork_migration_events WHERE chain_id = ${operationsChainId} AND universe_identity = '7' AND canonical ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM open_oracle_report_events WHERE chain_id = ${operationsChainId} AND open_oracle_address = ${oracle.toLowerCase()} AND report_id = 7 AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM escalation_game_events WHERE chain_id = ${operationsChainId} AND game_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM truth_auction_events WHERE chain_id = ${operationsChainId} AND auction_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId} AND entity_type = 'open-oracle-report' AND entity_identity = ${`${oracle.toLowerCase()}:7`} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND market_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number, log_index, tx_hash LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM fork_migration_events WHERE chain_id = ${operationsChainId} AND universe_identity = '7' AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
 				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM entity_state_snapshots WHERE chain_id = ${operationsChainId} AND entity_type = 'auction' AND entity_identity = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC LIMIT 1`,
 			]
 			const plans = await Promise.all(explainQueries)
 			expect(plans).toHaveLength(7)
 			for (const plan of plans) expect(JSON.stringify(plan)).toContain('Plan')
+
+			const resetLease = await database.tryAcquireIndexerLock(operationsChainId)
+			if (resetLease === undefined) throw new Error('operations manifest-reset writer did not acquire its lock')
+			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] }, resetLease, true)).toBe(true)
+			await resetLease.release()
+			const staleSnapshots = await database.sql`
+				SELECT DISTINCT read_status, canonical FROM entity_state_snapshots WHERE chain_id = ${operationsChainId}
+			`
+			expect(staleSnapshots).toEqual([{ read_status: 'stale', canonical: false }])
+
+			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${operationsChainId} AND hash = ${hash}`
+			for (const table of ['pools', 'pool_state_events', 'vault_snapshots', 'escalation_game_events', 'truth_auction_events'])
+				await database.sql.unsafe(`UPDATE ${table} SET canonical = true WHERE chain_id = $1`, [operationsChainId])
+			const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n)
+			expect(new Set(resampleTargets.map((target) => target.entityType))).toEqual(new Set(['pool', 'vault']))
 		} finally {
 			await database.close()
 		}

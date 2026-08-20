@@ -47,7 +47,6 @@ import {
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailRecordKey,
-	operationsLoadDisposition,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -56,6 +55,7 @@ import {
 	refreshPresentation,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
+	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
@@ -474,8 +474,7 @@ let demoTransactionRestoreErrorConsumed = false
 let demoTransactionAppendErrorConsumed = false
 let demoNetworkFallbackErrorConsumed = false
 let operationsRequestVersion = 0
-let operationsLoadPromise: Promise<boolean> | undefined
-let operationsLoadContext: string | undefined
+const operationsLoadState: { promise?: Promise<boolean>; context?: string } = {}
 let operationsCatalogState:
 	| {
 			readonly chainId: string
@@ -1611,7 +1610,7 @@ const demoOperations = (chainId: string) => {
 					consumedDebtAttoEth: (2n * 10n ** 18n).toString(),
 					releasedDebtAttoEth: (3n * 10n ** 17n).toString(),
 					resultingAvailableDebtAttoEth: (8n * 10n ** 18n).toString(),
-					resultingReservedDebtAttoEth: (0n).toString(),
+					resultingReservedDebtAttoEth: 0n.toString(),
 					resultingConsumedDebtAttoEth: (2n * 10n ** 18n).toString(),
 				},
 			},
@@ -3163,74 +3162,61 @@ const loadOperations = async ({
 	preservedContext?: OperationsRenderContext
 } = {}): Promise<boolean> => {
 	const requestedContext = `${requiredChainId()}:${location.pathname}`
-	if (operationsLoadPromise !== undefined) {
-		const disposition = operationsLoadDisposition(
-			operationsLoadContext ?? '',
-			requestedContext,
-			live,
-			catalogTargetCount !== undefined || detailTargetCount !== undefined,
-		)
-		if (disposition === 'supersede') operationsRequestVersion++
-		const activeResult = await operationsLoadPromise
-		if (disposition === 'join') return activeResult
-	}
-	const requestContext = `${requiredChainId()}:${location.pathname}`
-	const requestVersion = ++operationsRequestVersion
-	const run = (async () => {
-		const status = $('#operations-status')
-		const content = $('#operations-content')
-		const preserveRenderedContent = live && content.childElementCount > 0
-		status.hidden = false
-		status.className = preserveRenderedContent ? 'sr-only' : 'system-status'
-		status.textContent = preserveRenderedContent ? 'Refreshing canonical protocol operations…' : 'Loading canonical protocol operations…'
-		content.setAttribute('aria-busy', 'true')
-		try {
-			const detailRoute = operationsDetailRoute()
-			const catalogSection = detailRoute === undefined ? operationsCatalogSection() : undefined
-			const retainedCatalogCount =
-				catalogSection !== undefined && operationsCatalogState?.chainId === requiredChainId() && operationsCatalogState.section === catalogSection
-					? operationsCatalogState.items.length
-					: 0
-			const retainedDetailCount =
-				detailRoute !== undefined &&
-				operationsDetailState?.chainId === requiredChainId() &&
-				operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
-					? operationsDetailState.items.length
-					: 0
-			const response =
-				detailRoute !== undefined
-					? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount)
-					: catalogSection === undefined
-						? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
-						: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
-			if (requestVersion !== operationsRequestVersion) return false
-			if (detailRoute === undefined) renderOperations(response, preservedContext)
-			else renderOperationsDetail(response, detailRoute, preservedContext)
-			return true
-		} catch (error) {
-			if (requestVersion !== operationsRequestVersion) return false
-			if (preserveRenderedContent) {
-				status.className = 'sr-only'
-				status.textContent = 'Could not refresh protocol operations. Existing indexed evidence remains visible.'
+	return await runSerializedOperationsLoad(
+		operationsLoadState,
+		requestedContext,
+		live,
+		catalogTargetCount !== undefined || detailTargetCount !== undefined,
+		() => `${requiredChainId()}:${location.pathname}`,
+		() => operationsRequestVersion++,
+		async () => {
+			const requestVersion = ++operationsRequestVersion
+			const status = $('#operations-status')
+			const content = $('#operations-content')
+			const preserveRenderedContent = live && content.childElementCount > 0
+			status.hidden = false
+			status.className = preserveRenderedContent ? 'sr-only' : 'system-status'
+			status.textContent = preserveRenderedContent ? 'Refreshing canonical protocol operations…' : 'Loading canonical protocol operations…'
+			content.setAttribute('aria-busy', 'true')
+			try {
+				const detailRoute = operationsDetailRoute()
+				const catalogSection = detailRoute === undefined ? operationsCatalogSection() : undefined
+				const retainedCatalogCount =
+					catalogSection !== undefined && operationsCatalogState?.chainId === requiredChainId() && operationsCatalogState.section === catalogSection
+						? operationsCatalogState.items.length
+						: 0
+				const retainedDetailCount =
+					detailRoute !== undefined &&
+					operationsDetailState?.chainId === requiredChainId() &&
+					operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
+						? operationsDetailState.items.length
+						: 0
+				const response =
+					detailRoute !== undefined
+						? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount)
+						: catalogSection === undefined
+							? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+							: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
+				if (requestVersion !== operationsRequestVersion) return false
+				if (detailRoute === undefined) renderOperations(response, preservedContext)
+				else renderOperationsDetail(response, detailRoute, preservedContext)
+				return true
+			} catch (error) {
+				if (requestVersion !== operationsRequestVersion) return false
+				if (preserveRenderedContent) {
+					status.className = 'sr-only'
+					status.textContent = 'Could not refresh protocol operations. Existing indexed evidence remains visible.'
+					content.setAttribute('aria-busy', 'false')
+					return false
+				}
+				status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations request failure'
+				renderRetryStatus(status, 'Could not load protocol operations.', loadOperations)
+				content.replaceChildren()
 				content.setAttribute('aria-busy', 'false')
 				return false
 			}
-			status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations request failure'
-			renderRetryStatus(status, 'Could not load protocol operations.', loadOperations)
-			content.replaceChildren()
-			content.setAttribute('aria-busy', 'false')
-			return false
-		}
-	})()
-	const tracked = run.finally(() => {
-		if (operationsLoadPromise === tracked) {
-			operationsLoadPromise = undefined
-			operationsLoadContext = undefined
-		}
-	})
-	operationsLoadPromise = tracked
-	operationsLoadContext = requestContext
-	return await tracked
+		},
+	)
 }
 
 const syncNetworkUrl = () => {
@@ -6422,7 +6408,8 @@ const resetSelectedNetworkContext = () => {
 		$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
 	} else if (isOperations) {
 		operationsRequestVersion++
-		operationsLoadPromise = undefined
+		operationsLoadState.promise = undefined
+		operationsLoadState.context = undefined
 		operationsCatalogState = undefined
 		$('#operations-content').replaceChildren()
 		$('#operations-content').setAttribute('aria-busy', 'true')

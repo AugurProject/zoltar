@@ -36,6 +36,7 @@ import {
 	refreshPresentation,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
+	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
@@ -141,6 +142,42 @@ test('supersedes cross-network catalog appends and queues same-route live refres
 	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', true, false)).toBe('queue')
 	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, true)).toBe('queue')
 	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, false)).toBe('join')
+})
+
+test('serializes pagination ahead of multiple queued live refreshes', async () => {
+	const state: { promise?: Promise<boolean>; context?: string } = {}
+	const context = '1:/operations/reports'
+	const started: string[] = []
+	let finishInitial: (result: boolean) => void = unexpectedCall
+	const execute = (label: string, live: boolean, hasTarget: boolean, run: () => Promise<boolean>) =>
+		runSerializedOperationsLoad(
+			state,
+			context,
+			live,
+			hasTarget,
+			() => context,
+			() => undefined,
+			async () => {
+				started.push(label)
+				return await run()
+			},
+		)
+	const initial = execute(
+		'initial',
+		false,
+		false,
+		() =>
+			new Promise<boolean>((resolve) => {
+				finishInitial = resolve
+			}),
+	)
+	const pagination = execute('pagination', false, true, async () => true)
+	const liveOne = execute('live-one', true, false, async () => true)
+	const liveTwo = execute('live-two', true, false, async () => true)
+	expect(started).toEqual(['initial'])
+	finishInitial(true)
+	expect(await Promise.all([initial, pagination, liveOne, liveTwo])).toEqual([true, true, true, true])
+	expect(started).toEqual(['initial', 'pagination', 'live-one', 'live-two'])
 })
 
 const unexpectedCall = (): never => {
