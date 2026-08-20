@@ -139,9 +139,9 @@ async function legacyReplacementAmounts(client: ReadClient, openOracle: Address,
 	let fromBlock = BigInt(position.entrySubmissionBlockNumber)
 	while (fromBlock <= blockNumber) {
 		const toBlock = fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n : blockNumber
-		const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range =>
-			client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] }),
-		))].sort(compareLogs)
+		const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range => client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] })))].sort(
+			compareLogs,
+		)
 		for (const log of logs) {
 			if (!foundEntry) {
 				foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()

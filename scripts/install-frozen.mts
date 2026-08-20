@@ -8,19 +8,38 @@ const lockfilePath = path.join(installDirectory, 'bun.lock')
 const packageJsonBackupPath = `${packageJsonPath}.zoltar-install-backup`
 const lockfileBackupPath = `${lockfilePath}.zoltar-install-backup`
 
-const readPackageJson = () => JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+type DependencySection = 'dependencies' | 'devDependencies' | 'optionalDependencies'
+type DependencyMap = Record<string, string>
+interface PackageManifest {
+	dependencies?: DependencyMap
+	devDependencies?: DependencyMap
+	optionalDependencies?: DependencyMap
+	[key: string]: unknown
+}
 
-const writePackageJson = packageJson => {
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const readPackageJson = (): PackageManifest => {
+	const parsed: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+	if (!isRecord(parsed)) throw new Error(`${packageJsonPath} must contain a JSON object`)
+	for (const section of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
+		const dependencies = parsed[section]
+		if (dependencies !== undefined && !isRecord(dependencies)) throw new Error(`${packageJsonPath} has an invalid ${section} section`)
+	}
+	return parsed
+}
+
+const writePackageJson = (packageJson: PackageManifest): void => {
 	writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, undefined, '\t')}\n`)
 }
 
-const writeFileAtomic = (targetPath, contents) => {
+const writeFileAtomic = (targetPath: string, contents: string): void => {
 	const temporaryPath = `${targetPath}.${process.pid}.tmp`
 	writeFileSync(temporaryPath, contents)
 	renameSync(temporaryPath, targetPath)
 }
 
-const restoreBackupFile = (backupPath, targetPath, options = {}) => {
+const restoreBackupFile = (backupPath: string, targetPath: string, options: { parseJson?: boolean } = {}): void => {
 	if (!existsSync(backupPath)) return
 	const contents = readFileSync(backupPath, 'utf8')
 	if (options.parseJson === true) {
@@ -37,14 +56,14 @@ const restoreInstallBackups = () => {
 
 restoreInstallBackups()
 
-const getSharedDependencySection = packageJson => {
-	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+const getSharedDependencySection = (packageJson: PackageManifest): DependencySection | undefined => {
+	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
 		if (packageJson[dependencySection]?.['@zoltar/shared'] !== undefined) return dependencySection
 	}
 	return undefined
 }
 
-const runInstall = installArguments => {
+const runInstall = (installArguments: string[]): number => {
 	const result = spawnSync(process.execPath, installArguments, {
 		cwd: installDirectory,
 		stdio: 'inherit',
@@ -71,7 +90,7 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 		writeFileAtomic(lockfileBackupPath, originalLockfile)
 	}
 
-	const restoreAndExit = exitStatus => {
+	const restoreAndExit = (exitStatus: number): never => {
 		restoreInstallBackups()
 		process.exit(exitStatus)
 	}
@@ -80,7 +99,9 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 	process.once('SIGHUP', () => restoreAndExit(129))
 
 	try {
-		delete packageJson[sharedDependencySection]['@zoltar/shared']
+		const dependencies = packageJson[sharedDependencySection]
+		if (dependencies === undefined) throw new Error(`Missing ${sharedDependencySection} after dependency detection`)
+		delete dependencies['@zoltar/shared']
 		writePackageJson(packageJson)
 		return runInstall(['install', '--no-save', '--backend=copyfile'])
 	} finally {

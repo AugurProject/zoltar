@@ -90,7 +90,7 @@ class ContractFunctionExecutionError extends Error {
 
 class HttpRequestError extends Error {
 	readonly details: string
-	readonly status: number
+	override readonly status: number
 
 	constructor(options: { details: string; status: number; url: string }) {
 		super(options.details)
