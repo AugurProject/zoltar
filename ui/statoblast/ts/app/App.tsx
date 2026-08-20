@@ -31,7 +31,8 @@ import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/s
 import { useSecurityVaultOperations } from '../features/security-pools/hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
-import { getActiveSimulationController, initializeActiveEnvironment, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveSimulationController, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
@@ -69,7 +70,7 @@ export function App() {
 			getInFlightCount: () => transactionState.value.inFlightCount,
 			replaceEnvironment: async canCommit => {
 				let commitAllowed = false
-				await initializeActiveEnvironment(window.location, undefined, {
+				await initializeStatoblastActiveEnvironment(window.location, {
 					shouldCommit: () => {
 						commitAllowed = canCommit()
 						return commitAllowed
@@ -333,7 +334,7 @@ export function App() {
 		refreshRepPrices()
 	}
 	const refreshActiveEnvironment = async () => {
-		await initializeActiveEnvironment()
+		await initializeStatoblastActiveEnvironment()
 		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
 		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
 		await refreshSimulationView()

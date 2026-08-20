@@ -88,7 +88,7 @@ test('generated artifact checker resolves shared import-map outputs from the rep
 	}
 })
 
-for (const trackedPath of ['ui/zoltar/vendor/isows/native.js', 'ui/coreShared/js/index.js', 'ui/zoltar/dist/index.html', 'ui/zoltar/tsconfig.tsbuildinfo']) {
+for (const trackedPath of ['ui/zoltar/vendor/isows/native.js', 'ui/coreShared/js/index.js', 'ui/zoltar/dist/index.html', 'ui/zoltar/tsconfig.tsbuildinfo', 'ui/coreShared/ts/contractArtifact.d.ts']) {
 	test(`generated artifact checker rejects tracked ${trackedPath}`, async () => {
 		const repositoryRoot = await createGeneratedArtifactFixture()
 		const trackedGeneratedPathGit: GitRunner = () => ({

@@ -34,6 +34,8 @@ const generatedReviewPaths = [
 	'ui/statoblast/dist',
 	'ui/statoblast/js',
 	':(glob)**/*.tsbuildinfo',
+	':(glob)ui/*/ts/**/*.d.ts',
+	':(glob)ui/*/ts/**/*.d.ts.map',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
 	'ui/coreShared/ts/deploymentArtifacts.ts',
