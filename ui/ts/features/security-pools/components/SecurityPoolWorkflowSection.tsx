@@ -22,7 +22,7 @@ import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
-import { getQueuedVaultOperation, SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
+import { getQueuedVaultOperation, SecurityVaultSection } from './SecurityVaultSection.js'
 import { StickyObjectContext } from '../../../components/StickyObjectContext.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
@@ -865,18 +865,6 @@ export function SecurityPoolWorkflowSection({
 													</button>
 												}
 											/>
-											{vaultView === 'selected-vault' && selectedVaultDetails !== undefined && selectedVaultExistsOnchain ? (
-												<SelectedVaultSummarySection
-													repPerEthPrice={repPerEthPrice}
-													repPerEthSource={repPerEthSource}
-													repPerEthSourceUrl={repPerEthSourceUrl}
-													capacityOwnershipAttoRep={selectedVaultDetails.capacityOwnershipAttoRep}
-													securityVaultDetails={selectedVaultDetails}
-													selectedPoolStatoblastSecurityMultiplierBps={securityVault.selectedPoolStatoblastSecurityMultiplierBps}
-													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-													variant='embedded'
-												/>
-											) : undefined}
 										</SectionBlock>
 
 										{vaultView === 'browse-vaults' ? (
@@ -974,7 +962,6 @@ export function SecurityPoolWorkflowSection({
 												showHeader={false}
 												showLookupSection={false}
 												showSecurityPoolAddressInput={false}
-												showSummarySection={false}
 											/>
 										)}
 									</div>

@@ -9,9 +9,9 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
-	event VaultTargetHealthFactorSet(address indexed vault, uint256 targetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
+	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
 
-	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 targetHealthFactorBps) external {
+	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
 		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
 		feeIndexRemainder = 0;
 		totalCapacityOwnershipAttoRep =
@@ -23,8 +23,10 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			previousCapacityOwnershipAttoRep +
 			nextCapacityOwnershipAttoRep;
 		securityVaults[vault].capacityOwnershipAttoRep = nextCapacityOwnershipAttoRep;
-		if (targetHealthFactorBps != 0) vaultTargetHealthFactorBps[vault] = targetHealthFactorBps;
-		emit VaultTargetHealthFactorSet(vault, vaultTargetHealthFactorBps[vault], nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+		if (depositTargetHealthFactorBps != 0) {
+			lastDepositTargetHealthFactorBpsByVault[vault] = depositTargetHealthFactorBps;
+			emit VaultDepositTargetHealthFactorRecorded(vault, depositTargetHealthFactorBps, nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+		}
 	}
 
 	function resumeForkedEscalationGame() external {

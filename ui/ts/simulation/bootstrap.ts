@@ -433,13 +433,13 @@ async function loadRequiredSecurityVault(readClient: ReadClient, securityPoolAdd
 	return vaultDetails
 }
 
-function getSeededVaultTargetHealthFactorBps(vault: SeededVaultSpec) {
+function getSeededVaultDepositTargetFactorBps(vault: SeededVaultSpec) {
 	if (vault.capacityOwnershipAttoRep <= 0n) throw new Error('Seeded vault capacity ownership must be positive')
 	const numerator = vault.vaultRepBackingDepositAttoRep * 10_000n
-	if (numerator % vault.capacityOwnershipAttoRep !== 0n) throw new Error('Seeded vault capacity ownership must map to an exact target health factor')
-	const targetHealthFactorBps = numerator / vault.capacityOwnershipAttoRep
-	if (targetHealthFactorBps < 10_000n) throw new Error('Seeded vault target health factor must be at least 1.00×')
-	return targetHealthFactorBps
+	if (numerator % vault.capacityOwnershipAttoRep !== 0n) throw new Error('Seeded vault capacity ownership must map to an exact deposit target factor')
+	const depositTargetFactorBps = numerator / vault.capacityOwnershipAttoRep
+	if (depositTargetFactorBps < 10_000n) throw new Error('Seeded vault deposit target factor must be at least 1.00×')
+	return depositTargetFactorBps
 }
 
 async function createSeededSecurityPool({ createWriteClient, currentTimestamp, deployerAccount, questionTitle }: { createWriteClient: (accountAddress: Address) => WriteClient; currentTimestamp: bigint; deployerAccount: Address; questionTitle: string }) {
@@ -596,7 +596,7 @@ async function seedSecurityPool({
 	for (const [index, vaultSpec] of poolSpec.vaults.entries()) {
 		const writeClient = createWriteClient(vaultSpec.accountAddress)
 		await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-		await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultTargetHealthFactorBps(vaultSpec))
+		await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec))
 		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 		if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
@@ -750,7 +750,7 @@ async function seedSecurityPoolX2Scenario({
 		for (const [index, vaultSpec] of seededPool.vaults.entries()) {
 			const writeClient = createWriteClient(vaultSpec.accountAddress)
 			await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-			await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultTargetHealthFactorBps(vaultSpec))
+			await depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec))
 			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 			if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)

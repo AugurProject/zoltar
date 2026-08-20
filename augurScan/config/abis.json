@@ -1,5 +1,5 @@
 {
-  "sourceHash": "6d393eafaa25644756ca6b1149603242d7528b6615e7209d92d481d486d5af36",
+  "sourceHash": "8aa2443d4c12da296f8fb3b92057b00ea37591ab849b4baee3fe8cbd6b3fb202",
   "contracts": {
     "IERC1363": {
       "source": "contracts/statoblast/openOracle/openzeppelin/contracts/interfaces/IERC1363.sol",
@@ -17405,6 +17405,37 @@
           "inputs": [
             {
               "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "depositTargetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingTotalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultDepositTargetHealthFactorRecorded",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
               "internalType": "uint256",
               "name": "operationId",
               "type": "uint256"
@@ -17447,37 +17478,6 @@
             }
           ],
           "name": "VaultLiquidated",
-          "type": "event"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": true,
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "targetHealthFactorBps",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "capacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "resultingTotalCapacityOwnershipAttoRep",
-              "type": "uint256"
-            }
-          ],
-          "name": "VaultTargetHealthFactorSet",
           "type": "event"
         },
         {
@@ -17649,7 +17649,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -17692,7 +17692,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -17903,6 +17903,30 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultCapacityBackingFactorsBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "associatedRepPerCapacityBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "poolHeldRepPerCapacityBps",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "getVaultCount",
           "outputs": [
@@ -18069,6 +18093,25 @@
               "internalType": "bool",
               "name": "",
               "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -18705,25 +18748,6 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -20580,6 +20604,25 @@
               "name": "",
               "type": "uint256"
             },
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeIndex",
+          "outputs": [
             {
               "internalType": "uint256",
               "name": "",
@@ -23245,7 +23288,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "depositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -23261,7 +23304,7 @@
               "type": "uint256"
             }
           ],
-          "name": "VaultTargetHealthFactorSet",
+          "name": "VaultDepositTargetHealthFactorRecorded",
           "type": "event"
         },
         {
@@ -23306,6 +23349,25 @@
         {
           "inputs": [],
           "name": "feeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
           "outputs": [
             {
               "internalType": "uint256",
@@ -23481,7 +23543,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "depositTargetHealthFactorBps",
               "type": "uint256"
             }
           ],
@@ -23603,25 +23665,6 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -23840,6 +23883,25 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "lastUpdatedFeeAccumulator",
           "outputs": [
@@ -24025,25 +24087,6 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -24421,6 +24464,30 @@
             }
           ],
           "stateMutability": "pure",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "securityPoolAddress",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeAccounting",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "feeIndexAtFinalization",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "claimableFeesAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
           "type": "function"
         },
         {
@@ -31217,7 +31284,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -31260,7 +31327,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -31440,6 +31507,30 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultCapacityBackingFactorsBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "associatedRepPerCapacityBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "poolHeldRepPerCapacityBps",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "getVaultCount",
           "outputs": [
@@ -31606,6 +31697,25 @@
               "internalType": "bool",
               "name": "",
               "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -32235,25 +32345,6 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -33459,6 +33550,25 @@
             {
               "internalType": "uint256",
               "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
               "type": "uint256"
             }
           ],

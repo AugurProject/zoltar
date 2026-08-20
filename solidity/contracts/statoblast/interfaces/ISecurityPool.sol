@@ -126,7 +126,8 @@ interface ISecurityPool {
 	function statoblastSecurityMultiplierBps() external view returns (uint256);
 	function minimumSecurityBondDebtAttoEth() external view returns (uint256);
 	function minimumVaultRepDepositAttoRep() external view returns (uint256);
-	function vaultTargetHealthFactorBps(address vault) external view returns (uint256);
+	/// @notice Latest target supplied with a positive REP deposit; metadata only, not aggregate vault health.
+	function lastDepositTargetHealthFactorBpsByVault(address vault) external view returns (uint256);
 	function totalClaimableVaultFeesAttoEth() external view returns (uint256);
 	function totalAccruedFeesAttoEth() external view returns (uint256);
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
@@ -164,6 +165,9 @@ interface ISecurityPool {
 	function getTotalPoolHeldAttoRep() external view returns (uint256);
 	function getCurrentMintingCapacityAttoEth() external view returns (uint256);
 	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256);
+	/// @notice Current associated and pool-held REP per capacity in basis points; zero capacity returns `(0, 0)`.
+	/// @dev Associated REP includes dispute-staked principal as at-risk security, not liquid collateral with a known payout. These ratios are not current vault health, which also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints.
+	function getVaultCapacityBackingFactorsBps(address vault) external view returns (uint256 associatedRepPerCapacityBps, uint256 poolHeldRepPerCapacityBps);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
@@ -190,8 +194,8 @@ interface ISecurityPool {
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function assignFinalizedAuctionFees(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization) external;
 	function setTotalRepBackingUnits(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);

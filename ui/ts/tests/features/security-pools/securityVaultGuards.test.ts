@@ -54,7 +54,7 @@ describe('security vault guards', () => {
 		).toBeUndefined()
 	})
 
-	test('blocks positive deposits until the target health factor is valid', () => {
+	test('blocks positive deposits until the deposit target factor is valid', () => {
 		const guard = (targetHealthFactor: string) =>
 			getVaultDepositGuardMessage({
 				approvalSatisfied: true,
@@ -64,9 +64,9 @@ describe('security vault guards', () => {
 				walletRepShortfallAttoRep: undefined,
 			})
 
-		expect(guard('')).toBe('Target health factor must be a number with at most four decimal places')
-		expect(guard('abc')).toBe('Target health factor must be a number with at most four decimal places')
-		expect(guard('0.9999')).toBe('Target health factor must be at least 1.00×')
+		expect(guard('')).toBe('Deposit target factor must be a number with at most four decimal places')
+		expect(guard('abc')).toBe('Deposit target factor must be a number with at most four decimal places')
+		expect(guard('0.9999')).toBe('Deposit target factor must be at least 1.00×')
 		expect(guard('1.25')).toBeUndefined()
 	})
 

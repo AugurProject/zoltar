@@ -99,9 +99,9 @@ export const manipulatePriceOracleAndPerformOperation = async (client: WriteClie
 			client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
 		])
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)
-		const targetHealthFactorBps = amount === 0n ? (1n << 256n) - 1n : (vaultAttoRep * 10_000n) / amount
+		const lastDepositTargetHealthFactorBps = amount === 0n ? (1n << 256n) - 1n : (vaultAttoRep * 10_000n) / amount
 		// Legacy scenarios used an oracle-gated absolute-capacity setter as setup. Capacity is now
-		// created only by deposit-time health factors, so preserve those scenarios with an explicit
+		// created only by deposit-time target factors, so preserve those scenarios with an explicit
 		// Anvil fixture override while production and focused tests exercise the new deposit path.
 		const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
 		const storageHex = (value: bigint) => `0x${value.toString(16).padStart(64, '0')}` as `0x${string}`
@@ -111,7 +111,7 @@ export const manipulatePriceOracleAndPerformOperation = async (client: WriteClie
 					[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
 					[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
 					[storageHex(mappingSlot(16n) + 1n)]: amount,
-					[storageHex(mappingSlot(30n))]: targetHealthFactorBps,
+					[storageHex(mappingSlot(25n))]: lastDepositTargetHealthFactorBps,
 				},
 			},
 		})

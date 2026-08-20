@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'a5c89deb69a1fa17391b0c7578e59d46fa280d516a6fbcc4db94a4d7789ed3b9'
+export const expectedProductionSoliditySourceFingerprint = 'fe06c5f9e67114fec928ee6e9c443f52124414850105168ef5163c274c6deefa'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -97,7 +97,7 @@ export const eventSourceByName: Record<string, string> = {
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	TotalRepBackingUnitsSet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	VaultTargetHealthFactorSet: 'solidity/contracts/statoblast/SecurityPool.sol',
+	VaultDepositTargetHealthFactorRecorded: 'solidity/contracts/statoblast/SecurityPool.sol',
 	PendingEthRefundWithdrawn: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	PendingReportRecovered: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
 	ParentRepLocked: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -330,7 +330,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'c209c24aef4071e13c7598ed7b8a6dc733f3946e8646307befa3c9a60387ff72'
+export const referencedEventAbiFingerprint = 'b75943e2fff5b833f695d6811b9b752ee17cbe35fd8b25dd2549fcbb00998bf8'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -490,7 +490,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': '2a27b7ed5407ac8067de39d67bbe84902f4c1c36ab070eeaeb99375db6f8b8e1',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
-	'solidity/contracts/statoblast/SecurityPool.sol': '518ccff2b6bf34c3df6a791efdb15d0b3057e944f3a7cdfbe3399d127d581557',
+	'solidity/contracts/statoblast/SecurityPool.sol': '476750edee765d03170530ebb130e0aee772774b6e9f7c5d7d80e7bbe47345b5',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -704,12 +704,12 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '2e812e6e7aa0a0cd167c975680c8275667cd1bcce000555c0b15aba1bef1031c',
+		compiledAbiFingerprint: 'adf6de72251995da0be0c70433cf48361433cdf637b2ede48d063aa34b38d211',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '25c286eef854f7f8c3a60fb339e29063f864976fb0c650594e6b5478a5af13f8',
+		readAbiFingerprint: '4aa6f532ffca94b25b9de71ebb35b258d20c3789ddeb63325a04a52847568ca9',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `vaultTargetHealthFactorBps`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Use `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. `lastDepositTargetHealthFactorBpsByVault` is deposit-instruction metadata, not a vault health measurement. Use `getVaultCapacityBackingFactorsBps` for current associated and pool-held REP-per-capacity ratios, `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity, and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 		securityBoundary:
 			'Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -725,6 +725,7 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'getVaultFeeRemainder' },
 			{ name: 'getCurrentMintingCapacityAttoEth' },
 			{ name: 'getVaultOpenInterestAttoEth' },
+			{ name: 'getVaultCapacityBackingFactorsBps' },
 			{ name: 'isEscalationResolved' },
 		],
 		readStorageDeclarations: [
@@ -759,7 +760,7 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'systemState', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
 			{ name: 'minimumSecurityBondDebtAttoEth', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
 			{ name: 'minimumVaultRepDepositAttoRep', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
-			{ name: 'vaultTargetHealthFactorBps', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
+			{ name: 'lastDepositTargetHealthFactorBpsByVault', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
 		interactions: [
@@ -774,10 +775,10 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`depositRepToVault(attoRepAmount, targetHealthFactorBps)`',
 				caller: 'Vault owner',
-				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from the deposit and selected target health factor.',
+				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from this deposit and its selected deposit target factor.',
 				declarations: [{ name: 'depositRepToVault' }],
-				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; target health factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
-				signals: '`RepDepositedToVault`, the vault target-health-factor event, and accounting checkpoints',
+				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
+				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{
 				call: '`redeemFees(vault)`',
@@ -881,7 +882,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces the vault and pool capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
 				declarations: [{ name: 'withdrawRepFromVault' }],
 				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.',
-				signals: '`VaultTargetHealthFactorSet`; REP `Transfer`; `RepWithdrawnFromVault`; `VaultAccountingCheckpoint`; and applicable fee-accrual or retention `PoolAccountingCheckpoint` events, including a zero-value transfer/event path if the trusted coordinator supplies zero',
+				signals: 'REP `Transfer`; `RepWithdrawnFromVault`; `VaultAccountingCheckpoint`; and applicable fee-accrual or retention `PoolAccountingCheckpoint` events',
 			},
 			{
 				call: '`performLiquidation(request)`',
@@ -952,18 +953,20 @@ export const contractReferences: ContractReference[] = [
 				signals: '`SystemStateSet`, including for a repeated state',
 			},
 			{
-				call: '`configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
+				call: '`configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureVault' }],
-				effect: 'Replaces the vault REP backing units, price-independent capacity ownership, fee index, target health factor, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and registers the nonzero vault address regardless of the supplied state.',
+				effect:
+					'Replaces the vault REP backing units, price-independent capacity ownership, fee index, latest-deposit preference metadata, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and registers the nonzero vault address regardless of the supplied state.',
 				preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},
 			{
-				call: '`configureFinalizedAuctionVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
+				call: '`configureFinalizedAuctionVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'configureFinalizedAuctionVault' }],
-				effect: 'Assigns finalized-auction REP backing and already-fee-eligible capacity ownership to the winning vault without clearing the pool-wide fee-index remainder, then replaces the vault fee index, health target, bad debt, and aggregate pool bad debt and registers the vault.',
+				effect:
+					'Assigns finalized-auction REP backing and already-fee-eligible capacity ownership to the winning vault without clearing the pool-wide fee-index remainder, preserves its latest-deposit preference metadata without inventing one for a new vault, then replaces the vault fee index, bad debt, and aggregate pool bad debt and registers the vault.',
 				preconditions: '`vault` is nonzero; the forker has already included the sold capacity ownership in the pool fee denominator at auction finalization.',
 				signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 			},
@@ -1100,7 +1103,7 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for their non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
 				effect:
-					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
+					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, latest-positive-deposit target preference metadata, and vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
 				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
 				signals: '`VaultBadDebtMigrated` and `VaultMigrationCheckpoint`',
 			},
@@ -1108,7 +1111,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault owner',
 				effect:
-					"First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer capacity ownership, target health factor, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer capacity ownership, latest-positive-deposit target preference metadata, and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
 				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals: 'Vault migration events, including `VaultBadDebtMigrated`, plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',

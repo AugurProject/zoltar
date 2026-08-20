@@ -2438,6 +2438,19 @@ describe('Statoblast: truth auction', () => {
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			strictEqualTypeSafe(participantVault.feeIndex, migratedVaultBeforeClaim.feeIndex, 'newly auction-funded vaults should inherit the current child-pool fee index')
+			strictEqualTypeSafe(
+				await client.readContract({ address: yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [auctionParticipant.account.address] }),
+				0n,
+				'auction claims into a new vault should not fabricate a deposit preference',
+			)
+			const [associatedRepPerCapacityBps, poolHeldRepPerCapacityBps] = await client.readContract({
+				address: yesSecurityPool.securityPool,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
+				functionName: 'getVaultCapacityBackingFactorsBps',
+				args: [auctionParticipant.account.address],
+			})
+			assert.ok(associatedRepPerCapacityBps > 0n, 'auction-funded backing should produce a derived associated REP-per-capacity ratio')
+			strictEqualTypeSafe(poolHeldRepPerCapacityBps, associatedRepPerCapacityBps, 'a new auction-funded vault with no escalation stake should have equal derived backing ratios')
 		})
 
 		test('claimAuctionProceeds allows a vault to claim winning bids across multiple calls', async () => {
@@ -2587,6 +2600,15 @@ describe('Statoblast: truth auction', () => {
 					args: [vault],
 				})
 			const auctionedBadDebtAttoEth = 2n
+			const retainedDepositPreferenceBps = 12_345n
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: poolAddress,
+					abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
+					functionName: 'setLastDepositTargetHealthFactorBps',
+					args: [positiveRepVault, retainedDepositPreferenceBps],
+				}),
+			)
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					address: poolAddress,
@@ -2613,6 +2635,16 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(zeroRepForward[1], 0n, 'capacity ownership')
 			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
 			strictEqualTypeSafe(positiveRepForward[1], 3n, 'capacity ownership')
+			strictEqualTypeSafe(
+				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [positiveRepVault] }),
+				retainedDepositPreferenceBps,
+				'auction credit into an existing vault should preserve its last deposit preference',
+			)
+			strictEqualTypeSafe(
+				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [zeroRepVault] }),
+				0n,
+				'auction credit into a new vault should not fabricate a deposit preference',
+			)
 			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 1n, 'a debt-only auction position should still assign its bad-debt slice')
 			strictEqualTypeSafe(
 				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),

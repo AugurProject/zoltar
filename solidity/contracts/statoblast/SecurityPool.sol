@@ -73,7 +73,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	event RepWithdrawnFromVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
-	event VaultTargetHealthFactorSet(address indexed vault, uint256 targetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
+	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
 	event VaultLiquidated(uint256 indexed operationId, address operator, address indexed receiverVault, address indexed targetVault, uint256 securityBondDebtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event RepRedeemedFromVault(address indexed caller, address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
@@ -384,6 +384,18 @@ contract SecurityPool is SecurityPoolStorage {
 				: 0;
 	}
 
+	/// @notice Returns current REP-to-capacity ratios, not a target or current vault health factor.
+	/// @dev Associated REP includes dispute-staked principal, which is at-risk security rather than liquid collateral with a known payout. Current health also depends on OI, REP/ETH price, the security multiplier, and both protocol health constraints. Zero capacity returns zero for both ratios.
+	function getVaultCapacityBackingFactorsBps(address vault) external view returns (uint256 associatedRepPerCapacityBps, uint256 poolHeldRepPerCapacityBps) {
+		uint256 capacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
+		if (capacityOwnershipAttoRep == 0) return (0, 0);
+		uint256 poolHeldRepAttoRep = backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
+		uint256 disputeStakedAttoRep =
+			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
+		associatedRepPerCapacityBps = Math.mulDiv(poolHeldRepAttoRep + disputeStakedAttoRep, SecurityPoolUtils.BPS_DENOMINATOR, capacityOwnershipAttoRep);
+		poolHeldRepPerCapacityBps = Math.mulDiv(poolHeldRepAttoRep, SecurityPoolUtils.BPS_DENOMINATOR, capacityOwnershipAttoRep);
+	}
+
 	function _getActiveOpenInterestAttoEth() private view returns (uint256) {
 		return
 			settlementCollateralAttoEth > totalBadDebtAttoEth ? settlementCollateralAttoEth - totalBadDebtAttoEth : 0;
@@ -432,6 +444,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
 		require(!isEscalationResolved(), 'Resolved');
+		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		updateVaultFees(msg.sender);
 		uint256 repBackingUnits = attoRepToBackingUnits(attoRepAmount);
@@ -448,7 +461,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, msg.sender);
 	}
 
-	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 targetHealthFactorBps) private {
+	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
 		address delegate = liquidationDelegate;
 		bytes4 selector = SecurityPoolLiquidationDelegate.setVaultCapacity.selector;
 		assembly ('memory-safe') {
@@ -456,7 +469,7 @@ contract SecurityPool is SecurityPoolStorage {
 			mstore(pointer, selector)
 			mstore(add(pointer, 0x04), vault)
 			mstore(add(pointer, 0x24), nextCapacityOwnershipAttoRep)
-			mstore(add(pointer, 0x44), targetHealthFactorBps)
+			mstore(add(pointer, 0x44), depositTargetHealthFactorBps)
 			if iszero(delegatecall(gas(), delegate, pointer, 0x64, 0, 0)) {
 				returndatacopy(pointer, 0, returndatasize())
 				revert(pointer, returndatasize())
@@ -733,15 +746,15 @@ contract SecurityPool is SecurityPoolStorage {
 		emit SystemStateSet(systemState);
 	}
 
-	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
 	}
 
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
 	}
 
-	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 targetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
+	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
 		require(vault != address(0x0), 'Zero vault');
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (
@@ -752,7 +765,7 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 		securityVaults[vault].capacityOwnershipAttoRep = capacityOwnershipAttoRep;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
-		vaultTargetHealthFactorBps[vault] = targetHealthFactorBps;
+		lastDepositTargetHealthFactorBpsByVault[vault] = lastDepositTargetHealthFactorBps;
 		vaultBadDebtAttoEth[vault] = newVaultBadDebtAttoEth;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		_registerVault(vault);

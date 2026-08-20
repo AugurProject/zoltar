@@ -115,7 +115,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(whitepaperStatoblast, /id="dynamic-capacity"/)
 	assert.match(securityPool, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
 	assert.equal((11n * 10_000n) / 30_000n, 3n, 'capacity ownership must round a nonzero remainder downward')
-	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme target health factor may round capacity ownership to zero')
+	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
 	assert.match(securityPoolUtils, /function isVaultHealthyAtFactor\([\s\S]*Math\.Rounding\.Ceil[\s\S]*poolHeldVaultRepBackingAttoRep \+ disputeStakedAttoRep < associatedRequiredRepAttoRep[\s\S]*return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep/)
 	assert.match(liquidationHtml, /id="capacity-and-health"/)
 	assert.doesNotMatch(securityPoolUtils, /function calculateLiquidationTransfer\(/, 'the obsolete bonus-priced liquidation preview must not remain externally callable')
@@ -593,7 +593,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameCarry, /function initializeForkCarrySnapshotWithResolutionBalances\([\s\S]*?\) external \{\s*_initializeForkCarrySnapshot\(/)
 	assert.match(escalationGameCarry, /function _initializeForkCarrySnapshot\([\s\S]*?require\(msg\.sender == address\(securityPool\), 'Only pool'\);\s*require\(forkContinuation, 'No fork mode'\);\s*require\(!forkCarrySnapshotInitialized\(\), 'Snapshot initialized'\)/)
 	assert.match(contractInteractionReference, /initializeForkCarrySnapshotWithResolutionBalances\(\.\.\.\)[\s\S]*no prior snapshot[\s\S]*Installs the immutable inherited peaks, leaf counts, carry totals, resolution balances, and normalized nullifier roots/)
-	assert.match(contractInteractionReference, /Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, target health factor, and vault bad debt into one child pool/)
+	assert.match(
+		contractInteractionReference,
+		/Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, latest-positive-deposit target preference metadata, and vault bad debt into one child pool/,
+	)
+	assert.doesNotMatch(contractInteractionReference, /transfers REP-denominated capacity ownership, target health factor/)
 	assert.match(contractInteractionReference, /optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state/)
 	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds dispute-staked REP backing nor authorizes carried proofs/)
 	assert.match(contractInteractionReference, /external fork interrupted the game[\s\S]*winners settle in the child by carried proof[\s\S]*unresolved parent escalation-deposit accounting cleanup is optional/)
@@ -826,10 +830,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /setAwaitingForkContinuation\(shouldAwait\)[\s\S]*No lifecycle or value-change guard[\s\S]*`AwaitingForkContinuationSet`, including for a repeated value/)
 	assert.match(securityPool, /function setSystemState\(SystemState newState\) external onlyForker \{\s*systemState = newState;\s*emit SystemStateSet\(systemState\)/)
 	assert.match(contractInteractionReference, /setSystemState\(newState\)[\s\S]*No transition or value-change guard[\s\S]*`SystemStateSet`, including for a repeated state/)
-	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?vaultTargetHealthFactorBps\[vault\] = targetHealthFactorBps;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
+	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?lastDepositTargetHealthFactorBpsByVault\[vault\] = lastDepositTargetHealthFactorBps;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
 	assert.match(
 		contractInteractionReference,
-		/configureVault\(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, targetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/,
+		/configureVault\(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/,
 	)
 	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newDenominator\) external onlyForker \{\s*totalRepBackingUnits = newDenominator;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
 	assert.match(contractInteractionReference, /setTotalRepBackingUnits\(newDenominator\)[\s\S]*No lifecycle or value-change guard[\s\S]*`TotalRepBackingUnitsSet`, including for zero or a repeated value/)

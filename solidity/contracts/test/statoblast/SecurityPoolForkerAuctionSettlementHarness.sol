@@ -15,7 +15,7 @@ contract AuctionSettlementPoolHarness {
 	}
 
 	mapping(address vault => Vault) public securityVaults;
-	mapping(address vault => uint256 targetHealthFactorBps) public vaultTargetHealthFactorBps;
+	mapping(address vault => uint256 lastDepositTargetHealthFactorBps) public lastDepositTargetHealthFactorBpsByVault;
 	mapping(address vault => uint256 badDebtAttoEth) public vaultBadDebtAttoEth;
 	uint256 public totalRepBackingUnits = 1e18;
 	uint256 public feeEligibleCapacityOwnershipAttoRep;
@@ -25,13 +25,18 @@ contract AuctionSettlementPoolHarness {
 		totalBadDebtAttoEth = amountAttoEth;
 	}
 
+	function setLastDepositTargetHealthFactorBps(address vault, uint256 value) external {
+		lastDepositTargetHealthFactorBpsByVault[vault] = value;
+	}
+
 	function updateVaultFees(address) external {}
 
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 feeIndex, uint256, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external {
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 feeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external {
 		Vault storage current = securityVaults[vault];
 		current.repBackingUnits = repBackingUnits;
 		current.capacityOwnershipAttoRep = capacityOwnershipAttoRep;
 		current.feeIndex = feeIndex;
+		lastDepositTargetHealthFactorBpsByVault[vault] = lastDepositTargetHealthFactorBps;
 		vaultBadDebtAttoEth[vault] = newVaultBadDebtAttoEth;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 	}
