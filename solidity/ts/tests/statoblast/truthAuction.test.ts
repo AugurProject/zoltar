@@ -186,7 +186,7 @@ describe('Statoblast: truth auction', () => {
 		await mockWindow.advanceTime(10n * DAY)
 	}
 
-	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint) => {
+	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint, purchaseAuctionRep = true) => {
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -207,7 +207,7 @@ describe('Statoblast: truth auction', () => {
 		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork
 		const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const auctionTick = await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+		const auctionTick = purchaseAuctionRep ? await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy) : 0n
 		if (forcedSurplusAboveCapacityOwnershipAttoRep !== undefined) {
 			await mockWindow.setBalance(yesSecurityPool.securityPool, securityPoolCapacityOwnershipAttoRep + forcedSurplusAboveCapacityOwnershipAttoRep)
 		}
@@ -483,6 +483,24 @@ describe('Statoblast: truth auction', () => {
 				accountedCollateralBeforeSubsequentAccrual,
 				'preserved aggregate carry should reconcile settlement collateral and accrued fees exactly after subsequent accrual',
 			)
+		})
+
+		test('zero-purchase unassigned capacity does not expose phantom fee ownership', async () => {
+			const { yesSecurityPool } = await setupLongDatedChildAuction('zero-purchase fee accounting source', undefined, false)
+			const unassignedAtFinalization = await getUnassignedPosition(yesSecurityPool.securityPool)
+			assert.ok(unassignedAtFinalization.capacityOwnershipAttoRep > 0n, 'zero-purchase auctions should retain explicit unassigned capacity')
+
+			await mockWindow.advanceTime(DAY)
+			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+			const unassignedAfterAccrual = await getUnassignedPosition(yesSecurityPool.securityPool)
+			const poolSnapshot = await client.readContract({
+				abi: statoblast_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			})
+			assert.ok(poolSnapshot.feeIndex > unassignedAfterAccrual.feeIndex, 'migrated fee-eligible capacity should advance the pool fee index')
+			strictEqualTypeSafe(unassignedAfterAccrual.claimableFeesAttoEth, 0n, 'zero-purchase unassigned capacity must remain outside fee ownership')
 		})
 
 		test('unhealthy unassigned auction ownership blocks new minting until a claim assigns it', async () => {

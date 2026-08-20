@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
+import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 
 library SecurityPoolUtils {
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
@@ -98,6 +99,9 @@ library SecurityPoolUtils {
 		ISecurityPool securityPool = ISecurityPool(payable(securityPoolAddress));
 		ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
 		feeIndexAtFinalization = forker.getUnassignedPositionFeeIndex(securityPool);
+		address truthAuction = securityPool.truthAuction();
+		if (truthAuction == address(0) || IUniformPriceDualCapBatchAuction(truthAuction).totalAttoRepPurchased() == 0)
+			return (feeIndexAtFinalization, 0);
 		(, uint256 capacityOwnershipAttoRep, ) = forker.getUnassignedPosition(securityPool);
 		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
 	}
