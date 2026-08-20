@@ -43,7 +43,16 @@
 	},
 	"overrides": [
 		{
-			"includes": ["docs/assets/js/chartRuntime.js", "docs/assets/js/docsData.js", "docs/assets/js/docsSearchData.js"],
+			"includes": [
+				"docs/assets/js/chartRuntime.js",
+				"docs/assets/js/docsData.js",
+				"docs/assets/js/docsSearchData.js",
+				"docs/assets/js/docsShell.js",
+				"docs/assets/js/responsiveDocs.js",
+				"docs/assets/js/interactiveTools.js",
+				"docs/assets/js/invariantExplorer.js",
+				"docs/assets/js/mmrProofPlanner.js"
+			],
 			"formatter": {
 				"enabled": false
 			},

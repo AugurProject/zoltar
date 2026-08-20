@@ -46,6 +46,8 @@ bun test
 bun run dev
 ```
 
+The browser source lives under `browser/`. `bun run build` bundles `browser/app.ts` and its helpers to the stable browser entry point `public/app.js`; that generated file is ignored and must not be edited. `bun run dev`, `bun run start`, and `bun run qa:serve` build it automatically, and development mode rebuilds it when browser TypeScript changes.
+
 Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving. Migration 005 introduces range-index dataset cursors and rejects an older database if it has an indexed network checkpoint or any block row. No legacy checkpoint or activity compatibility is retained. For the Compose setup, first run the shared-network command under **Start with Docker**. Then run `docker compose down --volumes` to delete the old database and `docker compose up --build` to rebuild it from each network's automatically discovered effective start. A database without a checkpoint or block row migrates in place.
 
 `POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
