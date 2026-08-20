@@ -5,6 +5,7 @@ import { join } from 'node:path'
 const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '.dockerignore')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
+const workflow = join(import.meta.dir, '..', '..', 'workflow-changes', 'augur-scan.yml')
 
 describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
@@ -29,5 +30,11 @@ describe('Docker packaging', () => {
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).not.toContain('COPY augurScan/browser')
 		expect(runtimeStage).not.toContain('COPY --from=browser-build /workspace/augurScan/node_modules')
+	})
+
+	test('installs root dependencies before typechecking shared source', async () => {
+		const source = await readFile(workflow, 'utf8')
+		expect(source).toContain('uses: ./.github/actions/setup-component')
+		expect(source).toContain('directory: augurScan')
 	})
 })
