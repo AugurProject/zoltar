@@ -45,9 +45,12 @@ export async function updateOperatorConnectivity(parameters: {
 	else await updateConnectivityEndpointChecks(parameters.endpointState, runCheck)
 	await checkIndependentRpcChains(parameters.deployment.quorumRpcUrls, selectedNetwork.chain.id, parameters.readChainId ?? readRpcChainId)
 	await checkSubmissionEndpoints(parameters.submission, selectedNetwork.chain.id)
+	let centralizedMarkets: PersistedOperatorSettings['centralizedMarkets'] | undefined
 	await parameters.persist(settings => {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
-		return { ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
+		centralizedMarkets = { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }
+		return { ...settings, centralizedMarkets, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
 	})
-	return { connectivity, network: networkName, rpcQuorum, rpcQuorumChanged }
+	if (centralizedMarkets === undefined) throw new Error('Connectivity persistence did not apply the operator settings update')
+	return { centralizedMarkets, connectivity, network: networkName, rpcQuorum, rpcQuorumChanged }
 }

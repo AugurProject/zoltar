@@ -53,6 +53,25 @@ describe('operator connectivity updates', () => {
 		expect(state.endpointChecks).toEqual([relayCheck()])
 	})
 
+	test('queues the persisted market chain when dedicated connectivity initializes Sepolia', async () => {
+		let settings = await exampleSettings()
+		const result = await updateOperatorConnectivity({
+			activeNetwork: undefined,
+			activeRpcQuorum: 1,
+			check: async () => [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
+			deployment: settings.deployment,
+			endpointState: { endpointChecks: [] },
+			execute: false,
+			persist: async update => {
+				settings = update(settings)
+			},
+			submission: settings.submission,
+			value: request('sepolia', 'https://rpc.example/', 1),
+		})
+		expect(result.centralizedMarkets.assetChainId).toBe(11_155_111)
+		expect(settings.centralizedMarkets.assetChainId).toBe(11_155_111)
+	})
+
 	test('preserves active endpoint health when a quorum-change check fails', async () => {
 		const settings = await exampleSettings()
 		const state = { endpointChecks: [relayCheck()] }

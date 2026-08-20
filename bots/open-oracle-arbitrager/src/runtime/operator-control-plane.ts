@@ -360,6 +360,7 @@ export function startOperatorControlPlane(parameters: {
 					fixedState.explorerUrl = config.network.explorerUrl
 					fixedState.networkConfigured = true
 				}
+				pending.centralizedMarkets = next.centralizedMarkets
 				pending.rpcQuorum = next.rpcQuorum
 				pending.connectivity = next.connectivity
 				recordOperation(state, {
