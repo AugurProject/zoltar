@@ -22,6 +22,24 @@ export function subscribeToWalletContextChanges(eventSource: InjectedEthereumEve
 	}
 }
 
+export function createWalletContextSubscription(onChange: (eventName: WalletContextChangeEvent) => void) {
+	let eventSource: InjectedEthereumEventSource | undefined
+	let unsubscribe: (() => void) | undefined
+	return {
+		bind(nextEventSource: InjectedEthereumEventSource | undefined) {
+			if (nextEventSource === eventSource) return
+			unsubscribe?.()
+			eventSource = nextEventSource
+			unsubscribe = nextEventSource === undefined ? undefined : subscribeToWalletContextChanges(nextEventSource, onChange)
+		},
+		dispose() {
+			unsubscribe?.()
+			unsubscribe = undefined
+			eventSource = undefined
+		},
+	}
+}
+
 declare global {
 	interface Window {
 		ethereum?: InjectedEthereum

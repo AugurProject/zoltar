@@ -88,26 +88,14 @@ jobs:
           $IPFS_HASH
           \`\`\`
 
-          You can view published versions of Zoltar and Augur Statoblast through any IPFS gateway.
-          The CID root is a directory; each application is published under its own path.
+          You can view published versions of Zoltar through any IPFS gateway.
 
-          ##### Zoltar
-
-          [ipfs://$IPFS_HASH/zoltar/](ipfs://$IPFS_HASH/zoltar/) __(Recommended)__
+          [ipfs://$IPFS_HASH](ipfs://$IPFS_HASH) __(Recommended)__
           _requires Brave Browser or IPFS Desktop_
-          [https://$IPFS_HASH.ipfs.nftstorage.link/zoltar/](https://$IPFS_HASH.ipfs.nftstorage.link/zoltar/)
-          [https://$IPFS_HASH.ipfs.zoltu.io/zoltar/](https://$IPFS_HASH.ipfs.zoltu.io/zoltar/)
-          [https://$IPFS_HASH.ipfs.cf-ipfs.com/zoltar/](https://$IPFS_HASH.ipfs.cf-ipfs.com/zoltar/)
-          [https://$IPFS_HASH.ipfs.w3s.link/zoltar/](https://$IPFS_HASH.ipfs.w3s.link/zoltar/)
-
-          ##### Augur Statoblast
-
-          [ipfs://$IPFS_HASH/statoblast/](ipfs://$IPFS_HASH/statoblast/) __(Recommended)__
-          _requires Brave Browser or IPFS Desktop_
-          [https://$IPFS_HASH.ipfs.nftstorage.link/statoblast/](https://$IPFS_HASH.ipfs.nftstorage.link/statoblast/)
-          [https://$IPFS_HASH.ipfs.zoltu.io/statoblast/](https://$IPFS_HASH.ipfs.zoltu.io/statoblast/)
-          [https://$IPFS_HASH.ipfs.cf-ipfs.com/statoblast/](https://$IPFS_HASH.ipfs.cf-ipfs.com/statoblast/)
-          [https://$IPFS_HASH.ipfs.w3s.link/statoblast/](https://$IPFS_HASH.ipfs.w3s.link/statoblast/)
+          [https://$IPFS_HASH.ipfs.nftstorage.link](https://$IPFS_HASH.ipfs.nftstorage.link)
+          [https://$IPFS_HASH.ipfs.zoltu.io](https://$IPFS_HASH.ipfs.zoltu.io)
+          [https://$IPFS_HASH.ipfs.cf-ipfs.com](https://$IPFS_HASH.ipfs.cf-ipfs.com)
+          [https://$IPFS_HASH.ipfs.w3s.link](https://$IPFS_HASH.ipfs.w3s.link)
           EOF
           )
 

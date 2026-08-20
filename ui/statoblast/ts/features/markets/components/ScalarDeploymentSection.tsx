@@ -104,6 +104,9 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					/>
 				}
 				details={{
+					answerUnit: questionDetails.answerUnit,
+					displayValueMax: questionDetails.displayValueMax,
+					displayValueMin: questionDetails.displayValueMin,
 					maxValueLabel: formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks),
 					minValueLabel: formatScalarOutcomeLabel(questionDetails, 0n),
 					numTicks: questionDetails.numTicks,

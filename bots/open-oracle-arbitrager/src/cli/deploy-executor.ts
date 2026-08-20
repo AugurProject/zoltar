@@ -27,11 +27,12 @@ PRIVATE_KEY=0x... bun run deploy-executor -- [options]
 
   --network=mainnet|sepolia
   --rpc-url=https://...
-  --quorum-rpc-url=https://... Repeat as required by the saved dashboard policy
+  --quorum-rpc-url=https://... Optional; saved quorum 2 requires two
   --salt=0x...                  32-byte CREATE2 salt; defaults to zero
 
-The saved RPC agreement requirement permits none only when set to one reader for
-an isolated development network.
+The saved RPC agreement requirement defaults to one reader, so the primary RPC is
+sufficient. Select quorum 2 in the dashboard to require two additional independent
+RPC origins.
 
 The command predicts and deploys the stateless executor through the canonical
 CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
@@ -46,7 +47,7 @@ const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 const savedSettings = await loadOperatorSettings(settingsFile)
-const rpcQuorum = savedSettings?.rpcQuorum ?? 2
+const rpcQuorum = savedSettings?.rpcQuorum ?? 1
 process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)

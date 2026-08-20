@@ -34,6 +34,7 @@ export type TransactionIntent = {
 	source: string
 	submittedDetail?: ComponentChildren
 	submittedTitle: ComponentChildren
+	universeId?: bigint | undefined
 }
 
 export type GlobalTransactionPresentation = {
@@ -45,6 +46,7 @@ export type GlobalTransactionPresentation = {
 	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren
 	tone: GlobalTransactionTone
+	universeId?: bigint | undefined
 }
 
 export type StickyContextItem = {
@@ -243,6 +245,9 @@ export type OutcomeChipRowProps = {
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
 	details: {
+		answerUnit?: string
+		displayValueMax?: bigint
+		displayValueMin?: bigint
 		maxValueLabel?: ComponentChildren
 		minValueLabel?: ComponentChildren
 		numTicks: bigint

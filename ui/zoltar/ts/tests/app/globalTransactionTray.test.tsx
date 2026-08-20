@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { createMarketCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -60,6 +60,34 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+	})
+
+	test('warns when transaction lifecycle state belongs to a different header universe', async () => {
+		const intent = createMarketCreationTransactionIntent({ marketType: 'binary', universeId: 7n })
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
+		const submitted = markTransactionSubmitted(requested, '0xb234000000000000000000000000000000000000000000000000000000000000')
+		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const success = createMarketCreationSuccessPresentation({ createQuestionHash: '0xb234000000000000000000000000000000000000000000000000000000000000', marketType: 'binary', questionId: '0x01' }, { universeId: 7n })
+		const lifecyclePresentations = [requested.active, submitted.active, failed.active, success]
+		if (lifecyclePresentations.some(presentation => presentation === undefined)) throw new Error('Transaction lifecycle presentation should be defined')
+
+		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray activeUniverseId={7n} transaction={requested.active} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(within(document.body).queryByText('Transaction universe mismatch')).toBeNull()
+		await act(() => {
+			render(<GlobalTransactionTray activeUniverseId={8n} transaction={{ ...success, universeId: undefined }} />, renderedComponent.container)
+		})
+		expect(within(document.body).queryByText('Transaction universe mismatch')).toBeNull()
+
+		for (const presentation of lifecyclePresentations) {
+			await act(() => {
+				render(<GlobalTransactionTray activeUniverseId={8n} transaction={presentation} />, renderedComponent.container)
+			})
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByText('Transaction universe mismatch')).not.toBeNull()
+			expect(documentQueries.getByText('This transaction belongs to 0x7, while the header shows 0x8.')).not.toBeNull()
+			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
+		}
 	})
 
 	test('reserves the transaction tray height in the viewport scroll area', async () => {

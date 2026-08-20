@@ -1,8 +1,8 @@
-import { type Address, type TransactionLog } from '#ethereum'
+import { rpcFailureWithContext, type Address, type TransactionLog } from '#ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/shared/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
-import { authenticateDeploymentManifest, type DeploymentRole } from '#config/deployment-auth'
+import { authenticateDeploymentManifest, validateDeploymentManifestRequirements, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
@@ -10,6 +10,7 @@ import type { ReadClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
 import { settledQuorumValue } from '#monitoring/read-quorum'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { endpointLabel } from '#monitoring/connectivity'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
 const REORG_OVERLAP_BLOCKS = 12n
@@ -99,15 +100,22 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 	const manifest = config.deploymentManifest
 	if (manifest === undefined) throw new Error('Execution requires an authenticated deployment manifest')
 	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
+	validateDeploymentManifestRequirements(manifest, { chainId: config.network.chain.id, network: config.network.name, required })
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	await requireManifestAuthenticationQuorum(
-		clients.map(client =>
-			authenticateDeploymentManifest(manifest, {
-				chainId: config.network.chain.id,
-				network: config.network.name,
-				readCode: address => client.getCode({ address }),
-				required,
-			}),
-		),
+		clients.map(async (client, index) => {
+			const endpoint = endpointLabel(endpoints[index] ?? '')
+			try {
+				await authenticateDeploymentManifest(manifest, {
+					chainId: config.network.chain.id,
+					network: config.network.name,
+					readCode: address => client.getCode({ address }),
+					required,
+				})
+			} catch (error) {
+				throw rpcFailureWithContext(error, endpoint, 'eth_getCode')
+			}
+		}),
 	)
 }
 

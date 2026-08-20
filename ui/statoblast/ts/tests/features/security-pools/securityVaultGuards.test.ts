@@ -42,7 +42,7 @@ describe('security vault guards', () => {
 				isDepositBelowMinimum: false,
 				walletRepShortfallAttoRep: 2n * 10n ** 18n,
 			}),
-		).toBe('Need 2 more REP in this wallet.')
+		).toBe('Need 2\u00a0more\u00a0REP in this wallet.')
 
 		expect(
 			getVaultDepositGuardMessage({
@@ -110,7 +110,7 @@ describe('security vault guards', () => {
 				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
 				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Reduce the withdrawal to 2 500 REP or less.')
+		).toBe('Reduce the withdrawal to 2 500\u00a0REP or less.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
@@ -192,7 +192,7 @@ describe('security vault guards', () => {
 				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
 				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
-		).toBe('Need 7 more ETH in this wallet to request a new price.')
+		).toBe('Need 7\u00a0more\u00a0ETH in this wallet to request a new price.')
 
 		expect(
 			getVaultWithdrawGuardMessage({
@@ -203,6 +203,6 @@ describe('security vault guards', () => {
 				withdrawableRepAmountAttoRep: 5n * ATTO_ETH_PER_ETH,
 				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
-		).toBe('Need 7 more ETH in this wallet to queue this REP withdrawal.')
+		).toBe('Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 })

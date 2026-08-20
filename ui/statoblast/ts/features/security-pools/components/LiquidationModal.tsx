@@ -14,7 +14,6 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OpenOraclePriceValue } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOraclePriceValue.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { TransactionUniverseValue } from '@zoltar/ui-zoltar/features/universes/components/TransactionUniverseValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -22,7 +21,8 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/lib/actionAvailability.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { formatCurrencyInputBalance, formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
@@ -584,8 +584,12 @@ export function LiquidationModal({
 						<MetricField label={liquidationCopy.totalApprovalLimit}>
 							<CurrencyValue value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
-						<MetricField label={liquidationCopy.approvalValidAfter}>{formatTimestamp(liquidationApprovalDetails.params.validAfter)}</MetricField>
-						<MetricField label={liquidationCopy.approvalExpiration}>{formatTimestamp(liquidationApprovalDetails.params.validUntil)}</MetricField>
+						<MetricField label={liquidationCopy.approvalValidAfter}>
+							<TimestampValue timestamp={liquidationApprovalDetails.params.validAfter} />
+						</MetricField>
+						<MetricField label={liquidationCopy.approvalExpiration}>
+							<TimestampValue timestamp={liquidationApprovalDetails.params.validUntil} />
+						</MetricField>
 						<MetricField label={liquidationCopy.minimumPostLiquidationHealth}>{formatHealthFactorBps(liquidationApprovalDetails.params.minPostLiquidationHealthFactorBps)}</MetricField>
 						<MetricField label={liquidationCopy.approvalStatus}>{getApprovalStatus(liquidationApprovalDetails.revoked, approvalNonceInvalidated, liquidationApprovalDetails.params.validAfter, liquidationApprovalDetails.params.validUntil, currentTimestamp)}</MetricField>
 					</DataGrid>
@@ -599,10 +603,7 @@ export function LiquidationModal({
 					</div>
 				)}
 				<TransactionReview
-					context={[
-						{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable },
-						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
-					]}
+					context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
 					primary={[
 						{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },

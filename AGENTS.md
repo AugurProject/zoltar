@@ -20,7 +20,6 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 
 ## Working boundaries
 
-- Preserve unrelated staged, unstaged, and untracked user changes. Do not rewrite or remove them to simplify the task.
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
 - Never edit `ui/*/js/**` or `shared/js/**` directly.
 - Do not modify imported compatibility contracts:
@@ -111,7 +110,7 @@ Run `bun run check:generated-clean` only for CI/release freshness work or when c
 Generated outputs are intentionally untracked, except for the documentation outputs and
 vendored deployment input listed below. The documentation outputs are tracked because the
 static documentation site loads them directly;
-`bun run docs:check-charts`, `bun run docs:check-contract-reference`, and
+`bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
 pins the deployment input and prevents its large upstream packages from entering the lockfile.
 
@@ -124,9 +123,15 @@ pins the deployment input and prevents its large upstream packages from entering
 | `ui/*/js/**` | UI TypeScript build per package |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
+| `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/responsiveDocs.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/interactiveTools.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/invariantExplorer.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/mmrProofPlanner.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
+| `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
@@ -174,8 +179,8 @@ Automated formatters and linters enforce only part of this policy. Review the re
 
 ## Documentation
 
-- Documentation under `docs/` uses HTML as its canonical source format. Do not add Markdown files there; `docs/AGENTS.md` is the sole repository-instruction exception.
-- Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
+- Documentation under `docs/` uses HTML as its canonical source format.
+- Do not create standalone tests that asserts text in the documentation
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
 

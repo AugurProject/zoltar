@@ -1,4 +1,4 @@
-# Zoltar security-pool liquidator
+# Statoblast liquidator
 
 The liquidator discovers every security pool registered by a configured
 `SecurityPoolFactory`, shows pool and vault statistics in a local dashboard, and
@@ -41,12 +41,11 @@ password. Compose publishes the port only on host loopback, so connect from anot
 machine through a trusted tunnel to the host rather than changing the port binding.
 Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that `127.0.0.1` mapping.
 
-Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `2`. This production
-policy requires two agreeing readers and two independent quorum RPC URLs in addition
-to the primary reader so one endpoint may be unavailable. For an isolated local
-development chain only, put `ZOLTAR_BOT_RPC_QUORUM=1` in this directory's `.env`
-before starting Compose. That setting permits the primary reader to operate alone
-and removes independent RPC corroboration. Values other than `1` or `2` stop startup.
+Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `1`, so the primary read
+RPC is sufficient and independent quorum RPCs are optional. To require two agreeing
+readers, put `ZOLTAR_BOT_RPC_QUORUM=2` in this directory's `.env` before starting
+Compose and configure two independent quorum RPC URLs in addition to the primary
+reader so one endpoint may be unavailable. Values other than `1` or `2` stop startup.
 
 Save the chain and RPCs in **Chain and RPC connectivity**, finish the remaining
 configuration, and resume only after reviewing the saved settings. Run
@@ -88,8 +87,8 @@ saved. Same-chain RPC changes apply at the next scan. A configured operator file
 cannot be retargeted to another chain: create a separate paused configuration with
 a separate `runtime.stateFile`, then select its chain and endpoints in the
 dashboard. This boundary prevents transactions, staged operations, and scan state
-from crossing chains. Under the default quorum policy, live execution requires two
-independent quorum RPCs in addition to the primary read RPC.
+from crossing chains. The primary read RPC is sufficient by default; optional
+independent quorum RPCs become mandatory only when `ZOLTAR_BOT_RPC_QUORUM=2`.
 
 A configured bot keeps its dashboard available when retryable RPC transport
 unavailability prevents startup validation. It reports `connectivity-degraded`, shows
@@ -114,12 +113,12 @@ endpoints, gas limits, and REP limits have been reviewed. When execution is
 enabled:
 
 - `connectivity.readRpcUrl` supplies the local operational view.
-- Under the default quorum policy, `connectivity.quorumRpcUrls` must contain at
-  least two independent read RPCs.
+- `connectivity.quorumRpcUrls` is optional by default. When
+  `ZOLTAR_BOT_RPC_QUORUM=2`, it must contain at least two independent read RPCs.
 - For a critical pool, price, vault, or candidate snapshot, only a retryable
   transport failure makes a reader unavailable. The configured number of readers
   must respond, and every responding reader must agree exactly before a transaction
-  is sent. Under the default policy, one transport-unavailable endpoint degrades
+  is sent. Under the opt-in two-reader policy, one transport-unavailable endpoint degrades
   health without stopping a healthy two-reader quorum. A malformed or contradictory
   response is a safety fault and fails closed.
 - `submission.mode` may be `public` or `private`. ETH-funded stale-price requests
@@ -410,7 +409,7 @@ bun run check
 The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 retry, and transaction-submission primitives live in `../shared`.
 
-> Live liquidation is experimental. Use a dedicated low-balance signer, begin on
-> Sepolia, keep dry-run logs, and supervise pool health. Assumed pool open interest
+> Use a dedicated low-balance signer, begin on Sepolia, keep dry-run logs, and
+> supervise pool health. Assumed pool open interest
 > remains an economic obligation even when the fixed liquidation bonus is
 > positive.

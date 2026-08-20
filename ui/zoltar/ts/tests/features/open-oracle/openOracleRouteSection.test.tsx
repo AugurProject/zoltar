@@ -545,7 +545,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle report.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Need 100\u00a0more\u00a0ETH in this wallet to create the selected standalone Open Oracle report.')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {
@@ -639,6 +639,7 @@ describe('OpenOracleSection route create view', () => {
 		}
 		expect(review.textContent).toContain(defaultForm.settlementTime)
 		expect(review.textContent).toContain(defaultForm.disputeDelay)
+		expect(reviewQueries.getAllByText('1\u00a0ETH')).toHaveLength(2)
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {

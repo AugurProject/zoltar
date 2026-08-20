@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, validateStoredTradingDeployment } from '../protocol/deployment.ts'
+import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep } from '../protocol/deployment.ts'
 
 function examplePlan() {
 	return getTradingDeploymentPlan(
 		{
 			chainId: 11_155_111,
 			chainName: 'Sepolia',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'sepolia',
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
@@ -20,6 +21,7 @@ describe('wallet trading deployment plan', () => {
 		const core = {
 			chainId: 11_155_111,
 			chainName: 'Sepolia',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'sepolia',
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
@@ -38,6 +40,7 @@ describe('wallet trading deployment plan', () => {
 		const core = {
 			chainId: 1,
 			chainName: 'Ethereum Mainnet',
+			defaultRpcUrl: 'https://rpc.example',
 			id: 'mainnet',
 			proxyDeployer: getAddress(`0x${'56'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'78'.repeat(20)}`),
@@ -50,6 +53,7 @@ describe('wallet trading deployment plan', () => {
 			{
 				chainId: 1,
 				chainName: 'Ethereum Mainnet',
+				defaultRpcUrl: 'https://rpc.example',
 				id: 'mainnet',
 				proxyDeployer: getAddress(`0x${'9a'.repeat(20)}`),
 				securityPoolFactory: getAddress(`0x${'bc'.repeat(20)}`),
@@ -145,45 +149,5 @@ describe('wallet trading deployment plan', () => {
 
 		await expect(deployTradingStep(walletClient, publicClient, plan, plan.factory, undefined, async () => await Promise.reject(new Error('Wallet context changed before deployment')))).rejects.toThrow('Wallet context changed before deployment')
 		expect(sendCount).toBe(0)
-	})
-
-	test('rejects getter-compatible stored addresses that are not current deterministic deployments', async () => {
-		const plan = examplePlan()
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method }) => {
-					if (method === 'eth_chainId') return '0xaa36a7'
-					return '0x'
-				},
-			}),
-		})
-		await expect(
-			validateStoredTradingDeployment(
-				client,
-				{
-					chainId: plan.core.chainId,
-					chainName: plan.core.chainName,
-					factory: getAddress(`0x${'56'.repeat(20)}`),
-					feeBps: plan.feeBps,
-					router: getAddress(`0x${'78'.repeat(20)}`),
-					rpcUrl: 'https://rpc.example/',
-					securityPoolFactory: plan.core.securityPoolFactory,
-				},
-				[plan.core],
-			),
-		).rejects.toThrow('do not match the current deterministic contracts')
-	})
-
-	test('rejects stored deployment state served by a different RPC chain', async () => {
-		const plan = examplePlan()
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method }) => {
-					if (method === 'eth_chainId') return '0x1'
-					throw new Error(`Deployment state must not be read after wrong chain response: ${method}`)
-				},
-			}),
-		})
-		await expect(validateStoredTradingDeployment(client, deploymentConfigurationForPlan(plan, 'https://rpc.example/'), [plan.core])).rejects.toThrow('does not match RPC chain 1')
 	})
 })

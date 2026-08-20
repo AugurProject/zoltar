@@ -129,7 +129,7 @@ export const standaloneFundingRisk = 'The ETH value and settler reward are commi
 export const standaloneDisputeSettingsRisk = 'Dispute fees, escalation, and timing settings determine when the report can be challenged and settled.'
 export const secondsAbbreviation = 's'
 export const blocks = 'blocks'
-export const formatTimingValue = (timingAmount: CopyTemplateValue, unit: CopyTemplateValue) => `${timingAmount} ${unit}`
+export const formatTimingValue = (timingAmount: CopyTemplateValue, unit: CopyTemplateValue) => `${timingAmount}\u00a0${unit}`
 export const formatExactSeconds = (seconds: CopyTemplateValue) => `${seconds} seconds`
 export const timing = 'Timing'
 export const token1Address = 'Base Token Address'

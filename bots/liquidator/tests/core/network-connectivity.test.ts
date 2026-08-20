@@ -22,6 +22,19 @@ function healthyChecks(chainId: number): Awaited<ReturnType<NetworkConnectivityC
 }
 
 describe('network connectivity updates', () => {
+	test('accepts a dashboard update with only the primary read RPC by default', async () => {
+		const settings = await exampleSettings()
+		settings.runtime.execute = true
+		const next = await updateNetworkConnectivity({
+			apply: () => undefined,
+			checks: { checkConnectivity: async () => healthyChecks(11_155_111), readRpcChainId: async () => 11_155_111 },
+			persist: async update => update(settings),
+			settings,
+			value: request('sepolia', []),
+		})
+		expect(next.connectivity.quorumRpcUrls).toEqual([])
+	})
+
 	test('checks, persists, and applies initial network configuration with every market chain ID coupled', async () => {
 		const settings = await exampleSettings()
 		settings.childMarketConfigurations = [{ ...settings.centralizedMarkets, assetAddress: '0x0000000000000000000000000000000000000001' }]

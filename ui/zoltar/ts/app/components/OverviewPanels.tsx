@@ -10,7 +10,6 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
@@ -39,7 +38,6 @@ function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
 
 export function OverviewPanels({
 	applicationTitle,
-	activeUniverseId,
 	accountState,
 	isConnectingWallet,
 	isManagingWallet,
@@ -52,7 +50,6 @@ export function OverviewPanels({
 	onGoToGenesisUniverse,
 	onRefreshRepPrices,
 	onSwitchNetwork,
-	parentUniverseId,
 	readBackendStatus,
 	repPerEthFailure,
 	repPerEthPrice,
@@ -80,7 +77,6 @@ export function OverviewPanels({
 	}
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
-	const shouldShowParentUniverse = parentUniverseId !== undefined && activeUniverseId !== 0n && parentUniverseId !== activeUniverseId
 	const isBrowserSimulationReadBackend = effectiveReadBackendStatus.rpcUrl === 'browser-simulation'
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
@@ -227,11 +223,6 @@ export function OverviewPanels({
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}
 					</MetricField>
-					{shouldShowParentUniverse ? (
-						<MetricField className='overview-metric-secondary' label={appCopy.parentUniverse}>
-							<UniverseLink universeId={parentUniverseId} />
-						</MetricField>
-					) : undefined}
 				</DataGrid>
 				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>
 					{showEnvironmentDetails ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}

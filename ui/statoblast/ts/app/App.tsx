@@ -187,6 +187,7 @@ export function App() {
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
 		...walletScopedHookConfig,
+		activeUniverseId,
 		deploymentStatuses,
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
@@ -509,6 +510,7 @@ export function App() {
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		overview: {
 			accountState,
+			activeUniverseId,
 			environmentRefreshKey: activeEnvironmentNonce,
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
@@ -589,12 +591,12 @@ export function App() {
 				refreshSelectedPoolData(selectedSecurityPoolAddress)
 			},
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
-			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress),
+			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
 			loadingPoolOracleManager,
 			loadingLiquidationFundingPreview,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth),
+			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint) => void requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
@@ -760,7 +762,7 @@ export function App() {
 					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />
 					<AppHeaderShell overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
+						<GlobalTransactionTray activeUniverseId={activeUniverseId} routeKey={transactionRouteKey} transaction={transactionState.value.active} />
 
 						<div id='app-content' tabIndex={-1}>
 							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>

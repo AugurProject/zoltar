@@ -139,13 +139,25 @@ function stateLabel(state: TransactionState, action = 'Transaction') {
 	return 'Ready to simulate after wallet balances and inputs are valid'
 }
 
-function renderLiveTradeSummary(quote: Quote, side: 'YES' | 'NO') {
+type EntrySummaryValue = Readonly<{
+	amount: Extract<Quote, { kind: 'entry' }>['value']['amount']
+	market: Pick<Extract<Quote, { kind: 'entry' }>['value']['market'], 'feeBps'>
+	result: Pick<Extract<Quote, { kind: 'entry' }>['value']['result'], 'totalLongShares' | 'invalidInsurance'>
+}>
+type ExitSummaryValue = Readonly<{
+	market: Pick<Extract<Quote, { kind: 'exit' }>['value']['market'], 'feeBps'>
+	result: Pick<Extract<Quote, { kind: 'exit' }>['value']['result'], 'totalLongShares' | 'invalidInsurance' | 'ethOut'>
+}>
+type LiveTradeSummaryQuote = Readonly<{ kind: 'entry'; value: EntrySummaryValue }> | Readonly<{ kind: 'exit'; value: ExitSummaryValue }>
+
+export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES' | 'NO') {
 	if (quote.kind === 'entry')
 		return (
 			<div class='trade-summary' aria-label='Trade summary'>
 				<div>
 					<span>You pay</span>
 					<strong>{formatUnits(quote.value.amount)} ETH</strong>
+					<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
 				</div>
 				<span class='trade-summary__arrow' aria-hidden='true'>
 					→
@@ -163,6 +175,7 @@ function renderLiveTradeSummary(quote: Quote, side: 'YES' | 'NO') {
 				<span>You use</span>
 				<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
 				<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
+				<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
 			</div>
 			<span class='trade-summary__arrow' aria-hidden='true'>
 				→
@@ -261,7 +274,7 @@ function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' 
 	)
 }
 
-function PairInitializationAction({ market }: { market: LiveMarket }) {
+export function PairInitializationAction({ market, onSelect = () => undefined }: { market: LiveMarket; onSelect?(market: LiveMarket): void }) {
 	const blocker = marketNewRiskBlocker(market, BigInt(Math.floor(Date.now() / 1_000)))
 	if (blocker !== undefined)
 		return (
@@ -274,15 +287,35 @@ function PairInitializationAction({ market }: { market: LiveMarket }) {
 		)
 	return (
 		<div class='operation-block'>
-			<p>Conditional price unavailable until initialization.</p>
-			<a class='primary-action' href='#/liquidity'>
-				{market.pair === undefined ? 'Create pair and initialize atomically in Liquidity' : 'Initialize this pair in Liquidity'}
+			<p>
+				{market.pair === undefined
+					? `This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`
+					: `The trading pool exists but needs initial liquidity before trading can open. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`}
+			</p>
+			<a class='primary-action' href='#/liquidity' onClick={() => onSelect(market)}>
+				{market.pair === undefined ? 'Deploy trading pool' : 'Initialize trading pool'}
 			</a>
 		</div>
 	)
 }
 
-export function LiveSecurityPoolDetails({ market, refreshError, refreshing = false, retry, workflowLocked }: { market: LiveMarket; refreshError?: string | undefined; refreshing?: boolean; retry(): void; workflowLocked: boolean }) {
+export function LiveSecurityPoolDetails({
+	market,
+	refreshError,
+	refreshing = false,
+	retry,
+	workflowLocked,
+	connectionMessage,
+	onSelect = () => undefined,
+}: {
+	market: LiveMarket
+	refreshError?: string | undefined
+	refreshing?: boolean
+	retry(): void
+	workflowLocked: boolean
+	connectionMessage?: string | undefined
+	onSelect?(market: LiveMarket): void
+}) {
 	const hasLoadedDetails = market.loadError === undefined
 	let refreshMessage: string | undefined
 	if (refreshing) refreshMessage = hasLoadedDetails ? 'Refreshing security pool; showing the last successful result.' : 'Retrying security pool details…'
@@ -301,6 +334,11 @@ export function LiveSecurityPoolDetails({ market, refreshError, refreshing = fal
 				</div>
 				{market.loadError === undefined ? null : <Status tone='warn'>Pool data unavailable</Status>}
 			</header>
+			{connectionMessage === undefined ? null : (
+				<p class='error' role='alert'>
+					{connectionMessage}
+				</p>
+			)}
 			<section class='section' aria-busy={refreshing}>
 				{refreshMessage === undefined ? null : <p role='status'>{refreshMessage}</p>}
 				{errorMessage === undefined ? null : (
@@ -316,55 +354,58 @@ export function LiveSecurityPoolDetails({ market, refreshError, refreshing = fal
 					</>
 				)}
 				{market.loadError === undefined ? (
-					<dl class='fact-list'>
-						<SecurityPoolIdentityRows market={market} />
-						<div>
-							<dt>Question end</dt>
-							<dd>{formatTimestamp(market.endTime)}</dd>
-						</div>
-						<div>
-							<dt>System state</dt>
-							<dd>{systemStateLabel(market.systemState)}</dd>
-						</div>
-						<div>
-							<dt>Universe fork</dt>
-							<dd>{market.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(market.universeForkTime)}`}</dd>
-						</div>
-						{market.questionOutcome === 3 ? null : (
+					<>
+						<dl class='fact-list'>
+							<SecurityPoolIdentityRows market={market} />
 							<div>
-								<dt>Outcome</dt>
-								<dd>{questionOutcomeLabel(market.questionOutcome)}</dd>
+								<dt>Question end</dt>
+								<dd>{formatTimestamp(market.endTime)}</dd>
 							</div>
-						)}
-						<div>
-							<dt>Security multiplier</dt>
-							<dd>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</dd>
-						</div>
-						<div>
-							<dt>Initial report priority fee</dt>
-							<dd>{formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
-						</div>
-						<div>
-							<dt>Registered vaults</dt>
-							<dd>{market.vaultCount.toString()}</dd>
-						</div>
-						<div>
-							<dt>Per-second retention multiplier</dt>
-							<dd>{formatUnits(market.currentRetentionRate, 18, 12)}×</dd>
-						</div>
-						<div>
-							<dt>Total / fee-eligible capacity ownership</dt>
-							<dd>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</dd>
-						</div>
-						<div>
-							<dt>Minting capacity</dt>
-							<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
-						</div>
-						<div>
-							<dt>Checkpointed collateral / share ratio</dt>
-							<dd>{market.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
-						</div>
-					</dl>
+							<div>
+								<dt>System state</dt>
+								<dd>{systemStateLabel(market.systemState)}</dd>
+							</div>
+							<div>
+								<dt>Universe fork</dt>
+								<dd>{market.universeForkTime === 0n ? 'Not forked' : `Forked ${formatTimestamp(market.universeForkTime)}`}</dd>
+							</div>
+							{market.questionOutcome === 3 ? null : (
+								<div>
+									<dt>Outcome</dt>
+									<dd>{questionOutcomeLabel(market.questionOutcome)}</dd>
+								</div>
+							)}
+							<div>
+								<dt>Security multiplier</dt>
+								<dd>{formatBpsMultiplier(market.statoblastSecurityMultiplierBps)}</dd>
+							</div>
+							<div>
+								<dt>Initial report priority fee</dt>
+								<dd>{formatUnits(market.initialReportPriorityFeeAttoEthPerGas, 9)} nETH / gas</dd>
+							</div>
+							<div>
+								<dt>Registered vaults</dt>
+								<dd>{market.vaultCount.toString()}</dd>
+							</div>
+							<div>
+								<dt>Per-second retention multiplier</dt>
+								<dd>{formatUnits(market.currentRetentionRate, 18, 12)}×</dd>
+							</div>
+							<div>
+								<dt>Total / fee-eligible capacity ownership</dt>
+								<dd>{formatCapacityOwnership(market.totalCapacityOwnershipAttoRep, market.feeEligibleCapacityOwnershipAttoRep)}</dd>
+							</div>
+							<div>
+								<dt>Minting capacity</dt>
+								<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
+							</div>
+							<div>
+								<dt>Checkpointed collateral / share ratio</dt>
+								<dd>{market.shareTokenSupplyAttoShares === 0n ? 'No complete sets yet' : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
+							</div>
+						</dl>
+						{market.pair === undefined ? <PairInitializationAction market={market} onSelect={onSelect} /> : null}
+					</>
 				) : (
 					<dl class='fact-list'>
 						<SecurityPoolIdentityRows market={market} />
@@ -443,6 +484,7 @@ export function LiveTrading({
 	onWorkflowLockChange,
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
+	walletConnectRequestNonce,
 	onDeploymentRetry = () => undefined,
 }: {
 	route: string
@@ -453,6 +495,7 @@ export function LiveTrading({
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
+	walletConnectRequestNonce?: number
 	onDeploymentRetry?(): void
 }) {
 	const { wallet, balances, discovery, position, workflow } = useLiveTradingController({
@@ -467,20 +510,27 @@ export function LiveTrading({
 		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
 	})
-	const { account, walletClient, connect, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances, refreshBalancesAfterApproval } = balances
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, approve, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
+	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
+	useEffect(() => {
+		if (walletConnectRequestNonce === undefined) return
+		if (previousWalletConnectRequestNonce.current === walletConnectRequestNonce) return
+		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
+		void connect()
+	}, [connect, walletConnectRequestNonce])
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
 					<div>
 						<span class='eyebrow'>Standalone live client</span>
-						<h1>Deployment configuration required</h1>
+						<h1>Trading contracts unavailable</h1>
 						<p class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
-							{configurationError ?? message ?? 'Loading deployment.json…'}
+							{configurationError ?? message ?? 'Checking deterministic trading contracts…'}
 						</p>
 						{configurationError === undefined ? null : (
 							<button class='secondary-action' type='button' onClick={onDeploymentRetry}>
@@ -528,7 +578,10 @@ export function LiveTrading({
 			)
 	}
 	if (routePool !== undefined) {
-		if (selected !== undefined) return <LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} />
+		if (selected !== undefined)
+			return (
+				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? 'unknown discovery error') : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} connectionMessage={connectionMessage} onSelect={selectMarket} />
+			)
 		return (
 			<main class='route' id='main-content'>
 				<header class='route-header'>
@@ -539,6 +592,11 @@ export function LiveTrading({
 						<h1>Security pool</h1>
 					</div>
 				</header>
+				{connectionMessage === undefined ? null : (
+					<p class='error' role='alert'>
+						{connectionMessage}
+					</p>
+				)}
 				<section class='section' aria-busy={discoveryState === 'loading'}>
 					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
 				</section>
@@ -554,9 +612,11 @@ export function LiveTrading({
 						<h1>Portfolio</h1>
 						<p>{configuration.chainName}</p>
 					</div>
-					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-						{account === undefined ? 'Connect wallet' : shortAddress(account)}
-					</button>
+					{walletConnectRequestNonce === undefined ? (
+						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+							{account === undefined ? 'Connect wallet' : shortAddress(account)}
+						</button>
+					) : null}
 				</header>
 				{message === undefined ? null : (
 					<p class='error' role='alert'>
@@ -585,12 +645,14 @@ export function LiveTrading({
 		<main class='route' id='main-content'>
 			<header class='route-header'>
 				<div>
-					<h1>Two-way markets</h1>
+					<h1>Markets</h1>
 					<p>{configuration.chainName} · conditional prices only</p>
 				</div>
-				<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-					{account === undefined ? 'Connect wallet' : shortAddress(account)}
-				</button>
+				{walletConnectRequestNonce === undefined ? (
+					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+						{account === undefined ? 'Connect wallet' : shortAddress(account)}
+					</button>
+				) : null}
 			</header>
 			{message === undefined && parsedAmount.error === undefined ? null : (
 				<p class='error' role='alert'>
@@ -663,7 +725,7 @@ export function LiveTrading({
 								</div>
 								<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
 							</div>
-							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} /> : null}
+							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} onSelect={selectMarket} /> : null}
 							<dl class='fact-list'>
 								<div>
 									<dt>Security pool</dt>

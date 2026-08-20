@@ -3,7 +3,7 @@ import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securi
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type LocalSettlementBidStatus = 'claimed' | 'refunded'
@@ -91,7 +91,7 @@ export function buildViewerTruthAuctionBidRows({
 		const inSessionSettlementResult = settlementResultByKey[settlementBidKey]
 		const isSettlementBidActions = selectedStage === 'settlement' && isSettlementBid && inSessionSettlementResult === undefined && !isSettlementInProgress
 		const isSettlementBidSelectable = inSessionSettlementResult === undefined && !isSettlementInProgress
-		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatCurrencyInputBalance(bid.bidAmountAttoEth)} ETH at ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick))} ETH/REP`
+		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatValueWithUnit(formatCurrencyInputBalance(bid.bidAmountAttoEth), 'ETH')} at ${formatValueWithUnit(formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick)), 'ETH/REP')}`
 		const statusLabel = (() => {
 			if (inSessionSettlementResult === 'claimed') return 'Claimed'
 			if (inSessionSettlementResult === 'refunded') return 'Refunded'

@@ -3,7 +3,6 @@ import type { ComponentChildren } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { UniverseLink } from './UniverseLink.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { ActionAvailability } from '../../types.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -48,7 +47,7 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 								key={child.universeId.toString()}
 								surface={surface}
 								className='compact'
-								title={renderTitle === undefined ? <UniverseLink universeId={child.universeId} /> : renderTitle(child)}
+								title={renderTitle === undefined ? child.outcomeLabel : renderTitle(child)}
 								badge={renderBadge === undefined ? undefined : renderBadge(child)}
 								actions={
 									childAction === undefined ? undefined : (

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import { installDomEnvironment } from '../../../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
-import { LivePortfolio, LiveSecurityPoolDetails, SecurityPoolRouteEmptyState } from '../features/LiveTrading.tsx'
+import { LivePortfolio, LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../features/LiveTrading.tsx'
 import { Portfolio } from '../features/Routes.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import type { LiveMarket } from '../protocol/live.ts'
@@ -111,7 +111,17 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} retry={() => undefined} workflowLocked={false} />)
+		let selectedPool: Address | undefined
+		const rendered = await renderIntoDocument(
+			<LiveSecurityPoolDetails
+				market={{ ...market, feeBps: 47n }}
+				retry={() => undefined}
+				workflowLocked={false}
+				onSelect={selected => {
+					selectedPool = selected.pool
+				}}
+			/>,
+		)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
@@ -119,6 +129,19 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.textContent).not.toContain('OutcomeNone (unresolved)')
+		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Deploy trading pool')
+		expect(rendered.container.textContent).toContain('available to browse')
+		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
+		rendered.container.querySelector<HTMLAnchorElement>('a[href="#/liquidity"]')?.click()
+		expect(selectedPool).toBe(pool)
+	})
+
+	test('shows the deployed fee when an existing trading pool needs initialization', async () => {
+		const rendered = await renderIntoDocument(<PairInitializationAction market={{ ...market, pair: `0x${'90'.repeat(20)}`, feeBps: 125n }} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain('needs initial liquidity')
+		expect(rendered.container.textContent).toContain('Trading fee: 1.25%')
+		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Initialize trading pool')
 	})
 
 	test('does not present placeholder operational facts when live pool reads fail', async () => {

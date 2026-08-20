@@ -13,16 +13,18 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
-import { UniverseLink } from '@zoltar/ui-zoltar/features/universes/components/UniverseLink.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
+import { formatUniverseIdHex } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
+import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 
 export function SecurityPoolSection({
 	accountState,
+	activeUniverseId,
 	availableQuestionsContextKey,
 	availableQuestions,
 	checkingDuplicateOriginPool,
@@ -115,62 +117,62 @@ export function SecurityPoolSection({
 
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (
-			<EntityCard
-				surface='flat'
-				title={securityPoolCopy.poolCreated}
-				variant='record'
-				actions={
-					<div className='actions'>
-						<button
-							aria-label={securityPoolCopy.formatOpenPoolLabel(createdQuestionDetails === undefined ? securityPoolResult.securityPoolAddress : getQuestionTitle(createdQuestionDetails), securityPoolResult.securityPoolAddress)}
-							className='primary'
-							onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress, securityPoolResult.universeId)}
-						>
-							{securityPoolCopy.openPool}
-						</button>
-						{onReturnToBrowse === undefined ? undefined : (
-							<button className='secondary' onClick={onReturnToBrowse}>
-								{commonCopy.returnToBrowse}
+			<>
+				{securityPoolResult.universeId === activeUniverseId ? undefined : (
+					<WarningSurface role='alert' surface='flat' variant='compact'>
+						<strong>{securityPoolCopy.universeMismatch}</strong>
+						<p>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId), formatUniverseIdHex(activeUniverseId))}</p>
+					</WarningSurface>
+				)}
+				<EntityCard
+					surface='flat'
+					title={securityPoolCopy.poolCreated}
+					variant='record'
+					actions={
+						<div className='actions'>
+							<button
+								aria-label={securityPoolCopy.formatOpenPoolLabel(createdQuestionDetails === undefined ? securityPoolResult.securityPoolAddress : getQuestionTitle(createdQuestionDetails), securityPoolResult.securityPoolAddress)}
+								className='primary'
+								onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress, securityPoolResult.universeId)}
+							>
+								{securityPoolCopy.openPool}
 							</button>
-						)}
-						<button className='secondary' onClick={onResetSecurityPoolCreation}>
-							{securityPoolCopy.createAnotherPool}
-						</button>
-					</div>
-				}
-			>
-				<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
-				<ul className='status-list hashes'>
-					<li>
-						<span>{securityPoolCopy.poolAddressLabel}</span>
-						<strong>
-							<AddressValue address={securityPoolResult.securityPoolAddress} />
-						</strong>
-					</li>
-					<li>
-						<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
-						<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</strong>
-					</li>
-					<li>
-						<span>{commonCopy.initialReportPriorityFee}</span>
-						<strong>
-							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, 9)} {commonCopy.gwei}
-						</strong>
-					</li>
-					<li>
-						<span>{commonCopy.universe}</span>
-						<strong>
-							<UniverseLink universeId={securityPoolResult.universeId} />
-						</strong>
-					</li>
-					<li>
-						<span>{securityPoolCopy.deploymentTransactionHash}</span>
-						<strong>
-							<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
-						</strong>
-					</li>
-				</ul>
-			</EntityCard>
+							{onReturnToBrowse === undefined ? undefined : (
+								<button className='secondary' onClick={onReturnToBrowse}>
+									{commonCopy.returnToBrowse}
+								</button>
+							)}
+							<button className='secondary' onClick={onResetSecurityPoolCreation}>
+								{securityPoolCopy.createAnotherPool}
+							</button>
+						</div>
+					}
+				>
+					<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
+					<ul className='status-list hashes'>
+						<li>
+							<span>{securityPoolCopy.poolAddressLabel}</span>
+							<strong>
+								<AddressValue address={securityPoolResult.securityPoolAddress} />
+							</strong>
+						</li>
+						<li>
+							<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
+							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</strong>
+						</li>
+						<li>
+							<span>{commonCopy.initialReportPriorityFee}</span>
+							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</strong>
+						</li>
+						<li>
+							<span>{securityPoolCopy.deploymentTransactionHash}</span>
+							<strong>
+								<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
+							</strong>
+						</li>
+					</ul>
+				</EntityCard>
+			</>
 		)
 
 	return (

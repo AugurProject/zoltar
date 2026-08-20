@@ -29,7 +29,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 
 	return (
 		<ScalarOutcomePicker
-			details={{ numTicks: details.numTicks }}
+			details={{ answerUnit: details.answerUnit, displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, numTicks: details.numTicks }}
 			isInvalid={isInvalid}
 			label={marketCopy.scalarPreview}
 			onInvalidChange={setIsInvalid}

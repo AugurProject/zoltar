@@ -1,7 +1,7 @@
 import { maxUint256 } from '@zoltar/shared/ethereum'
 import { parseDecimalInput } from './decimal.js'
 import { sanitizeErrorDetail } from './errors.js'
-import { formatCurrencyBalance } from './formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from './formatters.js'
 export const maxUint200 = 2n ** 200n - 1n
 export type TokenApprovalState = {
 	error: string | undefined
@@ -122,9 +122,9 @@ export function formatTokenApprovalNeededMessage({ actionLabel, requirement, tok
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
 	if (targetAmount === undefined) return undefined
-	return `Need ${formatCurrencyBalance(requirement.neededAmount, tokenUnits)} more ${tokenLabel} approved before ${actionLabel}.`
+	return `Need ${formatAdditionalCurrencyBalance(requirement.neededAmount, tokenLabel, tokenUnits)} approved before ${actionLabel}.`
 }
 export function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
 	if (nextApprovedAmount >= requiredAmount) return undefined
-	return `Approving ${formatCurrencyBalance(nextApprovedAmount, tokenUnits)} ${tokenLabel} will still leave ${formatCurrencyBalance(requiredAmount - nextApprovedAmount, tokenUnits)} more ${tokenLabel} needed before ${actionLabel}.`
+	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCurrencyBalance(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
 }

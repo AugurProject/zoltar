@@ -775,6 +775,20 @@ button .loading-value {
 	vertical-align: bottom;
 }
 
+.copy-feedback,
+.currency-value-number-unit {
+	display: block;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.copy-feedback {
+	width: max-content;
+}
+
 .copy-error-recovery-wrap {
 	display: block;
 	max-width: 100%;
@@ -871,15 +885,15 @@ button.currency-value.copyable {
 	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
-	margin: -0.2rem -0.25rem;
+	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	cursor: copy;
 	text-align: inherit;
 	touch-action: manipulation;
-	overflow: visible;
-	text-overflow: clip;
-	white-space: normal;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 button.currency-value.copyable:hover:not(:disabled) {
@@ -952,7 +966,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	box-sizing: border-box;
 	border: 0;
 	border-radius: 0.35rem;
-	margin: -0.2rem -0.25rem;
+	margin: -0.2rem 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	font: inherit;
@@ -2111,6 +2125,11 @@ button.wallet-asset-action-pending:disabled {
 	gap: var(--space-2);
 }
 
+.security-pool-overview-record {
+	display: grid;
+	gap: var(--space-2);
+}
+
 .comparison-record {
 	display: grid;
 	grid-template-columns: minmax(15rem, 1.35fr) minmax(0, 3fr);
@@ -2300,6 +2319,8 @@ button.wallet-asset-action-pending:disabled {
 	flex-shrink: 0;
 	align-items: center;
 	gap: 0.5rem;
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-1);
 	cursor: pointer;
 }
 
@@ -2429,6 +2450,52 @@ button.wallet-asset-action-pending:disabled {
 	gap: 0.65rem 0.9rem;
 }
 
+.scalar-slider-stats .metric-label,
+.scalar-slider-stats .metric-field-value {
+	display: block;
+}
+
+.scalar-slider-stats .metric-label {
+	margin-bottom: 0.2rem;
+}
+
+.scalar-value-editor {
+	display: grid;
+	max-width: 100%;
+	min-width: 0;
+	gap: var(--space-1);
+}
+
+.scalar-value-input-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+	width: 100%;
+}
+
+.scalar-value-input-row .form-input {
+	min-width: 0;
+	width: min(12rem, 100%);
+	min-height: 2.75rem;
+	border: 1px solid var(--input-border);
+	border-radius: var(--radius-control);
+	padding: 0.8rem 0.95rem;
+	font: inherit;
+	background-color: rgba(6, 12, 20, 0.88);
+	color: var(--text);
+}
+
+.scalar-value-input-row > .scalar-value-unit {
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .entity-card-subsection-header {
 	display: flex;
 	align-items: center;
@@ -2494,6 +2561,10 @@ button.wallet-asset-action-pending:disabled {
 
 .market-linked-pool:last-child {
 	border-bottom: 0;
+}
+
+.market-linked-pool-universe-warning {
+	grid-column: 1 / -1;
 }
 
 .market-linked-pool-summary {
@@ -4054,6 +4125,10 @@ strong.metric-value-danger {
 	flex: 1;
 	min-width: 0;
 	gap: 0.32rem;
+}
+
+.global-transaction-universe-warning {
+	margin-right: 2.7rem;
 }
 
 main.global-transaction-tray-open {
@@ -7144,6 +7219,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 .overview-inline-metrics.data-grid > .overview-address-metric {
 	grid-column: span 2;
+}
+
+@media (min-width: 1280px) {
+	.overview-inline-metrics.data-grid {
+		grid-template-columns: minmax(16rem, 1fr) repeat(6, fit-content(10rem));
+	}
+
+	.overview-inline-metrics.data-grid > .overview-address-metric {
+		grid-column: auto;
+	}
 }
 
 .workflow-stack,

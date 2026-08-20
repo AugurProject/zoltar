@@ -15,10 +15,9 @@ Dry-run is the example default. The bot cannot submit a transaction unless
 `runtime.execute` is enabled in its configuration and a signer is saved in that
 configuration or supplied through the local dashboard.
 
-> **Live execution is experimental.** Mainnet commands below are operator
-> references, not production approval. Rehearse on Sepolia with a dedicated
-> low-balance key, validate current executable liquidity, and supervise every
-> position; no automated strategy can guarantee a profit or prevent every loss.
+> Use a dedicated low-balance key, validate current executable liquidity, and
+> supervise every position; no automated strategy can guarantee a profit or prevent
+> every loss.
 > The [latest pinned market fixture](./docs/market-fixture.html#open-oracle-market-fixture)
 > is dated historical evidence, not a live liquidity or profitability claim.
 
@@ -53,9 +52,9 @@ executor, which swaps the required inventory atomically and submits the OpenOrac
 dispute while preserving the wallet as the replacement reporter. After the dispute
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
-exact asset recovery pass the finality quorum through 12 canonical descendants. Under
-the default quorum policy, the finality quorum requires at least two available
-readers, and every available reader must agree. If a later reporter replaces
+exact asset recovery pass the finality policy through 12 canonical descendants. By
+default the primary reader is sufficient. When the saved `rpcQuorum` setting is `2`,
+at least two readers must be available and every available reader must agree. If a later reporter replaces
 the bot, it derives the exact one-token credit from the authenticated old and new
 report amounts, withdraws only that amount through a parent-bound executor call,
 and verifies the `ReplacementCreditWithdrawn` event through the same receipt and
@@ -102,13 +101,14 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
-  bytecode hash for every contract and executable token. Under the default quorum
-  policy, at least two available read RPCs authenticate every manifest entry before
-  the bot can sign; a contradictory authentication result fails closed.
-- Under the default quorum policy, at least three independently operated read RPCs:
-  one primary plus two or more quorum endpoints. Only a retryable transport failure
-  makes a reader unavailable. Live execution requires at least two responses, and every responding reader must
-  agree exactly. One transport-unavailable reader is reported as degraded without
+  bytecode hash for every contract and executable token. The primary read RPC
+  authenticates every manifest entry by default. With the saved `rpcQuorum` setting at `2`,
+  at least two available readers must authenticate every entry before the bot can
+  sign. A contradictory authentication result fails closed.
+- One primary read RPC. Optional independent quorum RPCs add corroboration; when
+  the saved `rpcQuorum` setting is `2`, configure two or more in addition to the primary. Only a retryable transport failure
+  makes a reader unavailable. Live execution requires the configured number of responses, and every responding reader must
+  agree exactly. Under the opt-in two-reader policy, one transport-unavailable reader is reported as degraded without
   stopping an otherwise healthy quorum; a malformed or contradictory response is a
   safety fault and fails closed. Execution also requires exact
   quote-block agreement on OpenOracle state, pool state, quotes, confirmed nonce,
@@ -141,41 +141,6 @@ Do not use a key that controls unrelated protocol or treasury funds. By default,
 dashboard binds to `127.0.0.1`; the host-loopback container setup is documented
 under [Docker](#docker). The execution key still lives in the bot process and must
 be protected like any hot wallet.
-
-## End-user readiness backlog
-
-The repository implementation is a guarded operator tool, not yet a supported
-retail release. Complete these items before declaring or packaging a supported
-end-user release. The commands below remain experimental operator references:
-
-1. Publish separate, reviewed mainnet and Sepolia **execution manifests** containing
-   the deployed executor, OpenOracle, approved coordinators, router, factory,
-   quoter, WETH, and executable tokens with runtime bytecode hashes. The protocol
-   deployment manifests for other projects are not a substitute for this bot trust
-   root.
-2. Deploy and source-verify the stateless executor on each supported network, then
-   reproduce every manifest hash through at least two independently operated RPCs.
-3. Run a funded, low-limit Sepolia rehearsal covering entry, replacement, normal
-   settlement, withdrawal, restart after each journal stage, relay rejection,
-   RPC disagreement, and signer-authorized manual reconciliation. Retain transaction
-   hashes and recovery evidence as release artifacts.
-4. Add an external signer or encrypted-keystore interface so routine operators do
-   not need to paste a raw private key into the dashboard or save it in plaintext.
-   Until then, use a dedicated low-balance key and leave **Save this new key in
-   plaintext for future restarts** off.
-5. Extend the deterministic interrupted-write, partial-relay, same-origin RPC,
-   clock-skew, and deep-reorganization tests with host-level disk-full and
-   provider-specific chaos rehearsals.
-6. Publish a supported relay/RPC compatibility matrix and continuously exercise
-   exact bundle simulation, submission, receipt, and archive-read behavior against
-   those providers.
-7. Package a versioned release with pinned Bun support, checksums or signatures,
-   reproducible installation, default service supervision, log rotation, health
-   checks, and alerts for paused, syncing, error, stale-head, recovery-required,
-   low-inventory, and unconfirmed-bundle states.
-8. Commission an independent review of the final deployed addresses, manifests,
-   signer integration, release package, and funded rehearsal evidence. Repeat the
-   review whenever execution dependencies or token allowlists change.
 
 ## Install
 
@@ -233,12 +198,11 @@ from another machine through a trusted tunnel to the host rather than changing t
 port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
 `127.0.0.1` mapping.
 
-The saved RPC agreement requirement defaults to `2`. This production policy requires
-two agreeing readers and two independent quorum RPC URLs in addition to the primary
-reader so one endpoint may be unavailable. For an isolated local development chain
-only, select **1 reader · isolated development only** in **Chain and RPC
-connectivity**. That setting permits the primary reader to operate alone and removes
-independent RPC corroboration. Restart the bot after changing the requirement.
+The saved RPC agreement requirement defaults to `1`, so the primary read RPC is
+sufficient and independent quorum RPCs are optional. To require two agreeing readers,
+select **2 agreeing readers · independent quorum** in **Chain and RPC connectivity**
+and configure two independent quorum RPC URLs in addition to the primary reader so
+one endpoint may be unavailable. Restart the bot after changing the requirement.
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, then
@@ -349,15 +313,14 @@ chain where the canonical CREATE2 proxy and executor init code are identical:
 PRIVATE_KEY=0xYourDeploymentPrivateKey ETH_RPC_URL=https://rpc-a.example bun run deploy-executor -- --network=mainnet --quorum-rpc-url=https://rpc-b.example --quorum-rpc-url=https://rpc-c.example --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-For the isolated Anvil network only, first save the one-reader development policy in
-the dashboard and restart. The command reads that saved policy, so independent quorum
-URLs can be omitted:
+The saved default policy permits the primary Anvil RPC without independent quorum
+URLs:
 
 ```bash
 PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia --salt=0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-Under the default quorum policy, the three read RPCs must use independent origins. Before broadcasting, the command
+When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
 configuration as `<operator-config>.executor-deployment.json`. It also holds the same
@@ -732,7 +695,8 @@ saved. Initial chain selection and quorum changes apply after restart; an RPC-on
 change on the active chain applies at the next scan boundary. To operate another chain, follow
 the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
 by the saved RPC agreement requirement with the deployment controls before enabling
-execution. The default policy requires independent quorum readers.
+execution. The default policy uses the primary reader alone. Independent quorum
+readers are required only when the saved requirement is `2`.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
@@ -900,7 +864,7 @@ signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
 token input and returned token delta are negative, while the native output delta is
 positive and cannot fall below the signed minimum WETH output.
 
-Under the default quorum policy, at least two available read RPCs must return the
+When the saved `rpcQuorum` setting is `2`, at least two available read RPCs must return the
 same quote at the exact quorum block, and every available response must agree. The executor
 calls the authenticated PoolManager directly, requires those signed deltas to match
 the requested input or output, settles only those deltas, and converts native ETH
@@ -1167,7 +1131,7 @@ separate. Exact successful evidence first moves the record to
 `closed-pending-finality`. The bot retains the risk slot and transaction evidence
 until the exact lifecycle evidence passes the finality quorum; it then
 realizes profit, or removes provisional withdrawal and gas accounting and reopens
-the position if the receipt was reorged out. Under the default quorum policy, fewer than two available agreeing RPCs
+the position if the receipt was reorged out. Under the opt-in two-reader policy, fewer than two available agreeing RPCs
 therefore delays closure rather than releasing the slot from the primary RPC's head.
 
 When another report replaces the bot, the durable entry already contains the exact
@@ -1272,13 +1236,13 @@ entry from depending on wallet inventory already committed to recovery.
 	  `deployment.uniswapV4Quoter` are configured, but only against standard-fee,
   hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
   Identities remain operator-supplied, but
-  under the default quorum policy, live mode authenticates every address and runtime
+  under the opt-in two-reader policy, live mode authenticates every address and runtime
   bytecode hash against the reviewed deployment manifest through at least two available read RPCs. Every
   available authentication result must agree; the manifest itself remains an
   operator trust root.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
-- Under the default quorum policy, live execution uses the exact read-quorum rule
+- Under the opt-in two-reader policy, live execution uses the exact read-quorum rule
   above at one canonical block: only retryable transport failures omit a reader, at least two readers must
   respond, and every response must agree exactly. Signed entry values come from
   that agreed snapshot, and an
@@ -1321,7 +1285,6 @@ entry from depending on wallet inventory already committed to recovery.
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can
   still cause loss. Start on Sepolia, use a dedicated low-balance wallet, set small
   risk limits, and supervise every live position.
-- A profitable dry-run observation is not production approval. Before enabling
-  execution, verify the current pools, relay simulations, inventory, risk limits,
+- Before enabling execution, verify the current pools, relay simulations, inventory, risk limits,
   deployment manifest, settlement path, and recovery procedure with a low-value
-  rehearsal.
+  transaction.

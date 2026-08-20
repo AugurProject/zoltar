@@ -166,8 +166,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.queryByText('Risk cue')).toBeNull()
 		expect(documentQueries.queryByText('Title is required')).toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBeNull()
-		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expect(documentQueries.getByText('Complete the required question fields.')).not.toBeNull()
+		expect(documentQueries.getByText('Missing required fields: Title')).not.toBeNull()
 
 		await act(() => {
 			titleInput.dispatchEvent(new Event('blur'))
@@ -212,7 +211,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Review question', 'Fix invalid fields: End time must be after start time')
+		expectTransactionButtonDisabled(document.body, 'Review question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
 	})
 
 	test('keeps scalar details and ended-state risk visible through reversible review and submission', async () => {
@@ -313,7 +312,7 @@ describe('MarketCreateQuestionSection', () => {
 		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
-		expect(documentQueries.getByText(/Augur Statoblast origin security pools/)).not.toBeNull()
+		expect(documentQueries.queryByText(/Augur Statoblast origin security pools/)).toBeNull()
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {
@@ -793,7 +792,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Scalar Preview')).not.toBeNull()
+		expect(documentQueries.getByText('Try a Scalar Answer')).not.toBeNull()
 
 		const slider = document.querySelector('input[type="range"]')
 		if (slider === null) throw new Error('Expected scalar slider')

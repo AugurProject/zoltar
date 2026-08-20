@@ -96,6 +96,18 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	return formatDecimalString(formattedValue)
 }
 
+export function formatValueWithUnit(value: string, unit: string) {
+	return `${value}\u00a0${unit}`
+}
+
+export function formatCurrencyBalanceWithUnit(value: bigint | undefined, unit: string, units: number = 18) {
+	return formatValueWithUnit(formatCurrencyBalance(value, units), unit)
+}
+
+export function formatAdditionalCurrencyBalance(value: bigint, unit: string, units: number = 18) {
+	return `${formatCurrencyBalance(value, units)}\u00a0more\u00a0${unit}`
+}
+
 export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
 	assertInteger(units, 'Units')
 	return units === 18 ? formatEther(value) : formatUnits(value, units)
@@ -173,6 +185,14 @@ export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: big
 	if (delta === 0n) return 'now'
 	if (delta > 0n) return `in ${formatRelativeDuration(delta)}`
 	return `${formatRelativeDuration(-delta)} ago`
+}
+
+export function getWallClockTimestamp() {
+	return BigInt(Math.floor(Date.now() / 1_000))
+}
+
+export function formatTimestampWithRelative(timestamp: bigint, currentTimestamp = getWallClockTimestamp()) {
+	return `${formatTimestamp(timestamp)} (${formatRelativeTimestamp(timestamp, currentTimestamp)})`
 }
 
 export function formatDuration(seconds: bigint) {

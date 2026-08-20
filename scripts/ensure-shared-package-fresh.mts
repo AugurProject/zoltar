@@ -11,11 +11,28 @@ const installedSharedNodeModulesPath = path.join(installedSharedPackagePath, 'no
 const sourceSharedNodeModulesPath = path.join(sharedPackagePath, 'node_modules')
 const mode = process.argv.includes('--refresh') ? 'refresh' : 'check'
 
-const readPackageJson = async packagePath => JSON.parse(await fs.readFile(packagePath, 'utf8'))
+interface PackageManifest {
+	files: string[]
+}
 
-const listFilesRecursively = async directoryPath => {
+interface ManifestEntry {
+	hash: string
+	relativePath: string
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const readPackageJson = async (packagePath: string): Promise<PackageManifest> => {
+	const parsed: unknown = JSON.parse(await fs.readFile(packagePath, 'utf8'))
+	if (!isRecord(parsed) || !Array.isArray(parsed['files']) || !parsed['files'].every((file): file is string => typeof file === 'string')) {
+		throw new Error(`Package manifest ${packagePath} must contain a string files array`)
+	}
+	return { files: parsed['files'] }
+}
+
+const listFilesRecursively = async (directoryPath: string): Promise<string[]> => {
 	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
-	const filePaths = await Promise.all(
+	const filePaths: string[][] = await Promise.all(
 		entries.map(async entry => {
 			const entryPath = path.join(directoryPath, entry.name)
 			if (entry.isSymbolicLink()) return []
@@ -27,7 +44,7 @@ const listFilesRecursively = async directoryPath => {
 	return filePaths.flat().sort()
 }
 
-const listPackageFilesRecursively = async packageRootPath => {
+const listPackageFilesRecursively = async (packageRootPath: string): Promise<string[]> => {
 	const filePaths = await listFilesRecursively(packageRootPath)
 	return filePaths.filter(filePath => {
 		const relativePath = path.relative(packageRootPath, filePath)
@@ -35,14 +52,14 @@ const listPackageFilesRecursively = async packageRootPath => {
 	})
 }
 
-const hashFile = async filePath =>
+const hashFile = async (filePath: string): Promise<string> =>
 	createHash('sha256')
 		.update(await fs.readFile(filePath))
 		.digest('hex')
 
 const getPublishedSharedFiles = async () => {
 	const sharedPackageJson = await readPackageJson(path.join(sharedPackagePath, 'package.json'))
-	const publishedDirectories = Array.isArray(sharedPackageJson.files) ? sharedPackageJson.files : []
+	const publishedDirectories = sharedPackageJson.files
 	const publishedFiles = await Promise.all(
 		publishedDirectories.map(async directoryName => {
 			const directoryPath = path.join(sharedPackagePath, directoryName)
@@ -52,7 +69,7 @@ const getPublishedSharedFiles = async () => {
 	return [path.join(sharedPackagePath, 'package.json'), ...publishedFiles.flat()].sort()
 }
 
-const getSharedPackageManifest = async (packageRootPath, files) => {
+const getSharedPackageManifest = async (packageRootPath: string, files: readonly string[]): Promise<ManifestEntry[]> => {
 	return await Promise.all(
 		files.map(async sourcePath => {
 			const relativePath = path.relative(sharedPackagePath, sourcePath)

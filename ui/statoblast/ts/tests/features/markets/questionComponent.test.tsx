@@ -107,7 +107,7 @@ describe('Question component', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent).toContain('1 to 10 USD')
+		expect(document.body.textContent).toContain('1 to 10\u00a0USD')
 		expect(document.body.textContent).not.toContain('1000000000000000000 to 10000000000000000000')
 	})
 

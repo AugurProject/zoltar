@@ -18,7 +18,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '@zoltar/ui-zoltar/features/universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { TransactionUniverseValue } from '@zoltar/ui-zoltar/features/universes/components/TransactionUniverseValue.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
@@ -255,7 +254,6 @@ export function TradingSection({
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
 					{ identityKey: 'security-pool', label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
-					{ identityKey: 'universe', label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
 					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
 				]
 	const retentionFeeDisclosure = [

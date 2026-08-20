@@ -89,6 +89,7 @@ type SecurityPoolRouteContentProps = {
 } & RepPerEthPriceProps
 
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
+	activeUniverseId: bigint
 	onReturnToBrowse?: () => void
 	showHeader?: boolean
 }
@@ -132,6 +133,7 @@ type LiquidationModalStateProps = {
 
 type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	environmentRefreshKey: number
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
@@ -158,9 +160,9 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
-	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void
+	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number

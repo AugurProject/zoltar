@@ -50,7 +50,6 @@ describe('OverviewPanels', () => {
 			onGoToGenesisUniverse: () => undefined,
 			onRefreshRepPrices: () => undefined,
 			onSwitchNetwork: () => undefined,
-			parentUniverseId: undefined,
 			repPerEthFailure: undefined,
 			repPerEthPrice: undefined,
 			repPerEthSource: undefined,
@@ -394,22 +393,9 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText('browser simulation · provider via default @ 12')).toBeNull()
 	})
 
-	test('shows the parent universe metric for child universes', async () => {
+	test('does not repeat a parent universe outside the header', async () => {
 		const documentQueries = await renderOverviewPanels({
-			activeUniverseId: 11n,
-			parentUniverseId: 3n,
 			universeLabel: 'Universe 11',
-		})
-
-		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 0x3' })
-		expect(parentUniverseLink).toBeDefined()
-		expect(document.body.textContent?.includes('Parent Universe')).toBe(true)
-	})
-
-	test('hides the parent universe metric for genesis', async () => {
-		const documentQueries = await renderOverviewPanels({
-			activeUniverseId: 0n,
-			parentUniverseId: 0n,
 		})
 
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()

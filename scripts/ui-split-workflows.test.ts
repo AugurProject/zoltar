@@ -3,9 +3,9 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const repositoryRoot = join(import.meta.dir, '..')
-const ciWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
-const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
-const setupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
+const ciWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
+const deployTestnetWorkflowPath = join(repositoryRoot, 'workflow-changes', 'deploy-testnet.yml')
+const setupActionPath = join(repositoryRoot, 'workflow-changes', 'setup-ci-action.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },

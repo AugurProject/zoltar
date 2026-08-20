@@ -92,10 +92,10 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
-	test('defaults existing configuration files to the production RPC quorum', () => {
+	test('defaults existing configuration files to the primary-reader RPC policy', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
 		delete serialized.rpcQuorum
-		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(2)
+		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
 	})
 
 	test('validates and persists the dashboard RPC quorum policy', () => {
@@ -104,9 +104,16 @@ describe('operator settings persistence', () => {
 		expect(parseOperatorSettings({ ...serialized, rpcQuorum: 1 }).rpcQuorum).toBe(1)
 	})
 
-	test('requires three independent read endpoints for live execution', () => {
+	test('permits live execution with only the primary read RPC by default', () => {
 		const value = settings(privateKey)
-		const serialized = serializeOperatorSettings(value)
+		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 1 })
+		const parsed = parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })
+		expect(parsed.deployment.quorumRpcUrls).toEqual([])
+	})
+
+	test('requires independent readers when the two-reader policy is explicitly enabled', () => {
+		const value = settings(privateKey)
+		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 2 })
 		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
 	})
 

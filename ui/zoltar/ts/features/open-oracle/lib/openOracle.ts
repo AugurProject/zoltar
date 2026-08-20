@@ -6,7 +6,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
@@ -81,7 +81,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	if (settlerRewardAttoEth === undefined) return 'Enter a valid settler reward.'
 	if (ethValue < settlerRewardAttoEth) return 'ETH value to send must be at least the settler reward.'
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletBalanceAttoEth) return `Need ${formatCurrencyBalance(ethValue - walletBalanceAttoEth)} more ETH in this wallet to create the selected standalone Open Oracle report.`
+	if (ethValue > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethValue - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
 	return undefined
 }
 
@@ -667,7 +667,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
 	if (lastSettlementTimestamp === 0n) return '-'
-	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
+	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)}\u00a0REP / ETH`
 }
 
 export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {

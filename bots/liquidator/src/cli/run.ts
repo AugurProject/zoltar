@@ -28,6 +28,7 @@ import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservation
 import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
 import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
+import { createSystemDeploymentGate } from '#core/deployment-gate'
 
 const constantProductPairAbi = [
 	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
@@ -74,9 +75,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
 			const [token0, token1, reserves] = await Promise.all([
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
-				readContractAtBlock(client.transport, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
+				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
 			])
 			if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
 			return { blockHash: block.hash, blockNumber: block.number, blockTimestamp: block.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
@@ -397,6 +398,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		status: 'info',
 	})
 	let lastDryRunKey: string | undefined
+	let missingDeploymentAddress: string | undefined
+	const checkSystemDeployment = createSystemDeploymentGate()
 	await pollUntilStopped(
 		async () => {
 			if (shutdown.isRequested()) return true
@@ -408,6 +411,21 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				const currentChain = chainFor(settings)
 				chain = currentChain
 				client = createPrimaryClient()
+				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
+				if (!deploymentStatus.deployed) {
+					state.status = state.paused ? 'paused' : 'starting'
+					if (missingDeploymentAddress !== deploymentStatus.address) {
+						recordActivity(state, {
+							details: `chain=${settings.network.chainId.toString()} contract=${deploymentStatus.address}`,
+							kind: 'deployment',
+							message: `${deploymentStatus.name} is not deployed; waiting before checking again`,
+							status: 'info',
+						})
+						missingDeploymentAddress = deploymentStatus.address
+					}
+					return 'deferred'
+				}
+				missingDeploymentAddress = undefined
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]

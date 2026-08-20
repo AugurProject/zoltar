@@ -780,8 +780,8 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7 more ETH in this wallet to queue liquidation.')
-		expect(within(document.body).getByText('Need 7 more ETH in this wallet to queue liquidation.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')
+		expect(within(document.body).getByText('Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')).not.toBeNull()
 	})
 
 	test('allows queued liquidation when the entered amount exceeds the executable cap because execution will clamp it', async () => {

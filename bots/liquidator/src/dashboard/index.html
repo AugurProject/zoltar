@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="dark" />
-		<title>Zoltar Liquidator</title>
+		<title>Statoblast liquidator</title>
 		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
 	</head>
@@ -12,8 +12,8 @@
 		<header class="topbar operator-shell">
 			<div class="operator-primary">
 				<div>
-					<p class="eyebrow">Zoltar operator</p>
-					<h1>Pool liquidator</h1>
+					<p class="eyebrow">Statoblast operator</p>
+					<h1>Statoblast liquidator</h1>
 				</div>
 				<div class="topbar-actions operator-safety" aria-label="Bot safety status">
 					<span id="mode-badge" class="badge">Starting</span>
@@ -227,7 +227,7 @@
 									>
 									<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
 									<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
-									<label><span>Independent quorum RPC URLs · one per line</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
+									<label><span>Independent quorum RPC URLs · optional; quorum 2 requires two</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
 								</div>
 								<div class="form-actions"><span id="network-status" class="muted" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
 							</fieldset>

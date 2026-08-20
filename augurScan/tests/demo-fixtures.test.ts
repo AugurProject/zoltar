@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from '../public/demo-fixtures.js'
+import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from '../browser/demo-fixtures.ts'
 
 test('derives every conditional demo price from its exact AMM reserves', () => {
 	for (const price of demoAmmPriceHistory(Date.parse('2026-08-12T00:00:00.000Z'))) {

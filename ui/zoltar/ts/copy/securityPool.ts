@@ -106,6 +106,7 @@ export const stagedOperationId = 'Staged Operation ID'
 export const zeroPlaceholder = '0'
 export const stagedOperations = 'Staged Operations'
 export const universeMismatch = 'Universe Mismatch'
+export const formatBrowsePoolUniverseMismatch = (poolUniverse: string, activeUniverse: string) => `This pool belongs to ${poolUniverse}, while the header shows ${activeUniverse}.`
 export const poolUniverseLead = 'This pool belongs to'
 export const activeUniverseSeparator = 'but the app is currently set to'
 export const missingPoolDetail = 'Pool actions are locked until the app uses the same universe.'
@@ -159,7 +160,7 @@ export const vaultCoverageDetail = 'Ordinary coverage counts pool-held vault REP
 export const depositRepToVaultPendingLabel = 'Depositing REP…'
 export const firstDepositTail = 'in the first deposit.'
 export const newVaultsRequireAtLeast = 'New vaults require at least'
-export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`
+export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
 export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
 export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'
 export const connectWalletBeforeRedeemingRep = 'Connect a wallet before redeeming REP.'

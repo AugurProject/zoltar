@@ -47,16 +47,43 @@ describe('deployment authentication', () => {
 		).rejects.toThrow('runtime bytecode hash')
 	})
 
+	test('rejects manifest configuration mismatches before reading RPC code', async () => {
+		let codeReads = 0
+		const readCode = async () => {
+			codeReads += 1
+			return openOracleCode
+		}
+		for (const authentication of [
+			authenticateDeploymentManifest(manifest, { chainId: 11_155_111, network: 'sepolia', readCode, required: [{ address: openOracle, role: 'open-oracle' }] }),
+			authenticateDeploymentManifest(manifest, { chainId: 1, network: 'mainnet', readCode, required: [{ address: getAddress('0x0000000000000000000000000000000000000003'), role: 'token' }] }),
+		]) {
+			try {
+				await authentication
+				throw new Error('Expected deployment authentication to fail')
+			} catch (error) {
+				expect(error instanceof Error ? error.message : String(error)).not.toContain('RPC ')
+			}
+		}
+		expect(codeReads).toBe(0)
+	})
+
 	test('recognizes the separately authenticated Uniswap execution roles', () => {
 		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
 		expect(parseDeploymentRole('uniswap-v4-pool-manager')).toBe('uniswap-v4-pool-manager')
 		expect(parseDeploymentRole('uniswap-v4-quoter')).toBe('uniswap-v4-quoter')
 	})
 
-	test('tolerates one unavailable manifest reader but never a safety mismatch', async () => {
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new TypeError('fetch failed'))])).resolves.toBeUndefined()
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.reject(new TypeError('fetch failed')), Promise.reject(new TypeError('fetch failed'))])).rejects.toThrow('at least two available independent RPC endpoints')
-		await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new Error('runtime bytecode hash mismatch'))])).rejects.toThrow('runtime bytecode hash mismatch')
+	test('tolerates one unavailable manifest reader but never a safety mismatch under the explicit quorum policy', async () => {
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new TypeError('fetch failed'))])).resolves.toBeUndefined()
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.reject(new TypeError('fetch failed')), Promise.reject(new TypeError('fetch failed'))])).rejects.toThrow('at least two available independent RPC endpoints')
+			await expect(requireManifestAuthenticationQuorum([Promise.resolve(), Promise.resolve(), Promise.reject(new Error('runtime bytecode hash mismatch'))])).rejects.toThrow('runtime bytecode hash mismatch')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

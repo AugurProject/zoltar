@@ -1,15 +1,17 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { initialCursor, scanRanges } from '../src/monitoring/block-sync.ts'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { fetchLogsWithAdaptiveRanges, initialCursor, logRangeLimitError, LogScanError, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
-import { createPublicClient, custom, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
-import { createRpcEndpointPool, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
+import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
+import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
+import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
@@ -36,6 +38,7 @@ describe('shared bot primitives', () => {
 				'bigintToSafeNumber',
 				'bytesToHex',
 				'concatHex',
+				'createContextualPublicClient',
 				'createPublicClient',
 				'createRpcEndpointPool',
 				'createWalletClient',
@@ -70,6 +73,7 @@ describe('shared bot primitives', () => {
 				'publicActions',
 				'readContractAtBlock',
 				'recoverTransactionAddress',
+				'rpcFailureWithContext',
 				'toHex',
 				'zeroAddress',
 				'zeroHash',
@@ -90,6 +94,117 @@ describe('shared bot primitives', () => {
 		])
 	})
 
+	test('narrows log scans when a provider rejects the requested block range', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges(initialCursor(13n, 13n), 13n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock > 2n) throw new Error(`You can query up to 3 blocks at a time, but requested ${(range.toBlock - range.fromBlock + 1n).toString()} blocks`)
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-3', 'log-6', 'log-8', 'log-11'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 9n },
+			{ fromBlock: 0n, toBlock: 4n },
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 3n, toBlock: 12n },
+			{ fromBlock: 3n, toBlock: 7n },
+			{ fromBlock: 3n, toBlock: 5n },
+			{ fromBlock: 6n, toBlock: 13n },
+			{ fromBlock: 6n, toBlock: 9n },
+			{ fromBlock: 6n, toBlock: 7n },
+			{ fromBlock: 8n, toBlock: 13n },
+			{ fromBlock: 8n, toBlock: 10n },
+			{ fromBlock: 11n, toBlock: 13n },
+		])
+	})
+
+	test('identifies provider range and payload rejections without retrying other failures', () => {
+		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
+		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
+		expect(logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('log response too large'))).toBe(true)
+		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
+		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(false)
+		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
+		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
+		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	})
+
+	test('narrows invalid-params range-limit responses without retrying inverted ranges', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		await fetchLogsWithAdaptiveRanges({ nextBlock: 7n }, 10n, 4n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock - range.fromBlock + 1n > 2n) throw new Error('invalid params: block range is too large')
+			return []
+		})
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 7n, toBlock: 10n },
+			{ fromBlock: 7n, toBlock: 8n },
+			{ fromBlock: 9n, toBlock: 10n },
+		])
+	})
+
+	test('recognizes the bounded transport response error for oversized log payloads', () => {
+		const label = 'RPC eth_getLogs'
+		expect(logRangeLimitError(new Error(`${label} response exceeds ${(LOG_RPC_RESPONSE_BYTES / (1024 * 1024)).toString()} MiB`))).toBe(true)
+	})
+
+	test('narrows the attempted span after a truncated range fails and always makes progress', async () => {
+		const requestedRanges: { fromBlock: bigint; toBlock: bigint }[] = []
+		const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: 0n }, 2n, 10n, async range => {
+			requestedRanges.push(range)
+			if (range.toBlock > range.fromBlock) throw new Error('query returned more than 10000 results')
+			return [`log-${range.fromBlock.toString()}`]
+		})
+		expect(logs).toEqual(['log-0', 'log-1', 'log-2'])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 2n },
+			{ fromBlock: 0n, toBlock: 1n },
+			{ fromBlock: 0n, toBlock: 0n },
+			{ fromBlock: 1n, toBlock: 2n },
+			{ fromBlock: 1n, toBlock: 1n },
+			{ fromBlock: 2n, toBlock: 2n },
+		])
+		const firstAttempt = requestedRanges[0]
+		const secondAttempt = requestedRanges[1]
+		if (firstAttempt === undefined || secondAttempt === undefined) throw new Error('Expected at least two requested ranges')
+		expect(secondAttempt.toBlock - secondAttempt.fromBlock < firstAttempt.toBlock - firstAttempt.fromBlock).toBe(true)
+	})
+
+	test('requests a failing one-block range exactly once', async () => {
+		let attempts = 0
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 5n }, 5n, 10n, async () => {
+				attempts += 1
+				throw new Error('query returned more than 10000 results')
+			})
+		} catch (error) {
+			failure = error
+		}
+		expect(attempts).toBe(1)
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 5n, toBlock: 5n })
+	})
+
+	test('stops narrowing at single-block ranges and reports the failing range', async () => {
+		let failure: unknown
+		try {
+			await fetchLogsWithAdaptiveRanges({ nextBlock: 1n }, 1n, 10n, async () => {
+				throw new Error('HTTP 400 while calling eth_getLogs')
+			})
+		} catch (error) {
+			failure = error
+		}
+		if (!(failure instanceof LogScanError)) throw new Error('Expected a LogScanError')
+		expect(failure.logRange).toEqual({ fromBlock: 1n, toBlock: 1n })
+		expect(failure.message).toContain('blocks 1 through 1')
+		expect(failure.message).toContain('HTTP 400 while calling eth_getLogs')
+	})
+
 	test('requires independent quorum observations to agree', () => {
 		expect(
 			quorumValue('head', [
@@ -105,9 +220,9 @@ describe('shared bot primitives', () => {
 		).toThrow('RPC disagreement')
 	})
 
-	test('keeps RPC quorum secure by default and permits an explicit single-node development policy', () => {
-		expect(rpcQuorumRequirement({})).toBe(2)
-		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({}))).toBe(3)
+	test('uses one RPC by default and permits an explicit independent-reader quorum policy', () => {
+		expect(rpcQuorumRequirement({})).toBe(1)
+		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({}))).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' })).toBe(1)
 		expect(configuredReadRpcEndpointMinimum(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '1' }))).toBe(1)
 		expect(rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '2' })).toBe(2)
@@ -130,7 +245,7 @@ describe('shared bot primitives', () => {
 
 	test('keeps transport-only quorum loss classified as degraded connectivity', async () => {
 		const unavailable = new RpcEndpointPoolFailure([{ error: 'cooling down until 2026-08-13T00:00:00.000Z', target: 'https://offline.example' }])
-		const result = settledQuorumValue('head', [Promise.resolve({ endpoint: 'one', value: 1n }), Promise.reject(unavailable), Promise.reject(unavailable)])
+		const result = settledQuorumValue('head', [Promise.resolve({ endpoint: 'one', value: 1n }), Promise.reject(unavailable), Promise.reject(unavailable)], 2)
 		await expect(result).rejects.toThrow('at least two available')
 		await result.catch(error => expect(operationalFailureDisposition(error)).toBe('connectivity-degraded'))
 	})
@@ -188,7 +303,7 @@ describe('shared bot primitives', () => {
 			},
 			getBlockNumber: async () => 112n,
 		})
-		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n), reader(112n), reader(112n)], ['one', 'two', 'three', 'four'], 'disjoint receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('requires at least two available independent RPC endpoints')
+		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n), reader(112n), reader(112n)], ['one', 'two', 'three', 'four'], 'disjoint receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('requires at least two available independent RPC endpoints')
 	})
 
 	test('never omits semantic failures from canonical finality evidence', async () => {
@@ -276,6 +391,98 @@ describe('shared bot primitives', () => {
 		} finally {
 			primary.stop(true)
 			secondary.stop(true)
+		}
+	})
+
+	test('keeps successful endpoint context isolated across overlapping pooled reads', async () => {
+		const first = Bun.serve({
+			port: 0,
+			fetch: async () => {
+				await Bun.sleep(25)
+				return Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })
+			},
+		})
+		const second = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
+		try {
+			if (first.port === undefined || second.port === undefined) throw new Error('RPC context test servers did not expose ports')
+			const firstUrl = `http://127.0.0.1:${first.port.toString()}`
+			const secondUrl = `http://127.0.0.1:${second.port.toString()}`
+			const pool = createRpcEndpointPool([firstUrl, secondUrl])
+			let firstTarget: string | undefined
+			let secondTarget: string | undefined
+			const firstRead = createPublicClient({ transport: pool.transportFor(firstUrl, context => (firstTarget = context.target)) }).getChainId()
+			const secondRead = createPublicClient({ transport: pool.transportFor(secondUrl, context => (secondTarget = context.target)) }).getChainId()
+			await expect(Promise.all([firstRead, secondRead])).resolves.toEqual([1, 1])
+			expect(firstTarget).toBe(new URL(firstUrl).origin)
+			expect(secondTarget).toBe(new URL(secondUrl).origin)
+		} finally {
+			first.stop(true)
+			second.stop(true)
+		}
+	})
+
+	test('attributes post-response validation failures to the endpoint that served the request', async () => {
+		const secondary = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x2' }) })
+		try {
+			if (secondary.port === undefined) throw new Error('RPC validation test server did not expose a port')
+			const primaryUrl = 'http://127.0.0.1:1'
+			const secondaryUrl = `http://127.0.0.1:${secondary.port.toString()}`
+			const pool = createRpcEndpointPool([primaryUrl, secondaryUrl], { timeoutMilliseconds: 100 })
+			try {
+				await pool.contextualRequest('eth_chainId', async transport => {
+					const chainId = await createPublicClient({ transport }).getChainId()
+					if (chainId !== 1) throw new Error(`Expected chain 1, received ${chainId.toString()}`)
+				})
+				throw new Error('Expected chain validation to fail')
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				expect(message).toContain(`RPC ${new URL(secondaryUrl).origin} failed while calling eth_chainId`)
+				expect(message).not.toContain(new URL(primaryUrl).origin)
+				expect(message.match(/eth_chainId/g)).toHaveLength(1)
+			}
+		} finally {
+			secondary.stop(true)
+		}
+	})
+
+	test('keeps concurrent typed response failures bound to their exact RPC action', async () => {
+		const transactionServer = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const payload = await request.json()
+				const id = typeof payload === 'object' && payload !== null && !Array.isArray(payload) && 'id' in payload ? payload['id'] : 1
+				await Bun.sleep(25)
+				return Response.json({ id, jsonrpc: '2.0', result: {} })
+			},
+		})
+		const receiptServer = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const payload = await request.json()
+				const id = typeof payload === 'object' && payload !== null && !Array.isArray(payload) && 'id' in payload ? payload['id'] : 1
+				return Response.json({ id, jsonrpc: '2.0', result: {} })
+			},
+		})
+		try {
+			if (transactionServer.port === undefined || receiptServer.port === undefined) throw new Error('Contextual client test servers did not expose ports')
+			const transactionUrl = `http://user:transaction-secret@127.0.0.1:${transactionServer.port.toString()}/private-rpc?token=transaction-secret#fragment`
+			const receiptUrl = `http://user:receipt-secret@127.0.0.1:${receiptServer.port.toString()}/private-rpc?token=receipt-secret#fragment`
+			const pool = createRpcEndpointPool([transactionUrl, receiptUrl])
+			const transactionClient = createContextualPublicClient(mainnet, pool, transactionUrl)
+			const receiptClient = createContextualPublicClient(mainnet, pool, receiptUrl)
+			const results = await Promise.allSettled([transactionClient.getTransaction({ hash: `0x${'11'.repeat(32)}` }), receiptClient.getTransactionReceipt({ hash: `0x${'22'.repeat(32)}` })])
+			const messages = results.map(result => (result.status === 'rejected' ? String(result.reason) : 'request unexpectedly succeeded'))
+			expect(messages[0]).toContain(`RPC http://127.0.0.1:${transactionServer.port.toString()} failed while calling eth_getTransactionByHash`)
+			expect(messages[1]).toContain(`RPC http://127.0.0.1:${receiptServer.port.toString()} failed while calling eth_getTransactionReceipt`)
+			for (const message of messages) {
+				expect(message).not.toContain('secret')
+				expect(message).not.toContain('private-rpc')
+				expect(message).not.toContain('token=')
+				expect(message).not.toContain('fragment')
+			}
+		} finally {
+			transactionServer.stop(true)
+			receiptServer.stop(true)
 		}
 	})
 
@@ -392,6 +599,148 @@ describe('shared bot primitives', () => {
 			malformed.stop(true)
 			healthy.stop(true)
 		}
+	})
+
+	test('identifies the RPC origin and method for non-retryable HTTP failures', async () => {
+		let healthyRequests = 0
+		const rejected = Bun.serve({ port: 0, fetch: () => new Response('invalid request', { status: 400 }) })
+		const healthy = Bun.serve({
+			port: 0,
+			fetch: () => {
+				healthyRequests += 1
+				return Response.json({ id: 1, jsonrpc: '2.0', result: [] })
+			},
+		})
+		try {
+			if (rejected.port === undefined || healthy.port === undefined) throw new Error('RPC diagnostic test servers did not expose ports')
+			const rejectedUrl = `http://127.0.0.1:${rejected.port.toString()}/private/provider-key`
+			const pool = createRpcEndpointPool([rejectedUrl, `http://127.0.0.1:${healthy.port.toString()}`])
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: pool.transport }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message).toContain(`RPC ${new URL(rejectedUrl).origin} returned HTTP 400 while calling eth_getLogs`)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+			let boundFailure: unknown
+			try {
+				await createPublicClient({ transport: pool.transportFor(rejectedUrl) }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				boundFailure = error
+			}
+			expect(boundFailure instanceof Error ? boundFailure.message : String(boundFailure)).toContain(`RPC ${new URL(rejectedUrl).origin} returned HTTP 400 while calling eth_getLogs`)
+			expect(healthyRequests).toBe(0)
+		} finally {
+			rejected.stop(true)
+			healthy.stop(true)
+		}
+	})
+
+	test('keeps endpoint and method context idempotent for typed response and provider failures', async () => {
+		const target = 'https://rpc.example'
+		const wrongChain = rpcFailureWithContext(new Error('Read RPC chain mismatch: expected 1, received 2'), target, 'eth_chainId')
+		expect(wrongChain.message).toBe('RPC https://rpc.example failed while calling eth_chainId: Read RPC chain mismatch: expected 1, received 2')
+		const malformedBlock = rpcFailureWithContext(new Error('RPC returned an invalid block'), target, 'eth_getBlockByNumber')
+		expect(malformedBlock.message).toBe('RPC https://rpc.example failed while calling eth_getBlockByNumber: RPC returned an invalid block')
+		const undecodableCall = rpcFailureWithContext(new Error('ABI return data is empty'), target, 'eth_call')
+		expect(undecodableCall.message).toBe('RPC https://rpc.example failed while calling eth_call: ABI return data is empty')
+		const alreadyContextual = rpcFailureWithContext(new Error('RPC https://rpc.example eth_getLogs not supported'), target, 'eth_getLogs')
+		expect(alreadyContextual.message.match(/https:\/\/rpc\.example/g)).toHaveLength(1)
+		expect(alreadyContextual.message.match(/eth_getLogs/g)).toHaveLength(1)
+		const attemptedElsewhere = rpcFailureWithContext(new Error('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs'), target, 'eth_getLogs')
+		expect(attemptedElsewhere.message).toBe('RPC https://recovery.example returned HTTP 400 while calling eth_getLogs')
+		const poolFailure = new RpcEndpointPoolFailure([
+			{ error: 'failed while calling eth_getLogs: fetch failed', target: 'https://first.example' },
+			{ error: 'cooling down until the next retry window before calling eth_getLogs', target: 'https://second.example' },
+		])
+		const preservedPoolFailure = rpcFailureWithContext(poolFailure, 'https://stale.example', 'eth_getLogs')
+		expect(preservedPoolFailure).toBe(poolFailure)
+		expect(preservedPoolFailure.message.match(/https:\/\/first\.example/g)).toHaveLength(1)
+		expect(preservedPoolFailure.message.match(/https:\/\/second\.example/g)).toHaveLength(1)
+		expect(preservedPoolFailure.message).not.toContain('stale.example')
+
+		const rejected = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_601, message: 'eth_getLogs not supported' }, id: 1, jsonrpc: '2.0' }) })
+		try {
+			if (rejected.port === undefined) throw new Error('RPC method diagnostic server did not expose a port')
+			const rejectedUrl = `http://127.0.0.1:${rejected.port.toString()}/private/provider-key`
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: createRpcEndpointPool([rejectedUrl]).transport }).getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message.match(new RegExp(new URL(rejectedUrl).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+		} finally {
+			rejected.stop(true)
+		}
+	})
+
+	test('rejects malformed typed RPC results before endpoint context is lost', async () => {
+		const malformed = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: {} }) })
+		try {
+			if (malformed.port === undefined) throw new Error('Malformed RPC result server did not expose a port')
+			const url = `http://127.0.0.1:${malformed.port.toString()}/private/provider-key`
+			let failure: unknown
+			try {
+				await createPublicClient({ transport: createRpcEndpointPool([url]).transport }).getBalance({ address: '0x0000000000000000000000000000000000000001' })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message.match(/eth_getBalance/g)).toHaveLength(1)
+			expect(message.match(new RegExp(new URL(url).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
+			expect(message).not.toContain('provider-key')
+		} finally {
+			malformed.stop(true)
+		}
+	})
+
+	test('identifies the RPC origin and method for retryable transport failures and cooldowns', async () => {
+		let now = 1_000
+		const unavailableUrl = 'http://operator:provider-secret@127.0.0.1:1/private/provider-key?token=query-secret'
+		const pool = createRpcEndpointPool([unavailableUrl], {
+			baseCooldownMilliseconds: 100,
+			now: () => now,
+			random: () => 0,
+			timeoutMilliseconds: 100,
+		})
+		const clients = [createPublicClient({ transport: pool.transport }), createPublicClient({ transport: pool.transportFor(unavailableUrl) })]
+		for (const [index, client] of clients.entries()) {
+			let failure: unknown
+			try {
+				await client.getLogs({ fromBlock: 1n, toBlock: 1n })
+			} catch (error) {
+				failure = error
+			}
+			const message = failure instanceof Error ? failure.message : String(failure)
+			expect(message).toContain(new URL(unavailableUrl).origin)
+			expect(message.match(/eth_getLogs/g)).toHaveLength(1)
+			expect(message).not.toContain('operator')
+			expect(message).not.toContain('provider-secret')
+			expect(message).not.toContain('provider-key')
+			expect(message).not.toContain('query-secret')
+			if (index === 0) now += 101
+		}
+
+		let cooldownFailure: unknown
+		try {
+			await clients[1]?.getLogs({ fromBlock: 1n, toBlock: 1n })
+		} catch (error) {
+			cooldownFailure = error
+		}
+		const cooldownMessage = cooldownFailure instanceof Error ? cooldownFailure.message : String(cooldownFailure)
+		expect(cooldownMessage).toContain(new URL(unavailableUrl).origin)
+		expect(cooldownMessage).toContain('cooling down until')
+		expect(cooldownMessage.match(/eth_getLogs/g)).toHaveLength(1)
+		expect(cooldownMessage).not.toContain('provider-secret')
+		expect(cooldownMessage).not.toContain('provider-key')
+		expect(cooldownMessage).not.toContain('query-secret')
 	})
 
 	test('tracks independent live-mode transports in one endpoint-health snapshot', async () => {
@@ -540,8 +889,7 @@ describe('shared bot primitives', () => {
 		}
 	})
 
-	test('unlinks a failed lock initialization even when closing the handle fails', async () => {
-		let removed = false
+	test('reports cleanup failure when failed lock initialization cannot close its handle', async () => {
 		await expect(
 			acquireExclusiveProcessLock(
 				'operator.lock',
@@ -554,40 +902,110 @@ describe('shared bot primitives', () => {
 						close: async () => {
 							throw new Error('close failed')
 						},
+						fd: 1,
 						sync: async () => undefined,
+						truncate: async () => undefined,
 						writeFile: async () => {
 							throw new Error('write failed')
 						},
 					}),
 					readFile: async () => '',
-					rm: async () => {
-						removed = true
-					},
+					tryLock: () => true,
 				},
 			),
 		).rejects.toThrow('Failed to initialize and clean up process lock')
-		expect(removed).toBe(true)
 	})
 
-	test('retries process-lock cleanup after a transient unlink failure', async () => {
+	test('closes the file handle when native lock acquisition throws', async () => {
+		let closed = false
+		await expect(
+			acquireExclusiveProcessLock(
+				'operator.lock',
+				'Test lock',
+				{},
+				{
+					mkdir: async () => undefined,
+					open: async () => ({
+						chmod: async () => undefined,
+						close: async () => {
+							closed = true
+						},
+						fd: 1,
+						sync: async () => undefined,
+						truncate: async () => undefined,
+						writeFile: async () => undefined,
+					}),
+					readFile: async () => '',
+					tryLock: () => {
+						throw new Error('native lock unavailable')
+					},
+				},
+			),
+		).rejects.toThrow('native lock unavailable')
+		expect(closed).toBe(true)
+	})
+
+	test('retries process-lock cleanup after a transient close failure without replacing the lock inode', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-process-lock-'))
 		temporaryDirectories.push(directory)
 		const lockPath = join(directory, 'operator.lock')
-		let removals = 0
+		let closes = 0
 		const filesystem = {
 			mkdir,
 			open,
 			readFile,
-			rm: async (path: string, options: { force: true }) => {
-				removals += 1
-				if (removals === 1) throw new Error('transient unlink failure')
-				await rm(path, options)
-			},
+			tryLock: () => true,
 		}
-		const lock = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
-		await expect(lock.release()).rejects.toThrow('transient unlink failure')
+		const lock = await acquireExclusiveProcessLock(
+			lockPath,
+			'Test lock',
+			{},
+			{
+				...filesystem,
+				open: async (...arguments_) => {
+					const handle = await open(...arguments_)
+					return {
+						chmod: async mode => await handle.chmod(mode),
+						close: async () => {
+							closes += 1
+							if (closes === 1) throw new Error('transient close failure')
+							await handle.close()
+						},
+						fd: handle.fd,
+						sync: async () => await handle.sync(),
+						truncate: async length => await handle.truncate(length),
+						writeFile: async (data, options) => await handle.writeFile(data, options),
+					}
+				},
+			},
+		)
+		const inode = (await stat(lockPath)).ino
+		await expect(lock.release()).rejects.toThrow('transient close failure')
 		await lock.release()
 		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {}, filesystem)
+		await replacement.release()
+		expect((await stat(lockPath)).isFile()).toBe(true)
+		expect((await stat(lockPath)).ino).toBe(inode)
+	})
+
+	test('reclaims a process lock after its owner is killed', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-killed-process-lock-'))
+		temporaryDirectories.push(directory)
+		const lockPath = join(directory, 'operator.lock')
+		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/process-lock.ts')).href
+		const child = Bun.spawn([process.execPath, '--eval', `import { acquireExclusiveProcessLock } from ${JSON.stringify(moduleUrl)}; await acquireExclusiveProcessLock(${JSON.stringify(lockPath)}, 'Test lock', {}); console.log('ready'); await Bun.sleep(60_000)`], { stderr: 'pipe', stdout: 'pipe' })
+		try {
+			const reader = child.stdout.getReader()
+			const next = await reader.read()
+			if (next.done || !new TextDecoder().decode(next.value).includes('ready')) throw new Error(`Lock subprocess stopped before acquisition: ${await new Response(child.stderr).text()}`)
+			reader.releaseLock()
+			child.kill('SIGKILL')
+			expect(await child.exited).not.toBe(0)
+		} finally {
+			if (child.exitCode === null) child.kill('SIGKILL')
+			await child.exited
+		}
+		const replacement = await acquireExclusiveProcessLock(lockPath, 'Test lock', {})
 		await replacement.release()
 	})
 

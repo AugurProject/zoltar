@@ -7,6 +7,7 @@ export const approvingRep = 'Approving REP…'
 export const cancel = 'Cancel'
 export const walletConnectionRequired = 'Connect wallet to continue.'
 export const copied = 'Copied'
+export const copiedAddress = 'Copied address'
 export const copyFailed = 'Copy failed — select the value and copy it manually.'
 export const copyUnavailable = 'Copy unavailable'
 export const manualCopyValue = 'Exact value for manual copy'
@@ -116,7 +117,7 @@ export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
 export const approvalSatisfied = 'Approval Satisfied'
 export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve Max ${tokenLabel}`
-export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel} ${tokenSymbol}`
+export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
 export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${amount}`
 export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
 export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue) => `${tokenLabel} Approval Amount`
@@ -153,5 +154,8 @@ export const questionTimeline = 'Question timeline'
 export const questionType = 'Question Type'
 export const selectedOutcome = 'Selected Outcome'
 export const selectedTick = 'Selected Tick'
+export const scalarValue = 'Scalar Value'
+export const scalarValueHelpText = 'Enter a value on an increment.'
+export const scalarValueInvalid = 'Enter a value between the minimum and maximum that falls on an increment.'
 export const ticks = 'Ticks'
 export const untitledQuestion = 'Untitled question'

@@ -29,17 +29,18 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 	const copiedValue = copied.value
 	const exactSuffix = suffix === '' ? '' : ` ${suffix}`
 
-	let displayValue: string | undefined
-	let compactDisplayValue: string | undefined
+	let displayNumber: string | undefined
+	let compactDisplayNumber: string | undefined
 	if (value !== undefined && exactValue !== undefined) {
 		if (precision === 'exact') {
-			displayValue = `${exactValue}${exactSuffix}`
-			compactDisplayValue = displayValue
+			displayNumber = exactValue
+			compactDisplayNumber = displayNumber
 		} else {
-			displayValue = `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}${exactSuffix}`
-			compactDisplayValue = `≈ ${formatCompactCurrencyBalance(value, units)}${exactSuffix}`
+			displayNumber = `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}`
+			compactDisplayNumber = `≈ ${formatCompactCurrencyBalance(value, units)}`
 		}
 	}
+	const displayValue = displayNumber === undefined ? undefined : `${displayNumber}${exactSuffix}`
 
 	useLayoutEffect(() => {
 		if (!compactWhenOverflow || value === undefined || displayValue === undefined) {
@@ -78,9 +79,15 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 
 	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</LoadingText>
 
-	if (value === undefined || exactValue === undefined || displayValue === undefined || compactDisplayValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
+	if (value === undefined || exactValue === undefined || displayValue === undefined || displayNumber === undefined || compactDisplayNumber === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 
-	const resolvedDisplayValue = compactWhenOverflow && shouldCompact && !copiedValue ? compactDisplayValue : displayValue
+	const resolvedDisplayNumber = compactWhenOverflow && shouldCompact && !copiedValue ? compactDisplayNumber : displayNumber
+	const renderedValue = (
+		<span className='currency-value-number-unit'>
+			{resolvedDisplayNumber}
+			{exactSuffix}
+		</span>
+	)
 	const exactTitle = `${exactValue}${exactSuffix}`
 	const valueClassName = `currency-value${copyable ? ' copyable' : ''} ${className}`
 	const measureClassName = `currency-value currency-value-measure ${className}`
@@ -89,7 +96,7 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 		return (
 			<span className='currency-value-wrap'>
 				<span ref={spanRef} className={valueClassName} title={exactTitle}>
-					{resolvedDisplayValue}
+					{renderedValue}
 				</span>
 				<span ref={measureRef} aria-hidden='true' className={measureClassName} />
 			</span>
@@ -98,7 +105,7 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 	return (
 		<span className='currency-value-wrap'>
 			<button ref={buttonRef} type='button' className={valueClassName} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactValue)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(exactValue)}>
-				{copiedValue ? commonCopy.copied : resolvedDisplayValue}
+				{copiedValue ? <span className='copy-feedback'>{commonCopy.copied}</span> : renderedValue}
 			</button>
 			<CopyErrorMessage id={copyErrorId} manualValue={exactValue} message={copyError.value} />
 			<span ref={measureRef} aria-hidden='true' className={measureClassName} />

@@ -138,7 +138,7 @@ describe('configured coordinator report discovery', () => {
 			transactionsRoot: `0x${'ff'.repeat(32)}`,
 			uncles: [],
 		}
-		const provider = (reportId: bigint, unavailable = false, reorg = false): EIP1193Provider => {
+		const provider = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false): EIP1193Provider => {
 			let blockReads = 0
 			return {
 				request: parameters => {
@@ -146,7 +146,7 @@ describe('configured coordinator report discovery', () => {
 					if (unavailable) throw new ConnectivityDegradedError('RPC connection unavailable')
 					if (parameters.method === 'eth_getBlockByNumber') {
 						blockReads += 1
-						return Promise.resolve({ ...rawBlock, hash: reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
+						return Promise.resolve({ ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
 					}
 					if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
 					const request = parameters.params[0]
@@ -167,7 +167,7 @@ describe('configured coordinator report discovery', () => {
 				},
 			}
 		}
-		const client = (reportId: bigint, unavailable = false, reorg = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg)) })
+		const client = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg, missingBlockHash)) })
 		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
 
 		const reports = await pendingCoordinatorReportsWithQuorum([client(7n), client(7n), client(7n, true)], config, 100n)
@@ -175,6 +175,7 @@ describe('configured coordinator report discovery', () => {
 		expect(reports.map(report => report.helper.reportId)).toEqual([7n])
 		expect(methods).not.toContain('eth_getLogs')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n), client(8n)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('RPC disagreement')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [] }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending coordinator report snapshot block 100 is missing its canonical hash before the read')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, true), client(7n, false, true)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('changed during pending coordinator report snapshot')
 		await expect(replacementDisputeAmountsWithQuorum([client(7n, false, true), client(7n, false, true)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'] }, 7n, 2n, 100n)).rejects.toThrow('changed during replacement dispute snapshot')
 	})
@@ -188,6 +189,60 @@ describe('configured coordinator report discovery', () => {
 
 		expect([...reports.keys()]).toEqual([7n])
 		expect(reports.get(7n)?.latest).toEqual(active)
+	})
+
+	test('recovers a legacy replacement from the first log chunk without scanning later blocks', async () => {
+		const blockHash = `0x${'aa'.repeat(32)}` as Hex
+		const entryTransactionHash = `0x${'11'.repeat(32)}` as Hex
+		const successorTransactionHash = `0x${'22'.repeat(32)}` as Hex
+		const reportTopic = toHex(7n, { size: 32 })
+		const rawBlock = {
+			baseFeePerGas: '0x1',
+			difficulty: '0x0',
+			extraData: '0x',
+			gasLimit: '0x1c9c380',
+			gasUsed: '0x0',
+			hash: blockHash,
+			logsBloom: `0x${'00'.repeat(256)}`,
+			miner: getAddress('0x0000000000000000000000000000000000000000'),
+			mixHash: `0x${'00'.repeat(32)}`,
+			nonce: '0x0000000000000000',
+			number: '0xfa',
+			parentHash: `0x${'bb'.repeat(32)}`,
+			receiptsRoot: `0x${'cc'.repeat(32)}`,
+			sha3Uncles: `0x${'dd'.repeat(32)}`,
+			size: '0x1',
+			stateRoot: `0x${'ee'.repeat(32)}`,
+			timestamp: '0x64',
+			totalDifficulty: '0x0',
+			transactions: [],
+			transactionsRoot: `0x${'ff'.repeat(32)}`,
+			uncles: [],
+		}
+		const entryLog = { address: openOracle, blockHash, blockNumber: '0x63', data: encodeOpenOracleStatePreimagePacked(reportState(7n, 1_000n, 2_000n)), logIndex: '0x0', removed: false, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, reportTopic], transactionHash: entryTransactionHash, transactionIndex: '0x0' }
+		const successorLog = { address: openOracle, blockHash, blockNumber: '0x63', data: encodeOpenOracleStatePreimagePacked(reportState(7n, 1_400n, 2_300n)), logIndex: '0x1', removed: false, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, reportTopic], transactionHash: successorTransactionHash, transactionIndex: '0x1' }
+		const logRanges: { fromBlock: string; toBlock: string }[] = []
+		const provider = (): EIP1193Provider => ({
+			request: async parameters => {
+				if (parameters.method === 'eth_getBlockByNumber') return Promise.resolve(rawBlock)
+				if (parameters.method !== 'eth_getLogs' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
+				const request = parameters.params[0]
+				if (typeof request !== 'object' || request === null || !('fromBlock' in request) || !('toBlock' in request)) throw new Error('Malformed log filter')
+				logRanges.push({ fromBlock: String(request.fromBlock), toBlock: String(request.toBlock) })
+				if (request.fromBlock !== '0x0' || request.toBlock !== '0x63') throw new Error('HTTP 400 while calling eth_getLogs')
+				return [entryLog, successorLog]
+			},
+		})
+
+		const replacement = await legacyReplacementAmountsWithQuorum(
+			[createPublicClient({ chain: mainnet, transport: custom(provider()) })],
+			{ connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, openOracle, quorumRpcUrls: [] },
+			{ entrySubmissionBlockNumber: '0', entryTransactionHash, reportId: '7' },
+			250n,
+		)
+
+		expect(replacement).toEqual({ amounts: { amount1: 1_400n, amount2: 2_300n }, blockHash })
+		expect(logRanges).toEqual([{ fromBlock: '0x0', toBlock: '0x63' }])
 	})
 
 	test('recovers a legacy restarted position replacement from report-specific logs with quorum', async () => {

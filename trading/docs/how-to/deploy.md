@@ -11,7 +11,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/deploy`, select the network, enter an HTTPS RPC URL and the immutable fee, then connect a wallet. The UI checks the RPC chain, canonical proxy, and core factory before enabling the first transaction. Submit the factory transaction, then the router transaction. Progress reaches `2 / 2` after both deterministic contracts and their immutable links have been verified. The flow resumes at the first missing contract if you return later.
+Open `http://localhost:4163/#/deploy`. The UI automatically selects the canonical deployment and its default public RPC, then checks the RPC chain, canonical proxy, and core factory. Connect a wallet and review the status shown for the Trading factory and Trading router. Submit the factory transaction, then the router transaction. Progress reaches `2 / 2` after both deterministic contracts and their immutable links have been verified. The flow resumes at the first missing contract when you return with the same settings. To use another supported network or RPC URL, open **Settings** beside the wallet before connecting. Browser-led deployment uses a fixed 0.30% trading fee. Trading-pool deployment is not part of this setup: browse SecurityPools after setup and deploy a trading pool only for a selected pool that does not have one. Its deployment prompt identifies the deployed immutable fee as a percentage before submission.
 
 ## Use local Anvil
 
@@ -31,9 +31,9 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/deploy` and follow the public-network steps above with **Ethereum Mainnet · chain 1** and `http://127.0.0.1:8545`. The browser will deploy the trading factory and router through the same deterministic proxy.
+Open `http://localhost:4163/#/deploy` and follow the public-network steps above with **Ethereum Mainnet** and `http://127.0.0.1:8545`. The browser will deploy the trading factory and router through the same deterministic proxy.
 
-For a generated trading manifest instead of browser storage, open another terminal in the repository root, enter `trading/`, and run the local deployment script against the matching root manifest:
+For script or integration testing, open another terminal in the repository root, enter `trading/`, and run the local deployment script against the matching root manifest:
 
 ```bash
 cd trading

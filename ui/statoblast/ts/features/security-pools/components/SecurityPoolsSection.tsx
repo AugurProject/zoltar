@@ -38,6 +38,7 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseC
 			{view === 'create' ? (
 				<SecurityPoolSection
 					{...createPool}
+					activeUniverseId={overview.activeUniverseId}
 					onReturnToBrowse={() => openView('browse')}
 					showHeader={false}
 					onOpenCreatedPool={(securityPoolAddress, universeId) => {

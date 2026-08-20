@@ -83,8 +83,10 @@ const walletBalanceBoundsAssertion = `(() => { const wallet = document.querySele
 const maximumWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent?.endsWith('.584007913129639935') === true)`
 const smallWalletBalancesAssertion = `(${walletBalanceBoundsAssertion}) && [...document.querySelectorAll('.wallet-summary__balances strong')].every(value => value.textContent === '0.000000000000000001')`
 const headerRowsAssertion = `(() => { const actions = document.querySelector('.header-actions')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return actions !== undefined && nav !== undefined && header !== undefined && nav.top >= actions.bottom && actions.left >= header.left && actions.right <= header.right && nav.left >= header.left && nav.right <= header.right && document.documentElement.scrollWidth <= innerWidth })()`
-const visibleHeaderContextAssertion = `(() => { const selectors = ['.demo-banner', '.brand', '.network-pill', '.universe-selector select']; const bounds = selectors.map(selector => document.querySelector(selector)?.getBoundingClientRect()); return bounds.every(value => value !== undefined && value.width > 0 && value.height > 0 && value.left >= 0 && value.right <= innerWidth && value.top >= 0 && value.bottom <= innerHeight) && document.querySelector('.demo-banner')?.textContent?.includes('SIMULATED DATA') === true && document.querySelector('.brand')?.textContent?.includes('Zoltar') === true && document.querySelector('.network-pill')?.textContent?.includes('Anvil 31337') === true && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe' })()`
+const visibleHeaderContextAssertion = `(() => { const selectors = ['.demo-banner', '.brand', '.network-pill', '.universe-selector select']; const bounds = selectors.map(selector => document.querySelector(selector)?.getBoundingClientRect()); return bounds.every(value => value !== undefined && value.width > 0 && value.height > 0 && value.left >= 0 && value.right <= innerWidth && value.top >= 0 && value.bottom <= innerHeight) && document.querySelector('.demo-banner')?.textContent?.includes('SIMULATED DATA') === true && document.querySelector('.brand')?.textContent?.includes('Statoblast trading') === true && document.querySelector('.network-pill')?.textContent?.includes('Anvil 31337') === true && document.querySelector('.universe-selector select')?.selectedOptions[0]?.textContent === 'Genesis universe' })()`
 const expandedWalletInFlowAssertion = `(() => { const panel = document.querySelector('.wallet-summary__details')?.getBoundingClientRect(); const nav = document.querySelector('.site-header nav')?.getBoundingClientRect(); const main = document.querySelector('main')?.getBoundingClientRect(); return panel !== undefined && nav !== undefined && main !== undefined && panel.left >= 0 && panel.right <= innerWidth && panel.bottom <= nav.top && panel.bottom <= main.top })()`
+const injectLiveWalletActionExpression = `(() => { const actions = document.querySelector('.header-actions'); if (actions === null) return false; document.querySelectorAll('.header-actions .wallet-button').forEach(button => button.remove()); const button = document.createElement('button'); button.className = 'wallet-button'; button.type = 'button'; button.textContent = '0x8ba1…BA72'; actions.append(button); return true })()`
+const liveWalletHeaderAssertion = `(() => { const walletButtons = [...document.querySelectorAll('.header-actions .wallet-button')]; const button = walletButtons[0]?.getBoundingClientRect(); const header = document.querySelector('.site-header')?.getBoundingClientRect(); return walletButtons.length === 1 && button !== undefined && header !== undefined && button.width > 0 && button.height >= 44 && button.left >= header.left && button.right <= header.right && walletButtons[0]?.textContent === '0x8ba1…BA72' && (${genesisWalletSummaryAssertion}) && document.documentElement.scrollWidth <= innerWidth })()`
 const transactionStateLayoutAssertion = `(() => { const panel = document.querySelector('.trade-panel')?.getBoundingClientRect(); const action = document.querySelector('.trade-action')?.getBoundingClientRect(); const status = document.querySelector('.transaction-message')?.getBoundingClientRect(); const hash = document.querySelector('.transaction-hash'); const hashBounds = hash?.getBoundingClientRect(); const hashCode = hash?.querySelector('code'); const hashFits = hash === null || (hashBounds !== undefined && hashBounds.left >= panel.left && hashBounds.right <= panel.right && hashCode?.textContent?.length === 66); return panel !== undefined && action !== undefined && status !== undefined && action.bottom <= status.top && hashFits && [...document.querySelectorAll('.trade-panel button, .trade-panel input')].every(control => control.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`
 const scenarios = [
 	{
@@ -92,37 +94,44 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/#/deploy',
-		assertExpression: `document.querySelector('.deployment-setup select')?.options.length === 3 && document.querySelector('.deployment-setup input[type="url"]') !== null && document.body.textContent?.includes('Immutable trading fee') === true && [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
+		assertExpression: `(async () => { let checks = {}; for (let attempt = 0; attempt < 100; attempt++) { checks = { networkOptions: document.querySelector('.site-header .deployment-settings select')?.options.length === 2, walletButton: [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Connect wallet'), settingsClosed: document.querySelector('.site-header .deployment-settings')?.open === false, setupHasNoRpc: document.querySelector('.deployment-setup input[type="url"]') === null, deployDisabled: [...document.querySelectorAll('.deployment-setup button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (attempt === 99) checks.pageText = (document.body.textContent ?? '').slice(0, 300); if (Object.values(checks).every(value => value === true)) return true; await new Promise(resolve => setTimeout(resolve, 100)) } throw new Error(JSON.stringify(checks)) })()`,
 	},
+	...([1_000, 800] as const).map(width => ({
+		name: `deployment-setup-${width}`,
+		width,
+		height: 900,
+		path: '/#/deploy',
+		assertExpression: `(() => { const wallet = document.querySelector('.site-header .wallet-button')?.getBoundingClientRect(); const settings = document.querySelector('.site-header .deployment-settings-host')?.getBoundingClientRect(); return wallet !== undefined && settings !== undefined && wallet.right <= settings.left && Math.abs(wallet.top - settings.top) <= 1 && Math.abs(wallet.bottom - settings.bottom) <= 1 && document.documentElement.scrollWidth <= innerWidth })()`,
+	})),
 	{
 		name: 'deployment-setup-mobile',
 		width: 390,
 		height: 844,
 		path: '/#/deploy',
-		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup__fields')?.getBoundingClientRect(); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } }); const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth) throw new Error(JSON.stringify(checks)); return true })()`,
+		assertExpression: `(() => { const fields = document.querySelector('.deployment-setup')?.getBoundingClientRect(); const all = [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1);  const offenders = [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1).map(el => ({ tag: el.tagName, cls: String(el.getAttribute('class') ?? '').slice(0, 60), right: el.getBoundingClientRect().right })); const ignoredfix = all.filter(el => !all.some(other => other !== el && el.contains(other))).map(el => ({ tag: el.tagName, cls: String(el.getAttribute('class') ?? '').slice(0, 60), right: el.getBoundingClientRect().right })); const controls = [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].map(control => { const bounds = control.getBoundingClientRect(); return { name: control.getAttribute('name') ?? control.textContent?.trim() ?? control.tagName, left: bounds.left, right: bounds.right, height: bounds.height } });  const checks = { fields: fields === undefined ? undefined : { left: fields.left, right: fields.right }, offenders, controls, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }; if (fields === undefined || fields.left < 0 || fields.right > innerWidth || controls.some(control => control.left < 0 || control.right > innerWidth || control.height < 44) || checks.scrollWidth > checks.clientWidth || (checks.offenders ?? []).length > 0) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'deployment-setup-pending-hydration-desktop',
 		width: 1440,
 		height: 900,
 		path: '/?qaDeployment=pending#/deploy',
-		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluate: `(async () => { for (let attempt = 0; attempt < 200; attempt++) { const settings = document.querySelector('.site-header .deployment-settings'); const connect = [...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Connect wallet'); if (settings === null) { await new Promise(resolve => setTimeout(resolve, 100)); continue } settings.open = true; const rpc = settings.querySelector('input[type="url"]'); if (!(rpc instanceof HTMLInputElement)) return false; rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); connect?.click(); return true } throw new Error('setup-wait-timeout: ' + (document.body.textContent ?? '').slice(0, 200) + ' hash ' + location.hash) })()`,
 		evaluateWaitMs: 300,
 		clickSelector: '.deployment-setup .primary-action',
 		clickWaitMs: 800,
-		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', walletInSiteHeader: document.querySelector('.site-header .wallet-button') !== null && document.querySelector('.route-header .wallet-button') === null, controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify({ ...checks, status: document.querySelector('.deployment-setup__status')?.textContent, action: document.querySelector('.deployment-setup .primary-action')?.textContent, error: document.querySelector('[role="alert"]')?.textContent })); return true })()`,
 	},
 	{
 		name: 'deployment-setup-pending-hydration-mobile',
 		width: 390,
 		height: 844,
 		path: '/?qaDeployment=pending#/deploy',
-		evaluate: `(() => { const select = document.querySelector('.deployment-setup select'); const rpc = document.querySelector('.deployment-setup input[type="url"]'); if (!(select instanceof HTMLSelectElement) || !(rpc instanceof HTMLInputElement)) return false; select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })); rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+		evaluate: `(async () => { for (let attempt = 0; attempt < 200; attempt++) { const settings = document.querySelector('.site-header .deployment-settings'); const connect = [...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Connect wallet'); if (settings === null) { await new Promise(resolve => setTimeout(resolve, 100)); continue } settings.open = true; const rpc = settings.querySelector('input[type="url"]'); if (!(rpc instanceof HTMLInputElement)) return false; rpc.value = 'http://127.0.0.1:8545'; rpc.dispatchEvent(new Event('input', { bubbles: true })); connect?.click(); return true } throw new Error('setup-wait-timeout: ' + (document.body.textContent ?? '').slice(0, 200) + ' hash ' + location.hash) })()`,
 		evaluateWaitMs: 300,
 		clickSelector: '.deployment-setup .primary-action',
 		clickWaitMs: 800,
-		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
-		scrollY: 420,
+		assertExpression: `(() => { const checks = { pending: document.body.textContent?.includes('Deployment in progress') === true, actionBusy: document.querySelector('.deployment-setup .primary-action')?.getAttribute('aria-busy') === 'true', walletInSiteHeader: document.querySelector('.site-header .wallet-button') !== null && document.querySelector('.route-header .wallet-button') === null, controlsDisabled: [...document.querySelectorAll('.deployment-setup select, .deployment-setup input, .deployment-setup button')].every(control => control.disabled), navigationDisabled: [...document.querySelectorAll('.site-header a')].every(link => link.getAttribute('aria-disabled') === 'true'), fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
+		scrollSelector: '.deployment-setup .primary-action',
 		postScrollAssertExpression: `(() => { const action = document.querySelector('.deployment-setup .primary-action')?.getBoundingClientRect(); return action !== undefined && action.top >= 0 && action.bottom <= innerHeight && document.documentElement.scrollWidth <= document.documentElement.clientWidth })()`,
 	},
 	{
@@ -147,6 +156,19 @@ const scenarios = [
 		path: '/?demo=1&scenario=baseline#/markets',
 		assertExpression: `(() => { const checks = { deployHidden: document.querySelector('a[href="#/deploy"]') === null, poolInternalsHidden: ${poolInternalsHiddenAssertion}, removedCopy: ${removedCopyAssertion}, universeSelector: ${universeSelectorAssertion}, walletSummary: ${genesisWalletSummaryAssertion} }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
+	{ name: 'live-wallet-header-desktop', width: 1440, height: 900, path: '/?demo=1&scenario=baseline#/markets', evaluate: injectLiveWalletActionExpression, assertExpression: liveWalletHeaderAssertion },
+	{ name: 'live-wallet-header-1001', width: 1001, height: 900, path: '/?demo=1&scenario=baseline#/markets', evaluate: injectLiveWalletActionExpression, assertExpression: liveWalletHeaderAssertion },
+	{ name: 'live-wallet-header-1000', width: 1000, height: 900, path: '/?demo=1&scenario=baseline#/markets', evaluate: injectLiveWalletActionExpression, assertExpression: liveWalletHeaderAssertion },
+	{
+		name: 'live-wallet-header-mobile',
+		width: 390,
+		height: 844,
+		path: '/?demo=1&scenario=baseline#/markets',
+		evaluate: injectLiveWalletActionExpression,
+		clickSelector: '.wallet-summary__trigger',
+		clickWaitMs: 50,
+		assertExpression: `(${liveWalletHeaderAssertion}) && document.querySelector('.wallet-summary__identity code')?.textContent === '0x8ba1f109551bD432803012645Ac136ddd64DBA72' && [...document.querySelectorAll('.wallet-summary__detail-balances strong')].every(value => value.getBoundingClientRect().width > 0) && (${expandedWalletInFlowAssertion})`,
+	},
 	{ name: 'market-list-1280', width: 1280, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{ name: 'market-list-1181', width: 1181, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: genesisWalletSummaryAssertion },
 	{ name: 'market-list-1501', width: 1501, height: 900, path: '/?demo=1&scenario=baseline#/markets', assertExpression: `(${genesisWalletSummaryAssertion}) && (${headerRowsAssertion})` },
@@ -156,9 +178,9 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: '/?demo=1&scenario=baseline#/markets',
-		clickSelector: '.wallet-summary__trigger',
-		clickWaitMs: 50,
-		assertExpression: `document.querySelector('.wallet-summary')?.hasAttribute('open') === true && document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1' && document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0 && document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0 && document.documentElement.scrollWidth <= innerWidth`,
+		evaluate: `(() => { const summary = document.querySelector('details.wallet-summary'); if (!(summary instanceof HTMLDetailsElement)) return false; if (!summary.open) summary.querySelector('.wallet-summary__trigger')?.click(); return true })()`,
+		evaluateWaitMs: 50,
+		assertExpression: `(() => { const checks = { open: document.querySelector('.wallet-summary')?.hasAttribute('open') === true, interactive: document.querySelector('.wallet-summary__trigger')?.getAttribute('tabindex') !== '-1', identityVisible: document.querySelector('.wallet-summary__identity')?.getBoundingClientRect().height > 0, balancesVisible: document.querySelector('.wallet-summary__detail-balances')?.getBoundingClientRect().height > 0, fits: document.documentElement.scrollWidth <= innerWidth }; if (Object.values(checks).some(value => !value)) throw new Error(JSON.stringify(checks)); return true })()`,
 	},
 	{
 		name: 'wallet-balance-loading',
@@ -540,9 +562,9 @@ try {
 		await command('Page.navigate', { url: `${baseUrl}${scenario.path}` })
 		await Bun.sleep(600)
 		if ('evaluate' in scenario) {
-			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true })
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.evaluate, returnByValue: true, awaitPromise: true })
 			const result = evaluated.result
-			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}`)
+			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Setup expression failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 			await Bun.sleep('evaluateWaitMs' in scenario ? scenario.evaluateWaitMs : 100)
 		}
 		if ('clickSelector' in scenario) {
@@ -551,12 +573,16 @@ try {
 			await Bun.sleep(scenario.clickWaitMs)
 		}
 		if ('assertExpression' in scenario) {
-			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true })
+			const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true, awaitPromise: true })
 			const result = evaluated.result
 			if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
 		}
 		if ('scrollY' in scenario) {
 			await command('Runtime.evaluate', { expression: `document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0, ${scenario.scrollY})` })
+			await Bun.sleep(300)
+		}
+		if ('scrollSelector' in scenario) {
+			await command('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scenario.scrollSelector)})?.scrollIntoView({ block: 'center' })` })
 			await Bun.sleep(300)
 		}
 		if ('postScrollAssertExpression' in scenario) {

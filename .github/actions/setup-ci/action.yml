@@ -34,15 +34,13 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock') }}
+        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/bun.lock', 'solidity/bun.lock') }}
 
     - name: Install dependencies
       shell: bash
       run: |
         bun install --frozen-lockfile
-        (cd ui/coreShared && bun install --frozen-lockfile)
-        (cd ui/zoltar && bun install --frozen-lockfile)
-        (cd ui/statoblast && bun install --frozen-lockfile)
+        (cd ui && bun install --frozen-lockfile)
         (cd solidity && bun install --frozen-lockfile)
 
     - name: Cache generated shared package
@@ -61,18 +59,16 @@ runs:
           solidity/.contract-hash.json
           solidity/ts/types/contractArtifact.ts
           solidity/types/contractArtifact.ts
-          ui/coreShared/ts/abis.ts
-          ui/coreShared/ts/contractArtifact.ts
-        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/coreShared/build/projectArtifacts.mts') }}
+          ui/ts/abis.ts
+          ui/ts/contractArtifact.ts
+        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/build/projectArtifacts.mts') }}
 
     - name: Cache UI vendor assets
       id: vendor-cache
       uses: actions/cache@v5
       with:
-        path: |
-          ui/zoltar/vendor
-          ui/statoblast/vendor
-        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'ui/coreShared/build/bundlerPaths.mts', 'ui/coreShared/build/vendor.mts') }}
+        path: ui/vendor
+        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/bun.lock', 'ui/package.json', 'ui/tsconfig.vendor.json', 'ui/build/bundlerPaths.mts', 'ui/build/vendor.mts') }}
 
     - name: Generate and verify generated artifacts
       if: inputs.verify-generated == 'true' || steps.shared-cache.outputs.cache-hit != 'true' || steps.contract-cache.outputs.cache-hit != 'true' || steps.vendor-cache.outputs.cache-hit != 'true'

@@ -222,7 +222,16 @@
 		white-space: normal;
 	}
 
+	.operator-primary > .operator-safety > .badge[hidden] {
+		display: none;
+	}
+
 	.operator-primary > .operator-safety > button {
+		font-size: 0.82rem;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		padding-inline: 0.5rem;
+		white-space: normal;
 		width: 100%;
 	}
 

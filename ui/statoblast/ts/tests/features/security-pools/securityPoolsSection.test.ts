@@ -308,6 +308,7 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 				}
 	return {
 		accountState,
+		activeUniverseId: 1n,
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,

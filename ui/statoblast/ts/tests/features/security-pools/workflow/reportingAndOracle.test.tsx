@@ -368,10 +368,14 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
+		const executions: Array<{ operationId: bigint; securityPoolAddress: string; universeId: bigint }> = []
+		const pool = createSelectedPool({ universeId: 4n })
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
+					activeUniverseId: pool.universeId,
 					checkedSecurityPoolAddress: zeroAddress,
+					onExecutePendingPoolOperation: (_managerAddress, operationId, securityPoolAddress, universeId) => executions.push({ operationId, securityPoolAddress, universeId }),
 					poolOracleManagerDetails: {
 						activeStagedOperationCount: 4n,
 						callbackStateHash: undefined,
@@ -399,7 +403,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						token2: zeroAddress,
 					},
 					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
+					securityPools: [pool],
 					selectedPoolView: 'staged-operations',
 				})}
 				showHeader={false}
@@ -417,6 +421,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Execute staged operation' }))
+		expect(executions).toEqual([{ operationId: 7n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
 
 	test('labels liquidation amounts by accounting role', async () => {
@@ -577,12 +583,12 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
-		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string }> = []
+		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool()
 		const baseProps = createSecurityPoolWorkflowProps({
 			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
 			checkedSecurityPoolAddress: pool.securityPoolAddress,
-			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestValueAttoEth) => requests.push({ managerAddress, reviewedRequestValueAttoEth, securityPoolAddress }),
+			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId) => requests.push({ managerAddress, reviewedRequestValueAttoEth, securityPoolAddress, universeId }),
 			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 2n * 10n ** 18n }),
 			securityPoolAddress: pool.securityPoolAddress,
 			securityPools: [pool],
@@ -609,7 +615,40 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
-		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
+		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
+	})
+
+	test('retains the reviewed pool universe when selection changes before confirming a price request', async () => {
+		const requests: Array<{ securityPoolAddress: string; universeId: bigint }> = []
+		const reviewedPool = createSelectedPool({ universeId: 2n })
+		const newlySelectedPool = createSelectedPool({
+			managerAddress: getAddress('0x00000000000000000000000000000000000000b1'),
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000b2'),
+			universeId: 3n,
+		})
+		const baseProps = createSecurityPoolWorkflowProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 100n * 10n ** 18n }),
+			activeUniverseId: reviewedPool.universeId,
+			checkedSecurityPoolAddress: reviewedPool.securityPoolAddress,
+			onRequestPoolPrice: (_managerAddress, securityPoolAddress, _reviewedRequestValueAttoEth, universeId) => requests.push({ securityPoolAddress, universeId }),
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 2n * 10n ** 18n }),
+			securityPoolAddress: reviewedPool.securityPoolAddress,
+			securityPools: [reviewedPool],
+			selectedPoolView: 'price-oracle',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Request new price' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Request New Price' })
+
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} activeUniverseId={newlySelectedPool.universeId} checkedSecurityPoolAddress={newlySelectedPool.securityPoolAddress} securityPoolAddress={newlySelectedPool.securityPoolAddress} securityPools={[newlySelectedPool]} showHeader={false} />, renderedComponent.container)
+		})
+
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
+		expect(requests).toEqual([{ securityPoolAddress: reviewedPool.securityPoolAddress, universeId: reviewedPool.universeId }])
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {
@@ -632,7 +671,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Request new price', 'Need 7 more ETH in this wallet to request a new price.')
+		expectTransactionButtonDisabled(document.body, 'Request new price', 'Need 7\u00a0more\u00a0ETH in this wallet to request a new price.')
 	})
 
 	test('disables Request New Price while the current oracle price remains valid', async () => {

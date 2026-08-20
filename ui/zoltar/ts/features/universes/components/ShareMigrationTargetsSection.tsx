@@ -150,6 +150,9 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 					</button>
 				}
 				details={{
+					answerUnit: scalarQuestion.answerUnit,
+					displayValueMax: scalarQuestion.displayValueMax,
+					displayValueMin: scalarQuestion.displayValueMin,
 					maxValueLabel: formatScalarOutcomeLabel(scalarQuestion, scalarQuestion.numTicks),
 					minValueLabel: formatScalarOutcomeLabel(scalarQuestion, 0n),
 					numTicks: scalarQuestion.numTicks,

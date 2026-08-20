@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '../../../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 import { App } from '../app/App.tsx'
 import { demoMarket } from '../demo/markets.ts'
 import { MarketDetail } from '../features/MarketDetail.tsx'
-import { ExecutionProtectionFields } from '../features/LiveTrading.tsx'
+import { ExecutionProtectionFields, renderLiveTradeSummary } from '../features/LiveTrading.tsx'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.tsx'
 import { renderIntoDocument } from './test-support/renderIntoDocument.tsx'
 
@@ -105,14 +106,15 @@ describe('essential trading copy', () => {
 	})
 
 	test('puts the user-facing trade result and action before optional mechanics', async () => {
-		const rendered = await renderIntoDocument(<MarketDetail market={demoMarket('baseline')} scenario='baseline' />)
+		const rendered = await renderIntoDocument(<MarketDetail market={{ ...demoMarket('baseline'), feeBps: 47n }} scenario='baseline' />)
 		cleanupRendered = rendered.cleanup
 		const summary = rendered.container.querySelector('.trade-summary')
 		const action = rendered.container.querySelector('.trade-action')
 		const breakdown = rendered.container.querySelector('.trade-breakdown')
 		if (summary === null || action === null || breakdown === null) throw new Error('Trade hierarchy is incomplete')
 		expect(summary.textContent).toContain('You pay0.25 ETH')
-		expect(summary.textContent).toContain('You receive0.3613 YES+ 0.2531 INVALID')
+		expect(summary.textContent).toContain('You receive0.3611 YES+ 0.2531 INVALID')
+		expect(summary.textContent).toContain('Trading fee 0.47%')
 		expect(summary.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(action.compareDocumentPosition(breakdown) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(breakdown.textContent).toContain('Conditional YES price70.0%')
@@ -120,6 +122,20 @@ describe('essential trading copy', () => {
 		expect(breakdown.textContent).toContain('NO reserve1,000 NO')
 		expect(rendered.container.querySelector('.detail-aside')?.textContent).toContain('Your position')
 		expect(rendered.container.querySelector('.detail-aside')?.textContent).not.toContain('Conditional YES price')
+		const exit = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Exit')
+		if (!(exit instanceof HTMLButtonElement)) throw new Error('Exit mode button is unavailable')
+		await act(async () => exit.click())
+		expect(rendered.container.querySelector('.trade-summary')?.textContent).toContain('Trading fee 0.47%')
+	})
+
+	test('shows the deployed fee in live entry and exit summaries', async () => {
+		const market = { feeBps: 125n }
+		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n } } }, 'YES'))
+		expect(entry.container.textContent).toContain('Trading fee 1.25%')
+		await entry.cleanup()
+		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
+		cleanupRendered = exit.cleanup
+		expect(exit.container.textContent).toContain('Trading fee 1.25%')
 	})
 
 	test('shows configurable slippage and transaction-validity controls', async () => {

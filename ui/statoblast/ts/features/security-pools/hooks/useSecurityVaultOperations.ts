@@ -20,7 +20,7 @@ import {
 } from '../../../protocol/index.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
@@ -86,6 +86,7 @@ type SecurityVaultActionSnapshot = {
 	effectiveSecurityPoolAddressInput: string | undefined
 	effectiveVaultSelectionKey: string
 	form: SecurityVaultFormState
+	universeId?: bigint | undefined
 }
 
 function useSecurityVaultOperationsWithDependencies<TWriteClient>(
@@ -190,6 +191,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		effectiveSecurityPoolAddressInput,
 		effectiveVaultSelectionKey,
 		form: { ...securityVaultForm.value },
+		universeId: securityVaultDetails.value?.universeId,
 	})
 	const isVaultActionSnapshotCurrent = (snapshot: SecurityVaultActionSnapshot) => snapshot.effectiveVaultSelectionKey === lastEffectiveVaultSelectionKey.current
 	const resolveSelectedVaultOwnerFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
@@ -247,11 +249,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined) => {
 		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress)
 		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.initialReportAmount2) {
-			throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalanceAttoRep)} more REP in this wallet to fund the initial report.`)
+			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 		}
 		const requiredEthWithWrap = addOpenOracleBountyBuffer(requiredCostAttoEth) + fundingRequirement.wethShortfallAttoEth
 		if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < requiredEthWithWrap) {
-			throw new Error(`Need ${formatCurrencyBalance(requiredEthWithWrap - walletBalanceAttoEth)} more ETH in this wallet to fund the initial report and ${actionLabel}.`)
+			throw new Error(`Need ${formatAdditionalCurrencyBalance(requiredEthWithWrap - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and ${actionLabel}.`)
 		}
 	}
 
@@ -320,6 +322,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
+			universeId: snapshot.universeId,
 			vaultAddress: getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress),
 		}
 		let securityPoolAddress: Address | undefined
@@ -412,7 +415,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
-				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalanceAttoRep)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
+				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
 				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',

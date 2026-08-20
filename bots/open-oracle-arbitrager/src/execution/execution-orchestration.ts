@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
+import { bigintToSafeNumber, rpcFailureWithContext, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
@@ -247,11 +247,16 @@ export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashRe
 	return settledQuorumValue(
 		`${label} canonical block ${blockNumber.toString()}`,
 		readers.map(async (reader, index) => {
-			const block = await reader.getBlock({ blockNumber })
-			if (block.hash == null) throw new Error(`${label} canonical block is missing its hash`)
-			return {
-				endpoint: endpointLabel(endpoints[index] ?? ''),
-				value: block.hash,
+			const endpoint = endpointLabel(endpoints[index] ?? '')
+			try {
+				const block = await reader.getBlock({ blockNumber })
+				if (block.hash == null) throw new Error(`${label} canonical block is missing its hash`)
+				return {
+					endpoint,
+					value: block.hash,
+				}
+			} catch (error) {
+				throw rpcFailureWithContext(error, endpoint, 'eth_getBlockByNumber')
 			}
 		}),
 	)

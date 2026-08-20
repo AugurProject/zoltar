@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
+const dockerignore = join(import.meta.dir, '..', 'Dockerfile.dockerignore')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')
 const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
 const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
@@ -38,10 +39,14 @@ describe('Docker packaging', () => {
 
 	test('builds and installs both shared packages where bot sources can resolve them', async () => {
 		const source = await readFile(dockerfile, 'utf8')
+		const ignoreSource = await readFile(dockerignore, 'utf8')
 		expect(source).toContain('-alpine AS shared-builder')
 		expect(source).toContain('&& bun run shared:build')
 		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production \\\n\t&& cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).toContain('COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts')
+		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')
+		expect(source).toContain('RUN bun ./scripts/check-process-lock-runtime.mts')
 	})
 
 	test('starts without host UID, GID, or .env configuration', async () => {

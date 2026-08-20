@@ -35,7 +35,7 @@ describe('MarketOverviewSection wallet asset control', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('adds the current universe REP token control to the overview', async () => {
+	test('does not repeat the header REP token control in the market overview', async () => {
 		const universe = {
 			childUniverses: [],
 			forkThresholdAttoRep: 100n,
@@ -53,6 +53,6 @@ describe('MarketOverviewSection wallet asset control', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByRole('button', { name: 'Add Genesis (0x0) REP to wallet' })).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Add Genesis (0x0) REP to wallet' })).toBeNull()
 	})
 })

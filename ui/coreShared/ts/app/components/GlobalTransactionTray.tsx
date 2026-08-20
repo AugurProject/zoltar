@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import * as appCopy from '../../copy/app.js'
 import { TransactionPresentationNotice } from '../../components/TransactionPresentationNotice.js'
+import { WarningSurface } from '../../components/WarningSurface.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
 
+function formatUniverseIdHex(universeId: bigint) {
+	return `0x${universeId.toString(16)}`
+}
+
 type GlobalTransactionTrayProps = {
+	activeUniverseId?: bigint | undefined
 	routeKey?: string
 	transaction: GlobalTransactionPresentation | undefined
 }
@@ -39,7 +46,7 @@ function rememberDismissal(dismissKey: string) {
 	dismissedKeys.add(dismissKey)
 }
 
-export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransactionTrayProps) {
+export function GlobalTransactionTray({ activeUniverseId, routeKey, transaction }: GlobalTransactionTrayProps) {
 	const [dismissedKey, setDismissedKey] = useState<string | undefined>(() => {
 		const transactionDismissKey = getDismissKey(transaction)
 		if (transactionDismissKey === undefined || !dismissedKeys.has(transactionDismissKey)) return undefined
@@ -95,10 +102,18 @@ export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransacti
 		if (shouldRememberDismissal(transaction)) rememberDismissal(transactionDismissKey)
 		setDismissedKey(transactionDismissKey)
 	}
+	const transactionUniverseId = transaction.universeId
+	const universeWarning =
+		transactionUniverseId === undefined || activeUniverseId === undefined || transactionUniverseId === activeUniverseId ? undefined : (
+			<WarningSurface className='global-transaction-universe-warning' surface='flat' variant='compact'>
+				<strong>{appCopy.transactionUniverseMismatch}</strong>
+				<p>{appCopy.formatTransactionUniverseMismatch(formatUniverseIdHex(transactionUniverseId), formatUniverseIdHex(activeUniverseId))}</p>
+			</WarningSurface>
+		)
 
 	return (
 		<div className='global-transaction-tray'>
-			<TransactionPresentationNotice compact={compact} dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} transaction={transaction} />
+			<TransactionPresentationNotice compact={compact} contextWarning={universeWarning} dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} transaction={transaction} />
 		</div>
 	)
 }

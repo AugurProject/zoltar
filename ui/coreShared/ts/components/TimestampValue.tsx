@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
-import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime } from '../lib/formatters.js'
+import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime, getWallClockTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -15,7 +15,7 @@ type TimestampValueProps = {
 
 export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
-	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
+	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
 	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
 
@@ -37,17 +37,11 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 			</span>
 		)
 
-	const relativeTimestamp = resolvedCurrentTimestamp === undefined ? undefined : formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
+	const relativeTimestamp = formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
 
 	return (
 		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={absoluteTimestamp}>
-			{absoluteTimestamp}
-			{relativeTimestamp === undefined ? null : (
-				<>
-					{' '}
-					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
-				</>
-			)}
+			{absoluteTimestamp} <span className='timestamp-value-relative'>({relativeTimestamp})</span>
 		</time>
 	)
 }

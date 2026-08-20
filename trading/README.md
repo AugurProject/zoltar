@@ -1,4 +1,4 @@
-# Zoltar two-way trading
+# Statoblast trading
 
 This self-contained project implements the two-reserve constant-product alternative described in [How To Build: Augur Constant Product with Invalid Insurance](https://micah-zoltu.medium.com/augur-constant-product-with-invalid-insurance-385fca7efbc7), adapted to the current local Zoltar protocol.
 
@@ -23,7 +23,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/markets`. Select a network whose canonical Zoltar core deployment is installed, enter its RPC URL, and connect a wallet. The repository's public-network manifests contain planned deterministic addresses; the UI verifies the required code before it offers a trading deployment transaction.
+Open `http://localhost:4163/#/markets`. The client derives the trading factory and router addresses from the canonical Zoltar deployment and checks their code through the default public RPC. If either deterministic contract is missing, the deployment screen is shown automatically. Connect a wallet, then deploy the trading factory and router in order. The **Settings** control beside the wallet lets you override the network or RPC URL without making configuration part of the setup steps. SecurityPools remain browseable without a trading pool; deploy and initialize one from the selected pool when needed. Browser-led deployment uses a fixed 0.30% trading fee. Trading and trading-pool deployment surfaces show the deployed immutable fee as a percentage.
 
 On Windows, run `start.bat` from this directory to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
 
@@ -41,23 +41,9 @@ Open `http://localhost:4163/?demo=1#/markets`. Demo mode is prominently labeled 
 
 The Docker image copies the canonical mainnet and Sepolia core deployment addresses from the root documentation manifests. The live UI uses the installed core deployment's deterministic proxy to deploy the two-way factory and router in two wallet transactions. It verifies the RPC chain, core contracts, deterministic addresses, immutable fee, and router-to-factory link before enabling trading.
 
-To use an existing reviewed trading deployment instead, first copy its manifest into `trading/deployments/`. Then set its project-local path at build time:
-
-```bash
-cp /absolute/path/to/reviewed.json deployments/reviewed.json
-docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
-TRADING_UI_DEPLOYMENT=deployments/reviewed.json docker compose up --build --force-recreate
-```
-
 ### Live deployment
 
-Without Docker, `bun run ui:build` includes the same wallet deployment setup. To use an existing reviewed deployment manifest instead:
-
-```bash
-TRADING_UI_DEPLOYMENT=/absolute/path/to/trading/deployments/local.json bun run ui:build
-```
-
-The live client validates the manifest, discovers canonical SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
+Without Docker, `bun run ui:build` includes the same deterministic wallet deployment setup. The live client derives and verifies the canonical trading contracts, discovers SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
 
 ## Commands
 
@@ -68,13 +54,14 @@ The live client validates the manifest, discovers canonical SecurityPools in bou
 | `bun run tsc` | Type-check SDK, tooling, and UI |
 | `bun run test` | Compile, type-check, and run SDK/UI tests |
 | `bun run coverage` | Bun coverage for TypeScript tests |
+| `bun run coverage:contracts` | Trace Solidity execution and require at least 99% production-contract line coverage |
 | `bun run check` | Formatting, types, and tests |
 | `bun run format:check` / `format` | Check or apply project formatting |
 | `bun run ui:build` / `ui:serve` | Build or serve the standalone UI |
 | `bun run deploy:local` | Deploy against an existing local Zoltar manifest |
 | `bun run docker:build` / `docker:run` | Build or run the standalone UI container from `trading/` |
 | `bun run gas-costs` | Report bytecode sizes and funded-fixture operation gas |
-| `bun run ci` | Run the AMM-local frozen install, build, tests, formatting, and dependency audit |
+| `bun run ci` | Run the AMM-local frozen install, build, tests, Solidity coverage gate, formatting, and dependency audit |
 
 Root aliases use the `trading:*` prefix.
 
@@ -91,7 +78,7 @@ The router creates and redeems complete sets using observed balance and attoETH 
 - [Start here](docs/index.md)
 - [First market](docs/tutorials/first-market.md) and [first trade](docs/tutorials/first-trade.md)
 - [Contract reference](docs/reference/contracts.md), [router reference](docs/reference/router.md), and [SDK reference](docs/reference/sdk.md)
-- [Two-way design](docs/explanation/two-way-market.md), [INVALID insurance](docs/explanation/invalid-insurance.md), and [security model](docs/explanation/security-model.md)
+- [Market design](docs/explanation/two-way-market.md), [INVALID insurance](docs/explanation/invalid-insurance.md), and [security model](docs/explanation/security-model.md)
 
 ## MVP limitations
 

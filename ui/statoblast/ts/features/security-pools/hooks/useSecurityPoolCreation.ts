@@ -20,6 +20,7 @@ import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from
 
 type UseSecurityPoolCreationParameters = {
 	accountAddress: Address | undefined
+	activeUniverseId?: bigint | undefined
 	deploymentStatuses: DeploymentStatus[]
 	enabled: boolean
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
@@ -44,7 +45,20 @@ function parseQuestionIdInput(marketId: string) {
 	return BigInt(trimmedMarketId)
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({
+	accountAddress,
+	activeUniverseId,
+	deploymentStatuses,
+	enabled,
+	onTransactionFailed,
+	onTransactionFinished,
+	onTransactionPresented,
+	onTransactionPrepared,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+	zoltarUniverseHasForked,
+}: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -134,6 +148,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			initialReportPriorityFeeGwei: submittedSecurityPoolForm.initialReportPriorityFeeGwei,
 			questionId: submittedSecurityPoolForm.marketId,
 			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
+			universeId: activeUniverseId,
 		}
 		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined

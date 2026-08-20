@@ -575,7 +575,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
-		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
 		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
 		expect(
 			within(transactionContext)
@@ -643,7 +643,7 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
-		expectTransactionButtonDisabled(documentQueries.getByRole('dialog', { name: 'Deposit REP' }), 'Deposit REP', 'New vaults require at least 30 REP in the first deposit.')
+		expectTransactionButtonDisabled(documentQueries.getByRole('dialog', { name: 'Deposit REP' }), 'Deposit REP', 'New vaults require at least 30\u00a0REP in the first deposit.')
 	})
 
 	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
@@ -721,7 +721,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 
 	test('does not require fresh-report funding immediately before oracle-price expiry', async () => {

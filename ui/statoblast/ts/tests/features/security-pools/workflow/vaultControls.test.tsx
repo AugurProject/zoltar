@@ -193,7 +193,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const withdrawDialog = documentQueries.getByRole('dialog', {
 			name: 'Withdraw REP',
 		})
-		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000 REP or less.')
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {
@@ -255,6 +255,6 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const withdrawDialog = documentQueries.getByRole('dialog', {
 			name: 'Withdraw REP',
 		})
-		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Need 7 more ETH in this wallet to queue this REP withdrawal.')
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 })

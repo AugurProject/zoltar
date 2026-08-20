@@ -59,7 +59,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(readOnlyContextItems).getByText('Security Pool Address')).not.toBeNull()
 		expect(persistentContext.classList.contains('static')).toBe(false)
 		expect(persistentContext.classList.contains('context-strip')).toBe(true)
-		expect(within(persistentContext).getByText('Universe')).not.toBeNull()
+		expect(within(persistentContext).queryByText('Universe')).toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
 		expect(contextDetails.hasAttribute('open')).toBe(false)

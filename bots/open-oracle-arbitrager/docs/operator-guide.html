@@ -12,8 +12,8 @@
 				<h1>OpenOracle Arbitrager</h1>
 				<p>This operator guide explains how the bot discovers OpenOracle games, compares their exchange rate with onchain liquidity, submits an atomic hedge and dispute, and accounts for the final withdrawal. It covers the operator configuration, local dashboard, strategy math, supported exchanges, durable recovery, and the balances an execution wallet needs.</p>
 				<div class="callout">
-					<strong>Experimental operator software</strong>
-					Dry-run first, rehearse with a dedicated low-balance key on Sepolia, and supervise every funded position. A modeled profit is not a guarantee: fees, failed inclusion, later disputes, token behavior, RPC failure, MEV, and market movement can still cause loss.
+					<strong>Execution risk</strong>
+					Use a dedicated low-balance key and supervise every funded position. A modeled profit is not a guarantee: fees, failed inclusion, later disputes, token behavior, RPC failure, MEV, and market movement can still cause loss.
 				</div>
 				<nav class="guide-nav" aria-label="Guide sections">
 					<a href="#quick-start">Quick start</a>
@@ -33,7 +33,7 @@
 					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-lifecycle" data-plot-width="1160" data-plot-height="390" role="img" aria-label="OpenOracle arbitrager execution and recovery lifecycle">
 						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after the configured reader requirement returns the same twelfth-descendant finality evidence; every available response must agree, and ambiguous evidence stays in durable recovery.</span>
 					</div>
-					<p class="diagram-caption"><span class="figure-label">Execution lifecycle</span>Both public and private delivery sign a parent-bound executor transaction. A missed target cannot later succeed; after twelve descendants, the configured reader requirement and every available response must agree on missing-receipt evidence before the bot safely expires the entry or retries the lifecycle while continuing to watch the old hash for late revert gas.</p>
+					<p class="diagram-caption"><span class="figure-label">Execution lifecycle</span>Both public and private delivery sign a parent-bound executor transaction. A missed target cannot later succeed; after twelve descendants, the configured reader requirement and every available response must agree on missing-receipt evidence before the bot safely expires the entry or retries the lifecycle while continuing to watch the old hash for late revert gas. The primary reader is sufficient by default; quorum 2 requires at least two available readers.</p>
 				</figure>
 				<div class="compact-grid">
 					<div>
@@ -59,11 +59,11 @@
 install -m 600 config/operator.example.json .state/operator.json
 bun run run</code></pre>
 				<p>Direct file editing is an offline workflow: stop the bot, edit the configuration, and restart it. While the bot is running, use the dashboard only; do not edit the file concurrently with a dashboard save.</p>
-				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Paused</strong>. In <strong>Chain and RPC connectivity</strong>, select the chain, RPC agreement requirement, and read and public RPC endpoints. Keep the default two-reader policy for production; use one reader only on an isolated development chain. The bot verifies every endpoint against the selected chain. Initial chain selection and quorum changes take effect after restart. Then review the deployment and network-specific durable paths in <strong>Complete bot configuration</strong>.</p>
+				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Paused</strong>. In <strong>Chain and RPC connectivity</strong>, select the chain, RPC agreement requirement, and read and public RPC endpoints. The default one-reader policy accepts the primary RPC alone; select two readers to require independent corroboration. The bot verifies every endpoint against the selected chain. Initial chain selection and quorum changes take effect after restart. Then review the deployment and network-specific durable paths in <strong>Complete bot configuration</strong>.</p>
 				<p>For Sepolia, copy the example to a separate operator file, start it with <code>OPEN_ORACLE_ARBITRAGER_CONFIG</code>, and use separate history, price-history, and position paths. A configured operator file cannot be retargeted to another chain because its journals are not chain-tagged. Keep <code>runtime.execute</code> off for the first rehearsal.</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
-					Under the default production policy, execution also requires an authenticated manifest, at least three independently operated read RPC origins, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected. A retryable transport failure may make one reader unavailable; critical evidence still requires at least two available readers, with every available response agreeing exactly. The one-reader policy removes this independent corroboration and is only for isolated development.
+					Execution also requires an authenticated manifest, one primary read RPC, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected. Independent readers are optional by default. When the saved RPC agreement requirement is <code>2</code>, configure two additional independent origins; critical evidence then requires at least two available readers, with every available response agreeing exactly.
 				</div>
 				<div class="table-scroll" tabindex="0" aria-label="Important configuration groups">
 					<table>
@@ -87,8 +87,8 @@ bun run run</code></pre>
 							</tr>
 							<tr>
 								<td><code>rpcQuorum</code></td>
-								<td>Selects two agreeing readers for production or one reader for isolated development.</td>
-								<td>Defaults to <code>2</code> and applies after restart.</td>
+								<td>Selects the primary reader alone or two agreeing independent readers.</td>
+								<td>Defaults to <code>1</code> and applies after restart.</td>
 							</tr>
 							<tr>
 								<td><code>submission</code></td>
@@ -234,7 +234,7 @@ bun run run</code></pre>
 						The lifecycle reserve is the larger of the configured floor and
 						<code>(callbackGasLimit + 900,000) × gas price</code>.
 					</li>
-					<li>Open hedged net uses actual executor hedge evidence and gas recorded so far. Realized net adds the exact ETH settler reward emitted by the lifecycle executor and requires exact withdrawal evidence. It closes only when the configured reader requirement returns the same twelfth-descendant finality evidence and every available response agrees.</li>
+					<li>Open hedged net uses actual executor hedge evidence and gas recorded so far. Realized net adds the exact ETH settler reward emitted by the lifecycle executor and requires exact withdrawal evidence. It closes only when the configured reader requirement returns the same twelfth-descendant finality evidence and every available response agrees. The primary reader is sufficient by default; quorum 2 requires at least two available readers.</li>
 				</ul>
 			</section>
 
@@ -308,7 +308,7 @@ bun run run</code></pre>
 					<li>withdrawing (replacement credit)</li>
 					<li>replaced</li>
 				</ul>
-				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until the configured reader requirement returns the same receipt and twelfth-descendant finality evidence, with every available response agreeing. Under the production policy this means at least two available independent readers; isolated development permits its single configured reader. A lagging or contradictory reader delays closure, and a reader is omitted only for a retryable transport failure.</p>
+				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until the configured reader requirement returns the same receipt and twelfth-descendant finality evidence, with every available response agreeing. The primary reader is sufficient by default. With quorum 2, at least two readers must be available, and a lagging or contradictory reader delays closure; a reader is omitted only for a retryable transport failure.</p>
 				<p>If a shallow reorganization removes that receipt, provisional gas and withdrawals are rolled back, the old signed hash is archived for late revert monitoring, and the position returns to <code>open</code> for a fresh parent-bound lifecycle attempt. Disagreement between readers keeps finality pending and fails the scan closed. Once the read quorum agrees, evidence that conflicts with the durable journal—such as a missing executor event or assets that cannot be attributed exactly—moves the position to <code>recovery-required</code> and continues consuming the risk limit.</p>
 				<p>A canonical immediate replacement is handled separately. The bot derives the exact credited token and amount from its durable entry report and the immediate successor, submits one parent-bound exact withdrawal, and waits for the normal twelve-descendant RPC quorum. Success becomes <code>replaced</code>, not <code>closed</code>: the claimed credit is known, but the hedge's remaining one-sided inventory has not been valued or unwound automatically.</p>
 				<div class="callout">

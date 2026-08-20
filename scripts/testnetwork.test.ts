@@ -46,9 +46,9 @@ describe('local test network packaging', () => {
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
 	})
 
-	test('keeps both bots secure by default while the arbitrager owns its policy in saved settings', async () => {
-		expect(await readFile(liquidatorComposeFile, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-2}')
+	test('defaults both bots to one reader while the arbitrager owns its policy in saved settings', async () => {
+		expect(await readFile(liquidatorComposeFile, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}')
 		expect(await readFile(arbitragerComposeFile, 'utf8')).not.toContain('ZOLTAR_BOT_RPC_QUORUM')
-		expect(JSON.parse(await readFile(arbitragerExampleFile, 'utf8'))).toMatchObject({ rpcQuorum: 2 })
+		expect(JSON.parse(await readFile(arbitragerExampleFile, 'utf8'))).toMatchObject({ rpcQuorum: 1 })
 	})
 })

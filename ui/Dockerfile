@@ -6,7 +6,7 @@ ARG BUN_VERSION=1.3.14
 
 FROM oven/bun:${BUN_VERSION}-alpine AS builder
 
-# git is required by preinstall hook scripts (link-shared-node-modules.mjs uses git rev-parse)
+# git is required by preinstall hook scripts (link-shared-node-modules.mts uses git rev-parse)
 RUN apk add --no-cache git
 WORKDIR /source
 RUN git init
