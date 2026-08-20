@@ -125,6 +125,19 @@ test('validates operations catalogs and timeline identities before querying', as
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'Invalid timeline identifier' })
 	}
+	for (const path of [
+		'state/reports/1/0x1234/7',
+		'state/reports/1/0x1111111111111111111111111111111111111111/not-decimal',
+		'state/escalations/1/0x1234',
+		'state/auctions/1/0x1234',
+		'state/trading/1/0x1234',
+		'state/risk/pools/1/0x1234',
+		'state/risk/vaults/1/0x1111111111111111111111111111111111111111/0x1234',
+		'state/forks/1/',
+	]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
 })
 
 test('requires a complete network and address for account transactions', async () => {

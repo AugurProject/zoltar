@@ -4,7 +4,7 @@ The state dashboard is an event-derived view of the canonical chain through the 
 
 ## Operations evidence model
 
-Migration 008 adds append-only domain evidence for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks all affected domain and timeline rows noncanonical; replay uses the source log position as its idempotency key.
+Migrations 008 and 009 add append-only domain evidence for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks all affected domain and timeline rows noncanonical; replay uses the source log position as its idempotency key.
 
 | Value | Source classification |
 | --- | --- |
@@ -12,11 +12,13 @@ Migration 008 adds append-only domain evidence for OpenOracle reports, escalatio
 | Report dispute and settlement boundaries | Deterministic calculation from event fields using the indexed block or indexed timestamp selected by the report flag |
 | Escalation deposits and per-outcome totals | Direct event fields plus deterministic canonical aggregation |
 | Auction schedule, bids, clearing result, settlements, and refunds | Direct event fields plus deterministic canonical aggregation |
-| Current values absent from events | Unavailable in the current event-only projection; `entity_state_snapshots` reserves a reorg-aware schema for a future tagged-read sampler but is not populated yet |
+| Current values absent from events | Current contract read at the latest fully indexed canonical block, stored in `entity_state_snapshots` with method, success/failure, block hash, and observation time |
 | Related addresses carried by one event | Direct event fields; augurScan does not currently claim cross-record inferred relationships |
 | Warning or urgency | Scanner presentation state, separate from protocol state |
 
-Every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. A value absent from indexed events is unavailable evidence, never numeric zero. Risk responses therefore expose unavailable protocol and scanner state until a tagged-read sampler is implemented.
+Every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. A value absent from indexed events or a failed tagged read is unavailable evidence, never numeric zero.
+
+When the indexer is caught up, it samples at most 25 least-recently observed pools, vaults, escalation games, and truth auctions per polling cycle, with four concurrent entity-snapshot jobs using the shared five-operation RPC queue. Every call is tagged to the same indexed block. The canonical block hash is checked before and after the reads and again inside the database transaction. Repeated cycles at a static head continue through unsampled entities; once every entity has a snapshot at that block, the sampler stops until the indexed boundary advances. Failed reads are retained as bounded availability evidence, and a reorg marks snapshots tied to displaced blocks stale and noncanonical.
 
 ### OpenOracle reports
 
@@ -32,6 +34,16 @@ The exact boundary is inclusive for the new state: at the dispute boundary the d
 ### Auctions and escalations
 
 Auction state uses the canonical indexed timestamp and exact `AuctionStarted`, `AuctionFinalized`, `BidSubmitted`, and `BidSettled` evidence. A finalized auction remains “bid settlements outstanding” while fewer bid settlements than submitted bids are observed. Escalation stake totals sum exact canonical `DepositOnOutcome.attoRepAmount` values by INVALID, NO, and YES; no floating-point arithmetic enters the projection.
+
+Catalog and detail pagination is newest first and stable on `(block_number, tx_hash, log_index)`. Its opaque cursor is bound to the chain, domain, entity, indexed block, and indexed hash. A head change invalidates the cursor instead of silently mixing evidence boundaries.
+
+### Risk and trading calculations
+
+Pool capacity is the exact current minting capacity less settlement collateral, floored at zero; utilization retains the exact basis-point integer. Vault health reproduces both `SecurityPoolUtils.isVaultHealthyAtFactor` constraints: associated backing includes dispute-staked REP, while the migration-safety constraint uses only pool-held backing and the greater of the half-excess security multiplier or liquidation-bonus multiplier. Protocol state (`healthy`, `liquidatable`, or `bad-debt`) is stored separately from the scanner's named 12,000-bps warning band.
+
+For an AMM `Swap`, pre-swap reserves are reconstructed from emitted post-swap reserves and exact input/output amounts. Spot, execution price, and price impact remain numerator/denominator pairs; basis points are a display derivative. The 24-hour and seven-day volume and fee summaries aggregate exact event integers. TWAP integrates exact reserve ratios over the selected wall-clock window and reports covered seconds separately; the observation immediately before the window supplies its opening price. A partial window is labeled partial rather than extrapolated. Hourly candles retain exact rational OHLC values and observation counts.
+
+One trading response reads at most 10,001 newest price candidates and calculates TWAP and candles from at most 10,000. The candidates include one optional observation before the seven-day window so TWAP can establish its opening price. `observationsTruncated: true` means that oldest candidate was omitted; it does not by itself prove that an in-window observation was omitted. Consumers should inspect `observationRange` and the TWAP coverage state, while candles describe every retained in-window observation. Volume, fee, swap-count, and liquidity-event summaries use independent SQL aggregates over every canonical event in their stated window and remain complete even when price candidates are truncated.
 
 ## Questions
 

@@ -1,5 +1,17 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, ESCALATION_OUTCOME, ETH_QUOTE_DECIMALS, reportLifecycle, USDC_QUOTE_DECIMALS } from './operations.ts'
+import {
+	auctionDemandCurve,
+	auctionLifecycle,
+	candlestickBuckets,
+	ESCALATION_OUTCOME,
+	ETH_QUOTE_DECIMALS,
+	fixedWindowTwap,
+	poolCapacity,
+	reportLifecycle,
+	swapAnalytics,
+	USDC_QUOTE_DECIMALS,
+	vaultRisk,
+} from './operations.ts'
 
 class ApiRequestError extends Error {}
 class ApiConflictError extends Error {}
@@ -232,7 +244,15 @@ const operationsAsOf = async (sql: SQL, chainId: number): Promise<Record<string,
 	return row
 }
 
-const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<string, unknown>) => {
+const reportCatalogData = async (
+	sql: SQL,
+	chainId: number,
+	asOf: Record<string, unknown>,
+	cursorBlock = String(asOf['blockNumber']),
+	cursorTx = `0x${'f'.repeat(64)}`,
+	cursorLog = 2_147_483_647,
+	queryLimit = 250,
+) => {
 	const rows = await sql`
 		WITH identities AS (
 			SELECT DISTINCT open_oracle_address, report_id FROM open_oracle_report_events WHERE chain_id = ${chainId} AND canonical
@@ -248,16 +268,17 @@ const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<string,
 		JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id AND evidence.canonical
-			ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 1
+			ORDER BY evidence.block_number DESC, evidence.tx_hash DESC, evidence.log_index DESC LIMIT 1
 		) latest ON true
 		LEFT JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id
 				AND evidence.canonical AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed')
-			ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 1
+			ORDER BY evidence.block_number DESC, evidence.tx_hash DESC, evidence.log_index DESC LIMIT 1
 		) round ON true
 		JOIN blocks block ON block.chain_id = ${chainId} AND block.hash = latest.block_hash
-		ORDER BY latest.block_number DESC, latest.log_index DESC LIMIT 250
+		WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
 	`
 	const indexedBlock = String(asOf['blockNumber'] ?? '')
 	const indexedTimestamp = String(asOf['blockTimestamp'] ?? '')
@@ -277,7 +298,14 @@ const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<string,
 	})
 }
 
-const escalationCatalogData = async (sql: SQL, chainId: number) =>
+const escalationCatalogData = async (
+	sql: SQL,
+	chainId: number,
+	cursorBlock: string,
+	cursorTx = `0x${'f'.repeat(64)}`,
+	cursorLog = 2_147_483_647,
+	queryLimit = 250,
+) =>
 	await sql`
 		WITH games AS (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical)
 		SELECT game.game_address,
@@ -293,11 +321,20 @@ const escalationCatalogData = async (sql: SQL, chainId: number) =>
 				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.yes}), '0') AS yes_stake_atto_rep
 		FROM games game JOIN LATERAL (
 			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
-			ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
-		) latest ON true ORDER BY latest.block_number DESC, latest.log_index DESC LIMIT 250
+			ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1
+		) latest ON true WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
 	`
 
-const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record<string, unknown>) => {
+const auctionCatalogData = async (
+	sql: SQL,
+	chainId: number,
+	asOf: Record<string, unknown>,
+	cursorBlock = String(asOf['blockNumber']),
+	cursorTx = `0x${'f'.repeat(64)}`,
+	cursorLog = 2_147_483_647,
+	queryLimit = 250,
+) => {
 	const rows = await sql`
 		WITH auctions AS (SELECT DISTINCT auction_address FROM truth_auction_events WHERE chain_id = ${chainId} AND canonical)
 		SELECT auction.auction_address,
@@ -307,10 +344,11 @@ const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record<string
 			(SELECT count(DISTINCT event.event_data->>'bidder') FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
 			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSettled')::integer AS settlement_count
 		FROM auctions auction
-		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1) latest ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionStarted' ORDER BY event.block_number DESC LIMIT 1) started ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionFinalized' ORDER BY event.block_number DESC LIMIT 1) finalized ON true
-		ORDER BY latest.block_number DESC, latest.log_index DESC LIMIT 250
+		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) latest ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionStarted' ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) started ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionFinalized' ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT 1) finalized ON true
+		WHERE (latest.block_number, latest.tx_hash, latest.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY latest.block_number DESC, latest.tx_hash DESC, latest.log_index DESC LIMIT ${queryLimit}
 	`
 	return rows.map((row: Record<string, unknown>) => {
 		const startData = jsonRecord(row['start_data'])
@@ -331,24 +369,107 @@ const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record<string
 
 const riskCatalogData = async (sql: SQL, chainId: number) => {
 	const [pools, vaults, liquidations] = await Promise.all([
-		sql`SELECT DISTINCT ON (pool_address) pool_address, block_number::text AS block_number,
-			settlement_collateral_atto_eth::text AS settlement_collateral_atto_eth,
-			total_capacity_ownership_atto_rep::text AS total_capacity_ownership_atto_rep,
-			fee_eligible_capacity_ownership_atto_rep::text AS fee_eligible_capacity_ownership_atto_rep,
-			total_claimable_vault_fees_atto_eth::text AS total_claimable_vault_fees_atto_eth,
-			unallocated_accrued_fees_atto_eth::text AS unallocated_accrued_fees_atto_eth,
-			'unavailable'::text AS protocol_state, 'unavailable'::text AS scanner_severity,
-			'Current risk read has not completed at the indexed block'::text AS scanner_reason
-			FROM pool_snapshots WHERE chain_id = ${chainId} AND canonical ORDER BY pool_address, block_number DESC, log_index DESC`,
-		sql`SELECT DISTINCT ON (pool_address, vault_address) pool_address, vault_address, block_number::text AS block_number,
-			rep_backing_units::text AS rep_backing_units, capacity_ownership_atto_rep::text AS capacity_ownership_atto_rep,
-			claimable_fees_atto_eth::text AS claimable_fees_atto_eth,
-			'unavailable'::text AS protocol_state, 'unavailable'::text AS scanner_severity,
-			'Health and liquidation values require a successful tagged contract read'::text AS scanner_reason
-			FROM vault_snapshots WHERE chain_id = ${chainId} AND canonical ORDER BY pool_address, vault_address, block_number DESC, log_index DESC`,
+		sql`
+			WITH identities AS (SELECT DISTINCT pool_address FROM pools WHERE chain_id = ${chainId} AND canonical)
+			SELECT identity.pool_address, snapshot.block_number::text AS block_number, snapshot.block_hash,
+				snapshot.block_timestamp, snapshot.read_status, snapshot.read_result, snapshot.read_failure_reason,
+				snapshot.source_method, snapshot.observed_at
+			FROM identities identity LEFT JOIN LATERAL (
+				SELECT state.* FROM entity_state_snapshots state
+				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+				WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool'
+					AND state.entity_identity = identity.pool_address AND state.canonical
+				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+			) snapshot ON true ORDER BY identity.pool_address
+		`,
+		sql`
+			WITH identities AS (
+				SELECT DISTINCT pool_address, vault_address FROM vault_snapshots WHERE chain_id = ${chainId} AND canonical
+			)
+			SELECT identity.pool_address, identity.vault_address,
+				vault.block_number::text AS block_number, vault.block_hash, vault.block_timestamp,
+				vault.read_status, vault.read_result, vault.read_failure_reason, vault.source_method, vault.observed_at,
+				pool.read_result AS pool_read_result, pool.read_status AS pool_read_status,
+				pool.block_number::text AS pool_block_number, pool.block_hash AS pool_block_hash,
+				pool.block_timestamp AS pool_block_timestamp
+			FROM identities identity
+			LEFT JOIN LATERAL (
+				SELECT state.* FROM entity_state_snapshots state
+				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+				WHERE state.chain_id = ${chainId} AND state.entity_type = 'vault'
+					AND state.entity_identity = identity.pool_address || ':' || identity.vault_address AND state.canonical
+				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+			) vault ON true
+			LEFT JOIN LATERAL (
+				SELECT state.* FROM entity_state_snapshots state
+				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+				WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool'
+					AND state.entity_identity = identity.pool_address AND state.canonical
+				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+			) pool ON true ORDER BY identity.pool_address, identity.vault_address
+		`,
 		sql`SELECT * FROM protocol_timeline_entries WHERE chain_id = ${chainId} AND canonical AND semantic_event_kind = 'VaultLiquidated' ORDER BY block_number DESC, log_index DESC LIMIT 25`,
 	])
-	return { pools, vaults, recentLiquidations: liquidations }
+	const poolData = pools.map((row: Record<string, unknown>) => {
+		const state = jsonRecord(row['read_result'])
+		if (row['read_status'] !== 'success')
+			return {
+				...row,
+				protocol_state: 'unavailable',
+				scanner_severity: 'unavailable',
+				scanner_reason: row['read_failure_reason'] ?? 'Current tagged pool read is awaiting completion',
+			}
+		const capacity = poolCapacity(String(state['settlementCollateralAttoEth']), String(state['currentMintingCapacityAttoEth']))
+		const badDebt = BigInt(String(state['totalBadDebtAttoEth'] ?? '0'))
+		return {
+			...row,
+			read_result: state,
+			capacity,
+			protocol_state: badDebt > 0n ? 'bad-debt' : String(state['systemState'] ?? '0'),
+			scanner_severity: badDebt > 0n ? 'critical' : 'healthy',
+			scanner_reason: badDebt > 0n ? 'Pool has recorded bad debt' : 'Tagged pool accounting read completed',
+		}
+	})
+	const vaultData = vaults.map((row: Record<string, unknown>) => {
+		const state = jsonRecord(row['read_result'])
+		const poolState = jsonRecord(row['pool_read_result'])
+		const price = jsonRecord(poolState['price'])
+		const snapshotEvidence = {
+			vaultSnapshot: { blockNumber: row['block_number'], blockHash: row['block_hash'], blockTimestamp: row['block_timestamp'] },
+			poolSnapshot: { blockNumber: row['pool_block_number'], blockHash: row['pool_block_hash'], blockTimestamp: row['pool_block_timestamp'] },
+		}
+		if (row['read_status'] !== 'success' || row['pool_read_status'] !== 'success' || row['block_hash'] !== row['pool_block_hash'])
+			return {
+				...row,
+				snapshot_evidence: snapshotEvidence,
+				protocol_state: 'unavailable',
+				scanner_severity: 'unavailable',
+				scanner_reason:
+					row['read_failure_reason'] ??
+					(row['read_status'] === 'success' && row['pool_read_status'] === 'success'
+						? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion'
+						: 'Coherent tagged vault and pool reads are awaiting completion'),
+			}
+		const risk = vaultRisk({
+			poolHeldBackingAttoRep: String(state['poolHeldBackingAttoRep']),
+			disputeStakedAttoRep: String(state['disputeStakedAttoRep']),
+			openInterestAttoEth: String(state['openInterestAttoEth']),
+			repPerEth1e18: String(price['repPerEth1e18'] ?? '0'),
+			securityMultiplierBps: String(state['securityMultiplierBps']),
+			targetHealthFactorBps: String(state['targetHealthFactorBps']),
+			badDebtAttoEth: String(state['badDebtAttoEth']),
+		})
+		return {
+			...row,
+			read_result: state,
+			snapshot_evidence: snapshotEvidence,
+			risk,
+			protocol_state: risk.protocolState,
+			scanner_severity: risk.scannerSeverity,
+			scanner_reason: risk.scannerReason,
+		}
+	})
+	return { pools: poolData, vaults: vaultData, recentLiquidations: liquidations }
 }
 
 const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
@@ -357,7 +478,7 @@ const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const asOf = await operationsAsOf(sql, chainId)
 	const [reports, escalations, auctions, risk, prices, recentChanges, forks] = await Promise.all([
 		reportCatalogData(sql, chainId, asOf),
-		escalationCatalogData(sql, chainId),
+		escalationCatalogData(sql, chainId, String(asOf['blockNumber'])),
 		auctionCatalogData(sql, chainId, asOf),
 		riskCatalogData(sql, chainId),
 		sql`SELECT coordinator_address AS source_contract, event_name AS source_event, rep_per_eth_1e18::text AS value, block_number::text AS block_number, settlement_timestamp AS observed_timestamp FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND canonical ORDER BY block_number DESC, log_index DESC LIMIT 1`,
@@ -371,17 +492,363 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	const asOf = await operationsAsOf(sql, chainId)
-	const data =
+	if (domain === 'risk') return json({ chainId, asOf, data: await riskCatalogData(sql, chainId) })
+	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows =
 		domain === 'reports'
-			? await reportCatalogData(sql, chainId, asOf)
+			? await reportCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
 			: domain === 'escalations'
-				? await escalationCatalogData(sql, chainId)
+				? await escalationCatalogData(sql, chainId, cursorBlock, cursorTx, cursorLog, page.queryLimit)
 				: domain === 'auctions'
-					? await auctionCatalogData(sql, chainId, asOf)
-					: domain === 'risk'
-						? await riskCatalogData(sql, chainId)
-						: await sql`SELECT universe_identity, event_name, event_data, block_number::text AS block_number, block_hash, tx_hash, log_index FROM fork_migration_events WHERE chain_id = ${chainId} AND canonical ORDER BY block_number DESC, log_index DESC LIMIT 250`
-	return json({ chainId, asOf, data })
+					? await auctionCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
+					: await sql`
+						SELECT universe_identity, event_name, event_data, block_number::text AS block_number,
+							block_hash, tx_hash, log_index FROM fork_migration_events
+						WHERE chain_id = ${chainId} AND canonical
+							AND (block_number, tx_hash, log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+						ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT ${page.queryLimit}
+					`
+	return json({
+		chainId,
+		asOf,
+		data: paged(rows, page.limit, (row) => protocolCursorFor(chainId, `${domain}-catalog`, 'catalog', asOf, row)),
+	})
+}
+
+type ProtocolCursor = readonly [number, string, string, string, string, string, string, number]
+
+const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const parsed = JSON.parse(atob(value)) as unknown
+		const parts = Array.isArray(parsed) ? parsed : []
+		if (
+			parts.length !== 8 ||
+			!isNonNegativeSafeInteger(parts[0]) ||
+			typeof parts[1] !== 'string' ||
+			typeof parts[2] !== 'string' ||
+			!isPostgresBigint(parts[3]) ||
+			typeof parts[4] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
+			!isPostgresBigint(parts[5]) ||
+			typeof parts[6] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
+			!isPostgresInteger(parts[7]) ||
+			BigInt(parts[5]) > BigInt(parts[3])
+		)
+			throw new Error('shape')
+		return parts as [number, string, string, string, string, string, string, number]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const protocolCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+	btoa(
+		JSON.stringify([
+			chainId,
+			domain,
+			identity,
+			String(asOf['blockNumber']),
+			String(asOf['blockHash']),
+			String(row['block_number']),
+			String(row['tx_hash']),
+			Number(row['log_index']),
+		]),
+	)
+
+const detailPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>) => {
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
+	if (cursor !== undefined) {
+		if (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity) throw new ApiRequestError('cursor does not match the requested entity')
+		if (cursor[3] !== String(asOf['blockNumber']) || cursor[4] !== String(asOf['blockHash']))
+			throw new ApiConflictError('Indexed state changed; restart pagination')
+	}
+	return { limit, queryLimit: limit + 1, cursor }
+}
+
+const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
+	const rows = await sql`
+		SELECT snapshot.* FROM entity_state_snapshots snapshot
+		JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash AND block.canonical
+		WHERE snapshot.chain_id = ${chainId} AND snapshot.entity_type = ${entityType}
+			AND snapshot.entity_identity = ${entityIdentity} AND snapshot.canonical
+		ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
+	`
+	return rows[0]
+}
+
+const paged = (rows: readonly Record<string, unknown>[], limit: number, cursor: (row: Record<string, unknown>) => string) => {
+	const hasMore = rows.length > limit
+	const items = rows.slice(0, limit)
+	return { items, limit, hasMore, nextCursor: hasMore && items.length > 0 ? cursor(items[items.length - 1] as Record<string, unknown>) : undefined }
+}
+
+const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
+	const chainId = routeInteger(parts[0])
+	const openOracleAddress = parts[1]?.toLowerCase()
+	const reportId = parts[2]
+	if (
+		parts.length !== 3 ||
+		chainId === undefined ||
+		openOracleAddress === undefined ||
+		!/^0x[0-9a-f]{40}$/.test(openOracleAddress) ||
+		reportId === undefined ||
+		!/^\d+$/.test(reportId)
+	)
+		return json({ error: 'Invalid report identifier' }, 400)
+	const identity = `${openOracleAddress}:${reportId}`
+	const asOf = await operationsAsOf(sql, chainId)
+	const page = detailPage(url, chainId, 'report', identity, asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows = await sql`
+		SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
+		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
+			AND event.report_id = ${reportId} AND event.canonical
+			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+	`
+	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
+	const currentRows = await sql`
+		SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
+		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
+			AND event.report_id = ${reportId} AND event.canonical
+		ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
+	`
+	const current = currentRows[0]
+	const currentData = jsonRecord(current?.['report_data'])
+	const lifecycle =
+		current === undefined
+			? undefined
+			: reportLifecycle({
+					eventName:
+						current['event_name'] === 'ReportSettled' ? 'ReportSettled' : current['event_name'] === 'ReportDisputed' ? 'ReportDisputed' : 'ReportSubmitted',
+					flags: typeof currentData['flags'] === 'string' ? currentData['flags'] : undefined,
+					reportTimestamp: typeof currentData['reportTimestamp'] === 'string' ? currentData['reportTimestamp'] : undefined,
+					disputeDelay: typeof currentData['disputeDelay'] === 'string' ? currentData['disputeDelay'] : undefined,
+					settlementTime: typeof currentData['settlementTime'] === 'string' ? currentData['settlementTime'] : undefined,
+					indexedBlock: String(asOf['blockNumber']),
+					indexedTimestamp: String(asOf['blockTimestamp']),
+				})
+	return json({
+		chainId,
+		asOf,
+		data: {
+			identity: { openOracleAddress, reportId },
+			current: current === undefined ? undefined : { ...current, report_data: currentData, lifecycle },
+			rounds: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'report', identity, asOf, row)),
+		},
+	})
+}
+
+const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url: URL, domain: 'auction' | 'escalation'): Promise<Response> => {
+	const chainId = routeInteger(parts[0])
+	const address = parts[1]?.toLowerCase()
+	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address))
+		return json({ error: `Invalid ${domain} identifier` }, 400)
+	const asOf = await operationsAsOf(sql, chainId)
+	const page = detailPage(url, chainId, domain, address, asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows: readonly Record<string, unknown>[] =
+		domain === 'auction'
+			? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer) ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}`
+			: await sql`SELECT event.*, block.timestamp AS block_timestamp FROM escalation_game_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.game_address = ${address} AND event.canonical AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer) ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}`
+	if (rows.length === 0 && page.cursor === undefined) return json({ error: `${domain === 'auction' ? 'Auction' : 'Escalation game'} not found` }, 404)
+	const snapshot = await snapshotFor(sql, chainId, domain, address)
+	const result: Record<string, unknown> = {
+		identity: address,
+		snapshot,
+		events: paged(rows, page.limit, (row) => protocolCursorFor(chainId, domain, address, asOf, row)),
+	}
+	if (domain === 'auction') {
+		const [bids, finalizations] = await Promise.all([
+			sql`
+			SELECT event_data->>'tick' AS tick, event_data->>'bidAmountAttoEth' AS amount_atto_eth
+			FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
+				AND canonical AND event_name = 'BidSubmitted' ORDER BY block_number, log_index
+			`,
+			sql`SELECT * FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
+				AND canonical AND event_name = 'AuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
+		])
+		result['demandCurve'] = auctionDemandCurve(
+			bids.map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })),
+		)
+		result['finalization'] = finalizations[0]
+	} else {
+		result['deposits'] = rows.filter((row) => row['event_name'] === 'DepositOnOutcome' || row['event_name'] === 'LocalDepositAppended')
+		result['claims'] = rows.filter((row) => String(row['event_name']).includes('Claim'))
+	}
+	return json({ chainId, asOf, data: result })
+}
+
+const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
+	const chainId = routeInteger(parts[0])
+	const identity = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]).toLowerCase()
+	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128)
+		return json({ error: 'Invalid fork identifier' }, 400)
+	const asOf = await operationsAsOf(sql, chainId)
+	const page = detailPage(url, chainId, 'fork', identity, asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows = await sql`
+		SELECT event.*, block.timestamp AS block_timestamp FROM fork_migration_events event
+		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+		WHERE event.chain_id = ${chainId} AND event.canonical
+			AND (event.universe_identity = ${identity} OR event.event_data->>'universeId' = ${identity}
+				OR event.event_data->>'childUniverseId' = ${identity})
+			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+	`
+	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Fork not found' }, 404)
+	const branches = await sql`
+		SELECT event_data->>'childUniverseId' AS child_universe_id,
+			max(event_data->>'outcomeIndex') AS outcome_index,
+			COALESCE(sum((event_data->>'amountAttoRep')::numeric) FILTER (WHERE event_name = 'MigrationRepSplit'), 0)::text AS migrated_atto_rep,
+			count(DISTINCT event_data->>'migrator') FILTER (WHERE event_data ? 'migrator')::integer AS migrator_count,
+			count(*) FILTER (WHERE event_name = 'MigrationRepSplit')::integer AS migration_count
+		FROM fork_migration_events WHERE chain_id = ${chainId} AND canonical
+			AND (universe_identity = ${identity} OR event_data->>'universeId' = ${identity})
+			AND event_data ? 'childUniverseId'
+		GROUP BY event_data->>'childUniverseId' ORDER BY event_data->>'childUniverseId'
+	`
+	return json({
+		chainId,
+		asOf,
+		data: { identity, branches, events: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'fork', identity, asOf, row)) },
+	})
+}
+
+const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
+	const chainId = routeInteger(parts[0])
+	const market = parts[1]?.toLowerCase()
+	if (parts.length !== 2 || chainId === undefined || market === undefined || !/^0x[0-9a-f]{40}$/.test(market))
+		return json({ error: 'Invalid AMM identifier' }, 400)
+	const asOf = await operationsAsOf(sql, chainId)
+	const page = detailPage(url, chainId, 'trading', market, asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows = await sql`
+		SELECT event.*, block.timestamp AS block_timestamp,
+			EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds
+		FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+			AND (event.block_number, event.tx_hash, event.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY event.block_number DESC, event.tx_hash DESC, event.log_index DESC LIMIT ${page.queryLimit}
+	`
+	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'AMM not found' }, 404)
+	const eventRows = rows.map((row: Record<string, unknown>) => {
+		const eventData = jsonRecord(row['event_data'])
+		if (row['event_name'] !== 'Swap') return { ...row, event_data: eventData }
+		return {
+			...row,
+			event_data: eventData,
+			analytics: swapAnalytics({
+				yesForNo: eventData['yesForNo'] === true,
+				amountIn: String(eventData['amountIn']),
+				amountOut: String(eventData['amountOut']),
+				feeAmount: String(eventData['feeAmount']),
+				resultingYesReserve: String(eventData['resultingYesReserve']),
+				resultingNoReserve: String(eventData['resultingNoReserve']),
+			}),
+		}
+	})
+	const observations = await sql`
+		WITH window_observations AS (
+			SELECT EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds,
+				event.event_data->>'resultingNoReserve' AS numerator, event.event_data->>'resultingYesReserve' AS denominator,
+				event.block_number, event.tx_hash, event.log_index
+			FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+			WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+				AND event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
+		), prior_observation AS (
+			SELECT EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds,
+				event.event_data->>'resultingNoReserve' AS numerator, event.event_data->>'resultingYesReserve' AS denominator,
+				event.block_number, event.tx_hash, event.log_index
+			FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+			WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+				AND event.event_name = 'Swap' AND block.timestamp < to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)
+			ORDER BY event.block_number DESC, event.log_index DESC LIMIT 1
+		)
+		SELECT * FROM (
+			SELECT * FROM (SELECT * FROM window_observations UNION ALL SELECT * FROM prior_observation) candidate
+			ORDER BY block_number DESC, tx_hash DESC, log_index DESC LIMIT 10001
+		) retained ORDER BY block_number, tx_hash, log_index
+	`
+	const summaries = await sql`
+		SELECT
+			count(*) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 86400))::integer AS swaps_24h,
+			count(*) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800))::integer AS swaps_7d,
+			COALESCE(sum((event.event_data->>'amountIn')::numeric) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 86400)), 0)::text AS input_volume_24h,
+			COALESCE(sum((event.event_data->>'amountIn')::numeric) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)), 0)::text AS input_volume_7d,
+			COALESCE(sum((event.event_data->>'feeAmount')::numeric) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 86400)), 0)::text AS fees_24h,
+			COALESCE(sum((event.event_data->>'feeAmount')::numeric) FILTER (WHERE event.event_name = 'Swap' AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800)), 0)::text AS fees_7d,
+			count(*) FILTER (WHERE event.event_name IN ('LiquidityInitialized', 'LiquidityAdded', 'LiquidityRemoved') AND block.timestamp >= to_timestamp(${String(asOf['blockTimestamp'])}::numeric - 604800))::integer AS liquidity_events_7d
+		FROM amm_trade_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
+		WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
+	`
+	const exactObservations = observations.slice(-10_000).map((row: Record<string, unknown>) => ({
+		timestamp: String(row['timestamp_seconds']),
+		numerator: String(row['numerator']),
+		denominator: String(row['denominator']),
+	}))
+	const end = String(asOf['blockTimestamp'])
+	const endValue = BigInt(end)
+	const firstObservation = exactObservations[0]
+	const lastObservation = exactObservations.at(-1)
+	return json({
+		chainId,
+		asOf,
+		data: {
+			market,
+			summary: summaries[0],
+			events: paged(eventRows, page.limit, (row) => protocolCursorFor(chainId, 'trading', market, asOf, row)),
+			twap24h: fixedWindowTwap(exactObservations, (endValue > 86_400n ? endValue - 86_400n : 0n).toString(), end),
+			twap7d: fixedWindowTwap(exactObservations, (endValue > 604_800n ? endValue - 604_800n : 0n).toString(), end),
+			candles: candlestickBuckets(exactObservations, '3600'),
+			observationLimit: 10_000,
+			observationsTruncated: observations.length > 10_000,
+			observationRange:
+				firstObservation === undefined || lastObservation === undefined
+					? undefined
+					: { firstTimestamp: firstObservation.timestamp, lastTimestamp: lastObservation.timestamp, count: exactObservations.length },
+		},
+	})
+}
+
+const riskDetailResponse = async (sql: SQL, parts: readonly string[]): Promise<Response> => {
+	const kind = parts[0]
+	const chainId = routeInteger(parts[1])
+	const poolAddress = parts[2]?.toLowerCase()
+	const vaultAddress = parts[3]?.toLowerCase()
+	if (
+		chainId === undefined ||
+		(kind !== 'pools' && kind !== 'vaults') ||
+		poolAddress === undefined ||
+		!/^0x[0-9a-f]{40}$/.test(poolAddress) ||
+		(kind === 'pools' ? parts.length !== 3 : parts.length !== 4 || vaultAddress === undefined || !/^0x[0-9a-f]{40}$/.test(vaultAddress))
+	)
+		return json({ error: 'Invalid risk entity identifier' }, 400)
+	const asOf = await operationsAsOf(sql, chainId)
+	const risk = await riskCatalogData(sql, chainId)
+	const entity =
+		kind === 'pools'
+			? risk.pools.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress)
+			: risk.vaults.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress && row['vault_address'] === vaultAddress)
+	if (entity === undefined) return json({ error: `${kind === 'pools' ? 'Pool' : 'Vault'} risk state not found` }, 404)
+	return json({ chainId, asOf, data: entity })
 }
 
 const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
@@ -398,11 +865,22 @@ const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): P
 	)
 		return json({ error: 'Invalid timeline identifier' }, 400)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
-	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const asOf = await operationsAsOf(sql, chainId)
-	const rows =
-		await sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash WHERE timeline.chain_id = ${chainId} AND timeline.entity_type = ${entityType} AND timeline.entity_identity = ${entityIdentity} AND timeline.canonical ORDER BY timeline.block_number DESC, timeline.log_index DESC LIMIT ${limit}`
-	return json({ chainId, asOf, data: { items: rows, limit, hasMore: rows.length === limit } })
+	url.searchParams.set('limit', String(requestedLimit))
+	const identity = `${entityType}:${entityIdentity}`
+	const page = detailPage(url, chainId, 'timeline', identity, asOf)
+	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const rows = await sql`
+		SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
+		JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
+		WHERE timeline.chain_id = ${chainId} AND timeline.entity_type = ${entityType}
+			AND timeline.entity_identity = ${entityIdentity} AND timeline.canonical
+			AND (timeline.block_number, timeline.tx_hash, timeline.log_index) < (${cursorBlock}::bigint, ${cursorTx}, ${cursorLog}::integer)
+		ORDER BY timeline.block_number DESC, timeline.tx_hash DESC, timeline.log_index DESC LIMIT ${page.queryLimit}
+	`
+	return json({ chainId, asOf, data: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'timeline', identity, asOf, row)) })
 }
 
 const stateCatalog = async (sql: SQL, url: URL): Promise<Response> => {
@@ -1017,6 +1495,16 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/auctions') return await domainCatalogResponse(sql, url, 'auctions')
 		if (url.pathname === '/api/v1/state/risk') return await domainCatalogResponse(sql, url, 'risk')
 		if (url.pathname === '/api/v1/state/forks') return await domainCatalogResponse(sql, url, 'forks')
+		if (url.pathname.startsWith('/api/v1/state/reports/'))
+			return await reportDetailResponse(sql, url.pathname.slice('/api/v1/state/reports/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/escalations/'))
+			return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/escalations/'.length).split('/'), url, 'escalation')
+		if (url.pathname.startsWith('/api/v1/state/auctions/'))
+			return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/auctions/'.length).split('/'), url, 'auction')
+		if (url.pathname.startsWith('/api/v1/state/forks/')) return await forkDetailResponse(sql, url.pathname.slice('/api/v1/state/forks/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/risk/')) return await riskDetailResponse(sql, url.pathname.slice('/api/v1/state/risk/'.length).split('/'))
+		if (url.pathname.startsWith('/api/v1/state/trading/'))
+			return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/address-portfolio') return await addressPortfolioResponse(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/timeline/'))
 			return await timelineResponse(sql, url.pathname.slice('/api/v1/state/timeline/'.length).split('/'), url)

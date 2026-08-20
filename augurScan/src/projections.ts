@@ -134,7 +134,7 @@ type UniswapPriceProjection = {
 
 type DomainEventProjection = {
 	type: 'domainEvent'
-	domain: 'report' | 'escalation' | 'auction' | 'risk' | 'trading' | 'fork'
+	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'trading' | 'fork'
 	entityType: string
 	entityIdentity: string
 	semanticEventKind: string
@@ -497,64 +497,134 @@ const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 	return []
 }
 
-const eventDomains: Readonly<Record<string, DomainEventProjection['domain']>> = {
-	ReportSubmitted: 'report',
-	ReportDisputed: 'report',
-	ReportSettled: 'report',
-	DepositOnOutcome: 'escalation',
-	LocalDepositAppended: 'escalation',
-	ClaimDeposit: 'escalation',
-	NonDecisionReached: 'escalation',
-	InheritedThresholdTie: 'escalation',
-	GameContinuedFromFork: 'escalation',
-	ForkCarryCheckpoint: 'escalation',
-	CarryDepositConsumed: 'escalation',
-	AuctionStarted: 'auction',
-	BidSubmitted: 'auction',
-	AuctionFinalized: 'auction',
-	BidSettled: 'auction',
-	EthRefundDeferred: 'auction',
-	PendingEthRefundWithdrawn: 'auction',
-	VaultLiquidated: 'risk',
-	VaultBadDebtMigrated: 'risk',
-	PoolAccountingCheckpoint: 'risk',
-	VaultAccountingCheckpoint: 'risk',
-	CompleteSetCreated: 'risk',
-	CompleteSetRedeemed: 'risk',
-	SharesRedeemed: 'risk',
-	Swap: 'trading',
-	Sync: 'trading',
-	LiquidityAdded: 'trading',
-	LiquidityInitialized: 'trading',
-	LiquidityRemoved: 'trading',
-	UniverseForked: 'fork',
-	DeployChild: 'fork',
-	MigrationRepAdded: 'fork',
-	MigrationRepSplit: 'fork',
-	RepBurned: 'fork',
-	ChildPoolLinked: 'fork',
-	VaultMigrationCheckpoint: 'fork',
-	ChildDisputeStakedRepMaterialized: 'fork',
+type EventDomainDefinition = {
+	readonly domain: DomainEventProjection['domain']
+	readonly entityType: string
+	readonly identityFields?: readonly string[]
+}
+
+const definitions = (
+	domain: DomainEventProjection['domain'],
+	entityType: string,
+	eventNames: readonly string[],
+	identityFields?: readonly string[],
+): Readonly<Record<string, EventDomainDefinition>> =>
+	Object.fromEntries(eventNames.map((eventName) => [eventName, { domain, entityType, ...(identityFields === undefined ? {} : { identityFields }) }]))
+
+// This is the scanner's explicit semantic taxonomy. It intentionally excludes
+// generic ERC approvals/transfers while covering every protocol lifecycle event
+// emitted by the contracts represented in the operations views.
+const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
+	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
+	...definitions('oracle', 'price-coordinator', [
+		'CoordinatorStateCheckpoint',
+		'ExecutedStagedOperation',
+		'LiquidationRouteStaged',
+		'PendingReportRecovered',
+		'PriceReportRejected',
+		'PriceReported',
+		'PriceRequested',
+		'RepEthPriceSet',
+		'SecurityPoolSet',
+		'StagedOperationQueued',
+	]),
+	...definitions('escalation', 'escalation', [
+		'CarryDepositConsumed',
+		'ClaimDeposit',
+		'DepositOnOutcome',
+		'ForkCarryCheckpoint',
+		'ForkContinuationResumed',
+		'ForkedEscrowClaimed',
+		'ForkedEscrowExported',
+		'ForkedEscrowRecorded',
+		'GameContinuedFromFork',
+		'GameStarted',
+		'InheritedThresholdTie',
+		'LocalDepositAppended',
+		'NonDecisionReached',
+		'ResidualRepSweptToSecurityPool',
+		'TruthAuctionHaircutApplied',
+		'VaultEscrowUpdated',
+		'VaultUnresolvedTotalsExported',
+	]),
+	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundDeferred', 'PendingEthRefundWithdrawn']),
+	...definitions('risk', 'pool', [
+		'AwaitingForkContinuationSet',
+		'CompleteSetCreated',
+		'CompleteSetRedeemed',
+		'EscalationGameSet',
+		'PoolAccountingCheckpoint',
+		'PoolForkModeActivated',
+		'ShareTokenSupplySet',
+		'SharesRedeemed',
+		'SystemStateSet',
+		'TotalRepBackingUnitsSet',
+	]),
+	...definitions(
+		'risk',
+		'vault',
+		[
+			'DepositToEscalationGame',
+			'RepDepositedToVault',
+			'RepRedeemedFromVault',
+			'RepWithdrawnFromVault',
+			'VaultAccountingCheckpoint',
+			'VaultBadDebtRecorded',
+			'VaultLiquidated',
+			'VaultTargetHealthFactorSet',
+		],
+		['vault', 'targetVault'],
+	),
+	...definitions('trading', 'amm', ['LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync']),
+	...definitions(
+		'fork',
+		'fork',
+		[
+			'UniverseForked',
+			'DeployChild',
+			'MigrationRepAdded',
+			'MigrationRepSplit',
+			'RepBurned',
+			'ChildDisputeStakedRepMaterialized',
+			'ChildPoolLinked',
+			'ChildRepSplit',
+			'ClaimAuctionProceeds',
+			'ClaimForkedEscalationDepositsToWallet',
+			'DisputeStakedRepDrainedAtFork',
+			'ParentRepLocked',
+			'PoolHeldRepSweptToChild',
+			'SecurityPoolForkSnapshot',
+			'TruthAuctionFinalized',
+			'TruthAuctionStarted',
+			'VaultBadDebtMigrated',
+			'VaultMigrationCheckpoint',
+			'Migrate',
+		],
+		['childUniverseId', 'universeId', 'childPool', 'parentPool', 'securityPool'],
+	),
 }
 
 const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
 	const eventName = log.decoded.name
 	const data = log.decoded.arguments
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
-	const domain = eventDomains[eventName]
-	if (domain === undefined) return undefined
+	const definition = eventDomains[eventName]
+	if (definition === undefined) return undefined
 	const reportId = data['reportId']
-	const universeId = data['childUniverseId'] ?? data['universeId']
+	const fieldIdentity = definition.identityFields?.map((field) => data[field]).find((value) => typeof value === 'string')
+	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
 	const entityIdentity =
-		domain === 'report' && typeof reportId === 'string'
+		definition.domain === 'report' && typeof reportId === 'string'
 			? `${log.address.toLowerCase()}:${reportId}`
-			: domain === 'fork' && typeof universeId === 'string'
-				? universeId
-				: log.address.toLowerCase()
+			: definition.entityType === 'vault' && identitySuffix !== undefined
+				? `${log.address.toLowerCase()}:${identitySuffix}`
+				: definition.domain === 'fork' && identitySuffix !== undefined
+					? identitySuffix
+					: log.address.toLowerCase()
 	return {
 		type: 'domainEvent',
-		domain,
-		entityType: domain === 'report' ? 'open-oracle-report' : domain,
+		domain: definition.domain,
+		entityType: definition.entityType,
 		entityIdentity,
 		semanticEventKind: eventName,
 		data,

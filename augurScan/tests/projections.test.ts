@@ -306,4 +306,31 @@ describe('state projections', () => {
 		const auction = projectionsFrom(log('BidSubmitted', { bidder: vault, tick: '-3', bidIndex: '0', bidAmountAttoEth: atomic(10n) })).at(-1)
 		expect(auction).toMatchObject({ type: 'domainEvent', domain: 'auction', semanticEventKind: 'BidSubmitted' })
 	})
+
+	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
+		expect(projectionsFrom(log('CoordinatorStateCheckpoint', { reportId: '1' })).at(-1)).toMatchObject({
+			type: 'domainEvent',
+			domain: 'oracle',
+			entityType: 'price-coordinator',
+			entityIdentity: pool.toLowerCase(),
+		})
+		expect(projectionsFrom(log('GameStarted', { activationTime: '1' })).at(-1)).toMatchObject({
+			domain: 'escalation',
+			entityIdentity: pool.toLowerCase(),
+		})
+		expect(projectionsFrom(log('VaultBadDebtRecorded', { targetVault: vault })).at(-1)).toMatchObject({
+			domain: 'risk',
+			entityType: 'vault',
+			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
+		})
+		expect(projectionsFrom(log('PredeploymentSharesQuarantined', { invalidAmount: '1' })).at(-1)).toMatchObject({
+			domain: 'trading',
+			entityType: 'amm',
+		})
+		expect(projectionsFrom(log('SecurityPoolForkSnapshot', { parentPool: vault })).at(-1)).toMatchObject({
+			domain: 'fork',
+			entityIdentity: vault.toLowerCase(),
+		})
+		expect(projectionsFrom(log('Migrate', { childUniverseId: '7' })).at(-1)).toMatchObject({ domain: 'fork', entityIdentity: '7' })
+	})
 })

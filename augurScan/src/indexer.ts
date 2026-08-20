@@ -107,6 +107,7 @@ import {
 	zeroAddress,
 } from './ethereum.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from './metadata.ts'
+import { sampleEntityState } from './snapshots.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from './time.ts'
 import type { ContractMetadata, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { uniswapV2V3TokenPairs, uniswapV4PoolConfigurations, uniswapV4PoolId } from './uniswap.ts'
@@ -816,7 +817,10 @@ class NetworkIndexer {
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
-			if (checkpoint !== undefined) await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
+			if (checkpoint !== undefined) {
+				await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
+				await this.#refreshEntityStateSnapshots(checkpoint.number, checkpoint.hash)
+			}
 			await this.#assertLease()
 			await this.#database.updateObservedHead(this.#network.chainId, observedHead, 'live', this.#requireLease())
 			if (checkpoint === undefined) this.#reportWaitingForStart(observedHead)
@@ -1396,6 +1400,26 @@ class NetworkIndexer {
 			async (balances) => {
 				await this.#assertLease()
 				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease())
+			},
+		)
+	}
+
+	async #refreshEntityStateSnapshots(blockNumber: bigint, blockHash: Hash): Promise<void> {
+		const targets = await this.#database.stateSnapshotTargets(this.#network.chainId, blockNumber, 25, this.#requireLease())
+		if (targets.length === 0) return
+		await commitCanonicalRead(
+			blockNumber,
+			blockHash,
+			async () => {
+				const header = await this.#getBlockHeader(blockNumber)
+				if (header.hash !== blockHash) throw new ChainContinuityError(`Canonical chain changed while sampling block ${blockNumber}`)
+				const snapshots = await mapLimit(targets, 4, (target) => sampleEntityState(this.#client, target, blockNumber))
+				return { snapshots, timestamp: unixSecondsToDate(header.timestamp, 'State snapshot block timestamp') }
+			},
+			async (number) => (await this.#getBlockHeader(number)).hash,
+			async ({ snapshots, timestamp }) => {
+				await this.#assertLease()
+				await this.#database.storeEntityStateSnapshots(this.#network.chainId, blockNumber, blockHash, timestamp, snapshots, this.#requireLease())
 			},
 		)
 	}

@@ -23,6 +23,20 @@ CREATE INDEX IF NOT EXISTS protocol_timeline_entity
 CREATE INDEX IF NOT EXISTS protocol_timeline_recent
 	ON protocol_timeline_entries(chain_id, block_number DESC, log_index DESC) WHERE canonical;
 
+-- Bun serializes a JavaScript string once more when PostgreSQL infers a jsonb
+-- parameter. Normalize rows written by older scanner builds before projecting
+-- their decoded arguments.
+UPDATE transactions SET receipt = (receipt #>> '{}')::jsonb WHERE jsonb_typeof(receipt) = 'string';
+UPDATE actions SET
+	arguments = CASE WHEN jsonb_typeof(arguments) = 'string' THEN (arguments #>> '{}')::jsonb ELSE arguments END,
+	display_arguments = CASE WHEN jsonb_typeof(display_arguments) = 'string' THEN (display_arguments #>> '{}')::jsonb ELSE display_arguments END,
+	argument_schema = CASE WHEN jsonb_typeof(argument_schema) = 'string' THEN (argument_schema #>> '{}')::jsonb ELSE argument_schema END;
+UPDATE logs SET
+	topics = CASE WHEN jsonb_typeof(topics) = 'string' THEN (topics #>> '{}')::jsonb ELSE topics END,
+	arguments = CASE WHEN jsonb_typeof(arguments) = 'string' THEN (arguments #>> '{}')::jsonb ELSE arguments END,
+	display_arguments = CASE WHEN jsonb_typeof(display_arguments) = 'string' THEN (display_arguments #>> '{}')::jsonb ELSE display_arguments END,
+	argument_schema = CASE WHEN jsonb_typeof(argument_schema) = 'string' THEN (argument_schema #>> '{}')::jsonb ELSE argument_schema END;
+
 CREATE TABLE IF NOT EXISTS open_oracle_report_events (
 	chain_id bigint NOT NULL,
 	block_hash text NOT NULL,
@@ -197,7 +211,7 @@ SELECT chain_id, block_hash, tx_hash, log_index, block_number,
 		ELSE 'risk'
 	END,
 	CASE
-		WHEN event_name IN ('ReportSubmitted', 'ReportDisputed', 'ReportSettled') THEN emitter_address || ':' || arguments->>'reportId'
+		WHEN event_name IN ('ReportSubmitted', 'ReportDisputed', 'ReportSettled') THEN emitter_address || ':' || (arguments->>'reportId')
 		WHEN event_name IN ('UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned', 'ChildPoolLinked', 'VaultMigrationCheckpoint', 'ChildDisputeStakedRepMaterialized') THEN COALESCE(arguments->>'childUniverseId', arguments->>'universeId', emitter_address)
 		ELSE emitter_address
 	END,

@@ -39,8 +39,10 @@ The browser provides:
 - deep-linked evidence with contract provenance, complete receipt, related logs, decoded action/event schemas, exact raw values, copy controls, and explorer links;
 - searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts;
 - a single-network rich list ranked by ETH or SepoliaETH, WETH, or sent transactions, with bounded per-token REP balances, pool/vault participation, and explicit pending or partial balance state.
-- an Operations destination with freshness, report, escalation, auction, accounting-evidence, fork/migration, price-provenance, and semantic-change views; snapshot-dependent health, liquidation, and severity remain explicitly unavailable until tagged reads are implemented;
+- an Operations destination with freshness, report, escalation, auction, tagged pool/vault risk, fork/migration, price-provenance, semantic-change, and direct entity-detail views;
 - canonical domain projections and unified timelines for reports, games, auctions, AMM activity, forks, and migrations;
+- bounded canonical tagged-block reads for current pool, vault, escalation, and auction values, with retained read failures and stale-on-reorg semantics;
+- stable keyset pagination; full-window exact AMM volume and fee summaries; and explicitly bounded price-impact, TWAP-coverage, and candlestick observations;
 - pool-level OpenOracle coordinator history plus REP/WETH, REP/native-ETH, REP/USDC, and liquidity histories.
 
 ## Delivery and validation

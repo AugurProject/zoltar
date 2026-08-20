@@ -346,6 +346,11 @@ main {
 	border-color: rgba(86, 215, 208, 0.45);
 	background: rgba(86, 215, 208, 0.08);
 }
+.operations-nav a:focus-visible,
+.operations-detail-header a:focus-visible {
+	outline: 2px solid var(--cyan);
+	outline-offset: 3px;
+}
 .operations-content {
 	min-height: 520px;
 }
@@ -412,6 +417,56 @@ main {
 	border: 1px solid var(--line);
 	border-radius: 7px;
 	background: rgba(5, 9, 13, 0.34);
+}
+
+a.operations-row {
+	color: inherit;
+	text-decoration: none;
+}
+
+a.operations-row:hover,
+a.operations-row:focus-visible {
+	border-color: var(--cyan);
+	background: color-mix(in srgb, var(--cyan) 6%, var(--panel));
+}
+
+.operations-detail-header {
+	display: grid;
+	gap: 0.55rem;
+}
+
+.operations-detail-header h2,
+.operations-detail-header p {
+	margin: 0;
+}
+
+.operations-raw-evidence {
+	grid-column: 1 / -1;
+	max-width: 100%;
+}
+
+.operations-raw-evidence summary {
+	display: list-item;
+	width: fit-content;
+	min-height: 36px;
+	padding: 0.45rem;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 0.78rem;
+	color: var(--muted);
+}
+.operations-raw-evidence summary:focus-visible,
+.chart-data-disclosure summary:focus-visible {
+	outline: 2px solid var(--cyan);
+	outline-offset: 2px;
+}
+
+.operations-raw-evidence pre {
+	max-height: 22rem;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.72rem;
 }
 .operations-row strong,
 .operations-row span,
@@ -851,6 +906,45 @@ main {
 .chart-scroll .time-chart {
 	min-width: 700px;
 }
+.chart-data-disclosure {
+	margin-top: 0.75rem;
+	font-size: 0.68rem;
+}
+.chart-data-disclosure summary {
+	display: list-item;
+	width: fit-content;
+	min-height: 36px;
+	padding: 0.45rem;
+	border-radius: 6px;
+	color: var(--cyan);
+	cursor: pointer;
+}
+.chart-data-scroll {
+	margin-top: 0.65rem;
+	overflow-x: auto;
+}
+.chart-data-scroll table {
+	width: 100%;
+	min-width: 620px;
+	border-collapse: collapse;
+	font-family: var(--mono);
+}
+.chart-data-scroll caption {
+	padding-bottom: 0.5rem;
+	color: var(--muted);
+	text-align: left;
+}
+.chart-data-scroll th,
+.chart-data-scroll td {
+	padding: 0.45rem 0.55rem;
+	border-bottom: 1px solid var(--line);
+	text-align: left;
+	white-space: nowrap;
+}
+.chart-data-scroll thead th {
+	color: var(--muted);
+	font-weight: 650;
+}
 .chart-grid-line {
 	stroke: #253241;
 	stroke-width: 1;
@@ -1075,9 +1169,13 @@ button[aria-busy="true"]:disabled {
 	font-weight: 700;
 }
 .secondary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	color: var(--text);
 	border-color: var(--line);
 	background: var(--panel);
+	text-decoration: none;
 }
 .secondary:not(:disabled):hover {
 	border-color: var(--cyan);
@@ -2146,6 +2244,10 @@ dialog::backdrop {
 	}
 	.operations {
 		margin-top: 2rem;
+	}
+	.operations-nav {
+		flex-wrap: wrap;
+		overflow-x: visible;
 	}
 	.operations-freshness,
 	.operations-metrics {

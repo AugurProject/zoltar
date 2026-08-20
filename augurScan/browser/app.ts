@@ -757,7 +757,7 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		event_name: demoEvents[index % demoEvents.length],
 		summary:
 			index % 2 === 0
-				? 'amountAttoRep=4,250.75 REP · vault=Market maker (0x19B4…E2a0)'
+				? 'amount=4,250.75 REP · vault=Market maker (0x19B4…E2a0)'
 				: `reportId=1842 · price=0.004281 ${network.id === 'sepolia' ? 'SepoliaETH' : 'ETH'} · outcomeIndex=2`,
 		decode_status: index === 7 ? 'unknown' : 'decoded',
 		canonical: true,
@@ -765,13 +765,13 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		topics: [demoHash],
 		data: '0x00',
 		arguments: {
-			['amountAttoRep']: '4250750000000000000000',
+			['amountAttoRep']: (4_250_750n * 10n ** 15n).toString(),
 			vault: '0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0',
 			coordinator: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 			recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 		},
 		display_arguments: {
-			['amountAttoRep']: '4,250.75 REP',
+			['amountAttoRep']: (4_250_750n * 10n ** 15n).toString(),
 			vault: 'Market maker (0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0)',
 			coordinator: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
 			recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
@@ -1552,16 +1552,29 @@ const demoOperations = (chainId: string) => {
 		pools: [
 			{
 				pool_address: '0x9999999999999999999999999999999999999999',
-				settlement_collateral_atto_eth: '42000000000000000000',
-				total_capacity_ownership_atto_rep: '9000000000000000000000',
+				block_number: asOf.blockNumber,
+				read_status: 'success',
+				protocol_state: '0',
+				scanner_severity: 'warning',
+				scanner_reason: 'Pool is above the scanner capacity warning band',
+				capacity: {
+					usedAttoEth: (42n * 10n ** 18n).toString(),
+					capacityAttoEth: (50n * 10n ** 18n).toString(),
+					availableAttoEth: (8n * 10n ** 18n).toString(),
+					utilizationBps: '8400',
+				},
 			},
 		],
 		vaults: [
 			{
 				pool_address: '0x9999999999999999999999999999999999999999',
 				vault_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-				rep_backing_units: '6100000000000000000000',
-				claimable_fees_atto_eth: '170000000000000000',
+				block_number: asOf.blockNumber,
+				read_status: 'success',
+				protocol_state: 'healthy',
+				scanner_severity: 'warning',
+				scanner_reason: 'Health factor is below the scanner warning threshold',
+				risk: { healthFactorBps: '11350', targetHealthFactorBps: '12000', liquidationBoundaryBps: '10000' },
 			},
 		],
 		recentLiquidations: [],
@@ -1580,6 +1593,147 @@ const demoOperations = (chainId: string) => {
 				{ semantic_event_kind: 'ReportDisputed', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber },
 				{ semantic_event_kind: 'DepositOnOutcome', entity_identity: '0x777777…', block_number: asOf.blockNumber },
 			],
+		},
+	}
+}
+
+const demoOperationsDetail = (path: string): unknown => {
+	const request = new URL(path, location.origin)
+	const parts = request.pathname.split('/').filter(Boolean)
+	const domain = parts[3]
+	const chainId = (domain === 'risk' ? parts[5] : parts[4]) ?? '1'
+	const operations = demoOperations(chainId)
+	const identity = parts.slice(5).map(decodeURIComponent)
+	const evidence = (eventName: string, eventData: Record<string, unknown>) => ({
+		event_name: eventName,
+		event_data: eventData,
+		block_number: operations.asOf.blockNumber,
+		block_hash: operations.asOf.blockHash,
+		tx_hash: demoHash,
+		log_index: 7,
+		canonical: true,
+	})
+	if (domain === 'reports') {
+		const report = operations.data.reports.find(
+			(item) => item.open_oracle_address.toLowerCase() === identity[0]?.toLowerCase() && item.report_id === identity[1],
+		)
+		const current = {
+			...evidence('ReportDisputed', report?.report_data ?? {}),
+			report_data: report?.report_data ?? {},
+			lifecycle: report?.lifecycle ?? { state: 'Awaiting indexed evidence', clock: 'timestamp' },
+		}
+		return {
+			chainId,
+			asOf: operations.asOf,
+			data: { identity: { openOracleAddress: identity[0], reportId: identity[1] }, current, rounds: { items: [current], limit: 100, hasMore: false } },
+		}
+	}
+	if (domain === 'escalations') {
+		const event = evidence('DepositOnOutcome', {
+			depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			outcome: '1',
+			attoRepAmount: '1250000000000000000000',
+		})
+		return {
+			chainId,
+			asOf: operations.asOf,
+			data: {
+				identity: identity[0],
+				snapshot: {
+					entity_identity: identity[0],
+					block_number: operations.asOf.blockNumber,
+					read_status: 'success',
+					source_method: 'lifecycle(), balances(), totalCapital()',
+					read_result: { phase: 'Active', requiredNextDepositAttoRep: (500n * 10n ** 18n).toString() },
+				},
+				deposits: [event],
+				claims: [],
+				events: { items: [event], limit: 100, hasMore: false },
+			},
+		}
+	}
+	if (domain === 'auctions') {
+		const bid = evidence('BidSubmitted', { bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', tick: '14', bidAmountAttoEth: (3n * 10n ** 18n).toString() })
+		return {
+			chainId,
+			asOf: operations.asOf,
+			data: {
+				identity: identity[0],
+				snapshot: {
+					entity_identity: identity[0],
+					block_number: operations.asOf.blockNumber,
+					read_status: 'success',
+					source_method: 'auctionState(), computeClearing()',
+					read_result: { state: 'Open' },
+				},
+				demandCurve: [{ tick: '14', amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 18n).toString() }],
+				events: { items: [bid], limit: 100, hasMore: false },
+			},
+		}
+	}
+	if (domain === 'risk') {
+		const kind = parts[4]
+		const risk = operations.data.risk
+		const entity =
+			kind === 'pools'
+				? risk.pools.find((item) => item.pool_address.toLowerCase() === parts[6]?.toLowerCase())
+				: risk.vaults.find(
+						(item) => item.pool_address.toLowerCase() === parts[6]?.toLowerCase() && item.vault_address.toLowerCase() === parts[7]?.toLowerCase(),
+					)
+		return { chainId: parts[5] ?? chainId, asOf: operations.asOf, data: entity ?? {} }
+	}
+	if (domain === 'trading') {
+		const swap = evidence('Swap', {
+			yesForNo: true,
+			amountIn: '1000000000000000000',
+			amountOut: '970000000000000000',
+			feeAmount: '3000000000000000',
+			resultingYesReserve: '51000000000000000000',
+			resultingNoReserve: '49030000000000000000',
+		})
+		return {
+			chainId,
+			asOf: operations.asOf,
+			data: {
+				market: identity[0],
+				summary: {
+					swaps_24h: 12,
+					swaps_7d: 63,
+					input_volume_24h: '18000000000000000000',
+					input_volume_7d: '91000000000000000000',
+					fees_24h: '54000000000000000',
+					fees_7d: '273000000000000000',
+				},
+				twap24h: { state: 'Available', numerator: '49', denominator: '51', coverageSeconds: '86400', windowSeconds: '86400' },
+				twap7d: { state: 'Partial coverage', numerator: '97', denominator: '100', coverageSeconds: '518400', windowSeconds: '604800' },
+				candles: [
+					{
+						bucketStart: String(BigInt(operations.asOf.blockTimestamp) - 3600n),
+						open: { numerator: '1', denominator: '1' },
+						high: { numerator: '1', denominator: '1' },
+						low: { numerator: '49', denominator: '51' },
+						close: { numerator: '49', denominator: '51' },
+						observations: 12,
+					},
+				],
+				events: { items: [swap], limit: 100, hasMore: false },
+			},
+		}
+	}
+	const migration = evidence('MigrationRepSplit', {
+		universeId: identity[0],
+		childUniverseId: '1',
+		outcomeIndex: '1',
+		migrator: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+		amountAttoRep: (4_500n * 10n ** 18n).toString(),
+	})
+	return {
+		chainId,
+		asOf: operations.asOf,
+		data: {
+			identity: identity[0],
+			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
+			events: { items: [migration], limit: 100, hasMore: false },
 		},
 	}
 }
@@ -1613,6 +1767,11 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 			if (demoState === 'loading') return await new Promise(() => {})
 			if (demoState === 'error') throw new Error('Operations could not be loaded')
 			return demoOperations(new URL(path, location.origin).searchParams.get('chainId') ?? '1')
+		}
+		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|risk\/(?:pools|vaults))\//.test(path)) {
+			if (demoState === 'loading') return await new Promise(() => {})
+			if (demoState === 'error') throw new Error('Operations detail could not be loaded')
+			return demoOperationsDetail(path)
 		}
 		if (path.startsWith('/api/v1/state/catalog')) {
 			if (demoReorgObserved && pageUrl.searchParams.get('canonicalRouteRefreshError') === '1' && !demoCanonicalRouteRefreshErrorConsumed) {
@@ -2207,6 +2366,14 @@ const operationNumber = (value: unknown): string =>
 const operationCounted = (value: unknown, singular: string, plural?: string): string =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? counted(value, singular, plural) : counted(undefined, singular, plural)
 
+const operationsHref = (pathname: string): string => {
+	const destination = new URL(pathname, location.origin)
+	const chainId = selectedChainId()
+	if (chainId !== '') destination.searchParams.set('chainId', chainId)
+	if (isDemo) destination.searchParams.set('demo', '1')
+	return `${destination.pathname}${destination.search}`
+}
+
 const operationCard = (label: string, value: string, detail?: string) => {
 	const card = element('div', 'operations-card')
 	card.append(element('span', '', label), element('strong', '', value))
@@ -2214,8 +2381,10 @@ const operationCard = (label: string, value: string, detail?: string) => {
 	return card
 }
 
-const operationRow = (title: string, status: string, identity: string, block: unknown) => {
-	const row = element('div', 'operations-row')
+const operationRow = (title: string, status: string, identity: string, block: unknown, href?: string) => {
+	const row = href === undefined ? element('div', 'operations-row') : document.createElement('a')
+	row.className = 'operations-row'
+	if (row instanceof HTMLAnchorElement && href !== undefined) row.href = href
 	const copy = element('div')
 	copy.append(element('strong', '', title), element('span', '', status), element('code', '', shortIdentifier(identity, 12, 8)))
 	row.append(copy)
@@ -2258,7 +2427,10 @@ const renderOperations = (response: OperationsResponse) => {
 		),
 		operationCard('Observed head', `#${number(typeof asOf['observedHead'] === 'string' ? asOf['observedHead'] : undefined)}`),
 		operationCard('Block lag', number(typeof asOf['lagBlocks'] === 'string' ? asOf['lagBlocks'] : undefined), String(asOf['phase'] ?? 'Unavailable')),
-		operationCard('Indexed timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000)),
+		operationCard(
+			'Indexed timestamp',
+			asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000).replace('.000Z', 'Z'),
+		),
 		operationCard('Live updates', connection.classList.contains('live') ? 'Connected' : 'Reconnecting', 'Canonical commits only'),
 	)
 	const metrics = element('div', 'operations-metrics')
@@ -2280,6 +2452,9 @@ const renderOperations = (response: OperationsResponse) => {
 			`${String(lifecycle['state'] ?? 'Awaiting indexed evidence')} · ${operationNumber(item['observed_rounds'])} rounds · ${String(reportData['token1'] ?? 'token 1')} / ${String(reportData['token2'] ?? 'token 2')}`,
 			`${String(item['open_oracle_address'] ?? '')}:${String(item['report_id'] ?? '')}`,
 			item['block_number'],
+			operationsHref(
+				`/operations/report/${encodeURIComponent(String(item['open_oracle_address'] ?? ''))}/${encodeURIComponent(String(item['report_id'] ?? ''))}`,
+			),
 		)
 	})
 	const escalationRows = escalations.map((item) =>
@@ -2288,6 +2463,7 @@ const renderOperations = (response: OperationsResponse) => {
 			`${String(item['event_name'] ?? 'Active')} · INVALID ${operationNumber(item['invalid_stake_atto_rep'])} · NO ${operationNumber(item['no_stake_atto_rep'])} · YES ${operationNumber(item['yes_stake_atto_rep'])} attoREP`,
 			String(item['game_address'] ?? ''),
 			item['block_number'],
+			operationsHref(`/operations/escalation/${encodeURIComponent(String(item['game_address'] ?? ''))}`),
 		),
 	)
 	const auctionRows = auctions.map((item) =>
@@ -2296,28 +2472,41 @@ const renderOperations = (response: OperationsResponse) => {
 			`${String(item['status'] ?? 'Awaiting indexed evidence')} · ${operationCounted(item['bid_count'], 'bid')} · ${operationCounted(item['bidder_count'], 'bidder')}`,
 			String(item['auction_address'] ?? ''),
 			item['block_number'],
+			operationsHref(`/operations/auction/${encodeURIComponent(String(item['auction_address'] ?? ''))}`),
 		),
 	)
 	const riskRows = [
-		...pools.map((item) =>
-			operationRow(
+		...pools.map((item) => {
+			const capacity = isRecord(item['capacity']) ? item['capacity'] : {}
+			return operationRow(
 				'Pool accounting',
-				`${operationNumber(item['settlement_collateral_atto_eth'])} attoETH collateral`,
+				`${String(item['scanner_severity'] ?? 'unavailable')} · ${operationNumber(capacity['utilizationBps'])} bps utilized · ${String(item['scanner_reason'] ?? '')}`,
 				String(item['pool_address'] ?? ''),
 				item['block_number'],
-			),
-		),
-		...vaults.map((item) =>
-			operationRow(
+				operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
+			)
+		}),
+		...vaults.map((item) => {
+			const itemRisk = isRecord(item['risk']) ? item['risk'] : {}
+			return operationRow(
 				'Vault position',
-				`${operationNumber(item['rep_backing_units'])} REP backing units`,
+				`${String(item['scanner_severity'] ?? 'unavailable')} · health ${operationNumber(itemRisk['healthFactorBps'])} bps · ${String(item['scanner_reason'] ?? '')}`,
 				String(item['vault_address'] ?? ''),
 				item['block_number'],
-			),
-		),
+				operationsHref(
+					`/operations/risk/vault/${encodeURIComponent(String(item['pool_address'] ?? ''))}/${encodeURIComponent(String(item['vault_address'] ?? ''))}`,
+				),
+			)
+		}),
 	]
 	const forkRows = forks.map((item) =>
-		operationRow('Fork / migration', String(item['event_name'] ?? 'Migration evidence'), String(item['universe_identity'] ?? ''), item['block_number']),
+		operationRow(
+			'Fork / migration',
+			String(item['event_name'] ?? 'Migration evidence'),
+			String(item['universe_identity'] ?? ''),
+			item['block_number'],
+			operationsHref(`/operations/fork/${encodeURIComponent(String(item['universe_identity'] ?? ''))}`),
+		),
 	)
 	const changeRows = changes.map((item) =>
 		operationRow(
@@ -2385,6 +2574,274 @@ const renderOperations = (response: OperationsResponse) => {
 	$('#operations-status').hidden = true
 }
 
+type OperationsDetailRoute = {
+	readonly kind: 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading' | 'vault'
+	readonly identity: readonly string[]
+}
+
+const operationsDetailRoute = (): OperationsDetailRoute | undefined => {
+	const parts = location.pathname.split('/').filter(Boolean)
+	if (parts[0] !== 'operations') return undefined
+	const kind = parts[1]
+	if (kind === 'report' && parts.length === 4) return { kind, identity: [decodeURIComponent(parts[2] ?? ''), decodeURIComponent(parts[3] ?? '')] }
+	if ((kind === 'auction' || kind === 'escalation' || kind === 'fork') && parts.length === 3) return { kind, identity: [decodeURIComponent(parts[2] ?? '')] }
+	if (kind === 'trading' && parts.length === 3) return { kind, identity: [decodeURIComponent(parts[2] ?? '')] }
+	if (kind === 'risk' && parts[2] === 'pool' && parts.length === 4) return { kind: 'pool', identity: [decodeURIComponent(parts[3] ?? '')] }
+	if (kind === 'risk' && parts[2] === 'vault' && parts.length === 5)
+		return { kind: 'vault', identity: [decodeURIComponent(parts[3] ?? ''), decodeURIComponent(parts[4] ?? '')] }
+	return undefined
+}
+
+const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string): string => {
+	const chainId = encodeURIComponent(requiredChainId())
+	const identity = route.identity.map(encodeURIComponent).join('/')
+	const resource =
+		route.kind === 'report'
+			? 'reports'
+			: route.kind === 'escalation'
+				? 'escalations'
+				: route.kind === 'auction'
+					? 'auctions'
+					: route.kind === 'pool'
+						? 'risk/pools'
+						: route.kind === 'vault'
+							? 'risk/vaults'
+							: route.kind === 'trading'
+								? 'trading'
+								: 'forks'
+	const query = new URLSearchParams({ limit: '100' })
+	if (cursor !== undefined) query.set('cursor', cursor)
+	return `/api/v1/state/${resource}/${chainId}/${identity}?${query.toString()}`
+}
+
+const rawEvidence = (value: unknown) => {
+	const disclosure = document.createElement('details')
+	disclosure.className = 'operations-raw-evidence'
+	disclosure.append(element('summary', '', 'Raw chain evidence'))
+	const raw = document.createElement('pre')
+	raw.textContent = JSON.stringify(value, null, 2) ?? 'Unavailable'
+	disclosure.append(raw)
+	return disclosure
+}
+
+const detailEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+	items.map((item) => {
+		const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
+		const block = item['block_number']
+		const row = operationRow(eventName, `Canonical event · log ${String(item['log_index'] ?? '—')}`, String(item['tx_hash'] ?? ''), block)
+		row.append(rawEvidence(item))
+		return row
+	})
+
+const detailPageRecord = (data: Record<string, unknown>, key: string): Record<string, unknown> => (isRecord(data[key]) ? data[key] : {})
+
+const renderOperationsDetail = (response: OperationsResponse, route: OperationsDetailRoute) => {
+	const content = $('#operations-content')
+	const data = response.data
+	const asOf = response.asOf
+	const header = element('section', 'operations-detail-header')
+	const back = document.createElement('a')
+	const catalogPath =
+		route.kind === 'report'
+			? '/operations/reports'
+			: route.kind === 'escalation'
+				? '/operations/escalations'
+				: route.kind === 'auction'
+					? '/operations/auctions'
+					: route.kind === 'pool' || route.kind === 'vault'
+						? '/operations/risk'
+						: '/operations'
+	back.href = operationsHref(catalogPath)
+	back.textContent = catalogPath === '/operations' ? '← Back to Operations' : '← Back to catalog'
+	const titleIdentity = route.kind === 'vault' ? route.identity[1] : route.identity[0]
+	const title = element(
+		'h2',
+		'',
+		route.kind === 'report'
+			? `OpenOracle report ${route.identity[1]}`
+			: `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`,
+	)
+	header.append(
+		back,
+		title,
+		element(
+			'p',
+			'operations-route-freshness',
+			`As of indexed block #${number(String(asOf['blockNumber'] ?? ''))} · ${number(String(asOf['lagBlocks'] ?? ''))} blocks behind`,
+		),
+	)
+
+	const summary = element('div', 'operations-metrics')
+	const snapshot = isRecord(data['snapshot']) ? data['snapshot'] : undefined
+	const current = isRecord(data['current']) ? data['current'] : undefined
+	const lifecycle = current !== undefined && isRecord(current['lifecycle']) ? current['lifecycle'] : undefined
+	summary.append(
+		operationCard(
+			'Protocol state',
+			String(
+				lifecycle?.['state'] ?? (snapshot?.['read_status'] === 'success' ? 'Current tagged read available' : (snapshot?.['read_status'] ?? 'Event-derived')),
+			),
+		),
+		operationCard(
+			'Calculation kind',
+			snapshot === undefined ? 'derived-from-events' : 'tagged-contract-read',
+			String(snapshot?.['source_method'] ?? 'Canonical event projection'),
+		),
+		operationCard('Entity identity', route.identity.join(' · ')),
+	)
+
+	const panels: HTMLElement[] = []
+	if (snapshot !== undefined)
+		panels.push(
+			operationsPanel(
+				'Current-state snapshot',
+				[
+					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
+					rawEvidence(snapshot),
+				],
+				'Snapshot unavailable',
+			),
+		)
+	if (current !== undefined)
+		panels.push(
+			operationsPanel(
+				'Current report',
+				[
+					operationRow(
+						String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'),
+						'Latest canonical report evidence',
+						route.identity.join(':'),
+						current['block_number'],
+					),
+					rawEvidence(current),
+				],
+				'Current report unavailable',
+			),
+		)
+	if (route.kind === 'pool' || route.kind === 'vault')
+		panels.push(
+			operationsPanel(
+				'Current risk state',
+				[
+					operationRow(
+						String(data['protocol_state'] ?? 'Unavailable'),
+						`${String(data['scanner_severity'] ?? 'unavailable')} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`,
+						route.identity.join(':'),
+						data['block_number'],
+					),
+					rawEvidence(data),
+				],
+				'Risk state unavailable',
+			),
+		)
+	if (route.kind === 'trading') {
+		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
+		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}
+		const twap7d = isRecord(data['twap7d']) ? data['twap7d'] : {}
+		panels.push(
+			operationsPanel(
+				'Trading summary',
+				[
+					operationRow(
+						'24-hour activity',
+						`${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${operationNumber(tradingSummary['input_volume_24h'])} input units · ${operationNumber(tradingSummary['fees_24h'])} fee units`,
+						route.identity[0] ?? '',
+						undefined,
+					),
+					operationRow(
+						'Seven-day activity',
+						`${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${operationNumber(tradingSummary['input_volume_7d'])} input units · ${operationNumber(tradingSummary['fees_7d'])} fee units`,
+						route.identity[0] ?? '',
+						undefined,
+					),
+					operationRow(
+						'24-hour TWAP',
+						`${String(twap24h['state'] ?? 'Unavailable')} · ${String(twap24h['numerator'] ?? '—')} / ${String(twap24h['denominator'] ?? '—')}`,
+						'NO per YES',
+						undefined,
+					),
+					operationRow(
+						'Seven-day TWAP',
+						`${String(twap7d['state'] ?? 'Unavailable')} · ${String(twap7d['numerator'] ?? '—')} / ${String(twap7d['denominator'] ?? '—')}`,
+						'NO per YES',
+						undefined,
+					),
+					rawEvidence({ summary: tradingSummary, twap24h, twap7d, candles: data['candles'] }),
+				],
+				'No trading observations are available.',
+			),
+		)
+	}
+
+	const demand = operationRecords(data['demandCurve'])
+	if (demand.length > 0) {
+		const demandRows = demand.map((point) =>
+			operationRow(
+				`Tick ${String(point['tick'])}`,
+				`${operationNumber(point['amountAttoEth'])} attoETH · cumulative ${operationNumber(point['cumulativeDemandAttoEth'])}`,
+				String(point['tick']),
+				undefined,
+			),
+		)
+		panels.push(operationsPanel('Demand curve data', demandRows, 'No bids have been indexed.'))
+	}
+	const branches = operationRecords(data['branches'])
+	if (branches.length > 0)
+		panels.push(
+			operationsPanel(
+				'Child universe branches',
+				branches.map((branch) =>
+					operationRow(
+						`Child ${String(branch['child_universe_id'])}`,
+						`Outcome ${String(branch['outcome_index'] ?? '—')} · ${operationNumber(branch['migrated_atto_rep'])} attoREP · ${operationCounted(branch['migrator_count'], 'migrator')}`,
+						String(branch['child_universe_id']),
+						undefined,
+					),
+				),
+				'No child branches have been indexed.',
+			),
+		)
+	const evidencePage = detailPageRecord(data, route.kind === 'report' ? 'rounds' : 'events')
+	const evidenceItems = operationRecords(evidencePage['items'])
+	const evidencePanel = operationsPanel(
+		route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline',
+		detailEvidenceRows(evidenceItems),
+		'No canonical evidence is available.',
+	)
+	if (evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string') {
+		const loadMore = document.createElement('button')
+		loadMore.type = 'button'
+		loadMore.className = 'secondary compact'
+		loadMore.textContent = 'Show older evidence'
+		loadMore.addEventListener('click', async () => {
+			loadMore.disabled = true
+			loadMore.textContent = 'Loading…'
+			try {
+				const next = decodeOperationsResponse(await api(operationsDetailEndpoint(route, String(evidencePage['nextCursor']))))
+				const nextPage = detailPageRecord(next.data, route.kind === 'report' ? 'rounds' : 'events')
+				const list = evidencePanel.querySelector('.operations-list')
+				list?.append(...detailEvidenceRows(operationRecords(nextPage['items'])))
+				if (nextPage['hasMore'] === true && typeof nextPage['nextCursor'] === 'string') {
+					evidencePage['nextCursor'] = nextPage['nextCursor']
+					loadMore.disabled = false
+					loadMore.textContent = 'Show older evidence'
+				} else loadMore.remove()
+			} catch (error) {
+				loadMore.disabled = false
+				loadMore.textContent = 'Retry older evidence'
+				loadMore.title = error instanceof Error ? error.message : 'Unable to load older evidence'
+			}
+		})
+		evidencePanel.append(loadMore)
+	}
+	panels.push(evidencePanel)
+	const grid = element('div', 'operations-grid operations-grid-single')
+	grid.append(...panels)
+	content.replaceChildren(header, summary, grid)
+	content.setAttribute('aria-busy', 'false')
+	$('#operations-status').hidden = true
+}
+
 const loadOperations = async (): Promise<boolean> => {
 	if (operationsLoadPromise !== undefined) return await operationsLoadPromise
 	const requestVersion = ++operationsRequestVersion
@@ -2396,9 +2853,13 @@ const loadOperations = async (): Promise<boolean> => {
 		status.textContent = 'Loading canonical protocol operations…'
 		content.setAttribute('aria-busy', 'true')
 		try {
-			const response = decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+			const detailRoute = operationsDetailRoute()
+			const response = decodeOperationsResponse(
+				await api(detailRoute === undefined ? `/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}` : operationsDetailEndpoint(detailRoute)),
+			)
 			if (requestVersion !== operationsRequestVersion) return false
-			renderOperations(response)
+			if (detailRoute === undefined) renderOperations(response)
+			else renderOperationsDetail(response, detailRoute)
 			return true
 		} catch (error) {
 			if (requestVersion !== operationsRequestVersion) return false
@@ -3800,6 +4261,32 @@ const chartCard = <T extends { timestamp: string }>(
 		}
 		const viewport = element('div', 'chart-scroll')
 		viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
+		const dataDisclosure = document.createElement('details')
+		dataDisclosure.className = 'chart-data-disclosure'
+		dataDisclosure.append(element('summary', '', 'View exact chart data'))
+		const tableViewport = element('div', 'chart-data-scroll')
+		const table = document.createElement('table')
+		const caption = element('caption', '', `${title} exact indexed observations`)
+		const head = document.createElement('thead')
+		const headerRow = document.createElement('tr')
+		headerRow.append(element('th', '', 'Indexed time'))
+		for (const definition of definitions) headerRow.append(element('th', '', definition.label))
+		head.append(headerRow)
+		const body = document.createElement('tbody')
+		for (const row of rows) {
+			const tableRow = document.createElement('tr')
+			const time = element('th', '', new Date(row.timestamp).toLocaleString())
+			time.setAttribute('scope', 'row')
+			tableRow.append(time)
+			for (const { key, decimals = 18, unit = '' } of definitions) {
+				const value = row[key]
+				tableRow.append(element('td', '', value === undefined ? 'Unavailable' : exactUnit(chartNumericValue(value), decimals, unit, decimals)))
+			}
+			body.append(tableRow)
+		}
+		table.append(caption, head, body)
+		tableViewport.append(table)
+		dataDisclosure.append(tableViewport)
 		card.append(
 			viewport,
 			element(
@@ -3807,6 +4294,7 @@ const chartCard = <T extends { timestamp: string }>(
 				'data-note',
 				`${note}${independentlyScaled ? ' Each line is independently scaled to its observed range so every trend remains visible; exact latest values are listed above.' : ''}`,
 			),
+			dataDisclosure,
 		)
 	}
 	return card
@@ -4769,6 +5257,13 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 		staticField('Child pools', number(poolItem.child_count)),
 	)
 	staticCard.append(grid)
+	if (history.market?.pair_address) {
+		const analyticsLink = document.createElement('a')
+		analyticsLink.className = 'secondary compact state-analytics-link'
+		analyticsLink.href = operationsHref(`/operations/trading/${encodeURIComponent(history.market.pair_address)}`)
+		analyticsLink.textContent = 'Open AMM trading analytics'
+		staticCard.append(analyticsLink)
+	}
 	fragment.append(staticCard)
 	$('#state-detail').replaceChildren(fragment)
 }
