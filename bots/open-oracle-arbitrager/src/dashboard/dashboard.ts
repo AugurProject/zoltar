@@ -235,7 +235,7 @@ async function loadCompleteConfiguration() {
 		configurationRevision = envelope.revision
 		configurationLoaded = true
 		configurationLoadError = undefined
-		setText('configuration-status', 'Changes are schema-validated before the owner-only configuration file is replaced.')
+		setText('configuration-status', '')
 	} catch (error) {
 		configurationLoaded = false
 		configurationLoadError = error instanceof Error ? error.message : String(error)
@@ -626,6 +626,7 @@ function renderOperations(operations: readonly PublicOperationEntry[]) {
 }
 
 function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
+	setText('tracked-token-addresses', snapshot.tokenAddresses.length === 0 ? 'None observed' : snapshot.tokenAddresses.join(' · '))
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
@@ -879,13 +880,13 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 		signerStatus.setAttribute('role', 'status')
 		privateKeyInput.setAttribute('aria-invalid', 'false')
 		const activeSigner = snapshot.wallet === undefined ? 'no active signer' : `active ${shorten(snapshot.wallet)}`
-		const restartSigner = snapshot.savedWallet === undefined ? 'no restart signer' : `restart ${shorten(snapshot.savedWallet)}`
-		if (snapshot.queuedWallet === null) signerStatus.textContent = `Clear queued · ${activeSigner} · ${restartSigner}`
-		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Queued ${shorten(snapshot.queuedWallet)} · ${activeSigner} · ${restartSigner}`
-		else if (snapshot.wallet === undefined) signerStatus.textContent = snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} saved for restart`
+		const savedSigner = snapshot.savedWallet === undefined ? 'not saved' : `saved ${shorten(snapshot.savedWallet)}`
+		if (snapshot.queuedWallet === null) signerStatus.textContent = `Clearing signer · ${activeSigner}`
+		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Applying ${shorten(snapshot.queuedWallet)} · ${activeSigner}`
+		else if (snapshot.wallet === undefined) signerStatus.textContent = snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} available`
 		else if (snapshot.savedWallet === undefined) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · memory only`
-		else if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · saved for restart`
-		else signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · restart uses ${shorten(snapshot.savedWallet)}`
+		else if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · saved`
+		else signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · ${savedSigner}`
 	}
 	const controls = signerControlState({
 		hasQueuedSigner: typeof snapshot.queuedWallet === 'string',
@@ -949,6 +950,9 @@ function render(snapshot: PublicOperatorSnapshot) {
 	runStatusBadge.dataset['status'] = runStatus
 	runStatusBadge.textContent = statusLabels.status
 	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
+	const capabilityBadge = element('capability-badge')
+	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.className = `badge${snapshot.operatorCapable ? ' badge-ok' : ' badge-warning'}`
 	renderPollRetry(snapshot)
 	const headerNetworkBadge = element('header-network-badge')
 	headerNetworkBadge.textContent = snapshot.networkConfigured ? `${snapshot.network} · ${snapshot.expectedChainId.toString()}` : 'Network setup'
@@ -960,7 +964,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge attention-badge${attentionCount === 0 ? ' badge-ok' : ' badge-warning'}`
-	attentionBadge.href = networkSetupCount > 0 ? '#network-connectivity' : recoveryCount > 0 ? '#position-lifecycle' : uncertainTransactionCount > 0 ? '#transaction-tracking' : snapshot.lastError === undefined ? '#overview' : '#notice'
+	attentionBadge.href = networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : snapshot.lastError === undefined ? '/overview' : '/overview#notice'
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
@@ -980,7 +984,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', snapshot.networkConfigured ? `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.` : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
+	setText('chain-safety', snapshot.networkConfigured ? '' : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
 	renderSignerStatus(snapshot)
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
@@ -1001,7 +1005,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	}
 	const notice = element('notice')
 	let noticeTitle = 'Dry-run mode'
-	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration and restart to change modes.'
+	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration to change modes.'
 	let noticeTone = 'info'
 	if (snapshot.execute) {
 		noticeTitle = 'Execution mode is locally armed'
@@ -1093,7 +1097,7 @@ const refresh = singleFlight(async () => {
 		const attentionCount = retainedAttentionCount + 1
 		attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 		attentionBadge.className = 'badge attention-badge badge-danger'
-		attentionBadge.href = '#notice'
+		attentionBadge.href = '/overview#notice'
 		const headerNetworkBadge = element('header-network-badge')
 		if (latestSnapshot?.networkConfigured === true) headerNetworkBadge.textContent = `${latestSnapshot.network} · ${latestSnapshot.expectedChainId.toString()} · last known`
 		else if (latestSnapshot !== undefined) headerNetworkBadge.textContent = 'Network setup · last known'
@@ -1139,7 +1143,7 @@ element<HTMLFormElement>('configuration-form').addEventListener('submit', async 
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(response.configuration)
 		synchronizeFocusedConfiguration(response.configuration)
 		configurationRevision = response.revision
-		setText('configuration-status', 'Complete configuration saved. Restart the bot to apply every field.')
+		setText('configuration-status', 'Complete configuration saved. Changes apply at the next scan boundary.')
 	} catch (error) {
 		setText('configuration-status', error instanceof Error ? error.message : String(error))
 	} finally {
@@ -1247,28 +1251,36 @@ element('confirm-resume').addEventListener('click', () => {
 	void changePaused(false)
 })
 
-const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
-const fragmentSections: Readonly<Record<string, string>> = {
-	'market-history': 'markets',
-	'network-connectivity': 'settings',
-	'complete-configuration': 'settings',
-	'deployment-configuration': 'settings',
-	notice: 'overview',
-	'position-lifecycle': 'operations',
-	'risk-envelope': 'overview',
-	'transaction-tracking': 'operations',
+const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
+
+function secureExternalLinks(root: ParentNode) {
+	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
+	for (const link of links) {
+		if (link.origin === window.location.origin) continue
+		link.target = '_blank'
+		link.rel = 'noopener noreferrer'
+	}
 }
+
+secureExternalLinks(document)
+new MutationObserver(records => {
+	for (const record of records) {
+		for (const node of record.addedNodes) if (node instanceof HTMLElement) secureExternalLinks(node)
+	}
+}).observe(document.body, { childList: true, subtree: true })
 
 function revealSectionLink(link: HTMLAnchorElement) {
 	const navigation = link.closest<HTMLElement>('.section-nav')
-	if (navigation === null || navigation.scrollWidth <= navigation.clientWidth) return
+	if (navigation === null) return
 	const align = () => {
-		const activeRect = link.getBoundingClientRect()
-		const navigationRect = navigation.getBoundingClientRect()
-		navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
 	}
 	align()
 	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
+	window.addEventListener('load', align, { once: true })
+	window.addEventListener('resize', align)
+	new ResizeObserver(align).observe(navigation)
+	void document.fonts?.ready.then(align)
 }
 
 function scrollToSection(id: string) {
@@ -1276,22 +1288,28 @@ function scrollToSection(id: string) {
 	const shell = document.querySelector<HTMLElement>('.operator-shell')
 	if (target === null || shell === null) return
 	if (target instanceof HTMLDetailsElement) target.open = true
-	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
-	window.scrollTo({ top: Math.max(0, top) })
+	else target.closest('details')?.setAttribute('open', '')
+	const align = () => {
+		const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
+		window.scrollTo({ top: Math.max(0, top) })
+	}
+	align()
+	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => window.requestAnimationFrame(align))
+	void document.fonts?.ready.then(align)
 }
 
 function syncSectionNavigation(scrollToTarget = false) {
-	const targetId = window.location.hash.slice(1) || 'overview'
-	const activeId = fragmentSections[targetId] ?? targetId
+	const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
 	let activeLink: HTMLAnchorElement | undefined
 	for (const link of sectionLinks) {
-		if (link.hash.slice(1) === activeId) {
+		if (link.pathname === activePath) {
 			link.setAttribute('aria-current', 'page')
 			activeLink = link
 		} else link.removeAttribute('aria-current')
 	}
 	if (activeLink !== undefined) revealSectionLink(activeLink)
-	if (scrollToTarget) scrollToSection(targetId)
+	const targetId = window.location.hash.slice(1)
+	if (scrollToTarget && targetId !== '') scrollToSection(targetId)
 }
 
 window.addEventListener('hashchange', () => syncSectionNavigation(true))
@@ -1319,7 +1337,7 @@ element<HTMLFormElement>('strategy-form').addEventListener('submit', async event
 			method: 'PUT',
 		})
 		loadSettings(response.settings)
-		setText('form-status', 'Strategy saved. Applies to the next scan and future restarts.')
+		setText('form-status', 'Strategy saved. Applies to the next scan.')
 		await refresh()
 	} catch (error) {
 		setText('form-status', error instanceof Error ? error.message : String(error))
@@ -1350,7 +1368,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 			method: 'PUT',
 		})
 		loadSubmission(response.submission)
-		setText('submission-status', 'Submission settings saved. Applies to the next scan and future restarts.')
+		setText('submission-status', 'Submission settings saved. Applies to the next scan.')
 		await refresh()
 	} catch (error) {
 		setText('submission-status', error instanceof Error ? error.message : String(error))
@@ -1379,7 +1397,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
 		}
 		const rpcQuorum = Number(element<HTMLSelectElement>('rpc-quorum').value)
-		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; restartRequired: boolean; rpcQuorum: 1 | 2 }>('/api/connectivity', {
+		const response = await api<{ connectivity: ConnectivitySettings; network: 'mainnet' | 'sepolia'; rpcQuorum: 1 | 2 }>('/api/connectivity', {
 			body: JSON.stringify({ connectivity, network: selectedNetwork, rpcQuorum }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
@@ -1390,7 +1408,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		persistedNetwork = response.network
 		element<HTMLSelectElement>('rpc-quorum').value = response.rpcQuorum.toString()
 		updateNetworkTargetStatus()
-		setText('connectivity-status', response.restartRequired ? 'Chain, RPCs, and quorum passed validation and were saved. Restart the bot to apply them.' : 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
+		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		await refresh()
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
@@ -1430,7 +1448,7 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			method: 'PUT',
 		})
 		loadDeployment(response.deployment)
-		setText('deployment-status', 'Deployment configuration saved. Restart the bot to apply protocol identities and quorum RPCs.')
+		setText('deployment-status', 'Deployment configuration saved. Protocol identities and quorum RPCs apply at the next scan boundary.')
 	} catch (error) {
 		setText('deployment-status', error instanceof Error ? error.message : String(error))
 	} finally {
@@ -1462,7 +1480,7 @@ element<HTMLFormElement>('create2-form').addEventListener('submit', async event 
 		})
 		element<HTMLInputElement>('deployment-executor').value = result.address
 		element<HTMLTextAreaElement>('deployment-manifest').value = ''
-		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}. Saved for restart; replace the cleared execution manifest.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}. Saved for restart; replace the cleared execution manifest.`)
+		setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}; replace the cleared execution manifest.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}; replace the cleared execution manifest.`)
 		await refresh()
 	} catch (error) {
 		setText('create2-status', error instanceof Error ? error.message : String(error))
@@ -1509,7 +1527,7 @@ element('clear-signer-button').addEventListener('click', () => void updateSigner
 element('forget-signer-button').addEventListener('click', async () => {
 	if (signerRequestPending) return
 	signerRequestPending = true
-	signerFeedback = { error: false, message: 'Removing the saved restart key…' }
+	signerFeedback = { error: false, message: 'Removing the saved key…' }
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	try {
 		await api<{ wallet: string | undefined }>('/api/signer', {

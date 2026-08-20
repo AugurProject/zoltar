@@ -43,6 +43,18 @@ describe('liquidator dashboard server', () => {
 				},
 				operatorPath: protectedPath,
 				paused: false,
+				pendingStagedOperations: [
+					{
+						candidateBlock: '119',
+						coordinator: '0x1111111111111111111111111111111111111111',
+						historicalRecoveryComplete: false,
+						internalPath: protectedPath,
+						latestRecoveryBlock: '120',
+						operationId: '7',
+						queuedBlock: '100',
+						target: '0x2222222222222222222222222222222222222222',
+					},
+				],
 				rpcEndpointHealth: [
 					{
 						consecutiveFailures: 2,
@@ -132,6 +144,17 @@ describe('liquidator dashboard server', () => {
 		expect(body).not.toContain('candidate-target-marker')
 		expect(body).not.toContain('vault-address-marker')
 		expect(Reflect.get(snapshot, 'activities')).toEqual([{ at: '2026-08-13T00:00:00.000Z', message: 'Transaction submitted', status: 'pending' }])
+		expect(Reflect.get(snapshot, 'pendingStagedOperations')).toEqual([
+			{
+				candidateBlock: '119',
+				coordinator: '0x1111111111111111111111111111111111111111',
+				historicalRecoveryComplete: false,
+				latestRecoveryBlock: '120',
+				operationId: '7',
+				queuedBlock: '100',
+				target: '0x2222222222222222222222222222222222222222',
+			},
+		])
 		expect(Reflect.get(snapshot, 'pools')).toEqual([
 			{
 				address: '0x2222222222222222222222222222222222222222',
@@ -240,6 +263,11 @@ describe('liquidator dashboard server', () => {
 		expect(page.status).toBe(200)
 		const pageSource = await page.text()
 		expect(pageSource).toContain('Statoblast liquidator')
+		for (const route of ['overview', 'pools', 'markets', 'operations', 'settings']) {
+			const routedPage = await fetch(new URL(`/${route}`, server.url))
+			expect(routedPage.status).toBe(200)
+			expect(await routedPage.text()).toContain(`<body data-page="${route}">`)
+		}
 		expect(pageSource).toContain('id="centralized-market-status" class="muted" role="status" aria-live="polite"')
 		expect(pageSource).toContain('id="centralized-market-summary" class="metric-grid"')
 		expect(pageSource).not.toContain('id="centralized-market-summary" class="metric-grid" aria-live')

@@ -113,6 +113,11 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(page.headers.get('content-security-policy')).toContain("default-src 'self'")
 	const pageSource = await page.text()
 	expect(pageSource).toContain('OpenOracle Arbitrager')
+	for (const route of ['overview', 'operations', 'games', 'markets', 'settings']) {
+		const routedPage = await fetch(`${origin}/${route}`)
+		expect(routedPage.status).toBe(200)
+		expect(await routedPage.text()).toContain(`<body data-page="${route}">`)
+	}
 	expect(pageSource).toContain('<a href="/documentation">Operator guide</a>')
 	expect(pageSource).not.toContain('>Starting<')
 	expect(pageSource).toContain('id="mode-badge" class="badge">Mode —</span>')
@@ -153,7 +158,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('aria-describedby="signer-status"')
 	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
 	expect(pageSource).toContain('id="forget-signer-button"')
-	expect(pageSource).toContain('Save this new key in plaintext')
+	expect(pageSource).toContain('Save this key in the local operator file')
 	expect(pageSource).toContain('Clear signer &amp; saved key')
 	expect(pageSource).toContain('Observed dispute paths')
 	expect(pageSource).toContain('Spot (WETH/token)')
@@ -183,6 +188,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(referenceSource).toContain('<pre tabindex="0" aria-label="Scrollable code or command example">')
 	expect(referenceSource).toContain('href="/documentation#math"')
 	expect(referenceSource).toContain('href="/market-fixture.html#open-oracle-market-fixture"')
+	expect(referenceSource).toContain('href="https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint" target="_blank" rel="noreferrer"')
 	const fixture = await fetch(`${origin}/market-fixture.html`)
 	expect(fixture.status).toBe(200)
 	const fixtureSource = await fixture.text()
@@ -372,7 +378,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	state.endpointChecks = [{ chainId: undefined, checkedAt: new Date(0).toISOString(), error: rawRpcFailure, kind: 'read-rpc', status: 'failed', target: credentialEndpoint }]
 	state.rpcEndpointHealth = [{ consecutiveFailures: 2, error: rawRpcFailure, lastFailureAt: new Date(0).toISOString(), lastSuccessAt: undefined, latencyMilliseconds: undefined, nextRetryAt: new Date(1_000).toISOString(), status: 'offline', target: credentialEndpoint }]
 	state.operationLog = [
-		{ category: 'configuration', details: protectedSettingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'All fields apply after restart', reportId: undefined, timestamp: new Date(0).toISOString() },
+		{ category: 'configuration', details: protectedSettingsFile, level: 'info', message: 'Complete operator configuration saved', reason: 'Live settings apply automatically at scan boundaries', reportId: undefined, timestamp: new Date(0).toISOString() },
 		{ category: 'decision', details: 'net 0.0158 ETH · 992 bps', level: 'info', message: 'Selected profitable sell-REP dispute', reason: 'quote, TWAP, inventory, and risk checks passed', reportId: '1', timestamp: new Date(0).toISOString() },
 		{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '1', timestamp: new Date(0).toISOString() },
 	]

@@ -207,7 +207,7 @@
 	.operator-primary > .operator-safety {
 		display: grid;
 		align-items: stretch;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		width: 100%;
 	}
 
@@ -216,7 +216,8 @@
 		align-items: center;
 		justify-content: center;
 		min-width: 0;
-		min-height: 4rem;
+		min-height: 2.75rem;
+		padding: 0.35rem 0.45rem;
 		overflow-wrap: anywhere;
 		text-align: center;
 		white-space: normal;
@@ -228,6 +229,7 @@
 
 	.operator-primary > .operator-safety > button {
 		font-size: 0.82rem;
+		min-height: 2.75rem;
 		min-width: 0;
 		overflow-wrap: anywhere;
 		padding-inline: 0.5rem;

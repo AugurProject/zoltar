@@ -40,6 +40,8 @@ const settings = {
 	privateKey: null,
 	runtime: {
 		execute: false,
+		historicalLogRecovery: false,
+		logLookbackBlocks: 256,
 		maxVaultsPerPool: 1000,
 		once: false,
 		pollMilliseconds: 12000,
@@ -97,7 +99,13 @@ describe('liquidator settings', () => {
 			readRpcUrl: 'https://read.example/',
 		})
 		expect(serialized.runtime.stateFile.endsWith('/bots/liquidator/.state/operator-state.json')).toBe(true)
+		expect(serialized.runtime).toMatchObject({ historicalLogRecovery: false, logLookbackBlocks: 256 })
 		expect(serialized.approvedUniverses).toEqual(['0'])
+	})
+
+	test('bounds the normal log window to the latest 1 through 256 blocks', () => {
+		for (const logLookbackBlocks of [1, 256]) expect(parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } }).runtime.logLookbackBlocks).toBe(logLookbackBlocks)
+		for (const logLookbackBlocks of [0, 257]) expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } })).toThrow('runtime.logLookbackBlocks must be an integer from 1 through 256')
 	})
 
 	test('rejects overlapping health-management thresholds', () => {

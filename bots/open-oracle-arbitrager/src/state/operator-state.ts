@@ -181,6 +181,7 @@ export type OperatorSnapshot = {
 	network: NetworkName
 	networkConfigured: boolean
 	openOracle: Address
+	operatorCapable: boolean
 	operationLog: readonly OperationEntry[]
 	opportunities: readonly OpportunitySnapshot[]
 	positions: readonly PositionRecord[]
@@ -267,6 +268,7 @@ export type PublicOperatorSnapshot = {
 	network: NetworkName
 	networkConfigured: boolean
 	openOracle: Address
+	operatorCapable: boolean
 	operationLog: readonly PublicOperationEntry[]
 	opportunities: readonly OpportunitySnapshot[]
 	positions: readonly PublicPositionRecord[]
@@ -494,6 +496,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		network: snapshot.network,
 		networkConfigured: snapshot.networkConfigured,
 		openOracle: snapshot.openOracle,
+		operatorCapable: snapshot.operatorCapable,
 		operationLog: snapshot.operationLog.map(publicOperationEntry),
 		opportunities: snapshot.opportunities.map(opportunity => ({
 			centralizedPriceDeviationBps: opportunity.centralizedPriceDeviationBps,
@@ -967,6 +970,7 @@ export function operatorSnapshot(
 		network: fixed.network,
 		networkConfigured: fixed.networkConfigured ?? true,
 		openOracle: fixed.openOracle,
+		operatorCapable: state.status === 'running' && state.lastPollAt !== undefined && state.blockNumber !== undefined && !state.paused && state.lastError === undefined && (fixed.execute === false || fixed.wallet !== undefined),
 		opportunities: state.opportunities,
 		positions: state.positions.slice(0, 500),
 		operationLog: state.operationLog,

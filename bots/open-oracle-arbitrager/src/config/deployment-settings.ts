@@ -74,9 +74,9 @@ export function assertFocusedDeploymentCompatible(rep: Address, centralizedMarke
 	}
 }
 
-export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly Address[], restartTokenAddresses: readonly Address[] | undefined, previousRep: Address, nextRep: Address) {
+export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly Address[], persistedTokenAddresses: readonly Address[] | undefined, previousRep: Address, nextRep: Address) {
 	return {
-		active: [...activeTokenAddresses],
-		restart: replacePrimaryRepToken(restartTokenAddresses ?? activeTokenAddresses, previousRep, nextRep),
+		active: replacePrimaryRepToken(activeTokenAddresses, previousRep, nextRep),
+		persisted: replacePrimaryRepToken(persistedTokenAddresses ?? activeTokenAddresses, previousRep, nextRep),
 	}
 }

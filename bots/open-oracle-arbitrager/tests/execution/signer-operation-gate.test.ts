@@ -16,3 +16,13 @@ test('rejects releasing a signer operation that does not own the gate', () => {
 	const gate = createSignerOperationGate()
 	expect(() => gate.release('deployment')).toThrow('owned by none')
 })
+
+test('serializes configuration persistence with an active scan', () => {
+	const gate = createSignerOperationGate()
+	expect(gate.acquire('scan')).toBe(true)
+	expect(gate.acquire('configuration')).toBe(false)
+	gate.release('scan')
+	expect(gate.acquire('configuration')).toBe(true)
+	expect(gate.acquire('scan')).toBe(false)
+	gate.release('configuration')
+})

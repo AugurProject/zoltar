@@ -170,7 +170,11 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	return {
 		execute: runtime['execute'],
 		historyFile,
-		lookbackBlocks: nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks'),
+		lookbackBlocks: (() => {
+			const value = nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks')
+			if (value > 256n) throw new Error('Runtime lookbackBlocks must be from 0 through 256')
+			return value
+		})(),
 		maxHedgeSlippageBps,
 		once: runtime['once'],
 		positionFile,
