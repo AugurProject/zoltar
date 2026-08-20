@@ -11,13 +11,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-test('rejects executor deployment while a different network is saved for restart', () => {
-	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Restart to apply the saved network')
+test('rejects executor deployment while a different saved network is pending', () => {
+	expect(() => requireActivePersistedNetwork('mainnet', 'sepolia')).toThrow('Wait for the saved network to apply at the next scan boundary')
 	expect(() => requireActivePersistedNetwork('mainnet', 'mainnet')).not.toThrow()
 })
 
-test('rejects executor deployment while a different RPC quorum is saved for restart', () => {
-	expect(() => requireActivePersistedRpcQuorum(1, 2)).toThrow('Restart to apply the saved RPC agreement requirement')
+test('rejects executor deployment while a different saved RPC quorum is pending', () => {
+	expect(() => requireActivePersistedRpcQuorum(1, 2)).toThrow('Wait for the saved RPC agreement requirement to apply at the next scan boundary')
 	expect(() => requireActivePersistedRpcQuorum(2, 2)).not.toThrow()
 })
 

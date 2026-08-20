@@ -6,6 +6,7 @@ const projectRoot = path.resolve(import.meta.dir, '..')
 const guidePath = path.join(projectRoot, 'docs', 'operator-guide.html')
 const guide = await readFile(guidePath, 'utf8')
 const readme = await readFile(path.join(projectRoot, 'README.md'), 'utf8')
+const dashboard = await readFile(path.join(projectRoot, 'src', 'dashboard', 'index.html'), 'utf8')
 const diagramSpecs = JSON.parse(await readFile(path.join(projectRoot, 'docs', 'diagram-specs.json'), 'utf8')) as Record<string, unknown>
 
 const markdownAnchors = (contents: string) =>
@@ -51,8 +52,15 @@ assert.match(guide, /Uniswap V3 remains the\s+reference and TWAP anchor/)
 assert.match(readme, /Uniswap V2, V3, or hookless V4/)
 assert.match(readme, /### Executor public surface/)
 assert.match(readme, /`dispute` is a lower-level, unhedged funding helper/)
-assert.match(readme, /Legacy\s+journals without a persisted dispute index are the bounded exception/)
-assert.match(readme, /retain log\s+history back to the oldest open legacy position's entry block/)
+assert.match(readme, /legacy\s+journal without durable dispute evidence is marked for manual reconciliation/)
+assert.match(readme, /`runtime\.lookbackBlocks` to `0` to disable event discovery, or from `1` through\s+`256`/)
+
+const dashboardRoutes = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
+for (const match of readme.matchAll(/\]\((http:\/\/127\.0\.0\.1:4173\/[^)]*)\)/g)) {
+	const target = new URL(match[1] ?? '')
+	assert.ok(dashboardRoutes.has(target.pathname), `README links to unknown dashboard route ${target.pathname}`)
+	if (target.hash !== '') assert.match(dashboard, new RegExp(`\\bid="${target.hash.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`), `README dashboard link has missing target ${target.href}`)
+}
 
 await assertLocalLinksResolve(guidePath, guide)
 const fixturePath = path.join(projectRoot, 'docs', 'market-fixture.html')

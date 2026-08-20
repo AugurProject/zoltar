@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
 import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
+import { deploymentIdentityChanged, deploymentUpdateMustWait, requireSafeDeploymentTransition, tokenUpdateForDeployment } from '../../src/runtime/operator-control-plane.ts'
 
 async function exampleSettings() {
 	const settings = parseOperatorSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -18,7 +19,20 @@ function relayCheck(): EndpointCheck {
 }
 
 describe('operator connectivity updates', () => {
-	test('persists a dashboard switch to the isolated-development quorum for restart', async () => {
+	test('distinguishes deployment identity switches from same-identity routing updates', async () => {
+		const current = (await exampleSettings()).deployment
+		expect(deploymentIdentityChanged(current, { ...current, uniswapRouter: current.rep })).toBe(false)
+		expect(deploymentIdentityChanged(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' })).toBe(true)
+		expect(deploymentIdentityChanged(current, { ...current, executor: '0x0000000000000000000000000000000000000002' })).toBe(true)
+		expect(deploymentUpdateMustWait(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' }, [{ status: 'open' }])).toBe(true)
+		expect(deploymentUpdateMustWait(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' }, [{ status: 'closed' }])).toBe(false)
+		expect(() => requireSafeDeploymentTransition({ positions: [{ status: 'open' }] }, current, { ...current, executor: '0x0000000000000000000000000000000000000002' })).toThrow('cannot change while a position still consumes risk')
+		expect(() => requireSafeDeploymentTransition({ positions: [{ status: 'open' }] }, current, { ...current, executor: current.executor })).not.toThrow()
+		const nextRep = '0x0000000000000000000000000000000000000002'
+		expect(tokenUpdateForDeployment([current.rep], current.rep, { ...current, rep: nextRep }, false)).toEqual([nextRep])
+	})
+
+	test('persists a dashboard switch to the isolated-development quorum for live application', async () => {
 		let settings = await exampleSettings()
 		const state = { endpointChecks: [relayCheck()] }
 		const result = await updateOperatorConnectivity({
@@ -34,9 +48,28 @@ describe('operator connectivity updates', () => {
 			submission: settings.submission,
 			value: request('mainnet', 'https://rpc.example/', 1),
 		})
-		expect(result).toMatchObject({ rpcQuorum: 1, rpcQuorumRestartRequired: true })
+		expect(result).toMatchObject({ rpcQuorum: 1, rpcQuorumChanged: true })
 		expect(settings.rpcQuorum).toBe(1)
 		expect(state.endpointChecks).toEqual([relayCheck()])
+	})
+
+	test('queues the persisted market chain when dedicated connectivity initializes Sepolia', async () => {
+		let settings = await exampleSettings()
+		const result = await updateOperatorConnectivity({
+			activeNetwork: undefined,
+			activeRpcQuorum: 1,
+			check: async () => [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
+			deployment: settings.deployment,
+			endpointState: { endpointChecks: [] },
+			execute: false,
+			persist: async update => {
+				settings = update(settings)
+			},
+			submission: settings.submission,
+			value: request('sepolia', 'https://rpc.example/', 1),
+		})
+		expect(result.centralizedMarkets.assetChainId).toBe(11_155_111)
+		expect(settings.centralizedMarkets.assetChainId).toBe(11_155_111)
 	})
 
 	test('preserves active endpoint health when a quorum-change check fails', async () => {

@@ -1,5 +1,7 @@
 export type LogRange = { fromBlock: bigint; toBlock: bigint }
 
+export const DEFAULT_LATEST_LOG_BLOCKS = 256n
+
 export class LogScanError extends Error {
 	readonly logRange: LogRange
 
@@ -33,6 +35,35 @@ export function logRangeLimitError(error: unknown) {
 		const mentionsExceeding = message.includes('limit') || message.includes('too many') || message.includes('exceed') || message.includes('too large') || message.includes('maximum') || message.includes('up to') || message.includes('more than')
 		return mentionsRangeCap && mentionsExceeding
 	})
+}
+
+export function historyUnavailableError(error: unknown) {
+	return walkErrorCauses(error, current => {
+		if (!('message' in current) || typeof current.message !== 'string') return false
+		const message = current.message.toLowerCase()
+		return message.includes('history unavailable') || message.includes('historical data unavailable') || message.includes('missing trie node') || message.includes('pruned') || message.includes('block is out of range') || message.includes('requested data is not available')
+	})
+}
+
+export function latestLogRange(head: bigint, maximumBlocks = DEFAULT_LATEST_LOG_BLOCKS): LogRange {
+	if (maximumBlocks < 1n || maximumBlocks > DEFAULT_LATEST_LOG_BLOCKS) throw new Error(`maximumBlocks must be from 1 through ${DEFAULT_LATEST_LOG_BLOCKS.toString()}`)
+	return { fromBlock: head + 1n > maximumBlocks ? head + 1n - maximumBlocks : 0n, toBlock: head }
+}
+
+export function newestFirstScanRanges(fromBlock: bigint, toBlock: bigint, maximumRange = DEFAULT_LATEST_LOG_BLOCKS) {
+	if (maximumRange < 1n) throw new Error('maximumRange must be positive')
+	if (fromBlock > toBlock) return []
+	const ranges: LogRange[] = []
+	let nextToBlock = toBlock
+	while (nextToBlock >= fromBlock) {
+		const available = nextToBlock - fromBlock + 1n
+		const attemptedBlocks = maximumRange < available ? maximumRange : available
+		const range = { fromBlock: nextToBlock - attemptedBlocks + 1n, toBlock: nextToBlock }
+		ranges.push(range)
+		if (range.fromBlock === fromBlock) break
+		nextToBlock = range.fromBlock - 1n
+	}
+	return ranges
 }
 
 export async function fetchLogsWithAdaptiveRanges<Log>(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, maximumRange: bigint, fetchRange: (logRange: LogRange) => Promise<readonly Log[]>): Promise<Log[]> {
@@ -124,8 +155,18 @@ export function withFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, bloc
 	return { ...cursor, finalityAnchorHash: blockHash, finalityAnchorNumber: blockNumber }
 }
 
+export function finalityAnchorMatches(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
+	return cursor.finalityAnchorNumber === blockNumber && cursor.finalityAnchorHash?.toLowerCase() === blockHash.toLowerCase()
+}
+
+export function finalityAnchorRequiresReset(cursor: SyncCursor, currentHead: bigint, observedAnchorHash: string | undefined) {
+	const anchorNumber = cursor.finalityAnchorNumber
+	if (anchorNumber === undefined || cursor.finalityAnchorHash === undefined) return false
+	return anchorNumber > currentHead || observedAnchorHash === undefined || !finalityAnchorMatches(cursor, anchorNumber, observedAnchorHash)
+}
+
 export function assertFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
-	if (cursor.finalityAnchorNumber !== blockNumber || cursor.finalityAnchorHash !== blockHash) {
-		throw new Error(`Canonical chain reorganized deeper than the configured overlap at block ${blockNumber.toString()}; restart to rebuild the complete lookback before execution`)
+	if (!finalityAnchorMatches(cursor, blockNumber, blockHash)) {
+		throw new Error(`Canonical chain reorganized deeper than the configured overlap at block ${blockNumber.toString()}; execution remains blocked while the retained lookback is rebuilt`)
 	}
 }

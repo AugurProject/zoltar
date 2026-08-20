@@ -1,4 +1,4 @@
-export type SignerOperation = 'deployment' | 'scan'
+export type SignerOperation = 'configuration' | 'deployment' | 'scan'
 
 export function createSignerOperationGate() {
 	let owner: SignerOperation | undefined

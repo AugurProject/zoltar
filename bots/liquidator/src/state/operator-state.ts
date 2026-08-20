@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, isHex, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { formatDecimalAmount } from '#config/settings'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
@@ -96,9 +96,23 @@ export type DurableState = {
 }
 
 export type PendingStagedOperation = {
+	candidateOutcome?: {
+		blockHash: Hex
+		blockNumber: bigint
+		errorMessage: string
+		operation: bigint
+		operationId: bigint
+		success: boolean
+		transactionHash: Hex
+	}
 	coordinator: Address
+	historicalRecoveryComplete?: boolean | undefined
+	latestRecoveryBlock?: bigint | undefined
+	nextHistoricalBlock?: bigint | undefined
 	operationId: bigint
 	queuedBlock: bigint
+	recoveryAnchorBlock?: bigint | undefined
+	recoveryAnchorHash?: Hex | undefined
 	target: Address
 }
 
@@ -140,6 +154,10 @@ export type RuntimeState = {
 	wallet: Address | undefined
 	walletAttoEth: bigint
 	walletRepByToken: Map<string, bigint>
+}
+
+function isHash(value: unknown): value is Hex {
+	return typeof value === 'string' && isHex(value) && value.length === 66
 }
 
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined): RuntimeState {
@@ -254,6 +272,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
 	if (state.status === 'connectivity-degraded') alerts.push({ message: state.error ?? 'RPC connectivity is degraded; automatic execution is blocked until connectivity recovers', severity: 'warning' })
 	if (state.pendingTransactions.length > 0) alerts.push({ message: `${state.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`, severity: 'error' })
+	if (state.pendingStagedOperations.length > 0) alerts.push({ message: `${state.pendingStagedOperations.length.toString()} staged operation(s) require outcome recovery before execution can continue`, severity: 'error' })
 	for (const configuration of configurations) {
 		if (configuration !== rootConfiguration && !discoveredRepAssets.has(configuration.assetAddress.toLowerCase())) continue
 		const consensus = state.marketConsensusByAsset.get(configuration.assetAddress.toLowerCase()) ?? (configuration === rootConfiguration ? state.marketConsensus : undefined)
@@ -331,6 +350,16 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		marketConsensus: serializeMarketConsensusEstimate(state.marketConsensus, formatDecimalAmount),
 		error: state.error,
 		execute,
+		operatorCapable:
+			state.lastScanAt !== undefined &&
+			state.lastScannedBlock !== undefined &&
+			!state.scanning &&
+			!state.paused &&
+			state.error === undefined &&
+			state.pendingTransactions.length === 0 &&
+			state.pendingStagedOperations.length === 0 &&
+			state.status === (execute ? 'running' : 'dry-run') &&
+			(!execute || state.wallet !== undefined),
 		lastScanAt: state.lastScanAt,
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		lastScannedTimestamp: state.lastScannedTimestamp?.toString(),
@@ -347,6 +376,16 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		},
 		paused: state.paused,
 		rpcEndpointHealth: state.rpcEndpointHealth,
+		pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
+			candidateBlock: operation.candidateOutcome?.blockNumber.toString(),
+			coordinator: operation.coordinator,
+			historicalRecoveryComplete: operation.historicalRecoveryComplete === true,
+			latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
+			nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
+			operationId: operation.operationId.toString(),
+			queuedBlock: operation.queuedBlock.toString(),
+			target: operation.target,
+		})),
 		pendingTransactions: state.pendingTransactions.map(intent => ({
 			hash: intent.hash,
 			kind: intent.kind,
@@ -524,11 +563,45 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 			if (typeof operation !== 'object' || operation === null || Array.isArray(operation)) throw new Error('Pending staged operation must be an object')
 			const operationId = Reflect.get(operation, 'operationId')
 			const queuedBlock = Reflect.get(operation, 'queuedBlock')
+			const latestRecoveryBlock = Reflect.get(operation, 'latestRecoveryBlock')
+			const nextHistoricalBlock = Reflect.get(operation, 'nextHistoricalBlock')
+			const historicalRecoveryComplete = Reflect.get(operation, 'historicalRecoveryComplete')
+			const recoveryAnchorBlock = Reflect.get(operation, 'recoveryAnchorBlock')
+			const recoveryAnchorHash = Reflect.get(operation, 'recoveryAnchorHash')
+			const rawCandidateOutcome = Reflect.get(operation, 'candidateOutcome')
+			let candidateOutcome: PendingStagedOperation['candidateOutcome']
+			if (rawCandidateOutcome !== undefined) {
+				if (typeof rawCandidateOutcome !== 'object' || rawCandidateOutcome === null || Array.isArray(rawCandidateOutcome)) throw new Error('Pending staged operation candidate outcome must be an object')
+				const blockHash = Reflect.get(rawCandidateOutcome, 'blockHash')
+				const blockNumber = Reflect.get(rawCandidateOutcome, 'blockNumber')
+				const errorMessage = Reflect.get(rawCandidateOutcome, 'errorMessage')
+				const candidateOperation = Reflect.get(rawCandidateOutcome, 'operation')
+				const candidateOperationId = Reflect.get(rawCandidateOutcome, 'operationId')
+				const success = Reflect.get(rawCandidateOutcome, 'success')
+				const transactionHash = Reflect.get(rawCandidateOutcome, 'transactionHash')
+				if (!isHash(blockHash) || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHash(transactionHash))
+					throw new Error('Pending staged operation candidate outcome is invalid')
+				candidateOutcome = {
+					blockHash,
+					blockNumber: BigInt(blockNumber),
+					errorMessage,
+					operation: BigInt(candidateOperation),
+					operationId: BigInt(candidateOperationId),
+					success,
+					transactionHash,
+				}
+			}
 			if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
+			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHash(recoveryAnchorHash)))) throw new Error('Pending staged operation recovery anchor is invalid')
 			return {
+				...(candidateOutcome === undefined ? {} : { candidateOutcome }),
 				coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
+				...(typeof historicalRecoveryComplete === 'boolean' ? { historicalRecoveryComplete } : {}),
+				...(typeof latestRecoveryBlock === 'string' ? { latestRecoveryBlock: BigInt(latestRecoveryBlock) } : {}),
+				...(typeof nextHistoricalBlock === 'string' ? { nextHistoricalBlock: BigInt(nextHistoricalBlock) } : {}),
 				operationId: BigInt(operationId),
 				queuedBlock: BigInt(queuedBlock),
+				...(typeof recoveryAnchorBlock === 'string' && isHash(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
 				target: getAddress(String(Reflect.get(operation, 'target'))),
 			}
 		}),
@@ -607,8 +680,20 @@ export async function saveDurableState(path: string, state: RuntimeState) {
 				lastScannedBlock: state.lastScannedBlock?.toString(),
 				pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
 					...operation,
+					candidateOutcome:
+						operation.candidateOutcome === undefined
+							? undefined
+							: {
+									...operation.candidateOutcome,
+									blockNumber: operation.candidateOutcome.blockNumber.toString(),
+									operation: operation.candidateOutcome.operation.toString(),
+									operationId: operation.candidateOutcome.operationId.toString(),
+								},
+					latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
+					nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
 					operationId: operation.operationId.toString(),
 					queuedBlock: operation.queuedBlock.toString(),
+					recoveryAnchorBlock: operation.recoveryAnchorBlock?.toString(),
 				})),
 				pendingTransactions: state.pendingTransactions.map(intent => ({
 					...intent,

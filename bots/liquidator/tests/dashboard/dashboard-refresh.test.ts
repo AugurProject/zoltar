@@ -43,6 +43,7 @@ type DashboardConfiguration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
+	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -71,12 +72,25 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		childMarketConfigurations: [],
 		desiredPools: [],
 		...(network === undefined ? {} : { network }),
+		runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 },
 		selectedPools: ['0x1111111111111111111111111111111111111111'],
 		strategy: {},
 	}
 }
 
-function state(error?: string, alerts: { message: string; severity: 'error' | 'warning' }[] = [], options: { execute?: boolean; lastScannedBlock?: string; lastScannedTimestamp?: string; paused?: boolean; pendingTransactions?: PendingTransaction[]; universes?: DashboardUniverse[] } = {}) {
+function state(
+	error?: string,
+	alerts: { message: string; severity: 'error' | 'warning' }[] = [],
+	options: {
+		execute?: boolean
+		lastScannedBlock?: string
+		lastScannedTimestamp?: string
+		paused?: boolean
+		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
+		pendingTransactions?: PendingTransaction[]
+		universes?: DashboardUniverse[]
+	} = {},
+) {
 	return {
 		activities: [],
 		alerts,
@@ -96,6 +110,7 @@ function state(error?: string, alerts: { message: string; severity: 'error' | 'w
 			walletRep: '2',
 		},
 		paused: options.paused ?? false,
+		pendingStagedOperations: options.pendingStagedOperations ?? [],
 		pendingTransactions: options.pendingTransactions ?? [],
 		pools: [
 			{
@@ -384,7 +399,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(initialFailure.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · unverified')
 		expect(initialFailure.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
 		expect(initialFailure.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
-		expect(initialFailure.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('#global-error')
+		expect(initialFailure.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('/overview#global-error')
 		expect(initialFailure.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
 		expect(initialFailure.window.document.getElementById('global-error')?.textContent).toContain('Automatic retry is active')
 		expect(initialFailure.window.document.body.textContent).not.toContain('state fixture unavailable')
@@ -453,13 +468,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Network not configured')
 		const attention = unconfigured.window.document.getElementById('attention-badge')
 		expect(attention?.textContent).toBe('1 action')
-		expect(attention?.getAttribute('href')).toBe('#network-connectivity')
+		expect(attention?.getAttribute('href')).toBe('/settings#network-connectivity')
 		if (!(attention instanceof unconfigured.window.HTMLAnchorElement)) throw new Error('Expected network-setup attention action')
-		attention.click()
-		await Bun.sleep(1)
-		expect(unconfigured.window.location.hash).toBe('#network-connectivity')
-		expect(unconfigured.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#settings')
-		expect(unconfigured.window.document.getElementById('network-connectivity')?.hasAttribute('open')).toBe(true)
 		const networkForm = unconfigured.window.document.getElementById('network-form')
 		const networkName = unconfigured.window.document.getElementById('network-name')
 		const readRpcUrl = unconfigured.window.document.getElementById('read-rpc-url')
@@ -573,7 +583,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state('read RPC stalled'))
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Error')
 		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
-		const action = page.window.document.querySelector('#attention-badge[href="#global-error"]')
+		const action = page.window.document.querySelector('#attention-badge[href="/overview#global-error"]')
 		expect(action?.textContent).toBe('1 action')
 		if (!(action instanceof page.window.HTMLAnchorElement)) throw new Error('Expected scan-error action')
 		const globalError = page.window.document.getElementById('global-error')
@@ -581,10 +591,6 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(globalError?.textContent).toContain('Automatic retry is active.')
 		expect(globalError?.textContent).not.toContain('read RPC stalled')
 		expect(page.window.document.getElementById('operator-alerts')?.classList.contains('hidden')).toBe(true)
-		action.click()
-		await Bun.sleep(1)
-		expect(page.window.location.hash).toBe('#global-error')
-		expect(page.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#overview')
 	})
 
 	test('surfaces an incomplete vault registry scan', async () => {
@@ -732,13 +738,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.refresh()
 		expect(recoveryGuidance.hidden).toBe(true)
 
-		const recoveryLink = page.window.document.querySelector('#operator-alerts a[href="#recovery"]')
+		const recoveryLink = page.window.document.querySelector('#operator-alerts a[href="/operations#recovery"]')
 		expect(recoveryLink?.textContent).toBe('Review recovery')
 		if (!(recoveryLink instanceof page.window.HTMLAnchorElement)) throw new Error('Expected recovery link')
-		recoveryLink.click()
-		await Bun.sleep(1)
-		expect(page.window.location.hash).toBe('#recovery')
-		expect(page.window.document.querySelector('.section-nav a[aria-current="page"]')?.getAttribute('href')).toBe('#operations')
 		expect(page.window.document.getElementById('attention-badge')?.textContent).toContain('action')
 		const pauseButton = page.window.document.getElementById('pause-button')
 		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause button')
@@ -751,7 +753,25 @@ describe('liquidator dashboard refresh behavior', () => {
 		const dialog = page.window.document.getElementById('resume-dialog')
 		expect(page.pauseRequests).toHaveLength(0)
 		expect(dialog?.hasAttribute('open')).toBe(true)
-		expect(page.window.document.getElementById('resume-preflight')?.textContent).toContain('Transaction recovery')
+		expect(page.window.document.getElementById('resume-preflight')?.textContent).toContain('Recovery work')
+
+		page.setSnapshot(
+			state(undefined, [{ message: '1 staged operation requires outcome recovery', severity: 'error' }], {
+				pendingStagedOperations: [
+					{
+						coordinator: '0x1111111111111111111111111111111111111111',
+						historicalRecoveryComplete: false,
+						latestRecoveryBlock: '110',
+						operationId: '7',
+						queuedBlock: '100',
+						target: '0x2222222222222222222222222222222222222222',
+					},
+				],
+			}),
+		)
+		await page.refresh()
+		expect(page.window.document.getElementById('recovery-list')?.textContent).toContain('Staged operation 7')
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toContain('action')
 
 		const confirm = page.window.document.getElementById('confirm-resume')
 		if (!(confirm instanceof page.window.HTMLButtonElement)) throw new Error('Expected resume confirmation')

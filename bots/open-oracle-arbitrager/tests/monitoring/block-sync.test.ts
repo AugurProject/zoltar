@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { advanceCursor, advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor } from '#monitoring/block-sync'
+import { advanceCursor, advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, finalityAnchorMatches, finalityAnchorRequiresReset, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor } from '#monitoring/block-sync'
 
 describe('block-driven synchronization', () => {
 	test('chunks the startup lookback and catches every block', () => {
@@ -49,7 +49,12 @@ describe('block-driven synchronization', () => {
 
 	test('fails closed when a reorganization changes the retained finality anchor', () => {
 		const cursor = withFinalityAnchor(advanceCursor(100n, '0x100'), 88n, '0x88a')
+		expect(finalityAnchorMatches(cursor, 88n, '0x88a')).toBe(true)
+		expect(finalityAnchorMatches(cursor, 88n, '0x88b')).toBe(false)
 		expect(() => assertFinalityAnchor(cursor, 88n, '0x88a')).not.toThrow()
 		expect(() => assertFinalityAnchor(cursor, 88n, '0x88b')).toThrow('deeper than the configured overlap')
+		expect(finalityAnchorRequiresReset(cursor, 100n, '0x88a')).toBe(false)
+		expect(finalityAnchorRequiresReset(cursor, 100n, '0x88b')).toBe(true)
+		expect(finalityAnchorRequiresReset(cursor, 80n, undefined)).toBe(true)
 	})
 })
