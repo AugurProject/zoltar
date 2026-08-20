@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { isAccountTransactionValue, isLogDetailValue, isRecord } from '../browser/api-validation.ts'
 import { handleApi } from '../src/api.ts'
 import {
 	assertBlockAppend,
@@ -817,6 +818,7 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 		if (detailResponse === undefined) throw new Error('log detail API did not return a response')
 		const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[]; origin_address: string }
+		expect(isLogDetailValue(detail)).toBeTrue()
 		expect(detail.receipt.logs).toHaveLength(1)
 		expect(detail.argument_schema).toEqual([])
 		expect(detail.origin_address).toBe(address.toLowerCase())
@@ -882,17 +884,21 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 			database.sql,
 		)
 		if (interactionsResponse === undefined) throw new Error('address interactions API did not return a response')
-		expect(await interactionsResponse.json()).toMatchObject({
+		const interactionsPayload: unknown = await interactionsResponse.json()
+		expect(interactionsPayload).toMatchObject({
 			items: [
 				{
 					tx_hash: referencedOnlyTransactionHash,
 					roles: ['referenced'],
+					pool_addresses: null,
 					function_name: 'reportFor',
 					action_arguments: { participant: referencedOnlyAddress.toLowerCase() },
 				},
 			],
 			limit: 1,
 		})
+		if (!isRecord(interactionsPayload) || !Array.isArray(interactionsPayload['items'])) throw new Error('address interactions API returned malformed items')
+		expect(interactionsPayload['items'].every(isAccountTransactionValue)).toBeTrue()
 		const transactionsResponse = await handleApi(
 			new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`),
 			database.sql,
