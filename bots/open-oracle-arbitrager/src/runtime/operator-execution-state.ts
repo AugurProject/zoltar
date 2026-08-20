@@ -21,6 +21,19 @@ export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, ne
 	return changed
 }
 
+export function resetReportScanState<TLog>(state: Pick<OperatorState, 'activeReportCount' | 'marketConsensus' | 'marketObservations' | 'opportunities' | 'reportPaths' | 'status' | 'tokenMarkets'>, reports: { clear: () => void }) {
+	reports.clear()
+	state.activeReportCount = 0
+	state.opportunities = []
+	state.reportPaths = []
+	state.tokenMarkets = []
+	state.marketObservations = []
+	state.marketConsensus = undefined
+	state.status = 'syncing'
+	const cachedLogs: TLog[] = []
+	return { cachedLogs, cursor: undefined }
+}
+
 export function applyQueuedExecutionSettings(config: Configuration, state: OperatorState, pending: PendingOperatorUpdates) {
 	let reportScanReset = false
 	if (pending.centralizedMarkets !== undefined) {

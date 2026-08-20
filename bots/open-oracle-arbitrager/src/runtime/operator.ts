@@ -32,7 +32,7 @@ import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
 import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorControlPlane } from './operator-control-plane.ts'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { applyQueuedExecutionSettings, applyQueuedSigner } from './operator-execution-state.ts'
+import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
@@ -252,16 +252,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					} else {
 						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
 						if (appliedSettings.reportScanReset) {
-							cursor = undefined
-							cachedLogs = []
-							reports.clear()
-							state.activeReportCount = 0
-							state.opportunities = []
-							state.reportPaths = []
-							state.tokenMarkets = []
-							state.marketObservations = []
-							state.marketConsensus = undefined
-							state.status = 'syncing'
+							const reset = resetReportScanState<TransactionLog>(state, reports)
+							cursor = reset.cursor
+							cachedLogs = reset.cachedLogs
 						}
 					}
 					if (!deploymentSettingsDeferred && pending.execute !== undefined) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { applyCentralizedMarketSettings, applyLookbackBlockSetting } from '../../src/runtime/operator-execution-state.ts'
+import { applyCentralizedMarketSettings, applyLookbackBlockSetting, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
 
 describe('queued operator execution settings', () => {
 	test('removes old-source evidence before a replacement source can authorize execution', () => {
@@ -17,6 +17,28 @@ describe('queued operator execution settings', () => {
 		const config = { lookbackBlocks: 16n }
 		expect(applyLookbackBlockSetting(config, 256n)).toBe(true)
 		expect(config.lookbackBlocks).toBe(256n)
+		const reports = new Map([[1n, { reportId: 1n }]])
+		const state = {
+			activeReportCount: 1,
+			marketConsensus: { reliable: true },
+			marketObservations: [{ sourceId: 'source-a' }],
+			opportunities: [{ reportId: '1' }],
+			reportPaths: [{ reportId: '1' }],
+			status: 'running' as const,
+			tokenMarkets: [{ token: 'REP' }],
+		}
+		const reset = resetReportScanState<{ blockNumber: bigint }>(state, reports)
+		expect(reset).toEqual({ cachedLogs: [], cursor: undefined })
+		expect(reports.size).toBe(0)
+		expect(state).toEqual({
+			activeReportCount: 0,
+			marketConsensus: undefined,
+			marketObservations: [],
+			opportunities: [],
+			reportPaths: [],
+			status: 'syncing',
+			tokenMarkets: [],
+		})
 		expect(applyLookbackBlockSetting(config, 256n)).toBe(false)
 	})
 })

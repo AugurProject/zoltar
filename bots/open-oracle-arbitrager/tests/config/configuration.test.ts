@@ -347,6 +347,13 @@ describe('file-only startup configuration', () => {
 		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
 		await waitForStateValue(origin, 'networkConfigured', true)
 		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
+		let configuredState = await waitForJson(origin, '/api/state')
+		const rpcOrigin = new URL(rpcUrl).origin
+		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
+			await Bun.sleep(20)
+			configuredState = await waitForJson(origin, '/api/state')
+		}
+		expect(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').toContain(rpcOrigin)
 		const resume = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: false }),
 			headers: { 'content-type': 'application/json', origin },
@@ -361,19 +368,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(noOpSave.status, await noOpSave.clone().text()).toBe(200)
-		let configuredState = await waitForJson(origin, '/api/state')
-		for (let attempt = 0; attempt < 100 && configuredState['networkConfigured'] !== true; attempt++) {
-			await Bun.sleep(20)
-			configuredState = await waitForJson(origin, '/api/state')
-		}
-		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
-		const rpcOrigin = new URL(rpcUrl).origin
-		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
-			await Bun.sleep(20)
-			configuredState = await waitForJson(origin, '/api/state')
-		}
-		expect(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').toContain(rpcOrigin)
-		const resumedState = await waitForJson(origin, '/api/state')
+		const resumedState = await waitForStateValue(origin, 'paused', false)
 		expect(resumedState['paused']).toBe(false)
 		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resume queued', reason: 'Saved and queued for the next scan boundary' })]))
 		const configuredContents = await Bun.file(path).text()
