@@ -10,6 +10,7 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
+<<<<<<< HEAD:ui/zoltar/ts/protocol/openOracle.ts
 import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type {
 	LiquidationApprovalDetails,
@@ -24,6 +25,10 @@ import type {
 	StagedOracleQueuedResult,
 	WriteClient,
 } from '@zoltar/ui-core-shared/types/contracts.js'
+=======
+import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
+>>>>>>> origin/main:ui/ts/protocol/openOracle.ts
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
@@ -72,7 +77,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddr
 		if (!sameAddress(log.address, managerAddress)) continue
 		try {
 			const decodedLog = decodeEventLog({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				data: log.data,
 				topics: log.topics,
 			})
@@ -99,7 +104,7 @@ function getStagedOracleQueuedResult(receipt: TransactionReceipt, managerAddress
 		if (!sameAddress(log.address, managerAddress)) continue
 		try {
 			const decodedLog = decodeEventLog({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				data: log.data,
 				topics: log.topics,
 			})
@@ -137,67 +142,67 @@ function requireBigintArray(value: unknown, context: string) {
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime] = await readRequiredMulticall(client, [
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingOperationSlotId',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getPendingSettlementOperationIds',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingReportId',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationCostAttoEth',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getRequestPriceCostAttoEth',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getActiveStagedOperationCount',
 			address: managerAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'settlementTime',
 			address: managerAddress,
 			args: [],
@@ -217,7 +222,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	if (activeStagedOperationCount > 0n) {
 		const previewCount = activeStagedOperationCount < ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT ? activeStagedOperationCount : ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT
 		const activeStagedOperationsResponse = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getActiveStagedOperations',
 			address: managerAddress,
 			args: [0n, previewCount],
@@ -242,7 +247,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingOperation = stagedOperations.find(operation => operation.operationId === pendingOperationSlotId)
 		if (pendingOperation === undefined && pendingOperationSlotId > 0n) {
 			const stagedOperation = await client.readContract({
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'getPendingOperationSlot',
 				address: managerAddress,
 				args: [],
@@ -264,7 +269,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	if (pendingReportId > 0n) {
 		const eventState = await loadOpenOracleEventState(client, resolvedOracleAddress, pendingReportId)
 		callbackStateHash = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'oracleGame',
 			address: resolvedOracleAddress,
 			args: [pendingReportId],
@@ -313,7 +318,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 			throw error
 		}),
 		client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'oracleGame',
 			address: openOracleAddress,
 			args: [reportId],
@@ -396,7 +401,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 	const pageOffset = getProtocolPageOffset(pageIndex, pageSize)
 	const openOracleAddress = getOpenOracleAddress()
 	const nextReportId = await client.readContract({
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'nextReportId',
 		address: openOracleAddress,
 		args: [],
@@ -569,7 +574,7 @@ export async function createOpenOracleReportInstance(
 	}))
 	const callParams = {
 		address: getOpenOracleAddress(),
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'report',
 		args: [
 			[
@@ -609,7 +614,7 @@ export async function createOpenOracleReportInstance(
 async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
 	const requestPriceCostAttoEth = await client.readContract({
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'getRequestPriceCostAttoEth',
 		args: [],
 	})
@@ -620,43 +625,43 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getPendingSettlementOperationIds',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingReportId',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationCostAttoEth',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getRequestPriceCostAttoEth',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			args: [],
 		}),
@@ -693,13 +698,13 @@ async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReport
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'reputationToken',
 			args: [],
 		}),
@@ -715,7 +720,7 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 	const [rawReputationTokenAddress, currentWethBalanceAttoEth, resolvedInitialReportPrice, minimumToken1ReportAttoEth] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'reputationToken',
 			args: [],
 		}),
@@ -728,7 +733,7 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 		proposedRepPerEthPrice ?? getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			args: [],
 		}),
@@ -760,13 +765,13 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 	const [isPriceValid, pendingReportId] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			args: [],
 		}),
 		client.readContract({
 			address: managerAddress,
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'pendingReportId',
 			args: [],
 		}),
@@ -802,7 +807,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
 		args: [resolvedInitialReportPrice, requestedInitialAttoWeth],
 		value: reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress)),
@@ -816,7 +821,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
 		gas: 5_000_000n,
@@ -853,7 +858,7 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 		requireBigintValue(
 			await client.readContract({
 				address: openOracleAddress,
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'tokenHolder',
 				args: [holder, token],
 			}),
@@ -870,7 +875,7 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address): Promise<OpenOracleActionResult> {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'withdrawTo',
 		args: [token, amount, recipient],
 	}))
@@ -890,7 +895,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 	}
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		gas: 5000000n,
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
@@ -908,7 +913,7 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 	if (derivedTokenToSwap.toLowerCase() !== tokenToSwap.toLowerCase()) throw new Error('The dispute price direction does not match the selected swap token.')
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'dispute',
 		args: [reportId, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
 	}))
@@ -933,7 +938,7 @@ export type LiquidationApprovalParams = {
 export async function loadLiquidationApprovalRegistry(client: ReadClient, managerAddress: Address) {
 	return await client.readContract({
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'liquidationApprovalRegistry',
 		args: [],
 	})
@@ -943,13 +948,13 @@ export async function loadLiquidationApproval(client: ReadClient, managerAddress
 	const registryAddress = await loadLiquidationApprovalRegistry(client, managerAddress)
 	const approval = await client.readContract({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'getLiquidationApproval',
 		args: [approvalId],
 	})
 	const minimumValidNonce = await client.readContract({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'minimumLiquidationApprovalNonce',
 		args: [approval.params.receiverVault],
 	})
@@ -959,7 +964,7 @@ export async function loadLiquidationApproval(client: ReadClient, managerAddress
 export async function setLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams) {
 	return await writeContractAndWait(client, () => ({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'setLiquidationApproval',
 		args: [params],
 	}))
@@ -968,7 +973,7 @@ export async function setLiquidationApproval(client: WriteClient, registryAddres
 export async function permitLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams, signature: Hex) {
 	return await writeContractAndWait(client, () => ({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'permitLiquidationApproval',
 		args: [params, signature],
 	}))
@@ -977,7 +982,7 @@ export async function permitLiquidationApproval(client: WriteClient, registryAdd
 export async function revokeLiquidationApproval(client: WriteClient, registryAddress: Address, approvalId: Hex) {
 	return await writeContractAndWait(client, () => ({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'revokeLiquidationApproval',
 		args: [approvalId],
 	}))
@@ -986,7 +991,7 @@ export async function revokeLiquidationApproval(client: WriteClient, registryAdd
 export async function invalidateLiquidationApprovalNonce(client: WriteClient, registryAddress: Address, newNonce: bigint) {
 	return await writeContractAndWait(client, () => ({
 		address: registryAddress,
-		abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+		abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 		functionName: 'invalidateLiquidationApprovalNonce',
 		args: [newNonce],
 	}))
@@ -1000,7 +1005,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 	}
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageLiquidation',
 		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth],
 		value: queueOperationValueAttoEth,
@@ -1022,7 +1027,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 	}
 	const callParams = {
 		address: managerAddress,
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
 		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth],
 		value: queueOperationValueAttoEth,

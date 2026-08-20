@@ -11,9 +11,9 @@ const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'c
 const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
-const OPEN_ORACLE_LOCAL_PATH = 'contracts/peripherals/openOracle/OpenOracle.sol'
-const OPEN_ORACLE_LOCAL_PREFIX = 'contracts/peripherals/openOracle/'
-const OPEN_ORACLE_LOCAL_VENDOR_PREFIX = 'contracts/peripherals/openOracle/openzeppelin/contracts/'
+const OPEN_ORACLE_LOCAL_PATH = 'contracts/statoblast/openOracle/OpenOracle.sol'
+const OPEN_ORACLE_LOCAL_PREFIX = 'contracts/statoblast/openOracle/'
+const OPEN_ORACLE_LOCAL_VENDOR_PREFIX = 'contracts/statoblast/openOracle/openzeppelin/contracts/'
 const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleSlim.sol'
 const OPEN_ORACLE_UPSTREAM_PREFIX = 'src/'
 const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/'
@@ -23,15 +23,15 @@ const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;'
 const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity 0.8.35;'
 const allowedImmutableContractWarnings = [
 	{
-		sourcePath: 'contracts/peripherals/Multicall3.sol',
+		sourcePath: 'contracts/statoblast/Multicall3.sol',
 		message: 'Since the VM version paris, "difficulty" was replaced by "prevrandao"',
 	},
 	{
-		sourcePath: 'contracts/peripherals/WETH9.sol',
+		sourcePath: 'contracts/statoblast/WETH9.sol',
 		message: "'transfer' is deprecated and scheduled for removal",
 	},
 	{
-		sourcePath: 'contracts/peripherals/openOracle/OpenOracle.sol',
+		sourcePath: 'contracts/statoblast/openOracle/OpenOracle.sol',
 		message: 'Unnamed return variable can remain unassigned',
 	},
 	{

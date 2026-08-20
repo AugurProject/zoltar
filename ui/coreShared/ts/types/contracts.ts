@@ -198,12 +198,15 @@ export type SecurityPoolCreationResult = {
 }
 
 export type SecurityVaultDetails = {
+	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
 	disputeStakedAttoRep: bigint
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint
+	openInterestAttoEth?: bigint
+	poolHeldRepPerCapacityBps?: bigint
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address

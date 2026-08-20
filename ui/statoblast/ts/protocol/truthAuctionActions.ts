@@ -1,9 +1,17 @@
 import { type Address } from '@zoltar/shared/ethereum'
+<<<<<<< HEAD:ui/statoblast/ts/protocol/truthAuctionActions.ts
 import { peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar/protocol/core.js'
 import { getInfraContractAddresses } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { executeForkAuctionAction } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
+=======
+import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
+import type { WriteClient } from '../types/contracts.js'
+import { writeContractAndWait } from './core.js'
+import { getInfraContractAddresses } from './deploymentHelpers.js'
+import { executeForkAuctionAction } from './securityPoolActions.js'
+>>>>>>> origin/main:ui/ts/protocol/truthAuctionActions.ts
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
@@ -14,7 +22,7 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'startTruthAuction',
 				args: [securityPoolAddress],
 			})),
@@ -24,7 +32,7 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => {
 		const callParams = {
 			address: truthAuctionAddress,
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'submitBid',
 			args: [tick],
 			value: amount,
@@ -48,7 +56,7 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: truthAuctionAddress,
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'refundLosingBids',
 				args: selectedBids === undefined ? [{ tick, bidIndex }] : selectedBids,
 			})),
@@ -64,7 +72,7 @@ export async function settleTruthAuctionBids(client: WriteClient, securityPoolAd
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'settleAuctionBids',
 				args: [securityPoolAddress, vaultAddress, claimTickIndices, refundTickIndices],
 			})),
@@ -79,7 +87,7 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'finalizeTruthAuction',
 				args: [securityPoolAddress],
 			})),

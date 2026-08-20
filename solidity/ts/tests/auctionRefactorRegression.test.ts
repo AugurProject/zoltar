@@ -2,7 +2,7 @@ import { test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
-const auctionSource = 'contracts/peripherals/UniformPriceDualCapBatchAuction.sol'
+const auctionSource = 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol'
 const auctionName = 'UniformPriceDualCapBatchAuction'
 const auctionRuntimeBytecodeBudgetBytes = 15_360
 
@@ -70,8 +70,8 @@ test('auction extraction stays inside the audited runtime bytecode budget', () =
 test('liquidation boundaries expose one typed request with one nested snapshot', () => {
 	const artifacts = loadContractsJson(import.meta.dir)
 	const boundaries: Array<[string, string, string, number]> = [
-		['contracts/peripherals/SecurityPool.sol', 'SecurityPool', 'performLiquidation', 8],
-		['contracts/peripherals/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate', 'performBundledLiquidation', 8],
+		['contracts/statoblast/SecurityPool.sol', 'SecurityPool', 'performLiquidation', 8],
+		['contracts/statoblast/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate', 'performBundledLiquidation', 8],
 	]
 	for (const [source, contract, functionName, expectedTopLevelComponents] of boundaries) {
 		const output = getContractOutput(artifacts, source, contract)

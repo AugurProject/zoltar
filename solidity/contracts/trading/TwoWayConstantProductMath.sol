@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { Math } from '../peripherals/openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Math } from '../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 library TwoWayConstantProductMath {
 	uint256 internal constant BPS_DENOMINATOR = 10_000;

@@ -1,0 +1,154 @@
+import { beforeEach, describe, test } from 'bun:test'
+import type { Address } from '@zoltar/shared/ethereum'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { useStatoblastReceiveGuardsFixture, type StatoblastReceiveGuardsFixture } from './fixture'
+
+describe('Statoblast: receive guards', () => {
+	const fixture = useStatoblastReceiveGuardsFixture()
+	const assert: StatoblastReceiveGuardsFixture['assert'] = fixture.assert
+	const strictEqualTypeSafe: StatoblastReceiveGuardsFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
+	const {
+		createWriteClient,
+		TEST_ADDRESSES,
+		getChildUniverseId,
+		getETHBalance,
+		manipulatePriceOracleAndPerformOperation,
+		triggerOwnGameFork,
+		getInfraContractAddresses,
+		getSecurityPoolAddresses,
+		getQuestionEndDate,
+		OperationType,
+		QuestionOutcome,
+		migrateRepToZoltar,
+		migrateVault,
+		getTotalTheoreticalSupplyAttoRep,
+		createCompleteSet,
+		depositRepToVault,
+		getRepToken,
+		repDeposit,
+		genesisUniverse,
+		statoblastSecurityMultiplierBps,
+		testInternalSenderBalance,
+		sendEthAndWait,
+	} = fixture
+
+	let mockWindow: StatoblastReceiveGuardsFixture['mockWindow']
+	let client: StatoblastReceiveGuardsFixture['client']
+	let securityPoolAddresses: StatoblastReceiveGuardsFixture['securityPoolAddresses']
+	let questionId: StatoblastReceiveGuardsFixture['questionId']
+
+	beforeEach(() => {
+		mockWindow = fixture.mockWindow
+		client = fixture.client
+		securityPoolAddresses = fixture.securityPoolAddresses
+		questionId = fixture.questionId
+	})
+
+	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint, expectedReason: RegExp) => {
+		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		await mockWindow.setBalance(unauthorizedSender.account.address, testInternalSenderBalance)
+		const targetBalanceBefore = await getETHBalance(client, to)
+		await assert.rejects(
+			writeContractAndWait(unauthorizedSender, () => unauthorizedSender.sendTransaction({ to, value })),
+			expectedReason,
+		)
+		strictEqualTypeSafe(await getETHBalance(client, to), targetBalanceBefore, 'Rejected ETH send must preserve the target balance')
+	}
+
+	test('SecurityPool receive restricts unauthorized senders', async () => {
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+		const poolAddress = securityPoolAddresses.securityPool
+
+		// Ensure forker has ETH to send
+		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
+
+		// 1. Unauthorized sender should revert
+		await expectUnauthorizedEthSendToReject(poolAddress, 1000n, /Bad ETH sender/)
+
+		// 2. Authorized sender: securityPoolForker
+		await mockWindow.impersonateAccount(forkerAddress)
+		await sendEthAndWait(forkerAddress, poolAddress, 1000n)
+		const balance = await getETHBalance(client, poolAddress)
+		strictEqualTypeSafe(balance, 1000n, 'Pool balance after forker send')
+
+		// 3. Set up child pool scenario to test additional senders
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestAmount = 10n * 10n ** 18n
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		// Fork and migrate
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		// Get child addresses
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const childPoolAddress = childAddresses.securityPool
+		const truthAuctionAddress = childAddresses.truthAuction
+
+		// Ensure ETH for testing
+		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
+		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
+
+		// 4. Unauthorized to child pool reverts
+		await expectUnauthorizedEthSendToReject(childPoolAddress, 100n, /Bad ETH sender/)
+
+		// Record initial child balance
+		const initialChildBal = await getETHBalance(client, childPoolAddress)
+
+		// 5. Send from forker to child
+		await mockWindow.impersonateAccount(forkerAddress)
+		await sendEthAndWait(forkerAddress, childPoolAddress, 2000n)
+		const afterForkerBal = await getETHBalance(client, childPoolAddress)
+		strictEqualTypeSafe(afterForkerBal - initialChildBal, 2000n, 'Child balance increase from forker')
+
+		// 6. Send from truthAuction to child
+		await mockWindow.impersonateAccount(truthAuctionAddress)
+		await sendEthAndWait(truthAuctionAddress, childPoolAddress, 3000n)
+		const afterAuctionBal = await getETHBalance(client, childPoolAddress)
+		strictEqualTypeSafe(afterAuctionBal - initialChildBal, 5000n, 'Child balance total increase from both')
+	})
+
+	test('SecurityPoolForker receive restricts unauthorized senders', async () => {
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+
+		// Setup to create a child pool so truthAuction is registered
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestAmount = 10n * 10n ** 18n
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const truthAuctionAddress = childAddresses.truthAuction
+
+		// Ensure auction has ETH to send
+		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
+
+		// 1. Unauthorized sender to forker should revert
+		await expectUnauthorizedEthSendToReject(forkerAddress, 100n, /execution reverted/)
+
+		// 2. Authorized sender: truthAuction
+		const initialForkerBal = await getETHBalance(client, forkerAddress)
+		await mockWindow.impersonateAccount(truthAuctionAddress)
+		await sendEthAndWait(truthAuctionAddress, forkerAddress, 2000n)
+		const newForkerBal = await getETHBalance(client, forkerAddress)
+		strictEqualTypeSafe(newForkerBal - initialForkerBal, 2000n, 'Forker balance increase from truthAuction')
+	})
+})

@@ -23,9 +23,9 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
 - Never edit `ui/*/js/**` or `shared/js/**` directly.
 - Do not modify imported compatibility contracts:
-  - `solidity/contracts/peripherals/openOracle/OpenOracle.sol`
-  - `solidity/contracts/peripherals/WETH9.sol`
-  - `solidity/contracts/peripherals/Multicall3.sol`
+  - `solidity/contracts/statoblast/openOracle/OpenOracle.sol`
+  - `solidity/contracts/statoblast/WETH9.sol`
+  - `solidity/contracts/statoblast/Multicall3.sol`
 - The protocol is not live. Do not preserve legacy ABIs, accessors, events, names, or compatibility shims solely for prior development deployments. Keep compatibility only for a current consumer, test, deployment script, or documented launch requirement.
 - Pin every `package.json` dependency to an exact version without `^` or `~`.
 

@@ -3,9 +3,15 @@
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
+<<<<<<< HEAD:ui/zoltar/ts/tests/protocol/reporting.test.ts
 import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+=======
+import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../contractArtifact.js'
+import type { EscalationSide } from '../../types/contracts.js'
+import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from './testSupport.js'
+>>>>>>> origin/main:ui/ts/tests/protocol/reporting.test.ts
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -844,7 +850,7 @@ describe('reporting protocol client', () => {
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 3) throw new Error('Unexpected migrateVaultWithUnresolvedEscalation calldata')
@@ -874,7 +880,7 @@ describe('reporting protocol client', () => {
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		if (!Array.isArray(decodedCall.args) || decodedCall.args.length !== 4) throw new Error('Unexpected claimForkedEscalationDeposits calldata')
@@ -925,7 +931,7 @@ describe('reporting protocol client', () => {
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDeposits')

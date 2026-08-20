@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { keccak256, type Hex } from '@zoltar/shared/ethereum'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
-const escalationGameSourcePath = 'contracts/peripherals/EscalationGame.sol'
+const escalationGameSourcePath = 'contracts/statoblast/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576

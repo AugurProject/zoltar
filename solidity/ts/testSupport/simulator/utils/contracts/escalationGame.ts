@@ -1,10 +1,10 @@
 import { encodeDeployData } from '@zoltar/shared/ethereum'
-import { ReputationToken_ReputationToken, peripherals_EscalationGame_EscalationGame, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 import { getRepTokenAddress } from './zoltar'
-import { getInfraContractAddresses } from './deployPeripherals'
+import { getInfraContractAddresses } from './deployStatoblast'
 import { requireAddress, requireArray, requireBigInt } from '../utilities'
 
 function requireContractAddress(value: `0x${string}` | null | undefined, context: string): `0x${string}` {
@@ -44,7 +44,7 @@ function getTupleField(value: unknown, index: number, key: string, context: stri
 export const getNonDecisionThresholdAttoRep = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionThresholdAttoRep',
 			address: escalationGame,
 			args: [],
@@ -55,7 +55,7 @@ export const getNonDecisionThresholdAttoRep = async (client: ReadClient, escalat
 export const getQuestionResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
 	parseQuestionOutcome(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getQuestionResolution',
 			address: escalationGame,
 			args: [],
@@ -65,7 +65,7 @@ export const getQuestionResolution = async (client: ReadClient, escalationGame: 
 export const getStartBond = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'startBondAttoRep',
 			address: escalationGame,
 			args: [],
@@ -76,7 +76,7 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'totalDisputeStakedAttoRep',
 			address: escalationGame,
 			args: [],
@@ -87,7 +87,7 @@ export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: Ac
 export const getEscrowedRepByVault = async (client: ReadClient, escalationGame: AccountAddress, vault: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'disputeStakedRepByVaultAttoRep',
 			address: escalationGame,
 			args: [vault],
@@ -101,7 +101,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 	do {
 		const returnedDeposits = requireArray(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'getDepositsByOutcome',
 				address: escalationGame,
 				args: [outcome, currentIndex, CONTRACT_PAGE_SIZE],
@@ -123,7 +123,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 
 export const getEscalationGameOutcomeState = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) =>
 	await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		functionName: 'getOutcomeState',
 		address: escalationGame,
 		args: [outcome],
@@ -132,16 +132,16 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 export const deployEscalationGame = async (writeClient: WriteClient, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint) => {
 	const verifierDeploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
-			abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-			bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+			abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+			bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 		}),
 	})
 	const verifierDeploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: verifierDeploymentHash })
 	const proofVerifierAddress = requireContractAddress(verifierDeploymentReceipt.contractAddress, 'proof verifier deployment address')
 	const deploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 		}),
 	})
@@ -149,7 +149,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBondAt
 	const escalationGameAddress = requireContractAddress(deploymentReceipt.contractAddress, 'Escalation game deployment address')
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'start',
 			address: escalationGameAddress,
 			args: [startBondAttoRep, nonDecisionThresholdAttoRep],
@@ -161,19 +161,19 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBondAt
 export const getBalances = async (client: ReadClient, escalationGame: AccountAddress) => {
 	const [invalidState, yesState, noState] = await Promise.all([
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getOutcomeState',
 			address: escalationGame,
 			args: [0],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getOutcomeState',
 			address: escalationGame,
 			args: [1],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getOutcomeState',
 			address: escalationGame,
 			args: [2],
@@ -185,7 +185,7 @@ export const getBalances = async (client: ReadClient, escalationGame: AccountAdd
 export const getActivationTime = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'activationTime',
 			address: escalationGame,
 			args: [],
@@ -196,7 +196,7 @@ export const getActivationTime = async (client: ReadClient, escalationGame: Acco
 export const getEscalationGameTotalCost = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCostAttoRep',
 			address: escalationGame,
 			args: [],
@@ -207,7 +207,7 @@ export const getEscalationGameTotalCost = async (client: ReadClient, escalationG
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
 	const preview = requireArray(
 		await writeClient.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'previewDepositOnOutcome',
 			address: escalationGame,
 			args: [outcome, amount],
@@ -226,7 +226,7 @@ export const depositOnOutcome = async (writeClient: WriteClient, escalationGame:
 	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'recordDepositFromSecurityPool',
 			address: escalationGame,
 			args: [depositor, outcome, acceptedAmount, resultingCumulativeAmount],

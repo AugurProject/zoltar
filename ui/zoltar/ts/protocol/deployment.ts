@@ -5,6 +5,7 @@ import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ScalarOutcomes_ScalarOutcomes,
 	ZoltarQuestionData_ZoltarQuestionData,
+<<<<<<< HEAD:ui/zoltar/ts/protocol/deployment.ts
 	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	peripherals_Multicall3_Multicall3,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
@@ -13,6 +14,28 @@ import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getInfraContractAddresses, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode } from './deploymentHelpers.js'
+=======
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_Multicall3_Multicall3,
+	statoblast_SecurityPoolUtils_SecurityPoolUtils,
+	statoblast_WETH9_WETH9,
+	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	statoblast_openOracle_OpenOracle_OpenOracle,
+} from '../contractArtifact.js'
+import {
+	MULTICALL3_BYTECODE,
+	PROXY_DEPLOYER_ADDRESS,
+	ZERO_SALT,
+	getEscalationGameFactoryByteCode,
+	getInfraContractAddresses,
+	getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
+	getSecurityPoolFactoryByteCode,
+	getSecurityPoolForkerByteCode,
+	getShareTokenFactoryByteCode,
+	getZoltarInitCode,
+	getZoltarQuestionDataByteCode,
+} from './deploymentHelpers.js'
+>>>>>>> origin/main:ui/ts/protocol/deployment.ts
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -38,11 +61,11 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Record<De
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0xffc50c2e60f6b94512c41eb736669e9ce8ec546340cb85b3959c00c0efbde9e3',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
-	securityPoolFactory: '0x1a3f287f62a040269d970db111de699a4183b9dd78a3bc298d32d7890ec653c7',
-	securityPoolForker: '0x8168618aae4bbac4683df1bf7c7d9d1fb1d3ff4262496f8a373a329a60a90337',
-	securityPoolUtils: '0xeb2c5b81cd486403f9bf6eabc72ca09edec6d65f5ac0fffe978b98907b9ce73f',
+	securityPoolFactory: '0x27c15977c9289c723ff16ee211cebb89cdcf7cadad470519383acbb135c39509',
+	securityPoolForker: '0x4b91605ac365e0e3783c6555d33cfd65481f91c4cb38dd5622cce3548a49b18b',
+	securityPoolUtils: '0xb3ae710a9fafc6349441b36336634b1bfca30ad89516d4fd087463bbe37d1b5b',
 	shareTokenFactory: '0xfcf1abdf1e5ced1f74f24c58c22cc745806007c4bae0a9586a42dd327feec73a',
-	uniformPriceDualCapBatchAuctionFactory: '0xe6a40cee0091f1893337468397aa96d3ce858bf228162f8b5a10f093c414850d',
+	uniformPriceDualCapBatchAuctionFactory: '0xcec6c159400edfe35a548cf68cdebcf3a9b873bf1a97c7323b9bac02d0ba80fe',
 	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
 	zoltar: '0xab10fc74b97acd4e7a97007283f9f341ddfa81cf894fdfe5c9caf0bb939946b2',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
@@ -50,12 +73,12 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Record<De
 
 export const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
-	escalationGameClaimDelegate: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
-	multicall3: `0x${peripherals_Multicall3_Multicall3.evm.deployedBytecode.object}`,
-	openOracle: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
+	escalationGameClaimDelegate: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
+	multicall3: `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`,
+	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	scalarOutcomes: `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}`,
-	uniformPriceDualCapBatchAuctionFactory: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}`,
-	weth: `0x${peripherals_WETH9_WETH9.evm.deployedBytecode.object}`,
+	uniformPriceDualCapBatchAuctionFactory: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}`,
+	weth: `0x${statoblast_WETH9_WETH9.evm.deployedBytecode.object}`,
 	zoltarQuestionData: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`,
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
 
@@ -84,11 +107,11 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	priceOracleManagerAndOperatorQueuerFactory: '0xfef520f4f2f638fc41c78823c64a8194fa5758017117f2a2436fa4697aef68dd',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
-	securityPoolFactory: '0x62e1b3de2abe87ea82ca2f4cbf5dfef431252655ca9827f9d82eb49853e841e0',
-	securityPoolForker: '0x8394dd233701a917a79655ce037fad7866c748715e6384cfa566663cb2bd5540',
-	securityPoolUtils: '0xeb2c5b81cd486403f9bf6eabc72ca09edec6d65f5ac0fffe978b98907b9ce73f',
+	securityPoolFactory: '0xb9f7e13bca549483563c8c427895d96808b08530d5bb619e31600c58c2f320b9',
+	securityPoolForker: '0x0c36169a21ba67733bde308d4976bab811bbf09504fb27aebfd03f659eff110d',
+	securityPoolUtils: '0xb3ae710a9fafc6349441b36336634b1bfca30ad89516d4fd087463bbe37d1b5b',
 	shareTokenFactory: '0xb4921aa294a97e2236c5597e0f5391aa45574d0a664ce2b5037a60fd5c367409',
-	uniformPriceDualCapBatchAuctionFactory: '0xe6a40cee0091f1893337468397aa96d3ce858bf228162f8b5a10f093c414850d',
+	uniformPriceDualCapBatchAuctionFactory: '0xcec6c159400edfe35a548cf68cdebcf3a9b873bf1a97c7323b9bac02d0ba80fe',
 	zoltar: '0xd88ac0e34684f9156068590e63fe1a0da390eb63b4261e456e7e0843cc2090f0',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
@@ -470,7 +493,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			label: 'UniformPriceDualCapBatchAuctionFactory',
 			address: addresses.uniformPriceDualCapBatchAuctionFactory,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
 		},
 		{
 			id: 'scalarOutcomes',
@@ -484,14 +507,14 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			label: 'SecurityPoolUtils',
 			address: addresses.securityPoolUtils,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`),
 		},
 		{
 			id: 'openOracle',
 			label: 'OpenOracle',
 			address: addresses.openOracle,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
 		},
 		{
 			id: 'zoltarQuestionData',
@@ -528,6 +551,50 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			dependencies: [...(profile.id === 'sepolia' ? (['weth'] as const) : []), 'proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress)),
 		},
+<<<<<<< HEAD:ui/zoltar/ts/protocol/deployment.ts
+=======
+		{
+			id: 'securityPoolForker',
+			label: 'Security Pool Forker',
+			address: addresses.securityPoolForker,
+			dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
+			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
+		},
+		{
+			id: 'escalationGameClaimDelegate',
+			label: 'Escalation Claim Checkpoint Delegate',
+			address: addresses.escalationGameClaimDelegate,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
+		},
+		{
+			id: 'escalationGameFactory',
+			label: 'Escalation Game Factory',
+			address: addresses.escalationGameFactory,
+			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
+			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
+		},
+		{
+			id: 'securityPoolFactory',
+			label: 'Security Pool Factory',
+			address: addresses.securityPoolFactory,
+			dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
+			deploy: async client =>
+				await deployViaProxy(
+					client,
+					getSecurityPoolFactoryByteCode({
+						escalationGameFactory: addresses.escalationGameFactory,
+						openOracle: addresses.openOracle,
+						priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
+						securityPoolForker: addresses.securityPoolForker,
+						shareTokenFactory: addresses.shareTokenFactory,
+						uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+						zoltar: addresses.zoltar,
+						zoltarQuestionData: addresses.zoltarQuestionData,
+					}),
+				),
+		},
+>>>>>>> origin/main:ui/ts/protocol/deployment.ts
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
 }

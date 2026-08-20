@@ -10,17 +10,17 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
-	peripherals_SecurityPoolForker_SecurityPoolForker,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	statoblast_SecurityPoolForker_SecurityPoolForker,
 	ReputationToken_ReputationToken,
-	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
-	test_peripherals_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
-	test_peripherals_FalseReturningERC20_FalseReturningERC20,
-	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
-	test_peripherals_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
+	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
+	test_statoblast_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
+	test_statoblast_FalseReturningERC20_FalseReturningERC20,
+	test_statoblast_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
+	test_statoblast_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
 } from '../types/contractArtifact'
 import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -121,7 +121,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readIterativeAttritionCost = async (escalationGame: Address, timeSinceStart: bigint) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'computeIterativeAttritionCostAttoRep',
 			address: escalationGame,
 			args: [timeSinceStart],
@@ -129,7 +129,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readTimeSinceStartFromAttritionCost = async (escalationGame: Address, attritionCost: bigint) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'computeTimeSinceStartFromAttritionCostAttoRep',
 			address: escalationGame,
 			args: [attritionCost],
@@ -137,7 +137,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readBindingCapital = async (escalationGame: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getBindingCapitalAttoRep',
 			address: escalationGame,
 			args: [],
@@ -145,7 +145,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readHasReachedNonDecision = async (escalationGame: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'hasReachedNonDecision',
 			address: escalationGame,
 			args: [],
@@ -153,7 +153,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readNonDecisionState = async (escalationGame: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionState',
 			address: escalationGame,
 			args: [],
@@ -161,7 +161,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readCanTriggerOwnFork = async (escalationGame: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'canTriggerOwnFork',
 			address: escalationGame,
 			args: [],
@@ -169,7 +169,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readNonDecisionTimestamp = async (escalationGame: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionTimestamp',
 			address: escalationGame,
 			args: [],
@@ -202,16 +202,16 @@ describe('Escalation Game Test Suite', () => {
 		)
 		const verifierDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 			}),
 		})
 		const verifierDeploymentReceipt = await client.waitForTransactionReceipt({ hash: verifierDeploymentHash })
 		const proofVerifierAddress = requireContractAddress(verifierDeploymentReceipt.contractAddress, 'proof verifier deployment address')
 		const escalationGameDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 			}),
 		})
@@ -281,8 +281,8 @@ describe('Escalation Game Test Suite', () => {
 	async function deployFalseReturningToken() {
 		const tokenDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: test_peripherals_FalseReturningERC20_FalseReturningERC20.abi,
-				bytecode: `0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
+				abi: test_statoblast_FalseReturningERC20_FalseReturningERC20.abi,
+				bytecode: `0x${test_statoblast_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
 			}),
 		})
 		const tokenDeploymentReceipt = await client.waitForTransactionReceipt({ hash: tokenDeploymentHash })
@@ -294,7 +294,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'start',
 					args: [startBondAttoRep, nonDecisionThresholdAttoRep],
@@ -306,7 +306,7 @@ describe('Escalation Game Test Suite', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
 					args: [startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, false, 0n],
@@ -341,7 +341,7 @@ describe('Escalation Game Test Suite', () => {
 	const advanceForkContinuationPastStart = async (escalationGameAddress: Address, targetAttritionCost = reportBond + 1n) => {
 		await resumeEscalationFromFork(escalationGameAddress)
 		const forkResumedAt = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'forkResumedAt',
 			args: [],
@@ -365,7 +365,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readOutcomeState = async (escalationGameAddress: Address, outcome: QuestionOutcome) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getOutcomeState',
 			args: [outcome],
@@ -378,7 +378,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readIsForkCarryFundingComplete = async (escalationGameAddress: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'isForkCarryFundingComplete',
 			args: [],
@@ -387,7 +387,7 @@ describe('Escalation Game Test Suite', () => {
 	const readTotalEscrowedRep = async (escalationGameAddress: Address): Promise<bigint> =>
 		requireBigInt(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'totalDisputeStakedAttoRep',
 				args: [],
@@ -397,7 +397,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readForkCarrySnapshotInitialized = async (escalationGameAddress: Address) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'forkCarrySnapshotInitialized',
 			args: [],
@@ -406,7 +406,7 @@ describe('Escalation Game Test Suite', () => {
 	const readEscrowedRepByVault = async (escalationGameAddress: Address, vault: Address): Promise<bigint> =>
 		requireBigInt(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'disputeStakedRepByVaultAttoRep',
 				args: [vault],
@@ -417,7 +417,7 @@ describe('Escalation Game Test Suite', () => {
 	const readForkedEscrowByVaultAndOutcome = async (escalationGameAddress: Address, vault: Address, outcome: QuestionOutcome): Promise<readonly [bigint, bigint, bigint, bigint]> => {
 		const forkedEscrow = requireArray(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'getForkedEscrowByVaultAndOutcome',
 				args: [vault, outcome],
@@ -430,7 +430,7 @@ describe('Escalation Game Test Suite', () => {
 	const readCarryLeafPage = async (escalationGameAddress: Address, outcome: QuestionOutcome, startNodeId: bigint, maxEntries: bigint): Promise<readonly [CarryLeaf[], bigint]> => {
 		const carryLeafPage = requireArray(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'getCarryLeafPageByOutcome',
 				args: [outcome, startNodeId, maxEntries],
@@ -449,7 +449,7 @@ describe('Escalation Game Test Suite', () => {
 
 	const readProofConsumedCarriedDepositIndexes = async (escalationGameAddress: Address, outcome: QuestionOutcome, startIndex: bigint, numberOfEntries: bigint) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 			args: [outcome, startIndex, numberOfEntries],
@@ -461,7 +461,7 @@ describe('Escalation Game Test Suite', () => {
 		await transactWithEscalationGame(
 			escalationGameAddress,
 			encodeFunctionData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'getCarryLeafPageByOutcome',
 				args: [outcome, startNodeId, maxEntries],
 			}),
@@ -471,7 +471,7 @@ describe('Escalation Game Test Suite', () => {
 		await transactWithEscalationGame(
 			escalationGameAddress,
 			encodeFunctionData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 				args: [outcome, startIndex, numberOfEntries],
 			}),
@@ -480,7 +480,7 @@ describe('Escalation Game Test Suite', () => {
 		await transactWithEscalationGame(
 			escalationGameAddress,
 			encodeFunctionData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'getForkedEscrowByVaultAndOutcome',
 				args: [vault, outcome],
 			}),
@@ -624,7 +624,7 @@ describe('Escalation Game Test Suite', () => {
 				if (log.logIndex === null || log.logIndex === undefined) throw new Error('escalation event log is missing its log index')
 				let decoded: ReturnType<typeof decodeEventLog>
 				try {
-					decoded = decodeEventLog({ abi: peripherals_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics })
+					decoded = decodeEventLog({ abi: statoblast_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics })
 				} catch (error) {
 					if (!isIgnorableLogDecodeError(error)) throw error
 					continue
@@ -760,13 +760,13 @@ describe('Escalation Game Test Suite', () => {
 
 	const assertCarryCommitmentStructure = async (escalationGameAddress: Address, label: string) => {
 		const snapshot = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getForkCarrySnapshot',
 			args: [],
 		})
 		const roots = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getForkCarryRoots',
 			args: [],
@@ -842,7 +842,7 @@ describe('Escalation Game Test Suite', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					})
@@ -893,8 +893,8 @@ describe('Escalation Game Test Suite', () => {
 			async () =>
 				await client.sendTransaction({
 					data: encodeDeployData({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
-						bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
+						bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 						args: [testSecurityPoolAddress, getRepTokenAddress(0n), zeroAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 					}),
 				}),
@@ -909,8 +909,8 @@ describe('Escalation Game Test Suite', () => {
 			async () =>
 				await client.sendTransaction({
 					data: encodeDeployData({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
-						bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
+						bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 						args: [testSecurityPoolAddress, getRepTokenAddress(0n), incompatibleVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 					}),
 				}),
@@ -923,7 +923,7 @@ describe('Escalation Game Test Suite', () => {
 		const unauthorized = await deployEscalationGameWithProofPool()
 		await assert.rejects(
 			attacker.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: unauthorized.escalationGameAddress,
 				functionName: 'start',
 				args: [reportBond, nonDecisionThresholdAttoRep],
@@ -939,7 +939,7 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalation(subRepBond.escalationGameAddress, 1n, 2n)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: subRepBond.escalationGameAddress,
 				functionName: 'startBondAttoRep',
 				args: [],
@@ -960,7 +960,7 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalationFromFork(fork.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
 		await assert.rejects(
 			attacker.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: fork.escalationGameAddress,
 				functionName: 'resumeFromFork',
 				args: [],
@@ -1020,7 +1020,7 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaProofTestSecurityPool(full.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
 		await assert.rejects(
 			client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: full.escalationGameAddress,
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Yes, reportBond],
@@ -1035,7 +1035,7 @@ describe('Escalation Game Test Suite', () => {
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: resolved.escalationGameAddress,
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Yes, reportBond],
@@ -1052,7 +1052,7 @@ describe('Escalation Game Test Suite', () => {
 
 	test('proof verifier public boundaries expose deterministic error reasons', async () => {
 		const { proofVerifierAddress } = await deployEscalationGameWithProofPool()
-		const verifierAbi = peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
+		const verifierAbi = statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
 
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeIterativeAttritionCostAttoRep', args: [1n, 2n, 0n, 2n, 1n] }), /Time too high/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeAcceptedDepositAmount', args: [1n, 0n, 0n, 10n, 1n, 10n, [1n, 0n, 0n]] }), /Below start bond/)
@@ -1065,7 +1065,7 @@ describe('Escalation Game Test Suite', () => {
 
 	test('proof verifier preserves exact power-of-two logarithm components', async () => {
 		const { proofVerifierAddress } = await deployEscalationGameWithProofPool()
-		const verifierAbi = peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
+		const verifierAbi = statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
 		const lowValue = 10n ** 18n
 		const ln2Scaled = 693_147n
 
@@ -1137,7 +1137,7 @@ describe('Escalation Game Test Suite', () => {
 		const deployment = await deployEscalationGameTestSecurityPool()
 		await assert.rejects(
 			client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: deployment.escalationGameAddress,
 				functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
 				args: [client.account.address, QuestionOutcome.None],
@@ -1146,7 +1146,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: deployment.escalationGameAddress,
 				functionName: 'recordForkedEscrowForOutcome',
 				args: [client.account.address, QuestionOutcome.Yes, 1n, 0n],
@@ -1192,7 +1192,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: deployment.escalationGameAddress,
 				functionName: 'drainAllRep',
 				args: [client.account.address],
@@ -1210,7 +1210,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: deployment.escalationGameAddress,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -1224,7 +1224,7 @@ describe('Escalation Game Test Suite', () => {
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: emptyFinal.escalationGameAddress,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -1238,7 +1238,7 @@ describe('Escalation Game Test Suite', () => {
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: unresolved.escalationGameAddress,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -1253,7 +1253,7 @@ describe('Escalation Game Test Suite', () => {
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escrowed.escalationGameAddress,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -1314,13 +1314,13 @@ describe('Escalation Game Test Suite', () => {
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		const depositPage = deposits.slice(1, 6)
 		const maxCountDepositPage = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getDepositsByOutcome',
 			args: [QuestionOutcome.Yes, 1n, MAX_UINT256],
 		})
 		const noneOutcomeDepositPage = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getDepositsByOutcome',
 			args: [QuestionOutcome.None, 0n, 1n],
@@ -1344,7 +1344,7 @@ describe('Escalation Game Test Suite', () => {
 				client,
 				async () =>
 					await client.writeContract({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						address: escalationGame,
 						functionName: 'claimDepositForWinning',
 						args: [0n, QuestionOutcome.None],
@@ -1360,7 +1360,7 @@ describe('Escalation Game Test Suite', () => {
 				client,
 				async () =>
 					await client.writeContract({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						address: escalationGame,
 						functionName: 'claimDepositForWinning',
 						args: [0n, 4],
@@ -1477,7 +1477,7 @@ describe('Escalation Game Test Suite', () => {
 		const snapshotInitialized = await readForkCarrySnapshotInitialized(child.escalationGameAddress)
 		const yesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
 		const forkCarrySnapshot = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getForkCarrySnapshot',
 			args: [],
@@ -1487,7 +1487,7 @@ describe('Escalation Game Test Suite', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					})
@@ -1730,8 +1730,8 @@ describe('Escalation Game Test Suite', () => {
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, parentYesCarryTotal, parentYesCarryTotal)
 		const childRepBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
 		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, childRepBefore / 4n)
-		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepBeforeAttoRep', args: [] }), childRepBefore)
-		assert.strictEqual(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepRemainingAttoRep', args: [] }), childRepBefore - childRepBefore / 4n)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepBeforeAttoRep', args: [] }), childRepBefore)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'truthAuctionRepRemainingAttoRep', args: [] }), childRepBefore - childRepBefore / 4n)
 		const childRootSource = await client.call({ to: child.escalationGameAddress, data: '0xc028bc2a' })
 		assert.strictEqual(addressString(BigInt(childRootSource.data ?? '0x')).toLowerCase(), parent.escalationGameAddress.toLowerCase())
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
@@ -1866,7 +1866,7 @@ describe('Escalation Game Test Suite', () => {
 		const shallowCheckHash = await client.sendTransaction({
 			to: forkerAddress,
 			data: encodeFunctionData({
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'isEscalationDepositClaimedDirectly',
 				args: [shallowAncestor, QuestionOutcome.Yes, 0n],
 			}),
@@ -1876,7 +1876,7 @@ describe('Escalation Game Test Suite', () => {
 		const deepCheckHash = await client.sendTransaction({
 			to: forkerAddress,
 			data: encodeFunctionData({
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'isEscalationDepositClaimedDirectly',
 				args: [deepestAncestor, QuestionOutcome.Yes, 0n],
 			}),
@@ -2108,7 +2108,7 @@ describe('Escalation Game Test Suite', () => {
 		)
 		const receiverBalanceAfterExport = await getERC20Balance(client, repToken, receiver)
 		const localPrincipalAfterExport = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: deployment.escalationGameAddress,
 			functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
 			args: [client.account.address, QuestionOutcome.Yes],
@@ -2227,7 +2227,7 @@ describe('Escalation Game Test Suite', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					})
@@ -2326,7 +2326,7 @@ describe('Escalation Game Test Suite', () => {
 		const decodedLogs = receipt.logs.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					data: log.data,
 					topics: log.topics,
 				})
@@ -2362,7 +2362,7 @@ describe('Escalation Game Test Suite', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_EscalationGame_EscalationGame.abi,
+						abi: statoblast_EscalationGame_EscalationGame.abi,
 						data: log.data,
 						topics: log.topics,
 					})
@@ -2459,7 +2459,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), true, 'an inherited threshold tie without a fixed outcome should authorize its own fork')
 		await assert.rejects(
 			client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: child.escalationGameAddress,
 				functionName: 'previewDepositOnOutcome',
 				args: [QuestionOutcome.Invalid, reportBond],
@@ -2472,7 +2472,7 @@ describe('Escalation Game Test Suite', () => {
 			.filter(log => log.address.toLowerCase() === child.escalationGameAddress.toLowerCase())
 			.flatMap(log => {
 				try {
-					return [decodeEventLog({ abi: peripherals_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics }).eventName]
+					return [decodeEventLog({ abi: statoblast_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics }).eventName]
 				} catch (error) {
 					if (!isIgnorableLogDecodeError(error)) throw error
 					return []
@@ -2497,7 +2497,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), false, 'a fixed child should continue to its selected outcome instead of forking again')
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		const continuationEndDate = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'getEscalationGameEndDate',
 			args: [],
@@ -2587,7 +2587,7 @@ describe('Escalation Game Test Suite', () => {
 		assert.ok(residualRep > 0n, 'three nonzero outcome buckets should leave terminal losing carry after the winner is paid')
 		await writeContractAndWait(client, async () =>
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: child.escalationGameAddress,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -2700,7 +2700,7 @@ describe('Escalation Game Test Suite', () => {
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		assert.strictEqual(await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes), sourceLeafCount)
 		assert.strictEqual(await readCarryRoot(child.escalationGameAddress, QuestionOutcome.Yes), await readCarryRoot(source.escalationGameAddress, QuestionOutcome.Yes))
-		assert.ok((await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'continuation should resume in one call regardless of reporter count')
+		assert.ok((await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt', args: [] })) > 0n, 'continuation should resume in one call regardless of reporter count')
 	})
 
 	test('sybil reporters cannot exhaust a global payout-claim cap', async () => {
@@ -2753,7 +2753,7 @@ describe('Escalation Game Test Suite', () => {
 		await assert.rejects(
 			writeContractAndWait(client, async () =>
 				client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: child.escalationGameAddress,
 					functionName: 'sweepResidualRepToSecurityPool',
 					args: [],
@@ -2965,7 +2965,7 @@ describe('Escalation Game Test Suite', () => {
 
 		// totalCostAttoRep before activationTime (3 days in the future) returns 0
 		const costBeforeStart = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCostAttoRep',
 			address: escalationGame,
 			args: [],
@@ -2976,7 +2976,7 @@ describe('Escalation Game Test Suite', () => {
 		const activationTime = await getActivationTime(client, escalationGame)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		const costAfterTimeout = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCostAttoRep',
 			address: escalationGame,
 			args: [],

@@ -28,7 +28,7 @@
 
 			<section id="capacity-and-health">
 				<h2>Capacity and Live Health</h2>
-				<p>A vault deposit creates REP-denominated capacity ownership from the deposited REP and its selected target health factor. The pool totals capacity ownership in constant time. The live REP/ETH oracle price and the pool Statoblast security multiplier convert that total into current ETH minting capacity. A REP price change therefore changes capacity without rewriting vaults, and it never deletes already-open interest.</p>
+				<p>A vault deposit creates incremental REP-denominated capacity ownership from the deposited REP and that deposit's selected target factor. Deposits with different targets combine, so the latest deposit target is not a vault-wide health factor. The pool totals capacity ownership in constant time. The live REP/ETH oracle price and the pool Statoblast security multiplier convert that total into current ETH minting capacity. A REP price change therefore changes capacity without rewriting vaults, and it never deletes already-open interest.</p>
 				<p>Vault health uses the vault's live REP backing, locally attributed dispute-staked REP, proportional live open interest, capacity ownership, the settled REP/ETH price, and the pool multiplier. The ordinary associated-REP branch counts pool-held and locally staked REP. The free-REP branch counts only pool-held REP because locked claims may lose. Required REP is rounded upward.</p>
 				<p>A delegated approval may require a higher post-liquidation health factor. <code>10,000</code> means exactly the protocol minimum. The signed factor is applied to both backing branches and is checked again against live post-liquidation state at execution; a queue-time preview is never a guarantee.</p>
 			</section>

@@ -27,7 +27,7 @@ const collectSources = async (directory: string, relativeRoot = path.join(projec
 }
 
 const sources = await collectSources(contractsRoot)
-const vendorPrefix = 'contracts/peripherals/openOracle/openzeppelin/contracts/'
+const vendorPrefix = 'contracts/statoblast/openOracle/openzeppelin/contracts/'
 for (const [name, source] of Object.entries(sources)) {
 	if (name.startsWith(vendorPrefix)) sources[`@openzeppelin/contracts/${name.slice(vendorPrefix.length)}`] = source
 }

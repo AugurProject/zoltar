@@ -90,7 +90,7 @@ type CompleteCoverage = {
 
 const sourceExtensions = /\.(ts|tsx|mts|cts)$/
 const testSourcePattern = /\.(test|spec|fuzz)\.(ts|tsx|mts|cts)$/
-const importedSolidityContracts = ['solidity/contracts/peripherals/WETH9.sol', 'solidity/contracts/peripherals/Multicall3.sol', 'solidity/contracts/peripherals/openOracle/']
+const importedSolidityContracts = ['solidity/contracts/statoblast/WETH9.sol', 'solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/openOracle/']
 
 function normalizePath(filePath: string, repositoryRoot = process.cwd()) {
 	const normalized = filePath.replaceAll('\\', '/')

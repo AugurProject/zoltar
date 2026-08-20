@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { BinaryOutcomes } from '../peripherals/BinaryOutcomes.sol';
-import { ISecurityPool, SystemState } from '../peripherals/interfaces/ISecurityPool.sol';
-import { ISecurityPoolForker } from '../peripherals/interfaces/ISecurityPoolForker.sol';
-import { IERC1155Receiver } from '../peripherals/interfaces/IERC1155Receiver.sol';
-import { Math } from '../peripherals/openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
+import { ISecurityPool, SystemState } from '../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPoolForker } from '../statoblast/interfaces/ISecurityPoolForker.sol';
+import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
+import { Math } from '../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';

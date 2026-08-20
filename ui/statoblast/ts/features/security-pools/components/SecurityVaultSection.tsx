@@ -33,6 +33,7 @@ import { resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar/features/ope
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
+import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
@@ -53,6 +54,7 @@ import type { StagedOracleOperation } from '@zoltar/ui-core-shared/types/contrac
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
 	capacityOwnershipAttoRep: bigint
+	currentVaultIsHealthy?: boolean | undefined
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
@@ -64,7 +66,7 @@ type QueuedVaultOperationView = {
 	isPendingSlot: boolean
 	operationId: bigint
 }
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 
 	const embeddedContent = (
@@ -110,9 +112,12 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	)
 	const gridContent = (
 		<VaultMetricGrid
+			associatedRepPerCapacityBps={securityVaultDetails.associatedRepPerCapacityBps}
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
+			isCurrentlyHealthy={currentVaultIsHealthy}
+			poolHeldRepPerCapacityBps={securityVaultDetails.poolHeldRepPerCapacityBps}
 			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}
 			repPerEthPrice={repPerEthPrice}
 			repPerEthSource={repPerEthSource}
@@ -348,6 +353,17 @@ export function SecurityVaultSection({
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
+	const currentVaultIsHealthy =
+		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || !hasValidOraclePrice || oracleManagerDetails === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
+			? undefined
+			: isVaultHealthyAtFactor({
+					disputeStakedAttoRep: currentSelectedVaultDetails.disputeStakedAttoRep,
+					healthFactorBps: 10_000n,
+					openInterestAttoEth: currentSelectedVaultDetails.openInterestAttoEth,
+					poolHeldVaultRepBackingAttoRep: currentSelectedVaultDetails.vaultAttoRepBacking,
+					poolSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
+					repPerEthPrice: oracleManagerDetails.lastPrice,
+				})
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
 	const withdrawableRepAmountAttoRep = getSecurityVaultWithdrawableRepAmount({
@@ -580,6 +596,7 @@ export function SecurityVaultSection({
 								repPerEthSource={repPerEthSource}
 								repPerEthSourceUrl={repPerEthSourceUrl}
 								capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
+								currentVaultIsHealthy={currentVaultIsHealthy}
 								securityVaultDetails={currentSelectedVaultDetails}
 								selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 								selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
@@ -681,6 +698,7 @@ export function SecurityVaultSection({
 							repPerEthSource={repPerEthSource}
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep}
+							currentVaultIsHealthy={currentVaultIsHealthy}
 							securityVaultDetails={currentSelectedVaultDetails}
 							selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
@@ -947,6 +965,7 @@ export function SecurityVaultSection({
 					repPerEthSource={repPerEthSource}
 					repPerEthSourceUrl={repPerEthSourceUrl}
 					capacityOwnershipAttoRep={capacityOwnershipAttoRep}
+					currentVaultIsHealthy={currentVaultIsHealthy}
 					securityVaultDetails={currentSelectedVaultDetails}
 					selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}

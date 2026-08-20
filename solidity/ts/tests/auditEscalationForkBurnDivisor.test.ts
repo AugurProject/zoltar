@@ -10,11 +10,11 @@ import assert from '../testSupport/simulator/utils/assert'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
-	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	ReputationToken_ReputationToken,
-	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
+	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
 import { hashCarryLeaf, SparseNullifierTree } from './carryProofHelpers'
@@ -69,8 +69,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await ensureZoltarDeployed(client)
 		claimDelegate = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-				bytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 			}),
 		)
 	})
@@ -78,8 +78,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
 		const proofVerifier = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 			}),
 		)
 		const sourcePrincipalAtFork = 6n
@@ -95,8 +95,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			)
 			const escalationGame = await deployContract(
 				encodeDeployData({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
+					bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 					args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
 				}),
 			)
@@ -118,7 +118,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			)
 			await writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGame,
 					functionName: 'startFromFork',
 					args: [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking],
@@ -149,7 +149,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking - 1n)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: underfundedGame,
 				functionName: 'isForkCarryFundingComplete',
 				args: [],
@@ -170,7 +170,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		const { escalationGame: exactlyFundedGame, securityPool: exactlyFundedPool } = await deployContinuation(exactMinimumBacking)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: exactlyFundedGame,
 				functionName: 'isForkCarryFundingComplete',
 				args: [],
@@ -188,7 +188,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		assert.ok(
 			(await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: exactlyFundedGame,
 				functionName: 'forkResumedAt',
 				args: [],
@@ -206,8 +206,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		})
 		const proofVerifier = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 			}),
 		)
 		const expectedWinningPayout = NON_DECISION_THRESHOLD + (NON_DECISION_THRESHOLD * 3n) / 5n
@@ -261,8 +261,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		const escalationGame = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
 			}),
 		)
@@ -284,7 +284,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'startFromFork',
 				args: [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, true, childBacking],
@@ -337,7 +337,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), childBacking - 1n, 'child game must begin one attoREP below the safe post-fork backing')
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'isForkCarryFundingComplete',
 				args: [],
@@ -364,7 +364,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'isForkCarryFundingComplete',
 				args: [],
@@ -382,7 +382,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 		)
 		const forkResumedAt = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'forkResumedAt',
 			args: [],
@@ -390,7 +390,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await mockWindow.setTime(forkResumedAt + 3n * 24n * 60n * 60n + 1n)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'getFinalQuestionResolution',
 				args: [],

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool, ISecurityPoolFactory } from '../peripherals/interfaces/ISecurityPool.sol';
-import { IShareToken } from '../peripherals/interfaces/IShareToken.sol';
+import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { IShareToken } from '../statoblast/interfaces/IShareToken.sol';
 import { TwoWayConstantProductPair } from './TwoWayConstantProductPair.sol';
 import { PredeploymentShareSink } from './PredeploymentShareSink.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';

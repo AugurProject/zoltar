@@ -15,10 +15,10 @@ const BPS_DENOMINATOR = 10_000n
 
 export function parseTargetHealthFactorBps(value: string) {
 	const trimmed = value.trim()
-	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error('Target health factor must be a number with at most four decimal places')
+	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error('Deposit target factor must be a number with at most four decimal places')
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < BPS_DENOMINATOR) throw new Error('Target health factor must be at least 1.00×')
+	if (factorBps < BPS_DENOMINATOR) throw new Error('Deposit target factor must be at least 1.00×')
 	return factorBps
 }
 

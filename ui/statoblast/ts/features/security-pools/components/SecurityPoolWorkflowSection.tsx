@@ -21,10 +21,17 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
+<<<<<<< HEAD:ui/statoblast/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { getQueuedVaultOperation, SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+=======
+import { SectionBlock } from '../../../components/SectionBlock.js'
+import { getQueuedVaultOperation, SecurityVaultSection } from './SecurityVaultSection.js'
+import { StickyObjectContext } from '../../../components/StickyObjectContext.js'
+import { StateHint } from '../../../components/StateHint.js'
+>>>>>>> origin/main:ui/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
@@ -865,18 +872,6 @@ export function SecurityPoolWorkflowSection({
 													</button>
 												}
 											/>
-											{vaultView === 'selected-vault' && selectedVaultDetails !== undefined && selectedVaultExistsOnchain ? (
-												<SelectedVaultSummarySection
-													repPerEthPrice={repPerEthPrice}
-													repPerEthSource={repPerEthSource}
-													repPerEthSourceUrl={repPerEthSourceUrl}
-													capacityOwnershipAttoRep={selectedVaultDetails.capacityOwnershipAttoRep}
-													securityVaultDetails={selectedVaultDetails}
-													selectedPoolStatoblastSecurityMultiplierBps={securityVault.selectedPoolStatoblastSecurityMultiplierBps}
-													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-													variant='embedded'
-												/>
-											) : undefined}
 										</SectionBlock>
 
 										{vaultView === 'browse-vaults' ? (
@@ -974,7 +969,6 @@ export function SecurityPoolWorkflowSection({
 												showHeader={false}
 												showLookupSection={false}
 												showSecurityPoolAddressInput={false}
-												showSummarySection={false}
 											/>
 										)}
 									</div>

@@ -1,8 +1,15 @@
 import type { Address } from '@zoltar/shared/ethereum'
+<<<<<<< HEAD:ui/statoblast/ts/protocol/truthAuctions.ts
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from '@zoltar/ui-zoltar/protocol/decoders.js'
 import { getProtocolPageOffset } from '@zoltar/ui-zoltar/protocol/helpers.js'
+=======
+import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
+import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '../types/contracts.js'
+import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from './decoders.js'
+import { getProtocolPageOffset } from './helpers.js'
+>>>>>>> origin/main:ui/ts/protocol/truthAuctions.ts
 
 function requireTruthAuctionTickSummary(value: unknown, context: string): TruthAuctionTickSummary {
 	const summary = requireObjectValue(value, context)
@@ -45,7 +52,7 @@ function requireTruthAuctionBidViewArray(value: unknown, context: string): Truth
 
 export async function loadTruthAuctionTickSummary(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint): Promise<TruthAuctionTickSummary> {
 	const summary = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getTickSummary',
 		address: truthAuctionAddress,
 		args: [tick],
@@ -56,14 +63,14 @@ export async function loadTruthAuctionTickSummary(client: Pick<ReadClient, 'read
 export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
 	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getTickCount',
 		address: truthAuctionAddress,
 		args: [],
 	})
 	const tickPage = requireTruthAuctionTickSummaryArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickPage',
 			address: truthAuctionAddress,
 			args: [offset, BigInt(pageSize)],
@@ -81,14 +88,14 @@ export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readCon
 export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
 	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'activeTickCount',
 		address: truthAuctionAddress,
 		args: [],
 	})
 	const tickPage = requireTruthAuctionTickSummaryArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getActiveTickPage',
 			address: truthAuctionAddress,
 			args: [offset, BigInt(pageSize)],
@@ -106,14 +113,14 @@ export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'r
 export async function loadTruthAuctionTickBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint, pageIndex: number, pageSize: number): Promise<TruthAuctionTickBidPage> {
 	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const bidCount = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getBidCountAtTick',
 		address: truthAuctionAddress,
 		args: [tick],
 	})
 	const bidPage = requireTruthAuctionBidViewArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidPageAtTick',
 			address: truthAuctionAddress,
 			args: [tick, offset, BigInt(pageSize)],
@@ -132,14 +139,14 @@ export async function loadTruthAuctionTickBidPage(client: Pick<ReadClient, 'read
 export async function loadTruthAuctionBidderBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, bidder: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionBidderBidPage> {
 	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const bidCount = await client.readContract({
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getBidderBidCount',
 		address: truthAuctionAddress,
 		args: [bidder],
 	})
 	const bidPage = requireTruthAuctionBidViewArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidderBidPage',
 			address: truthAuctionAddress,
 			args: [bidder, offset, BigInt(pageSize)],

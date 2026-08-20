@@ -1,5 +1,5 @@
 import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const NULLIFIER_DEPTH = 64
 const NULLIFIER_PATH_MASK = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
@@ -7,7 +7,7 @@ const NULLIFIER_PATH_MASK = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
 type EscalationGameNode = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint]
 
 type CarryProofReadClient = {
-	readContract(parameters: { abi: typeof peripherals_EscalationGame_EscalationGame.abi; address: Address; functionName: 'nodes'; args: [bigint] }): Promise<EscalationGameNode>
+	readContract(parameters: { abi: typeof statoblast_EscalationGame_EscalationGame.abi; address: Address; functionName: 'nodes'; args: [bigint] }): Promise<EscalationGameNode>
 }
 
 type CreateCarryProofParameters = {
@@ -24,7 +24,7 @@ const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
 
 const readCarryNode = async (client: CarryProofReadClient, escalationGameAddress: Address, nodeId: bigint) =>
 	await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'nodes',
 		args: [nodeId],

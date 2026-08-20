@@ -8,23 +8,23 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
-import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { depositToEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_SecurityPool_SecurityPool,
-	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
-	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
-	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_SecurityPool_SecurityPool,
+	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
+	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
+	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
 import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
@@ -135,7 +135,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
+					abi: statoblast_SecurityPool_SecurityPool.abi,
 					address: securityPoolAddresses.securityPool,
 					functionName: 'withdrawFromEscalationGame',
 					args: [QuestionOutcome.Yes, [0n]], // deposit index 0
@@ -151,8 +151,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
 		const proofVerifier = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 			}),
 		)
 		const actualForkThreshold = 25n * 10n ** 18n
@@ -161,28 +161,28 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const gameEndDate = 10_000_000n
 		const zoltar = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
-				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.evm.bytecode.object}`,
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
+				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.evm.bytecode.object}`,
 				args: [actualForkThreshold],
 			}),
 		)
 		const securityPool = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.abi,
-				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.evm.bytecode.object}`,
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.abi,
+				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.evm.bytecode.object}`,
 				args: [zoltar],
 			}),
 		)
 		const harness = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
-				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.evm.bytecode.object}`,
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.evm.bytecode.object}`,
 				args: [securityPool, proofVerifier],
 			}),
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
 				address: harness,
 				functionName: 'configureBoundary',
 				args: [gameEndDate, nonDecisionThresholdAttoRep, winningDeposit],
@@ -197,14 +197,14 @@ describe('Escalation Game Fork Threshold Test', () => {
 		]) {
 			await writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
+					abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
 					address: zoltar,
 					functionName: 'setForkTime',
 					args: [boundaryCase.forkTime],
 				}),
 			)
 			const [amountToWithdrawAttoRep, burnAmount] = await client.readContract({
-				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
 				address: harness,
 				functionName: 'computeWinningWithdrawal',
 				args: [winningDeposit, winningDeposit],
@@ -275,7 +275,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n, 'late migration must not leave confiscated winner principal in the escalation game')
 		await assert.rejects(
 			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: securityPoolAddresses.escalationGame,
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
@@ -313,7 +313,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: securityPoolAddresses.securityPool,
 				functionName: 'initialEscalationGameDepositAttoRep',
 				args: [],
@@ -321,15 +321,15 @@ describe('Escalation Game Fork Threshold Test', () => {
 			initialTotalSupply / 10_000_000n,
 			'initial escalation deposit should apply the theoretical-supply floor',
 		)
-		assert.strictEqual(await client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
+		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 
 	test('rejects an escalation baseline that could exceed the exact supply-based minimum', async () => {
 		const infra = getInfraContractAddresses()
 		const deploymentData = encodeDeployData({
-			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			bytecode: applyLibraries(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
 			args: [
 				infra.securityPoolForker,
 				infra.zoltarQuestionData,

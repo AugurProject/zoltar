@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { IERC1155Receiver } from '../peripherals/interfaces/IERC1155Receiver.sol';
+import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 
 /// @notice Irrecoverably quarantines shares sent to a counterfactual pair address before deployment.
 contract PredeploymentShareSink is IERC1155Receiver {

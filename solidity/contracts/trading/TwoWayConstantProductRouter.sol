@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { BinaryOutcomes } from '../peripherals/BinaryOutcomes.sol';
-import { ISecurityPool, ISecurityPoolFactory } from '../peripherals/interfaces/ISecurityPool.sol';
-import { IERC1155Receiver } from '../peripherals/interfaces/IERC1155Receiver.sol';
+import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
+import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';

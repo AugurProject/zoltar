@@ -3,7 +3,7 @@ import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { fetchLogsWithAdaptiveRanges, initialCursor, logRangeLimitError, LogScanError, scanRanges } from '../src/monitoring/block-sync.ts'
+import { fetchLogsWithAdaptiveRanges, historyUnavailableError, initialCursor, latestLogRange, logRangeLimitError, LogScanError, newestFirstScanRanges, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
@@ -92,6 +92,22 @@ describe('shared bot primitives', () => {
 			{ fromBlock: 10n, toBlock: 19n },
 			{ fromBlock: 20n, toBlock: 25n },
 		])
+	})
+
+	test('bounds live log history and plans newest chunks first', () => {
+		expect(latestLogRange(1_000n)).toEqual({ fromBlock: 745n, toBlock: 1_000n })
+		expect(newestFirstScanRanges(1n, 600n, 256n)).toEqual([
+			{ fromBlock: 345n, toBlock: 600n },
+			{ fromBlock: 89n, toBlock: 344n },
+			{ fromBlock: 1n, toBlock: 88n },
+		])
+		expect(() => latestLogRange(1_000n, 257n)).toThrow('1 through 256')
+	})
+
+	test('recognizes pruned endpoint log-history failures for failover', () => {
+		expect(historyUnavailableError(new Error('missing trie node for requested block'))).toBe(true)
+		expect(historyUnavailableError(new Error('historical data unavailable on pruned endpoint'))).toBe(true)
+		expect(historyUnavailableError(new Error('execution reverted'))).toBe(false)
 	})
 
 	test('narrows log scans when a provider rejects the requested block range', async () => {
@@ -597,6 +613,28 @@ describe('shared bot primitives', () => {
 			expect(healthyRequests).toBe(0)
 		} finally {
 			malformed.stop(true)
+			healthy.stop(true)
+		}
+	})
+
+	test('fails over pruned log history to an endpoint that can serve the range', async () => {
+		let healthyRequests = 0
+		const pruned = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_000, message: 'historical data unavailable on pruned endpoint' }, id: 1, jsonrpc: '2.0' }) })
+		const healthy = Bun.serve({
+			port: 0,
+			fetch: () => {
+				healthyRequests += 1
+				return Response.json({ id: 1, jsonrpc: '2.0', result: [] })
+			},
+		})
+		try {
+			if (pruned.port === undefined || healthy.port === undefined) throw new Error('RPC history failover test servers did not expose ports')
+			const pool = createRpcEndpointPool([`http://127.0.0.1:${pruned.port.toString()}`, `http://127.0.0.1:${healthy.port.toString()}`])
+			expect(await createPublicClient({ transport: pool.transport }).getLogs({ fromBlock: 1n, toBlock: 1n })).toEqual([])
+			expect(healthyRequests).toBe(1)
+			expect(pool.snapshot()[0]?.status).toBe('degraded')
+		} finally {
+			pruned.stop(true)
 			healthy.stop(true)
 		}
 	})

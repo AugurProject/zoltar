@@ -3,17 +3,17 @@ import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import {
-	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
-	peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
+	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
 	ReputationToken_ReputationToken,
-	test_peripherals_FalseReturningERC20_FalseReturningERC20,
-	test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness,
-	test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+	test_statoblast_FalseReturningERC20_FalseReturningERC20,
+	test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness,
+	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
 } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -34,16 +34,16 @@ describe('Safe ERC20 Operations', () => {
 	const deployFalseReturningToken = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_FalseReturningERC20_FalseReturningERC20.abi,
-				bytecode: `0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
+				abi: test_statoblast_FalseReturningERC20_FalseReturningERC20.abi,
+				bytecode: `0x${test_statoblast_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
 			}),
 		)
 
 	const deployHarness = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
-				bytecode: `0x${test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.evm.bytecode.object}`,
+				abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+				bytecode: `0x${test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.evm.bytecode.object}`,
 			}),
 		)
 
@@ -62,7 +62,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeApproveToken',
 					args: [falseToken, receiver, 1n],
@@ -73,7 +73,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeTransferToken',
 					args: [falseToken, receiver, 1n],
@@ -84,7 +84,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeTransferFromToken',
 					args: [falseToken, receiver, receiver, 1n],
@@ -107,7 +107,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
+					abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 					address: harness,
 					functionName: 'safeTransferToken',
 					args: [reputationToken, client.account.address, 1n],
@@ -124,8 +124,8 @@ describe('Safe ERC20 Operations', () => {
 		const owner = client.account.address
 		if (owner === null) throw new Error('owner address missing')
 		const deploymentData = encodeDeployData({
-			abi: peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
-			bytecode: `0x${peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
+			abi: statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
+			bytecode: `0x${statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
 			args: [dummyZoltar, falseToken, 0n, owner],
 		})
 
@@ -145,12 +145,12 @@ describe('Safe ERC20 Operations', () => {
 		)
 		const proxy = await deployContract(
 			encodeDeployData({
-				abi: peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
-				bytecode: `0x${peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
+				abi: statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
+				bytecode: `0x${statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
 				args: [client.account.address, reputationToken, 0n, zeroAddress],
 			}),
 		)
-		const proxyAbi = peripherals_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi
+		const proxyAbi = statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi
 		const reason = /Only the security pool forker can use this migration proxy/
 
 		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'lockRep', args: [1n] }), reason)
@@ -162,14 +162,14 @@ describe('Safe ERC20 Operations', () => {
 	test('security pool deployment worker bubbles constructor revert reasons', async () => {
 		const fakeZoltar = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
-				bytecode: `0x${test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
+				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorker = await deployContract(
 			encodeDeployData({
-				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
 				args: [zeroAddress, zeroAddress],
 			}),
 		)
@@ -177,7 +177,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+					abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 					address: deploymentWorker,
 					functionName: 'deploy',
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],

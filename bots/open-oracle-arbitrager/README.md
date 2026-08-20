@@ -40,7 +40,7 @@ The arbitrager is an independent project inside the monorepo:
 Its own `package.json`, lockfile, TypeScript configuration, test configuration, and
 generated contract artifacts define its build. The executor imports unchanged
 protocol ERC-20 utilities from the monorepo's top-level `solidity/` project; it is
-not compiled into the protocol peripheral artifact set.
+not compiled into the protocol statoblast artifact set.
 
 ## How the flow works
 
@@ -79,13 +79,10 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 
 - Bun and this project's frozen dependencies.
 - An RPC endpoint for Ethereum mainnet or Sepolia. Approved-coordinator discovery
-  uses current contract state and does not require historical log access. Legacy
-  journals without a persisted dispute index are the bounded exception: after a
-  restart, replacement-credit recovery scans only that report's dispute logs from
-  its entry block until the immediate successor. Execution RPCs must therefore
-  retain log history back to the oldest open legacy position's entry block. Archive
-  access can also be useful for coordinator-free diagnostic mode when
-  `runtime.lookbackBlocks` reaches beyond the provider's retained log history.
+  uses current contract state and does not require historical log access. A legacy
+  journal without durable dispute evidence is marked for manual reconciliation
+  instead of starting an unbounded recovery scan. Coordinator-free diagnostic mode
+  reads only the configured latest-block window.
 - The deployed OpenOracle contract address.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
   coordinator whose games this wallet may dispute.
@@ -115,8 +112,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   and balances, plus exact agreement on the pending nonce actually signed. A
   legitimate pending transaction visible to only one provider blocks signing until
   the providers converge or the operator resolves it. The
-  [operator configuration](#persistent-operator-settings) supplies every
-  restart-time value.
+  [operator configuration](#persistent-operator-settings) supplies every persisted value.
 - For execution, a dedicated key on the selected network with:
   - ETH for the atomic dispute transaction.
   - WETH for the total executor funding shown in the dashboard.
@@ -202,18 +198,16 @@ The saved RPC agreement requirement defaults to `1`, so the primary read RPC is
 sufficient and independent quorum RPCs are optional. To require two agreeing readers,
 select **2 agreeing readers · independent quorum** in **Chain and RPC connectivity**
 and configure two independent quorum RPC URLs in addition to the primary reader so
-one endpoint may be unavailable. Restart the bot after changing the requirement.
+one endpoint may be unavailable. The saved agreement requirement and endpoint set
+apply automatically at the next scan boundary.
 
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
-save so every endpoint is checked against that chain. Reload the dashboard, then
-open [**Complete bot configuration**](http://127.0.0.1:4173/#complete-configuration).
+save so every endpoint is checked against that chain. Reload the dashboard, open
+Settings, then open [**Complete bot configuration**](http://127.0.0.1:4173/settings#complete-configuration).
 Add the reviewed deployment settings, set the centralized-market REP address to
 match `deployment.rep`, choose chain-specific history, price, and position paths,
-and save. Configuration changes apply after restart:
-
-```bash
-docker compose restart
-```
+and save. Supported live configuration changes apply automatically at the next
+scan boundary.
 
 Run `docker compose down` to stop the bot and `docker compose up --detach` to start
 it again. Compose preserves the operator configuration and bot history unless you
@@ -242,7 +236,7 @@ to classify any report as an executable opportunity.
 When network settings exist, startup and dashboard RPC changes validate
 `eth_chainId`. An initially unconfigured bot keeps its paused dashboard available
 without making RPC calls. It will not scan until a verified chain and endpoint set
-has been saved and the process restarted. A configured bot also keeps the dashboard
+has been saved. A configured bot also keeps the dashboard
 available when RPC validation is temporarily unavailable, reports
 `connectivity-degraded`, and retries with bounded backoff. The bot checks the chain
 before every scan.
@@ -255,11 +249,11 @@ on the block and report snapshot. Opportunity evaluation and pool sampling run o
 at the newest agreed head. With no new head the bot remains **Running** without
 re-evaluating or writing duplicate price samples.
 
-Coordinator-free diagnostic mode retains the historical fallback: startup scans
-`runtime.lookbackBlocks` in 100-block log-query chunks, then reads a 12-block overlap
-at each new head for shallow reorganization handling. The deliberately bounded
-response size prevents permissionless event volume from producing an unbounded RPC
-response.
+Coordinator-free diagnostic mode is an explicitly bounded fallback. Set
+`runtime.lookbackBlocks` to `0` to disable event discovery, or from `1` through
+`256` to inspect that many latest blocks. It starts with the newest block and never
+walks back toward genesis. The bounded response prevents permissionless event
+volume from producing an unbounded RPC request.
 
 ### Data freshness and retention
 
@@ -285,21 +279,21 @@ configuration** contains the persisted network. Replace
 every deployment address with values from the same reviewed test environment, set
 `centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
 use separate history, price, and position paths before saving the complete
-configuration and restarting:
+configuration:
 
 ```bash
 install -m 600 config/operator.example.json .state/operator-sepolia.json
 OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json bun run run
 ```
 
-Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` on the restart
-command and in the service definition. Before enabling execution, set the file's
+Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` in the service
+definition. Before enabling execution, set the file's
 runtime paths to distinct Sepolia-specific files such as
 `.state/history-sepolia.jsonl`, `.state/prices-sepolia.jsonl`, and
 `.state/positions-sepolia.json`.
 
-Deployment addresses can be changed in the complete JSON editor and apply only
-after restart. The selected chain cannot be changed after initial configuration,
+Deployment addresses can be changed in the complete JSON editor and apply at the
+next scan boundary. The selected chain cannot be changed after initial configuration,
 because durable records do not contain a chain ID. This prevents cached reports,
 transactions, positions, and profit totals from crossing networks.
 
@@ -415,13 +409,12 @@ bun run manifest -- verify --rpc-url=https://independent-provider.example --mani
 `config/execution-manifest.example.json` is deliberately placeholder-only and must never
 be used as an execution trust root.
 
-Execution remains fixed for the lifetime of the process. It can be configured in
-the complete JSON editor but requires a restart. When execution starts without a
+Execution mode can be changed in the complete JSON editor and applies at the next
+scan boundary. When execution starts without a
 remembered signer, it remains locked until a key is set in the local dashboard. Signer set/clear
 changes apply at the next unpaused scan boundary; they do not interrupt the current
 scan or confirmation wait, and clearing a signer cannot cancel a transaction already
-broadcast. Restarting the command is required to change between dry-run and
-execution.
+broadcast.
 
 Private bundle delivery is the example default. Configure relay URLs and the
 successful bundle-relay threshold under `submission.minimumBundleRelaySuccesses`,
@@ -664,14 +657,14 @@ password into the container. Authenticate as `operator` in the browser's HTTP Ba
 prompt. Basic authentication protects access but does not encrypt traffic, so keep
 that network free of untrusted peers or terminate TLS at an authenticated proxy.
 JSON API bodies are capped at 1 MiB. The key is kept in memory unless
-**Save this new key in plaintext for future restarts** is selected. That explicit
-choice stores the key in the owner-only operator settings file; protect the host,
-backups, and settings path as wallet credentials. **Forget saved key** atomically
-removes only the restart credential while retaining the active in-memory signer.
-**Clear signer & saved key** removes both the active signer and any saved restart credential.
-The status names the active address and, when different, the address that a future
-restart will use. Setting a different memory-only key preserves an existing restart
-key until **Forget saved key** or **Clear signer & saved key** is used. Mutable API
+**Save this key in the local operator file** is selected. That explicit choice
+stores the key in the owner-only operator settings file; protect the host, backups,
+and settings path as wallet credentials. **Forget saved key** atomically removes
+only the persisted credential while retaining the active in-memory signer. **Clear
+signer & saved key** removes both. The status names the active address and, when
+different, the saved address. Setting a different memory-only key preserves an
+existing saved key until **Forget saved key** or **Clear signer & saved key** is
+used. Mutable API
 requests require authentication when network-bound, same-origin JSON, and the fixed
 loopback host authority. Do not expose the dashboard to a network without transport
 security.
@@ -691,8 +684,8 @@ install -m 600 config/operator.example.json .state/operator.json
 any value inside the document. This locator is useful for service managers and
 tests. Select the chain and enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
-saved. Initial chain selection and quorum changes apply after restart; an RPC-only
-change on the active chain applies at the next scan boundary. To operate another chain, follow
+saved. Initial chain selection applies immediately, while quorum and RPC changes
+apply at the next scan boundary. To operate another chain, follow
 the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
 by the saved RPC agreement requirement with the deployment controls before enabling
 execution. The default policy uses the primary reader alone. Independent quorum
@@ -716,10 +709,10 @@ to defaults. A runtime write failure rejects the dashboard
 mutation and keeps the prior runtime settings active; fix the settings path or
 permissions and retry.
 
-Deployment identities remain restart-time trust roots, but the dashboard can validate
-the syntax and shape of REP, WETH, OpenOracle, coordinator, executor, manifest,
-quorum-RPC, and Uniswap V2/V3/V4 values and save them for the next restart. Saving
-does not authenticate contracts or verify RPC independence.
+Deployment identities are execution trust roots. The dashboard validates the
+syntax, shape, and independent RPC set for REP, WETH, OpenOracle, coordinator,
+executor, manifest, and Uniswap V2/V3/V4 values before saving them for the next
+scan boundary. The scan authenticates configured contract bytecode before execution.
 
 For dashboard deployment, configure a public submission RPC on the selected chain
 and set an active signer. If execution is armed, pause the bot first; pause blocks
@@ -730,9 +723,8 @@ chain and canonical CREATE2 proxy. A fresh deployment verifies its successful
 receipt and runtime bytecode; if the predicted address is already deployed, the
 action verifies matching runtime bytecode without sending a transaction. It then
 saves the executor and clears the old manifest. Paste a reviewed manifest
-containing the new executor, save, and restart; startup authenticates every
-configured identity and the manifest through the read quorum before execution
-begins.
+containing the new executor and save it. The next scan authenticates every
+configured identity and the manifest through the read quorum before execution begins.
 
 Pause blocks new position entry. It deliberately does not block settlement,
 replacement recovery, or withdrawal for a position that already has capital at
@@ -1048,8 +1040,9 @@ quote-refresh, simulation, or inventory guards.
 All other startup values are in `deployment`, `submission`, `tokenAddresses`, and
 `runtime`; `network` and `connectivity` are absent until the focused dashboard form
 saves them. The UI's complete JSON editor can change the remaining fields;
-deployment, path, execution-mode, UI-bind, and risk changes take effect after
-restart.
+deployment, execution-mode, and risk changes take effect at the next scan boundary.
+Process persistence paths and the dashboard bind cannot be edited while the bot is
+running.
 
 The position notional uses the refreshed required WETH plus required token funding
 valued at the higher of the executable hedge quote and signed hedge limit.
@@ -1162,7 +1155,7 @@ delete or hand-edit a record to bypass the one-position guard.
    automatically after gas accounting. A legacy record can contain multiple hashes;
    inspect every hash and never treat the record as expired merely because its target
    passed. If evidence is temporarily unavailable, restore the configured RPC service
-   and restart; the bot retries quorum recovery. For a successful mismatched receipt,
+   and let the bot retry quorum recovery automatically. For a successful mismatched receipt,
    reorganization, or legacy multi-transaction record, keep the bot paused and
    reconcile allowances, wallet balances, OpenOracle holder balances, and the current
    reporter manually. For inter-reader disagreement, preserve the contradictory
@@ -1258,9 +1251,10 @@ entry from depending on wallet inventory already committed to recovery.
   confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
   multiple relays shares the signed payload with every listed operator.
 - Approved-coordinator reports are reread from a fixed block whenever a new head is
-  processed. A retained block hash is checked on every poll; a deeper reorganization
-  stops execution and requires restart. Coordinator-free diagnostic mode separately
-  replays a 12-block event overlap. Operators still need independent alerting.
+  processed. A retained block hash is checked on every poll. If canonical history
+  changes beyond that retained anchor, execution stays blocked while the bot clears
+  its report and market caches, resets the retained in-memory cursor, and rebuilds the latest
+  configured bounded window automatically. Operators still need independent alerting.
 - Continuous mode retries transient poll failures with bounded exponential backoff.
   The dashboard exposes per-endpoint health and the latest error, `/healthz` supports
   container supervision, and Compose restarts an unexpectedly exited process.

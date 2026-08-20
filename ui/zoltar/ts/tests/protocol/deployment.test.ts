@@ -7,6 +7,7 @@ import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeplo
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
 import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../protocol/deploymentHelpers.js'
+<<<<<<< HEAD:ui/zoltar/ts/tests/protocol/deployment.test.ts
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/lib/transactionTray.js'
@@ -14,6 +15,15 @@ import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
+=======
+import type { ReadClient, WriteClient } from '../../types/contracts.js'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '../../lib/transactionTray.js'
+import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
+import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '../../lib/sepoliaDeploymentConfig.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../contractArtifact.js'
+>>>>>>> origin/main:ui/ts/tests/protocol/deployment.test.ts
 import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '../../protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
@@ -158,7 +168,7 @@ describe('contract deployment internals', () => {
 	})
 
 	test('pins the compiled auction factory runtime code for every public network', () => {
-		const runtimeCode = `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}` as Hex
+		const runtimeCode = `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}` as Hex
 		expect(EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.uniformPriceDualCapBatchAuctionFactory).toBe(keccak256(runtimeCode))
 		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
 			const factoryStep = getDeploymentSteps(profile).find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')

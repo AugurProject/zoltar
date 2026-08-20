@@ -1,11 +1,11 @@
 import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { type Address } from '@zoltar/shared/ethereum'
-import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
+import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -76,7 +76,7 @@ describe('Auction tick math fuzz', () => {
 		let previousPrice: bigint | undefined
 		for (const tick of sortedTicks) {
 			const solidityPrice = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'tickToPrice',
 				address: auctionAddress,
 				args: [tick],
@@ -91,7 +91,7 @@ describe('Auction tick math fuzz', () => {
 	test('tickToPrice stays within its documented rounding budget of independent rational-price vectors', async () => {
 		for (const [tick, exactRationalPrice] of INDEPENDENT_PRICE_VECTORS) {
 			const solidityPrice = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'tickToPrice',
 				address: auctionAddress,
 				args: [tick],
@@ -112,7 +112,7 @@ describe('Auction tick math fuzz', () => {
 			await assert.rejects(
 				async () =>
 					await client.readContract({
-						abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+						abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 						functionName: 'tickToPrice',
 						address: auctionAddress,
 						args: [tick],

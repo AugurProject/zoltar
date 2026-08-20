@@ -45,10 +45,13 @@ export type CollateralizationCircleProps = {
 }
 
 export type VaultMetricGridProps = {
+	associatedRepPerCapacityBps?: bigint | undefined
 	badDebtAttoEth?: bigint | undefined
 	className?: string
 	layout?: 'grid' | 'preview'
 	disputeStakedAttoRep?: bigint | undefined
+	isCurrentlyHealthy?: boolean | undefined
+	poolHeldRepPerCapacityBps?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined

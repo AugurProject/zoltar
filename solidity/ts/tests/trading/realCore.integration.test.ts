@@ -1,15 +1,15 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { usePeripheralsVaultAccountingFixture } from '../peripherals/fixture'
+import { useStatoblastVaultAccountingFixture } from '../statoblast/fixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const attoEthToAttoSharesAbi = [{ type: 'function', name: 'attoEthToAttoShares', stateMutability: 'view', inputs: [{ name: 'amountAttoEth', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 
 describe('trading against authoritative Zoltar contracts', () => {
-	const fixture = usePeripheralsVaultAccountingFixture()
+	const fixture = useStatoblastVaultAccountingFixture()
 	let account: Address
 	let factory: Address
 	let router: Address
@@ -26,15 +26,15 @@ describe('trading against authoritative Zoltar contracts', () => {
 	}
 
 	async function shareBalance(owner: Address, outcome: 0n | 1n | 2n) {
-		return await fixture.client.readContract({ abi: fixture.peripherals_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'balanceOf', args: [owner, outcome] })
+		return await fixture.client.readContract({ abi: fixture.statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'balanceOf', args: [owner, outcome] })
 	}
 
 	async function loadPoolAccounting() {
 		const address = fixture.securityPoolAddresses.securityPool
 		const [shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting] = await Promise.all([
-			fixture.client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address, functionName: 'shareTokenSupplyAttoShares' }),
-			fixture.client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address, functionName: 'getCurrentMintingCapacityAttoEth' }),
-			fixture.client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, address, functionName: 'getPoolAccountingSnapshot' }),
+			fixture.client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address, functionName: 'shareTokenSupplyAttoShares' }),
+			fixture.client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address, functionName: 'getCurrentMintingCapacityAttoEth' }),
+			fixture.client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address, functionName: 'getPoolAccountingSnapshot' }),
 		])
 		return { shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting }
 	}
@@ -53,7 +53,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
 		pair = await fixture.client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [fixture.securityPoolAddresses.securityPool] })
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: fixture.peripherals_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'setApprovalForAll', args: [router, true] }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: fixture.statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'setApprovalForAll', args: [router, true] }))
 	})
 
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {

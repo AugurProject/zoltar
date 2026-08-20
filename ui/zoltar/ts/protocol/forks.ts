@@ -1,8 +1,13 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
+<<<<<<< HEAD:ui/zoltar/ts/protocol/forks.ts
 import { Zoltar_Zoltar, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPool_SecurityPool, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+=======
+import { Zoltar_Zoltar, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
+import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '../types/contracts.js'
+>>>>>>> origin/main:ui/ts/protocol/forks.ts
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from './helpers.js'
 import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
@@ -49,7 +54,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
 	})
 	const migrationProxyAddress = await client.readContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'getMigrationProxyAddress',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
@@ -100,43 +105,43 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, settlementCollateralAttoEth, forkData, questionOutcome], ownForkMigrationStatusTuple, block] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'questionId',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'parent',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'universeId',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'systemState',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'truthAuction',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'settlementCollateralAttoEth',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkData',
 				address: getInfraContractAddresses().securityPoolForker,
 				args: [securityPoolAddress],
@@ -149,7 +154,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			},
 		]),
 		client.readContract({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'getOwnForkMigrationStatus',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
@@ -183,67 +188,67 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'attoEthRaiseCap',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'attoEthRaised',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'finalized',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'maxAttoRepBeingSold',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'minBidSizeAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'totalAttoRepPurchased',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfunded',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedThreshold',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfundedWinningAttoEth',
 				address: truthAuctionAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'clearingTick',
 				address: truthAuctionAddress,
 				args: [],
@@ -257,7 +262,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			clearingPrice = underfundedWinningAttoEth > 0n ? underfundedThreshold : undefined
 		} else if (!(clearingTick === 0n && accumulatedBidAttoEth === 0n)) {
 			clearingPrice = await client.readContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'tickToPrice',
 				address: truthAuctionAddress,
 				args: [clearingTick],
@@ -324,7 +329,7 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkZoltarWithOwnEscalationGame',
 				args: [securityPoolAddress],
 			})),
@@ -339,7 +344,7 @@ export async function initiateSecurityPoolFork(client: WriteClient, securityPool
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'initiateSecurityPoolFork',
 				args: [securityPoolAddress],
 			})),
@@ -354,7 +359,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'createChildUniverse',
 				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
@@ -411,7 +416,7 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateRepToZoltar',
 				args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
 			})),
@@ -426,7 +431,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
 				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
 			})),
@@ -437,7 +442,7 @@ export async function claimParentEscalationDeposits(client: WriteClient, securit
 	return await executeForkAuctionAction(client, 'claimParentEscalationDeposits', securityPoolAddress, universeId, async () => {
 		return await writeContractAndWait(client, () => ({
 			address: getInfraContractAddresses().securityPoolForker,
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'claimForkedEscalationDeposits',
 			args: [securityPoolAddress, vaultAddress, outcomeIndex, depositIndexes],
 		}))
@@ -453,7 +458,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
 				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
 			})),

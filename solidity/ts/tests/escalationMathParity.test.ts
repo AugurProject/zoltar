@@ -5,11 +5,11 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { ReputationToken_ReputationToken, peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier, peripherals_EscalationGame_EscalationGame, test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
 import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, getEscalationBindingCapitalAttoRep, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/shared/escalationMath'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 
@@ -55,7 +55,7 @@ describe('Escalation math parity', () => {
 
 	const readBindingCapital = async (escalationGame: `0x${string}`) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getBindingCapitalAttoRep',
 			args: [],
@@ -63,7 +63,7 @@ describe('Escalation math parity', () => {
 
 	const readEscalationEndDate = async (escalationGame: `0x${string}`) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getEscalationGameEndDate',
 			args: [],
@@ -71,7 +71,7 @@ describe('Escalation math parity', () => {
 
 	const readPreviewDepositOnOutcome = async (escalationGame: `0x${string}`, outcome: QuestionOutcome, amountAttoRep: bigint) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'previewDepositOnOutcome',
 			args: [outcome, amountAttoRep],
@@ -79,7 +79,7 @@ describe('Escalation math parity', () => {
 
 	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${string}`, attritionCost: bigint) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'computeTimeSinceStartFromAttritionCostAttoRep',
 			args: [attritionCost],
@@ -90,7 +90,7 @@ describe('Escalation math parity', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
 					args: [reportBond, nonDecisionThresholdAttoRep, elapsedAtFork, QuestionOutcome.None, false, 0n],
@@ -111,7 +111,7 @@ describe('Escalation math parity', () => {
 
 	const readOutcomeState = async (escalationGameAddress: Address, outcome: QuestionOutcome) =>
 		await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getOutcomeState',
 			args: [outcome],
@@ -127,7 +127,7 @@ describe('Escalation math parity', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
+					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGame,
 					functionName: 'start',
 					args: [reportBond, nonDecisionThresholdAttoRep],
@@ -160,16 +160,16 @@ describe('Escalation math parity', () => {
 		)
 		const verifierDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
-				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
 			}),
 		})
 		const verifierDeploymentReceipt = await client.waitForTransactionReceipt({ hash: verifierDeploymentHash })
 		const proofVerifierAddress = requireContractAddress(verifierDeploymentReceipt.contractAddress, 'proof verifier deployment address')
 		const escalationGameDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
 				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 			}),
 		})
@@ -289,7 +289,7 @@ describe('Escalation math parity', () => {
 
 	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[]) => {
 		const node = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'nodes',
 			args: [leafIndex + 1n],
@@ -456,7 +456,7 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(childBindingCapital, losingDepositAmount, 'child fork should inherit the parent binding-capital depth for this snapshot')
 		await resumeEscalationFromFork(child.testSecurityPoolAddress)
 		const forkResumedAt = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: child.escalationGameAddress,
 			functionName: 'forkResumedAt',
 			args: [],

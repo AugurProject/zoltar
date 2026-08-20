@@ -1,16 +1,16 @@
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
-import { usePeripheralsVaultAccountingFixture } from './peripherals/fixture'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
-import { OperationType } from '../testSupport/simulator/utils/contracts/peripherals'
-import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {
-	const fixture = usePeripheralsVaultAccountingFixture()
+	const fixture = useStatoblastVaultAccountingFixture()
 
 	const { assert, getQuestionOutcome, getSecurityPoolsEscalationGame, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, QuestionOutcome, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
 
@@ -39,7 +39,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const activationTime = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'activationTime',
 		})
@@ -47,7 +47,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'getQuestionResolution',
 			}),
@@ -55,7 +55,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 			'the balance comparison itself should have a strict winner',
 		)
 		const escalationEndDate = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getEscalationGameEndDate',
 		})

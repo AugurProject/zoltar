@@ -4,7 +4,7 @@ import { getContractOutput, getRecord, getString, loadContractsJson, normalizeSt
 
 test('SecurityPool event delegate storage anchors match the host layout', () => {
 	const artifacts = loadContractsJson(import.meta.dir)
-	const layout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPool.sol', 'SecurityPool'))
+	const layout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
 	const expectedSlots = new Map<string, string>([
 		['totalCapacityOwnershipAttoRep', '1'],
 		['settlementCollateralAttoEth', '2'],
@@ -20,6 +20,7 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 		['currentRetentionRate', '14'],
 		['securityVaults', '16'],
 		['vaultFeeRemainders', '17'],
+		['lastDepositTargetHealthFactorBpsByVault', '25'],
 	])
 	for (const [label, expectedSlot] of expectedSlots) {
 		const entry = layout.find(candidate => candidate.label === label)
@@ -55,8 +56,8 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 
 test('SecurityPool liquidation delegate retains the exact host storage sequence', () => {
 	const artifacts = loadContractsJson(import.meta.dir)
-	const hostLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPool.sol', 'SecurityPool'))
-	const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/peripherals/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate'))
+	const hostLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
+	const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/statoblast/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate'))
 	const summarize = (layout: typeof hostLayout) =>
 		layout.map(entry => ({
 			label: entry.label,

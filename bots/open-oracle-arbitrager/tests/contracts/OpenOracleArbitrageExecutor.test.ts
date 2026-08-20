@@ -6,7 +6,7 @@ import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/ut
 import { ensureDefined } from '../../../../solidity/ts/testSupport/simulator/utils/testUtils'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { executorArtifact, feeTokenArtifact, routerArtifact, targetArtifact, tokenArtifact, v4PoolManagerArtifact, wethArtifact } from '#contracts/artifacts.generated'
-import { peripherals_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

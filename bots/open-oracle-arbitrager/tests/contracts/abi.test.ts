@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../../../solidity/ts/types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../../../solidity/ts/types/contractArtifact'
 import { openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 
 type AbiInput = {
@@ -19,14 +19,14 @@ function inputShape(input: AbiInput): AbiInput {
 
 test('custom dispute ABI matches the compiled OpenOracle contract', () => {
 	const customDispute = openOracleAbi.find(entry => entry.type === 'function' && entry.name === 'dispute')
-	const compiledDispute = peripherals_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === 'dispute')
+	const compiledDispute = statoblast_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === 'dispute')
 	expect(customDispute?.inputs.map(inputShape)).toEqual(compiledDispute?.inputs.map(inputShape))
 })
 
 test('custom lifecycle ABI matches the compiled OpenOracle contract', () => {
 	for (const functionName of ['disputeHistory', 'storedGame', 'storedHelper', 'tokenHolder', 'internalAllowance', 'settle', 'withdraw']) {
 		const custom = openOracleAbi.find(entry => entry.type === 'function' && entry.name === functionName)
-		const compiled = peripherals_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === functionName)
+		const compiled = statoblast_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === functionName)
 		if (custom === undefined || custom.type !== 'function' || compiled === undefined || compiled.type !== 'function') throw new Error(`Lifecycle ABI is missing ${functionName}`)
 		const customInputs: readonly AbiInput[] = custom.inputs.map(inputShape)
 		const compiledInputs: readonly AbiInput[] = compiled.inputs.map(inputShape)
@@ -69,7 +69,7 @@ test('executor exposes atomic entry and lifecycle functions', () => {
 
 test('custom coordinator getter ABI matches the compiled coordinator contract', () => {
 	for (const custom of openOraclePriceCoordinatorAbi) {
-		const compiled = peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi.find(entry => entry.type === 'function' && entry.name === custom.name)
+		const compiled = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi.find(entry => entry.type === 'function' && entry.name === custom.name)
 		if (compiled === undefined || compiled.type !== 'function') throw new Error(`Compiled coordinator ABI is missing ${custom.name}`)
 		expect(compiled.inputs.map(inputShape)).toEqual(custom.inputs.map(inputShape))
 		expect(compiled.outputs.map(inputShape)).toEqual(custom.outputs.map(inputShape))
