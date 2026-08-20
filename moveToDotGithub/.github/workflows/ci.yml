@@ -1,0 +1,374 @@
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.3.14
+  FOUNDRY_VERSION: v1.5.1
+
+jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.scope.outputs.docs }}
+      core: ${{ steps.scope.outputs.core }}
+      trading: ${{ steps.scope.outputs.trading }}
+      bot_shared: ${{ steps.scope.outputs.bot_shared }}
+      arbitrager: ${{ steps.scope.outputs.arbitrager }}
+      liquidator: ${{ steps.scope.outputs.liquidator }}
+      augur_scan: ${{ steps.scope.outputs.augur_scan }}
+      infrastructure: ${{ steps.scope.outputs.infrastructure }}
+      package_matrix: ${{ steps.scope.outputs.package_matrix }}
+      has_packages: ${{ steps.scope.outputs.has_packages }}
+      forced_full: ${{ steps.scope.outputs.forced_full }}
+      augur_scan_integration: ${{ steps.scope.outputs.augur_scan_integration }}
+      artifact_inputs: ${{ steps.scope.outputs.artifact_inputs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Select CI scope
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            bun scripts/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
+          else
+            bun scripts/classify-ci-change.mts --github-output --full
+          fi
+
+  docs-checks:
+    name: Documentation checks
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - run: bun run docs:check:current
+      - run: bun run format:check
+      - run: bun run check:agents
+
+  component-inputs:
+    name: Prepare component build inputs
+    needs: changes
+    if: needs.changes.outputs.artifact_inputs == 'true' && needs.changes.outputs.core != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: component-build-inputs
+          path: |
+            shared/js
+            solidity/artifacts
+            solidity/ts/types/contractArtifact.ts
+            ui/ts/abis.ts
+            ui/ts/contractArtifact.ts
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  prepare:
+    name: Prepare
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-ci
+        with:
+          verify-generated: "true"
+      - name: Format
+        run: bun run format
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: .tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/ts/**') }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-
+      - name: Verify pre-task worktree cleanliness
+        run: |
+          git diff --exit-code -- .
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          git diff --check
+      - name: TypeScript checks and production UI build
+        run: bun run ci:preflight:current
+      - name: Upload production UI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-ui
+          path: ui/dist
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload component build inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-build-inputs
+          path: |
+            shared/js
+            solidity/artifacts
+            solidity/ts/types/contractArtifact.ts
+            ui/ts/abis.ts
+            ui/ts/contractArtifact.ts
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify final worktree cleanliness
+        if: always()
+        run: |
+          git diff --exit-code -- .
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          git diff --check
+
+  tests:
+    name: Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: [changes, prepare]
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-ui
+          path: ui/dist
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v1-
+      - name: Run balanced test shard
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_COUNT: ${{ strategy.job-total }}
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+          ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings.json
+          ZOLTAR_TEST_TIMING_OUTPUT: test-results/shard-${{ matrix.shard }}.timing.json
+        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --shard="${SHARD}/${SHARD_COUNT}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-timing-${{ matrix.shard }}
+          path: test-results/shard-${{ matrix.shard }}.timing.json
+          if-no-files-found: error
+          retention-days: 1
+
+  test-timings:
+    name: Update test timing history
+    needs: [changes, tests]
+    if: needs.changes.outputs.core == 'true' && needs.tests.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v1-
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: test-timing-*
+          path: test-results
+          merge-multiple: true
+      - run: bun ./scripts/merge-test-timings.mts --observations test-results --history .ci/test-timings.json
+      - uses: actions/cache/save@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
+
+  checks:
+    name: Repository checks
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-ci
+      - run: bun run check:ci:current
+
+  knip:
+    name: Dead code analysis
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - run: bun run knip
+
+  audit:
+    name: Root dependency audit
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun audit && (cd ui && bun audit) && (cd solidity && bun audit)
+
+  infrastructure-checks:
+    name: Infrastructure checks
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - run: bun run check:solidity-format
+      - run: bun run tsc:solidity:current
+      - run: bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ./solidity/ts/tests/
+      - run: cd solidity && bun audit
+
+  packages:
+    name: Package (${{ matrix.package }})
+    needs: [changes, prepare, component-inputs]
+    if: always() && needs.changes.result == 'success' && needs.changes.outputs.has_packages == 'true' && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped') && (needs.component-inputs.result == 'success' || needs.component-inputs.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.package_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download generated build inputs
+        if: matrix.artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: component-build-inputs
+          path: .
+      - uses: ./.github/actions/setup-component
+        with:
+          directory: ${{ matrix.directory }}
+          artifacts: ${{ matrix.artifacts }}
+      - run: bun scripts/run-component-ci.mts "${{ matrix.package }}"
+
+  augur-scan-integration:
+    name: augurScan PostgreSQL integration
+    needs: changes
+    if: needs.changes.outputs.augur_scan_integration == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: augur_scan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d augur_scan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-component
+        with:
+          directory: augurScan
+      - run: bun run test:integration
+        working-directory: augurScan
+        env:
+          POSTGRES_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/augur_scan_test
+
+  required:
+    name: Required
+    if: always()
+    needs: [changes, docs-checks, component-inputs, prepare, tests, test-timings, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        env:
+          FORCED_FULL: ${{ needs.changes.outputs.forced_full }}
+          DOCS_SELECTED: ${{ needs.changes.outputs.docs }}
+          CORE_SELECTED: ${{ needs.changes.outputs.core }}
+          TRADING_SELECTED: ${{ needs.changes.outputs.trading }}
+          BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
+          ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
+          LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
+          AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
+          INFRA_SELECTED: ${{ needs.changes.outputs.infrastructure }}
+          PACKAGES_SELECTED: ${{ needs.changes.outputs.has_packages }}
+          INTEGRATION_SELECTED: ${{ needs.changes.outputs.augur_scan_integration }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DOCS_RESULT: ${{ needs.docs-checks.result }}
+          COMPONENT_INPUTS_RESULT: ${{ needs.component-inputs.result }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          TEST_TIMINGS_RESULT: ${{ needs.test-timings.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          KNIP_RESULT: ${{ needs.knip.result }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          INFRA_RESULT: ${{ needs.infrastructure-checks.result }}
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+          INTEGRATION_RESULT: ${{ needs.augur-scan-integration.result }}
+        run: |
+          require_result() {
+            local selected="$1" result="$2" label="$3"
+            if [[ "${selected}" == "true" && "${result}" != "success" ]]; then
+              echo "Selected route ${label} ended as ${result}."
+              exit 1
+            fi
+            if [[ "${selected}" != "true" && "${result}" != "skipped" ]]; then
+              echo "Unselected route ${label} unexpectedly ended as ${result}."
+              exit 1
+            fi
+          }
+          [[ "${CHANGES_RESULT}" == "success" ]] || exit 1
+          require_result "${DOCS_SELECTED}" "${DOCS_RESULT}" docs
+          require_result "${INFRA_SELECTED}" "${INFRA_RESULT}" infrastructure
+          require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
+          require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
+          for result in PREPARE_RESULT TESTS_RESULT TEST_TIMINGS_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
+            require_result "${CORE_SELECTED}" "${!result}" "${result}"
+          done
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" || "${INTEGRATION_SELECTED}" != "true" ) ]]; then
+            echo 'Forced full run did not select every ordinary route.'
+            exit 1
+          fi
+          if [[ "${COMPONENT_INPUTS_RESULT}" != "success" && "${COMPONENT_INPUTS_RESULT}" != "skipped" ]]; then
+            echo "Component input preparation ended as ${COMPONENT_INPUTS_RESULT}."
+            exit 1
+          fi
+          echo 'All selected CI routes passed.'

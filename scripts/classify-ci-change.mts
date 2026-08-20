@@ -51,7 +51,7 @@ function directScopeForPath(filePath: string): CiScope | 'full' {
 function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[], full: boolean): Set<CiScope> {
 	if (full) return new Set(ciScopes)
 	const result = new Set(direct)
-	if (filePaths.some(filePath => filePath.startsWith('shared/'))) for (const scope of ['trading', 'bot-shared', 'arbitrager', 'liquidator'] as const) result.add(scope)
+	if (filePaths.some(filePath => filePath.startsWith('shared/'))) for (const scope of ['trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan'] as const) result.add(scope)
 	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading', 'arbitrager', 'liquidator'] as const) result.add(scope)
 	const queue = [...result]
 	for (const scope of queue)

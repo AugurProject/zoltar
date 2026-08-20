@@ -15,7 +15,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
 	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'arbitrager', 'liquidator']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
-	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator']],
+	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan']],
 	[['ui/ts/index.ts'], ['core']],
 	[['solidity/contracts/Zoltar.sol'], ['core', 'trading', 'arbitrager', 'liquidator', 'infrastructure']],
 	[['reth/compose.yaml'], ['infrastructure']],
@@ -55,6 +55,12 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 	expect(JSON.parse(mixed.packageMatrixJson)).toEqual({ include: [...mixed.packageMatrix] })
 	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['trading', 'bot-shared', 'arbitrager', 'liquidator'])
 	expect(classifyCiChange(['trading/ts/order.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
+})
+
+test('shared changes select every verified package consumer', () => {
+	const shared = classifyCiChange(['shared/ts/ethereum.ts'])
+	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
+	expect(JSON.parse(shared.packageMatrixJson)).toEqual({ include: [...shared.packageMatrix] })
 })
 
 test('Git path collection keeps deleted executables and both sides of renames', () => {
