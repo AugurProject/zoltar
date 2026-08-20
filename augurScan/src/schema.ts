@@ -27,9 +27,9 @@ export const runSchemaTransaction = async <T>(
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicTables: readonly string[]): 'initialize' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicRelations: readonly string[]): 'initialize' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
-	if (markerVersion !== undefined || publicTables.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
+	if (markerVersion !== undefined || publicRelations.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 	return 'initialize'
 }
 
@@ -42,15 +42,38 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 		`
 		let markerVersion: string | undefined
 		if (markerExists[0]?.exists === true) {
+			const markerShape = await connection`
+				SELECT
+					class.relkind,
+					EXISTS (
+						SELECT FROM pg_catalog.pg_attribute attribute
+						WHERE attribute.attrelid = class.oid AND attribute.attname = 'singleton'
+							AND attribute.atttypid = 'boolean'::regtype AND attribute.attnum > 0 AND NOT attribute.attisdropped
+					) AS has_singleton,
+					EXISTS (
+						SELECT FROM pg_catalog.pg_attribute attribute
+						WHERE attribute.attrelid = class.oid AND attribute.attname = 'schema_version'
+							AND attribute.atttypid = 'text'::regtype AND attribute.attnum > 0 AND NOT attribute.attisdropped
+					) AS has_schema_version
+				FROM pg_catalog.pg_class class
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public' AND class.relname = 'augurscan_schema'
+			`
+			if (markerShape.length !== 1 || markerShape[0]?.relkind !== 'r' || markerShape[0]?.has_singleton !== true || markerShape[0]?.has_schema_version !== true)
+				throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 			const markers = await connection`SELECT schema_version FROM public.augurscan_schema WHERE singleton`
 			if (markers.length !== 1 || typeof markers[0]?.schema_version !== 'string') throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 			markerVersion = markers[0].schema_version
 		}
-		const tables = await connection`
-			SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename
+		const relations = await connection`
+			SELECT class.relname
+			FROM pg_catalog.pg_class class
+			JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+			WHERE namespace.nspname = 'public' AND class.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+			ORDER BY class.relname
 		`
-		const publicTables = tables.flatMap((row: { tablename?: unknown }) => (typeof row.tablename === 'string' ? [row.tablename] : []))
-		if (schemaInitializationAction(markerVersion, publicTables) === 'current') return
+		const publicRelations = relations.flatMap((row: { relname?: unknown }) => (typeof row.relname === 'string' ? [row.relname] : []))
+		if (schemaInitializationAction(markerVersion, publicRelations) === 'current') return
 
 		const schema = await Bun.file(path.resolve(import.meta.dir, '../schema.sql')).text()
 		await runSchemaTransaction(

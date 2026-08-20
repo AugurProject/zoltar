@@ -1179,6 +1179,12 @@ postgresTest(
 		}
 		try {
 			await initializeSchema(database.sql)
+			const schemaState = await database.sql`
+				SELECT
+					(SELECT count(*)::integer FROM live_event_state WHERE singleton AND pruned_through_id = 0) AS live_state_count,
+					current_setting('search_path') AS search_path
+			`
+			expect(schemaState[0]).toMatchObject({ live_state_count: 1, search_path: '"$user", public' })
 			await database.seedNetwork(network)
 			const awaitingResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
 			if (awaitingResponse === undefined) throw new Error('awaiting operations endpoint did not return a response')

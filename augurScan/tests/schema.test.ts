@@ -8,6 +8,8 @@ test('initializes only an empty database and accepts the current schema marker',
 
 test('rejects legacy, unknown, and incomplete database schemas', () => {
 	expect(() => schemaInitializationAction(undefined, ['schema_migrations', 'networks'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+	expect(() => schemaInitializationAction(undefined, ['legacy_view'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+	expect(() => schemaInitializationAction(undefined, ['legacy_sequence'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 	expect(() => schemaInitializationAction('0', ['augurscan_schema'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 })
 

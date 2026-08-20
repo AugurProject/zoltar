@@ -5,17 +5,6 @@
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg12+2)
 -- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg12+2)
 
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
-
 --
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
@@ -29,10 +18,6 @@ SET row_security = off;
 
 COMMENT ON SCHEMA public IS '';
 
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
 
 --
 -- Name: actions; Type: TABLE; Schema: public; Owner: -
@@ -297,6 +282,8 @@ CREATE TABLE public.live_event_state (
     CONSTRAINT live_event_state_pruned_through_id_check CHECK ((pruned_through_id >= 0)),
     CONSTRAINT live_event_state_singleton_check CHECK (singleton)
 );
+
+INSERT INTO public.live_event_state (singleton) VALUES (true);
 
 
 --
@@ -1573,4 +1560,3 @@ ALTER TABLE ONLY public.vault_snapshots
 --
 -- PostgreSQL database dump complete
 --
-
