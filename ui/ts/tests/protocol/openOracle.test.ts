@@ -20,7 +20,7 @@ import {
 	withdrawOpenOracleBalance,
 	type LiquidationApprovalParams,
 } from '../../protocol/index.js'
-import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
+import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
 
@@ -312,7 +312,7 @@ describe('openOracle protocol client', () => {
 		expect(capturedGas).toBe(5_000_000n)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('settle')
@@ -350,7 +350,7 @@ describe('openOracle protocol client', () => {
 			if (withdrawalAttempts === 1) throw new Error('wallet rejected withdrawal')
 			const data = request.data
 			if (data === undefined) throw new Error('Expected withdrawal calldata')
-			const decodedCall = decodeFunctionData({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, data })
+			const decodedCall = decodeFunctionData({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, data })
 			expect(decodedCall.functionName).toBe('withdrawTo')
 			expect(decodedCall.args).toEqual([token1Address, 7n, holder])
 		})
@@ -430,7 +430,7 @@ describe('openOracle protocol client', () => {
 			calls.map(
 				call =>
 					decodeFunctionData({
-						abi: peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+						abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
 						data: call.data,
 					}).functionName,
 			),

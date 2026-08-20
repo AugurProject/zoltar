@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { BinaryOutcomes } from '../../../solidity/contracts/peripherals/BinaryOutcomes.sol';
-import { IERC1155Receiver } from '../../../solidity/contracts/peripherals/interfaces/IERC1155Receiver.sol';
-import { ISecurityPool, SystemState } from '../../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
+import { BinaryOutcomes } from '../../../solidity/contracts/statoblast/BinaryOutcomes.sol';
+import { IERC1155Receiver } from '../../../solidity/contracts/statoblast/interfaces/IERC1155Receiver.sol';
+import { ISecurityPool, SystemState } from '../../../solidity/contracts/statoblast/interfaces/ISecurityPool.sol';
 
 contract TradingMockZoltar {
 	mapping(uint248 => uint256) public forkTime;

@@ -6,7 +6,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { peripherals_WETH9_WETH9, test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
+import { statoblast_WETH9_WETH9, test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -27,8 +27,8 @@ describe('WETH9 failure guards', () => {
 	const deployWeth = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: peripherals_WETH9_WETH9.abi,
-				bytecode: `0x${peripherals_WETH9_WETH9.evm.bytecode.object}`,
+				abi: statoblast_WETH9_WETH9.abi,
+				bytecode: `0x${statoblast_WETH9_WETH9.evm.bytecode.object}`,
 			}),
 		)
 
@@ -41,7 +41,7 @@ describe('WETH9 failure guards', () => {
 
 	test('withdraw and direct transfer reject amounts above the caller balance without changing state', async () => {
 		const weth = await deployWeth()
-		const abi = peripherals_WETH9_WETH9.abi
+		const abi = statoblast_WETH9_WETH9.abi
 
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -80,7 +80,7 @@ describe('WETH9 failure guards', () => {
 
 	test('delegated transfer rejects an insufficient allowance and preserves balances and allowance', async () => {
 		const weth = await deployWeth()
-		const abi = peripherals_WETH9_WETH9.abi
+		const abi = statoblast_WETH9_WETH9.abi
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi,
@@ -153,7 +153,7 @@ describe('WETH9 failure guards', () => {
 				args: [
 					weth,
 					encodeFunctionData({
-						abi: peripherals_WETH9_WETH9.abi,
+						abi: statoblast_WETH9_WETH9.abi,
 						functionName: 'deposit',
 						args: [],
 					}),
@@ -163,7 +163,7 @@ describe('WETH9 failure guards', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_WETH9_WETH9.abi,
+				abi: statoblast_WETH9_WETH9.abi,
 				address: weth,
 				functionName: 'balanceOf',
 				args: [receiver],
@@ -181,7 +181,7 @@ describe('WETH9 failure guards', () => {
 					args: [
 						weth,
 						encodeFunctionData({
-							abi: peripherals_WETH9_WETH9.abi,
+							abi: statoblast_WETH9_WETH9.abi,
 							functionName: 'withdraw',
 							args: [amount],
 						}),
@@ -192,7 +192,7 @@ describe('WETH9 failure guards', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: peripherals_WETH9_WETH9.abi,
+				abi: statoblast_WETH9_WETH9.abi,
 				address: weth,
 				functionName: 'balanceOf',
 				args: [receiver],

@@ -1,14 +1,14 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, zeroAddress } from '@zoltar/shared/ethereum'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
-import { getActiveStagedOperationCount, getStagedOperation, getStagedOperationCounter } from '../testSupport/simulator/utils/contracts/peripherals'
+import { getActiveStagedOperationCount, getStagedOperation, getStagedOperationCounter } from '../testSupport/simulator/utils/contracts/statoblast'
 import { addRepToMigrationBalance, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../types/contractArtifact'
-import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './peripherals/fixture'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../types/contractArtifact'
+import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './statoblast/fixture'
 
 describe('Truth-auction ownership overflow regression', () => {
-	const fixture = usePeripheralsTruthAuctionFixture()
-	const assert: PeripheralsTruthAuctionFixture['assert'] = fixture.assert
+	const fixture = useStatoblastTruthAuctionFixture()
+	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
 
 	const {
 		DAY,
@@ -41,10 +41,10 @@ describe('Truth-auction ownership overflow regression', () => {
 		triggerExternalForkForSecurityPool,
 	} = fixture
 
-	let client: PeripheralsTruthAuctionFixture['client']
-	let mockWindow: PeripheralsTruthAuctionFixture['mockWindow']
-	let questionId: PeripheralsTruthAuctionFixture['questionId']
-	let securityPoolAddresses: PeripheralsTruthAuctionFixture['securityPoolAddresses']
+	let client: StatoblastTruthAuctionFixture['client']
+	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
+	let questionId: StatoblastTruthAuctionFixture['questionId']
+	let securityPoolAddresses: StatoblastTruthAuctionFixture['securityPoolAddresses']
 
 	beforeEach(() => {
 		client = fixture.client
@@ -55,7 +55,7 @@ describe('Truth-auction ownership overflow regression', () => {
 
 	test('a full-cap winner can value and withdraw REP after a tiny vault migration', async () => {
 		const minimumVaultRep = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
 			functionName: 'minimumVaultRepDepositAttoRep',
 			args: [],
@@ -129,7 +129,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		)
 			.map(log =>
 				decodeEventLog({
-					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 					data: log.data,
 					topics: log.topics,
 				}),

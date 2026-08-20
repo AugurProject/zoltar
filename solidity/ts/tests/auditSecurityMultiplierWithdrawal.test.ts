@@ -1,12 +1,12 @@
 import { describe, test } from 'bun:test'
-import { usePeripheralsVaultAccountingFixture } from './peripherals/fixture'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getTotalPoolHeldAttoRep, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
 describe('Audit PoC: security multiplier withdrawal bypass', () => {
-	const fixture = usePeripheralsVaultAccountingFixture()
+	const fixture = useStatoblastVaultAccountingFixture()
 	const { assert, depositToEscalationGame, manipulatePriceOracleAndPerformOperation, manipulatePriceOracle, OperationType, QuestionOutcome, repDeposit, reportedRepEthPrice, statoblastSecurityMultiplierBps } = fixture
 
 	test('a multiplier-safe vault cannot withdraw below multiplier-adjusted coverage', async () => {

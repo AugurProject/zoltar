@@ -7,11 +7,11 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { getOpenOracleExtraData, getOpenOracleReportStatus, loadOpenOracleEventState, openOracleSettle, wrapWeth } from '../testSupport/simulator/utils/contracts/peripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getOpenOracleExtraData, getOpenOracleReportStatus, loadOpenOracleEventState, openOracleSettle, wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureDefined } from '../testSupport/simulator/utils/testUtils'
-import { peripherals_openOracle_OpenOracle_OpenOracle, test_peripherals_FalseReturningERC20_FalseReturningERC20, test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle, test_statoblast_FalseReturningERC20_FalseReturningERC20, test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -87,8 +87,8 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	const deployFalseReturningToken = async () => {
 		const hash = await reporter.sendTransaction({
 			data: encodeDeployData({
-				abi: test_peripherals_FalseReturningERC20_FalseReturningERC20.abi,
-				bytecode: `0x${test_peripherals_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
+				abi: test_statoblast_FalseReturningERC20_FalseReturningERC20.abi,
+				bytecode: `0x${test_statoblast_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
 			}),
 		})
 		const receipt = await reporter.waitForTransactionReceipt({ hash })
@@ -122,7 +122,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	) =>
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'report',
 				args: [params, options.tryInternalBalance1 ?? false, options.tryInternalBalance2 ?? false, options.timing ?? getTimingBoundaries()],
@@ -132,7 +132,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 
 	const createReport = async (client: WriteClient) => {
 		const reportId = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -143,7 +143,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 
 	const getHeldBalance = async (holder: Address, token: Address) =>
 		await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'tokenHolder',
 			args: [holder, token],
@@ -178,7 +178,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const resolvedPreimage = preimage ?? (await loadOpenOracleEventState(client, reportId)).latest
 		return await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'dispute',
 				args: [reportId, newAmount1, newAmount2, options.disputer ?? client.account.address, options.tryInternalBalance1 ?? false, options.tryInternalBalance2 ?? false, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper), options.timing ?? getTimingBoundaries()],
@@ -249,20 +249,20 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 
 		await prepareReporter(reporter)
 		const nextReportIdBefore = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
 		})
 		const reportFundingBefore = {
 			disputeRecord: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'disputeHistory',
 				args: [nextReportIdBefore, 0n],
 			}),
 			gameHash: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'oracleGame',
 				args: [nextReportIdBefore],
@@ -276,7 +276,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await assertCustomError(() => submitReport(reporter, validParams, { value: 999n }), 'MsgValueTooLow')
 		assert.strictEqual(
 			await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'nextReportId',
 				args: [],
@@ -287,13 +287,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		assert.deepStrictEqual(
 			{
 				disputeRecord: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'disputeHistory',
 					args: [nextReportIdBefore, 0n],
 				}),
 				gameHash: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'oracleGame',
 					args: [nextReportIdBefore],
@@ -341,7 +341,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		}
 
 		const haltedReportId = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -352,7 +352,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await assertCustomError(() => disputeReport(disputer, haltedReportId, 1_002n, 900n, haltedState), 'EscalationHalted')
 
 		const ethReportId = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -364,13 +364,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			disputerHeldToken1: await getHeldBalance(disputer.account.address, ethState.game.token1),
 			disputerHeldToken2: await getHeldBalance(disputer.account.address, ethState.game.token2),
 			disputeRecord: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'disputeHistory',
 				args: [ethReportId, BigInt(ethState.game.numReports)],
 			}),
 			gameHash: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'oracleGame',
 				args: [ethReportId],
@@ -385,13 +385,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 				disputerHeldToken1: await getHeldBalance(disputer.account.address, ethState.game.token1),
 				disputerHeldToken2: await getHeldBalance(disputer.account.address, ethState.game.token2),
 				disputeRecord: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'disputeHistory',
 					args: [ethReportId, BigInt(ethState.game.numReports)],
 				}),
 				gameHash: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'oracleGame',
 					args: [ethReportId],
@@ -406,7 +406,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	})
 
 	test('balance, allowance, deposit, and withdrawal APIs expose their custom errors', async () => {
-		const oracleAbi = peripherals_openOracle_OpenOracle_OpenOracle.abi
+		const oracleAbi = statoblast_openOracle_OpenOracle_OpenOracle.abi
 		const intent = `0x${'00'.repeat(32)}` satisfies Hex
 		const basePermit = {
 			permitted: { token: WETH_ADDRESS, amount: 1n },
@@ -689,7 +689,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await assertCustomError(() => openOracleSettle(settler, reportId), 'AlreadySettled')
 
 		const callbackReportId = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -703,19 +703,19 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await mockWindow.setTime(callbackState.game.reportTimestamp + SETTLEMENT_TIME - 1n)
 		const invalidGasStateBefore = {
 			storedGame: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'storedGame',
 				args: [callbackReportId],
 			}),
 			gameHash: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'oracleGame',
 				args: [callbackReportId],
 			}),
 			finalPrice: await reporter.readContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'finalPrice',
 				args: [callbackReportId],
@@ -728,19 +728,19 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		assert.deepStrictEqual(
 			{
 				storedGame: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'storedGame',
 					args: [callbackReportId],
 				}),
 				gameHash: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'oracleGame',
 					args: [callbackReportId],
 				}),
 				finalPrice: await reporter.readContract({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'finalPrice',
 					args: [callbackReportId],
@@ -759,7 +759,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const reportId = await createReport(reporter)
 		const eventState = await loadOpenOracleEventState(reporter, reportId)
 		const storedHash = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'oracleGame',
 			args: [reportId],
@@ -776,20 +776,20 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	test('dirty report calldata reverts before creating a state hash', async () => {
 		await prepareReporter(reporter)
 		const reportId = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
 		})
 		const cleanData = encodeFunctionData({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'report',
 			args: [getReportParameters(reporter), false, false, getTimingBoundaries()],
 		})
 		await assertRawCallReverts(reporter, dirtyCalldataByte(cleanData, 0x0f), 1_000n)
 
-		assert.strictEqual(await reporter.readContract({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'nextReportId', args: [] }), reportId)
-		assert.strictEqual(await reporter.readContract({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), `0x${'00'.repeat(32)}`)
+		assert.strictEqual(await reporter.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'nextReportId', args: [] }), reportId)
+		assert.strictEqual(await reporter.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), `0x${'00'.repeat(32)}`)
 	})
 
 	test('dirty dispute calldata cannot mutate the report state hash', async () => {
@@ -800,13 +800,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const storedHash = hashOpenOracleStatePreimage(state)
 		await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
 		const cleanData = encodeFunctionData({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
 			args: [reportId, 1_200n, 800n, disputer.account.address, false, false, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper), [0n, 0n, 0n, 0n]],
 		})
 		await assertRawCallReverts(disputer, dirtyCalldataByte(cleanData, 0x4f))
 
-		assert.strictEqual(await reporter.readContract({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), storedHash)
+		assert.strictEqual(await reporter.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), storedHash)
 	})
 
 	test('dirty settle calldata cannot bypass state-hash verification', async () => {
@@ -816,13 +816,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const storedHash = hashOpenOracleStatePreimage(state)
 		await mockWindow.setTime(state.game.reportTimestamp + SETTLEMENT_TIME - 1n)
 		const cleanData = encodeFunctionData({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			args: [reportId, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)],
 		})
 		await assertRawCallReverts(settler, dirtyCalldataByte(cleanData, 0x2f))
 
-		assert.strictEqual(await reporter.readContract({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), storedHash)
+		assert.strictEqual(await reporter.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: openOracle, functionName: 'oracleGame', args: [reportId] }), storedHash)
 		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, 0n)
 	})
 
@@ -847,7 +847,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		assert.ok(status.settlementTimestamp >= disputed.latest.game.reportTimestamp + SETTLEMENT_TIME)
 
 		const heldToken1 = await reporter.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'tokenHolder',
 			args: [disputer.account.address, getAddress(addressString(GENESIS_REPUTATION_TOKEN))],
@@ -856,7 +856,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const balanceBefore = await getERC20Balance(reporter, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), disputer.account.address)
 		await writeContractAndWait(disputer, () =>
 			disputer.writeContract({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'withdraw',
 				args: [getAddress(addressString(GENESIS_REPUTATION_TOKEN)), 1_200n],

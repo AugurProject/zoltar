@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
-import { Zoltar_Zoltar, peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
+import { Zoltar_Zoltar, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
 import { sameAddress } from '../lib/address.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
@@ -112,7 +112,7 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 	while (true) {
 		const page = requireEscalationDepositArray(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'getDepositsByOutcome',
 				args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
@@ -165,7 +165,7 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 	while (true) {
 		const { page, nextNodeId } = requireCarryLeafPageResponse(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'getCarryLeafPageByOutcome',
 				args: [getReportingOutcomeValue(outcome), startNodeId, CONTRACT_PAGE_SIZE],
@@ -204,7 +204,7 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 		visitedNodeIds.add(nodeKey)
 		const { leaf, parentNodeId } = requireHistoricalCarryNode(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'nodes',
 				args: [nodeId],
@@ -225,13 +225,13 @@ async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient,
 	const directlyClaimedSourceNodeIds = new Set<string>()
 	if (inactiveLeaves.length > 0) {
 		const securityPoolAddress = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'securityPool',
 			args: [],
 		})
 		const securityPoolForkerAddress = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddress,
 			functionName: 'securityPoolForker',
 			args: [],
@@ -240,7 +240,7 @@ async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient,
 			inactiveLeaves.map(async leaf =>
 				requireBooleanValue(
 					await client.readContract({
-						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+						abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 						address: securityPoolForkerAddress,
 						functionName: 'isEscalationDepositClaimedDirectly',
 						args: [securityPoolAddress, getReportingOutcomeValue(outcome), leaf.parentDepositIndex],
@@ -273,20 +273,20 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	let inheritedLeaves: HistoricalCarrySnapshotEntry[] = []
 	if (forkContinuation === true) {
 		const securityPoolAddress = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'securityPool',
 			args: [],
 		})
 		const parentSecurityPoolAddress = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddress,
 			functionName: 'parent',
 			args: [],
 		})
 		if (parentSecurityPoolAddress !== zeroAddress) {
 			const parentEscalationGameAddress = await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				address: parentSecurityPoolAddress,
 				functionName: 'escalationGame',
 				args: [],
@@ -312,7 +312,7 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 	while (true) {
 		const page = requireArrayValue(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGameAddress,
 				functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 				args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
@@ -330,20 +330,20 @@ async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<Read
 	const [localConsumedIndexes, forkContinuation] = await Promise.all([loadProofConsumedCarriedDepositIndexes(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress)])
 	if (forkContinuation !== true) return localConsumedIndexes
 	const securityPoolAddress = await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'securityPool',
 		args: [],
 	})
 	const parentSecurityPoolAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: securityPoolAddress,
 		functionName: 'parent',
 		args: [],
 	})
 	if (parentSecurityPoolAddress === zeroAddress) return localConsumedIndexes
 	const parentEscalationGameAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: parentSecurityPoolAddress,
 		functionName: 'escalationGame',
 		args: [],
@@ -355,7 +355,7 @@ async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<Read
 
 async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
 	return await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'forkContinuation',
 		args: [],
@@ -364,7 +364,7 @@ async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, es
 
 async function readEscalationOutcomeState(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
 	return await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'getOutcomeState',
 		args: [getReportingOutcomeValue(outcome)],
@@ -393,13 +393,13 @@ async function loadRecursiveCarrySnapshot(
 		}
 	}
 	const securityPoolAddress = await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
 		functionName: 'securityPool',
 		args: [],
 	})
 	const parentSecurityPoolAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: securityPoolAddress,
 		functionName: 'parent',
 		args: [],
@@ -413,7 +413,7 @@ async function loadRecursiveCarrySnapshot(
 		}
 	}
 	const parentEscalationGameAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: parentSecurityPoolAddress,
 		functionName: 'escalationGame',
 		args: [],
@@ -437,7 +437,7 @@ async function loadRecursiveCarrySnapshot(
 
 async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentSecurityPoolAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
 	const parentEscalationGameAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: parentSecurityPoolAddress,
 		functionName: 'escalationGame',
 		args: [],
@@ -636,7 +636,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		}
 	const [viewerVaultTuple, escalationMigrationEntitlementTuple] = await Promise.all([
 		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [accountAddress],
@@ -656,13 +656,13 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		viewerRepBackingUnits === 0n
 			? 0n
 			: await client.readContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
+					abi: statoblast_SecurityPool_SecurityPool.abi,
 					functionName: 'backingUnitsToAttoRep',
 					address: securityPoolAddress,
 					args: [viewerRepBackingUnits],
 				})
 	const escalationGameAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'escalationGame',
 		address: securityPoolAddress,
 		args: [],
@@ -670,7 +670,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	const viewerVaultDisputeStakedAttoRep = sameAddress(escalationGameAddress, zeroAddress)
 		? 0n
 		: await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'disputeStakedRepByVaultAttoRep',
 				address: escalationGameAddress,
 				args: [accountAddress],
@@ -697,43 +697,43 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'escalationGame',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'settlementCollateralAttoEth',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'universeId',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'zoltar',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'initialEscalationGameDepositAttoRep',
 			address: securityPoolAddress,
 			args: [],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'systemState',
 			address: securityPoolAddress,
 			args: [],
@@ -745,7 +745,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [securityPoolAddress],
 		},
 		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'parent',
 			address: securityPoolAddress,
 			args: [],
@@ -791,31 +791,31 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'startBondAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionThresholdAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'activationTime',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCostAttoRep',
 			address: escalationGameAddress,
 			args: [],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getBindingCapitalAttoRep',
 			address: escalationGameAddress,
 			args: [],
@@ -824,7 +824,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		readEscalationOutcomeState(client, escalationGameAddress, 'yes'),
 		readEscalationOutcomeState(client, escalationGameAddress, 'no'),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'getEscalationGameEndDate',
 			address: escalationGameAddress,
 			args: [],
@@ -842,7 +842,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [universeId],
 		}),
 		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'hasReachedNonDecision',
 			address: escalationGameAddress,
 			args: [],
@@ -921,7 +921,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}))
@@ -938,7 +938,7 @@ export async function withdrawEscalationFromSecurityPool(client: WriteClient, se
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
 	}))
@@ -955,13 +955,13 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 	const [parentSecurityPoolAddress, childEscalationGameAddress] = await readRequiredMulticall(client, [
 		{
 			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'parent',
 			args: [],
 		},
 		{
 			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'escalationGame',
 			args: [],
 		},
@@ -970,7 +970,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 	if (childEscalationGameAddress === zeroAddress) throw new Error('Child escalation game unavailable for fork-carried settlement.')
 	const parentEscalationGameAddress = await client.readContract({
 		address: parentSecurityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'escalationGame',
 		args: [],
 	})
@@ -1039,7 +1039,7 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, secu
 		async () =>
 			await writeContractAndWait(client, () => ({
 				address: securityPoolAddress,
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [
 					getReportingOutcomeValue(outcome),

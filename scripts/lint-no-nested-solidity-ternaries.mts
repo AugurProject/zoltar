@@ -23,8 +23,8 @@ type NestedTernaryFinding = {
 const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
 const projectRoot = path.join(repositoryRoot, '..')
 const contractsRoot = path.join(projectRoot, 'solidity', 'contracts')
-const ignoredFiles = new Set(['solidity/contracts/peripherals/Multicall3.sol', 'solidity/contracts/peripherals/WETH9.sol'])
-const ignoredPathPrefixes = ['solidity/contracts/peripherals/openOracle']
+const ignoredFiles = new Set(['solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/WETH9.sol'])
+const ignoredPathPrefixes = ['solidity/contracts/statoblast/openOracle']
 
 function toProjectPath(filePath: string): string {
 	return path.relative(projectRoot, filePath).replaceAll('\\', '/')

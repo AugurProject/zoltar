@@ -446,7 +446,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -470,9 +470,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
+										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
 										>,
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>setSecurityPool</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>setSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -520,7 +520,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
+										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
 										>,
 										<a href="../../shared/ts/addressDerivation.ts"><code>addressDerivation.ts</code></a>
 									</dd>
@@ -546,7 +546,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker</code></a
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker</code></a
 										>, interface and storage-layout regression tests
 									</dd>
 								</div>
@@ -620,8 +620,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol">factory registry and canonical lookups</a>, <a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol">share-token authorization</a>,
-										<a href="../../solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts">stateful registry-bijection test</a>
+										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">factory registry and canonical lookups</a>, <a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">share-token authorization</a>,
+										<a href="../../solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts">stateful registry-bijection test</a>
 									</dd>
 								</div>
 							</dl>
@@ -671,8 +671,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Pool ETH accounting</a>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">stateful exact-accounting invariant tests</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Pool ETH accounting</a>,
+										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful exact-accounting invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -696,8 +696,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>receive</code>, tracked collateral, and fee redemption</a>,
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">auction finalization</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>receive</code>, tracked collateral, and fee redemption</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">auction finalization</a>
 									</dd>
 								</div>
 							</dl>
@@ -707,7 +707,7 @@
 						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. Total ownership includes any unclaimed truth-auction allocation, so that allocation can provide minting headroom before it becomes fee-eligible. Existing open interest is not deleted when later repricing lowers live capacity, so this is not a continuous collateral-below-capacity invariant. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
+							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so this is not a continuous collateral-below-capacity invariant. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
 							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A later REP price change can lower capacity below 9 ETH without changing the existing open interest or ownership records.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -721,8 +721,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_requireCapacityNotExceeded</code>, <code>setPoolFinancials</code>, and fee redemption</a>,
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">fork finalization</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>_requireCapacityNotExceeded</code>, <code>setPoolFinancials</code>, and fee redemption</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">fork finalization</a>
 									</dd>
 								</div>
 							</dl>
@@ -746,7 +746,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Capacity ownership and withdrawal checks</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Capacity ownership and withdrawal checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -770,7 +770,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoRepToBackingUnits</code> and <code>backingUnitsToAttoRep</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoRepToBackingUnits</code> and <code>backingUnitsToAttoRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -794,7 +794,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Fee accumulator and <code>redeemFees</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Fee accumulator and <code>redeemFees</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -818,7 +818,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>transferEth</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>transferEth</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -829,12 +829,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible capacity ownership equals summed live vault capacity ownership, and uncheckpointed capacity ownership equals capacity ownership whose vault fee index trails the global index. During <code>ForkMigration</code>, configured migrated capacity ownerships remain pending outside those pool aggregates. A <code>PoolForked</code>
-								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total capacity ownership equals fee-eligible capacity ownership plus the outstanding unclaimed auction allocation. If the auction purchases zero REP, no auction capacity ownership exists: the child still records the parent's fork-time total, while the unmigrated remainder stays outside fee eligibility. The
+								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible capacity ownership equals summed live vault capacity ownership plus sold truth-auction ownership awaiting claim. Uncheckpointed capacity ownership covers fee-eligible ownership not yet reconciled to the current global index, including an unclaimed auction allocation after the index advances. During <code>ForkMigration</code>, configured migrated capacity ownerships remain pending outside those pool aggregates. A <code>PoolForked</code>
+								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total capacity ownership equals fee-eligible capacity ownership, including the outstanding unclaimed auction allocation in both aggregates. If the auction purchases zero REP, the unmigrated remainder remains explicit unassigned capacity but stays outside fee eligibility. At finalization and after every claim, every capacity unit counted by the child belongs either to a real vault or to that nonwithdrawable unassigned position. The
 								<a href="../explanation/truth-auctions.html#clearing">auction settlement specification</a>
 								defines that zero-purchase allocation rule.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Migrating one of two vaults that each own 3 REP of capacity leaves the parent's frozen 6 REP total unchanged and records 3 REP as pending in the child. With purchased REP, claims move the remaining 3 REP from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remainder stays unassigned and ineligible.</p>
+							<p class="invariant-example"><strong>Example:</strong> Migrating one of two vaults that each own 3 REP of capacity leaves the parent's frozen 6 REP total unchanged and records 3 REP as unassigned in the child. With purchased REP, finalization adds those 3 REP of sold ownership to fee eligibility immediately, and later claims only transfer the position to bidder vaults. With zero purchased REP, the same 3 REP remains system-owned and ineligible.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -847,8 +847,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>getPoolAccountingSnapshot</code> and vault checkpointing</a>, <a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">truth-auction claim accounting</a>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">stateful ledger and claim-order invariant tests</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>getPoolAccountingSnapshot</code> and vault checkpointing</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">truth-auction claim accounting</a>,
+										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful ledger and claim-order invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -872,7 +872,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>mintCompleteSets</code> and <code>burnCompleteSets</code></a>
+										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and <code>burnCompleteSets</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -896,7 +896,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>redeemCompleteSet</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>redeemCompleteSet</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -920,7 +920,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>createCompleteSet</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>createCompleteSet</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -944,9 +944,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>redeemShares</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>redeemShares</code></a>
 										and
-										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
+										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -970,7 +970,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>redeemShares</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>redeemShares</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -998,7 +998,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol">ERC-1155 supply accounting</a>,
+										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">ERC-1155 supply accounting</a>,
 										<a href="../../solidity/ts/tests/erc1155.test.ts">modeled holder-supply invariant test</a>
 									</dd>
 								</div>
@@ -1023,8 +1023,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol">Escrow checks</a>,
-										<a href="../../solidity/contracts/peripherals/EscalationGame.sol"><code>EscalationGame</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Escrow checks</a>,
+										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1048,9 +1048,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../explanation/liquidations.html">Liquidation design</a>, <a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>performLiquidation</code></a
+										<a href="../explanation/liquidations.html">Liquidation design</a>, <a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>performLiquidation</code></a
 										>,
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1074,7 +1074,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a
+										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a
 										>, <a href="../explanation/liquidations.html">liquidation design</a>
 									</dd>
 								</div>
@@ -1099,9 +1099,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>_registerVault</code></a
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>_registerVault</code></a
 										>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">registry pagination and direct-claim boundary tests</a>
+										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">registry pagination and direct-claim boundary tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -1134,7 +1134,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>isOperational</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>isOperational</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1158,7 +1158,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">Fork snapshot preparation</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Fork snapshot preparation</a>
 									</dd>
 								</div>
 							</dl>
@@ -1182,7 +1182,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>getMigrationProxyAddress</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>getMigrationProxyAddress</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1206,7 +1206,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>initiateSecurityPoolFork</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>initiateSecurityPoolFork</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1230,7 +1230,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>forkActivationTime</code> recording and child guards</a>, <a href="../../solidity/contracts/peripherals/SecurityPoolUtils.sol"><code>MIGRATION_TIME</code></a
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>forkActivationTime</code> recording and child guards</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>MIGRATION_TIME</code></a
 										>, <a href="../../solidity/contracts/Zoltar.sol"><code>deployChild</code>, <code>addRepToMigrationBalance</code>, and <code>splitMigrationRep</code></a
 										>, migration deadline tests
 									</dd>
@@ -1256,10 +1256,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>_prepareForkState</code> external-fork authorization guard</a>,
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_validateChildPoolDeployment</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>_prepareForkState</code> external-fork authorization guard</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_validateChildPoolDeployment</code></a>
 										and
-										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"><code>deployChildSecurityPool</code></a>
+										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>deployChildSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1283,7 +1283,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateNonEscrowedVaultAccounting</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateNonEscrowedVaultAccounting</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1312,11 +1312,11 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_ensureChildEscalationBacking</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_ensureChildEscalationBacking</code></a>
 										,
-										<a href="../../solidity/contracts/peripherals/EscalationGame.sol"><code>resumeFromFork</code></a
-										>, <a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"><code>isForkCarryFundingComplete</code></a
-										>, <a href="../../solidity/contracts/peripherals/EscalationGameEscrow.sol"><code>_exportForkedEscrowByOutcome</code></a
+										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>resumeFromFork</code></a
+										>, <a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol"><code>isForkCarryFundingComplete</code></a
+										>, <a href="../../solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>_exportForkedEscrowByOutcome</code></a
 										>, and
 										<a href="../../solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts">fork-backing regression tests</a>
 									</dd>
@@ -1342,7 +1342,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"><code>_transferForkMigratedCollateralToChild</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_transferForkMigratedCollateralToChild</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1366,7 +1366,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
+										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1394,9 +1394,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
 										>,
-										<a href="../../solidity/contracts/peripherals/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
+										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -1420,7 +1420,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">Truth-auction start and finalization</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Truth-auction start and finalization</a>
 									</dd>
 								</div>
 							</dl>
@@ -1450,8 +1450,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol">Continuation initialization</a>,
-										<a href="../../solidity/contracts/peripherals/EscalationGameDepositDelegate.sol">truth-auction retention accounting</a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol">Continuation initialization</a>,
+										<a href="../../solidity/contracts/statoblast/EscalationGameDepositDelegate.sol">truth-auction retention accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -1475,7 +1475,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameState.sol">Unresolved counters</a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameState.sol">Unresolved counters</a>
 									</dd>
 								</div>
 							</dl>
@@ -1546,7 +1546,7 @@
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd><a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol">Carry nullifiers</a>, <a href="../reference/merkle-mountain-range.html">MMR proofs</a></dd>
+									<dd><a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol">Carry nullifiers</a>, <a href="../reference/merkle-mountain-range.html">MMR proofs</a></dd>
 								</div>
 							</dl>
 						</div>
@@ -1569,7 +1569,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameEscrow.sol"><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1593,7 +1593,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1617,7 +1617,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol">Settlement</a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol">Settlement</a>
 									</dd>
 								</div>
 							</dl>
@@ -1641,7 +1641,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGame.sol"><code>EscalationGame</code></a>
+										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1665,7 +1665,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameForker.sol">Forked claims</a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameForker.sol">Forked claims</a>
 									</dd>
 								</div>
 							</dl>
@@ -1689,7 +1689,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a>
+										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1713,10 +1713,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>activateForkMode</code></a
-										>, <a href="../../solidity/contracts/peripherals/EscalationGameCalculations.sol"><code>getQuestionResolution</code></a
-										>, <a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol">fixed-outcome propagation</a>, and
-										<a href="../../solidity/contracts/peripherals/EscalationGameSettlement.sol">pool/game payout check</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>activateForkMode</code></a
+										>, <a href="../../solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>getQuestionResolution</code></a
+										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">fixed-outcome propagation</a>, and
+										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol">pool/game payout check</a>
 									</dd>
 								</div>
 							</dl>
@@ -1742,7 +1742,7 @@
 									<dd>
 										<a href="../../solidity/contracts/Zoltar.sol"><code>getNonDecisionThresholdAttoRep</code></a>
 										,
-										<a href="../../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol">origin threshold admission</a>, <a href="../../solidity/contracts/peripherals/factories/EscalationGameFactory.sol"><code>deployEscalationGame</code></a
+										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">origin threshold admission</a>, <a href="../../solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>deployEscalationGame</code></a
 										>, and
 										<a href="../../solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts">start-liveness regression tests</a>
 									</dd>
@@ -1771,8 +1771,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/EscalationGameCarry.sol"><code>getForkCarrySnapshot</code> and <code>getForkCarryRoots</code></a
-										>, <a href="../../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"><code>bagCarryPeaks</code></a
+										<a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol"><code>getForkCarrySnapshot</code> and <code>getForkCarryRoots</code></a
+										>, <a href="../../solidity/contracts/statoblast/EscalationGameProofVerifier.sol"><code>bagCarryPeaks</code></a
 										>,
 										<a href="../../solidity/ts/tests/escalationGame.test.ts">independent carry-structure invariant tests</a>
 									</dd>
@@ -1810,7 +1810,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1837,7 +1837,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a
 										>,
 										<a href="../explanation/open-oracle.html">ratio direction</a>
 									</dd>
@@ -1863,7 +1863,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>isPriceValid</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>isPriceValid</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1887,7 +1887,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1911,7 +1911,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol">Staging and snapshot checks</a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">Staging and snapshot checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -1935,7 +1935,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1962,8 +1962,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol">active and pending staged-operation indexes</a>,
-										<a href="../../solidity/ts/tests/peripheralsInvariant.test.ts">queue/index invariant test</a>
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">active and pending staged-operation indexes</a>,
+										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">queue/index invariant test</a>
 									</dd>
 								</div>
 							</dl>
@@ -1987,7 +1987,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"><code>settle</code> and dispute validation</a>
+										<a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>settle</code> and dispute validation</a>
 									</dd>
 								</div>
 							</dl>
@@ -2011,8 +2011,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>pendingReportSponsor</code> and <code>_withdrawOpenOracleReporterBalances</code></a
-										>, <a href="../../solidity/contracts/peripherals/openOracle/OpenOracle.sol"><code>deposit</code> and <code>withdrawTo</code></a
+										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>pendingReportSponsor</code> and <code>_withdrawOpenOracleReporterBalances</code></a
+										>, <a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>deposit</code> and <code>withdrawTo</code></a
 										>,
 										<a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">coordinator/OpenOracle balance-domain test</a>
 									</dd>
@@ -2044,7 +2044,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>submitBid</code></a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>submitBid</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2068,7 +2068,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>computeClearing</code> and <code>finalize</code></a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>computeClearing</code> and <code>finalize</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2092,7 +2092,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>withdrawBids</code> and refund functions</a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>withdrawBids</code> and refund functions</a>
 									</dd>
 								</div>
 							</dl>
@@ -2116,7 +2116,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol"><code>allocateFromCumulativePosition</code></a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol"><code>allocateFromCumulativePosition</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2150,8 +2150,8 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim keeps purchased REP pool-held and credits corresponding REP backing units plus the bid's fixed-position share of the complete unmigrated capacity ownership to the bid's recorded vault. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero.</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid; the claim adds the REP backing units and deterministic capacity ownership share assigned to that bid while the purchased REP remains pool-held. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and transfers the bid's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bid's recorded vault. Each decrease in unassigned backing, capacity, and bad debt equals the corresponding vault credit. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, and cumulative allocation keeps capacity ownership and bad-debt rounding independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero. Claiming does not change total capacity ownership, fee-eligible capacity ownership, active open interest, total bad debt, retention rate, or aggregate accrued fees.</div>
+							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid. The claim moves the bid's backing units, deterministic capacity share, proportional bad debt, and accrued fees into that vault while leaving every pool aggregate unchanged. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2164,7 +2164,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">Auction-claim settlement</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Auction-claim settlement</a>
 									</dd>
 								</div>
 							</dl>
@@ -2215,7 +2215,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2240,7 +2240,7 @@
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="../explanation/truth-auctions.html">Weak-demand behavior</a>,
-										<a href="../../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2264,9 +2264,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code></a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code></a>
 										and
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol">refund-prefix accounting</a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">refund-prefix accounting</a>
 										and
 										<a href="../../solidity/ts/tests/auction.test.ts">repeated tick deletion/recreation tests</a>
 									</dd>
@@ -2296,7 +2296,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuctionStorage.sol">AVL tree and clearing</a>, <a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol">enumeration and auction integration</a>,
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">AVL tree and clearing</a>, <a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol">enumeration and auction integration</a>,
 										<a href="../../solidity/ts/tests/auction.test.ts">seeded independent-model and frozen-snapshot tests</a>
 									</dd>
 								</div>
@@ -2324,7 +2324,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and deferred refunds</a>,
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and deferred refunds</a>,
 										<a href="../../solidity/ts/tests/auction.test.ts">seeded and deferred-refund ETH-liability tests</a>
 									</dd>
 								</div>
@@ -2361,8 +2361,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol"><code>SystemState</code></a
-										>, <a href="../../solidity/contracts/peripherals/SecurityPoolForker.sol">fork transitions</a>; see <code>FORK-12</code> for child accounting consistency.
+										<a href="../../solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>SystemState</code></a
+										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">fork transitions</a>; see <code>FORK-12</code> for child accounting consistency.
 									</dd>
 								</div>
 							</dl>
@@ -2507,7 +2507,7 @@
 									<dd>
 										<a href="../../solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops</code></a
 										>, <a href="../../solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a
-										>, <a href="../../solidity/contracts/peripherals/WETH9.sol"><code>WETH9</code></a
+										>, <a href="../../solidity/contracts/statoblast/WETH9.sol"><code>WETH9</code></a
 										>, the network deployment manifests, and security assumption
 										<a href="./security-model.html#assumption-a21"><code>A21</code></a>
 									</dd>
@@ -2569,7 +2569,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/peripherals/SecurityPool.sol"><code>createCompleteSet</code></a
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code></a
 										>, ERC-1155 receiver checks, and receiver callback tests
 									</dd>
 								</div>

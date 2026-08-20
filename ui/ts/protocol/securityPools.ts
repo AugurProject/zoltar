@@ -1,11 +1,11 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_SecurityPoolForker_SecurityPoolForker,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_tokens_ShareToken_ShareToken,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 } from '../contractArtifact.js'
 import { isIgnorableLogDecodeError } from '../lib/errors.js'
@@ -63,7 +63,7 @@ function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
 		if (!sameAddress(log.address, securityPoolFactory)) continue
 		try {
 			const decodedLog = decodeEventLog({
-				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 				data: log.data,
 				topics: log.topics,
 			})
@@ -89,8 +89,8 @@ function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSe
 		from: getInfraContractAddresses().shareTokenFactory,
 		salt: getOriginSecurityPoolShareTokenSalt(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
 		bytecode: encodeDeployData({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+			abi: statoblast_tokens_ShareToken_ShareToken.abi,
+			bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 			args: [getInfraContractAddresses().securityPoolFactory, getZoltarAddress(), questionId],
 		}),
 	})
@@ -103,7 +103,7 @@ async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityP
 
 async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, blockNumber?: bigint) {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'getVaultCount',
 		address: securityPoolAddress,
 		args: [],
@@ -113,7 +113,7 @@ async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'
 
 async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, startIndex: bigint, count: bigint, blockNumber: bigint) {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'getVaults',
 		address: securityPoolAddress,
 		args: [startIndex, count],
@@ -124,7 +124,7 @@ async function getSecurityPoolVaults(client: Pick<ReadClient, 'readContract'>, s
 async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'readContract'>, securityPoolAddress: Address, vaultAddresses: Address[], blockNumber?: bigint) {
 	if (vaultAddresses.length === 0) return []
 	const escalationGameAddress = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'escalationGame',
 		address: securityPoolAddress,
 		args: [],
@@ -134,7 +134,7 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'r
 		return vaultAddresses.map(() => ({ disputeStakedAttoRep: 0n }))
 	}
 	const disputeStakeContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
+		abi: statoblast_EscalationGame_EscalationGame.abi,
 		functionName: 'disputeStakedRepByVaultAttoRep',
 		address: escalationGameAddress,
 		args: [vaultAddress],
@@ -182,14 +182,14 @@ async function loadSecurityPoolVaultSummaries(
 	}
 	const poolRepBackingTotalsPromise = Promise.all([
 		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getTotalPoolHeldAttoRep',
 			address: securityPoolAddress,
 			args: [],
 			blockNumber,
 		}),
 		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'totalRepBackingUnits',
 			address: securityPoolAddress,
 			args: [],
@@ -198,19 +198,19 @@ async function loadSecurityPoolVaultSummaries(
 	])
 	const loadCurrentVaultSummaries = async (vaultAddresses: Address[]) => {
 		const securityVaultSummaryContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [vaultAddress],
 		}))
 		const vaultOpenInterestContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getVaultOpenInterestAttoEth',
 			address: securityPoolAddress,
 			args: [vaultAddress],
 		}))
 		const vaultBadDebtContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
+			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'vaultBadDebtAttoEth',
 			address: securityPoolAddress,
 			args: [vaultAddress],
@@ -352,43 +352,43 @@ async function loadSecurityPoolDetails(
 	] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'settlementCollateralAttoEth',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'currentRetentionRate',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'minimumSecurityBondDebtAttoEth',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'minimumVaultRepDepositAttoRep',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkData',
 				address: getInfraContractAddresses().securityPoolForker,
 				args: [securityPoolAddress],
 			},
 			{
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'lastPrice',
 				address: managerAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'lastSettlementTimestamp',
 				address: managerAddress,
 				args: [],
@@ -400,25 +400,25 @@ async function loadSecurityPoolDetails(
 				args: [securityPoolAddress],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'systemState',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'shareTokenSupplyAttoShares',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'getTotalPoolHeldAttoRep',
 				address: securityPoolAddress,
 				args: [],
 			},
 			{
-				abi: peripherals_SecurityPool_SecurityPool.abi,
+				abi: statoblast_SecurityPool_SecurityPool.abi,
 				functionName: 'getPoolAccountingSnapshot',
 				address: securityPoolAddress,
 				args: [],
@@ -491,7 +491,7 @@ async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigin
 	return requireSecurityPoolDeploymentTupleArray(
 		await client.readContract({
 			address: getInfraContractAddresses().securityPoolFactory,
-			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'securityPoolDeploymentsRange',
 			args: [startIndex, count],
 		}),
@@ -526,7 +526,7 @@ function applyChildForkActivityHints(pools: ListedSecurityPool[]) {
 export async function loadAllSecurityPools(client: ReadClient, options: LoadAllSecurityPoolsOptions = {}): Promise<ListedSecurityPool[]> {
 	const deploymentCount = await client.readContract({
 		address: getInfraContractAddresses().securityPoolFactory,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'securityPoolDeploymentCount',
 		args: [],
 	})
@@ -550,7 +550,7 @@ export async function createSecurityPool(
 ) {
 	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: getDeploymentStepAddress('securityPoolFactory'),
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
 	}))
@@ -575,7 +575,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 	const startIndex = getProtocolPageOffset(pageIndex, pageSize)
 	const poolCount = await client.readContract({
 		address: getInfraContractAddresses().securityPoolFactory,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'securityPoolDeploymentCount',
 		args: [],
 	})
@@ -606,17 +606,17 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
 
 	const [badDebtAttoEth, currentRetentionRate, managerAddress, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, totalRepBackingUnits, repToken, totalPoolHeldRepBalanceAttoRep, totalCapacityOwnershipAttoRep, universeId, vaultData, disputeStakedRepByVaultAttoRep] = await Promise.all([
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'totalCapacityOwnershipAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalCapacityOwnershipAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
 		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
 	])
 

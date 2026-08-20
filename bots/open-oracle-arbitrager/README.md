@@ -40,7 +40,7 @@ The arbitrager is an independent project inside the monorepo:
 Its own `package.json`, lockfile, TypeScript configuration, test configuration, and
 generated contract artifacts define its build. The executor imports unchanged
 protocol ERC-20 utilities from the monorepo's top-level `solidity/` project; it is
-not compiled into the protocol peripheral artifact set.
+not compiled into the protocol statoblast artifact set.
 
 ## How the flow works
 

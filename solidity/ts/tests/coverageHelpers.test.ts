@@ -19,22 +19,22 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
-	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
-	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
-	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
-	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer,
-	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
+	statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
+	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	ReputationToken_ReputationToken,
-	test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy,
-	test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted,
-	test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness,
-	test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness,
-	test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
-	test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
+	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
+	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
+	test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness,
+	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
+	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
 } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -135,11 +135,11 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 test('coverage classifier keeps known untraceable source-map lines from manifest out of production totals', () => {
 	const cases = [
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol',
+			sourcePath: '/tmp/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol',
 			source: ['contract SecurityPoolForkerVaultMigrationBase {', '    constructor() {', '        pool = _pool;', '    }', '}'],
 		},
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol',
+			sourcePath: '/tmp/solidity/contracts/statoblast/tokens/ERC1155.sol',
 			source: [
 				'contract ERC1155 {',
 				'    function balanceOfBatch() external returns (uint256[] memory) {',
@@ -152,11 +152,11 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 			],
 		},
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol',
+			sourcePath: '/tmp/solidity/contracts/statoblast/EscalationGameSettlement.sol',
 			source: ['contract EscalationGameSettlement {', '    function withdrawDeposit(', '        uint256 claimIndex,', '        BinaryOutcomes.BinaryOutcome selectedOutcome', '    ) public {', "        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');", '    }', '}'],
 		},
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameCarry.sol',
+			sourcePath: '/tmp/solidity/contracts/statoblast/EscalationGameCarry.sol',
 			source: [
 				'contract EscalationGameCarry {',
 				'    function verify(bytes32[] calldata proofSiblings, uint8 selectedOutcome, uint256 parentDepositIndex, uint256 amount) internal {',
@@ -208,9 +208,9 @@ test('coverage classifier keeps similar lines coverable when source-map gap cont
 	].join('\n')
 	const erc1155Return = ['contract ERC1155 {', '    function balanceOf(address account, uint256 id) public view returns (uint256) {', '        return _balances[id][account];', '    }', '}'].join('\n')
 
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofFunction), [6])
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementUnrelatedUintOverload), [6])
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol', erc1155Return), [3])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/statoblast/EscalationGameSettlement.sol', settlementProofFunction), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/statoblast/EscalationGameSettlement.sol', settlementUnrelatedUintOverload), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/statoblast/tokens/ERC1155.sol', erc1155Return), [3])
 })
 
 test('coverage trace resolution never attributes unresolved nested program counters to fallback contracts', () => {
@@ -250,16 +250,16 @@ describe('Solidity bytecode coverage helpers', () => {
 	const deployCoverageHelper = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
-				bytecode: `0x${test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.evm.bytecode.object}`,
 			}),
 		)
 
 	const deployErc1155CoverageHelper = async () =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				bytecode: `0x${test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.evm.bytecode.object}`,
 			}),
 		)
 
@@ -284,8 +284,8 @@ describe('Solidity bytecode coverage helpers', () => {
 	const deployEscalationGameFactorySecurityPool = async (reputationTokenAddress: Address) =>
 		await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
-				bytecode: `0x${test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.evm.bytecode.object}`,
 				args: [reputationTokenAddress],
 			}),
 		)
@@ -298,7 +298,7 @@ describe('Solidity bytecode coverage helpers', () => {
 	})
 
 	test('security pool factory constructor, range, and child authorization guards expose exact reasons', async () => {
-		const factoryArtifact = peripherals_factories_SecurityPoolFactory_SecurityPoolFactory
+		const factoryArtifact = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
@@ -351,22 +351,22 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		const executedAddress = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
-				bytecode: `0x${test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted.evm.bytecode.object}`,
 			}),
 		)
 		const decoyAddress = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
-				bytecode: `0x${test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.evm.bytecode.object}`,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
+				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy.evm.bytecode.object}`,
 			}),
 		)
-		const sourcePath = 'solidity/contracts/test/peripherals/CoverageHelpersHarness.sol'
+		const sourcePath = 'solidity/contracts/test/statoblast/CoverageHelpersHarness.sol'
 		const decoyLine = await findLineNumberByExactSource(sourcePath, 'uint256 decoyValue = 23;')
-		const fixtureSourceSuffix = 'contracts/test/peripherals/CoverageHelpersHarness.sol'
+		const fixtureSourceSuffix = 'contracts/test/statoblast/CoverageHelpersHarness.sol'
 		const decoyBeforeExecution = await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine)
 		const decoyData = encodeFunctionData({
-			abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
+			abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
 			functionName: 'select',
 			args: [true],
 		})
@@ -394,7 +394,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		assert.ok((await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine)) > decoyBeforeExecution, 'the decoy trace PCs should map to the guarded decoy source line')
 
 		const data = encodeFunctionData({
-			abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
+			abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
 			functionName: 'select',
 			args: [true],
 		})
@@ -566,7 +566,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			helperAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 				functionName: 'safeApproveToken',
 				args: [reputationTokenAddress, participantClient.account.address, 7n],
 			}),
@@ -574,7 +574,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			helperAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 				functionName: 'safeTransferToken',
 				args: [reputationTokenAddress, participantClient.account.address, 5n],
 			}),
@@ -598,7 +598,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			helperAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 				functionName: 'safeTransferFromToken',
 				args: [reputationTokenAddress, client.account.address, participantClient.account.address, 9n],
 			}),
@@ -675,7 +675,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			transact(
 				helperAddress,
 				encodeFunctionData({
-					abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+					abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 					functionName: 'deployDeploymentStatusOracle',
 					args: [tooManyDeploymentAddresses],
 				}),
@@ -788,7 +788,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('reachable scalar arithmetic guards expose their specific revert reasons', async () => {
 		const helperAddress = await deployCoverageHelper()
-		const helperAbi = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi
+		const helperAbi = test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi
 		const scalarErrorCases = [
 			{
 				data: encodeFunctionData({
@@ -850,7 +850,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		const helperAddress = await deployCoverageHelper()
 		const data = encodeFunctionData({
-			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 			functionName: 'getTokenId',
 			args: [7n, 1],
 		})
@@ -882,19 +882,19 @@ describe('Solidity bytecode coverage helpers', () => {
 	test('traces eth_call coverage using state override code instead of latest chain code', async () => {
 		if (!isCoverageEnabled()) return
 
-		const helperRuntimeBytecode = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.evm?.deployedBytecode?.object
+		const helperRuntimeBytecode = test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.evm?.deployedBytecode?.object
 		if (helperRuntimeBytecode === undefined || helperRuntimeBytecode.length === 0) throw new Error('CoverageHelpersHarness deployed bytecode is unavailable')
 		const overrideCode = helperRuntimeBytecode.startsWith('0x') ? helperRuntimeBytecode : `0x${helperRuntimeBytecode}`
 		const overrideAddress = participantClient.account.address
-		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/peripherals/tokens/TokenId.sol', '_tokenId := or(')
+		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/statoblast/tokens/TokenId.sol', '_tokenId := or(')
 		const callData = encodeFunctionData({
-			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 			functionName: 'getTokenId',
 			args: [7n, 1],
 		})
 
 		await flushSolidityBytecodeCoverageForTest()
-		const priorHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		const priorHitCount = await readCoverageHitCount('/solidity/contracts/statoblast/tokens/TokenId.sol', targetLineNumber)
 
 		resetSolidityBytecodeCoverageAddressCache()
 		let overrideAddressGetCodeRequests = 0
@@ -914,7 +914,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		})
 
 		await flushSolidityBytecodeCoverageForTest()
-		const nextHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		const nextHitCount = await readCoverageHitCount('/solidity/contracts/statoblast/tokens/TokenId.sol', targetLineNumber)
 		assert.strictEqual(overrideAddressGetCodeRequests, 0, 'state override code should avoid a latest eth_getCode lookup for the overridden address')
 		assert.ok(nextHitCount > priorHitCount, 'state override-backed eth_call coverage should attribute the TokenId source line')
 	})
@@ -923,9 +923,9 @@ describe('Solidity bytecode coverage helpers', () => {
 		if (!isCoverageEnabled()) return
 
 		const helperAddress = await deployCoverageHelper()
-		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/peripherals/tokens/TokenId.sol', '_tokenId := or(')
+		const targetLineNumber = await findLineNumberByExactSource('solidity/contracts/statoblast/tokens/TokenId.sol', '_tokenId := or(')
 		const callData = encodeFunctionData({
-			abi: test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi,
+			abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 			functionName: 'getTokenId',
 			args: [9n, 2],
 		})
@@ -946,7 +946,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		assert.notStrictEqual(normalizeRpcBytecode(latestCode), normalizeRpcBytecode(historicalCode), 'historical block coverage test requires the mocked latest code to differ from the historical helper bytecode')
 
 		await flushSolidityBytecodeCoverageForTest()
-		const priorHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		const priorHitCount = await readCoverageHitCount('/solidity/contracts/statoblast/tokens/TokenId.sol', targetLineNumber)
 
 		resetSolidityBytecodeCoverageAddressCache()
 		let helperCodeLookupBlockTag: unknown
@@ -966,7 +966,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		})
 
 		await flushSolidityBytecodeCoverageForTest()
-		const nextHitCount = await readCoverageHitCount('/solidity/contracts/peripherals/tokens/TokenId.sol', targetLineNumber)
+		const nextHitCount = await readCoverageHitCount('/solidity/contracts/statoblast/tokens/TokenId.sol', targetLineNumber)
 		assert.strictEqual(helperCodeLookupBlockTag, callBlockTag, 'historical eth_call coverage should resolve bytecode at the original block selector')
 		assert.ok(nextHitCount > priorHitCount, 'historical eth_call coverage should attribute the TokenId source line even when latest code differs')
 	})
@@ -977,7 +977,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'supportsInterface',
 				args: ['0xd9b67a26'],
 			}),
@@ -985,7 +985,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'mintOne',
 				args: [client.account.address, 1n, 5n],
 			}),
@@ -993,7 +993,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'mintMany',
 				args: [client.account.address, [2n, 3n], [7n, 11n]],
 			}),
@@ -1001,7 +1001,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'balanceOfBatch',
 				args: [
 					[client.account.address, client.account.address, client.account.address],
@@ -1012,7 +1012,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'setApprovalForAll',
 				args: [participantClient.account.address, true],
 			}),
@@ -1020,7 +1020,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'isApprovedForAll',
 				args: [client.account.address, participantClient.account.address],
 			}),
@@ -1028,7 +1028,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'transferWithLegacyHelper',
 				args: [client.account.address, participantClient.account.address, 1n, 2n],
 			}),
@@ -1036,7 +1036,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'internalTransferWithLegacyHelper',
 				args: [participantClient.account.address, client.account.address, 1n, 1n],
 			}),
@@ -1044,7 +1044,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'batchTransferWithLegacyHelper',
 				args: [client.account.address, participantClient.account.address, [2n, 3n], [2n, 3n]],
 			}),
@@ -1052,7 +1052,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'internalBatchTransferWithLegacyHelper',
 				args: [participantClient.account.address, client.account.address, [2n, 3n], [1n, 1n]],
 			}),
@@ -1060,7 +1060,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'batchTransferWithLegacyHelper',
 				args: [client.account.address, participantClient.account.address, [], []],
 			}),
@@ -1068,7 +1068,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'burnOne',
 				args: [client.account.address, 1n, 1n],
 			}),
@@ -1076,7 +1076,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			tokenAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'burnMany',
 				args: [client.account.address, [2n, 3n], [1n, 1n]],
 			}),
@@ -1084,7 +1084,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		assert.strictEqual(
 			await client.readContract({
-				abi: test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
+				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				address: tokenAddress,
 				functionName: 'totalSupply',
 				args: [1n],
@@ -1096,7 +1096,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('ERC1155 internal mint and burn helpers expose every explicit guard reason', async () => {
 		const tokenAddress = await deployErc1155CoverageHelper()
-		const tokenAbi = test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi
+		const tokenAbi = test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi
 		const errorCases = [
 			{
 				data: encodeFunctionData({
@@ -1155,7 +1155,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('ERC1155 arithmetic panics preserve balances and supplies across single and batch paths', async () => {
 		const tokenAddress = await deployErc1155CoverageHelper()
-		const tokenAbi = test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness.abi
+		const tokenAbi = test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi
 		const panic11 = /arithmetic operation resulted in underflow or overflow|0x11|4e487b71[0-9a-f]*11/i
 		const readBalance = async (id: bigint, account = client.account.address) =>
 			await client.readContract({
@@ -1254,7 +1254,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	test('traces pure production libraries through transaction-backed harness calls', async () => {
 		const helperAddress = await deployCoverageHelper()
-		const helperAbi = test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness.abi
+		const helperAbi = test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi
 		const siblingHashes = Array.from({ length: 64 }, (_, index) => bytes32(BigInt(index + 1)))
 
 		assert.strictEqual(
@@ -1532,14 +1532,14 @@ describe('Solidity bytecode coverage helpers', () => {
 		const reputationTokenAddress = await deployReputationToken()
 		const claimDelegateAddress = await deployContract(
 			encodeDeployData({
-				abi: peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
-				bytecode: `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
+				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
+				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 			}),
 		)
 		const escalationGameFactoryAddress = await deployContract(
 			encodeDeployData({
-				abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-				bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
+				abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
+				bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
 				args: [claimDelegateAddress],
 			}),
 		)
@@ -1548,7 +1548,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				client.sendTransaction({
 					to: escalationGameFactoryAddress,
 					data: encodeFunctionData({
-						abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+						abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
 						functionName: 'deployEscalationGame',
 						args: [ATTO_REP, 2n * ATTO_REP],
 					}),
@@ -1562,7 +1562,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			startedGamePoolAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployStartedGame',
 				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 			}),
@@ -1570,7 +1570,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		await transact(
 			forkedGamePoolAddress,
 			encodeFunctionData({
-				abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				functionName: 'deployForkedGame',
 				args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP, 0n],
 			}),
@@ -1579,7 +1579,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			transact(
 				startedGamePoolAddress,
 				encodeFunctionData({
-					abi: test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
+					abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 					functionName: 'deployStartedGame',
 					args: [escalationGameFactoryAddress, ATTO_REP, 2n * ATTO_REP],
 				}),
@@ -1589,15 +1589,15 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		const priceOracleFactoryAddress = await deployContract(
 			encodeDeployData({
-				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
+				abi: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+				bytecode: applyLibraries(statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(
 			priceOracleFactoryAddress,
 			encodeFunctionData({
-				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+				abi: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				functionName: 'deployPriceOracleManagerAndOperatorQueuer',
 				args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
 			}),
@@ -1605,20 +1605,20 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		const fakeZoltar = await deployContract(
 			encodeDeployData({
-				abi: test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
-				bytecode: `0x${test_peripherals_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
+				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorkerAddress = await deployContract(
 			encodeDeployData({
-				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
 				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
 			participantClient.writeContract({
-				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
 				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
@@ -1630,7 +1630,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				client.sendTransaction({
 					to: deploymentWorkerAddress,
 					data: encodeFunctionData({
-						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+						abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 						functionName: 'deploy',
 						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
 					}),
@@ -1641,13 +1641,13 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 		const securityPoolDeployerAddress = await deployContract(
 			encodeDeployData({
-				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
-				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
+				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
 			}),
 		)
 		await assert.rejects(
 			participantClient.writeContract({
-				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				address: securityPoolDeployerAddress,
 				functionName: 'deploy',
 				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
@@ -1659,7 +1659,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				client.sendTransaction({
 					to: securityPoolDeployerAddress,
 					data: encodeFunctionData({
-						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
+						abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 						functionName: 'deploy',
 						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
 					}),

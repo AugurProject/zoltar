@@ -16,7 +16,7 @@
 /scripts/artifacts/uniswap-deployment.json text eol=lf
 
 # Third-party Solidity sources are intentionally vendored for compilation.
-/solidity/contracts/peripherals/openOracle/openzeppelin/** linguist-vendored=true
+/solidity/contracts/statoblast/openOracle/openzeppelin/** linguist-vendored=true
 
 # Solidity source bytes affect compiler metadata and deterministic deployment hashes.
 *.sol text eol=lf

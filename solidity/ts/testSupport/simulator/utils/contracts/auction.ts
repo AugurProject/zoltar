@@ -1,9 +1,9 @@
-import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
+import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
 import { bytes32String } from '../bigint'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
-import { getInfraContractAddresses } from './deployPeripherals'
+import { getInfraContractAddresses } from './deployStatoblast'
 
 type AuctionTickSummary = {
 	tick: bigint
@@ -56,7 +56,7 @@ function mapAuctionBidView(bid: unknown): AuctionBidView {
 export const startAuction = async (client: WriteClient, auctionAddress: Address, attoEthRaiseCap: bigint, maxAttoRepBeingSold: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'startAuction',
 			address: auctionAddress,
 			args: [attoEthRaiseCap, maxAttoRepBeingSold],
@@ -66,7 +66,7 @@ export const startAuction = async (client: WriteClient, auctionAddress: Address,
 export const submitBid = async (client: WriteClient, auctionAddress: Address, tick: bigint, bidAmountAttoEth: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'submitBid',
 			address: auctionAddress,
 			args: [tick],
@@ -77,7 +77,7 @@ export const submitBid = async (client: WriteClient, auctionAddress: Address, ti
 export const finalize = async (client: WriteClient, auctionAddress: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'finalize',
 			address: auctionAddress,
 			args: [],
@@ -87,7 +87,7 @@ export const finalize = async (client: WriteClient, auctionAddress: Address) =>
 export const computeClearing = async (client: ReadClient, auctionAddress: Address) => {
 	const result = requireArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'computeClearing',
 			address: auctionAddress,
 			args: [],
@@ -105,7 +105,7 @@ export const computeClearing = async (client: ReadClient, auctionAddress: Addres
 export const refundLosingBids = async (client: WriteClient, auctionAddress: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'refundLosingBids',
 			address: auctionAddress,
 			args: [tickIndex],
@@ -115,7 +115,7 @@ export const refundLosingBids = async (client: WriteClient, auctionAddress: Addr
 export const withdrawBids = async (client: WriteClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'withdrawBids',
 			address: auctionAddress,
 			args: [withdrawFor, tickIndex, proRataTotal],
@@ -126,7 +126,7 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 	const result = requireArray(
 		(
 			await client.simulateContract({
-				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'withdrawBids',
 				address: auctionAddress,
 				args: [withdrawFor, tickIndex, proRataTotal],
@@ -144,7 +144,7 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 export const isFinalized = async (client: ReadClient, auctionAddress: Address): Promise<boolean> =>
 	requireBoolean(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'finalized',
 			address: auctionAddress,
 			args: [],
@@ -155,7 +155,7 @@ export const isFinalized = async (client: ReadClient, auctionAddress: Address): 
 export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient, owner: Address, salt: Hex = bytes32String(0n)) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.abi,
+			abi: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.abi,
 			functionName: 'deployUniformPriceDualCapBatchAuction',
 			address: getInfraContractAddresses().uniformPriceDualCapBatchAuctionFactory,
 			args: [owner, salt],
@@ -165,7 +165,7 @@ export const deployUniformPriceDualCapBatchAuction = async (client: WriteClient,
 export const getClearingTick = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'clearingTick',
 			address: auctionAddress,
 			args: [],
@@ -176,7 +176,7 @@ export const getClearingTick = async (client: ReadClient, auctionAddress: Addres
 export const getMinBidSizeAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'minBidSizeAttoEth',
 			address: auctionAddress,
 			args: [],
@@ -187,7 +187,7 @@ export const getMinBidSizeAttoEth = async (client: ReadClient, auctionAddress: A
 export const getMaxRepBeingSoldAttoRep = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'maxAttoRepBeingSold',
 			address: auctionAddress,
 			args: [],
@@ -198,7 +198,7 @@ export const getMaxRepBeingSoldAttoRep = async (client: ReadClient, auctionAddre
 export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'attoEthRaiseCap',
 			address: auctionAddress,
 			args: [],
@@ -209,7 +209,7 @@ export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: 
 export const getEthRaisedAttoEth = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'attoEthRaised',
 			address: auctionAddress,
 			args: [],
@@ -220,7 +220,7 @@ export const getEthRaisedAttoEth = async (client: ReadClient, auctionAddress: Ad
 export const getTotalRepPurchasedAttoRep = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'totalAttoRepPurchased',
 			address: auctionAddress,
 			args: [],
@@ -231,7 +231,7 @@ export const getTotalRepPurchasedAttoRep = async (client: ReadClient, auctionAdd
 export const getTickCount = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickCount',
 			address: auctionAddress,
 			args: [],
@@ -242,7 +242,7 @@ export const getTickCount = async (client: ReadClient, auctionAddress: Address):
 export const getTickSummary = async (client: ReadClient, auctionAddress: Address, tick: bigint): Promise<AuctionTickSummary> =>
 	mapAuctionTickSummary(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickSummary',
 			address: auctionAddress,
 			args: [tick],
@@ -252,7 +252,7 @@ export const getTickSummary = async (client: ReadClient, auctionAddress: Address
 export const getTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint): Promise<AuctionTickSummary[]> =>
 	requireArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickPage',
 			address: auctionAddress,
 			args: [offset, limit],
@@ -263,7 +263,7 @@ export const getTickPage = async (client: ReadClient, auctionAddress: Address, o
 export const activeTickCount = async (client: ReadClient, auctionAddress: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'activeTickCount',
 			address: auctionAddress,
 			args: [],
@@ -274,7 +274,7 @@ export const activeTickCount = async (client: ReadClient, auctionAddress: Addres
 export const getActiveTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint): Promise<AuctionTickSummary[]> =>
 	requireArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getActiveTickPage',
 			address: auctionAddress,
 			args: [offset, limit],
@@ -285,7 +285,7 @@ export const getActiveTickPage = async (client: ReadClient, auctionAddress: Addr
 export const getBidCountAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidCountAtTick',
 			address: auctionAddress,
 			args: [tick],
@@ -296,7 +296,7 @@ export const getBidCountAtTick = async (client: ReadClient, auctionAddress: Addr
 export const getBidPageAtTick = async (client: ReadClient, auctionAddress: Address, tick: bigint, offset: bigint, limit: bigint): Promise<AuctionBidView[]> =>
 	requireArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidPageAtTick',
 			address: auctionAddress,
 			args: [tick, offset, limit],
@@ -307,7 +307,7 @@ export const getBidPageAtTick = async (client: ReadClient, auctionAddress: Addre
 export const getBidderBidCount = async (client: ReadClient, auctionAddress: Address, bidder: Address): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidderBidCount',
 			address: auctionAddress,
 			args: [bidder],
@@ -318,7 +318,7 @@ export const getBidderBidCount = async (client: ReadClient, auctionAddress: Addr
 export const getBidderBidPage = async (client: ReadClient, auctionAddress: Address, bidder: Address, offset: bigint, limit: bigint): Promise<AuctionBidView[]> =>
 	requireArray(
 		await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getBidderBidPage',
 			address: auctionAddress,
 			args: [bidder, offset, limit],

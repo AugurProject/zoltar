@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import {
 	ISecurityPool,
 	ISecurityPoolFactory
-} from '../../../solidity/contracts/peripherals/interfaces/ISecurityPool.sol';
+} from '../../../solidity/contracts/statoblast/interfaces/ISecurityPool.sol';
 import { ITwoWayConstantProductPair } from './ITwoWayConstantProductPair.sol';
 
 interface ITwoWayConstantProductFactory {

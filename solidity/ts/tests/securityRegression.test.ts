@@ -5,7 +5,7 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
 import {
 	executeStagedOperation,
@@ -17,8 +17,8 @@ import {
 	OperationType,
 	requestPriceIfNeededAndStageOperation,
 	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
-} from '../testSupport/simulator/utils/contracts/peripherals'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+} from '../testSupport/simulator/utils/contracts/statoblast'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getRepToken, getSecurityVault, getTotalCapacityOwnershipAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
@@ -28,12 +28,12 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
-	peripherals_tokens_ShareToken_ShareToken,
-	test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
+	statoblast_tokens_ShareToken_ShareToken,
+	test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver,
 } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
@@ -102,8 +102,8 @@ describe('security regression coverage', () => {
 	const deployCompleteSetReentrantReceiver = async (securityPool: Address) => {
 		const hash = await client.sendTransaction({
 			data: encodeDeployData({
-				abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
-				bytecode: `0x${test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.evm.bytecode.object}`,
+				abi: test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+				bytecode: `0x${test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.evm.bytecode.object}`,
 				args: [securityPool],
 			}),
 		})
@@ -129,7 +129,7 @@ describe('security regression coverage', () => {
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
 		assert.equal(
 			await client.readContract({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				address: securityPoolAddresses.shareToken,
 				functionName: 'isAuthorized',
 				args: [securityPoolAddresses.securityPool],
@@ -139,7 +139,7 @@ describe('security regression coverage', () => {
 		)
 		const attackHash = await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+				abi: test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
 				address: receiver,
 				functionName: 'attack',
 				args: [initialValue, reentrantValue],
@@ -153,7 +153,7 @@ describe('security regression coverage', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_SecurityPool_SecurityPool.abi,
+						abi: statoblast_SecurityPool_SecurityPool.abi,
 						data: log.data,
 						topics: log.topics,
 					})
@@ -188,7 +188,7 @@ describe('security regression coverage', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+					abi: test_statoblast_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
 					address: receiver,
 					functionName: 'attack',
 					args: [6n * 10n ** 18n, 6n * 10n ** 18n],
@@ -251,7 +251,7 @@ describe('security regression coverage', () => {
 
 		const noState = await getEscalationGameOutcomeState(client, escalationGame, QuestionOutcome.No)
 		const nonDecisionTimestamp = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'nonDecisionTimestamp',
 		})
@@ -316,8 +316,8 @@ describe('security regression coverage', () => {
 		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, statoblastSecurityMultiplierBps)
 		const squatterShareTokenAddress = getCreate2Address({
 			bytecode: encodeDeployData({
-				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				abi: statoblast_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 				args: [attacker.account.address, getZoltarAddress(), squattedQuestionId],
 			}),
 			from: getInfraContractAddresses().shareTokenFactory,
@@ -327,7 +327,7 @@ describe('security regression coverage', () => {
 		await createQuestion(client, squattedQuestionData, outcomes)
 		await writeContractAndWait(attacker, () =>
 			attacker.writeContract({
-				abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
+				abi: statoblast_factories_ShareTokenFactory_ShareTokenFactory.abi,
 				address: getInfraContractAddresses().shareTokenFactory,
 				functionName: 'deployShareToken',
 				args: [shareTokenSalt, squattedQuestionId],
@@ -386,7 +386,7 @@ describe('security regression coverage', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+						abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 						data: log.data,
 						topics: log.topics,
 					})

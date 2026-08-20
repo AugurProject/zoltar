@@ -16,7 +16,7 @@ import {
 	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE as SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
 	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS as SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE as SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-} from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+} from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '../../../lib/networkProfile.js'
