@@ -327,7 +327,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			)
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.includes('receipt is no longer canonical')) throw error
-				delete pending.candidateOutcome
+			delete pending.candidateOutcome
 			await saveDurableState(settings.runtime.stateFile, state)
 			continue
 		}
