@@ -72,7 +72,7 @@ POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test 
 docker stop augurscan-test-postgres
 ```
 
-The integration test expects a dedicated empty or current test database and deletes indexed test rows; never point `POSTGRES_TEST_URL` at a database containing data you need.
+The integration test expects a dedicated test database and destroys and recreates its `public` schema; never point `POSTGRES_TEST_URL` at a database containing data you need.
 
 Regenerate the committed ABI snapshot after contract event/function changes:
 

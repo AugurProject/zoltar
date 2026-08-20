@@ -17,7 +17,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
-import { initializeSchema } from '../src/schema.ts'
+import { initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -292,6 +292,36 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertRewindTarget(-1n, hash, checkpoint, false)).toThrow('must not specify an ancestor hash')
 		expect(() => assertRewindTarget(10n, hash, { indexedBlock: 11n }, true)).toThrow('complete indexed checkpoint')
 	})
+})
+
+postgresTest('rejects every public namespace object before fresh schema initialization', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const resetPublicSchema = async (): Promise<void> => {
+		await database.sql.unsafe('DROP SCHEMA public CASCADE')
+		await database.sql.unsafe('CREATE SCHEMA public')
+	}
+	const applicationTableCount = async (): Promise<number> => {
+		const rows = await database.sql`
+			SELECT count(*)::integer AS count FROM pg_catalog.pg_tables WHERE schemaname = 'public'
+		`
+		return Number(rows[0]?.count)
+	}
+	try {
+		await resetPublicSchema()
+		await database.sql.unsafe("CREATE COLLATION public.legacy_collation (provider = libc, locale = 'C')")
+		await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		expect(await applicationTableCount()).toBe(0)
+
+		await resetPublicSchema()
+		await database.sql.unsafe('CREATE OPERATOR public.## (FUNCTION = pg_catalog.int4pl, LEFTARG = int4, RIGHTARG = int4)')
+		await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		expect(await applicationTableCount()).toBe(0)
+	} finally {
+		await resetPublicSchema()
+		await initializeSchema(database.sql)
+		await database.close()
+	}
 })
 
 postgresTest('initializes, resumes, retains an orphan, and serves only its canonical replacement', async () => {
