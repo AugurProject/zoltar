@@ -293,6 +293,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						config.network.rep = deployment.rep
 						config.network.weth = deployment.weth
 						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+						state.rpcEndpointHealth = readPool.snapshot()
 						client = createClient()
 						clientRpcUrl = undefined
 						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
@@ -330,6 +331,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						config.connectivity = pending.connectivity
 						pending.connectivity = undefined
 						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+						state.rpcEndpointHealth = readPool.snapshot()
 						client = createClient()
 						clientRpcUrl = undefined
 						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
@@ -352,6 +354,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					}
 					if (executionActivationPending) {
 						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
+						state.rpcEndpointHealth = readPool.snapshot()
 						client = createClient()
 						clientRpcUrl = undefined
 						readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
