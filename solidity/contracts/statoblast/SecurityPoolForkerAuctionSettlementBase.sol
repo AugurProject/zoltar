@@ -12,7 +12,7 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
 	function _creditAuctionProceeds(ISecurityPool securityPool, address vault, SecurityPoolForkerForkData storage data, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased) internal {
-		if (amountAttoRep == 0 && newCapacityOwnershipAttoRep == 0) return;
+		if (amountAttoRep == 0 && newCapacityOwnershipAttoRep == 0 && badDebtToAssignAttoEth == 0) return;
 		uint256 auctionRepBackingUnitsPerAttoRep = data.auctionRepBackingUnitsPerAttoRep;
 		if (amountAttoRep > 0) require(auctionRepBackingUnitsPerAttoRep > 0, 'Rate');
 		uint256 auctionRepBackingUnits = Math.mulDiv(amountAttoRep, auctionRepBackingUnitsPerAttoRep, 1);

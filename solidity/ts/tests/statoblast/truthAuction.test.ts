@@ -2556,7 +2556,7 @@ describe('Statoblast: truth auction', () => {
 					functionName: 'securityVaults',
 					args: [vault],
 				})
-			const auctionedBadDebtAttoEth = 1n
+			const auctionedBadDebtAttoEth = 2n
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					address: poolAddress,
@@ -2575,15 +2575,15 @@ describe('Statoblast: truth auction', () => {
 			)
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
-			await credit(zeroRepVault, 0n, 1n, 0n)
-			await credit(positiveRepVault, 1n, 2n, 1n)
+			await credit(zeroRepVault, 0n, 0n, 1n)
+			await credit(positiveRepVault, 1n, 3n, 1n)
 			const zeroRepForward = await readVault(zeroRepVault)
 			const positiveRepForward = await readVault(positiveRepVault)
 			strictEqualTypeSafe(zeroRepForward[0], 0n, 'capacity ownership')
-			strictEqualTypeSafe(zeroRepForward[1], 1n, 'capacity ownership')
+			strictEqualTypeSafe(zeroRepForward[1], 0n, 'capacity ownership')
 			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
-			strictEqualTypeSafe(positiveRepForward[1], 2n, 'capacity ownership')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 0n, 'the earlier auction position should receive no indivisible bad-debt residue')
+			strictEqualTypeSafe(positiveRepForward[1], 3n, 'capacity ownership')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 1n, 'a debt-only auction position should still assign its bad-debt slice')
 			strictEqualTypeSafe(
 				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),
 				1n,
@@ -2591,13 +2591,13 @@ describe('Statoblast: truth auction', () => {
 			)
 
 			await mockWindow.anvilRevert(settlementSnapshot)
-			await credit(positiveRepVault, 1n, 2n, 1n)
-			await credit(zeroRepVault, 0n, 1n, 0n)
+			await credit(positiveRepVault, 1n, 3n, 1n)
+			await credit(zeroRepVault, 0n, 0n, 1n)
 			const zeroRepReverse = await readVault(zeroRepVault)
 			const positiveRepReverse = await readVault(positiveRepVault)
 			strictEqualTypeSafe(zeroRepReverse[1], zeroRepForward[1], 'capacity ownership')
 			strictEqualTypeSafe(positiveRepReverse[1], positiveRepForward[1], 'capacity ownership')
-			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 0n, 'auctioned bad-debt allocation should be independent of claim order')
+			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 1n, 'auctioned bad-debt allocation should be independent of claim order')
 			strictEqualTypeSafe(
 				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),
 				1n,
