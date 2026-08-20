@@ -40,6 +40,8 @@ function errorMessage(error: unknown) {
 }
 
 function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {
+	const logRange = /Log scan failed for blocks (\d+) (?:through|to) (\d+)/i.exec(error)
+	if (logRange !== null) return `Log scan failed: fromBlock ${logRange[1]} · toBlock ${logRange[2]}. Automatic retry remains active.`
 	const normalized = error.toLowerCase()
 	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
 	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
@@ -164,7 +166,7 @@ function publicRpcEndpointHealth(value: unknown) {
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'paused', 'scanning', 'status', 'wallet'])
+	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
@@ -174,6 +176,8 @@ function publicOperatorSnapshot(value: unknown) {
 	if (record(source['metrics']) !== undefined) {
 		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth', 'walletRep'])
 	}
+	if (Array.isArray(source['pendingStagedOperations']))
+		snapshot['pendingStagedOperations'] = publicList(source['pendingStagedOperations'], operation => publicFields(operation, ['candidateBlock', 'coordinator', 'historicalRecoveryComplete', 'latestRecoveryBlock', 'nextHistoricalBlock', 'operationId', 'queuedBlock', 'target']))
 	if (Array.isArray(source['pendingTransactions'])) snapshot['pendingTransactions'] = publicList(source['pendingTransactions'], intent => publicFields(intent, ['hash', 'label', 'mode', 'nonce', 'submissionBlock']))
 	if (Array.isArray(source['rpcEndpointHealth'])) snapshot['rpcEndpointHealth'] = publicList(source['rpcEndpointHealth'], publicRpcEndpointHealth)
 	if (Array.isArray(source['pools'])) snapshot['pools'] = publicList(source['pools'], publicPool)
@@ -193,6 +197,13 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished)
 	const directory = import.meta.dir
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
+	const dashboardPages = new Set(['overview', 'pools', 'markets', 'operations', 'settings'])
+	const dashboardPage = async (pathname: string) => {
+		const page = pathname === '/' ? 'overview' : pathname.slice(1)
+		if (!dashboardPages.has(page)) return undefined
+		const source = await Bun.file(join(directory, 'index.html')).text()
+		return source.replace('<body>', `<body data-page="${page}">`)
+	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	const server = Bun.serve({
@@ -207,10 +218,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
 			const url = new URL(request.url)
-			if (request.method === 'GET' && url.pathname === '/') {
-				return new Response(Bun.file(join(directory, 'index.html')), {
-					headers: headers('text/html; charset=utf-8'),
-				})
+			if (request.method === 'GET') {
+				const page = await dashboardPage(url.pathname)
+				if (page !== undefined) return new Response(page, { headers: headers('text/html; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.css') {
 				return new Response(Bun.file(join(directory, 'styles.css')), {

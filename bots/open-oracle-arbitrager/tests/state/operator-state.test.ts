@@ -29,6 +29,48 @@ const submission = { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: 
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
 
+function capabilityState(): OperatorState {
+	return {
+		activeReportCount: 0,
+		balances: undefined,
+		blockNumber: undefined,
+		blockTimestamp: undefined,
+		endpointChecks: [],
+		executionHistory: [],
+		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
+		lastError: undefined,
+		lastPollAt: undefined,
+		operationLog: [],
+		opportunities: [],
+		paused: false,
+		positions: [],
+		priceHistory: [],
+		reportPaths: [],
+		status: 'syncing',
+		tokenAddresses: [],
+		tokenMarkets: [],
+		transactionActivity: [],
+	}
+}
+
+test('reports operator capability only after a complete current scan and signer readiness', () => {
+	const state = capabilityState()
+	expect(operatorSnapshot(state, strategy(), submission, connectivity, fixed).operatorCapable).toBe(false)
+	state.status = 'running'
+	state.blockNumber = '100'
+	state.lastPollAt = '2026-08-20T00:00:00.000Z'
+	expect(operatorSnapshot(state, strategy(), submission, connectivity, fixed).operatorCapable).toBe(true)
+	expect(operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true }).operatorCapable).toBe(false)
+	expect(operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true, wallet: address }).operatorCapable).toBe(true)
+})
+
+test('publishes the complete execution REP catalog to the dashboard snapshot', () => {
+	const state = capabilityState()
+	const forkRep = '0x0000000000000000000000000000000000000002' as Address
+	state.tokenAddresses = [address, forkRep]
+	expect(operatorSnapshot(state, strategy(), submission, connectivity, fixed).tokenAddresses).toEqual([address, forkRep])
+})
+
 describe('public poll failures', () => {
 	test('clears stale retry timing after recovery before retaining a non-poll warning', () => {
 		const state: { consecutivePollFailures: number; lastPollFailureAt: string | undefined; lastRetryAt: string | undefined; nextRetryAt: string | undefined; retryInProgress: boolean } = {

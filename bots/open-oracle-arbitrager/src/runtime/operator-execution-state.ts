@@ -5,7 +5,82 @@ import { clearWalletDerivedState, type OperatorSnapshotFixedState, type Operator
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
+export function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
+	state.marketObservations = []
+	state.marketConsensus = undefined
+}
+
+export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
+	config.centralizedMarkets = nextSettings
+	clearMarketEvidenceForSourceChange(state)
+}
+
+export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
+	const changed = config.lookbackBlocks !== nextLookbackBlocks
+	config.lookbackBlocks = nextLookbackBlocks
+	return changed
+}
+
+export function resetReportScanState<TLog>(
+	state: {
+		activeReportCount: number
+		marketConsensus?: unknown
+		marketObservations?: unknown[] | undefined
+		opportunities: unknown[]
+		reportPaths: unknown[]
+		status: OperatorState['status']
+		tokenMarkets: unknown[]
+	},
+	reports: { clear: () => void },
+) {
+	reports.clear()
+	state.activeReportCount = 0
+	state.opportunities = []
+	state.reportPaths = []
+	state.tokenMarkets = []
+	state.marketObservations = []
+	state.marketConsensus = undefined
+	state.status = 'syncing'
+	const cachedLogs: TLog[] = []
+	return { cachedLogs, cursor: undefined }
+}
+
 export function applyQueuedExecutionSettings(config: Configuration, state: OperatorState, pending: PendingOperatorUpdates) {
+	let reportScanReset = false
+	if (pending.centralizedMarkets !== undefined) {
+		applyCentralizedMarketSettings(config, state, pending.centralizedMarkets)
+		pending.centralizedMarkets = undefined
+	}
+	if (pending.lookbackBlocks !== undefined) {
+		reportScanReset = applyLookbackBlockSetting(config, pending.lookbackBlocks)
+		pending.lookbackBlocks = undefined
+	}
+	if (pending.maxHedgeSlippageBps !== undefined) {
+		config.maxHedgeSlippageBps = pending.maxHedgeSlippageBps
+		pending.maxHedgeSlippageBps = undefined
+	}
+	if (pending.operatorSettings !== undefined) {
+		config.operatorSettings = pending.operatorSettings
+		pending.operatorSettings = undefined
+	}
+	if (pending.paused !== undefined) {
+		config.paused = pending.paused
+		state.paused = pending.paused
+		pending.paused = undefined
+	}
+	if (pending.persistedPrivateKey !== undefined || pending.signerUpdate) {
+		config.persistedPrivateKey = pending.persistedPrivateKey
+		pending.persistedPrivateKey = undefined
+	}
+	if (pending.riskLimits !== undefined) {
+		config.riskLimits = pending.riskLimits
+		pending.riskLimits = undefined
+	}
+	if (pending.rpcQuorum !== undefined) {
+		config.rpcQuorum = pending.rpcQuorum
+		process.env['ZOLTAR_BOT_RPC_QUORUM'] = pending.rpcQuorum.toString()
+		pending.rpcQuorum = undefined
+	}
 	if (pending.strategy !== undefined) {
 		applyStrategy(config, pending.strategy)
 		pending.strategy = undefined
@@ -18,7 +93,9 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		config.tokenAddresses = pending.tokenAddresses
 		state.tokenAddresses = pending.tokenAddresses
 		pending.tokenAddresses = undefined
+		pending.persistedTokenAddresses = undefined
 	}
+	return { reportScanReset }
 }
 
 export async function applyQueuedSigner<TWallet>(parameters: {

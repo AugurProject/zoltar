@@ -33,6 +33,19 @@ body {
 	font-family: var(--sans);
 }
 
+body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
+body[data-page="operations"] [data-page-content]:not([data-page-content="operations"]):not([data-page-content="all"]),
+body[data-page="games"] [data-page-content]:not([data-page-content="games"]):not([data-page-content="all"]),
+body[data-page="markets"] [data-page-content]:not([data-page-content="markets"]):not([data-page-content="all"]),
+body[data-page="settings"] [data-page-content]:not([data-page-content="settings"]):not([data-page-content="all"]) {
+	display: none;
+}
+
+.operations-stack {
+	display: grid;
+	gap: 1rem;
+}
+
 .dispute-paths {
 	display: grid;
 	gap: 0.75rem;

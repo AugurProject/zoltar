@@ -19,25 +19,26 @@
 					<span id="mode-badge" class="badge">Starting</span>
 					<span id="network-badge" class="badge">Network loading</span>
 					<span id="run-status-badge" class="badge">Loading</span>
-					<a id="attention-badge" class="badge attention-badge" href="#overview">No blockers</a>
+					<span id="capability-badge" class="badge">Capability loading</span>
+					<a id="attention-badge" class="badge attention-badge" href="/overview">No blockers</a>
 					<button id="refresh-button" class="secondary" type="button">Refresh</button>
 					<button id="pause-button" class="secondary" type="button">Pause</button>
 					<span id="pause-status" class="action-status" role="alert"></span>
 				</div>
 			</div>
 			<nav class="section-nav" aria-label="Dashboard sections">
-				<a href="#overview" aria-current="page">Overview</a>
-				<a href="#pools">Pool work</a>
-				<a href="#markets">Market evidence</a>
-				<a href="#operations">Activity &amp; recovery</a>
-				<a href="#settings">Settings</a>
+				<a href="/overview">Overview</a>
+				<a href="/pools">Pool work</a>
+				<a href="/markets">Market evidence</a>
+				<a href="/operations">Activity &amp; recovery</a>
+				<a href="/settings">Settings</a>
 			</nav>
 		</header>
 		<main>
-			<div id="global-error" class="notice error hidden" role="alert"></div>
-			<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
+			<div id="global-error" class="notice error hidden" data-page-content="all" role="alert"></div>
+			<ul id="operator-alerts" class="operator-alerts hidden" data-page-content="all" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
 
-			<section id="overview" aria-labelledby="overview-title">
+			<section id="overview" data-page-content="overview" aria-labelledby="overview-title">
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current position</p>
@@ -51,7 +52,7 @@
 				<div id="metrics" class="metric-grid"></div>
 			</section>
 
-			<section id="pools" aria-labelledby="pools-title">
+			<section id="pools" data-page-content="pools" aria-labelledby="pools-title">
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current work</p>
@@ -85,7 +86,7 @@
 				</div>
 			</section>
 
-			<section id="markets" aria-labelledby="centralized-markets-title">
+			<section id="markets" data-page-content="markets" aria-labelledby="centralized-markets-title">
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Independent market reference</p>
@@ -178,7 +179,7 @@
 				</div>
 			</section>
 
-			<div id="operations" class="operations-grid">
+			<div id="operations" class="operations-grid" data-page-content="operations">
 				<section id="recovery" aria-labelledby="recovery-title">
 					<div class="section-heading">
 						<div>
@@ -203,13 +204,13 @@
 				</section>
 			</div>
 
-			<div id="settings" class="settings-intro">
+			<div id="settings" class="settings-intro" data-page-content="settings">
 				<div>
 					<p class="eyebrow">Operator controls</p>
 					<h2>Settings</h2>
 				</div>
 			</div>
-			<div class="settings-stack">
+			<div class="settings-stack" data-page-content="settings">
 				<details id="network-connectivity" class="settings-group">
 					<summary>
 						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small>Network safety · chain locks after initial setup</small></span>
@@ -280,10 +281,11 @@
 									</div>
 									<p id="health-policy-preview" class="policy-preview">Vault health policy —</p>
 								</fieldset>
-								<fieldset class="settings-subgroup">
+								<fieldset id="log-scan-settings" class="settings-subgroup">
 									<legend>Timing and automation</legend>
+									<p class="muted">Normal recovery checks only the configured latest window, newest first. Historical backfill is off by default; when enabled, it walks older required blocks newest first and saves each successful chunk.</p>
 									<div class="form-grid">
-										<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label><label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label
+										<label>Stale-price funding buffer (bps)<input name="stalePriceFundingBufferBps" inputmode="numeric" /></label><label>Staged timeout (seconds)<input name="stagedOperationValidForSeconds" inputmode="numeric" /></label><label>Latest log window (1–256 blocks)<input name="logLookbackBlocks" type="number" min="1" max="256" step="1" /></label><label class="check"><input name="historicalLogRecovery" type="checkbox" />Enable historical recovery backfill</label
 										><label
 											>Candidate priority<select name="candidatePriority">
 												<option value="largest-bonus">Largest bonus</option>
@@ -320,7 +322,7 @@
 					<p class="eyebrow">Live resume check</p>
 					<h2 id="resume-title" tabindex="-1">Review execution readiness</h2>
 				</div>
-				<p class="muted">Resuming restarts scans. Existing guards still decide whether a transaction may execute.</p>
+				<p class="muted">Existing guards still decide whether a transaction may execute.</p>
 				<ul id="resume-preflight" class="preflight-list"></ul>
 				<div class="dialog-actions"><button id="cancel-resume" class="secondary" type="button">Keep paused</button><button id="confirm-resume" type="button">Resume bot</button></div>
 			</div>

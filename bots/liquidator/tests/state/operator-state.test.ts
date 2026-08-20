@@ -2,10 +2,37 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
 
 describe('liquidator durable state', () => {
+	test('reports operator capability only after a complete scan with no unresolved recovery', () => {
+		const state = initialRuntimeState(false, undefined)
+		expect(operatorSnapshot(state, false).operatorCapable).toBe(false)
+		state.lastScanAt = '2026-08-20T00:00:00.000Z'
+		state.lastScannedBlock = 100n
+		state.status = 'dry-run'
+		expect(operatorSnapshot(state, false).operatorCapable).toBe(true)
+		state.scanning = true
+		expect(operatorSnapshot(state, false).operatorCapable).toBe(false)
+		state.scanning = false
+		expect(operatorSnapshot(state, true).operatorCapable).toBe(false)
+		state.status = 'running'
+		expect(operatorSnapshot(state, true).operatorCapable).toBe(false)
+		state.wallet = getAddress('0x0000000000000000000000000000000000000010')
+		expect(operatorSnapshot(state, true).operatorCapable).toBe(true)
+		state.pendingStagedOperations.push({
+			coordinator: getAddress('0x0000000000000000000000000000000000000020'),
+			operationId: 7n,
+			queuedBlock: 101n,
+			target: getAddress('0x0000000000000000000000000000000000000030'),
+		})
+		const blocked = operatorSnapshot(state, false)
+		expect(blocked.operatorCapable).toBe(false)
+		expect(blocked.pendingStagedOperations).toEqual([expect.objectContaining({ operationId: '7', queuedBlock: '101' })])
+		expect(blocked.alerts).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('staged operation(s) require outcome recovery') })]))
+	})
+
 	test('rejects a current state journal that omits recovery collections', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-schema-'))
 		const path = join(directory, 'state.json')
@@ -46,9 +73,21 @@ describe('liquidator durable state', () => {
 			})
 			const state = initialRuntimeState(false, account.address)
 			state.pendingStagedOperations.push({
+				candidateOutcome: {
+					blockHash: `0x${'44'.repeat(32)}`,
+					blockNumber: 110n,
+					errorMessage: '',
+					operation: 0n,
+					operationId: 7n,
+					success: true,
+					transactionHash: `0x${'55'.repeat(32)}`,
+				},
 				coordinator: getAddress('0x0000000000000000000000000000000000000020'),
+				historicalRecoveryComplete: true,
 				operationId: 7n,
 				queuedBlock: 101n,
+				recoveryAnchorBlock: 110n,
+				recoveryAnchorHash: `0x${'66'.repeat(32)}`,
 				target: getAddress('0x0000000000000000000000000000000000000030'),
 			})
 			state.pendingTransactions.push({

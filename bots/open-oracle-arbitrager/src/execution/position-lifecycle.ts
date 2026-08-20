@@ -10,7 +10,7 @@ import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfigu
 import { submitContractTransaction, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
-import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, legacyReplacementAmountsWithQuorum, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
+import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
 import { operationalFailureDisposition } from '#monitoring/resilience'
 
@@ -121,9 +121,8 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		}
 		let replacementAmounts: { amount1: bigint; amount2: bigint } | undefined
 		if (activePosition.reportDisputeIndex === undefined) {
-			const replacement = await legacyReplacementAmountsWithQuorum(readClients, config, activePosition, blockNumber)
-			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Legacy replacement transition and report state use different canonical blocks')
-			replacementAmounts = replacement.amounts
+			await persistPosition({ ...activePosition, status: 'recovery-required' })
+			throw new Error(`Position ${activePosition.reportId} lacks a durable dispute cursor; automatic historical log replay is disabled and manual reconciliation is required`)
 		} else {
 			const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
 			const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
