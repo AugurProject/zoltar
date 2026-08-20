@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 const dockerfile = join(import.meta.dir, '..', 'ui', 'Dockerfile')
 const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'ipfs-deploy.yml')
-const versionDeployWorkflow = join(import.meta.dir, '..', 'github-actions', '.github', 'workflows', 'version-deploy.yml')
+const versionDeployWorkflow = join(import.meta.dir, '..', 'workflow-changes', 'version-deploy.yml')
 const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'scripts', 'docker-entrypoint.sh')
 const rootPackage = join(import.meta.dir, '..', 'package.json')
 const staticServer = join(import.meta.dir, '..', 'ui', 'build', 'dockerServe.mts')

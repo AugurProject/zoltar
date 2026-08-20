@@ -7,7 +7,7 @@ import * as url from 'node:url'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(scriptDirectoryPath, '..')
-const installScriptPath = path.join(scriptDirectoryPath, 'install-frozen.mjs')
+const installScriptPath = path.join(scriptDirectoryPath, 'install-frozen.mts')
 
 const createPackageJson = (dependencies: Record<string, string>) =>
 	`${JSON.stringify(

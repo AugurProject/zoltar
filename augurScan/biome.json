@@ -20,6 +20,6 @@
 		}
 	},
 	"files": {
-		"includes": ["**", "!node_modules", "!bun.lock", "!config/abis.json"]
+		"includes": ["**", "!node_modules", "!bun.lock", "!config/abis.json", "!public/app.js"]
 	}
 }

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { requiredElementRole } from '../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
@@ -34,7 +35,23 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	transactionRetryMode,
-} from '../public/live-update.js'
+} from '../browser/live-update.ts'
+
+const unexpectedCall = (): never => {
+	throw new Error('Expected asynchronous test callback to be assigned')
+}
+
+const take = <T>(items: T[]): T => {
+	const item = items.shift()
+	if (item === undefined) throw new Error('Expected a queued test callback')
+	return item
+}
+
+test('does not misclassify status elements whose ids contain button-like words', () => {
+	expect(requiredElementRole('#activity-more-status')).toBe('element')
+	expect(requiredElementRole('#more')).toBe('button')
+	expect(requiredElementRole('#detail-canonical-retry')).toBe('button')
+})
 
 test('keeps background refreshes silent while retaining explicit loading feedback', () => {
 	expect(refreshPresentation({ live: true, append: false })).toEqual({ busy: false, loadingState: false })
@@ -50,11 +67,11 @@ test('retains multi-page activity for forced noncanonical refreshes such as pers
 
 test('resolves activity refresh depth after queued pagination settles', async () => {
 	const gate = createForegroundRefreshGate()
-	let releasePagination
+	let releasePagination: () => void = unexpectedCall
 	let visibleDepth = 100
 	const pagination = gate.runForeground(
 		() =>
-			new Promise((resolve) => {
+			new Promise<void>((resolve) => {
 				releasePagination = () => {
 					visibleDepth = 200
 					resolve()
@@ -77,12 +94,12 @@ test('keeps known pagination available after ordinary refresh failures but not c
 test('rejects activity and rich-list pagination queued during canonical recovery', async () => {
 	for (const surface of ['activity', 'rich list']) {
 		const gate = createForegroundRefreshGate()
-		let releaseRefresh
+		let releaseRefresh: () => void = unexpectedCall
 		let canonicalRefreshRequired = false
 		let appendRequests = 0
 		const refresh = gate.runBackground(
 			() =>
-				new Promise((resolve) => {
+				new Promise<boolean>((resolve) => {
 					canonicalRefreshRequired = true
 					releaseRefresh = () => resolve(false)
 				}),
@@ -103,10 +120,10 @@ test('rejects activity and rich-list pagination queued during canonical recovery
 test('shows local pagination feedback before activity and rich-list work enters a busy gate', async () => {
 	for (const surface of ['activity', 'rich list']) {
 		const gate = createForegroundRefreshGate()
-		let releaseRefresh
+		let releaseRefresh: () => void = unexpectedCall
 		const refresh = gate.runBackground(
 			() =>
-				new Promise((resolve) => {
+				new Promise<void>((resolve) => {
 					releaseRefresh = resolve
 				}),
 		)
@@ -125,8 +142,8 @@ test('drops in-flight activity, account, and rich-list appends from an older can
 		let canonicalGeneration = 4
 		const requestGeneration = canonicalGeneration
 		const retained = [`${surface} retained`]
-		let resolveRequest
-		const response = new Promise((resolve) => {
+		let resolveRequest: (items: string[]) => void = unexpectedCall
+		const response = new Promise<string[]>((resolve) => {
 			resolveRequest = resolve
 		})
 		const append = (async () => {
@@ -146,8 +163,8 @@ test('drops a multi-page canonical snapshot when a newer invalidation arrives', 
 	let canonicalGeneration = 8
 	const requestGeneration = canonicalGeneration
 	const retained = [{ id: 'retained' }]
-	let resolveFirstPage
-	const firstPage = new Promise((resolve) => {
+	let resolveFirstPage: (page: { items: Array<{ id: string }>; nextCursor?: string }) => void = unexpectedCall
+	const firstPage = new Promise<{ items: Array<{ id: string }>; nextCursor?: string }>((resolve) => {
 		resolveFirstPage = resolve
 	})
 	const refresh = (async () => {
@@ -181,11 +198,11 @@ test('keeps committed account depth authoritative while a refresh snapshot is st
 
 test('defers background refreshes until an explicit log load settles', async () => {
 	const gate = createForegroundRefreshGate()
-	let releaseForeground
-	const calls = []
+	let releaseForeground: () => void = unexpectedCall
+	const calls: string[] = []
 	const foreground = gate.runForeground(
 		() =>
-			new Promise((resolve) => {
+			new Promise<void>((resolve) => {
 				calls.push('foreground')
 				releaseForeground = resolve
 			}),
@@ -203,11 +220,11 @@ test('defers background refreshes until an explicit log load settles', async () 
 
 test('queues foreground pagination behind an active background refresh', async () => {
 	const gate = createForegroundRefreshGate()
-	let releaseBackground
-	const calls = []
+	let releaseBackground: () => void = unexpectedCall
+	const calls: string[] = []
 	const background = gate.runBackground(
 		() =>
-			new Promise((resolve) => {
+			new Promise<void>((resolve) => {
 				calls.push('background')
 				releaseBackground = resolve
 			}),
@@ -225,11 +242,11 @@ test('queues foreground pagination behind an active background refresh', async (
 
 test('drops queued detail work after its lifecycle context is invalidated', async () => {
 	const gate = createForegroundRefreshGate()
-	let release
+	let release: () => void = unexpectedCall
 	let context = 2
 	const active = gate.runForeground(
 		() =>
-			new Promise((resolve) => {
+			new Promise<void>((resolve) => {
 				release = resolve
 			}),
 	)
@@ -249,7 +266,7 @@ test('drops queued detail work after its lifecycle context is invalidated', asyn
 
 test('reserves a pagination gate while refresh state is captured', async () => {
 	const gate = createForegroundRefreshGate()
-	const calls = []
+	const calls: string[] = []
 	const reservation = gate.reserve()
 	await reservation.ready
 	const pagination = gate.runForeground(async () => {
@@ -265,11 +282,11 @@ test('reserves a pagination gate while refresh state is captured', async () => {
 
 test('commits a staged system snapshot only while its detail gate is reserved', async () => {
 	const gate = createForegroundRefreshGate()
-	let releaseOldDetail
-	const calls = []
+	let releaseOldDetail: () => void = unexpectedCall
+	const calls: string[] = []
 	const oldDetail = gate.runForeground(
 		() =>
-			new Promise((resolve) => {
+			new Promise<void>((resolve) => {
 				calls.push('old detail')
 				releaseOldDetail = resolve
 			}),
@@ -291,19 +308,21 @@ test('commits a staged system snapshot only while its detail gate is reserved', 
 })
 
 test('collects a canonical snapshot to the prior visible depth without retaining missing records', async () => {
-	const pages = new Map([
+	const pages = new Map<string | undefined, { items: Array<{ id: string }>; nextCursor?: string }>([
 		[undefined, { items: [{ id: 'new' }, { id: 'kept-3' }], nextCursor: 'page-2' }],
 		['page-2', { items: [{ id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' }],
 		['page-3', { items: [{ id: 'older' }], nextCursor: undefined }],
 	])
-	const requested = []
+	const requested: Array<string | undefined> = []
 	const snapshot = await collectCanonicalPages(
 		async (cursor) => {
 			requested.push(cursor)
-			return pages.get(cursor)
+			const page = pages.get(cursor)
+			if (page === undefined) throw new Error(`Unexpected page cursor ${cursor}`)
+			return page
 		},
 		4,
-		(item) => item.id,
+		(item) => String(item.id),
 	)
 	expect(requested).toEqual([undefined, 'page-2'])
 	expect(snapshot).toEqual({ items: [{ id: 'new' }, { id: 'kept-3' }, { id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' })
@@ -311,16 +330,17 @@ test('collects a canonical snapshot to the prior visible depth without retaining
 })
 
 test('requests only the remaining canonical depth on a partial final page', async () => {
-	const requestedLimits = []
-	const snapshot = await collectCanonicalPages(
+	const requestedLimits: number[] = []
+	const snapshot = await collectCanonicalPages<{ id: number }, number>(
 		async (cursor, limit) => {
-			requestedLimits.push(limit)
+			const pageLimit = limit ?? 100
+			requestedLimits.push(pageLimit)
 			const offset = cursor ?? 0
-			const items = Array.from({ length: limit }, (_, index) => ({ id: offset + index }))
-			return { items, nextCursor: offset + limit }
+			const items = Array.from({ length: pageLimit }, (_, index) => ({ id: offset + index }))
+			return { items, nextCursor: offset + pageLimit }
 		},
 		150,
-		(item) => item.id,
+		(item) => String(item.id),
 	)
 	expect(requestedLimits).toEqual([100, 50])
 	expect(snapshot.items).toHaveLength(150)
@@ -331,19 +351,19 @@ test('requests only the remaining canonical depth on a partial final page', asyn
 
 test('keeps every log reachable when a live burst exceeds the first refreshed page', async () => {
 	const current = Array.from({ length: 350 }, (_, index) => ({ id: index }))
-	const requestedLimits = []
+	const requestedLimits: number[] = []
 	const retention = activityRefreshRetention(false, undefined, 220)
-	const refreshed = await collectCanonicalPages(
+	const refreshed = await collectCanonicalPages<{ id: number }, number>(
 		async (cursor = 0, limit = 100) => {
 			requestedLimits.push(limit)
 			const items = current.slice(cursor, cursor + limit)
 			const nextCursor = cursor + items.length < current.length ? cursor + items.length : undefined
 			return { items, nextCursor }
 		},
-		retention.replaceDepth,
-		(item) => item.id,
+		retention.replaceDepth ?? 0,
+		(item) => String(item.id),
 	)
-	const appended = current.slice(refreshed.nextCursor)
+	const appended = current.slice(refreshed.nextCursor ?? current.length)
 	expect(requestedLimits).toEqual([100, 100, 20])
 	expect(refreshed.nextCursor).toBe(220)
 	expect([...refreshed.items, ...appended].map((item) => item.id)).toEqual(current.map((item) => item.id))
@@ -514,11 +534,11 @@ test('detects when pagination points into a replaced snapshot', () => {
 })
 
 test('coalesces refresh bursts into one active request and one latest-state follow-up', async () => {
-	const releases = []
-	const calls = []
+	const releases: Array<(value: boolean) => void> = []
+	const calls: Array<{ count: number; force: boolean }> = []
 	const requestRefresh = createLatestRefreshCoordinator(
 		(count, force) =>
-			new Promise((resolve) => {
+			new Promise<boolean>((resolve) => {
 				calls.push({ count, force })
 				releases.push(resolve)
 			}),
@@ -528,47 +548,47 @@ test('coalesces refresh bursts into one active request and one latest-state foll
 	requestRefresh(3, true)
 	expect(joined).toBe(first)
 	expect(calls).toEqual([{ count: 1, force: false }])
-	releases.shift()(true)
+	take(releases)(true)
 	await Promise.resolve()
 	expect(calls).toEqual([
 		{ count: 1, force: false },
 		{ count: 5, force: true },
 	])
-	releases.shift()(true)
+	take(releases)(true)
 	expect(await first).toBe(true)
 })
 
 test('continues with the newest queued refresh when an in-flight refresh fails', async () => {
-	const releases = []
-	const calls = []
+	const releases: Array<{ resolve: (value: boolean) => void; reject: (reason?: unknown) => void }> = []
+	const calls: Array<{ count: number; force: boolean }> = []
 	const requestRefresh = createLatestRefreshCoordinator(
 		(count, force) =>
-			new Promise((resolve, reject) => {
+			new Promise<boolean>((resolve, reject) => {
 				calls.push({ count, force })
 				releases.push({ resolve, reject })
 			}),
 	)
 	const recovery = requestRefresh(1)
 	requestRefresh(1, true)
-	releases.shift().reject(new Error('stale route failed'))
+	take(releases).reject(new Error('stale route failed'))
 	await Promise.resolve()
 	expect(calls).toEqual([
 		{ count: 1, force: false },
 		{ count: 1, force: true },
 	])
-	releases.shift().resolve(true)
+	take(releases).resolve(true)
 	expect(await recovery).toBe(true)
 })
 
 test('serializes a reorg behind an in-flight refresh and uses current recovery state', async () => {
-	const releases = []
-	const calls = []
+	const releases: Array<(value: boolean) => void> = []
+	const calls: Array<{ count: number; force: boolean; recovery?: string }> = []
 	let active = 0
 	let maximumActive = 0
-	let recovery
+	let recovery: { id: string } | undefined
 	const requestRefresh = createLiveRouteRefreshCoordinator(
 		(count, force, currentRecovery) =>
-			new Promise((resolve) => {
+			new Promise<boolean>((resolve) => {
 				active++
 				maximumActive = Math.max(maximumActive, active)
 				calls.push({ count, force, recovery: currentRecovery?.id })
@@ -583,14 +603,14 @@ test('serializes a reorg behind an in-flight refresh and uses current recovery s
 	recovery = { id: 'canonical-reorg' }
 	requestRefresh(1, true)
 	expect(maximumActive).toBe(1)
-	releases.shift()(true)
+	take(releases)(true)
 	await Promise.resolve()
 	expect(calls).toEqual([
 		{ count: 1, force: false, recovery: undefined },
 		{ count: 1, force: true, recovery: 'canonical-reorg' },
 	])
 	expect(maximumActive).toBe(1)
-	releases.shift()(true)
+	take(releases)(true)
 	expect(await refresh).toBe(true)
 })
 
