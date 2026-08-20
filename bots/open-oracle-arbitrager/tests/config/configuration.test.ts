@@ -330,14 +330,22 @@ describe('file-only startup configuration', () => {
 		expect(Reflect.get(initialConfiguration as object, 'network')).toBeUndefined()
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
-		const response = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
+		if (typeof initialConfiguration !== 'object' || initialConfiguration === null || Array.isArray(initialConfiguration)) throw new Error('Initial configuration document is missing')
+		Reflect.set(initialConfiguration, 'network', 'sepolia')
+		Reflect.set(initialConfiguration, 'connectivity', { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl })
+		const initialMarkets = Reflect.get(initialConfiguration, 'centralizedMarkets')
+		if (typeof initialMarkets !== 'object' || initialMarkets === null || Array.isArray(initialMarkets)) throw new Error('Initial centralized-market configuration is missing')
+		Reflect.set(initialMarkets, 'assetChainId', 11_155_111)
+		const response = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(initial),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 })
+		const configuredEnvelopeFromCompleteSave = (await response.json()) as Record<string, unknown>
+		expect(configuredEnvelopeFromCompleteSave['revision']).toEqual(expect.any(String))
 		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
+		await waitForStateValue(origin, 'networkConfigured', true)
 		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true, status: 'paused' })
 		const resume = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: false }),

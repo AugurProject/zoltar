@@ -5,13 +5,30 @@ import { clearWalletDerivedState, type OperatorSnapshotFixedState, type Operator
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
+export function clearMarketEvidenceForSourceChange(state: { marketConsensus: unknown; marketObservations?: unknown[] | undefined }) {
+	state.marketObservations = []
+	state.marketConsensus = undefined
+}
+
+export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
+	config.centralizedMarkets = nextSettings
+	clearMarketEvidenceForSourceChange(state)
+}
+
+export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
+	const changed = config.lookbackBlocks !== nextLookbackBlocks
+	config.lookbackBlocks = nextLookbackBlocks
+	return changed
+}
+
 export function applyQueuedExecutionSettings(config: Configuration, state: OperatorState, pending: PendingOperatorUpdates) {
+	let reportScanReset = false
 	if (pending.centralizedMarkets !== undefined) {
-		config.centralizedMarkets = pending.centralizedMarkets
+		applyCentralizedMarketSettings(config, state, pending.centralizedMarkets)
 		pending.centralizedMarkets = undefined
 	}
 	if (pending.lookbackBlocks !== undefined) {
-		config.lookbackBlocks = pending.lookbackBlocks
+		reportScanReset = applyLookbackBlockSetting(config, pending.lookbackBlocks)
 		pending.lookbackBlocks = undefined
 	}
 	if (pending.maxHedgeSlippageBps !== undefined) {
@@ -54,6 +71,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		pending.tokenAddresses = undefined
 		pending.persistedTokenAddresses = undefined
 	}
+	return { reportScanReset }
 }
 
 export async function applyQueuedSigner<TWallet>(parameters: {

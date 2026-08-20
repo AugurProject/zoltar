@@ -273,6 +273,19 @@ export function startOperatorControlPlane(parameters: {
 					pending.strategy = mutableStrategy(next.strategy)
 					pending.submission = next.submission
 					pending.tokenAddresses = tokens.active
+					if (!config.networkConfigured && next.networkConfigured) {
+						config.network = networkConfiguration(next.network, {
+							factory: next.deployment.uniswapFactory,
+							quoter: next.deployment.uniswapQuoter,
+							rep: next.deployment.rep,
+							weth: next.deployment.weth,
+						})
+						config.networkConfigured = true
+						fixedState.network = config.network.name
+						fixedState.expectedChainId = config.network.chain.id
+						fixedState.explorerUrl = config.network.explorerUrl
+						fixedState.networkConfigured = true
+					}
 					fixedState.queuedWallet = signer.address ?? null
 					fixedState.savedWallet = next.privateKey === undefined ? undefined : privateKeyToAccount(next.privateKey).address
 				} finally {

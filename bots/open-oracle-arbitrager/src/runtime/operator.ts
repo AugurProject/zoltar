@@ -249,7 +249,21 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								reason: 'OpenOracle, executor, REP, and WETH identities remain unchanged until every risk-consuming position is closed',
 								reportId: undefined,
 							})
-					} else applyQueuedExecutionSettings(config, state, pending)
+					} else {
+						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
+						if (appliedSettings.reportScanReset) {
+							cursor = undefined
+							cachedLogs = []
+							reports.clear()
+							state.activeReportCount = 0
+							state.opportunities = []
+							state.reportPaths = []
+							state.tokenMarkets = []
+							state.marketObservations = []
+							state.marketConsensus = undefined
+							state.status = 'syncing'
+						}
+					}
 					if (!deploymentSettingsDeferred && pending.execute !== undefined) {
 						executionActivationPending = pending.execute && !fixedState.execute
 						if (executionActivationPending) {
