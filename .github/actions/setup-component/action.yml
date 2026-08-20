@@ -25,7 +25,6 @@ runs:
         key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ hashFiles(format('{0}/bun.lock', inputs.directory), format('{0}/package.json', inputs.directory), 'bun.lock', 'package.json', 'bots/shared/bun.lock', 'bots/shared/package.json', 'shared/package.json', 'shared/ts/**') }}
 
     - name: Install local dependency inputs
-      if: inputs.directory != 'trading'
       shell: bash
       run: |
         bun install --frozen-lockfile

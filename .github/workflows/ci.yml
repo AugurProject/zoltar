@@ -363,7 +363,7 @@ jobs:
           for result in PREPARE_RESULT TESTS_RESULT TEST_TIMINGS_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" || "${INTEGRATION_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi
