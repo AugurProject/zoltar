@@ -17,7 +17,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
-import { migrate } from '../src/migrate.ts'
+import { initializeSchema } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -294,15 +294,15 @@ describe('database checkpoint fencing', () => {
 	})
 })
 
-postgresTest('migrates, resumes, retains an orphan, and serves only its canonical replacement', async () => {
+postgresTest('initializes, resumes, retains an orphan, and serves only its canonical replacement', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
 	try {
-		await migrate(database.sql)
+		await initializeSchema(database.sql)
 		const concurrentMigrator = new ScannerDatabase(postgresUrl)
 		try {
-			await Promise.all([migrate(database.sql), migrate(concurrentMigrator.sql)])
-			await migrate(concurrentMigrator.sql)
+			await Promise.all([initializeSchema(database.sql), initializeSchema(concurrentMigrator.sql)])
+			await initializeSchema(concurrentMigrator.sql)
 		} finally {
 			await concurrentMigrator.close()
 		}
@@ -1178,7 +1178,7 @@ postgresTest(
 			contracts: [[oracle, 'OpenOracle', 'openOracle']],
 		}
 		try {
-			await migrate(database.sql)
+			await initializeSchema(database.sql)
 			await database.seedNetwork(network)
 			const awaitingResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
 			if (awaitingResponse === undefined) throw new Error('awaiting operations endpoint did not return a response')
@@ -1521,44 +1521,14 @@ postgresTest(
 				database.sql,
 			)
 			expect(uniswapSyncOnlyResponse?.status).toBe(404)
-			const cleanupMigration = await Bun.file(new URL('../migrations/011_amm_projection_cleanup.sql', import.meta.url)).text()
-			await database.sql.unsafe(cleanupMigration)
-			const invalidDerivedRows = await database.sql`
-				SELECT
-					(SELECT count(*)::integer FROM amm_trade_events WHERE chain_id = ${operationsChainId}
-						AND market_address IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})) AS trade_count,
-					(SELECT count(*)::integer FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId}
-						AND entity_identity IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket}) AND entity_type IN ('amm', 'trading')) AS timeline_count,
-					(SELECT count(*)::integer FROM logs WHERE chain_id = ${operationsChainId} AND block_hash = ${`0x${'f'.repeat(64)}`}
-						AND tx_hash = ${`0x${'d'.repeat(64)}`} AND log_index = 0) AS raw_log_count
-			`
-			expect(invalidDerivedRows[0]).toMatchObject({ trade_count: 0, timeline_count: 0, raw_log_count: 1 })
-
 			await database.sql`
-				INSERT INTO protocol_timeline_entries (
-					chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity,
-					semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical
-				) VALUES
-					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'trading', ${oracle.toLowerCase()},
-						'Swap', jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1',
-							'resultingYesReserve', '1', 'resultingNoReserve', '2'), '[]'::jsonb, ${oracle.toLowerCase()}, 'Swap', true),
-					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'amm', ${oracle.toLowerCase()},
-						'Swap', jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1',
-							'resultingYesReserve', '1', 'resultingNoReserve', '2'), '[]'::jsonb, ${oracle.toLowerCase()}, 'Swap', true),
-					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'risk', ${oracle.toLowerCase()},
-						'PoolAccountingCheckpoint', '{}'::jsonb, '[]'::jsonb, ${oracle.toLowerCase()}, 'PoolAccountingCheckpoint', true),
-					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'pool', ${oracle.toLowerCase()},
-						'PoolAccountingCheckpoint', '{}'::jsonb, '[]'::jsonb, ${oracle.toLowerCase()}, 'PoolAccountingCheckpoint', true)
+				DELETE FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId}
+					AND entity_identity IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})
 			`
-			const canonicalOrderMigration = await Bun.file(new URL('../migrations/012_operations_canonical_order.sql', import.meta.url)).text()
-			await database.sql.unsafe(canonicalOrderMigration)
-			const normalizedTimelineTypes = await database.sql`
-				SELECT entity_type FROM protocol_timeline_entries
-				WHERE chain_id = ${operationsChainId} AND entity_identity = ${oracle.toLowerCase()}
-					AND semantic_event_kind IN ('Swap', 'PoolAccountingCheckpoint')
-				ORDER BY entity_type
+			await database.sql`
+				DELETE FROM amm_trade_events WHERE chain_id = ${operationsChainId}
+					AND market_address IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})
 			`
-			expect(normalizedTimelineTypes).toEqual([{ entity_type: 'amm' }, { entity_type: 'pool' }])
 
 			await database.sql`
 				INSERT INTO liquidation_approval_events (

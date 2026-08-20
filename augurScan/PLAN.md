@@ -8,7 +8,7 @@ The scanner owns its application, configuration, and database inputs under `/aug
 
 ## Delivered architecture
 
-The shipped stack is Bun and TypeScript, the repository's `micro-eth-signer`-based adapter for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app runs idempotent migrations before it serves traffic.
+The shipped stack is Bun and TypeScript, the repository's `micro-eth-signer`-based adapter for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app initializes the complete schema in an empty database before it serves traffic and rejects incompatible databases instead of upgrading them.
 
 Configuration is checked in under `config/`:
 
@@ -49,11 +49,11 @@ The browser provides:
 
 The implementation is delivered in these completed slices:
 
-1. Isolated configuration, ABI snapshot, Docker packaging, migrations, and health endpoints.
+1. Isolated configuration, ABI snapshot, Docker packaging, fresh-database schema initialization, and health endpoints.
 2. Resumable multi-network indexing, polling, advisory leases, RPC recovery, reorg retention, dynamic discovery, exact decoding, and SSE commit notices.
 3. Log/action APIs and responsive activity/evidence UI.
 4. Event-replayed system catalogs and historical charts.
-5. Unit coverage for configuration, lifecycle recovery, metadata/decoding, and projections, plus a PostgreSQL integration scenario for migrations, leases, restart, discovery, receipt evidence, API canonicality, and reorg replacement.
+5. Unit coverage for configuration, lifecycle recovery, metadata/decoding, and projections, plus a PostgreSQL integration scenario for schema initialization, leases, restart, discovery, receipt evidence, API canonicality, and reorg replacement.
 
 Acceptance requires an empty-volume Compose start to expose the UI and begin each configured network independently; exact head progress and failures must remain visible; restart must resume without duplicate canonical occurrences; a reorg must retain the orphan and serve its replacement; and decoded amounts must always expose both a correctly scaled display value and exact raw evidence.
 

@@ -52,13 +52,13 @@ bun run dev
 
 The browser source lives under `browser/`. `bun run build` bundles `browser/app.ts` and its helpers to the stable browser entry point `public/app.js`; that generated file is ignored and must not be edited. `bun run dev`, `bun run start`, and `bun run qa:serve` build it automatically, and development mode rebuilds it when browser TypeScript changes.
 
-Local development expects PostgreSQL at `POSTGRES_URL`. The server applies SQL migrations under a PostgreSQL advisory lock before serving. Each migration uses one explicit transaction on the reserved lock connection; this avoids nested transaction control and the PostgreSQL “already/no transaction in progress” warnings. Migration 008 adds Operations projections, semantic timelines, exact report/auction/escalation/trading/fork evidence, state-snapshot storage, and Uniswap liquidity. Migration 009 completes the event backfill taxonomy, snapshot canonicality, and indexes used by entity pagination and interval analytics. Migration 010 adds liquidation-approval lifecycle evidence and removes misclassified Augur AMM trade and timeline projections for Uniswap-shaped swaps. Migration 011 repeats that idempotent cleanup for both legacy and current timeline entity types and rejects Uniswap V2-shaped `Sync` projections. Migration 012 removes superseded legacy timeline identities and aligns indexes with block-global log execution order. Raw logs and dedicated Uniswap observations remain intact. For the Compose setup, first run the shared-network command under **Start with Docker**. Then run `docker compose down --volumes` to delete an incompatible old database and `docker compose up --build` to rebuild it from each network's automatically discovered effective start.
+Local development expects PostgreSQL at `POSTGRES_URL`. augurScan supports fresh databases only: on first start it applies the complete [`schema.sql`](schema.sql) in one explicit transaction under a PostgreSQL advisory lock, then records the schema version. Later starts accept that version without reapplying the schema. A non-empty database without the current augurScan schema marker, or a database with another schema version, is rejected with an instruction to wipe it; augurScan never upgrades or transforms an existing database. After a wipe, the indexer retrieves chain history again from RPC starting at the configured or automatically discovered effective boundary. This single transaction boundary also avoids the PostgreSQL “already/no transaction in progress” warnings. For the Compose setup, first run the shared-network command under **Start with Docker**. Use `docker compose down --volumes` to delete an incompatible database and `docker compose up --build` to initialize a fresh one.
 
 `POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
 
 The scanner imports its Ethereum primitives through `src/ethereum.ts`, which reuses the repository's `micro-eth-signer`-based shared adapter. The adapter performs strict JSON-RPC envelope validation and does not batch unrelated requests, so malformed provider responses cannot be mistaken for missing blocks. `bun run check:ethereum-imports` rejects direct Viem imports. The Docker image copies only the scanner inputs and this shared adapter source from the repository build context.
 
-The default test suite runs without infrastructure. To exercise migration, checkpoint restart, dynamic discovery persistence, reorg/orphan retention, and current-chain API results, start a separate disposable PostgreSQL container and run the integration test against it:
+The default test suite runs without infrastructure. To exercise fresh-schema initialization, checkpoint restart, dynamic discovery persistence, reorg/orphan retention, and current-chain API results, start a separate disposable PostgreSQL container and run the integration test against it:
 
 ```bash
 docker run --detach --rm --name augurscan-test-postgres \
@@ -72,7 +72,7 @@ POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test 
 docker stop augurscan-test-postgres
 ```
 
-The integration test truncates its target database; never point `POSTGRES_TEST_URL` at a database containing data you need.
+The integration test expects a dedicated empty or current test database and deletes indexed test rows; never point `POSTGRES_TEST_URL` at a database containing data you need.
 
 Regenerate the committed ABI snapshot after contract event/function changes:
 
