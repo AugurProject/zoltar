@@ -1,5 +1,27 @@
-import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.js'
-import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.js'
+import {
+	isAccountTransactionValue,
+	isActivityRecordValue,
+	isAddressIdentityValue,
+	isAmmPriceValue,
+	isChartRowValue,
+	isJsonValue,
+	isLogDetailValue,
+	isNetworkRecordValue,
+	isNullableString,
+	isPoolStateEntityValue,
+	isQuestionStateEntityValue,
+	isRecord,
+	isRepEthPriceValue,
+	isRichListRecordValue,
+	isString,
+	isUniswapPriceValue,
+	isUniverseStateEntityValue,
+	isVaultStateEntityValue,
+	type JsonValue,
+} from './api-validation.ts'
+import { chartValueBounds, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
+import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
+import { requiredElementRole } from './dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
@@ -33,9 +55,369 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	transactionRetryMode,
-} from './live-update.js'
+} from './live-update.ts'
 
-const $ = (selector) => document.querySelector(selector)
+declare global {
+	interface Error {
+		status?: number
+	}
+	interface Window {
+		__demoTransactionRequests?: number
+		__demoRouteRequestsInFlight?: number
+		__demoMaxRouteRequestsInFlight?: number
+	}
+}
+
+type StateTab = 'pools' | 'vaults' | 'questions' | 'universes'
+interface NetworkRecord {
+	chain_id: string
+	id: string
+	name: string
+	start_block: string
+	indexed_block: string | null
+	indexed_hash: string | null
+	indexed_timestamp: string | null
+	observed_block: string | null
+	finalized_block: string | null
+	phase: string
+	last_poll_at: string | null
+	last_success_at: string | null
+	consecutive_failures: number
+	last_error: string | null
+	explorer_base_url: string
+	last_reorg_at?: string | null
+	next_retry_at?: string | null
+}
+
+interface ContractRecord {
+	chain_id: string
+	address: string
+	label: string
+	kind: string
+	provenance: string
+	discovery_block: string | null
+	discovery_tx_hash: string | null
+	deployment_block: string | null
+	deployment_timestamp: string | null
+	deployment_block_exact: boolean | null
+	deployment_checked_block: string | null
+	explorer_base_url: string
+}
+
+interface ActivityRecord {
+	chain_id: string
+	network_id: string
+	block_number: string
+	block_hash: string
+	block_timestamp: string
+	transaction_index: number
+	log_index: number
+	tx_hash: string
+	emitter_address: string
+	contract_label: string | null
+	contract_kind: string | null
+	event_name: string | null
+	summary: string
+	decode_status: string
+	canonical: boolean
+	finalized: boolean
+	topics: string[]
+	data: string
+	arguments: Record<string, JsonValue> | null
+	display_arguments: Record<string, JsonValue> | null
+	argument_schema: Array<ArgumentDefinition & { indexed?: boolean }> | null
+	origin_address: string | null
+	explorer_base_url: string
+	to_address?: string | null
+	value?: string
+	input?: string
+	gas_used?: string
+	contract_provenance?: string | null
+	event_signature?: string | null
+	action_summary?: string | null
+	action_arguments?: Record<string, JsonValue> | null
+	action_display_arguments?: Record<string, JsonValue> | null
+	action_argument_schema?: ArgumentDefinition[] | null
+	receipt?: Record<string, JsonValue>
+	relatedLogs?: RelatedLogRecord[]
+	function_signature?: string | null
+}
+interface TokenBalanceRecord {
+	address: string
+	balance: string
+	contractLabel?: string | null
+	name?: string | null
+	universeId?: string | null
+	symbol: string | null
+	decimals: number | null
+	blockNumber: string
+}
+
+interface RichListRecord {
+	chain_id: string
+	network_id?: string
+	explorer_base_url: string
+	address: string
+	label: string | null | undefined
+	kind: string | null | undefined
+	weth_balance?: string
+	native_balance?: string
+	transaction_count: string | number
+	interaction_count: string | number
+	pool_count: string | number
+	vault_count: string | number
+	active_vault_count?: string
+	rep_balances: TokenBalanceRecord[]
+	weth_balances: TokenBalanceRecord[]
+	native_balance_detail: { balance: string; blockNumber: string } | null
+	sampled_native_count?: string | number
+	sampled_rep_token_count?: string | number
+	rep_token_count?: string | number
+	sampled_weth_token_count?: string | number
+	weth_token_count?: string | number
+	oldest_balance_block?: string | null
+	last_balance_refresh?: string | null
+	rep_balances_truncated?: boolean
+	weth_balances_truncated?: boolean
+	pool_associations: Array<{ address: string; label: string | null; questionTitle: string | null }>
+	vault_positions: Array<{
+		poolAddress: string
+		questionTitle: string | null
+		repBackingUnits: string
+		capacityOwnershipAttoRep: SerializedAtomicInteger
+		claimableFeesAttoEth: SerializedAtomicInteger
+		blockNumber: string
+	}>
+	[key: string]: unknown
+}
+type PoolRecord = (typeof demoCatalog.pools)[number] & { current_state?: Record<string, JsonValue> }
+type VaultRecord = (typeof demoCatalog.vaults)[number]
+type QuestionRecord = (typeof demoCatalog.questions)[number] & { block_number?: string }
+type UniverseRecord = (typeof demoCatalog.universes)[number]
+type StateEntity = PoolRecord | VaultRecord | QuestionRecord | UniverseRecord
+type SerializedAtomicInteger = string | number
+
+interface StateCatalog {
+	pools: PoolRecord[]
+	vaults: VaultRecord[]
+	questions: QuestionRecord[]
+	universes: UniverseRecord[]
+	poolStates?: Array<{
+		chain_id: string
+		pool_address: string
+		event_name: string
+		state: Record<string, JsonValue>
+		block_number?: string
+		log_index?: number
+	}>
+	truncated?: Record<string, boolean>
+	limit?: number
+}
+
+interface AccountReference {
+	chain_id: string
+	address: string
+	label?: string | null
+	explorer_base_url?: string
+}
+
+interface AccountTransaction extends AccountReference {
+	tx_hash: string
+	block_hash: string
+	block_number: string
+	block_timestamp: string
+	transaction_index: number
+	from_address: string
+	to_address: string | null
+	to_label: string | null
+	to_kind: string | null
+	value: string
+	status: string
+	gas_used: string
+	function_name: string | null
+	function_signature: string | null
+	action_summary: string | null
+	action_arguments: Record<string, JsonValue> | null
+	action_display_arguments: Record<string, JsonValue> | null
+	action_argument_schema: ArgumentDefinition[] | null
+	explorer_base_url: string
+	roles?: string[]
+	pool_addresses?: string[] | null
+}
+
+interface ArgumentDefinition {
+	index: number
+	name: string
+	type: string
+	indexed?: boolean
+}
+
+interface AccountTransactionState {
+	key: string
+	account: AccountReference
+	items?: AccountTransaction[]
+	loaded: AccountTransaction[]
+	total: number
+	nextPageCursor?: string
+	snapshotBlock?: string
+	pageError?: string
+	pageErrorAppend: boolean
+	pageLoading: boolean
+}
+
+interface DialogSnapshot {
+	loadedCount: number
+	expandedKeys: string[]
+	anchorKey?: string
+	anchorTop?: number
+	focusKey?: string
+	focusIndex: number
+	outsideFocus?: string
+	scrollTop: number
+}
+
+interface CanonicalRecovery {
+	title: string
+	detail: string
+	pendingRefresh: boolean
+	logToRefresh?: ActivityRecord
+	accountToRefresh?: AccountReference
+	promise: Promise<boolean>
+	chainId?: string
+	accountDialogSnapshot?: DialogSnapshot
+}
+
+interface AddressIdentity {
+	chainId: number
+	address: string
+	label?: string
+	kind?: string
+}
+
+interface ChartRow {
+	timestamp: string
+	[key: string]: JsonValue | undefined
+}
+
+interface ChartDefinition<T extends { timestamp: string }> {
+	key: Extract<keyof T, string>
+	label: string
+	decimals?: number
+	unit?: string
+	className?: string
+	pointShape?: (row: T) => 'circle' | 'diamond'
+	pointLabel?: (row: T) => string
+}
+
+interface EntityHistory {
+	snapshots: ChartRow[]
+	events: ChartRow[]
+	ammPrices: ReturnType<typeof demoAmmPriceHistory>
+	repEthPrices: ReturnType<typeof demoRepEthPriceHistory>
+	uniswapRepEthPrices: ReturnType<typeof demoUniswapRepEthPriceHistory>
+	market?: { pair_address?: string | null; fee_bps?: string | number | null } | null
+	pools: JsonValue[]
+	forks: JsonValue[]
+}
+
+interface ItemsPage<T> {
+	items: T[]
+	nextCursor?: string
+	total?: number
+	limit?: number
+	offset?: number
+	snapshotBlock?: string
+}
+
+interface NetworkResponse extends ItemsPage<NetworkRecord> {
+	serverTime?: string
+	freshnessThresholdMs?: number
+}
+
+interface RelatedLogRecord {
+	log_index: number
+	emitter_address: string
+	event_name: string | null
+	summary: string
+}
+
+interface LogDetail extends ActivityRecord {
+	to_address: string | null
+	value: string
+	input: string
+	gas_used: string
+	contract_provenance: string | null
+	event_signature: string | null
+	function_signature: string | null
+	action_summary: string | null
+	action_arguments: Record<string, JsonValue> | null
+	action_display_arguments: Record<string, JsonValue> | null
+	action_argument_schema: ArgumentDefinition[] | null
+	receipt: Record<string, JsonValue>
+	relatedLogs: RelatedLogRecord[]
+}
+
+interface SelectEntityOptions {
+	preserveDetail?: boolean
+	quiet?: boolean
+	contextVersion?: number
+	suppliedHistory?: EntityHistory
+}
+
+interface RenderEntityListOptions {
+	refreshSelected?: boolean
+	live?: boolean
+	selectedHistory?: EntityHistory
+	detailGateReserved?: boolean
+}
+
+interface LiveChangeOptions {
+	live?: boolean
+	selector?: string
+}
+
+interface LoadOptions {
+	append?: boolean
+	live?: boolean
+	replaceDepth?: number
+	contextVersion?: number
+	retainVisibleDepth?: boolean
+}
+
+interface DetailOptions {
+	live?: boolean
+	canonicalRecovery?: boolean
+	contextVersion?: number
+}
+
+interface AccountDetailOptions extends DetailOptions {
+	restoreSnapshot?: DialogSnapshot
+}
+
+function $(selector: '#detail-dialog'): HTMLDialogElement
+function $(selector: '#event-filter' | '#address-filter' | '#entity-search'): HTMLInputElement
+function $(selector: '#global-network-filter' | '#rich-sort'): HTMLSelectElement
+function $(selector: '#filters'): HTMLFormElement
+function $(selector: '#address-back' | '.skip-link'): HTMLAnchorElement
+function $(
+	selector: '#refresh-stale' | '#detail-canonical-retry' | '#more' | '#clear-filters' | '#close-detail' | '#richlist-more' | '#filters button[type="submit"]',
+): HTMLButtonElement
+function $(selector: string): HTMLElement
+function $(selector: string): HTMLElement {
+	const found = document.querySelector<HTMLElement>(selector)
+	if (!(found instanceof HTMLElement)) throw new Error(`Required AugurScan element ${selector} is missing or has the wrong type`)
+	const expected = {
+		anchor: HTMLAnchorElement,
+		button: HTMLButtonElement,
+		dialog: HTMLDialogElement,
+		element: HTMLElement,
+		form: HTMLFormElement,
+		input: HTMLInputElement,
+		select: HTMLSelectElement,
+	}[requiredElementRole(selector)]
+	if (expected !== undefined && !(found instanceof expected)) throw new Error(`Required AugurScan element ${selector} has the wrong type`)
+	return found
+}
 const feed = $('#feed')
 const feedState = $('#feed-state')
 const networkCards = $('#network-cards')
@@ -63,7 +445,7 @@ const initialActivityFilters = {
 	address: pageUrl.searchParams.get('address') ?? '',
 }
 
-let nextCursor
+let nextCursor: string | undefined
 let appliedActivityFilters = { ...initialActivityFilters }
 let demoErrorConsumed = false
 let demoDetailErrorConsumed = false
@@ -75,7 +457,7 @@ let demoNetworkRequests = 0
 let demoRouteRequestsInFlight = 0
 let demoMaxRouteRequestsInFlight = 0
 let demoReorgObserved = false
-let demoEvictedAddress
+let demoEvictedAddress: string | undefined
 let demoReorgRefreshErrorConsumed = false
 let demoTransactionSnapshotInvalidated = false
 let demoCanonicalRouteRefreshErrorConsumed = false
@@ -88,49 +470,49 @@ let activityPaginationIntentVersion = 0
 let detailRequestVersion = 0
 let detailContextVersion = 0
 let pendingBlockUpdates = 0
-let blockRefreshTimer
-let headFreshnessTimer
+let blockRefreshTimer: number | undefined
+let headFreshnessTimer: number | undefined
 let streamHasOpened = false
-let stateData
-let activeStateType = 'pools'
-let selectedEntityKey
+let stateData: StateCatalog | undefined
+let activeStateType: StateTab = 'pools'
+let selectedEntityKey: string | undefined
 let catalogRequestVersion = 0
 let stateDetailRequestVersion = 0
 let stateDetailContextVersion = 0
-let stream
-let networkLoadPromise
-let networkFollowUpPromise
-let latestNetworks = []
-const indexerProgressSamples = new Map()
-let logsAbortController
+let stream: EventSource | undefined
+let networkLoadPromise: Promise<boolean> | undefined
+let networkFollowUpPromise: Promise<boolean> | undefined
+let latestNetworks: NetworkRecord[] = []
+const indexerProgressSamples = new Map<string, { indexedBlock: number; sampledAt: number; blocksPerSecond?: number }>()
+let logsAbortController: AbortController | undefined
 let serverClockOffsetMs = 0
 let networkFreshnessThresholdMs = 48_000
 let lastNetworkRequestFailed = false
-let activeReorgRecovery
+let activeReorgRecovery: CanonicalRecovery | undefined
 let canonicalRefreshRequired = false
 let canonicalDataGeneration = 0
-let richListItems = []
+let richListItems: RichListRecord[] = []
 let richListTotal = 0
 let richListRequestVersion = 0
 let richListPaginationIntentVersion = 0
-let contractItems = []
+let contractItems: ContractRecord[] = []
 let contractRequestVersion = 0
-let selectedContractAddress
-let activeLog
-let pendingCanonicalLog
-let pendingCanonicalActivityCount
-let activeAccount
-let activeAccountTransactions
-let activeAccountLoadMore
-let pendingCanonicalAccount
-let pendingAccountDialogSnapshot
+let selectedContractAddress: string | undefined
+let activeLog: ActivityRecord | undefined
+let pendingCanonicalLog: ActivityRecord | undefined
+let pendingCanonicalActivityCount: number | undefined
+let activeAccount: AccountReference | undefined
+let activeAccountTransactions: AccountTransactionState | undefined
+let activeAccountLoadMore: (() => Promise<boolean | undefined>) | undefined
+let pendingCanonicalAccount: AccountReference | undefined
+let pendingAccountDialogSnapshot: DialogSnapshot | undefined
 let preservePendingOnDialogClose = false
 let addressProfileRequestVersion = 0
 let viewContextVersion = 0
-let currentAddressProfile
-const addressIdentityCache = new Map()
-let polledReorgRefreshTimer
-let requestRouteRefresh
+let currentAddressProfile: RichListRecord | undefined
+const addressIdentityCache = new Map<string, string | false | Promise<string | undefined>>()
+let polledReorgRefreshTimer: number | undefined
+let requestRouteRefresh: (count?: number, force?: boolean) => Promise<boolean>
 const logRefreshGate = createForegroundRefreshGate()
 const contractRefreshGate = createForegroundRefreshGate()
 const richListRefreshGate = createForegroundRefreshGate()
@@ -142,7 +524,7 @@ const accountPageRefreshGate = createForegroundRefreshGate()
 const canonicalIncompleteTitle = 'Chain update refresh incomplete'
 const canonicalIncompleteDetail = 'Showing the prior details. Retry the chain update refresh to confirm the current state.'
 
-const showCanonicalDialogStatus = (title, detail) => {
+const showCanonicalDialogStatus = (title: string, detail: string) => {
 	if (!dialog.open) return
 	$('#detail-canonical-title').textContent = title
 	$('#detail-canonical-detail').textContent = detail
@@ -190,18 +572,23 @@ const updateConnectionStatus = () => {
 	$('#connection-label').textContent = status.label
 }
 
-const liveSnapshot = (container, selector = '[data-live-key]') =>
-	new Map([...container.querySelectorAll(selector)].map((node) => [node.dataset.liveKey, node.dataset.liveSignature ?? node.textContent]))
+const liveSnapshot = (container: ParentNode, selector = '[data-live-key]'): Map<string, string> =>
+	new Map(
+		[...container.querySelectorAll<HTMLElement>(selector)].flatMap((node) => {
+			const key = node.dataset['liveKey']
+			return key === undefined ? [] : [[key, node.dataset['liveSignature'] ?? node.textContent ?? '']]
+		}),
+	)
 
-const setLiveRecord = (node, key, value) => {
-	node.dataset.liveKey = key
-	node.dataset.liveSignature = typeof value === 'string' ? value : JSON.stringify(value)
+const setLiveRecord = <T extends HTMLElement>(node: T, key: string, value: unknown): T => {
+	node.dataset['liveKey'] = key
+	node.dataset['liveSignature'] = typeof value === 'string' ? value : (JSON.stringify(value) ?? 'undefined')
 	return node
 }
 
-const retryCanonicalViewOr = (fallback) => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : fallback())
+const retryCanonicalViewOr = (fallback: () => Promise<boolean>): Promise<boolean> => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : fallback())
 
-const renderRetryStatus = (status, message, retryAction) => {
+const renderRetryStatus = (status: HTMLElement, message: string, retryAction: () => undefined | Promise<unknown>): void => {
 	status.hidden = false
 	status.className = 'system-status error'
 	const retry = element('button', '', 'Retry')
@@ -210,7 +597,7 @@ const renderRetryStatus = (status, message, retryAction) => {
 	status.replaceChildren(element('span', '', message), retry)
 }
 
-const animateLiveNode = (node, className) => {
+const animateLiveNode = (node: HTMLElement, className: string) => {
 	node.classList.remove('live-added', 'live-changed', className)
 	requestAnimationFrame(() => {
 		node.classList.add(className)
@@ -220,16 +607,29 @@ const animateLiveNode = (node, className) => {
 	})
 }
 
-const applyLiveChanges = (container, previous, { live, selector = '[data-live-key]' } = {}) => {
+const requiredArrayItem = <T>(items: readonly T[], index: number, label: string): T => {
+	const item = items[index]
+	if (item === undefined) throw new Error(`${label} is missing`)
+	return item
+}
+
+const applyLiveChanges = (
+	container: ParentNode,
+	previous: ReadonlyMap<string, string>,
+	{ live = false, selector = '[data-live-key]' }: LiveChangeOptions = {},
+) => {
 	const changes = { added: 0, changed: 0 }
 	if (!live) return changes
-	const nodes = [...container.querySelectorAll(selector)]
+	const nodes = [...container.querySelectorAll<HTMLElement>(selector)]
 	const classified = classifyLiveRecords(
 		previous,
-		nodes.map((node) => ({ key: node.dataset.liveKey, signature: node.dataset.liveSignature })),
+		nodes.flatMap((node) => {
+			const key = node.dataset.liveKey
+			return key === undefined ? [] : [{ key, signature: node.dataset.liveSignature ?? '' }]
+		}),
 	)
 	for (const [index, record] of classified.entries()) {
-		const node = nodes[index]
+		const node = requiredArrayItem(nodes, index, 'Classified live node')
 		if (record.state === 'added') {
 			changes.added++
 			animateLiveNode(node, 'live-added')
@@ -335,7 +735,7 @@ const demoEvents = [
 	'BidSubmitted',
 ]
 const demoLogs = Array.from({ length: 18 }, (_, index) => {
-	const network = demoNetworks[index % 3 === 0 ? 1 : 0]
+	const network = requiredArrayItem(demoNetworks, index % 3 === 0 ? 1 : 0, 'Demo network')
 	return {
 		chain_id: network.chain_id,
 		network_id: network.id,
@@ -359,13 +759,13 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		topics: [demoHash],
 		data: '0x00',
 		arguments: {
-			amountAttoRep: '4250750000000000000000',
+			['amountAttoRep']: '4250750000000000000000',
 			vault: '0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0',
 			coordinator: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 			recipients: ['0x7777777777777777777777777777777777777777', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
 		},
 		display_arguments: {
-			amountAttoRep: '4,250.75 REP',
+			['amountAttoRep']: '4,250.75 REP',
 			vault: 'Market maker (0x19B4a7C60926D8FBe420C2a49f1DB56D7800E2a0)',
 			coordinator: 'OpenOracle (0xc9b36e44643fc5d882654ffd9791ae7171b0e9db)',
 			recipients: ['Security Pool (0x7777777777777777777777777777777777777777)', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'],
@@ -381,7 +781,7 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 	}
 })
 const demoRichList = Array.from({ length: 64 }, (_, index) => {
-	const network = demoNetworks[index % 3 === 0 ? 1 : 0]
+	const network = requiredArrayItem(demoNetworks, index % 3 === 0 ? 1 : 0, 'Demo rich-list network')
 	const address = `0x${(BigInt(index + 1) * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
 	const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n)
 	const poolCount = 1 + (index % 4)
@@ -413,7 +813,10 @@ const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		last_balance_refresh: new Date(Date.now() - index * 17_000).toISOString(),
 		rep_balances: [
 			{
-				address: demoNetworks[0].chain_id === network.chain_id ? '0x221657776846890989a759ba2973e427dff5c9bb' : '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
+				address:
+					requiredArrayItem(demoNetworks, 0, 'Mainnet demo network').chain_id === network.chain_id
+						? '0x221657776846890989a759ba2973e427dff5c9bb'
+						: '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
 				balance: repBalance.toString(),
 				contractLabel: 'Genesis REP',
 				universeId: '0',
@@ -475,7 +878,7 @@ const demoNetworkBaselines = new Map(
 	demoNetworks.map((network) => [network.chain_id, { blockNumber: BigInt(network.indexed_block), timestamp: new Date(network.indexed_timestamp).getTime() }]),
 )
 
-const demoAddress = (seed) => `0x${seed.repeat(40).slice(0, 40)}`
+const demoAddress = (seed: string) => `0x${seed.repeat(40).slice(0, 40)}`
 const demoQuestions = [
 	{
 		chain_id: '1',
@@ -529,6 +932,9 @@ const demoQuestions = [
 		fork_count: '1',
 	},
 ]
+const mainnetDemoQuestion = requiredArrayItem(demoQuestions, 0, 'Mainnet demo question')
+const secondaryDemoQuestion = requiredArrayItem(demoQuestions, 1, 'Secondary demo question')
+const sepoliaDemoQuestion = requiredArrayItem(demoQuestions, 2, 'Sepolia demo question')
 const demoPools = [
 	{
 		chain_id: '1',
@@ -536,8 +942,8 @@ const demoPools = [
 		pool_address: demoAddress('a'),
 		parent_address: demoAddress('0'),
 		universe_id: '0',
-		question_id: demoQuestions[0].question_id,
-		question_title: demoQuestions[0].title,
+		question_id: mainnetDemoQuestion.question_id,
+		question_title: mainnetDemoQuestion.title,
 		truth_auction_address: demoAddress('b'),
 		coordinator_address: demoAddress('c'),
 		share_token_address: demoAddress('d'),
@@ -561,8 +967,8 @@ const demoPools = [
 		pool_address: demoAddress('e'),
 		parent_address: demoAddress('a'),
 		universe_id: '4102938471029384710293847',
-		question_id: demoQuestions[0].question_id,
-		question_title: demoQuestions[0].title,
+		question_id: mainnetDemoQuestion.question_id,
+		question_title: mainnetDemoQuestion.title,
 		truth_auction_address: demoAddress('f'),
 		coordinator_address: demoAddress('1'),
 		share_token_address: demoAddress('2'),
@@ -586,8 +992,8 @@ const demoPools = [
 		pool_address: demoAddress('3'),
 		parent_address: demoAddress('0'),
 		universe_id: '0',
-		question_id: demoQuestions[1].question_id,
-		question_title: demoQuestions[1].title,
+		question_id: secondaryDemoQuestion.question_id,
+		question_title: secondaryDemoQuestion.title,
 		truth_auction_address: demoAddress('4'),
 		coordinator_address: demoAddress('5'),
 		share_token_address: demoAddress('6'),
@@ -611,8 +1017,8 @@ const demoPools = [
 		pool_address: demoAddress('7'),
 		parent_address: demoAddress('0'),
 		universe_id: '0',
-		question_id: demoQuestions[2].question_id,
-		question_title: demoQuestions[2].title,
+		question_id: sepoliaDemoQuestion.question_id,
+		question_title: sepoliaDemoQuestion.title,
 		truth_auction_address: demoAddress('8'),
 		coordinator_address: demoAddress('9'),
 		share_token_address: demoAddress('a1'),
@@ -632,7 +1038,7 @@ const demoPools = [
 	},
 ]
 const demoVaults = Array.from({ length: 9 }, (_, index) => {
-	const poolItem = demoPools[index % demoPools.length]
+	const poolItem = requiredArrayItem(demoPools, index % demoPools.length, 'Demo vault pool')
 	return {
 		chain_id: poolItem.chain_id,
 		network_id: poolItem.network_id,
@@ -658,7 +1064,7 @@ const demoUniverses = [
 		forking_outcome_index: '0',
 		reputation_token_address: demoAddress('91'),
 		theoretical_supply_atto_rep: '11000000000000000000000000',
-		active_fork_question_id: demoQuestions[1].question_id,
+		active_fork_question_id: secondaryDemoQuestion.question_id,
 		active_fork_time: new Date(Date.now() - 45 * 86_400_000).toISOString(),
 		forker_address: demoAddress('77'),
 		fork_threshold_atto_rep: '1200000000000000000000000',
@@ -713,7 +1119,7 @@ const demoUniverses = [
 		forking_outcome_index: '0',
 		reputation_token_address: demoAddress('95'),
 		theoretical_supply_atto_rep: '7200000000000000000000000',
-		active_fork_question_id: demoQuestions[2].question_id,
+		active_fork_question_id: sepoliaDemoQuestion.question_id,
 		active_fork_time: new Date(Date.now() - 4 * 86_400_000).toISOString(),
 		forker_address: demoAddress('78'),
 		fork_threshold_atto_rep: '800000000000000000000000',
@@ -754,36 +1160,37 @@ const demoCatalog = {
 	})),
 }
 
-const demoSeries = (base, count = 12, variation = 0.32) =>
+const demoSeries = (base: string, count = 12, variation = 0.32) =>
 	Array.from({ length: count }, (_, index) => {
 		const factor = 1 - variation + (variation * index) / Math.max(1, count - 1) + Math.sin(index * 1.4) * 0.025
 		return String(BigInt(Math.max(1, Math.round(Number(base) * factor))))
 	})
 
-const demoHistory = (path) => {
+const demoHistory = (path: string) => {
 	const parts = path.split('/')
 	const type = parts[4]
 	if (type === 'pools') {
-		const poolItem = demoPools.find((item) => item.pool_address === parts[6]) ?? demoPools[0]
+		const poolItem = demoPools.find((item) => item.pool_address === parts[6]) ?? requiredArrayItem(demoPools, 0, 'Default demo pool')
 		const collateral = demoSeries(poolItem.settlement_collateral_atto_eth)
 		const capacity = demoSeries(poolItem.total_capacity_ownership_atto_rep, 12, 0.4)
-		const hasAmm = poolItem.question_id === demoQuestions[0].question_id
-		const hasRepEthPrices = poolItem !== demoPools[2]
+		const hasAmm = poolItem.question_id === mainnetDemoQuestion.question_id
+		const hasRepEthPrices = poolItem !== requiredArrayItem(demoPools, 2, 'REP price demo pool')
 		const repEthPrices = demoRepEthPriceHistory()
+		const firstRepEthPrice = requiredArrayItem(repEthPrices, 0, 'Demo REP/ETH price')
 		const displayedRepEthPrices =
 			priceDemo === 'constant-zero'
-				? [{ ...repEthPrices[0], rep_per_eth_1e18: '0' }]
+				? [{ ...firstRepEthPrice, rep_per_eth_1e18: '0' }]
 				: priceDemo === 'constant-nonzero'
-					? [repEthPrices[0]]
+					? [firstRepEthPrice]
 					: priceDemo === 'constant-repeated'
-						? repEthPrices.slice(0, 3).map((price) => ({ ...price, rep_per_eth_1e18: repEthPrices[0].rep_per_eth_1e18 }))
+						? repEthPrices.slice(0, 3).map((price) => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 }))
 						: repEthPrices
 		return {
 			snapshots: collateral.map((value, index) => ({
 				timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
 				block_number: String(23100000 + index * 7700),
 				settlement_collateral_atto_eth: value,
-				total_capacity_ownership_atto_rep: capacity[index],
+				total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
 				total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
 				current_retention_rate: poolItem.current_retention_rate,
 			})),
@@ -803,7 +1210,8 @@ const demoHistory = (path) => {
 		}
 	}
 	if (type === 'vaults') {
-		const vaultItem = demoVaults.find((item) => item.pool_address === parts[6] && item.vault_address === parts[7]) ?? demoVaults[0]
+		const vaultItem =
+			demoVaults.find((item) => item.pool_address === parts[6] && item.vault_address === parts[7]) ?? requiredArrayItem(demoVaults, 0, 'Default demo vault')
 		const rep = demoSeries(vaultItem.rep_backing_units, 10, 0.45)
 		const capacity = demoSeries(vaultItem.capacity_ownership_atto_rep, 10, 0.5)
 		return {
@@ -811,13 +1219,13 @@ const demoHistory = (path) => {
 				timestamp: new Date(Date.now() - (9 - index) * 8 * 86_400_000).toISOString(),
 				block_number: String(23110000 + index * 6800),
 				rep_backing_units: value,
-				capacity_ownership_atto_rep: capacity[index],
+				capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo vault capacity point'),
 				claimable_fees_atto_eth: String(BigInt(1 + index) * 10n ** 16n),
 			})),
 		}
 	}
 	if (type === 'universes') {
-		const universe = demoUniverses.find((item) => item.universe_id === parts[6]) ?? demoUniverses[0]
+		const universe = demoUniverses.find((item) => item.universe_id === parts[6]) ?? requiredArrayItem(demoUniverses, 0, 'Default demo universe')
 		const supply = Array.from({ length: 9 }, (_, index) => String((BigInt(universe.theoretical_supply_atto_rep) * BigInt(108 - index)) / 100n))
 		return {
 			events: supply.map((value, index) => ({
@@ -837,7 +1245,13 @@ const demoHistory = (path) => {
 }
 
 let demoLiveSequence = 0
-const applyDemoBlock = (payload) => {
+interface LiveEventPayload {
+	chainId: string | number
+	blockNumber?: string | number
+	depth?: string | number
+}
+
+const applyDemoBlock = (payload: LiveEventPayload) => {
 	if (!isDemo || pageUrl.searchParams.get('streamDemo') !== '1') return
 	const chainId = String(payload.chainId)
 	const network = demoNetworks.find((item) => item.chain_id === chainId)
@@ -853,7 +1267,7 @@ const applyDemoBlock = (payload) => {
 	network.finalized_block = String(BigInt(nextBlock) - 64n)
 	network.last_poll_at = timestamp
 	network.last_success_at = timestamp
-	const template = demoLogs.find((item) => item.chain_id === chainId) ?? demoLogs[0]
+	const template = demoLogs.find((item) => item.chain_id === chainId) ?? requiredArrayItem(demoLogs, 0, 'Demo live log template')
 	demoLogs.unshift({
 		...template,
 		block_number: nextBlock,
@@ -881,25 +1295,28 @@ const applyDemoBlock = (payload) => {
 	}
 }
 
-const element = (tag, className, text) => {
+const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text?: string): HTMLElementTagNameMap[K] => {
 	const node = document.createElement(tag)
 	if (className) node.className = className
 	if (text !== undefined) node.textContent = text
 	return node
 }
 
-const short = (value, front = 6, back = 4) => (value ? `${value.slice(0, front)}…${value.slice(-back)}` : '—')
-const shortIdentifier = (value, front = 6, back = 4) => {
+const short = (value: string | readonly unknown[] | null | undefined, front = 6, back = 4): string =>
+	value ? `${value.slice(0, front)}…${value.slice(-back)}` : '—'
+const shortIdentifier = (value: string, front = 6, back = 4) => {
 	const text = String(value ?? '')
 	return text.length > front + back + 1 ? short(text, front, back) : text || '—'
 }
-const number = (value) => (value === null || value === undefined ? '—' : new Intl.NumberFormat('en-US').format(Number(value)))
-const counted = (value, singular, plural = `${singular}s`) => `${number(value)} ${Number(value) === 1 ? singular : plural}`
-const time = (value) =>
+const number = (value: string | number | bigint | null | undefined): string =>
+	value === null || value === undefined ? '—' : new Intl.NumberFormat('en-US').format(Number(value))
+const counted = (value: string | number | bigint | null | undefined, singular: string, plural = `${singular}s`): string =>
+	`${number(value)} ${Number(value) === 1 ? singular : plural}`
+const time = (value: string | number | Date | null | undefined) =>
 	value
 		? new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', hour12: false }).format(new Date(value))
 		: '—'
-const age = (value) => {
+const age = (value: string | number | Date | null | undefined) => {
 	if (!value) return 'not indexed'
 	const seconds = Math.max(0, Math.floor((Date.now() + serverClockOffsetMs - new Date(value).getTime()) / 1000))
 	if (seconds < 60) return `${seconds}s ago`
@@ -907,14 +1324,159 @@ const age = (value) => {
 	if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
 	return `${Math.floor(seconds / 86400)}d ago`
 }
-const exactTimestamp = (value) => (value ? new Date(value).toISOString() : 'No indexed timestamp')
-const until = (value) => {
+const exactTimestamp = (value: string | number | Date | null | undefined) => (value ? new Date(value).toISOString() : 'No indexed timestamp')
+const until = (value: string | number | Date | null | undefined) => {
 	if (!value) return 'time unknown'
 	const seconds = Math.ceil((new Date(value).getTime() - Date.now()) / 1000)
 	return seconds <= 0 ? 'now' : seconds < 60 ? `in ${seconds}s` : `in ${Math.ceil(seconds / 60)}m`
 }
 
-const api = async (path, { signal } = {}) => {
+const isBooleanRecord = (value: unknown): value is Record<string, boolean> => isRecord(value) && Object.values(value).every((item) => typeof item === 'boolean')
+const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
+const isNetworkRecord = (value: unknown): value is NetworkRecord => isNetworkRecordValue(value)
+
+const isActivityRecord = (value: unknown): value is ActivityRecord => isActivityRecordValue(value)
+
+const isContractRecord = (value: unknown): value is ContractRecord =>
+	isRecord(value) &&
+	isString(value['chain_id']) &&
+	isString(value['address']) &&
+	isString(value['label']) &&
+	isString(value['kind']) &&
+	isString(value['provenance']) &&
+	isNullableString(value['discovery_block']) &&
+	isNullableString(value['discovery_tx_hash']) &&
+	isNullableString(value['deployment_block']) &&
+	isNullableString(value['deployment_timestamp']) &&
+	(value['deployment_block_exact'] === null || typeof value['deployment_block_exact'] === 'boolean') &&
+	isNullableString(value['deployment_checked_block']) &&
+	isString(value['explorer_base_url'])
+
+const isRichListRecord = (value: unknown): value is RichListRecord => isRichListRecordValue(value)
+
+const isAccountTransaction = (value: unknown): value is AccountTransaction => isAccountTransactionValue(value)
+
+const decodeItemsPage = <T>(value: unknown, itemGuard: (item: unknown) => item is T, label: string): ItemsPage<T> => {
+	if (!isRecord(value) || !Array.isArray(value['items']) || !value['items'].every(itemGuard)) throw new Error(`${label} response is malformed`)
+	const nextCursor = value['nextCursor']
+	const total = value['total']
+	const limit = value['limit']
+	const offset = value['offset']
+	const snapshotBlock = value['snapshotBlock']
+	if (nextCursor !== undefined && !isString(nextCursor)) throw new Error(`${label} next cursor is malformed`)
+	if (total !== undefined && typeof total !== 'number') throw new Error(`${label} total is malformed`)
+	if (limit !== undefined && typeof limit !== 'number') throw new Error(`${label} limit is malformed`)
+	if (offset !== undefined && typeof offset !== 'number') throw new Error(`${label} offset is malformed`)
+	if (snapshotBlock !== undefined && !isString(snapshotBlock)) throw new Error(`${label} snapshot block is malformed`)
+	return {
+		items: value['items'],
+		...(nextCursor === undefined ? {} : { nextCursor }),
+		...(total === undefined ? {} : { total }),
+		...(limit === undefined ? {} : { limit }),
+		...(offset === undefined ? {} : { offset }),
+		...(snapshotBlock === undefined ? {} : { snapshotBlock }),
+	}
+}
+
+const decodeNetworkResponse = (value: unknown): NetworkResponse => {
+	const page = decodeItemsPage(value, isNetworkRecord, 'Network status')
+	if (!isRecord(value)) throw new Error('Network status response is malformed')
+	const serverTime = value['serverTime']
+	const freshnessThresholdMs = value['freshnessThresholdMs']
+	if (serverTime !== undefined && !isString(serverTime)) throw new Error('Network server time is malformed')
+	if (freshnessThresholdMs !== undefined && typeof freshnessThresholdMs !== 'number') throw new Error('Network freshness threshold is malformed')
+	return { ...page, ...(serverTime === undefined ? {} : { serverTime }), ...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }) }
+}
+
+const decodeValue = <T>(value: unknown, guard: (candidate: unknown) => candidate is T, label: string): T => {
+	if (!guard(value)) throw new Error(`${label} response is malformed`)
+	return value
+}
+
+const isAddressIdentity = (value: unknown): value is AddressIdentity => isAddressIdentityValue(value)
+
+const isLogDetail = (value: unknown): value is LogDetail => isLogDetailValue(value)
+
+const isPoolRecord = (value: unknown): value is PoolRecord => isPoolStateEntityValue(value)
+const isVaultRecord = (value: unknown): value is VaultRecord => isVaultStateEntityValue(value)
+const isQuestionRecord = (value: unknown): value is QuestionRecord => isQuestionStateEntityValue(value)
+const isUniverseRecord = (value: unknown): value is UniverseRecord => isUniverseStateEntityValue(value)
+
+type PoolStateRecord = NonNullable<StateCatalog['poolStates']>[number]
+const isPoolStateRecord = (value: unknown): value is PoolStateRecord =>
+	isRecord(value) &&
+	isString(value['chain_id']) &&
+	isString(value['pool_address']) &&
+	isString(value['event_name']) &&
+	isRecord(value['state']) &&
+	Object.values(value['state']).every(isJsonValue) &&
+	(value['block_number'] === undefined || isString(value['block_number'])) &&
+	(value['log_index'] === undefined || typeof value['log_index'] === 'number')
+
+const decodeStateCatalog = (value: unknown): StateCatalog => {
+	if (!isRecord(value)) throw new Error('State catalog response is malformed')
+	const pools = value['pools']
+	const vaults = value['vaults']
+	const questions = value['questions']
+	const universes = value['universes']
+	if (!Array.isArray(pools) || !pools.every(isPoolRecord)) throw new Error('State catalog pools are malformed')
+	if (!Array.isArray(vaults) || !vaults.every(isVaultRecord)) throw new Error('State catalog vaults are malformed')
+	if (!Array.isArray(questions) || !questions.every(isQuestionRecord)) throw new Error('State catalog questions are malformed')
+	if (!Array.isArray(universes) || !universes.every(isUniverseRecord)) throw new Error('State catalog universes are malformed')
+	const poolStates = value['poolStates']
+	if (poolStates !== undefined && (!Array.isArray(poolStates) || !poolStates.every(isPoolStateRecord))) {
+		throw new Error('State catalog pool states are malformed')
+	}
+	const truncated = value['truncated']
+	const limit = value['limit']
+	if (truncated !== undefined && !isBooleanRecord(truncated)) throw new Error('State catalog truncation metadata is malformed')
+	if (limit !== undefined && typeof limit !== 'number') throw new Error('State catalog limit is malformed')
+	return {
+		pools,
+		vaults,
+		questions,
+		universes,
+		...(poolStates === undefined ? {} : { poolStates }),
+		...(truncated === undefined ? {} : { truncated }),
+		...(limit === undefined ? {} : { limit }),
+	}
+}
+
+const isChartRow = (value: unknown): value is ChartRow => isChartRowValue(value)
+const isAmmPrice = (value: unknown): value is ReturnType<typeof demoAmmPriceHistory>[number] => isAmmPriceValue(value)
+const isRepEthPrice = (value: unknown): value is ReturnType<typeof demoRepEthPriceHistory>[number] => isRepEthPriceValue(value)
+const isUniswapPrice = (value: unknown): value is ReturnType<typeof demoUniswapRepEthPriceHistory>[number] => isUniswapPriceValue(value)
+
+const decodeEntityHistory = (value: unknown): EntityHistory => {
+	if (!isRecord(value)) throw new Error('State history response is malformed')
+	const snapshots = value['snapshots'] ?? []
+	const events = value['events'] ?? []
+	const ammPrices = value['ammPrices'] ?? []
+	const repEthPrices = value['repEthPrices'] ?? []
+	const uniswapRepEthPrices = value['uniswapRepEthPrices'] ?? []
+	const pools = value['pools'] ?? []
+	const forks = value['forks'] ?? []
+	if (!Array.isArray(snapshots) || !snapshots.every(isChartRow)) throw new Error('State history snapshots are malformed')
+	if (!Array.isArray(events) || !events.every(isChartRow)) throw new Error('State history events are malformed')
+	if (!Array.isArray(ammPrices) || !ammPrices.every(isAmmPrice)) throw new Error('AMM price history is malformed')
+	if (!Array.isArray(repEthPrices) || !repEthPrices.every(isRepEthPrice)) throw new Error('REP/ETH price history is malformed')
+	if (!Array.isArray(uniswapRepEthPrices) || !uniswapRepEthPrices.every(isUniswapPrice)) throw new Error('Uniswap price history is malformed')
+	if (!Array.isArray(pools) || !pools.every(isJsonValue)) throw new Error('Question pool history is malformed')
+	if (!Array.isArray(forks) || !forks.every(isJsonValue)) throw new Error('Question fork history is malformed')
+	const market = value['market']
+	if (
+		market !== undefined &&
+		market !== null &&
+		(!isRecord(market) ||
+			(market['pair_address'] !== undefined && !isNullableString(market['pair_address'])) ||
+			(market['fee_bps'] !== undefined && market['fee_bps'] !== null && typeof market['fee_bps'] !== 'string' && typeof market['fee_bps'] !== 'number'))
+	)
+		throw new Error('State market history is malformed')
+	return { snapshots, events, ammPrices, repEthPrices, uniswapRepEthPrices, pools, forks, ...(market === undefined ? {} : { market }) }
+}
+
+const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Promise<unknown> => {
 	if (isDemo) {
 		if (path.startsWith('/api/v1/networks')) {
 			if (networkState === 'error') throw new Error('Network status could not be refreshed')
@@ -952,7 +1514,12 @@ const api = async (path, { signal } = {}) => {
 			if (demoState === 'delayed') await new Promise((resolve) => setTimeout(resolve, 300))
 			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId')
-			return Object.fromEntries(Object.entries(demoCatalog).map(([key, items]) => [key, items.filter((item) => !chainId || String(item.chain_id) === chainId)]))
+			return {
+				pools: demoCatalog.pools.filter((item) => !chainId || item.chain_id === chainId),
+				vaults: demoCatalog.vaults.filter((item) => !chainId || item.chain_id === chainId),
+				questions: demoCatalog.questions.filter((item) => !chainId || item.chain_id === chainId),
+				universes: demoCatalog.universes.filter((item) => !chainId || item.chain_id === chainId),
+			}
 		}
 		if (path.startsWith('/api/v1/state/')) {
 			demoStateDetailRequests++
@@ -1018,7 +1585,7 @@ const api = async (path, { signal } = {}) => {
 				const initialTotal = demoInitialTransactionCounts.get(`${chainId}:${address}`) ?? total
 				const ordinal = Number(owner?.transaction_count ?? 0) - index - 1
 				const liveOrdinal = ordinal - initialTotal
-				const baseline = demoNetworkBaselines.get(chainId)
+				const baseline = chainId === null ? undefined : demoNetworkBaselines.get(chainId)
 				const blockNumber =
 					liveOrdinal >= 0
 						? (baseline?.blockNumber ?? 0n) + BigInt(liveOrdinal + 1)
@@ -1063,14 +1630,18 @@ const api = async (path, { signal } = {}) => {
 									{ index: 1, name: 'recipients', type: 'address[]' },
 								]
 							: [{ index: 0, name: 'reason', type: 'uint8' }],
-					explorer_base_url: network?.explorer_base_url,
+					explorer_base_url: network?.explorer_base_url ?? '',
 				}
 			})
 			const nextOffset = offset + items.length
 			return { items, total, limit, snapshotBlock: network?.indexed_block, nextCursor: nextOffset < total ? btoa(JSON.stringify(nextOffset)) : undefined }
 		}
 		if (path.startsWith('/api/v1/address-interactions')) {
-			const transactions = await api(path.replace('/address-interactions', '/address-transactions'))
+			const transactions = decodeItemsPage(
+				await api(path.replace('/address-interactions', '/address-transactions')),
+				isAccountTransaction,
+				'Address transactions',
+			)
 			return {
 				...transactions,
 				items: transactions.items
@@ -1087,10 +1658,11 @@ const api = async (path, { signal } = {}) => {
 			const chainId = request.searchParams.get('chainId')
 			const address = request.searchParams.get('address')?.toLowerCase()
 			const owner = demoRichList.find((item) => item.chain_id === chainId && item.address.toLowerCase() === address)
-			const fixedIdentity = {
+			const fixedIdentities: Record<string, readonly [string, string]> = {
 				'0xc9b36e44643fc5d882654ffd9791ae7171b0e9db': ['OpenOracle', 'openOracle'],
 				'0x7777777777777777777777777777777777777777': ['Security Pool', 'securityPool'],
-			}[address]
+			}
+			const fixedIdentity = address === undefined ? undefined : fixedIdentities[address]
 			const catalogIdentity = [
 				...demoPools.flatMap((pool) => [
 					[pool.chain_id, pool.pool_address, 'Security Pool', 'securityPool'],
@@ -1108,14 +1680,22 @@ const api = async (path, { signal } = {}) => {
 					[...(item.rep_balances ?? []), ...(item.weth_balances ?? [])].map((token) => [
 						item.chain_id,
 						token.address,
-						token.contractLabel ?? token.name,
-						token.universeId === undefined ? 'weth' : 'reputationToken',
+						'contractLabel' in token ? token.contractLabel : token.name,
+						'universeId' in token ? 'reputationToken' : 'weth',
 					]),
 				),
-			].find(([identityChainId, identityAddress]) => identityChainId === chainId && identityAddress.toLowerCase() === address)
+			].find(
+				(identity): identity is [string, string, string, string] =>
+					identity.length === 4 &&
+					typeof identity[0] === 'string' &&
+					typeof identity[1] === 'string' &&
+					typeof identity[3] === 'string' &&
+					identity[0] === chainId &&
+					identity[1].toLowerCase() === address,
+			)
 			return {
-				chainId,
-				address,
+				chainId: Number(chainId),
+				address: address ?? '',
 				label: owner?.label ?? fixedIdentity?.[0] ?? catalogIdentity?.[2],
 				kind: owner?.kind ?? fixedIdentity?.[1] ?? catalogIdentity?.[3],
 			}
@@ -1164,7 +1744,7 @@ const api = async (path, { signal } = {}) => {
 			const ranked =
 				pageUrl.searchParams.get('richPaginationDemo') === '1' && address === undefined && filtered.length > 0
 					? Array.from({ length: 120 }, (_, index) => ({
-							...filtered[index % filtered.length],
+							...requiredArrayItem(filtered, index % filtered.length, 'Demo rich-list pagination template'),
 							address: `0x${BigInt(index + 1)
 								.toString(16)
 								.padStart(40, '0')}`,
@@ -1187,12 +1767,12 @@ const api = async (path, { signal } = {}) => {
 			const detailLog =
 				demoLogs.find(
 					(item) => item.chain_id === requestedChainId && item.tx_hash === requestedTransactionHash && item.log_index === Number(requestedLogIndex),
-				) ?? demoLogs[0]
+				) ?? requiredArrayItem(demoLogs, 0, 'Demo log detail')
 			const detailNetwork = demoNetworks.find((network) => network.chain_id === detailLog.chain_id)
 			return {
 				...detailLog,
 				block_timestamp: detailLog.block_timestamp,
-				from_address: '0x1A620F3dC4Dba34F365C9233C34A22f8F48D2D34',
+				origin_address: '0x1A620F3dC4Dba34F365C9233C34A22f8F48D2D34',
 				to_address: '0x7777777777777777777777777777777777777777',
 				value: '0',
 				input: '0x4f8b2f2d',
@@ -1223,6 +1803,7 @@ const api = async (path, { signal } = {}) => {
 					logs: demoLogs.slice(0, 4).map(({ emitter_address: address, topics, data, log_index: logIndex }) => ({ address, topics, data, logIndex })),
 				},
 				event_signature: 'event PoolAccountingCheckpoint(address indexed securityPool, uint256 totalRepBackingUnits)',
+				function_signature: 'checkpoint(uint8,address[])',
 				action_summary: 'checkpoint(reason=Trade)',
 				relatedLogs: demoLogs.slice(0, 4),
 			}
@@ -1285,13 +1866,13 @@ const api = async (path, { signal } = {}) => {
 					: demoLogs.filter(
 							(item) =>
 								(!chainId || item.chain_id === chainId) &&
-								(!event || item.event_name?.toLowerCase().includes(event)) &&
+								(event === undefined || item.event_name?.toLowerCase().includes(event) === true) &&
 								(!address || [item.emitter_address, item.origin_address].some((candidate) => candidate?.toLowerCase() === address)),
 						)
 			if (pageUrl.searchParams.get('logPaginationDemo') !== '1' || filtered.length === 0) return { items: filtered }
 			const expanded = Array.from({ length: 220 }, (_, index) => {
 				const ordinal = demoReorgObserved ? (index === 0 ? 10_000 : index - 1) : index
-				const template = filtered[ordinal % filtered.length]
+				const template = requiredArrayItem(filtered, ordinal % filtered.length, 'Demo activity pagination template')
 				return {
 					...template,
 					block_number: String(23_184_711 - Math.min(ordinal, 219)),
@@ -1305,7 +1886,8 @@ const api = async (path, { signal } = {}) => {
 					summary: ordinal === 10_000 ? 'Canonical replacement after chain reorganization' : template.summary,
 				}
 			})
-			const offset = request.searchParams.get('cursor') ? Number(JSON.parse(atob(request.searchParams.get('cursor')))) : 0
+			const encodedCursor = request.searchParams.get('cursor')
+			const offset = encodedCursor === null ? 0 : Number(JSON.parse(atob(encodedCursor)))
 			const limit = Number(request.searchParams.get('limit') ?? 100)
 			const nextOffset = offset + limit
 			return { items: expanded.slice(offset, nextOffset), nextCursor: nextOffset < expanded.length ? btoa(JSON.stringify(nextOffset)) : undefined }
@@ -1313,16 +1895,17 @@ const api = async (path, { signal } = {}) => {
 	}
 	const timeout = AbortSignal.timeout(15_000)
 	const response = await fetch(path, { signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]) })
-	const payload = await response.json().catch(() => ({}))
+	const payload: unknown = await response.json().catch(() => ({}))
 	if (!response.ok) {
-		const error = new Error(payload.error ?? `Request failed (${response.status})`)
+		const message = isRecord(payload) && typeof payload['error'] === 'string' ? payload['error'] : `Request failed (${response.status})`
+		const error = new Error(message)
 		error.status = response.status
 		throw error
 	}
 	return payload
 }
 
-const renderNetworks = (networks) => {
+const renderNetworks = (networks: NetworkRecord[]) => {
 	let selectedReorgAdvanced = false
 	for (const network of networks) {
 		const previous = latestNetworks.find((item) => String(item.chain_id) === String(network.chain_id))
@@ -1476,7 +2059,7 @@ const completeCanonicalRefresh = () => {
 		$('#richlist-more').hidden = richListItems.length >= richListTotal
 		$('#richlist-more').disabled = false
 	}
-	const accountMore = detailContent.querySelector('.account-transactions-more')
+	const accountMore = detailContent.querySelector<HTMLButtonElement>('.account-transactions-more')
 	if (accountMore !== null && activeAccountTransactions !== undefined) {
 		accountMore.hidden =
 			activeAccountTransactions.nextPageCursor === undefined || (activeAccountTransactions.pageError !== undefined && activeAccountTransactions.pageErrorAppend)
@@ -1499,11 +2082,11 @@ const syncNetworkUrl = () => {
 	if (chainId) url.searchParams.set('chainId', chainId)
 	else url.searchParams.delete('chainId')
 	history.replaceState(null, '', url)
-	for (const link of document.querySelectorAll('.product-nav a')) {
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a')) {
 		const destination = new URL(link.href)
 		if (chainId) destination.searchParams.set('chainId', chainId)
 		else destination.searchParams.delete('chainId')
-		link.href = destination
+		link.href = destination.href
 	}
 }
 
@@ -1513,21 +2096,21 @@ const updateNetworkLabels = () => {
 	$('#rich-native-heading').textContent = `${symbol} / WETH`
 }
 
-const reconcileNetworkOptions = (items) => {
+const reconcileNetworkOptions = (items: NetworkRecord[]) => {
 	const selected = selectedChainId()
-	globalNetworkFilter.replaceChildren(...items.map((network) => new Option(network.name, network.chain_id)))
+	globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
 	globalNetworkFilter.value = [...globalNetworkFilter.options].some((option) => option.value === selected) ? selected : String(items[0]?.chain_id ?? '')
 	globalNetworkFilter.dataset.restored = 'true'
 	syncNetworkUrl()
 	updateNetworkLabels()
 }
 
-const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = false } = {}) => {
+const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = false } = {}): Promise<boolean> => {
 	if (networkLoadPromise !== undefined) {
 		if (!refreshAfterCurrent) return await networkLoadPromise
 		if (refreshAfterCurrent && networkFollowUpPromise !== undefined) return await networkFollowUpPromise
 		const activeLoad = networkLoadPromise
-		const followUp = activeLoad
+		const followUp: Promise<boolean> = activeLoad
 			.then(async () => {
 				if (networkLoadPromise === activeLoad) networkLoadPromise = undefined
 				return await loadNetworks({ synchronizeActivity })
@@ -1541,10 +2124,11 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 	const canonicalGeneration = canonicalDataGeneration
 	const run = (async () => {
 		try {
-			const { items, serverTime, freshnessThresholdMs } = await api('/api/v1/networks')
+			const { items, serverTime, freshnessThresholdMs } = decodeNetworkResponse(await api('/api/v1/networks'))
 			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
-			if (Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
+			if (freshnessThresholdMs !== undefined && Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0)
+				networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousNetwork = selectedChainId()
 			reconcileNetworkOptions(items)
 			if (previousNetwork !== selectedChainId()) resetSelectedNetworkContext()
@@ -1575,12 +2159,13 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 		if (networkLoadPromise === tracked) networkLoadPromise = undefined
 	})
 	networkLoadPromise = tracked
-	await tracked
+	return await tracked
 }
 
-const logKeyFor = (log) => `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`
+type LogReference = Pick<ActivityRecord, 'chain_id' | 'block_hash' | 'tx_hash' | 'log_index'>
+const logKeyFor = (log: LogReference) => `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`
 
-const rowFor = (log) => {
+const rowFor = (log: ActivityRecord) => {
 	const key = logKeyFor(log)
 	const row = setLiveRecord(element('article', 'log-row'), key, {
 		contractLabel: log.contract_label,
@@ -1614,14 +2199,14 @@ const rowFor = (log) => {
 	tx.className = 'cell cell-tx'
 	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link', compact: true })
 	row.append(chain, timestamp, contract, event, summary, tx, origin)
-	row.addEventListener('click', (clickEvent) => {
+	row.addEventListener('click', (clickEvent: MouseEvent) => {
 		if (clickEvent.target instanceof HTMLAnchorElement) return
 		openDetail(log)
 	})
 	return row
 }
 
-const queryPath = (cursor, limit = 100) => {
+const queryPath = (cursor: string, limit = 100) => {
 	const params = new URLSearchParams({ limit: String(limit) })
 	params.set('chainId', requiredChainId())
 	if (appliedActivityFilters.event) params.set('event', appliedActivityFilters.event)
@@ -1639,7 +2224,7 @@ const syncActivityFilterUrl = () => {
 	const url = new URL(location.href)
 	url.searchParams.delete('decoded')
 	for (const [name, value] of Object.entries(appliedActivityFilters)) {
-		if (value) url.searchParams.set(name, value)
+		if (typeof value === 'string' && value !== '') url.searchParams.set(name, value)
 		else url.searchParams.delete(name)
 	}
 	const chainId = selectedChainId()
@@ -1667,12 +2252,12 @@ const showInvalidAddressFilter = () => {
 
 const hasActivityFilters = () => Object.values(activityFilterValues()).some(Boolean)
 
-const setLogControlsBusy = (busy) => {
+const setLogControlsBusy = (busy: boolean) => {
 	for (const control of [$('#filters button[type="submit"]'), $('#more')]) control.disabled = busy
 	$('#clear-filters').disabled = busy || !hasActivityFilters()
 }
 
-const performLoadLogs = async ({ append = false, live = false, replaceDepth, contextVersion } = {}) => {
+const performLoadLogs = async ({ append = false, live = false, replaceDepth, contextVersion }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
@@ -1686,11 +2271,13 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 	const requestVersion = ++logsRequestVersion
 	const moreButton = $('#more')
 	const paginationStatus = $('#activity-more-status')
-	const hadRows = feed.querySelector('.log-row') !== null
+	const hadRows = feed.querySelector<HTMLElement>('.log-row') !== null
 	const previousRows = liveSnapshot(feed, '.log-row[data-live-key]')
 	const presentation = refreshPresentation({ live, append })
 	const anchor =
-		live && window.scrollY >= 420 ? [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.getBoundingClientRect().bottom > 0) : undefined
+		live && window.scrollY >= 420
+			? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find((row) => row.getBoundingClientRect().bottom > 0)
+			: undefined
 	const anchorKey = anchor?.dataset.liveKey
 	const anchorTop = anchor?.getBoundingClientRect().top
 	feed.setAttribute('aria-busy', String(presentation.busy))
@@ -1711,24 +2298,33 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 	try {
 		const payload =
 			!append && replaceDepth !== undefined
-				? await collectCanonicalPages((cursor, limit) => api(queryPath(cursor, limit), { signal: requestSignal }), replaceDepth, logKeyFor)
-				: await api(queryPath(append ? nextCursor : undefined), { signal: requestSignal })
+				? await collectCanonicalPages(
+						async (cursor, limit) => decodeItemsPage(await api(queryPath(cursor ?? '', limit), { signal: requestSignal }), isActivityRecord, 'Activity'),
+						replaceDepth,
+						logKeyFor,
+					)
+				: decodeItemsPage(await api(queryPath(append ? (nextCursor ?? '') : '')), isActivityRecord, 'Activity')
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
 		if (!append) feed.replaceChildren()
-		const refreshedKeys = new Set(append ? [...feed.querySelectorAll('.log-row[data-live-key]')].map((row) => row.dataset.liveKey) : [])
+		const refreshedKeys = new Set(
+			append
+				? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap((row) => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
+				: [],
+		)
 		for (const log of payload.items) {
 			const row = rowFor(log)
-			if (refreshedKeys.has(row.dataset.liveKey)) continue
-			refreshedKeys.add(row.dataset.liveKey)
+			const rowKey = row.dataset.liveKey
+			if (rowKey !== undefined && refreshedKeys.has(rowKey)) continue
+			if (rowKey !== undefined) refreshedKeys.add(rowKey)
 			feed.append(row)
 		}
 		applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
 		if (anchorKey !== undefined && anchorTop !== undefined) {
-			const currentAnchor = [...feed.querySelectorAll('.log-row[data-live-key]')].find((row) => row.dataset.liveKey === anchorKey)
+			const currentAnchor = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find((row) => row.dataset.liveKey === anchorKey)
 			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 		}
 		nextCursor = payload.nextCursor
@@ -1741,7 +2337,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			feed.childElementCount === 0 ? 'No logs shown' : `${feed.childElementCount} log${feed.childElementCount === 1 ? '' : 's'} shown`
 		return true
 	} catch (error) {
-		if (error.name === 'AbortError') return false
+		if (error instanceof Error && error.name === 'AbortError') return false
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, logsRequestVersion) ||
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
@@ -1753,11 +2349,11 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		if (append) {
 			feedState.hidden = feed.childElementCount > 0
 			$('#activity-summary').textContent = `${feed.childElementCount} logs shown · could not load more`
-			renderRetryStatus(paginationStatus, `Could not load more activity; showing indexed logs: ${error.message}`, retryAction)
+			renderRetryStatus(paginationStatus, `Could not load more activity; showing indexed logs: ${errorMessage(error)}`, retryAction)
 			moreButton.hidden = true
 		} else {
 			feedState.hidden = false
-			const message = element('span', '', hadRows ? `Showing last known activity: ${error.message}` : `Activity unavailable: ${error.message}`)
+			const message = element('span', '', hadRows ? `Showing last known activity: ${errorMessage(error)}` : `Activity unavailable: ${errorMessage(error)}`)
 			$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : ''
 			const retry = element('button', 'state-retry', 'Retry')
 			retry.type = 'button'
@@ -1779,7 +2375,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 	}
 }
 
-const loadLogs = (options = {}) => {
+const loadLogs = (options: LoadOptions = {}): Promise<boolean> => {
 	const contextVersion = viewContextVersion
 	const paginationIntentVersion = options.append === true ? ++activityPaginationIntentVersion : undefined
 	if (paginationIntentVersion !== undefined) {
@@ -1796,7 +2392,7 @@ const loadLogs = (options = {}) => {
 	const operation = () => {
 		const { retainVisibleDepth, ...loadOptions } = options
 		const replaceDepth = retainVisibleDepth
-			? resolveActivityRefreshDepth(loadOptions.replaceDepth, pendingCanonicalActivityCount, feed.querySelectorAll('.log-row').length)
+			? resolveActivityRefreshDepth(loadOptions.replaceDepth, pendingCanonicalActivityCount, feed.querySelectorAll<HTMLElement>('.log-row').length)
 			: loadOptions.replaceDepth
 		return performLoadLogs({ ...loadOptions, replaceDepth, contextVersion })
 	}
@@ -1815,13 +2411,17 @@ const loadLogs = (options = {}) => {
 	return request
 }
 
-const detailCard = (term, description, wide = false) => {
+const detailCard = (term: string, description: string, wide = false) => {
 	const card = element('dl', `detail-card${wide ? ' wide' : ''}`)
 	card.append(element('dt', '', term), element('dd', '', description ?? '—'))
 	return card
 }
 
-const addressDetailCard = (term, address, { knownLabel, chainId, wide = false } = {}) => {
+const addressDetailCard = (
+	term: string,
+	address: string | null | undefined,
+	{ knownLabel, chainId, wide = false }: { knownLabel?: string | null; chainId?: string; wide?: boolean } = {},
+) => {
 	const card = element('dl', `detail-card${wide ? ' wide' : ''}`)
 	const description = element('dd')
 	if (address) description.append(protocolAddressLink(address, { knownLabel, chainId }))
@@ -1830,7 +2430,7 @@ const addressDetailCard = (term, address, { knownLabel, chainId, wide = false } 
 	return card
 }
 
-const copyButton = (value, label) => {
+const copyButton = (value: string | number | bigint, label: string) => {
 	const button = element('button', 'copy-button', `Copy ${label}`)
 	button.type = 'button'
 	button.setAttribute('aria-live', 'polite')
@@ -1848,7 +2448,7 @@ const copyButton = (value, label) => {
 	return button
 }
 
-const explorerLink = (base, type, value, label) => {
+const explorerLink = (base: string, type: string, value: string | number, label: string) => {
 	const link = element('a', 'explorer-link', label)
 	link.href = `${String(base).replace(/\/$/, '')}/${type}/${value}`
 	link.target = '_blank'
@@ -1856,24 +2456,26 @@ const explorerLink = (base, type, value, label) => {
 	return link
 }
 
-const usableAddressLabel = (label) => (label && !String(label).toLowerCase().startsWith('unknown') ? String(label) : undefined)
+const usableAddressLabel = (label: unknown): string | undefined =>
+	typeof label === 'string' && label.length > 0 && !label.toLowerCase().startsWith('unknown') ? label : undefined
 
-const addressIdentityKey = (chainId, address) => `${chainId}:${String(address).toLowerCase()}`
+const addressIdentityKey = (chainId: string, address: string) => `${chainId}:${address.toLowerCase()}`
 
-const invalidateAddressIdentityCache = (chainId, missesOnly = false) => {
+const invalidateAddressIdentityCache = (chainId: string, missesOnly = false): void => {
 	const prefix = `${chainId}:`
 	for (const [key, value] of addressIdentityCache) {
 		if (key.startsWith(prefix) && (!missesOnly || typeof value !== 'string')) addressIdentityCache.delete(key)
 	}
 }
 
-const resolveAddressLabel = async (chainId, address) => {
+const resolveAddressLabel = async (chainId: string, address: string): Promise<string | undefined> => {
 	const key = addressIdentityKey(chainId, address)
 	const cached = addressIdentityCache.get(key)
 	if (typeof cached === 'string') return cached
 	if (cached === false) return undefined
 	if (cached) return await cached
 	const pending = api(`/api/v1/address-identity?${new URLSearchParams({ chainId: String(chainId), address })}`)
+		.then((value) => decodeValue(value, isAddressIdentity, 'Address identity'))
 		.then((identity) => {
 			const resolved = usableAddressLabel(identity.label)
 			if (addressIdentityCache.get(key) !== pending) return undefined
@@ -1889,28 +2491,39 @@ const resolveAddressLabel = async (chainId, address) => {
 	return await pending
 }
 
-const protocolAddressLink = (address, { knownLabel, chainId = selectedChainId(), className = 'address-link', compact = false } = {}) => {
-	const key = addressIdentityKey(chainId, address)
+interface ProtocolAddressLinkOptions {
+	knownLabel?: unknown
+	chainId?: string
+	className?: string
+	compact?: boolean
+}
+
+const protocolAddressLink = (
+	address: string | null,
+	{ knownLabel, chainId = selectedChainId(), className = 'address-link', compact = false }: ProtocolAddressLinkOptions = {},
+) => {
+	const resolvedAddress = address ?? ''
+	const key = addressIdentityKey(chainId, resolvedAddress)
 	const suppliedLabel = usableAddressLabel(knownLabel)
 	const cachedLabel = addressIdentityCache.get(key)
 	const canonicalLabel = typeof cachedLabel === 'string' ? cachedLabel : undefined
 	const displayLabel = canonicalLabel ?? suppliedLabel
-	const link = element('a', className, displayLabel ?? (compact ? short(address, 10, 8) : address))
-	const params = new URLSearchParams({ chainId: String(chainId), address })
+	const link = element('a', className, displayLabel ?? (compact ? short(resolvedAddress, 10, 8) : resolvedAddress))
+	const params = new URLSearchParams({ chainId: String(chainId), address: resolvedAddress })
 	if (isDemo) params.set('demo', '1')
 	link.href = `/address?${params}`
-	link.title = displayLabel ? `${displayLabel} · ${address}` : address
+	link.title = displayLabel ? `${displayLabel} · ${resolvedAddress}` : resolvedAddress
 	if (!canonicalLabel) {
-		void resolveAddressLabel(chainId, address).then((resolvedLabel) => {
+		void resolveAddressLabel(chainId, resolvedAddress).then((resolvedLabel) => {
 			if (!resolvedLabel) return
 			link.textContent = resolvedLabel
-			link.title = `${resolvedLabel} · ${address}`
+			link.title = `${resolvedLabel} · ${resolvedAddress}`
 		})
 	}
 	return link
 }
 
-const decodedValueNode = (rawValue, displayValue, chainId) => {
+const decodedValueNode = (rawValue: unknown, displayValue: unknown, chainId: string) => {
 	const node = element('span', 'decoded-value')
 	if (typeof rawValue === 'string' && /^0x[0-9a-fA-F]{40}$/.test(rawValue)) {
 		node.append(protocolAddressLink(rawValue, { chainId }))
@@ -1925,11 +2538,11 @@ const decodedValueNode = (rawValue, displayValue, chainId) => {
 		node.append(document.createTextNode(']'))
 		return node
 	}
-	if (rawValue && typeof rawValue === 'object') {
+	if (isRecord(rawValue)) {
 		node.append(document.createTextNode('{ '))
 		Object.entries(rawValue).forEach(([key, value], index) => {
 			if (index > 0) node.append(document.createTextNode(', '))
-			node.append(document.createTextNode(`${key}: `), decodedValueNode(value, displayValue?.[key], chainId))
+			node.append(document.createTextNode(`${key}: `), decodedValueNode(value, isRecord(displayValue) ? displayValue[key] : undefined, chainId))
 		})
 		node.append(document.createTextNode(' }'))
 		return node
@@ -1939,13 +2552,19 @@ const decodedValueNode = (rawValue, displayValue, chainId) => {
 	return node
 }
 
-const evidenceText = (value) => (value === undefined || value === null ? '—' : typeof value === 'string' ? value : JSON.stringify(value))
+const evidenceText = (value: unknown): string =>
+	value === undefined || value === null ? '—' : typeof value === 'string' ? value : (JSON.stringify(value) ?? '—')
 
-const decodedArgumentsTable = (schema, rawArguments, displayArguments, chainId) => {
+const decodedArgumentsTable = (
+	schema: ArgumentDefinition[] | null | undefined,
+	rawArguments: Record<string, unknown> | null | undefined,
+	displayArguments: Record<string, unknown> | null | undefined,
+	chainId: string,
+) => {
 	const raw = rawArguments ?? {}
 	const display = displayArguments ?? {}
-	const entries = schema?.length
-		? schema.toSorted((left, right) => Number(left.index) - Number(right.index))
+	const entries: ArgumentDefinition[] = schema?.length
+		? schema.toSorted((left, right) => left.index - right.index)
 		: Object.keys(raw).map((name, index) => ({ index, name, type: 'unknown' }))
 	const table = element('table', 'arguments')
 	const head = element('thead')
@@ -1972,33 +2591,42 @@ const decodedArgumentsTable = (schema, rawArguments, displayArguments, chainId) 
 	return table
 }
 
-const captureDetailContext = () => {
-	const focusable = [...detailContent.querySelectorAll('a, button, summary')]
-	const focusIndex = focusable.indexOf(document.activeElement)
+interface DetailContextSnapshot {
+	scrollTop: number
+	focusIndex: number
+	focusTop?: number
+}
+
+const captureDetailContext = (): DetailContextSnapshot => {
+	const focusable = [...detailContent.querySelectorAll<HTMLElement>('a, button, summary')]
+	const focusIndex = focusable.findIndex((candidate) => candidate === document.activeElement)
 	return {
 		scrollTop: dialog.scrollTop,
 		focusIndex,
-		focusTop: focusIndex >= 0 ? focusable[focusIndex].getBoundingClientRect().top : undefined,
+		focusTop: focusIndex >= 0 ? requiredArrayItem(focusable, focusIndex, 'Focused detail control').getBoundingClientRect().top : undefined,
 	}
 }
 
-const restoreDetailContext = (snapshot) => {
+const restoreDetailContext = (snapshot: DetailContextSnapshot) => {
 	dialog.scrollTop = snapshot.scrollTop
 	if (snapshot.focusIndex < 0) return
-	const focusable = [...detailContent.querySelectorAll('a, button, summary')]
+	const focusable = [...detailContent.querySelectorAll<HTMLElement>('a, button, summary')]
 	const nextFocus = focusable[snapshot.focusIndex]
 	if (nextFocus === undefined) return
 	if (snapshot.focusTop !== undefined) dialog.scrollTop += nextFocus.getBoundingClientRect().top - snapshot.focusTop
 	nextFocus.focus({ preventScroll: true })
 }
 
-const performOpenDetail = async (log, { live = false, canonicalRecovery = false, contextVersion } = {}) => {
+const performOpenDetail = async (
+	log: ActivityRecord | LogReference,
+	{ live = false, canonicalRecovery = false, contextVersion }: DetailOptions = {},
+): Promise<boolean> => {
 	if (contextVersion !== detailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++detailRequestVersion
 	const previousContext = live ? captureDetailContext() : undefined
-	activeLog = log
-	if (!canonicalRecovery) {
+	if (isActivityRecord(log)) activeLog = log
+	if (!canonicalRecovery && isActivityRecord(log)) {
 		pendingCanonicalLog = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : log
 		if (activeReorgRecovery !== undefined) {
 			activeReorgRecovery.logToRefresh = log
@@ -2025,12 +2653,13 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 	url.searchParams.set('log', `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`)
 	history.replaceState(null, '', url)
 	try {
-		const detail = await api(`/api/v1/logs/${log.chain_id}/${log.block_hash}/${log.tx_hash}/${log.log_index}`)
+		const detail = decodeValue(await api(`/api/v1/logs/${log.chain_id}/${log.block_hash}/${log.tx_hash}/${log.log_index}`), isLogDetail, 'Log detail')
 		if (
 			!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) ||
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
+		activeLog = detail
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
@@ -2076,9 +2705,7 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 		for (const occurrence of detail.relatedLogs ?? []) {
 			const button = element('button', 'related-log', `#${number(occurrence.log_index)} · ${occurrence.event_name ?? 'Unknown event'} · ${occurrence.summary}`)
 			button.type = 'button'
-			button.addEventListener('click', () =>
-				openDetail({ chain_id: detail.chain_id, block_hash: detail.block_hash, tx_hash: detail.tx_hash, log_index: occurrence.log_index }),
-			)
+			button.addEventListener('click', () => openDetail({ ...detail, log_index: occurrence.log_index }))
 			relatedList.append(button)
 		}
 		related.append(relatedList)
@@ -2093,21 +2720,21 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
-		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error.status)
+		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error instanceof Error ? error.status : undefined)
 		if (canonicalRecovery && !noncanonical && canonicalRefreshRequired) {
-			detailContent.querySelector('.detail-refresh-error')?.remove()
+			detailContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
 			if (previousContext) restoreDetailContext(previousContext)
 			return false
 		}
 		const alert = element('div', `detail-error${live ? ' detail-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
-		alert.append(element('p', '', noncanonical ? 'This log was replaced after the chain changed.' : `Could not open log: ${error.message}`))
+		alert.append(element('p', '', noncanonical ? 'This log was replaced after the chain changed.' : `Could not open log: ${errorMessage(error)}`))
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
 		retry.addEventListener('click', () => openDetail(log, { live: !noncanonical, canonicalRecovery }))
 		if (!noncanonical) alert.append(retry)
 		if (live && !noncanonical) {
-			detailContent.querySelector('.detail-refresh-error')?.remove()
+			detailContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
 			detailContent.prepend(alert)
 			if (previousContext) restoreDetailContext(previousContext)
 		} else detailContent.replaceChildren(alert)
@@ -2118,7 +2745,7 @@ const performOpenDetail = async (log, { live = false, canonicalRecovery = false,
 	}
 }
 
-const openDetail = (log, options = {}) => {
+const openDetail = (log: ActivityRecord | LogReference, options: DetailOptions = {}): Promise<boolean> => {
 	if (options.live !== true && options.canonicalRecovery !== true) {
 		detailContextVersion++
 		detailRequestVersion++
@@ -2133,50 +2760,58 @@ const restorePendingCanonicalLog = async () => {
 	return await openDetail(pendingCanonicalLog, { live: dialog.open, canonicalRecovery: true })
 }
 
-const captureAccountDialogSnapshot = () => {
+const captureAccountDialogSnapshot = (): DialogSnapshot | undefined => {
 	if (activeAccountTransactions === undefined) return undefined
-	const cards = [...detailContent.querySelectorAll('.account-transaction[data-live-key]')]
-	const focusedCard = document.activeElement?.closest('.account-transaction[data-live-key]')
-	const focusable = focusedCard ? [...focusedCard.querySelectorAll('a, button, summary')] : []
+	const cards = [...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')]
+	const focusedCard = document.activeElement?.closest<HTMLElement>('.account-transaction[data-live-key]')
+	const focusable = focusedCard ? [...focusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
 	const anchorCard = focusedCard ?? cards.find((card) => card.getBoundingClientRect().bottom > dialog.getBoundingClientRect().top)
 	return {
 		loadedCount: activeAccountTransactions.loaded.length,
-		expandedKeys: [...detailContent.querySelectorAll('.account-transaction-action[open]')].map(
-			(action) => action.closest('.account-transaction[data-live-key]')?.dataset.liveKey,
-		),
+		expandedKeys: [...detailContent.querySelectorAll<HTMLElement>('.account-transaction-action[open]')].flatMap((action) => {
+			const key = action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset.liveKey
+			return key === undefined ? [] : [key]
+		}),
 		anchorKey: anchorCard?.dataset.liveKey,
 		anchorTop: anchorCard?.getBoundingClientRect().top,
 		focusKey: focusedCard?.dataset.liveKey,
-		focusIndex: focusable.indexOf(document.activeElement),
-		outsideFocus: document.activeElement?.dataset.liveFocus,
+		focusIndex: focusable.findIndex((candidate) => candidate === document.activeElement),
+		outsideFocus: document.activeElement instanceof HTMLElement ? document.activeElement.dataset.liveFocus : undefined,
 		scrollTop: dialog.scrollTop,
 	}
 }
 
-const restoreAccountDialogSnapshot = (snapshot) => {
-	const availableKeys = new Set([...detailContent.querySelectorAll('.account-transaction[data-live-key]')].map((card) => card.dataset.liveKey))
+const restoreAccountDialogSnapshot = (snapshot: DialogSnapshot) => {
+	const availableKeys = new Set(
+		[...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')].flatMap((card) =>
+			card.dataset.liveKey === undefined ? [] : [card.dataset.liveKey],
+		),
+	)
 	const reconciled = reconcileTransactionDialogSnapshot(snapshot, availableKeys)
 	for (const key of reconciled.expandedKeys) {
 		if (key === undefined) continue
-		const card = detailContent.querySelector(`[data-live-key="${CSS.escape(key)}"]`)
-		const action = card?.querySelector('.account-transaction-action')
+		const card = detailContent.querySelector<HTMLElement>(`[data-live-key="${CSS.escape(key)}"]`)
+		const action = card?.querySelector<HTMLDetailsElement>('.account-transaction-action')
 		if (action) action.open = true
 	}
-	dialog.scrollTop = reconciled.scrollTop
+	dialog.scrollTop = reconciled.scrollTop ?? snapshot.scrollTop
 	if (reconciled.anchorKey && reconciled.anchorTop !== undefined) {
-		const anchor = detailContent.querySelector(`[data-live-key="${CSS.escape(reconciled.anchorKey)}"]`)
+		const anchor = detailContent.querySelector<HTMLElement>(`[data-live-key="${CSS.escape(reconciled.anchorKey)}"]`)
 		if (anchor) dialog.scrollTop += anchor.getBoundingClientRect().top - reconciled.anchorTop
 	}
 	if (reconciled.focusKey && reconciled.focusIndex >= 0) {
-		const focusedCard = detailContent.querySelector(`[data-live-key="${CSS.escape(reconciled.focusKey)}"]`)
-		const focusable = focusedCard ? [...focusedCard.querySelectorAll('a, button, summary')] : []
+		const focusedCard = detailContent.querySelector<HTMLElement>(`[data-live-key="${CSS.escape(reconciled.focusKey)}"]`)
+		const focusable = focusedCard ? [...focusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
 		focusable[reconciled.focusIndex]?.focus({ preventScroll: true })
 	} else if (reconciled.outsideFocus) {
-		detailContent.querySelector(`[data-live-focus="${CSS.escape(reconciled.outsideFocus)}"]`)?.focus({ preventScroll: true })
+		detailContent.querySelector<HTMLElement>(`[data-live-focus="${CSS.escape(reconciled.outsideFocus)}"]`)?.focus({ preventScroll: true })
 	}
 }
 
-const performOpenAccountTransactions = async (account, { live = false, restoreSnapshot, canonicalRecovery = false, contextVersion } = {}) => {
+const performOpenAccountTransactions = async (
+	account: AccountReference,
+	{ live = false, restoreSnapshot, canonicalRecovery = false, contextVersion }: AccountDetailOptions = {},
+): Promise<boolean> => {
 	if (contextVersion !== detailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const pageReservation = accountPageRefreshGate.reserve()
@@ -2230,19 +2865,24 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 				}
 	state.account = account
 	activeAccountTransactions = accountStateDuringStagedRefresh(previousState, state, stagedRefresh)
-	const render = ({ previous = new Map(), highlight = false } = {}) => {
-		const focusedCard = document.activeElement?.closest('.account-transaction[data-live-key]')
+	interface AccountRenderOptions {
+		previous?: ReadonlyMap<string, string>
+		highlight?: boolean
+	}
+
+	const render = ({ previous = new Map<string, string>(), highlight = false }: AccountRenderOptions = {}) => {
+		const focusedCard = document.activeElement?.closest<HTMLElement>('.account-transaction[data-live-key]')
 		const focusedTransactionKey = focusedCard?.dataset.liveKey
-		const focusedControls = focusedCard ? [...focusedCard.querySelectorAll('a, button, summary')] : []
-		const focusedControlIndex = focusedControls.indexOf(document.activeElement)
-		const outsideFocusKey = focusedCard ? undefined : document.activeElement?.dataset.liveFocus
-		const visibleCards = [...detailContent.querySelectorAll('.account-transaction[data-live-key]')]
+		const focusedControls = focusedCard ? [...focusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
+		const focusedControlIndex = focusedControls.findIndex((candidate) => candidate === document.activeElement)
+		const outsideFocusKey = focusedCard || !(document.activeElement instanceof HTMLElement) ? undefined : document.activeElement.dataset.liveFocus
+		const visibleCards = [...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')]
 		const anchorCard = focusedCard ?? visibleCards.find((card) => card.getBoundingClientRect().bottom > dialog.getBoundingClientRect().top)
 		const anchorKey = anchorCard?.dataset.liveKey
 		const anchorTop = anchorCard?.getBoundingClientRect().top
 		const openTransactionKeys = new Set(
-			[...detailContent.querySelectorAll('.account-transaction-action[open]')].map(
-				(action) => action.closest('.account-transaction[data-live-key]')?.dataset.liveKey,
+			[...detailContent.querySelectorAll<HTMLElement>('.account-transaction-action[open]')].map(
+				(action) => action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset.liveKey,
 			),
 		)
 		const header = element('div', 'account-transactions-header')
@@ -2310,8 +2950,8 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 		more.hidden = canonicalRefreshRequired || state.nextPageCursor === undefined || (state.pageError !== undefined && state.pageErrorAppend)
 		more.disabled = canonicalRefreshRequired || state.pageLoading
 		more.addEventListener('click', () => activeAccountLoadMore?.())
-		const content = [header]
-		let transactionError
+		const content: Node[] = [header]
+		let transactionError: HTMLDivElement | undefined
 		if (state.pageError) {
 			transactionError = element('div', `detail-error account-transactions-error${state.pageErrorAppend ? ' append-error' : ''}`)
 			transactionError.setAttribute('role', 'alert')
@@ -2327,27 +2967,34 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			if (!state.pageErrorAppend) content.push(transactionError)
 		}
 		content.push(list)
-		if (transactionError && state.pageErrorAppend) content.push(transactionError)
+		if (transactionError !== undefined && state.pageErrorAppend) content.push(transactionError)
 		content.push(more)
 		detailContent.replaceChildren(...content)
-		const nextAnchor = anchorKey ? detailContent.querySelector(`[data-live-key="${CSS.escape(anchorKey)}"]`) : undefined
+		const nextAnchor = anchorKey ? detailContent.querySelector<HTMLElement>(`[data-live-key="${CSS.escape(anchorKey)}"]`) : undefined
 		if (nextAnchor && anchorTop !== undefined) dialog.scrollTop += nextAnchor.getBoundingClientRect().top - anchorTop
 		if (focusedTransactionKey && focusedControlIndex >= 0) {
-			const nextFocusedCard = detailContent.querySelector(`[data-live-key="${CSS.escape(focusedTransactionKey)}"]`)
-			const nextControls = nextFocusedCard ? [...nextFocusedCard.querySelectorAll('a, button, summary')] : []
+			const nextFocusedCard = detailContent.querySelector<HTMLElement>(`[data-live-key="${CSS.escape(focusedTransactionKey)}"]`)
+			const nextControls = nextFocusedCard ? [...nextFocusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
 			nextControls[focusedControlIndex]?.focus({ preventScroll: true })
 		} else if (outsideFocusKey === 'show-more-transactions') {
-			detailContent.querySelector('[data-live-focus="show-more-transactions"]')?.focus({ preventScroll: true })
+			detailContent.querySelector<HTMLElement>('[data-live-focus="show-more-transactions"]')?.focus({ preventScroll: true })
 		}
 		applyLiveChanges(list, previous, { live: highlight, selector: '.account-transaction[data-live-key]' })
 	}
+	interface AccountPageOptions {
+		liveRefresh?: boolean
+		background?: boolean
+		stageOnly?: boolean
+		limit?: number
+		restartInvalidSnapshot?: boolean
+	}
 	const performLoadPage = async (
 		append = false,
-		{ liveRefresh = false, background = false, stageOnly = false, limit = 50, restartInvalidSnapshot = true } = {},
+		{ liveRefresh = false, background = false, stageOnly = false, limit = 50, restartInvalidSnapshot = true }: AccountPageOptions = {},
 	) => {
 		if (state.pageLoading) return false
 		if (!stageOnly && !paginationRequestAllowed(append, canonicalRefreshRequired)) {
-			const more = detailContent.querySelector('.account-transactions-more')
+			const more = detailContent.querySelector<HTMLButtonElement>('.account-transactions-more')
 			if (more !== null) {
 				more.hidden = true
 				more.disabled = true
@@ -2374,7 +3021,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 				limit: String(limit),
 			})
 			if (append && state.nextPageCursor) query.set('cursor', state.nextPageCursor)
-			const result = await api(`/api/v1/address-transactions?${query}`)
+			const result = decodeItemsPage(await api(`/api/v1/address-transactions?${query}`), isAccountTransaction, 'Address transactions')
 			if (
 				contextVersion !== detailContextVersion ||
 				!isCurrentLiveRequest(requestVersion, detailRequestVersion, state.account.chain_id, selectedChainId()) ||
@@ -2389,7 +3036,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 				append ? result.items : retained,
 				(transaction) => `${transaction.chain_id}:${transaction.tx_hash}`,
 			)
-			state.total = reconcilePaginatedTotal(state.total, result.total, append)
+			state.total = reconcilePaginatedTotal(state.total, result.total ?? state.total, append)
 			state.nextPageCursor = liveRefresh && previousCursor !== undefined ? previousCursor : result.nextCursor
 			if (state.loaded.length >= state.total) state.nextPageCursor = undefined
 			state.pageLoading = false
@@ -2403,7 +3050,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 				state.pageLoading = false
 				return false
 			}
-			if (error.status === 409 && restartInvalidSnapshot) {
+			if (error instanceof Error && error.status === 409 && restartInvalidSnapshot) {
 				state.pageLoading = false
 				const targetCount = previousLoaded.length + (append ? limit : 0)
 				state.loaded = []
@@ -2433,8 +3080,8 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 				state.pageLoading = false
 				state.pageErrorAppend = append
 				state.pageError = append
-					? `Could not load more transactions; showing the last known activity: ${recoveryError ?? error.message}`
-					: `Could not refresh sent transactions; showing the last known activity: ${recoveryError ?? error.message}`
+					? `Could not load more transactions; showing the last known activity: ${recoveryError ?? errorMessage(error)}`
+					: `Could not refresh sent transactions; showing the last known activity: ${recoveryError ?? errorMessage(error)}`
 				if (!stageOnly) render()
 				return false
 			}
@@ -2443,18 +3090,18 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			state.pageError =
 				state.loaded.length > 0
 					? append
-						? `Could not load more transactions; showing the last known activity: ${error.message}`
-						: `Could not refresh sent transactions; showing the last known activity: ${error.message}`
-					: `Could not load sent transactions: ${error.message}`
+						? `Could not load more transactions; showing the last known activity: ${errorMessage(error)}`
+						: `Could not refresh sent transactions; showing the last known activity: ${errorMessage(error)}`
+					: `Could not load sent transactions: ${errorMessage(error)}`
 			if (!stageOnly) render()
 			return false
 		} finally {
 			if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) detailContent.setAttribute('aria-busy', 'false')
 		}
 	}
-	const loadPage = (append = false, options = {}) => {
+	const loadPage = (append = false, options: AccountPageOptions = {}) => {
 		if (append && options.background !== true) {
-			const more = detailContent.querySelector('.account-transactions-more')
+			const more = detailContent.querySelector<HTMLButtonElement>('.account-transactions-more')
 			if (more !== null) {
 				more.disabled = true
 				more.setAttribute('aria-busy', 'true')
@@ -2467,14 +3114,14 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			: accountPageRefreshGate.runForeground(() => performLoadPage(append, options))
 	}
 	const loadMore = () => loadPage(true)
-	let releaseStagedRefresh
+	let releaseStagedRefresh: (() => void) | undefined
 	const stagedRefreshCompleted = stagedRefresh
-		? new Promise((resolve) => {
+		? new Promise<void>((resolve) => {
 				releaseStagedRefresh = resolve
 			})
 		: undefined
 	const queuedLoadMore = async () => {
-		const more = detailContent.querySelector('.account-transactions-more')
+		const more = detailContent.querySelector<HTMLButtonElement>('.account-transactions-more')
 		if (more !== null) {
 			more.disabled = true
 			more.setAttribute('aria-busy', 'true')
@@ -2484,7 +3131,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 		return activeAccountLoadMore === queuedLoadMore ? false : await activeAccountLoadMore?.()
 	}
 	activeAccountLoadMore = stagedRefresh ? queuedLoadMore : loadMore
-	let loadRequest
+	let loadRequest: Promise<boolean>
 	if (stagedRefresh) {
 		loadRequest = accountPageRefreshGate.runBackground(async () => {
 			const targetCount = stagedSnapshot?.loadedCount ?? 0
@@ -2523,7 +3170,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 			if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) && dialog.open) {
 				activeAccountTransactions = previousState
 				activeAccountLoadMore = previousLoadMore
-				detailContent.querySelector('.account-transactions-error')?.remove()
+				detailContent.querySelector<HTMLElement>('.account-transactions-error')?.remove()
 				if (!canonicalRecovery) {
 					const alert = element('div', 'detail-error account-transactions-error')
 					alert.setAttribute('role', 'alert')
@@ -2535,13 +3182,13 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 					detailContent.prepend(alert)
 				}
 			}
-			releaseStagedRefresh()
+			releaseStagedRefresh?.()
 			return false
 		}
 		activeAccountTransactions = state
 		activeAccountLoadMore = loadMore
 		render({ previous: refreshPrevious, highlight: true })
-		releaseStagedRefresh()
+		releaseStagedRefresh?.()
 	}
 	if (loaded && stagedSnapshot) restoreAccountDialogSnapshot(stagedSnapshot)
 	if (
@@ -2557,7 +3204,7 @@ const performOpenAccountTransactions = async (account, { live = false, restoreSn
 	return loaded
 }
 
-const openAccountTransactions = (account, options = {}) => {
+const openAccountTransactions = (account: AccountReference, options: AccountDetailOptions = {}): Promise<boolean> => {
 	if (options.live !== true && options.canonicalRecovery !== true) {
 		detailContextVersion++
 		detailRequestVersion++
@@ -2627,7 +3274,7 @@ const clearDetailUrl = () => {
 	history.replaceState(null, '', url)
 }
 
-const exactUnit = (value, decimals = 18, symbol = '', maximumFraction = 3) => {
+const exactUnit = (value: string | number | bigint | null | undefined, decimals = 18, symbol = '', maximumFraction = 3): string => {
 	if (value === null || value === undefined) return '—'
 	const negative = String(value).startsWith('-')
 	const digits = String(value)
@@ -2639,33 +3286,40 @@ const exactUnit = (value, decimals = 18, symbol = '', maximumFraction = 3) => {
 	return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}${symbol ? ` ${symbol}` : ''}`
 }
 
-const compactValue = (value, decimals = 18) => {
+const compactValue = (value: string | number | bigint | null | undefined, decimals = 18): number => {
 	if (value === null || value === undefined) return 0
 	const digits = String(value)
 	const scale = 10 ** Math.min(decimals, 18)
 	return Number(digits) / scale
 }
 
-const staticField = (label, value) => {
+const staticField = (label: string, value: string | number | bigint | null | undefined) => {
 	const field = element('div', 'static-field')
-	field.append(element('span', '', label), element('code', '', value ?? '—'))
+	field.append(element('span', '', label), element('code', '', value === null || value === undefined ? '—' : String(value)))
 	return field
 }
 
-const staticAddressField = (label, address, chainId) => {
+const staticAddressField = (label: string, address: string | null | undefined, chainId: string) => {
 	const field = element('div', 'static-field')
 	field.append(element('span', '', label), address ? protocolAddressLink(address, { chainId }) : element('code', '', '—'))
 	return field
 }
 
-const metricCard = (label, value, detail) => {
+const metricCard = (label: string, value: string, detail?: string) => {
 	const card = element('div', 'metric-card')
 	card.append(element('span', '', label), element('strong', '', value))
 	if (detail !== undefined) card.append(element('small', '', detail))
 	return card
 }
 
-const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
+const chartNumericValue = (value: unknown): string | number | bigint | null | undefined =>
+	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' || value === null || value === undefined ? value : undefined
+
+const lineChart = <T extends { timestamp: string }>(
+	rows: T[],
+	definitions: ChartDefinition<T>[],
+	{ sharedRange, axisUnit = '' }: { sharedRange?: readonly [number, number]; axisUnit?: string } = {},
+) => {
 	const width = 760
 	const height = 190
 	const margin = { left: 48, right: 14, top: 12, bottom: 28 }
@@ -2676,7 +3330,7 @@ const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 	const normalized = definitions.length > 1 && sharedRange === undefined
 	svg.setAttribute('aria-label', `${definitions.map(({ label }) => label).join(', ')} ${normalized ? 'independently scaled trend' : 'value'} over indexed time`)
 	const series = definitions.map(({ key, decimals = 18 }) => {
-		const raw = rows.map((row) => (row[key] === undefined ? Number.NaN : compactValue(row[key], decimals)))
+		const raw = rows.map((row) => (row[key] === undefined ? Number.NaN : compactValue(chartNumericValue(row[key]), decimals)))
 		const finite = raw.filter(Number.isFinite)
 		const seriesMinimum = Math.min(...finite)
 		const seriesRange = Math.max(...finite) - seriesMinimum
@@ -2702,13 +3356,14 @@ const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 		label.setAttribute('y', String(y + 3))
 		const axisValue = maximum - (range * index) / 3
 		label.textContent = normalized
-			? ['High', '⅔', '⅓', 'Low'][index]
+			? requiredArrayItem(['High', '⅔', '⅓', 'Low'], index, 'Normalized chart axis label')
 			: `${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(axisValue)}${axisUnit}`
 		svg.append(label)
 	}
 	definitions.forEach(({ key, label, decimals = 18, unit = '', className = '', pointShape, pointLabel }, definitionIndex) => {
 		const points = rows.flatMap((row, index) => {
-			const value = series[definitionIndex][index]
+			const definitionSeries = requiredArrayItem(series, definitionIndex, 'Chart definition series')
+			const value = requiredArrayItem(definitionSeries, index, 'Chart series point')
 			if (!Number.isFinite(value)) return []
 			const x = margin.left + (chartWidth * index) / Math.max(1, rows.length - 1)
 			const y = margin.top + chartHeight - ((value - minimum) / range) * chartHeight
@@ -2736,7 +3391,7 @@ const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 			point.setAttribute('tabindex', '0')
 			const title = document.createElementNS('http://www.w3.org/2000/svg', 'title')
 			const observationType = pointLabel?.(row)
-			title.textContent = `${label}: ${exactUnit(row[key], decimals, unit, decimals)} · ${new Date(row.timestamp).toLocaleString()}${observationType ? ` · ${observationType}` : ''}`
+			title.textContent = `${label}: ${exactUnit(chartNumericValue(row[key]), decimals, unit, decimals)} · ${new Date(row.timestamp).toLocaleString()}${observationType ? ` · ${observationType}` : ''}`
 			point.setAttribute('aria-label', title.textContent)
 			point.append(title)
 			svg.append(point)
@@ -2746,7 +3401,8 @@ const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 		for (const [x, row] of [
 			[margin.left, rows[0]],
 			[width - margin.right, rows.at(-1)],
-		]) {
+		] as const) {
+			if (row === undefined) continue
 			const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 			label.setAttribute('class', 'chart-axis-label')
 			label.setAttribute('x', String(x))
@@ -2758,12 +3414,22 @@ const lineChart = (rows, definitions, { sharedRange, axisUnit = '' } = {}) => {
 	return svg
 }
 
-const chartCard = (
-	title,
-	rows,
-	definitions,
-	note,
-	{ sharedRange, axisUnit, legendItems = [], emptyMessage = 'No checkpoints have been indexed for this entity yet.' } = {},
+const chartCard = <T extends { timestamp: string }>(
+	title: string,
+	rows: T[],
+	definitions: ChartDefinition<T>[],
+	note: string,
+	{
+		sharedRange,
+		axisUnit,
+		legendItems = [],
+		emptyMessage = 'No checkpoints have been indexed for this entity yet.',
+	}: {
+		sharedRange?: readonly [number, number]
+		axisUnit?: string
+		legendItems?: Array<{ label: string; className?: string }>
+		emptyMessage?: string
+	} = {},
 ) => {
 	const card = element('section', 'chart-card')
 	const heading = element('div', 'chart-heading')
@@ -2792,7 +3458,7 @@ const chartCard = (
 	return card
 }
 
-const stateHeader = (eyebrow, title, subtitle, kind) => {
+const stateHeader = (eyebrow: string, title: string, subtitle: string, kind: string) => {
 	const header = element('header', 'state-detail-header')
 	const copy = element('div')
 	copy.append(element('p', 'eyebrow', eyebrow), element('h3', 'state-detail-title', title), element('p', 'state-detail-subtitle', subtitle))
@@ -2800,17 +3466,17 @@ const stateHeader = (eyebrow, title, subtitle, kind) => {
 	return header
 }
 
-const richBalance = (value, symbol, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
-const richFieldLabel = (label) => element('span', 'sr-only rich-field-label', label)
+const richBalance = (value: string | number | undefined, symbol: string, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
+const richFieldLabel = (label: string) => element('span', 'sr-only rich-field-label', label)
 const nativeSymbol = (chainId = selectedChainId()) => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
-const syncContractUrl = (address) => {
+const syncContractUrl = (address: string) => {
 	const url = new URL(location.href)
 	if (address) url.searchParams.set('contract', address)
 	else url.searchParams.delete('contract')
 	history.replaceState(null, '', url)
 }
 
-const renderContractDetail = (contract) => {
+const renderContractDetail = (contract: ContractRecord | undefined) => {
 	const detail = $('#contract-detail')
 	if (contract === undefined) {
 		detail.replaceChildren(element('div', 'state-placeholder', 'No contract is selected.'))
@@ -2865,18 +3531,21 @@ const renderContracts = () => {
 	const selected =
 		contractItems.find((contract) => contract.address.toLowerCase() === selectedContractAddress?.toLowerCase()) ??
 		contractItems.find((contract) => contract.address.toLowerCase() === requested) ??
-		contractItems[0]
+		requiredArrayItem(contractItems, 0, 'Default contract')
 	selectedContractAddress = selected.address
 	const scrollLeft = list.scrollLeft
 	const scrollTop = list.scrollTop
-	const focusedContractAddress = document.activeElement?.closest?.('.contract-row')?.dataset.contractAddress
-	const focusedAction = document.activeElement?.closest?.('[data-contract-action]')?.dataset.contractAction
-	const existingRows = new Map([...list.querySelectorAll('.contract-row[data-contract-address]')].map((row) => [row.dataset.contractAddress, row]))
+	const focusedContractAddress =
+		document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('.contract-row')?.dataset.contractAddress : undefined
+	const focusedAction =
+		document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[data-contract-action]')?.dataset.contractAction : undefined
+	const existingRows = new Map([...list.querySelectorAll<HTMLElement>('.contract-row[data-contract-address]')].map((row) => [row.dataset.contractAddress, row]))
 	const renderedRows = []
 	for (const contract of contractItems) {
 		const status = contractDeploymentStatus(contract)
 		const addressKey = contract.address.toLowerCase()
 		const row = existingRows.get(addressKey) ?? element('button', 'contract-row')
+		if (!(row instanceof HTMLButtonElement)) throw new Error('Existing contract row has the wrong element type')
 		row.type = 'button'
 		row.dataset.contractAddress = addressKey
 		row.setAttribute('aria-selected', String(contract.address.toLowerCase() === selected.address.toLowerCase()))
@@ -2886,24 +3555,24 @@ const renderContracts = () => {
 		row.onclick = () => {
 			selectedContractAddress = contract.address
 			syncContractUrl(contract.address)
-			for (const candidate of list.querySelectorAll('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
+			for (const candidate of list.querySelectorAll<HTMLElement>('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
 			renderContractDetail(contract)
 		}
 		renderedRows.push(row)
 	}
-	const retainedRows = new Set(renderedRows)
+	const retainedRows = new Set<Element>(renderedRows)
 	for (const child of [...list.children]) if (!retainedRows.has(child)) child.remove()
 	for (const row of renderedRows) list.append(row)
 	list.scrollLeft = scrollLeft
 	list.scrollTop = scrollTop
 	syncContractUrl(selected.address)
 	renderContractDetail(selected)
-	if (focusedAction !== undefined) document.querySelector(`[data-contract-action="${focusedAction}"]`)?.focus()
-	else if (focusedContractAddress !== undefined) list.querySelector(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
+	if (focusedAction !== undefined) document.querySelector<HTMLElement>(`[data-contract-action="${focusedAction}"]`)?.focus()
+	else if (focusedContractAddress !== undefined) list.querySelector<HTMLElement>(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
 	list.setAttribute('aria-busy', 'false')
 }
 
-const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
+const performLoadContracts = async ({ live = false, contextVersion }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++contractRequestVersion
@@ -2916,7 +3585,7 @@ const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
 	}
 	$('#contract-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
-		const result = await api(`/api/v1/contracts?${new URLSearchParams({ chainId: requiredChainId() })}`)
+		const result = decodeItemsPage(await api(`/api/v1/contracts?${new URLSearchParams({ chainId: requiredChainId() })}`), isContractRecord, 'Contracts')
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, contractRequestVersion) ||
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
@@ -2938,14 +3607,16 @@ const performLoadContracts = async ({ live = false, contextVersion } = {}) => {
 		$('#contract-list').setAttribute('aria-busy', 'false')
 		renderRetryStatus(
 			status,
-			contractItems.length === 0 ? `Contract registry unavailable: ${error.message}` : `Refresh failed; showing the last registry: ${error.message}`,
+			contractItems.length === 0
+				? `Contract registry unavailable: ${errorMessage(error)}`
+				: `Refresh failed; showing the last registry: ${errorMessage(error)}`,
 			() => retryCanonicalViewOr(loadContracts),
 		)
 		return false
 	}
 }
 
-const loadContracts = (options = {}) => {
+const loadContracts = (options: LoadOptions = {}): Promise<boolean> => {
 	const contextVersion = viewContextVersion
 	const operation = () => performLoadContracts({ ...options, contextVersion })
 	return options.live === true ? contractRefreshGate.runBackground(operation) : contractRefreshGate.runForeground(operation)
@@ -2955,8 +3626,9 @@ const renderRichList = ({ live = false } = {}) => {
 	const rows = $('#richlist-rows')
 	const previousRows = liveSnapshot(rows, '.rich-row[data-live-key]')
 	const isInitialRender = rows.childElementCount === 0
-	const openDetailKeys = new Set([...rows.querySelectorAll('details[open][data-detail-key]')].map((details) => details.dataset.detailKey))
-	const focusedDetailKey = document.activeElement?.closest?.('details[data-detail-key]')?.dataset.detailKey
+	const openDetailKeys = new Set([...rows.querySelectorAll<HTMLElement>('details[open][data-detail-key]')].map((details) => details.dataset.detailKey))
+	const focusedDetailKey =
+		document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('details[data-detail-key]')?.dataset.detailKey : undefined
 	rows.replaceChildren()
 	for (const item of richListItems) {
 		const itemKey = `${item.chain_id}:${item.address}`
@@ -3054,7 +3726,10 @@ const renderRichList = ({ live = false } = {}) => {
 			)
 			tokenGrid.append(nativeCard)
 		}
-		for (const [token, fallbackSymbol] of [...wethTokens.map((token) => [token, 'WETH']), ...repTokens.map((token) => [token, 'REP'])]) {
+		for (const [token, fallbackSymbol] of [
+			...wethTokens.map((token): [TokenBalanceRecord, string] => [token, 'WETH']),
+			...repTokens.map((token): [TokenBalanceRecord, string] => [token, 'REP']),
+		]) {
 			const tokenCard = element('div', 'rich-token')
 			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
 			const tokenAddress = protocolAddressLink(token.address, {
@@ -3124,8 +3799,8 @@ const renderRichList = ({ live = false } = {}) => {
 		rows.append(article)
 	}
 	if (focusedDetailKey) {
-		const focusedDetails = [...rows.querySelectorAll('details[data-detail-key]')].find((details) => details.dataset.detailKey === focusedDetailKey)
-		focusedDetails?.querySelector('summary')?.focus({ preventScroll: true })
+		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find((details) => details.dataset.detailKey === focusedDetailKey)
+		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
 	}
 	applyLiveChanges(rows, previousRows, { live, selector: '.rich-row[data-live-key]' })
 	rows.setAttribute('aria-busy', 'false')
@@ -3133,7 +3808,7 @@ const renderRichList = ({ live = false } = {}) => {
 	$('#richlist-more').hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
 }
 
-const performLoadRichList = async ({ append = false, live = false, contextVersion } = {}) => {
+const performLoadRichList = async ({ append = false, live = false, contextVersion }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	if (!paginationRequestAllowed(append, canonicalRefreshRequired)) {
@@ -3164,15 +3839,15 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 	$('#rich-sort').disabled = presentation.busy
 	$('#richlist-rows').setAttribute('aria-busy', String(presentation.busy))
 	try {
-		const fetchPage = async (offset, limit) => {
+		const fetchPage = async (offset: number, limit: number) => {
 			const query = new URLSearchParams({ sort: $('#rich-sort').value, offset: String(offset), limit: String(limit) })
 			query.set('chainId', requiredChainId())
-			return await api(`/api/v1/richlist?${query}`)
+			return decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
 		}
-		const fetchSnapshot = async (requestedCount) => {
+		const fetchSnapshot = async (requestedCount: number) => {
 			const firstLimit = Math.min(100, requestedCount)
 			const firstPage = await fetchPage(0, firstLimit)
-			const targetCount = Math.min(requestedCount, firstPage.total)
+			const targetCount = Math.min(requestedCount, firstPage.total ?? firstPage.items.length)
 			const remainingOffsets = []
 			for (let offset = firstLimit; offset < targetCount; offset += 100) remainingOffsets.push(offset)
 			const remainingPages = await Promise.all(remainingOffsets.map((offset) => fetchPage(offset, Math.min(100, targetCount - offset))))
@@ -3185,7 +3860,7 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
-		if (append && paginatedSnapshotWasReplaced(richListItems.length, result.total)) {
+		if (append && paginatedSnapshotWasReplaced(richListItems.length, result.total ?? result.items.length)) {
 			result = await fetchSnapshot(Math.max(1, richListItems.length))
 			if (
 				!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) ||
@@ -3195,7 +3870,7 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 			replace = true
 		}
 		richListItems = replace ? result.items : [...richListItems, ...result.items]
-		richListTotal = result.total
+		richListTotal = result.total ?? richListItems.length
 		renderRichList({ live })
 		status.hidden = true
 		paginationStatus.hidden = true
@@ -3212,10 +3887,10 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		renderRetryStatus(
 			failureStatus,
 			append
-				? `Could not load more; showing known rankings: ${error.message}`
+				? `Could not load more; showing known rankings: ${errorMessage(error)}`
 				: richListItems.length === 0
-					? `Rich list unavailable: ${error.message}`
-					: `Refresh failed; showing last known rankings: ${error.message}`,
+					? `Rich list unavailable: ${errorMessage(error)}`
+					: `Refresh failed; showing last known rankings: ${errorMessage(error)}`,
 			() => retryCanonicalViewOr(() => loadRichList({ append })),
 		)
 		more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
@@ -3233,7 +3908,7 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 	}
 }
 
-const loadRichList = (options = {}) => {
+const loadRichList = (options: LoadOptions = {}): Promise<boolean> => {
 	const contextVersion = viewContextVersion
 	const paginationIntentVersion = options.append === true ? ++richListPaginationIntentVersion : undefined
 	if (paginationIntentVersion !== undefined) {
@@ -3268,7 +3943,12 @@ const loadRichList = (options = {}) => {
 	return request
 }
 
-const renderAddressProfile = (item, transactions, interactions, { live = false } = {}) => {
+const renderAddressProfile = (
+	item: RichListRecord,
+	transactions: AccountTransaction[],
+	interactions: AccountTransaction[],
+	{ live = false }: { live?: boolean } = {},
+) => {
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')
 	const chainId = String(item.chain_id)
@@ -3434,33 +4114,40 @@ const renderAddressProfile = (item, transactions, interactions, { live = false }
 	content.setAttribute('aria-busy', 'false')
 }
 
-const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) => {
+const performLoadAddressProfile = async ({ live = false, contextVersion }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++addressProfileRequestVersion
 	const content = $('#address-profile-content')
-	const hadProfile = content.querySelector('[data-live-key]') !== null
-	const address = pageUrl.searchParams.get('address')?.toLowerCase()
+	const hadProfile = content.querySelector<HTMLElement>('[data-live-key]') !== null
+	const requestedAddress = pageUrl.searchParams.get('address')?.toLowerCase()
 	const backParams = new URLSearchParams({ chainId: requiredChainId() })
 	if (isDemo) backParams.set('demo', '1')
 	$('#address-back').href = `/richlist?${backParams}`
-	if (!/^0x[0-9a-f]{40}$/.test(address ?? '')) {
+	if (requestedAddress === undefined || !/^0x[0-9a-f]{40}$/.test(requestedAddress)) {
 		content.replaceChildren(element('div', 'detail-error', 'A complete 20-byte address is required.'))
 		content.setAttribute('aria-busy', 'false')
 		return false
 	}
+	const address = requestedAddress
 	const presentation = refreshPresentation({ live })
 	content.setAttribute('aria-busy', String(presentation.busy))
-	if (presentation.loadingState) content.querySelector('.address-refresh-error')?.remove()
+	if (presentation.loadingState) content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 	if (presentation.loadingState && !hadProfile)
 		content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 	try {
 		const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '1' })
 		const [profile, identity, transactions, interactions] = await Promise.all([
-			api(`/api/v1/richlist?${query}`),
-			api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`),
-			api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
-			api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`),
+			api(`/api/v1/richlist?${query}`).then((value) => decodeItemsPage(value, isRichListRecord, 'Address profile')),
+			api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`).then((value) =>
+				decodeValue(value, isAddressIdentity, 'Address identity'),
+			),
+			api(`/api/v1/address-transactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`).then((value) =>
+				decodeItemsPage(value, isAccountTransaction, 'Address transactions'),
+			),
+			api(`/api/v1/address-interactions?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}&limit=10`).then((value) =>
+				decodeItemsPage(value, isAccountTransaction, 'Address interactions'),
+			),
 		])
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, addressProfileRequestVersion) ||
@@ -3476,13 +4163,14 @@ const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) 
 					address,
 					label: identity.label,
 					kind: identity.kind,
-					explorer_base_url: network?.explorer_base_url,
-					transaction_count: transactions.total,
-					interaction_count: transactions.total,
+					explorer_base_url: network?.explorer_base_url ?? '',
+					transaction_count: transactions.total ?? transactions.items.length,
+					interaction_count: interactions.total ?? interactions.items.length,
 					pool_count: 0,
 					vault_count: 0,
 					rep_balances: [],
 					weth_balances: [],
+					native_balance_detail: { balance: '0', blockNumber: network?.indexed_block ?? '0' },
 					pool_associations: [],
 					vault_positions: [],
 				}
@@ -3496,21 +4184,25 @@ const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) 
 		)
 			return false
 		if (hadProfile && canonicalRefreshRequired) {
-			content.querySelector('.address-refresh-error')?.remove()
+			content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 			content.setAttribute('aria-busy', 'false')
 			return false
 		}
 		const alert = element('div', `detail-error${hadProfile ? ' address-refresh-error' : ''}`)
 		alert.setAttribute('role', 'alert')
 		alert.append(
-			element('p', '', hadProfile ? `Refresh failed; showing last known address state: ${error.message}` : `Could not load address: ${error.message}`),
+			element(
+				'p',
+				'',
+				hadProfile ? `Refresh failed; showing last known address state: ${errorMessage(error)}` : `Could not load address: ${errorMessage(error)}`,
+			),
 		)
 		const retry = element('button', 'state-retry', 'Retry')
 		retry.type = 'button'
 		retry.addEventListener('click', () => retryCanonicalViewOr(loadAddressProfile))
 		alert.append(retry)
 		if (hadProfile) {
-			content.querySelector('.address-refresh-error')?.remove()
+			content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 			content.prepend(alert)
 		} else content.replaceChildren(alert)
 		content.setAttribute('aria-busy', 'false')
@@ -3518,20 +4210,22 @@ const performLoadAddressProfile = async ({ live = false, contextVersion } = {}) 
 	}
 }
 
-const loadAddressProfile = (options = {}) => {
+const loadAddressProfile = (options: LoadOptions = {}): Promise<boolean> => {
 	const contextVersion = viewContextVersion
 	const operation = () => performLoadAddressProfile({ ...options, contextVersion })
 	return options.live === true ? addressProfileRefreshGate.runBackground(operation) : addressProfileRefreshGate.runForeground(operation)
 }
 
-const fetchEntityHistory = async (type, item) => {
-	if (type === 'pools') return await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}`)
-	if (type === 'vaults') return await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}`)
-	if (type === 'questions') return await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}`)
-	return await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}`)
+const fetchEntityHistory = async (type: StateTab, item: StateEntity): Promise<EntityHistory> => {
+	if (type === 'pools' && 'pool_address' in item) return decodeEntityHistory(await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}`))
+	if (type === 'vaults' && 'vault_address' in item)
+		return decodeEntityHistory(await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}`))
+	if (type === 'questions' && 'question_id' in item) return decodeEntityHistory(await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}`))
+	if ('universe_id' in item) return decodeEntityHistory(await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}`))
+	throw new Error(`State entity does not match the selected ${type} tab`)
 }
 
-const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, suppliedHistory) => {
+const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory): Promise<void> => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('pools', poolItem))
 	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const poolNativeSymbol = nativeSymbol(poolItem.chain_id)
@@ -3641,16 +4335,18 @@ const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, s
 		),
 		staticField(
 			'Total REP backing units',
-			currentState.totalRepBackingUnits === undefined ? 'No checkpoint' : exactUnit(currentState.totalRepBackingUnits, 18, '', 3),
+			currentState.totalRepBackingUnits === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.totalRepBackingUnits), 18, '', 3),
 		),
 		staticField(
 			'Share-token supply',
-			currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(currentState.shareTokenSupplyAttoShares, 18, 'shares', 3),
+			currentState.shareTokenSupplyAttoShares === undefined
+				? 'No checkpoint'
+				: exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares', 3),
 		),
 		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol, 5)),
 		staticField('Current retention rate', exactUnit(poolItem.current_retention_rate, 18, '', 9)),
-		currentState.escalationGame
+		typeof currentState.escalationGame === 'string' && currentState.escalationGame !== ''
 			? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id)
 			: staticField('Escalation game', 'Not set'),
 	)
@@ -3664,10 +4360,10 @@ const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, s
 		staticAddressField('Parent pool', poolItem.parent_address, poolItem.chain_id),
 		staticAddressField('Share token', poolItem.share_token_address, poolItem.chain_id),
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
-		history.market === undefined
+		history.market === undefined || history.market === null
 			? staticField('Augur AMM pair', 'Not indexed')
 			: staticAddressField('Augur AMM pair', history.market.pair_address, poolItem.chain_id),
-		staticField('Augur AMM fee', history.market === undefined ? '—' : `${Number(history.market.fee_bps) / 100}%`),
+		staticField('Augur AMM fee', history.market === undefined || history.market === null ? '—' : `${Number(history.market.fee_bps) / 100}%`),
 		staticAddressField('Truth auction', poolItem.truth_auction_address, poolItem.chain_id),
 		staticField('Security multiplier', `${Number(poolItem.security_multiplier_bps) / 100}%`),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'gwei', 2)),
@@ -3678,7 +4374,12 @@ const renderPoolDetail = async (poolItem, requestVersion, canonicalGeneration, s
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const renderVaultDetail = async (vaultItem, requestVersion, canonicalGeneration, suppliedHistory) => {
+const renderVaultDetail = async (
+	vaultItem: VaultRecord,
+	requestVersion: number,
+	canonicalGeneration: number,
+	suppliedHistory?: EntityHistory,
+): Promise<void> => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('vaults', vaultItem))
 	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
@@ -3713,7 +4414,7 @@ const renderVaultDetail = async (vaultItem, requestVersion, canonicalGeneration,
 		staticField('Question', vaultItem.question_title),
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
-		staticField('Resulting pool REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '', 3)),
+		staticField('Resulting pool-held REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '', 3)),
 		staticField('Resulting fee-eligible capacity', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
 		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '', 8)),
 	)
@@ -3722,14 +4423,19 @@ const renderVaultDetail = async (vaultItem, requestVersion, canonicalGeneration,
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const questionStatus = (question) => {
+const questionStatus = (question: QuestionRecord): string => {
 	const now = Date.now()
 	if (now < new Date(question.start_time).getTime()) return 'Scheduled'
 	if (now < new Date(question.end_time).getTime()) return 'Open'
 	return 'Ended'
 }
 
-const renderQuestionDetail = async (question, requestVersion, canonicalGeneration, suppliedHistory) => {
+const renderQuestionDetail = async (
+	question: QuestionRecord,
+	requestVersion: number,
+	canonicalGeneration: number,
+	suppliedHistory?: EntityHistory,
+): Promise<void> => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('questions', question))
 	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
@@ -3760,7 +4466,7 @@ const renderQuestionDetail = async (question, requestVersion, canonicalGeneratio
 		['Created', question.created_timestamp],
 		['Starts', question.start_time],
 		['Ends', question.end_time],
-	])
+	] as const)
 		timeline.append(element('div', 'timeline-step', `${label} · ${new Date(value).toLocaleDateString('en-GB')}`))
 	definition.append(timeline)
 	fragment.append(definition)
@@ -3785,17 +4491,17 @@ const renderQuestionDetail = async (question, requestVersion, canonicalGeneratio
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const renderLineage = (universes, selected) => {
+const renderLineage = (universes: UniverseRecord[], selected: UniverseRecord): SVGSVGElement => {
 	const byKey = new Map(universes.map((universe) => [`${universe.chain_id}:${universe.universe_id}`, universe]))
-	const depth = (universe, seen = new Set()) => {
+	const depth = (universe: UniverseRecord, seen = new Set<string>()): number => {
 		const key = `${universe.chain_id}:${universe.universe_id}`
 		if (seen.has(key) || universe.parent_universe_id === universe.universe_id) return 0
 		seen.add(key)
 		const parent = byKey.get(`${universe.chain_id}:${universe.parent_universe_id}`)
 		return parent === undefined ? 0 : depth(parent, seen) + 1
 	}
-	const positions = new Map()
-	const levels = new Map()
+	const positions = new Map<string, { x: number; y: number }>()
+	const levels = new Map<number, UniverseRecord[]>()
 	for (const universe of universes) {
 		const level = depth(universe)
 		const members = levels.get(level) ?? []
@@ -3860,7 +4566,12 @@ const renderLineage = (universes, selected) => {
 	return svg
 }
 
-const renderUniverseDetail = async (universe, requestVersion, canonicalGeneration, suppliedHistory) => {
+const renderUniverseDetail = async (
+	universe: UniverseRecord,
+	requestVersion: number,
+	canonicalGeneration: number,
+	suppliedHistory?: EntityHistory,
+): Promise<void> => {
 	const history = suppliedHistory ?? (await fetchEntityHistory('universes', universe))
 	if (requestVersion !== stateDetailRequestVersion || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return
 	const fragment = document.createDocumentFragment()
@@ -3884,16 +4595,18 @@ const renderUniverseDetail = async (universe, requestVersion, canonicalGeneratio
 	fragment.append(
 		chartCard(
 			'Theoretical REP supply history',
-			history.events.filter((event) => event.theoretical_supply_atto_rep !== null),
+			history.events.filter((event) => event['theoretical_supply_atto_rep'] !== null),
 			[{ key: 'theoretical_supply_atto_rep', label: 'Theoretical REP', unit: 'REP' }],
 			'Supply changes are recorded from initialization, fork, burn, and migration events.',
 		),
 	)
 	const lineage = element('section', 'lineage-card')
 	const heading = element('div', 'chart-heading')
-	heading.append(element('h4', '', 'Returned Zoltar universes'), element('span', 'data-note', `${stateData.universes.length} returned records`))
+	const catalog = stateData
+	if (catalog === undefined) throw new Error('System state catalog is unavailable')
+	heading.append(element('h4', '', 'Returned Zoltar universes'), element('span', 'data-note', `${catalog.universes.length} returned records`))
 	const scroll = element('div', 'lineage-scroll')
-	scroll.append(renderLineage(stateData.universes, universe))
+	scroll.append(renderLineage(catalog.universes, universe))
 	lineage.append(heading, scroll, element('p', 'data-note', 'Each edge links a child universe to the parent fork and outcome that created it.'))
 	fragment.append(lineage)
 	const identity = element('section', 'static-card')
@@ -3915,38 +4628,45 @@ const renderUniverseDetail = async (universe, requestVersion, canonicalGeneratio
 	$('#state-detail').replaceChildren(fragment)
 }
 
-const entityKey = (type, item) => {
-	if (type === 'pools') return `${item.chain_id}:${item.pool_address}`
-	if (type === 'vaults') return `${item.chain_id}:${item.pool_address}:${item.vault_address}`
-	if (type === 'questions') return `${item.chain_id}:${item.question_id}`
-	return `${item.chain_id}:${item.universe_id}`
+const entityKey = (type: StateTab, item: StateEntity): string => {
+	if (type === 'pools' && 'pool_address' in item) return `${item.chain_id}:${item.pool_address}`
+	if (type === 'vaults' && 'vault_address' in item) return `${item.chain_id}:${item.pool_address}:${item.vault_address}`
+	if (type === 'questions' && 'question_id' in item) return `${item.chain_id}:${item.question_id}`
+	if ('universe_id' in item) return `${item.chain_id}:${item.universe_id}`
+	throw new Error(`State entity does not match the selected ${type} tab`)
 }
 
-const entityCopy = (type, item) => {
-	if (type === 'pools')
+const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
+	if (type === 'pools' && 'settlement_collateral_atto_eth' in item)
 		return [
 			item.question_title ?? short(item.pool_address),
 			`${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id), 1)}`,
 		]
-	if (type === 'vaults') return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP', 1)} capacity`]
-	if (type === 'questions') return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
-	return [
-		item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`,
-		`${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`,
-	]
+	if (type === 'vaults' && 'vault_address' in item)
+		return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, 'REP', 1)} capacity`]
+	if (type === 'questions' && 'outcome_options' in item) return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
+	if ('universe_id' in item && 'pool_count' in item)
+		return [
+			item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`,
+			`${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`,
+		]
+	throw new Error(`State entity does not match the selected ${type} tab`)
 }
 
-const performSelectEntity = async (item, { preserveDetail = false, quiet = false, contextVersion, suppliedHistory } = {}) => {
+const performSelectEntity = async (
+	item: StateEntity,
+	{ preserveDetail = false, quiet = false, contextVersion, suppliedHistory }: SelectEntityOptions = {},
+): Promise<boolean> => {
 	if (contextVersion !== stateDetailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	selectedEntityKey = entityKey(activeStateType, item)
-	for (const row of document.querySelectorAll('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
+	for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
 	const requestVersion = ++stateDetailRequestVersion
 	const detail = $('#state-detail')
 	const presentation = refreshPresentation({ live: quiet })
 	detail.setAttribute('aria-busy', String(presentation.busy))
 	const replaceWithLoading = presentation.loadingState && (!preserveDetail || detail.childElementCount === 0)
-	const existingRefreshStatus = detail.querySelector('.detail-refresh-status')
+	const existingRefreshStatus = detail.querySelector<HTMLElement>('.detail-refresh-status')
 	if (presentation.loadingState) existingRefreshStatus?.remove()
 	let refreshStatus = presentation.loadingState ? undefined : existingRefreshStatus
 	if (replaceWithLoading) detail.replaceChildren(element('div', 'state-placeholder', 'Loading historical checkpoints…'))
@@ -3960,10 +4680,12 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 	url.searchParams.set('entity', selectedEntityKey)
 	history.replaceState(null, '', url)
 	try {
-		if (activeStateType === 'pools') await renderPoolDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		if (activeStateType === 'vaults') await renderVaultDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		if (activeStateType === 'questions') await renderQuestionDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		if (activeStateType === 'universes') await renderUniverseDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'pools' && 'settlement_collateral_atto_eth' in item)
+			await renderPoolDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+		if (activeStateType === 'universes' && 'reputation_token_address' in item)
+			await renderUniverseDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
 		return (
 			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
 			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
@@ -3975,7 +4697,7 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 		) {
 			if (replaceWithLoading) {
 				const failure = element('div', 'state-error')
-				failure.append(element('span', '', `State history unavailable: ${error.message}`))
+				failure.append(element('span', '', `State history unavailable: ${errorMessage(error)}`))
 				const retry = element('button', '', 'Retry')
 				retry.type = 'button'
 				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item)))
@@ -3985,7 +4707,7 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 				const failure = refreshStatus ?? element('div', 'system-status detail-refresh-status')
 				failure.classList.add('error')
 				failure.setAttribute('role', 'alert')
-				failure.replaceChildren(element('span', '', `Historical refresh failed; showing last known details: ${error.message}`))
+				failure.replaceChildren(element('span', '', `Historical refresh failed; showing last known details: ${errorMessage(error)}`))
 				const retry = element('button', '', 'Retry')
 				retry.type = 'button'
 				retry.addEventListener('click', () => retryCanonicalViewOr(() => selectEntity(item, { preserveDetail: true })))
@@ -4003,7 +4725,7 @@ const performSelectEntity = async (item, { preserveDetail = false, quiet = false
 	}
 }
 
-const selectEntity = (item, options = {}) => {
+const selectEntity = (item: StateEntity, options: SelectEntityOptions = {}): Promise<boolean> => {
 	if (options.quiet !== true) {
 		stateDetailContextVersion++
 		stateDetailRequestVersion++
@@ -4013,7 +4735,7 @@ const selectEntity = (item, options = {}) => {
 	return options.quiet === true ? systemDetailRefreshGate.runBackground(operation) : systemDetailRefreshGate.runForeground(operation)
 }
 
-const selectEntityWhileReserved = (item, options = {}) => {
+const selectEntityWhileReserved = (item: StateEntity, options: SelectEntityOptions = {}): Promise<boolean> => {
 	if (options.quiet !== true) {
 		stateDetailContextVersion++
 		stateDetailRequestVersion++
@@ -4021,9 +4743,22 @@ const selectEntityWhileReserved = (item, options = {}) => {
 	return performSelectEntity(item, { ...options, contextVersion: stateDetailContextVersion })
 }
 
-const renderEntityList = async ({ refreshSelected = false, live = false, selectedHistory, detailGateReserved = false } = {}) => {
+const stateItems = (catalog: StateCatalog, type: StateTab): StateEntity[] => {
+	if (type === 'pools') return catalog.pools
+	if (type === 'vaults') return catalog.vaults
+	if (type === 'questions') return catalog.questions
+	return catalog.universes
+}
+
+const renderEntityList = async ({
+	refreshSelected = false,
+	live = false,
+	selectedHistory,
+	detailGateReserved = false,
+}: RenderEntityListOptions = {}): Promise<boolean> => {
 	const query = $('#entity-search').value.trim().toLowerCase()
-	const catalogItems = stateData[activeStateType]
+	if (stateData === undefined) throw new Error('System state catalog is unavailable')
+	const catalogItems = stateItems(stateData, activeStateType)
 	const items = catalogItems.filter((item) => !query || entityCopy(activeStateType, item).join(' ').toLowerCase().includes(query))
 	$('#entity-list-title').textContent = `All ${activeStateType}`
 	$('#entity-count').textContent = String(items.length)
@@ -4066,15 +4801,17 @@ const renderEntityList = async ({ refreshSelected = false, live = false, selecte
 }
 
 const renderStateStats = ({ live = false } = {}) => {
+	if (stateData === undefined) throw new Error('System state catalog is unavailable')
 	const stats = $('#state-stats')
 	const previousStats = liveSnapshot(stats, '.state-stat[data-live-key]')
 	stats.replaceChildren()
-	for (const [label, items] of [
+	const statGroups: Array<readonly [string, readonly StateEntity[]]> = [
 		['Pools', stateData.pools],
 		['Questions', stateData.questions],
 		['Vaults', stateData.vaults],
 		['Universes', stateData.universes],
-	]) {
+	]
+	for (const [label, items] of statGroups) {
 		const card = setLiveRecord(element('div', 'state-stat'), label.toLowerCase(), String(items.length))
 		card.append(element('span', '', label), element('strong', '', number(items.length)))
 		stats.append(card)
@@ -4083,13 +4820,13 @@ const renderStateStats = ({ live = false } = {}) => {
 	stats.setAttribute('aria-busy', 'false')
 }
 
-const setSystemControlsDisabled = (disabled) => {
+const setSystemControlsDisabled = (disabled: boolean) => {
 	$('#entity-search').disabled = disabled
-	for (const tab of document.querySelectorAll('[data-state-tab]')) tab.disabled = disabled
-	for (const row of document.querySelectorAll('.entity-row')) row.disabled = disabled
+	for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-state-tab]')) tab.disabled = disabled
+	for (const row of document.querySelectorAll<HTMLButtonElement>('.entity-row')) row.disabled = disabled
 }
 
-const performLoadSystemState = async ({ live = false, contextVersion } = {}) => {
+const performLoadSystemState = async ({ live = false, contextVersion }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++catalogRequestVersion
@@ -4108,31 +4845,33 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 	$('#state-stats').setAttribute('aria-busy', String(presentation.busy))
 	$('#entity-list').setAttribute('aria-busy', String(presentation.busy))
 	try {
-		const nextStateData = await api(`/api/v1/state/catalog?chainId=${requiredChainId()}`)
+		const nextStateData = decodeStateCatalog(await api(`/api/v1/state/catalog?chainId=${requiredChainId()}`))
 		if (
 			!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, catalogRequestVersion) ||
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
 		for (const poolItem of nextStateData.pools) poolItem.current_state = {}
-		const orderedPoolStates = nextStateData.poolStates.toSorted(
+		const orderedPoolStates = (nextStateData.poolStates ?? []).toSorted(
 			(left, right) => Number(left.block_number) - Number(right.block_number) || Number(left.log_index) - Number(right.log_index),
 		)
 		for (const state of orderedPoolStates) {
 			const poolItem = nextStateData.pools.find(
 				(candidate) => String(candidate.chain_id) === String(state.chain_id) && candidate.pool_address === state.pool_address,
 			)
-			if (poolItem !== undefined) Object.assign(poolItem.current_state, state.state)
+			if (poolItem?.current_state !== undefined) Object.assign(poolItem.current_state, state.state)
 		}
 		const stagedStateType = activeStateType
 		const stagedDetailContext = stateDetailContextVersion
 		const query = $('#entity-search').value.trim().toLowerCase()
-		const visibleItems = nextStateData[stagedStateType].filter((item) => !query || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(query))
+		const visibleItems = stateItems(nextStateData, stagedStateType).filter(
+			(item) => !query || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(query),
+		)
 		const selectedItem = visibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? visibleItems[0]
 		const stagedSelectedKey = selectedItem === undefined ? undefined : entityKey(stagedStateType, selectedItem)
 		const selectedHistory = selectedItem === undefined ? undefined : await fetchEntityHistory(stagedStateType, selectedItem)
 		const currentQuery = $('#entity-search').value.trim().toLowerCase()
-		const currentVisibleItems = nextStateData[stagedStateType].filter(
+		const currentVisibleItems = stateItems(nextStateData, stagedStateType).filter(
 			(item) => !currentQuery || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(currentQuery),
 		)
 		const currentSelectedItem = currentVisibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? currentVisibleItems[0]
@@ -4148,7 +4887,7 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 			return false
 		return await runWithForegroundReservation(systemDetailRefreshGate, async () => {
 			const reservedQuery = $('#entity-search').value.trim().toLowerCase()
-			const reservedVisibleItems = nextStateData[stagedStateType].filter(
+			const reservedVisibleItems = stateItems(nextStateData, stagedStateType).filter(
 				(item) => !reservedQuery || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(reservedQuery),
 			)
 			const reservedSelectedItem = reservedVisibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? reservedVisibleItems[0]
@@ -4194,7 +4933,9 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 			alert.hidden = false
 			alert.replaceChildren()
 			status.hidden = true
-			alert.append(element('span', '', hadData ? `Refresh failed; showing last known state: ${error.message}` : `System state unavailable: ${error.message}`))
+			alert.append(
+				element('span', '', hadData ? `Refresh failed; showing last known state: ${errorMessage(error)}` : `System state unavailable: ${errorMessage(error)}`),
+			)
 			const retry = element('button', '', 'Retry')
 			retry.type = 'button'
 			retry.addEventListener('click', () => retryCanonicalViewOr(loadSystemState))
@@ -4219,19 +4960,19 @@ const performLoadSystemState = async ({ live = false, contextVersion } = {}) => 
 	}
 }
 
-const loadSystemState = (options = {}) => {
+const loadSystemState = (options: LoadOptions = {}): Promise<boolean> => {
 	const contextVersion = viewContextVersion
 	const operation = () => performLoadSystemState({ ...options, contextVersion })
 	return options.live === true ? systemStateRefreshGate.runBackground(operation) : systemStateRefreshGate.runForeground(operation)
 }
 
-const setStateTab = (type) => {
+const setStateTab = (type: StateTab) => {
 	stateDetailContextVersion++
 	stateDetailRequestVersion++
 	activeStateType = type
 	selectedEntityKey = undefined
 	$('#state-detail').setAttribute('aria-busy', 'false')
-	for (const tab of document.querySelectorAll('[data-state-tab]')) {
+	for (const tab of document.querySelectorAll<HTMLElement>('[data-state-tab]')) {
 		const selected = tab.dataset.stateTab === type
 		tab.setAttribute('aria-selected', String(selected))
 		tab.tabIndex = selected ? 0 : -1
@@ -4276,11 +5017,11 @@ $('#clear-filters').addEventListener('click', () => {
 	resetActivityFilterContext()
 	loadLogs()
 })
-$('#address-filter').addEventListener('input', validateAddressFilter)
+$('#address-filter').addEventListener('input', () => validateAddressFilter())
 $('#filters').addEventListener('input', () => {
 	$('#clear-filters').disabled = !hasActivityFilters()
 })
-const retryCanonicalRefresh = async (button) => {
+const retryCanonicalRefresh = async (button: HTMLButtonElement) => {
 	if (button.disabled) return
 	button.disabled = true
 	button.setAttribute('aria-busy', 'true')
@@ -4307,7 +5048,7 @@ const retryCanonicalRefresh = async (button) => {
 $('#refresh-stale').addEventListener('click', () => retryCanonicalRefresh($('#refresh-stale')))
 $('#detail-canonical-retry').addEventListener('click', () => retryCanonicalRefresh($('#detail-canonical-retry')))
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
-$('#close-detail').addEventListener('click', closeDetail)
+$('#close-detail').addEventListener('click', () => closeDetail())
 dialog.addEventListener('click', (event) => {
 	if (event.target === dialog) closeDetail()
 })
@@ -4329,9 +5070,14 @@ dialog.addEventListener('close', () => {
 	preservePendingOnDialogClose = false
 	clearDetailUrl()
 })
-const stateTabs = [...document.querySelectorAll('[data-state-tab]')]
+const isStateTab = (value: string | undefined | null): value is StateTab =>
+	value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
+
+const stateTabs = [...document.querySelectorAll<HTMLButtonElement>('[data-state-tab]')]
 for (const tab of stateTabs) {
-	tab.addEventListener('click', () => setStateTab(tab.dataset.stateTab))
+	tab.addEventListener('click', () => {
+		if (isStateTab(tab.dataset.stateTab)) setStateTab(tab.dataset.stateTab)
+	})
 	tab.addEventListener('keydown', (event) => {
 		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
 		event.preventDefault()
@@ -4342,8 +5088,10 @@ for (const tab of stateTabs) {
 				: event.key === 'End'
 					? stateTabs.length - 1
 					: (current + (event.key === 'ArrowRight' ? 1 : -1) + stateTabs.length) % stateTabs.length
-		stateTabs[next].focus()
-		setStateTab(stateTabs[next].dataset.stateTab)
+		const nextTab = stateTabs[next]
+		if (nextTab === undefined) return
+		nextTab.focus()
+		if (isStateTab(nextTab.dataset.stateTab)) setStateTab(nextTab.dataset.stateTab)
 	})
 }
 $('#entity-search').addEventListener('input', () => {
@@ -4352,9 +5100,10 @@ $('#entity-search').addEventListener('input', () => {
 	if (stateData !== undefined) renderEntityList()
 })
 $('#entity-search').addEventListener('keydown', (event) => {
-	if (event.key !== 'Escape' || event.currentTarget.value === '') return
+	const input = event.currentTarget
+	if (!(input instanceof HTMLInputElement) || event.key !== 'Escape' || input.value === '') return
 	event.preventDefault()
-	event.currentTarget.value = ''
+	input.value = ''
 	stateDetailContextVersion++
 	stateDetailRequestVersion++
 	if (stateData !== undefined) renderEntityList()
@@ -4461,7 +5210,7 @@ $('#rich-sort').addEventListener('change', () => {
 })
 $('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
-const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recovery) => {
+const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean, recovery: CanonicalRecovery | undefined): Promise<boolean> => {
 	if (activeReorgRecovery !== undefined && activeReorgRecovery !== recovery) return await activeReorgRecovery.promise
 	const networkRefresh = loadNetworks()
 	if (isSystem) {
@@ -4477,10 +5226,11 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 	if (isRichList) {
 		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList({ live: true })])
 		if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalAccount === undefined && activeAccount && dialog.open) {
+			const account = activeAccount
 			const refreshedAccount = richListItems.find(
-				(item) => String(item.chain_id) === String(activeAccount.chain_id) && item.address.toLowerCase() === activeAccount.address.toLowerCase(),
+				(item) => String(item.chain_id) === String(account.chain_id) && item.address.toLowerCase() === account.address.toLowerCase(),
 			)
-			await openAccountTransactions(refreshedAccount ?? activeAccount, { live: true })
+			await openAccountTransactions(refreshedAccount ?? account, { live: true })
 		}
 		const canonicalDetailRefreshed =
 			contentRefreshed && pendingCanonicalAccount && activeReorgRecovery === undefined ? await restorePendingCanonicalAccount() : true
@@ -4507,7 +5257,11 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 		if (fullyRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return fullyRefreshed
 	}
-	const activityRetention = activityRefreshRetention(canonicalRefreshRequired, pendingCanonicalActivityCount, feed.querySelectorAll('.log-row').length)
+	const activityRetention = activityRefreshRetention(
+		canonicalRefreshRequired,
+		pendingCanonicalActivityCount,
+		feed.querySelectorAll<HTMLElement>('.log-row').length,
+	)
 	const [, contentRefreshed] = await Promise.all([
 		networkRefresh,
 		loadLogs({
@@ -4524,12 +5278,12 @@ const refreshAfterUpdates = async (_count, _forceContentRefresh = false, recover
 }
 requestRouteRefresh = createLiveRouteRefreshCoordinator(refreshAfterUpdates, () => activeReorgRecovery)
 
-const refreshCanonicalViews = (title, detail) => {
+const refreshCanonicalViews = (title: string, detail: string) => {
 	canonicalDataGeneration++
 	if (activeReorgRecovery !== undefined) {
 		activeReorgRecovery.pendingRefresh = true
 		if (isActivity) {
-			const visibleCount = feed.querySelectorAll('.log-row').length
+			const visibleCount = feed.querySelectorAll<HTMLElement>('.log-row').length
 			pendingCanonicalActivityCount = Math.max(pendingCanonicalActivityCount ?? 0, visibleCount)
 		}
 		activeReorgRecovery.title = title
@@ -4539,7 +5293,7 @@ const refreshCanonicalViews = (title, detail) => {
 		showCanonicalDialogStatus(title, detail)
 		return activeReorgRecovery.promise
 	}
-	const recovery = {
+	const recovery: CanonicalRecovery = {
 		chainId: requiredChainId(),
 		title,
 		detail,
@@ -4547,9 +5301,9 @@ const refreshCanonicalViews = (title, detail) => {
 		accountToRefresh: activeAccount && dialog.open ? activeAccount : undefined,
 		accountDialogSnapshot: activeAccount && dialog.open ? captureAccountDialogSnapshot() : undefined,
 		pendingRefresh: false,
-		promise: undefined,
+		promise: Promise.resolve(false),
 	}
-	if (isActivity) pendingCanonicalActivityCount = feed.querySelectorAll('.log-row').length
+	if (isActivity) pendingCanonicalActivityCount = feed.querySelectorAll<HTMLElement>('.log-row').length
 	if (recovery.logToRefresh) pendingCanonicalLog = recovery.logToRefresh
 	if (recovery.accountToRefresh) {
 		pendingCanonicalAccount = recovery.accountToRefresh
@@ -4565,7 +5319,7 @@ const refreshCanonicalViews = (title, detail) => {
 		$('#richlist-more').hidden = true
 		$('#richlist-more').disabled = true
 	}
-	const accountMore = detailContent.querySelector('.account-transactions-more')
+	const accountMore = detailContent.querySelector<HTMLButtonElement>('.account-transactions-more')
 	if (accountMore !== null) {
 		accountMore.hidden = true
 		accountMore.disabled = true
@@ -4652,19 +5406,25 @@ const connectStream = () => {
 	nextStream.addEventListener('error', () => {
 		updateConnectionStatus()
 	})
-	const eventPayload = (event, label) => {
+	const eventPayload = (event: MessageEvent, label: string): LiveEventPayload | undefined => {
 		try {
-			return JSON.parse(event.data)
+			const value: unknown = JSON.parse(String(event.data))
+			if (!isRecord(value) || (typeof value['chainId'] !== 'string' && typeof value['chainId'] !== 'number')) throw new Error('Missing chainId')
+			const blockNumber = value['blockNumber']
+			const depth = value['depth']
+			if (blockNumber !== undefined && typeof blockNumber !== 'string' && typeof blockNumber !== 'number') throw new Error('Invalid blockNumber')
+			if (depth !== undefined && typeof depth !== 'string' && typeof depth !== 'number') throw new Error('Invalid depth')
+			return { chainId: value['chainId'], ...(blockNumber === undefined ? {} : { blockNumber }), ...(depth === undefined ? {} : { depth }) }
 		} catch (error) {
 			console.error(`${label} notification could not be decoded (${error instanceof Error ? error.name : typeof error})`)
 			return undefined
 		}
 	}
-	const selectedEventPayload = (event, label) => {
+	const selectedEventPayload = (event: MessageEvent, label: string) => {
 		const payload = eventPayload(event, label)
 		return payload !== undefined && String(payload.chainId) === selectedChainId() ? payload : undefined
 	}
-	const liveUpdate = (event) => {
+	const liveUpdate = (event: MessageEvent) => {
 		if (selectedEventPayload(event, 'Live update') === undefined) return
 		queueBlockRefresh()
 	}
@@ -4672,7 +5432,7 @@ const connectStream = () => {
 		const payload = eventPayload(event, 'Block update')
 		if (payload === undefined) return
 		applyDemoBlock(payload)
-		invalidateAddressIdentityCache(payload.chainId, true)
+		invalidateAddressIdentityCache(String(payload.chainId), true)
 		if (String(payload.chainId) === selectedChainId()) liveUpdate(event)
 	})
 	nextStream.addEventListener('status', liveUpdate)
@@ -4683,7 +5443,7 @@ const connectStream = () => {
 			demoReorgObserved = true
 			demoEvictedAddress = activeAccount?.address.toLowerCase()
 		}
-		invalidateAddressIdentityCache(payload.chainId)
+		invalidateAddressIdentityCache(String(payload.chainId))
 		if (String(payload.chainId) !== selectedChainId()) return
 		const depth = String(payload.depth ?? 'unknown')
 		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; views are refreshing.`)
@@ -4713,14 +5473,14 @@ addEventListener('pagehide', () => {
 	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 })
-addEventListener('pageshow', async (event) => {
+addEventListener('pageshow', async (event: PageTransitionEvent) => {
 	if (!event.persisted) return
 	connectStream()
 	await requestRouteRefresh(1, true)
 })
 
 setInterval(() => {
-	for (const node of document.querySelectorAll('[data-time]'))
+	for (const node of document.querySelectorAll<HTMLElement>('[data-time]'))
 		node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset.time)} · ${age(node.dataset.time)}` : age(node.dataset.time)
 }, 1000)
 setInterval(() => {
@@ -4751,10 +5511,11 @@ $('#contracts').hidden = !isContracts
 $('#richlist').hidden = !isRichList
 $('#address-profile').hidden = !isAddress
 $('.skip-link').href = isSystem ? '#system' : isContracts ? '#contracts' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
-for (const link of document.querySelectorAll('.product-nav a')) if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
+for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a'))
+	if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 
 const requestedTab = pageUrl.searchParams.get('tab')
-if (isSystem) setStateTab(['pools', 'questions', 'vaults', 'universes'].includes(requestedTab) ? requestedTab : 'pools')
+if (isSystem) setStateTab(isStateTab(requestedTab) ? requestedTab : 'pools')
 if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefined
 
 const initialDashboardLoad = (async () => {
@@ -4783,6 +5544,7 @@ if (isActivity && deepLink !== null) {
 if (isRichList && accountDeepLink !== null) {
 	const [chainId, address] = accountDeepLink.split(':')
 	if (chainId === selectedChainId() && /^0x[0-9a-fA-F]{40}$/.test(address ?? '')) {
+		if (chainId === undefined || address === undefined) throw new Error('Account deep link is malformed')
 		const item = richListItems.find((candidate) => candidate.chain_id === chainId && candidate.address.toLowerCase() === address?.toLowerCase())
 		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === chainId)
 		await openAccountTransactions(

@@ -1,3 +1,28 @@
+import type { UniswapPriceObservation } from './chart-values.ts'
+
+export interface AmmPriceHistoryRecord {
+	timestamp: string
+	block_number: string
+	conditional_yes_bps: string
+	conditional_no_bps: string
+	yes_reserve_atto_shares: string
+	no_reserve_atto_shares: string
+}
+
+export interface RepEthPriceHistoryRecord {
+	timestamp: string
+	settlement_timestamp: string | null
+	block_number: string
+	event_name: string
+	report_id: string | null
+	rep_per_eth_1e18: string
+}
+
+interface DemoUniswapMarket {
+	venue: 'v2' | 'v3' | 'v4'
+	fee: string
+}
+
 const demoRepEthValues = [
 	'18250000000000000000',
 	'17980000000000000000',
@@ -7,7 +32,7 @@ const demoRepEthValues = [
 	'19640000000000000000',
 ]
 
-export const demoAmmPriceHistory = (now = Date.now()) =>
+export const demoAmmPriceHistory = (now = Date.now()): AmmPriceHistoryRecord[] =>
 	Array.from({ length: 12 }, (_, index) => {
 		const yesReserveAttoShares = BigInt(210 + index * 7) * 10n ** 18n
 		const noReserveAttoShares = BigInt(196 + index * 11) * 10n ** 18n
@@ -22,7 +47,7 @@ export const demoAmmPriceHistory = (now = Date.now()) =>
 		}
 	})
 
-export const demoRepEthPriceHistory = (now = Date.now()) =>
+export const demoRepEthPriceHistory = (now = Date.now()): RepEthPriceHistoryRecord[] =>
 	demoRepEthValues.map((value, index) => {
 		const timestamp = new Date(now - (demoRepEthValues.length - 1 - index) * 9 * 86_400_000).toISOString()
 		return {
@@ -35,7 +60,7 @@ export const demoRepEthPriceHistory = (now = Date.now()) =>
 		}
 	})
 
-const demoUniswapHistory = (markets, now) =>
+const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number): UniswapPriceObservation[] =>
 	markets.flatMap(({ venue, fee }, venueIndex) =>
 		demoRepEthValues.slice(1).map((value, index) => ({
 			timestamp: new Date(now - (4 - index) * 8 * 86_400_000 + venueIndex * 9_000_000).toISOString(),
@@ -50,7 +75,7 @@ const demoUniswapHistory = (markets, now) =>
 		})),
 	)
 
-export const demoUniswapRepEthPriceHistory = (now = Date.now()) =>
+export const demoUniswapRepEthPriceHistory = (now = Date.now()): UniswapPriceObservation[] =>
 	demoUniswapHistory(
 		[
 			{ venue: 'v2', fee: '3000' },
@@ -60,7 +85,7 @@ export const demoUniswapRepEthPriceHistory = (now = Date.now()) =>
 		now,
 	)
 
-export const demoDenseUniswapRepEthPriceHistory = (now = Date.now()) =>
+export const demoDenseUniswapRepEthPriceHistory = (now = Date.now()): UniswapPriceObservation[] =>
 	demoUniswapHistory(
 		[
 			{ venue: 'v2', fee: '3000' },

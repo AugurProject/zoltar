@@ -3,7 +3,7 @@
 		"target": "ES2023",
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
-		"lib": ["ES2023", "DOM"],
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"types": ["bun"],
 		"strict": true,
 		"skipLibCheck": true,
@@ -12,5 +12,5 @@
 		"allowImportingTsExtensions": true,
 		"noEmit": true
 	},
-	"include": ["src", "scripts", "tests"]
+	"include": ["src", "scripts", "browser", "tests"]
 }

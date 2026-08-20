@@ -6,7 +6,7 @@
 	"license": "Unlicense",
 	"scripts": {
 		"ci": "bun ./ci/run.mts",
-		"refresh:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mjs --refresh",
+		"refresh:shared-dependency": "bun ../scripts/ensure-shared-package-fresh.mts --refresh",
 		"setup": "bun install --frozen-lockfile && bun run compile && bun run ui:build",
 		"compile": "bun ./ts/compiler/compile.mts",
 		"generate": "bun run compile",
