@@ -1,7 +1,6 @@
 name: CI Gate
 
 on:
-  workflow_call:
   pull_request:
     branches: [main]
   push:
@@ -85,8 +84,8 @@ jobs:
             shared/js
             solidity/artifacts
             solidity/ts/types/contractArtifact.ts
-            ui/ts/abis.ts
-            ui/ts/contractArtifact.ts
+            ui/coreShared/ts/abis.ts
+            ui/coreShared/ts/contractArtifact.ts
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -110,7 +109,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .tsbuildinfo
-          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/ts/**') }}
+          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/*/ts/**') }}
           restore-keys: |
             ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-
       - name: Verify pre-task worktree cleanliness
@@ -119,12 +118,28 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=normal)"
           git diff --check
       - name: TypeScript checks and production UI build
-        run: bun run ci:preflight:current
+        shell: bash
+        run: |
+          started_at="${SECONDS}"
+          set +e
+          bun run ui:build:apps
+          build_status="$?"
+          if [[ "${build_status}" -ne 0 ]]; then
+            exit "${build_status}"
+          fi
+          bun run ci:preflight:current
+          status="$?"
+          set -e
+          duration="$((SECONDS - started_at))"
+          echo "| Preflight and production build | ${duration}s |" >> "${GITHUB_STEP_SUMMARY}"
+          exit "${status}"
       - name: Upload production UI build
         uses: actions/upload-artifact@v4
         with:
           name: production-ui
-          path: ui/dist
+          path: |
+            ui/zoltar/dist
+            ui/statoblast/dist
           if-no-files-found: error
           retention-days: 1
       - name: Upload component build inputs
@@ -135,8 +150,8 @@ jobs:
             shared/js
             solidity/artifacts
             solidity/ts/types/contractArtifact.ts
-            ui/ts/abis.ts
-            ui/ts/contractArtifact.ts
+            ui/coreShared/ts/abis.ts
+            ui/coreShared/ts/contractArtifact.ts
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -163,8 +178,10 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           name: production-ui
-          path: ui/dist
-      - uses: actions/cache/restore@v5
+          path: ui
+
+      - name: Restore historical test timings
+        uses: actions/cache/restore@v5
         with:
           path: .ci/test-timings.json
           key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
@@ -244,7 +261,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - run: bun audit && (cd ui && bun audit) && (cd solidity && bun audit)
+      - name: Run dependency audits
+        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd solidity && bun audit)
 
   infrastructure-checks:
     name: Infrastructure checks

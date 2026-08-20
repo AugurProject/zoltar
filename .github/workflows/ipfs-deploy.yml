@@ -5,6 +5,9 @@ on:
     workflows: [CI Gate]
     branches: [main]
     types: [completed]
+  push:
+    tags:
+      - v*
   workflow_dispatch:
 
 permissions:
@@ -66,3 +69,79 @@ jobs:
 
       - name: Push image
         run: docker push "${IMAGE_RELEASE_ID}"
+
+      - name: Create a reference for IPFS hash
+        if: github.ref_type == 'tag'
+        run: |
+          IPFS_HASH=$(docker run --entrypoint /bin/sh "${IMAGE_RELEASE_ID}" -c 'cat /ipfs_hash.txt')
+          echo "IPFS_HASH=${IPFS_HASH}" >> "$GITHUB_ENV"
+
+      - name: Create a release
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_NOTE_TEMPLATE=$(cat << EOF
+          #### IPFS Hash
+
+          \`\`\`
+          $IPFS_HASH
+          \`\`\`
+
+          You can view published versions of Zoltar and Augur Statoblast through any IPFS gateway.
+          The CID root is a directory; each application is published under its own path.
+
+          ##### Zoltar
+
+          [ipfs://$IPFS_HASH/zoltar/](ipfs://$IPFS_HASH/zoltar/) __(Recommended)__
+          _requires Brave Browser or IPFS Desktop_
+          [https://$IPFS_HASH.ipfs.nftstorage.link/zoltar/](https://$IPFS_HASH.ipfs.nftstorage.link/zoltar/)
+          [https://$IPFS_HASH.ipfs.zoltu.io/zoltar/](https://$IPFS_HASH.ipfs.zoltu.io/zoltar/)
+          [https://$IPFS_HASH.ipfs.cf-ipfs.com/zoltar/](https://$IPFS_HASH.ipfs.cf-ipfs.com/zoltar/)
+          [https://$IPFS_HASH.ipfs.w3s.link/zoltar/](https://$IPFS_HASH.ipfs.w3s.link/zoltar/)
+
+          ##### Augur Statoblast
+
+          [ipfs://$IPFS_HASH/statoblast/](ipfs://$IPFS_HASH/statoblast/) __(Recommended)__
+          _requires Brave Browser or IPFS Desktop_
+          [https://$IPFS_HASH.ipfs.nftstorage.link/statoblast/](https://$IPFS_HASH.ipfs.nftstorage.link/statoblast/)
+          [https://$IPFS_HASH.ipfs.zoltu.io/statoblast/](https://$IPFS_HASH.ipfs.zoltu.io/statoblast/)
+          [https://$IPFS_HASH.ipfs.cf-ipfs.com/statoblast/](https://$IPFS_HASH.ipfs.cf-ipfs.com/statoblast/)
+          [https://$IPFS_HASH.ipfs.w3s.link/statoblast/](https://$IPFS_HASH.ipfs.w3s.link/statoblast/)
+          EOF
+          )
+
+          PAYLOAD_TEMPLATE=$(cat <<EOF
+          {
+            "name": "$GITHUB_REF_NAME",
+            "tag_name": "$GITHUB_REF_NAME",
+            "body": $(echo "$RELEASE_NOTE_TEMPLATE" | jq -cRs '@json|fromjson'),
+            "draft": false,
+            "generate_release_notes": true
+          }
+          EOF
+          )
+
+          REQUEST_DATA=$(echo "$PAYLOAD_TEMPLATE" | jq -c)
+          RESPONSE=$(curl \
+            --silent \
+            --location \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$REQUEST_DATA" \
+            --write-out "%{http_code}" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases"
+          )
+
+          RESPONSE_CODE=${RESPONSE: -3}
+          RESPONSE_BODY=${RESPONSE//$RESPONSE_CODE/}
+
+          if [ "$RESPONSE_CODE" -ne 201 ]; then
+            ERROR_MESSAGE=$(echo "$RESPONSE_BODY" | jq '.message')
+            echo "HTTP $RESPONSE_CODE - $ERROR_MESSAGE"
+            exit 1
+          fi
+
+          echo "Release ($GITHUB_REF_NAME) successfully created"
