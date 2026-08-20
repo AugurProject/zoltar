@@ -27,9 +27,9 @@ export const runSchemaTransaction = async <T>(
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicRelations: readonly string[]): 'initialize' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
-	if (markerVersion !== undefined || publicRelations.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
+	if (markerVersion !== undefined || publicObjects.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 	return 'initialize'
 }
 
@@ -65,15 +65,27 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			if (markers.length !== 1 || typeof markers[0]?.schema_version !== 'string') throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 			markerVersion = markers[0].schema_version
 		}
-		const relations = await connection`
-			SELECT class.relname
-			FROM pg_catalog.pg_class class
-			JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
-			WHERE namespace.nspname = 'public' AND class.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
-			ORDER BY class.relname
+		const objects = await connection`
+			SELECT object_name FROM (
+				SELECT 'relation:' || class.relname AS object_name
+				FROM pg_catalog.pg_class class
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public' AND class.relkind IN ('r', 'p', 'v', 'm', 'S', 'f', 'c')
+				UNION ALL
+				SELECT 'type:' || type_entry.typname AS object_name
+				FROM pg_catalog.pg_type type_entry
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = type_entry.typnamespace
+				WHERE namespace.nspname = 'public'
+				UNION ALL
+				SELECT 'routine:' || procedure_entry.proname AS object_name
+				FROM pg_catalog.pg_proc procedure_entry
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure_entry.pronamespace
+				WHERE namespace.nspname = 'public'
+			) public_objects
+			ORDER BY object_name
 		`
-		const publicRelations = relations.flatMap((row: { relname?: unknown }) => (typeof row.relname === 'string' ? [row.relname] : []))
-		if (schemaInitializationAction(markerVersion, publicRelations) === 'current') return
+		const publicObjects = objects.flatMap((row: { object_name?: unknown }) => (typeof row.object_name === 'string' ? [row.object_name] : []))
+		if (schemaInitializationAction(markerVersion, publicObjects) === 'current') return
 
 		const schema = await Bun.file(path.resolve(import.meta.dir, '../schema.sql')).text()
 		await runSchemaTransaction(
