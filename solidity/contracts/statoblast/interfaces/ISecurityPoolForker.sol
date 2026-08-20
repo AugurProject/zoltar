@@ -30,6 +30,7 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 	/// @notice Pool-owned accounting not yet assigned to a withdrawable vault.
 	/// @dev Fee eligibility can be smaller than total capacity after a zero-purchase auction.
 	function getUnassignedPosition(ISecurityPool securityPool) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth);
+	function getUnassignedPositionFeeIndex(ISecurityPool securityPool) external view returns (uint256);
 	function getOwnForkRepBuckets(ISecurityPool securityPool)
 		external
 		view

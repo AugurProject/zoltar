@@ -94,6 +94,14 @@ library SecurityPoolUtils {
 		return (numerator / PRICE_PRECISION, numerator % PRICE_PRECISION);
 	}
 
+	function getUnassignedPositionFeeAccounting(address securityPoolAddress) external view returns (uint256 feeIndexAtFinalization, uint256 claimableFeesAttoEth) {
+		ISecurityPool securityPool = ISecurityPool(payable(securityPoolAddress));
+		ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
+		feeIndexAtFinalization = forker.getUnassignedPositionFeeIndex(securityPool);
+		(, uint256 capacityOwnershipAttoRep, ) = forker.getUnassignedPosition(securityPool);
+		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
+	}
+
 	function calculateMintingCapacityAttoEth(uint256 capacityOwnershipAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
 		if (repEthPrice == 0 || capacityOwnershipAttoRep == 0) return 0;
 		uint256 capacityValueAttoEth = Math.mulDiv(capacityOwnershipAttoRep, PRICE_PRECISION, repEthPrice);

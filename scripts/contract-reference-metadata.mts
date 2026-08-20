@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '9281eb58010bbee6a0f8f7646fa8e08a1dfefd9e43688586194388d91ec2c452'
+export const expectedProductionSoliditySourceFingerprint = '3585faaf04da63aa9ae5c357f5573aafe9bffc0bb8c5e1e58c167e4c99b5098a'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -1027,17 +1027,18 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'f91fd8965efece452e3baa7f763f8a65255e04855f3c3ae776479a9332d4abc6',
+		compiledAbiFingerprint: 'a020c5bd3f76bb764fe16b469c8fc7eb408befe2742df714b1a25a013d118da1',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
-		readAbiFingerprint: '65fc159540db5fed4a2762907978cdbe5ec0ac56e2c77c30917b3ed75b42ff54',
+		readAbiFingerprint: 'a86dd34e9af6508b8a182c6f507e5b3af94b0a1b5482ad3911b2a8e4de0b4ad4',
 		readSurface:
-			'Use `zoltar`, `forkData`, `getMigratedAttoRep`, `getForkActivationTime`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
+			'Use `zoltar`, `forkData`, `getMigratedAttoRep`, `getForkActivationTime`, `getUnassignedPosition`, `getUnassignedPositionFeeIndex`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions.',
 		readDeclarations: [
 			{ name: 'forkData' },
 			{ name: 'getMigratedAttoRep' },
 			{ name: 'getForkActivationTime' },
 			{ name: 'getUnassignedPosition' },
+			{ name: 'getUnassignedPositionFeeIndex' },
 			{ name: 'isEscalationDepositClaimedDirectly' },
 			{ name: 'getEscalationDepositId' },
 			{ name: 'getDirectlyClaimedEscalationPrincipal' },

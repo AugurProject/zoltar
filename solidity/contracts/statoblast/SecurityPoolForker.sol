@@ -90,6 +90,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
+	function getUnassignedPositionFeeIndex(ISecurityPool securityPool) external view returns (uint256) {
+		return forkDataByPool[securityPool].auctionFeeIndexAtFinalization;
+	}
+
 	function isEscalationDepositClaimedDirectly(ISecurityPool securityPool, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256 parentDepositIndex) external view returns (bool) {
 		return
 			directlyClaimedEscalationDepositById[

@@ -4,6 +4,7 @@ import {
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_SecurityPool_SecurityPool,
+	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness,
 	test_statoblast_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness,
@@ -223,7 +224,13 @@ describe('Statoblast: truth auction', () => {
 			functionName: 'getUnassignedPosition',
 			args: [securityPool],
 		})
-		return { repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth }
+		const [feeIndex, claimableFeesAttoEth] = await client.readContract({
+			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
+			address: getInfraContractAddresses().securityPoolUtils,
+			functionName: 'getUnassignedPositionFeeAccounting',
+			args: [securityPool],
+		})
+		return { repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth, feeIndex, claimableFeesAttoEth }
 	}
 
 	test('forker public entry points expose exact wrong-state and empty-action guards', async () => {
@@ -410,8 +417,12 @@ describe('Statoblast: truth auction', () => {
 			const unassignedPositionBeforeClaim = await getUnassignedPosition(yesSecurityPool.securityPool)
 			assert.ok(unassignedPositionBeforeClaim.repBackingUnits > 0n, 'the finalized auction must expose its unassigned REP backing')
 			assert.ok(unassignedPositionBeforeClaim.capacityOwnershipAttoRep > 0n, 'the finalized auction must expose its unassigned capacity')
+			strictEqualTypeSafe(unassignedPositionBeforeClaim.claimableFeesAttoEth, 0n, 'the unassigned position should start at its finalization fee-index baseline')
 			await mockWindow.advanceTime(DAY)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
+			const accruedUnassignedPositionBeforeClaim = await getUnassignedPosition(yesSecurityPool.securityPool)
+			strictEqualTypeSafe(accruedUnassignedPositionBeforeClaim.feeIndex, unassignedPositionBeforeClaim.feeIndex, 'the pending position must retain its finalization fee-index baseline')
+			assert.ok(accruedUnassignedPositionBeforeClaim.claimableFeesAttoEth > 0n, 'the pending position must expose fees earned since finalization')
 
 			const migratedVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const poolSnapshotBeforeClaim = await client.readContract({
@@ -438,6 +449,7 @@ describe('Statoblast: truth auction', () => {
 			const unassignedPositionAfterClaim = await getUnassignedPosition(yesSecurityPool.securityPool)
 			strictEqualTypeSafe(unassignedPositionAfterClaim.capacityOwnershipAttoRep, 0n, 'the final claim must transfer all claimable unassigned capacity')
 			strictEqualTypeSafe(unassignedPositionAfterClaim.badDebtAttoEth, 0n, 'the final claim must transfer all unassigned bad debt')
+			strictEqualTypeSafe(unassignedPositionAfterClaim.claimableFeesAttoEth, 0n, 'the final claim must transfer all accrued unassigned fees')
 			const auctionVaultAtClaim = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			assert.ok(auctionVaultAtClaim.claimableFeesAttoEth > 0n, 'auctioned ownership should earn fees from truth-auction finalization even when claimed later')
 			strictEqualTypeSafe(await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), migratedVault.claimableFeesAttoEth + auctionVaultAtClaim.claimableFeesAttoEth, 'auction claims should assign the already-accrued fee share without changing total accrued fees')
