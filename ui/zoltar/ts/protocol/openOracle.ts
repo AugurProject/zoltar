@@ -10,8 +10,7 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
-<<<<<<< HEAD:ui/zoltar/ts/protocol/openOracle.ts
-import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type {
 	LiquidationApprovalDetails,
 	OpenOracleActionResult,
@@ -25,10 +24,6 @@ import type {
 	StagedOracleQueuedResult,
 	WriteClient,
 } from '@zoltar/ui-core-shared/types/contracts.js'
-=======
-import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { LiquidationApprovalDetails, OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
->>>>>>> origin/main:ui/ts/protocol/openOracle.ts
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'

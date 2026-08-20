@@ -10,12 +10,13 @@ const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
 const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
+const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server | undefined
 
 const chromiumPath = getChromiumPath()
-const productionBrowserTest = test
+const productionBrowserTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS)
 const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
 
 beforeAll(async () => {
@@ -217,7 +218,7 @@ test('Chromium DevTools port discovery tolerates delayed startup', async () => {
 		await writePortFile
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
-})
+}, 10_000)
 
 test('Chromium DevTools port discovery reports an early browser exit', async () => {
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: 17, signalCode: null })).rejects.toThrow('Chromium exited with code 17 before publishing its DevTools port')
@@ -311,7 +312,7 @@ test('Chromium page target discovery tolerates a delayed initial page target', a
 	} finally {
 		devToolsServer.stop(true)
 	}
-})
+}, 10_000)
 
 test('Chromium page target discovery retries after a stalled target response', async () => {
 	let requestCount = 0

@@ -95,7 +95,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xdCC03cc07Ec0c633079446Be13b52371104ff0d7"
+			"address": "0x51cf207A931e76C837441dA3b70c57d71C62fF77"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -110,7 +110,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x5dae4d3F03A59a51F01e52920a76Cb4013D15c70"
+			"address": "0x3A7b70613E86908a4494D3cBf627C62342c96990"
 		},
 		{
 			"id": "escalationGameProofVerifier",

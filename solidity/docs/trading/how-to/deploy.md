@@ -2,7 +2,7 @@
 
 ## Use an installed public-network core
 
-The root mainnet and Sepolia manifests describe planned deterministic addresses; they do not prove that the contracts are live. Continue only after the selected network has reviewed core code at those addresses. See the root [deployment-status reference](../../../docs/reference/deployment-status.html) for that distinction.
+The root mainnet and Sepolia manifests describe planned deterministic addresses; they do not prove that the contracts are live. Continue only after the selected network has reviewed core code at those addresses. See the root [deployment-status reference](../../../../docs/reference/deployment-status.html) for that distinction.
 
 From `ui/trading`, start the standalone UI:
 

@@ -1,13 +1,7 @@
 import { type Address } from '@zoltar/shared/ethereum'
-<<<<<<< HEAD:ui/statoblast/ts/protocol/securityVault.ts
-import { peripherals_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { SecurityVaultActionResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar/protocol/core.js'
-=======
-import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import type { SecurityVaultActionResult, WriteClient } from '../types/contracts.js'
-import { writeContractAndWait } from './core.js'
->>>>>>> origin/main:ui/ts/protocol/securityVault.ts
 
 export async function depositRepToVaultToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) {
 	if (amount <= 0n) throw new Error('REP deposit amount must be greater than zero')

@@ -373,7 +373,7 @@ export async function switchWalletChain(provider: InjectedEthereum, chainId: num
 	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${chainId.toString(16)}` }] })
 }
 
-export async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
+async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const [questionData, zoltar, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'zoltar' }),

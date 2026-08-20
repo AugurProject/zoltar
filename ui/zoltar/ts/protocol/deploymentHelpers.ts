@@ -7,19 +7,6 @@ import {
 	ScalarOutcomes_ScalarOutcomes,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
-<<<<<<< HEAD:ui/zoltar/ts/protocol/deploymentHelpers.ts
-	peripherals_Multicall3_Multicall3,
-	peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
-	peripherals_SecurityPoolForker_SecurityPoolForker,
-	peripherals_SecurityPoolUtils_SecurityPoolUtils,
-	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
-	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
-	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	peripherals_openOracle_OpenOracle_OpenOracle,
-} from '@zoltar/ui-core-shared/contractArtifact.js'
-=======
 	statoblast_Multicall3_Multicall3,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
@@ -30,8 +17,7 @@ import {
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
-} from '../contractArtifact.js'
->>>>>>> origin/main:ui/ts/protocol/deploymentHelpers.ts
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 

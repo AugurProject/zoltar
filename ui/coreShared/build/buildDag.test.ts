@@ -38,6 +38,18 @@ describe('UI build dependency direction', () => {
 		expect(appBuild).toContain('ui:build:apps')
 	})
 
+	test('the public production build emits the complete UI DAG before bundling', () => {
+		const scripts = readRootPackageJson().scripts ?? {}
+		const productionBuild = scripts['ui:build:prod']
+		if (productionBuild === undefined) throw new Error('ui:build:prod script is missing')
+		const generateIndex = productionBuild.indexOf('bun run generate')
+		const appBuildIndex = productionBuild.indexOf('bun run ui:build:apps')
+		const productionBundleIndex = productionBuild.indexOf('bun run ui:build:prod:current')
+		expect(generateIndex).toBeGreaterThanOrEqual(0)
+		expect(appBuildIndex).toBeGreaterThan(generateIndex)
+		expect(productionBundleIndex).toBeGreaterThan(appBuildIndex)
+	})
+
 	test('setup scripts emit the complete UI DAG before compiling tests', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		for (const name of ['setup', 'ui:setup']) {

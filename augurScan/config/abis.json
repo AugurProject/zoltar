@@ -1,5 +1,5 @@
 {
-  "sourceHash": "67cdd77e1a5e93d32660e5902e7454b181915783703a970f8c4431365a525682",
+  "sourceHash": "504f6c2fdd35b7ff5e81938e1b9a21ec380ae6813a6f4662d8dc3583f2e83d85",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -2484,7 +2484,7 @@
       ]
     },
     "EscalationGame": {
-      "source": "contracts/peripherals/EscalationGame.sol",
+      "source": "contracts/statoblast/EscalationGame.sol",
       "abi": [
         {
           "inputs": [
@@ -4429,7 +4429,7 @@
       ]
     },
     "EscalationGameCalculations": {
-      "source": "contracts/peripherals/EscalationGameCalculations.sol",
+      "source": "contracts/statoblast/EscalationGameCalculations.sol",
       "abi": [
         {
           "anonymous": false,
@@ -5434,7 +5434,7 @@
       ]
     },
     "EscalationGameCarry": {
-      "source": "contracts/peripherals/EscalationGameCarry.sol",
+      "source": "contracts/statoblast/EscalationGameCarry.sol",
       "abi": [
         {
           "anonymous": false,
@@ -6715,7 +6715,7 @@
       ]
     },
     "EscalationGameClaimDelegate": {
-      "source": "contracts/peripherals/EscalationGameClaimDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameClaimDelegate.sol",
       "abi": [
         {
           "inputs": [],
@@ -7030,7 +7030,7 @@
       ]
     },
     "IEscalationClaimCheckpointSource": {
-      "source": "contracts/peripherals/EscalationGameClaimDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameClaimDelegate.sol",
       "abi": [
         {
           "inputs": [
@@ -7072,7 +7072,7 @@
       ]
     },
     "IEscalationClaimGameContext": {
-      "source": "contracts/peripherals/EscalationGameClaimDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameClaimDelegate.sol",
       "abi": [
         {
           "inputs": [],
@@ -7090,7 +7090,7 @@
       ]
     },
     "EscalationGameDepositDelegate": {
-      "source": "contracts/peripherals/EscalationGameDepositDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameDepositDelegate.sol",
       "abi": [
         {
           "anonymous": false,
@@ -7846,7 +7846,7 @@
       ]
     },
     "IEscalationGameDepositContext": {
-      "source": "contracts/peripherals/EscalationGameDepositDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameDepositDelegate.sol",
       "abi": [
         {
           "inputs": [
@@ -7948,7 +7948,7 @@
       ]
     },
     "IEscalationGameSecurityPoolContext": {
-      "source": "contracts/peripherals/EscalationGameDepositDelegate.sol",
+      "source": "contracts/statoblast/EscalationGameDepositDelegate.sol",
       "abi": [
         {
           "inputs": [],
@@ -7966,7 +7966,7 @@
       ]
     },
     "EscalationGameEscrow": {
-      "source": "contracts/peripherals/EscalationGameEscrow.sol",
+      "source": "contracts/statoblast/EscalationGameEscrow.sol",
       "abi": [
         {
           "anonymous": false,
@@ -9434,7 +9434,7 @@
       ]
     },
     "EscalationGameForker": {
-      "source": "contracts/peripherals/EscalationGameForker.sol",
+      "source": "contracts/statoblast/EscalationGameForker.sol",
       "abi": [
         {
           "inputs": [
@@ -10191,7 +10191,7 @@
       ]
     },
     "EscalationGameProofVerifier": {
-      "source": "contracts/peripherals/EscalationGameProofVerifier.sol",
+      "source": "contracts/statoblast/EscalationGameProofVerifier.sol",
       "abi": [
         {
           "inputs": [
@@ -10563,7 +10563,7 @@
       ]
     },
     "EscalationGameSettlement": {
-      "source": "contracts/peripherals/EscalationGameSettlement.sol",
+      "source": "contracts/statoblast/EscalationGameSettlement.sol",
       "abi": [
         {
           "anonymous": false,
@@ -12339,7 +12339,7 @@
       ]
     },
     "EscalationGameState": {
-      "source": "contracts/peripherals/EscalationGameState.sol",
+      "source": "contracts/statoblast/EscalationGameState.sol",
       "abi": [
         {
           "anonymous": false,
@@ -13202,7 +13202,7 @@
       ]
     },
     "EscalationGameStorage": {
-      "source": "contracts/peripherals/EscalationGameStorage.sol",
+      "source": "contracts/statoblast/EscalationGameStorage.sol",
       "abi": [
         {
           "inputs": [],
@@ -13438,7 +13438,7 @@
       ]
     },
     "ILiquidationApprovalCoordinator": {
-      "source": "contracts/peripherals/LiquidationApprovalRegistry.sol",
+      "source": "contracts/statoblast/LiquidationApprovalRegistry.sol",
       "abi": [
         {
           "inputs": [],
@@ -13456,7 +13456,7 @@
       ]
     },
     "LiquidationApprovalRegistry": {
-      "source": "contracts/peripherals/LiquidationApprovalRegistry.sol",
+      "source": "contracts/statoblast/LiquidationApprovalRegistry.sol",
       "abi": [
         {
           "anonymous": false,
@@ -14265,7 +14265,7 @@
       ]
     },
     "Multicall3": {
-      "source": "contracts/peripherals/Multicall3.sol",
+      "source": "contracts/statoblast/Multicall3.sol",
       "abi": [
         {
           "inputs": [
@@ -14708,7 +14708,7 @@
       ]
     },
     "IStoredOpenOracleGame": {
-      "source": "contracts/peripherals/OpenOraclePriceCoordinator.sol",
+      "source": "contracts/statoblast/OpenOraclePriceCoordinator.sol",
       "abi": [
         {
           "inputs": [
@@ -14752,7 +14752,7 @@
       ]
     },
     "OpenOraclePriceCoordinator": {
-      "source": "contracts/peripherals/OpenOraclePriceCoordinator.sol",
+      "source": "contracts/statoblast/OpenOraclePriceCoordinator.sol",
       "abi": [
         {
           "inputs": [
@@ -16270,7 +16270,7 @@
       ]
     },
     "ISecurityPoolDeploymentWorkerConfiguration": {
-      "source": "contracts/peripherals/SecurityPool.sol",
+      "source": "contracts/statoblast/SecurityPool.sol",
       "abi": [
         {
           "inputs": [],
@@ -16301,7 +16301,7 @@
       ]
     },
     "SecurityPool": {
-      "source": "contracts/peripherals/SecurityPool.sol",
+      "source": "contracts/statoblast/SecurityPool.sol",
       "abi": [
         {
           "inputs": [
@@ -16899,6 +16899,37 @@
           "inputs": [
             {
               "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "depositTargetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingTotalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultDepositTargetHealthFactorRecorded",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
               "internalType": "uint256",
               "name": "operationId",
               "type": "uint256"
@@ -16944,37 +16975,6 @@
           "type": "event"
         },
         {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": true,
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "targetHealthFactorBps",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "capacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "resultingTotalCapacityOwnershipAttoRep",
-              "type": "uint256"
-            }
-          ],
-          "name": "VaultTargetHealthFactorSet",
-          "type": "event"
-        },
-        {
           "inputs": [],
           "name": "activateForkMode",
           "outputs": [],
@@ -16992,9 +16992,14 @@
               "internalType": "uint256",
               "name": "amountAttoRep",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "auctionFeeIndexAtFinalization",
+              "type": "uint256"
             }
           ],
-          "name": "addFeeEligibleCapacityOwnershipAttoRep",
+          "name": "assignFinalizedAuctionFees",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -17138,7 +17143,50 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newVaultBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "configureFinalizedAuctionVault",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "vaultFeeIndex",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -17349,6 +17397,30 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultCapacityBackingFactorsBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "associatedRepPerCapacityBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "poolHeldRepPerCapacityBps",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "getVaultCount",
           "outputs": [
@@ -17515,6 +17587,25 @@
               "internalType": "bool",
               "name": "",
               "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -18164,25 +18255,6 @@
         {
           "inputs": [
             {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
               "internalType": "enum QuestionOutcome",
               "name": "outcome",
               "type": "uint8"
@@ -18301,7 +18373,7 @@
       ]
     },
     "SecurityPoolEventEmitter": {
-      "source": "contracts/peripherals/SecurityPoolEventEmitter.sol",
+      "source": "contracts/statoblast/SecurityPoolEventEmitter.sol",
       "abi": [
         {
           "anonymous": false,
@@ -18949,7 +19021,7 @@
       ]
     },
     "SecurityPoolForker": {
-      "source": "contracts/peripherals/SecurityPoolForker.sol",
+      "source": "contracts/statoblast/SecurityPoolForker.sol",
       "abi": [
         {
           "inputs": [
@@ -20010,6 +20082,54 @@
           "inputs": [
             {
               "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPosition",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
               "name": "parent",
               "type": "address"
             },
@@ -20240,7 +20360,7 @@
       ]
     },
     "SecurityPoolForkerAuctionSettlementBase": {
-      "source": "contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol",
+      "source": "contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol",
       "abi": [
         {
           "anonymous": false,
@@ -20740,7 +20860,7 @@
       ]
     },
     "SecurityPoolForkerBase": {
-      "source": "contracts/peripherals/SecurityPoolForkerBase.sol",
+      "source": "contracts/statoblast/SecurityPoolForkerBase.sol",
       "abi": [
         {
           "anonymous": false,
@@ -21240,7 +21360,7 @@
       ]
     },
     "SecurityPoolForkerVaultMigrationBase": {
-      "source": "contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol",
+      "source": "contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol",
       "abi": [
         {
           "anonymous": false,
@@ -21851,7 +21971,7 @@
       ]
     },
     "SecurityPoolForkerVaultMigrationDelegate": {
-      "source": "contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol",
+      "source": "contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol",
       "abi": [
         {
           "inputs": [
@@ -22499,6 +22619,11 @@
             },
             {
               "internalType": "uint256",
+              "name": "badDebtToAssignAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
               "name": "totalAttoRepPurchased",
               "type": "uint256"
             }
@@ -22599,7 +22724,7 @@
       ]
     },
     "SecurityPoolLiquidationDelegate": {
-      "source": "contracts/peripherals/SecurityPoolLiquidationDelegate.sol",
+      "source": "contracts/statoblast/SecurityPoolLiquidationDelegate.sol",
       "abi": [
         {
           "anonymous": false,
@@ -22657,7 +22782,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "depositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -22673,7 +22798,7 @@
               "type": "uint256"
             }
           ],
-          "name": "VaultTargetHealthFactorSet",
+          "name": "VaultDepositTargetHealthFactorRecorded",
           "type": "event"
         },
         {
@@ -22718,6 +22843,25 @@
         {
           "inputs": [],
           "name": "feeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
           "outputs": [
             {
               "internalType": "uint256",
@@ -22893,7 +23037,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "depositTargetHealthFactorBps",
               "type": "uint256"
             }
           ],
@@ -23024,30 +23168,11 @@
           ],
           "stateMutability": "view",
           "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
         }
       ]
     },
     "SecurityPoolMigrationProxy": {
-      "source": "contracts/peripherals/SecurityPoolMigrationProxy.sol",
+      "source": "contracts/statoblast/SecurityPoolMigrationProxy.sol",
       "abi": [
         {
           "inputs": [
@@ -23197,7 +23322,7 @@
       ]
     },
     "SecurityPoolStorage": {
-      "source": "contracts/peripherals/SecurityPoolStorage.sol",
+      "source": "contracts/statoblast/SecurityPoolStorage.sol",
       "abi": [
         {
           "inputs": [],
@@ -23241,6 +23366,25 @@
         {
           "inputs": [],
           "name": "feeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
           "outputs": [
             {
               "internalType": "uint256",
@@ -23446,30 +23590,11 @@
           ],
           "stateMutability": "view",
           "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
         }
       ]
     },
     "SecurityPoolUtils": {
-      "source": "contracts/peripherals/SecurityPoolUtils.sol",
+      "source": "contracts/statoblast/SecurityPoolUtils.sol",
       "abi": [
         {
           "anonymous": false,
@@ -23577,45 +23702,6 @@
             {
               "internalType": "uint256",
               "name": "backingUnitsToTransfer",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "pure",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
-              "name": "auctionedBadDebtAttoEth",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nextClaimedCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "auctionedCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "previouslyClaimedBadDebtAttoEth",
-              "type": "uint256"
-            }
-          ],
-          "name": "calculateCumulativeAuctionBadDebt",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "badDebtToAssignAttoEth",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nextClaimedBadDebtAttoEth",
               "type": "uint256"
             }
           ],
@@ -23877,6 +23963,30 @@
         {
           "inputs": [
             {
+              "internalType": "address",
+              "name": "securityPoolAddress",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeAccounting",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "feeIndexAtFinalization",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "claimableFeesAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "uint256",
               "name": "poolHeldVaultRepBackingAttoRep",
               "type": "uint256"
@@ -23956,11 +24066,34 @@
           ],
           "stateMutability": "pure",
           "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "ISecurityPool"
+            },
+            {
+              "internalType": "address",
+              "name": "securityPoolForker",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "settlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "requireUnassignedPositionHealthy",
+          "outputs": [],
+          "stateMutability": "view",
+          "type": "function"
         }
       ]
     },
     "IERC1271": {
-      "source": "contracts/peripherals/SignatureValidation.sol",
+      "source": "contracts/statoblast/SignatureValidation.sol",
       "abi": [
         {
           "inputs": [
@@ -23989,7 +24122,7 @@
       ]
     },
     "UniformPriceDualCapBatchAuction": {
-      "source": "contracts/peripherals/UniformPriceDualCapBatchAuction.sol",
+      "source": "contracts/statoblast/UniformPriceDualCapBatchAuction.sol",
       "abi": [
         {
           "inputs": [
@@ -24940,6 +25073,11 @@
               "internalType": "uint256",
               "name": "proRataTotal",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "secondaryProRataTotal",
+              "type": "uint256"
             }
           ],
           "name": "withdrawBids",
@@ -24958,6 +25096,11 @@
               "internalType": "uint256",
               "name": "totalProRataAllocation",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalSecondaryProRataAllocation",
+              "type": "uint256"
             }
           ],
           "stateMutability": "nonpayable",
@@ -24973,7 +25116,7 @@
       ]
     },
     "WETH9": {
-      "source": "contracts/peripherals/WETH9.sol",
+      "source": "contracts/statoblast/WETH9.sol",
       "abi": [
         {
           "anonymous": false,
@@ -25262,7 +25405,7 @@
       ]
     },
     "EscalationGameFactory": {
-      "source": "contracts/peripherals/factories/EscalationGameFactory.sol",
+      "source": "contracts/statoblast/factories/EscalationGameFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -25362,7 +25505,7 @@
       ]
     },
     "CreationCodeChunk": {
-      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "source": "contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -25378,7 +25521,7 @@
       ]
     },
     "LiquidationApprovalRegistryDeployer": {
-      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "source": "contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
       "abi": [
         {
           "inputs": [],
@@ -25412,7 +25555,7 @@
       ]
     },
     "PriceCoordinatorDeploymentWorker": {
-      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "source": "contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
       "abi": [
         {
           "inputs": [],
@@ -25464,7 +25607,7 @@
       ]
     },
     "PriceOracleManagerAndOperatorQueuerFactory": {
-      "source": "contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
+      "source": "contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -25815,7 +25958,7 @@
       ]
     },
     "SecurityPoolDeployer": {
-      "source": "contracts/peripherals/factories/SecurityPoolDeployer.sol",
+      "source": "contracts/statoblast/factories/SecurityPoolDeployer.sol",
       "abi": [
         {
           "inputs": [],
@@ -25904,7 +26047,7 @@
       ]
     },
     "SecurityPoolDeploymentWorker": {
-      "source": "contracts/peripherals/factories/SecurityPoolDeployer.sol",
+      "source": "contracts/statoblast/factories/SecurityPoolDeployer.sol",
       "abi": [
         {
           "inputs": [
@@ -26030,7 +26173,7 @@
       ]
     },
     "SecurityPoolFactory": {
-      "source": "contracts/peripherals/factories/SecurityPoolFactory.sol",
+      "source": "contracts/statoblast/factories/SecurityPoolFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -26541,7 +26684,7 @@
       ]
     },
     "ShareTokenFactory": {
-      "source": "contracts/peripherals/factories/ShareTokenFactory.sol",
+      "source": "contracts/statoblast/factories/ShareTokenFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -26581,7 +26724,7 @@
       ]
     },
     "UniformPriceDualCapBatchAuctionFactory": {
-      "source": "contracts/peripherals/factories/UniformPriceDualCapBatchAuctionFactory.sol",
+      "source": "contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol",
       "abi": [
         {
           "inputs": [
@@ -26610,7 +26753,7 @@
       ]
     },
     "IAugur": {
-      "source": "contracts/peripherals/interfaces/IAugur.sol",
+      "source": "contracts/statoblast/interfaces/IAugur.sol",
       "abi": [
         {
           "anonymous": false,
@@ -29561,7 +29704,7 @@
       ]
     },
     "IERC1155": {
-      "source": "contracts/peripherals/interfaces/IERC1155.sol",
+      "source": "contracts/statoblast/interfaces/IERC1155.sol",
       "abi": [
         {
           "anonymous": false,
@@ -29878,7 +30021,7 @@
       ]
     },
     "IERC1155Receiver": {
-      "source": "contracts/peripherals/interfaces/IERC1155Receiver.sol",
+      "source": "contracts/statoblast/interfaces/IERC1155Receiver.sol",
       "abi": [
         {
           "inputs": [
@@ -29980,7 +30123,7 @@
       ]
     },
     "IERC165": {
-      "source": "contracts/peripherals/interfaces/IERC165.sol",
+      "source": "contracts/statoblast/interfaces/IERC165.sol",
       "abi": [
         {
           "inputs": [
@@ -30004,7 +30147,7 @@
       ]
     },
     "IEscalationGameEvents": {
-      "source": "contracts/peripherals/interfaces/IEscalationGame.sol",
+      "source": "contracts/statoblast/interfaces/IEscalationGame.sol",
       "abi": [
         {
           "anonymous": false,
@@ -30237,7 +30380,7 @@
       ]
     },
     "ISecurityPool": {
-      "source": "contracts/peripherals/interfaces/ISecurityPool.sol",
+      "source": "contracts/statoblast/interfaces/ISecurityPool.sol",
       "abi": [
         {
           "anonymous": false,
@@ -30508,9 +30651,14 @@
               "internalType": "uint256",
               "name": "amountAttoRep",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "auctionFeeIndexAtFinalization",
+              "type": "uint256"
             }
           ],
-          "name": "addFeeEligibleCapacityOwnershipAttoRep",
+          "name": "assignFinalizedAuctionFees",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -30654,7 +30802,50 @@
             },
             {
               "internalType": "uint256",
-              "name": "targetHealthFactorBps",
+              "name": "lastDepositTargetHealthFactorBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newVaultBadDebtAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "newTotalBadDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "configureFinalizedAuctionVault",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "vaultFeeIndex",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -30834,6 +31025,30 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "getVaultCapacityBackingFactorsBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "associatedRepPerCapacityBps",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "poolHeldRepPerCapacityBps",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "getVaultCount",
           "outputs": [
@@ -31000,6 +31215,25 @@
               "internalType": "bool",
               "name": "",
               "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "lastDepositTargetHealthFactorBpsByVault",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -31642,25 +31876,6 @@
         {
           "inputs": [
             {
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            }
-          ],
-          "name": "vaultTargetHealthFactorBps",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
               "internalType": "enum QuestionOutcome",
               "name": "outcome",
               "type": "uint8"
@@ -31761,7 +31976,7 @@
       ]
     },
     "ISecurityPoolFactory": {
-      "source": "contracts/peripherals/interfaces/ISecurityPool.sol",
+      "source": "contracts/statoblast/interfaces/ISecurityPool.sol",
       "abi": [
         {
           "inputs": [
@@ -32094,7 +32309,7 @@
       ]
     },
     "ISecurityPoolForker": {
-      "source": "contracts/peripherals/interfaces/ISecurityPoolForker.sol",
+      "source": "contracts/statoblast/interfaces/ISecurityPoolForker.sol",
       "abi": [
         {
           "anonymous": false,
@@ -32838,6 +33053,54 @@
               "type": "address"
             }
           ],
+          "name": "getUnassignedPosition",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
+          "name": "getUnassignedPositionFeeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract ISecurityPool",
+              "name": "securityPool",
+              "type": "address"
+            }
+          ],
           "name": "initiateSecurityPoolFork",
           "outputs": [],
           "stateMutability": "nonpayable",
@@ -33018,7 +33281,7 @@
       ]
     },
     "ISecurityPoolForkerEvents": {
-      "source": "contracts/peripherals/interfaces/ISecurityPoolForker.sol",
+      "source": "contracts/statoblast/interfaces/ISecurityPoolForker.sol",
       "abi": [
         {
           "anonymous": false,
@@ -33457,7 +33720,7 @@
       ]
     },
     "ISecurityPoolForkerChildEscalationGameInitializer": {
-      "source": "contracts/peripherals/interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol",
+      "source": "contracts/statoblast/interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol",
       "abi": [
         {
           "inputs": [
@@ -33491,7 +33754,7 @@
       ]
     },
     "IShareToken": {
-      "source": "contracts/peripherals/interfaces/IShareToken.sol",
+      "source": "contracts/statoblast/interfaces/IShareToken.sol",
       "abi": [
         {
           "anonymous": false,
@@ -33862,7 +34125,7 @@
       ]
     },
     "IUniformPriceDualCapBatchAuction": {
-      "source": "contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol",
+      "source": "contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol",
       "abi": [
         {
           "anonymous": false,
@@ -34763,6 +35026,11 @@
               "internalType": "uint256",
               "name": "proRataTotal",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "secondaryProRataTotal",
+              "type": "uint256"
             }
           ],
           "name": "withdrawBids",
@@ -34781,6 +35049,11 @@
               "internalType": "uint256",
               "name": "totalProRataAllocation",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalSecondaryProRataAllocation",
+              "type": "uint256"
             }
           ],
           "stateMutability": "nonpayable",
@@ -34796,7 +35069,7 @@
       ]
     },
     "IUniformPriceDualCapBatchAuctionEvents": {
-      "source": "contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol",
+      "source": "contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol",
       "abi": [
         {
           "anonymous": false,
@@ -35011,7 +35284,7 @@
       ]
     },
     "IWeth9": {
-      "source": "contracts/peripherals/interfaces/IWeth9.sol",
+      "source": "contracts/statoblast/interfaces/IWeth9.sol",
       "abi": [
         {
           "anonymous": false,
@@ -35296,7 +35569,7 @@
       ]
     },
     "OpenOracle": {
-      "source": "contracts/peripherals/openOracle/OpenOracle.sol",
+      "source": "contracts/statoblast/openOracle/OpenOracle.sol",
       "abi": [
         {
           "inputs": [],
@@ -36597,7 +36870,7 @@
       ]
     },
     "ISignatureTransfer": {
-      "source": "contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol",
+      "source": "contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol",
       "abi": [
         {
           "inputs": [
@@ -36750,7 +37023,7 @@
       ]
     },
     "Errors": {
-      "source": "contracts/peripherals/openOracle/libraries/Errors.sol",
+      "source": "contracts/statoblast/openOracle/libraries/Errors.sol",
       "abi": [
         {
           "inputs": [],
@@ -36995,7 +37268,7 @@
       ]
     },
     "ERC1155": {
-      "source": "contracts/peripherals/tokens/ERC1155.sol",
+      "source": "contracts/statoblast/tokens/ERC1155.sol",
       "abi": [
         {
           "inputs": [],
@@ -37440,7 +37713,7 @@
       ]
     },
     "ShareToken": {
-      "source": "contracts/peripherals/tokens/ShareToken.sol",
+      "source": "contracts/statoblast/tokens/ShareToken.sol",
       "abi": [
         {
           "inputs": [

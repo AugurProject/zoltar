@@ -3,15 +3,9 @@
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
-<<<<<<< HEAD:ui/zoltar/ts/tests/protocol/reporting.test.ts
-import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-=======
-import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../contractArtifact.js'
-import type { EscalationSide } from '../../types/contracts.js'
-import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from './testSupport.js'
->>>>>>> origin/main:ui/ts/tests/protocol/reporting.test.ts
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')

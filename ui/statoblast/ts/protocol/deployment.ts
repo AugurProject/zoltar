@@ -5,7 +5,7 @@ import type { DeploymentStatus, DeploymentStatusSnapshot, DeploymentStep, ReadCl
 import { getDeploymentSteps as getZoltarDeploymentSteps, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar/protocol/deployment.js'
 import { getInfraContractAddresses, getEscalationGameFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 
@@ -38,7 +38,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			label: 'Escalation Claim Checkpoint Delegate',
 			address: addresses.escalationGameClaimDelegate,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
 		},
 		{
 			id: 'escalationGameFactory',

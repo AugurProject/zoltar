@@ -1,13 +1,8 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
-<<<<<<< HEAD:ui/zoltar/ts/protocol/forks.ts
-import { Zoltar_Zoltar, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPool_SecurityPool, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { Zoltar_Zoltar, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-=======
-import { Zoltar_Zoltar, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
-import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '../types/contracts.js'
->>>>>>> origin/main:ui/ts/protocol/forks.ts
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from './helpers.js'
 import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'

@@ -16,33 +16,18 @@ import { createInjectedBackend } from '@zoltar/ui-core-shared/lib/chainBackend.j
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { formatOpenOracleFeePercentageInput, getOpenOracleSelectedReportActionMode } from '../../../features/open-oracle/lib/openOracle.js'
 import type { OpenOracleView } from '../../../features/types.js'
-<<<<<<< HEAD:ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-=======
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { addressString } from '../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
-import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
-import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
->>>>>>> origin/main:ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

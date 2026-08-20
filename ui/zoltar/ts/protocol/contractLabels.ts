@@ -2,16 +2,6 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import {
 	ZoltarQuestionData_ZoltarQuestionData,
 	Zoltar_Zoltar,
-<<<<<<< HEAD:ui/zoltar/ts/protocol/contractLabels.ts
-	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	peripherals_SecurityPoolForker_SecurityPoolForker,
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_openOracle_OpenOracle_OpenOracle,
-	peripherals_tokens_ShareToken_ShareToken,
-} from '@zoltar/ui-core-shared/contractArtifact.js'
-=======
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPool_SecurityPool,
@@ -19,8 +9,7 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_tokens_ShareToken_ShareToken,
-} from '../contractArtifact.js'
->>>>>>> origin/main:ui/ts/protocol/contractLabels.ts
+} from '@zoltar/ui-core-shared/contractArtifact.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([
 	[ABIS.mainnet.erc20, 'ERC-20 Token'],

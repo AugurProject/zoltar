@@ -7,6 +7,7 @@ import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.js'
 import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { shareBalanceScope } from '../protocol/live.js'
+import * as commonCopy from '../copy/common.js'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
@@ -461,7 +462,7 @@ export function Help() {
 					collateral only if their outcome won.
 				</p>
 				<p>
-					The complete developer and protocol documentation is included in <code>solidity/docs/trading/</code>.
+					{commonCopy.developerDocumentation} <code>{commonCopy.developerDocumentationPath}</code>.
 				</p>
 			</section>
 		</main>

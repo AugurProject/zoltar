@@ -20,15 +20,9 @@ import {
 	withdrawOpenOracleBalance,
 	type LiquidationApprovalParams,
 } from '../../protocol/index.js'
-<<<<<<< HEAD:ui/zoltar/ts/tests/protocol/openOracle.test.ts
-import { peripherals_LiquidationApprovalRegistry_LiquidationApprovalRegistry, peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-=======
-import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
-import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
-import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
->>>>>>> origin/main:ui/ts/tests/protocol/openOracle.test.ts
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')

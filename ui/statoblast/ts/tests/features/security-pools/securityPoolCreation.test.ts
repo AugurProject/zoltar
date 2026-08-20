@@ -2,7 +2,6 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-<<<<<<< HEAD:ui/statoblast/ts/tests/features/security-pools/securityPoolCreation.test.ts
 import { createSecurityPool } from '../../../protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -12,27 +11,11 @@ import { addressString } from '../../../../../../solidity/ts/testSupport/simulat
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
-=======
-import { createSecurityPool } from '../../../protocol/index.js'
-import { createWalletWriteClient } from '../../../lib/clients.js'
-import type { WriteClient as UiWriteClient } from '../../../types/contracts.js'
-import type { InjectedEthereum } from '../../../injectedEthereum.js'
-import { DAY, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { addressString } from '../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../../../../solidity/ts/types/contractArtifact'
->>>>>>> origin/main:ui/ts/tests/features/security-pools/securityPoolCreation.test.ts
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

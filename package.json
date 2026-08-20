@@ -71,7 +71,7 @@
 		"ui:setup": "bun ./scripts/install-frozen.mts && bun ./scripts/install-frozen.mts ui/coreShared && bun ./scripts/install-frozen.mts ui/zoltar && bun ./scripts/install-frozen.mts ui/statoblast && bun ./scripts/install-frozen.mts ui/trading && bun run setup-contracts && bun run ui:build:apps && bun run ui:build:tests",
 		"app:build": "bun run generate && bun run ui:build:apps && bun run ui:build:tests",
 		"ui:build": "bun run app:build",
-		"ui:build:prod": "bun run check:mainnet-deployment && cd ui/zoltar && bun run build:prod && cd ../statoblast && bun run build:prod && cd ../trading && bun run build:prod",
+		"ui:build:prod": "bun run generate && bun run ui:build:apps && bun run ui:build:prod:current",
 		"ui:build:prod:current": "bun run check:mainnet-deployment:current && bun ./ui/coreShared/build/production.mts zoltar && bun ./ui/coreShared/build/production.mts statoblast && bun ./ui/coreShared/build/production.mts trading",
 		"ui:build:prod:prepared": "bun run refresh:shared-dependencies && bun run tsc:app && bun run ui:build:prod:current",
 		"ui:workers": "cd ui/coreShared && bun run build:workers",

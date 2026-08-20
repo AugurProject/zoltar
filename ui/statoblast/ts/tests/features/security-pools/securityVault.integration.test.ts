@@ -2,7 +2,6 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
-<<<<<<< HEAD:ui/statoblast/ts/tests/features/security-pools/securityVault.integration.test.ts
 import { approveErc20 } from '../../../protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '../../../protocol/securityVault.js'
 import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
@@ -15,25 +14,10 @@ import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../.
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
-=======
-import { approveErc20, depositRepToVaultToSecurityPool, loadErc20Allowance, loadErc20Balance, loadSecurityVaultDetails } from '../../../protocol/index.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import type { InjectedEthereum } from '../../../injectedEthereum.js'
-import { DAY, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { addressString } from '../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
->>>>>>> origin/main:ui/ts/tests/features/security-pools/securityVault.integration.test.ts
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

@@ -6,38 +6,21 @@ import { getHistoricalTestWeights, readTestTimingHistory, writeTestTimingObserva
 
 const repositoryRoot = process.cwd()
 
-<<<<<<< HEAD
 export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['ui/statoblast/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
-	['solidity/ts/tests/peripherals/forkMigration.test.ts', 37],
-	['solidity/ts/tests/peripherals/truthAuction.test.ts', 19],
-=======
-const knownFileWeights = new Map<string, number>([
-	['ui/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
 	['solidity/ts/tests/statoblast/forkMigration.test.ts', 37],
 	['solidity/ts/tests/statoblast/truthAuction.test.ts', 19],
->>>>>>> origin/main
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 15],
 	['solidity/ts/tests/escalationGame.test.ts', 15],
 	['ui/zoltar/ts/tests/integration/activeEnvironment.test.ts', 15],
 	['solidity/ts/tests/auction.test.ts', 14],
-<<<<<<< HEAD
-	['solidity/ts/tests/peripherals/escalationMigration.test.ts', 9],
-	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
-	['solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts', 5],
-	['solidity/ts/tests/peripherals/vaultAccounting.test.ts', 5],
-	['ui/zoltar/ts/tests/integration/deployedEnvironment.test.ts', 4],
-	['solidity/ts/tests/peripheralsInvariant.test.ts', 4],
-	['solidity/ts/tests/peripherals/receiveGuards.test.ts', 2],
-=======
 	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 9],
-	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
+	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
 	['solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts', 5],
 	['solidity/ts/tests/statoblast/vaultAccounting.test.ts', 5],
-	['ui/ts/tests/simulation/deployedEnvironment.test.ts', 4],
+	['ui/zoltar/ts/tests/integration/deployedEnvironment.test.ts', 4],
 	['solidity/ts/tests/statoblastInvariant.test.ts', 4],
 	['solidity/ts/tests/statoblast/receiveGuards.test.ts', 2],
->>>>>>> origin/main
 ])
 
 function parseShardOption(args: readonly string[]): { listOnly: boolean; shardIndex: number; shardCount: number; passthroughArgs: string[] } {

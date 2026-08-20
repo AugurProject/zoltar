@@ -40,9 +40,8 @@ import { getDefaultOpenOracleCreateFormState } from '../../../lib/formDefaults.j
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../protocol/oracleTiming.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
-<<<<<<< HEAD:ui/zoltar/ts/tests/features/open-oracle/openOracle.test.ts
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
 import type { WriteContractClient } from '../../../protocol/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
@@ -51,25 +50,10 @@ import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../.
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
-=======
-import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../../contractArtifact.js'
-import type { InjectedEthereum } from '../../../injectedEthereum.js'
-import type { WriteContractClient } from '../../../protocol/core.js'
-import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { addressString } from '../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast'
->>>>>>> origin/main:ui/ts/tests/features/open-oracle/openOracle.test.ts
+import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
