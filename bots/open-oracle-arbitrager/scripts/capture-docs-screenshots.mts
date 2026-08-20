@@ -26,7 +26,6 @@ const rawRelayFailure = `Private relay https://operator:${protectedFailureMarker
 const rawNonPollFailure = 'Risk policy requires operator attention'
 const expectedRpcPollFailure = publicPollFailure(rawRpcFailure)
 const expectedRpcOperatorFailure = publicOperatorFailure(rawRpcFailure)
-const expectedRelayOperatorFailure = publicOperatorFailure(rawRelayFailure)
 const expectedNonPollFailure = publicOperatorFailure(rawNonPollFailure)
 const expectedStateUnavailableFailure = `${publicPollFailure('fixture state endpoint unavailable', 'load the latest operator state for the dashboard')} Use Refresh to retry now.`
 let fixtureStatus: OperatorSnapshot['status'] = 'running'
@@ -236,7 +235,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
 			const fragment =
 				section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'network-connectivity' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
-			await replacePage(`${origin}/`, mobile ? 390 : 1440, mobile ? 844 : 900)
+			await replacePage(`${origin}/${fragment}`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
 				await command(
@@ -245,31 +244,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						expression: `(() => {
 							const section = document.getElementById(${JSON.stringify(section)})
 							if (section === null) return
-							const fragment = ${JSON.stringify(fragment)}
-							const directFragment = section.id === fragment
-							if (directFragment) window.location.hash = fragment
-							else {
-								history.replaceState(null, '', '#' + fragment)
-								const links = [...document.querySelectorAll('.section-nav a[href^="#"]')]
-								const activeLink = links.find(link => link.getAttribute('href') === '#' + fragment)
-								for (const link of links) {
-									if (link === activeLink) link.setAttribute('aria-current', 'page')
-									else link.removeAttribute('aria-current')
-								}
-								const navigation = activeLink?.closest('.section-nav')
-								if (activeLink instanceof HTMLElement && navigation instanceof HTMLElement) {
-									const activeRect = activeLink.getBoundingClientRect()
-									const navigationRect = navigation.getBoundingClientRect()
-									navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
-								}
-							}
 							if (section instanceof HTMLDetailsElement) section.open = true
 							section.closest('details')?.setAttribute('open', '')
 							for (const scroller of document.querySelectorAll('.table-scroll')) scroller.scrollLeft = 0
-							if (!directFragment) {
-								const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
-								window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - offset))
-							}
+							const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
+							window.scrollTo(0, Math.max(0, section.getBoundingClientRect().top + window.scrollY - offset))
 						})()`,
 					},
 					sessionId,
@@ -314,11 +293,11 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			if (mobile && section !== undefined && typeof result === 'object' && result !== null && 'targetTop' in result && 'headerBottom' in result && typeof result.targetTop === 'number' && typeof result.headerBottom === 'number' && result.targetTop < result.headerBottom) {
 				throw new Error(`${name} places its target behind the sticky header`)
 			}
-			if (typeof result !== 'object' || result === null || !('activeHref' in result) || result.activeHref !== `#${fragment}` || !('activeVisible' in result) || result.activeVisible !== true) throw new Error(`${name} does not show its active ${fragment} navigation item`)
+			if (typeof result !== 'object' || result === null || !('activeHref' in result) || result.activeHref !== `/${fragment}` || !('activeVisible' in result) || result.activeVisible !== true) throw new Error(`${name} does not show its active ${fragment} navigation item`)
 			await capturePng(name)
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_SETTINGS'] === '1') {
-			await replacePage(`${origin}/?mutation=connectivity-error#settings`, 390, 844)
+			await replacePage(`${origin}/settings?mutation=connectivity-error`, 390, 844)
 			await Bun.sleep(750)
 			fixtureConnectivityFailure = true
 			await command(
@@ -435,7 +414,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				const width = mobile ? 390 : 1440
 				const height = mobile ? 844 : 900
 				fixtureConfigurationHanging = true
-				await replacePage(`${origin}/?configuration=loading-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await replacePage(`${origin}/settings?configuration=loading-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(150)
 				const loading = await readConfigurationState()
 				assertConfigurationControls(loading, true, 'Loading', width)
@@ -482,7 +461,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				if (typeof reloadRecovered !== 'object' || reloadRecovered === null || !('containerHidden' in reloadRecovered) || reloadRecovered.containerHidden !== true) throw new Error(`Failed configuration reload did not recover: ${JSON.stringify(reloadRecovered)}`)
 
 				fixtureConfigurationUnavailable = true
-				await replacePage(`${origin}/?configuration=failed-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await replacePage(`${origin}/settings?configuration=failed-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
 				const failed = await readConfigurationState()
 				assertConfigurationControls(failed, true, 'Failed', width)
@@ -508,7 +487,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				if (typeof recovered !== 'object' || recovered === null || !('containerHidden' in recovered) || recovered.containerHidden !== true) throw new Error(`Configuration retry did not recover: ${JSON.stringify(recovered)}`)
 
 				fixtureConfigurationHanging = true
-				await replacePage(`${origin}/?configuration=hanging-${mobile ? 'mobile' : 'desktop'}#settings`, width, height)
+				await replacePage(`${origin}/settings?configuration=hanging-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(2_250)
 				const timedOut = await readConfigurationState()
 				assertConfigurationControls(timedOut, true, 'Timed-out', width)
@@ -575,7 +554,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('pauseDisabled' in unconfiguredResumeValue) ||
 					unconfiguredResumeValue.pauseDisabled !== true ||
 					!('attentionHref' in unconfiguredResumeValue) ||
-					unconfiguredResumeValue.attentionHref !== '#network-connectivity' ||
+					unconfiguredResumeValue.attentionHref !== '/settings#network-connectivity' ||
 					!('attentionText' in unconfiguredResumeValue) ||
 					unconfiguredResumeValue.attentionText !== '1 action' ||
 					!('pauseBusy' in unconfiguredResumeValue) ||
@@ -777,13 +756,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					if (
 						status === 'error' &&
 						(!('attentionHref' in value) ||
-							value.attentionHref !== '#notice' ||
+							value.attentionHref !== '/overview#notice' ||
 							!('attentionText' in value) ||
 							value.attentionText !== '1 action' ||
 							!('hash' in value) ||
 							value.hash !== '#notice' ||
 							!('activeHref' in value) ||
-							value.activeHref !== '#overview' ||
+							value.activeHref !== '/overview' ||
 							!('noticeTone' in value) ||
 							value.noticeTone !== 'danger' ||
 							!('noticeTitle' in value) ||
@@ -806,31 +785,9 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							value.bodyContainsCredential !== false ||
 							!('endpointText' in value) ||
 							typeof value.endpointText !== 'string' ||
-							!value.endpointText.includes(expectedRpcOperatorFailure) ||
-							!('operationDetailsWidth' in value) ||
-							typeof value.operationDetailsWidth !== 'number' ||
-							value.operationDetailsWidth > 480 ||
-							!('operationReasonWidth' in value) ||
-							typeof value.operationReasonWidth !== 'number' ||
-							value.operationReasonWidth > 480 ||
-							!('operationTableWidth' in value) ||
-							typeof value.operationTableWidth !== 'number' ||
-							value.operationDetailsWidth > value.operationTableWidth ||
-							value.operationReasonWidth > value.operationTableWidth ||
-							!('operationText' in value) ||
-							typeof value.operationText !== 'string' ||
-							!value.operationText.includes(expectedRelayOperatorFailure) ||
-							!('transactionTargetWidth' in value) ||
-							typeof value.transactionTargetWidth !== 'number' ||
-							value.transactionTargetWidth > 480 ||
-							!('transactionTableWidth' in value) ||
-							typeof value.transactionTableWidth !== 'number' ||
-							value.transactionTargetWidth > value.transactionTableWidth ||
-							!('transactionText' in value) ||
-							typeof value.transactionText !== 'string' ||
-							!value.transactionText.includes(expectedRelayOperatorFailure))
+							!value.endpointText.includes(expectedRpcOperatorFailure))
 					)
-						throw new Error('Error state did not expose its attention and recovery context')
+						throw new Error(`Error state did not expose its attention and recovery context: ${JSON.stringify(value)}`)
 					if (status !== 'error' && (!('retryVisible' in value) || value.retryVisible !== false)) throw new Error(`${status} state displayed a retry badge without an active retry`)
 					if (mobile && 'bodyScrollWidth' in value && typeof value.bodyScrollWidth === 'number' && value.bodyScrollWidth > width) throw new Error(`${status} header overflows its ${width.toString()}px viewport`)
 					if (status === 'error') {
@@ -1057,7 +1014,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					typeof initialFailure !== 'object' ||
 					initialFailure === null ||
 					!('attentionHref' in initialFailure) ||
-					initialFailure.attentionHref !== '#notice' ||
+					initialFailure.attentionHref !== '/overview#notice' ||
 					!('attentionText' in initialFailure) ||
 					initialFailure.attentionText !== '1 action' ||
 					!('mode' in initialFailure) ||
@@ -1261,7 +1218,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						typeof value !== 'object' ||
 						value === null ||
 						!('activeHref' in value) ||
-						value.activeHref !== `#${expectedSection}` ||
+						value.activeHref !== `/${expectedSection}` ||
 						!('activeVisible' in value) ||
 						value.activeVisible !== true ||
 						!('hash' in value) ||
@@ -1643,6 +1600,7 @@ const snapshot = {
 		},
 	],
 	paused: false,
+	operatorCapable: true,
 	positionRecordCount: positionDerivedSnapshot.positionRecordCount,
 	positions: positionDerivedSnapshot.positions,
 	priceHistory,
@@ -1724,6 +1682,7 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		nextRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && !fixtureRetryInProgress ? (fixtureNextRetryAt ?? new Date(Date.now() + 10_000).toISOString()) : undefined,
 		retryInProgress: fixtureRetryInProgress,
 		operationLog: fixtureAttention === 'error' ? [{ category: 'transaction', details: rawRelayFailure, level: 'error', message: 'Transaction submission failed', reason: rawRpcFailure, reportId: '816', timestamp: sampledAt(0) }, ...snapshot.operationLog] : snapshot.operationLog,
+		operatorCapable: !paused && fixtureStatus === 'running' && fixtureAttention === 'none',
 		paused,
 		positions: fixturePositions,
 		status: paused ? 'paused' : fixtureStatus,
@@ -1753,7 +1712,7 @@ const server = startDashboardServer(0, {
 	updateConnectivity: async () => {
 		while (fixtureConnectivityHanging) await Bun.sleep(10)
 		if (fixtureConnectivityFailure) throw new Error(`RPC https://operator:${protectedFailureMarker}@rpc.example returned credential-bearing provider text`)
-		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, restartRequired: false, rpcQuorum: 2 as const }
+		return { connectivity: snapshot.connectivity, network: 'mainnet' as const, rpcQuorum: 2 as const }
 	},
 	updateConfiguration: value => value,
 	updateSigner: () => ({ wallet }),

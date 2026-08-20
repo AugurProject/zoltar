@@ -43,7 +43,7 @@
 	"runtime": {
 		"execute": false,
 		"historyFile": ".state/history-mainnet.jsonl",
-		"lookbackBlocks": "50000",
+		"lookbackBlocks": "256",
 		"maxHedgeSlippageBps": "50",
 		"once": false,
 		"positionFile": ".state/positions-mainnet.json",

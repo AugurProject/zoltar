@@ -11,7 +11,7 @@ test('replaces the derived primary REP without retaining stale deployment trust'
 	expect(replacePrimaryRepToken([previousRep, explicitToken, nextRep], previousRep, nextRep)).toEqual([nextRep, explicitToken])
 })
 
-test('keeps the live scan catalog unchanged while preparing restart deployment settings', () => {
+test('replaces the configured REP in both active and persisted live deployment settings', () => {
 	const activeRep = address('1')
 	const restartRep = address('2')
 	const explicitToken = address('3')
@@ -19,8 +19,8 @@ test('keeps the live scan catalog unchanged while preparing restart deployment s
 
 	const transition = prepareDeploymentTokenTransition(activeTokens, undefined, activeRep, restartRep)
 
-	expect(transition.active).toEqual([activeRep, explicitToken])
-	expect(transition.restart).toEqual([restartRep, explicitToken])
+	expect(transition.active).toEqual([restartRep, explicitToken])
+	expect(transition.persisted).toEqual([restartRep, explicitToken])
 })
 
 test('rejects insecure or credential-bearing quorum RPC URLs', () => {

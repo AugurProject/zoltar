@@ -1,17 +1,25 @@
 export function createConfigurationMutationGate(isScanning: () => boolean) {
 	let active = false
+	let queue = Promise.resolve()
 	return {
 		isActive() {
 			return active
 		},
 		async run<T>(mutation: () => Promise<T>) {
-			if (active || isScanning()) throw new Error('Wait for the active scan or configuration update to finish')
-			active = true
-			try {
-				return await mutation()
-			} finally {
-				active = false
-			}
+			const result = queue.then(async () => {
+				while (isScanning()) await new Promise(resolve => setTimeout(resolve, 10))
+				active = true
+				try {
+					return await mutation()
+				} finally {
+					active = false
+				}
+			})
+			queue = result.then(
+				() => undefined,
+				() => undefined,
+			)
+			return await result
 		},
 	}
 }

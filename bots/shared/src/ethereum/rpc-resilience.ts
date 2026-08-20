@@ -1,5 +1,6 @@
 import { custom } from './rpc-transport.ts'
 import { http, requestTransport, RpcError } from './rpc-transport.ts'
+import { historyUnavailableError } from '../monitoring/block-sync.ts'
 
 export type RpcEndpointStatus = 'degraded' | 'healthy' | 'offline' | 'unknown'
 
@@ -96,6 +97,10 @@ function retryableRpcFailure(error: unknown) {
 	return false
 }
 
+function endpointFailoverEligible(method: string, error: unknown) {
+	return retryableRpcFailure(error) || (method === 'eth_getLogs' && historyUnavailableError(error))
+}
+
 function validatedInteger(value: number, label: string, minimum: number, maximum: number) {
 	if (!Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
 	return value
@@ -139,7 +144,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			endpoint.status = 'healthy'
 			return value
 		} catch (error) {
-			if (!retryableRpcFailure(error)) throw error
+			if (!endpointFailoverEligible(method, error)) throw error
 			const failedAt = now()
 			endpoint.consecutiveFailures += 1
 			endpoint.error = safeErrorMessage(error, endpoint.url, endpoint.target)
@@ -176,7 +181,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					preferredIndex = endpoints.indexOf(endpoint)
 					return value
 				} catch (error) {
-					if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
+					if (!endpointFailoverEligible(method, error)) throw endpointRequestFailure(error, endpoint, method)
 					failures.push({ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target })
 				}
 			}
@@ -195,7 +200,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					try {
 						return await requestEndpoint(endpoint, method, params, onSuccess)
 					} catch (error) {
-						if (!retryableRpcFailure(error)) throw endpointRequestFailure(error, endpoint, method)
+						if (!endpointFailoverEligible(method, error)) throw endpointRequestFailure(error, endpoint, method)
 						throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
 					}
 				},

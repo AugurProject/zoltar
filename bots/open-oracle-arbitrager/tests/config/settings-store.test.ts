@@ -57,7 +57,7 @@ function settings(privateKeyValue: Hex | undefined) {
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
-			lookbackBlocks: 50_000n,
+			lookbackBlocks: 256n,
 			maxHedgeSlippageBps: 50n,
 			once: false,
 			positionFile: '.state/positions.json',
@@ -221,6 +221,13 @@ describe('operator settings persistence', () => {
 		expect(loadOperatorSettings(path)).rejects.toThrow('Unknown operator configuration field')
 		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), 'utf8')
 		expect(loadOperatorSettings(path)).rejects.toThrow('unsupported version')
+	})
+
+	test('bounds coordinator-free event discovery to the latest 0 through 256 blocks', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		for (const lookbackBlocks of ['0', '256']) expect(parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks } }).runtime.lookbackBlocks).toBe(BigInt(lookbackBlocks))
+		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks: '-1' } })).toThrow('Runtime lookbackBlocks must be a nonnegative integer string')
+		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks: '257' } })).toThrow('Runtime lookbackBlocks must be from 0 through 256')
 	})
 
 	test('rejects persistent runtime files that resolve to the same path', () => {

@@ -25,7 +25,7 @@ async function main() {
 	const config = await loadConfiguration()
 	const lockManager = createExecutionLockManager(account => acquireExecutionSignerLock(config.network.chain.id, account))
 	try {
-		if (config.execute) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
+		if (config.execute || config.ui) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
 		const initialSignerLock = !config.execute || config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
 		let startupFailures = 0
 		for (;;) {

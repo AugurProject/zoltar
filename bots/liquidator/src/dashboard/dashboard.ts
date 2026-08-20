@@ -101,7 +101,9 @@ type Snapshot = {
 	}
 	paused: boolean
 	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
+	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
+	operatorCapable: boolean
 	pools: Pool[]
 	scanning: boolean
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
@@ -117,6 +119,7 @@ type Configuration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
+	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
 }
@@ -164,6 +167,7 @@ const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
+const capabilityBadge = element('capability-badge', HTMLSpanElement)
 const attentionBadge = element('attention-badge', HTMLAnchorElement)
 const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
@@ -338,13 +342,13 @@ function renderAlerts(snapshot: Snapshot) {
 		const recoveryAlert = alerts[0]
 		if (recoveryAlert === undefined) {
 			alerts.unshift({
-				actionHref: '#recovery',
+				actionHref: '/operations#recovery',
 				actionLabel: 'Review recovery',
 				message: `${snapshot.pendingTransactions.length.toString()} transaction ${snapshot.pendingTransactions.length === 1 ? 'intent requires' : 'intents require'} operator recovery before execution can continue.`,
 				severity: 'warning',
 			})
 		} else {
-			recoveryAlert.actionHref = '#recovery'
+			recoveryAlert.actionHref = '/operations#recovery'
 			recoveryAlert.actionLabel = 'Review recovery'
 		}
 	}
@@ -401,65 +405,78 @@ function renderMarketSources(sources: MarketSourceRow[]) {
 
 function renderRecovery(snapshot: Snapshot) {
 	if (document.activeElement instanceof HTMLElement && recoveryList.contains(document.activeElement)) return
-	if (snapshot.pendingTransactions.length === 0) {
+	if (snapshot.pendingTransactions.length === 0 && snapshot.pendingStagedOperations.length === 0) {
 		const empty = document.createElement('p')
 		empty.className = 'empty'
-		empty.textContent = 'No pending transaction intents.'
+		empty.textContent = 'No pending recovery work.'
 		recoveryList.replaceChildren(empty)
 		return
 	}
-	recoveryList.replaceChildren(
-		...snapshot.pendingTransactions.map(intent => {
-			const card = document.createElement('article')
-			card.className = 'recovery-card'
-			const heading = document.createElement('h3')
-			heading.textContent = intent.label
-			const metadata = document.createElement('p')
-			metadata.className = 'mono muted'
-			metadata.textContent = `${intent.mode} · nonce ${intent.nonce} · submitted at block ${intent.submissionBlock} · ${intent.hash}`
-			const form = document.createElement('form')
-			form.className = 'reconciliation-form'
-			const label = document.createElement('label')
-			label.textContent = 'Finalized replacement or cancellation hash'
-			const input = document.createElement('input')
-			input.autocomplete = 'off'
-			input.inputMode = 'text'
-			input.pattern = '0x[0-9a-fA-F]{64}'
-			input.placeholder = '0x…'
-			input.required = true
-			const button = document.createElement('button')
-			button.type = 'submit'
-			button.textContent = 'Verify & reconcile'
-			button.disabled = !stateConnected || !snapshot.paused
-			const status = document.createElement('span')
-			status.className = 'action-status'
-			status.setAttribute('role', 'alert')
-			const saved = recoveryActionStates.get(intent.hash.toLowerCase())
-			if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
-			label.append(input)
-			form.append(label, button, status)
-			form.addEventListener('submit', async event => {
-				event.preventDefault()
-				if (!window.confirm('Reconcile only if this finalized transaction intentionally replaced or canceled the pending intent. Continue?')) return
-				button.disabled = true
-				actionStatus(status, 'Checking RPC quorum and canonical finality…')
-				try {
-					await put('/api/reconcile-transaction', { intentHash: intent.hash, replacementHash: input.value.trim() })
-					recoveryActionStates.delete(intent.hash.toLowerCase())
-					actionStatus(status, 'Reconciled')
-					await refresh()
-				} catch (error) {
-					const message = publicFailure(error, 'Could not reconcile this intent. Confirm the replacement hash and finality, then retry.')
-					recoveryActionStates.set(intent.hash.toLowerCase(), { failed: true, message })
-					actionStatus(status, message, true)
-				} finally {
-					button.disabled = !stateConnected || !snapshot.paused
-				}
-			})
-			card.append(heading, metadata, form)
-			return card
-		}),
-	)
+	const transactionCards = snapshot.pendingTransactions.map(intent => {
+		const card = document.createElement('article')
+		card.className = 'recovery-card'
+		const heading = document.createElement('h3')
+		heading.textContent = intent.label
+		const metadata = document.createElement('p')
+		metadata.className = 'mono muted'
+		metadata.textContent = `${intent.mode} · nonce ${intent.nonce} · submitted at block ${intent.submissionBlock} · ${intent.hash}`
+		const form = document.createElement('form')
+		form.className = 'reconciliation-form'
+		const label = document.createElement('label')
+		label.textContent = 'Finalized replacement or cancellation hash'
+		const input = document.createElement('input')
+		input.autocomplete = 'off'
+		input.inputMode = 'text'
+		input.pattern = '0x[0-9a-fA-F]{64}'
+		input.placeholder = '0x…'
+		input.required = true
+		const button = document.createElement('button')
+		button.type = 'submit'
+		button.textContent = 'Verify & reconcile'
+		button.disabled = !stateConnected || !snapshot.paused
+		const status = document.createElement('span')
+		status.className = 'action-status'
+		status.setAttribute('role', 'alert')
+		const saved = recoveryActionStates.get(intent.hash.toLowerCase())
+		if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
+		label.append(input)
+		form.append(label, button, status)
+		form.addEventListener('submit', async event => {
+			event.preventDefault()
+			if (!window.confirm('Reconcile only if this finalized transaction intentionally replaced or canceled the pending intent. Continue?')) return
+			button.disabled = true
+			actionStatus(status, 'Checking RPC quorum and canonical finality…')
+			try {
+				await put('/api/reconcile-transaction', { intentHash: intent.hash, replacementHash: input.value.trim() })
+				recoveryActionStates.delete(intent.hash.toLowerCase())
+				actionStatus(status, 'Reconciled')
+				await refresh()
+			} catch (error) {
+				const message = publicFailure(error, 'Could not reconcile this intent. Confirm the replacement hash and finality, then retry.')
+				recoveryActionStates.set(intent.hash.toLowerCase(), { failed: true, message })
+				actionStatus(status, message, true)
+			} finally {
+				button.disabled = !stateConnected || !snapshot.paused
+			}
+		})
+		card.append(heading, metadata, form)
+		return card
+	})
+	const stagedCards = snapshot.pendingStagedOperations.map(operation => {
+		const card = document.createElement('article')
+		card.className = 'recovery-card'
+		const heading = document.createElement('h3')
+		heading.textContent = `Staged operation ${operation.operationId}`
+		const metadata = document.createElement('p')
+		metadata.className = 'mono muted'
+		metadata.textContent = `queued block ${operation.queuedBlock} · latest checked ${operation.latestRecoveryBlock ?? 'not yet'} · historical ${operation.historicalRecoveryComplete ? 'complete' : (operation.nextHistoricalBlock ?? 'not enabled')} · ${operation.coordinator} → ${operation.target}`
+		const status = document.createElement('p')
+		status.className = 'muted'
+		status.textContent = operation.candidateBlock === undefined ? 'Waiting for a canonical outcome.' : `Outcome found at block ${operation.candidateBlock}; waiting for canonical finality.`
+		card.append(heading, metadata, status)
+		return card
+	})
+	recoveryList.replaceChildren(...transactionCards, ...stagedCards)
 }
 
 function renderCentralizedMarket(snapshot: Snapshot) {
@@ -975,6 +992,8 @@ function render(snapshot: Snapshot) {
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
 	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
+	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning factory registry…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
@@ -1003,7 +1022,7 @@ function render(snapshot: Snapshot) {
 }
 
 function snapshotAttentionCount(snapshot: Snapshot) {
-	return (configurationConnected && currentConfiguration?.network === undefined ? 1 : 0) + Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+	return (configurationConnected && currentConfiguration?.network === undefined ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
 }
 
 function renderAttention(snapshot: Snapshot) {
@@ -1011,11 +1030,11 @@ function renderAttention(snapshot: Snapshot) {
 	const attentionCount = snapshotAttentionCount(snapshot)
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
-	let attentionTarget = '#overview'
-	if (networkSetupRequired) attentionTarget = '#network-connectivity'
-	else if (snapshot.pendingTransactions.length > 0) attentionTarget = '#recovery'
-	else if (snapshot.error !== undefined) attentionTarget = '#global-error'
-	else if (snapshot.alerts.length > 0) attentionTarget = '#operations'
+	let attentionTarget = '/overview'
+	if (networkSetupRequired) attentionTarget = '/settings#network-connectivity'
+	else if (snapshot.pendingTransactions.length > 0 || snapshot.pendingStagedOperations.length > 0) attentionTarget = '/operations#recovery'
+	else if (snapshot.error !== undefined) attentionTarget = '/overview#global-error'
+	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
 	attentionBadge.href = attentionTarget
 }
 
@@ -1032,6 +1051,8 @@ function populateConfiguration(configuration: Configuration) {
 	approvedUniverses = new Set(configuration.approvedUniverses)
 	selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
+	setFormValue('logLookbackBlocks', configuration.runtime.logLookbackBlocks)
+	setFormValue('historicalLogRecovery', configuration.runtime.historicalLogRecovery)
 	if (configuration.network !== undefined && configuration.connectivity !== undefined) {
 		networkName.value = configuration.network.name
 		networkName.disabled = true
@@ -1057,6 +1078,7 @@ function populateConfiguration(configuration: Configuration) {
 		renderPools(currentSnapshot)
 	}
 	setMutationControlsEnabled(stateConnected)
+	if (window.location.hash !== '') syncSectionNavigation(true)
 }
 
 networkForm.addEventListener('submit', async event => {
@@ -1147,6 +1169,8 @@ recheckRecovery.addEventListener('click', async () => {
 })
 
 function scanFailureDetail(error: string) {
+	const logRange = /fromBlock (\d+) · toBlock (\d+)/i.exec(error)
+	if (logRange !== null) return `Log scan failed for fromBlock ${logRange[1]} through toBlock ${logRange[2]}.`
 	const normalized = error.toLowerCase()
 	if (normalized.includes('rpc')) return 'RPC connectivity or chain reads failed.'
 	if (normalized.includes('market') || normalized.includes('price')) return 'Market evidence or price validation failed.'
@@ -1210,10 +1234,10 @@ function renderConnectionFailure(error: unknown) {
 	renderNetworkBadge()
 	runStatusBadge.textContent = 'Disconnected'
 	runStatusBadge.className = 'badge warning'
-	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length, snapshot.alerts.length))
+	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length))
 	attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = 'badge warning'
-	attentionBadge.href = '#global-error'
+	attentionBadge.href = '/overview#global-error'
 	recoveryGuidance.hidden = true
 	setMutationControlsEnabled(false)
 	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')
@@ -1254,7 +1278,7 @@ function openResumePreflight(snapshot: Snapshot) {
 	}).length
 	resumePreflight.replaceChildren(
 		preflightItem('Mode', 'Live execution'),
-		preflightItem('Transaction recovery', snapshot.pendingTransactions.length === 0 ? 'Clear' : `${snapshot.pendingTransactions.length.toString()} unresolved`),
+		preflightItem('Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`),
 		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
 		preflightItem('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
 		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)),
@@ -1308,23 +1332,36 @@ poolFilter.addEventListener('input', () => {
 
 strategyForm.addEventListener('input', updateHealthPolicyPreview)
 
-const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="#"]')]
-const fragmentSections: Readonly<Record<string, string>> = {
-	'global-error': 'overview',
-	'network-connectivity': 'settings',
-	recovery: 'operations',
+const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
+
+function secureExternalLinks(root: ParentNode) {
+	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
+	for (const link of links) {
+		if (link.origin === window.location.origin) continue
+		link.target = '_blank'
+		link.rel = 'noopener noreferrer'
+	}
 }
+
+secureExternalLinks(document)
+new MutationObserver(records => {
+	for (const record of records) {
+		for (const node of record.addedNodes) if (node instanceof HTMLElement) secureExternalLinks(node)
+	}
+}).observe(document.body, { childList: true, subtree: true })
 
 function revealSectionLink(link: HTMLAnchorElement) {
 	const navigation = link.closest<HTMLElement>('.section-nav')
-	if (navigation === null || navigation.scrollWidth <= navigation.clientWidth) return
+	if (navigation === null) return
 	const align = () => {
-		const activeRect = link.getBoundingClientRect()
-		const navigationRect = navigation.getBoundingClientRect()
-		navigation.scrollLeft += activeRect.left - navigationRect.left - (navigationRect.width - activeRect.width) / 2
+		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
 	}
 	align()
 	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
+	window.addEventListener('load', align, { once: true })
+	window.addEventListener('resize', align)
+	new ResizeObserver(align).observe(navigation)
+	void document.fonts?.ready.then(align)
 }
 
 function scrollToSection(id: string) {
@@ -1332,22 +1369,28 @@ function scrollToSection(id: string) {
 	const shell = document.querySelector<HTMLElement>('.operator-shell')
 	if (target === null || shell === null) return
 	if (target instanceof HTMLDetailsElement) target.open = true
-	const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
-	window.scrollTo({ top: Math.max(0, top) })
+	else target.closest('details')?.setAttribute('open', '')
+	const align = () => {
+		const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
+		window.scrollTo({ top: Math.max(0, top) })
+	}
+	align()
+	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => window.requestAnimationFrame(align))
+	void document.fonts?.ready.then(align)
 }
 
 function syncSectionNavigation(scrollToTarget = false) {
-	const targetId = window.location.hash.slice(1) || 'overview'
-	const activeId = fragmentSections[targetId] ?? targetId
+	const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
 	let activeLink: HTMLAnchorElement | undefined
 	for (const link of sectionLinks) {
-		if (link.hash.slice(1) === activeId) {
+		if (link.pathname === activePath) {
 			link.setAttribute('aria-current', 'page')
 			activeLink = link
 		} else link.removeAttribute('aria-current')
 	}
 	if (activeLink !== undefined) revealSectionLink(activeLink)
-	if (scrollToTarget) scrollToSection(targetId)
+	const targetId = window.location.hash.slice(1)
+	if (scrollToTarget && targetId !== '') scrollToSection(targetId)
 }
 
 window.addEventListener('hashchange', () => syncSectionNavigation(true))
@@ -1368,6 +1411,10 @@ strategyForm.addEventListener('submit', async event => {
 		const field = strategyForm.elements.namedItem(name)
 		next[name] = field instanceof HTMLInputElement && field.checked
 	}
+	const logLookbackBlocks = Number(data.get('logLookbackBlocks'))
+	const historicalLogRecovery = strategyForm.elements.namedItem('historicalLogRecovery')
+	next['logLookbackBlocks'] = logLookbackBlocks
+	next['historicalLogRecovery'] = historicalLogRecovery instanceof HTMLInputElement && historicalLogRecovery.checked
 	try {
 		const configuration = await put<Configuration>('/api/strategy', next)
 		populateConfiguration(configuration)

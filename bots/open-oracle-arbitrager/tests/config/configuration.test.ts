@@ -133,6 +133,15 @@ async function waitForJson(origin: string, path: string) {
 	throw new Error('Dashboard did not become ready')
 }
 
+async function waitForStateValue(origin: string, key: string, expected: unknown) {
+	for (let attempt = 0; attempt < 150; attempt++) {
+		const state = await waitForJson(origin, '/api/state')
+		if (state[key] === expected) return state
+		await Bun.sleep(20)
+	}
+	throw new Error(`Dashboard state ${key} did not become ${String(expected)} at a scan boundary`)
+}
+
 describe('file-only startup configuration', () => {
 	test('documents the saved default and opt-in executor RPC policies', async () => {
 		const child = Bun.spawn([executable, deployExecutorSource, '--help'], { env: { ...process.env }, stderr: 'pipe', stdout: 'pipe' })
@@ -321,39 +330,27 @@ describe('file-only startup configuration', () => {
 		expect(Reflect.get(initialConfiguration as object, 'network')).toBeUndefined()
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
-		const response = await fetch(`${origin}/api/connectivity`, {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
+		if (typeof initialConfiguration !== 'object' || initialConfiguration === null || Array.isArray(initialConfiguration)) throw new Error('Initial configuration document is missing')
+		Reflect.set(initialConfiguration, 'network', 'sepolia')
+		Reflect.set(initialConfiguration, 'connectivity', { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl })
+		const initialMarkets = Reflect.get(initialConfiguration, 'centralizedMarkets')
+		if (typeof initialMarkets !== 'object' || initialMarkets === null || Array.isArray(initialMarkets)) throw new Error('Initial centralized-market configuration is missing')
+		Reflect.set(initialMarkets, 'assetChainId', 11_155_111)
+		const response = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(initial),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toEqual({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', restartRequired: true, rpcQuorum: 1 })
+		const configuredEnvelopeFromCompleteSave = (await response.json()) as Record<string, unknown>
+		expect(configuredEnvelopeFromCompleteSave['revision']).toEqual(expect.any(String))
 		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
-		expect(await waitForJson(origin, '/api/state')).toMatchObject({ networkConfigured: false, status: 'paused' })
-		const prematureResume = await fetch(`${origin}/api/paused`, {
-			body: JSON.stringify({ paused: false }),
-			headers: { 'content-type': 'application/json', origin },
-			method: 'PUT',
-		})
-		expect(prematureResume.status).toBe(400)
-		child.kill()
-		await child.exited
-		children.splice(children.indexOf(child), 1)
-		const restartedChild = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
-		children.push(restartedChild)
-		const noOpConfiguration = await waitForJson(origin, '/api/configuration')
-		const noOpSave = await fetch(`${origin}/api/configuration`, {
-			body: JSON.stringify(noOpConfiguration),
-			headers: { 'content-type': 'application/json', origin },
-			method: 'PUT',
-		})
-		expect(noOpSave.status, await noOpSave.clone().text()).toBe(200)
+		const queuedState = await waitForJson(origin, '/api/state')
+		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false, status: 'paused' })
+		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
+		await waitForStateValue(origin, 'networkConfigured', true)
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		let configuredState = await waitForJson(origin, '/api/state')
-		for (let attempt = 0; attempt < 100 && configuredState['networkConfigured'] !== true; attempt++) {
-			await Bun.sleep(20)
-			configuredState = await waitForJson(origin, '/api/state')
-		}
-		expect(configuredState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		const rpcOrigin = new URL(rpcUrl).origin
 		for (let attempt = 0; attempt < 100 && !(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').includes(rpcOrigin); attempt++) {
 			await Bun.sleep(20)
@@ -367,9 +364,16 @@ describe('file-only startup configuration', () => {
 		})
 		expect(resume.status, await resume.clone().text()).toBe(200)
 		expect(await resume.json()).toEqual({ paused: false })
-		const resumedState = await waitForJson(origin, '/api/state')
+		const noOpConfiguration = await waitForJson(origin, '/api/configuration')
+		const noOpSave = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(noOpConfiguration),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(noOpSave.status, await noOpSave.clone().text()).toBe(200)
+		const resumedState = await waitForStateValue(origin, 'paused', false)
 		expect(resumedState['paused']).toBe(false)
-		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resumed', reason: 'Applied immediately and saved for future starts' })]))
+		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resume queued', reason: 'Saved and queued for the next scan boundary' })]))
 		const configuredContents = await Bun.file(path).text()
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
@@ -392,7 +396,51 @@ describe('file-only startup configuration', () => {
 		expect(await Bun.file(path).text()).toBe(configuredContents)
 	})
 
-	test('requires a restart before executor deployment can use a newly saved quorum', async () => {
+	test('applies focused initial network, market chain, and RPC identity together at a scan boundary', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpc = Bun.serve({
+			async fetch(request) {
+				const body = (await request.json()) as { id: unknown }
+				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
+			},
+			hostname: '127.0.0.1',
+			port: 0,
+		})
+		servers.push(rpc)
+		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		const configuration = (await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json()) as Record<string, unknown>
+		const runtime = Reflect.get(configuration, 'runtime')
+		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
+		Reflect.set(runtime, 'historyFile', join(directory, 'history.jsonl'))
+		Reflect.set(runtime, 'positionFile', join(directory, 'positions.json'))
+		Reflect.set(runtime, 'priceHistoryFile', join(directory, 'prices.jsonl'))
+		Reflect.set(runtime, 'uiPort', dashboardPort)
+		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+		const path = join(directory, 'operator.json')
+		await writeFile(path, JSON.stringify(configuration), 'utf8')
+		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		children.push(child)
+		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
+		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
+		const response = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(response.status, await response.clone().text()).toBe(200)
+		expect(await response.json()).toMatchObject({ network: 'sepolia', rpcQuorum: 1 })
+		expect(await loadOperatorSettings(path)).toMatchObject({ centralizedMarkets: { assetChainId: 11_155_111 }, network: 'sepolia', networkConfigured: true, rpcQuorum: 1 })
+		const queuedState = await waitForJson(origin, '/api/state')
+		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
+		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
+		const activeState = await waitForStateValue(origin, 'networkConfigured', true)
+		expect(activeState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
+		expect(JSON.stringify(activeState['rpcEndpointHealth']) ?? '').toContain(new URL(rpcUrl).origin)
+	})
+
+	test('keeps executor deployment guarded while a newly saved quorum applies live', async () => {
 		const directory = await temporaryDirectory()
 		const dashboardPort = unusedPort()
 		const rpc = Bun.serve({
@@ -500,7 +548,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(developmentQuorumResponse.status, await developmentQuorumResponse.clone().text()).toBe(200)
-		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', restartRequired: true, rpcQuorum: 1 })
+		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 1 })
 		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(1)
 		const restoreProductionQuorumResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
@@ -622,6 +670,17 @@ describe('file-only startup configuration', () => {
 		if (typeof executeRuntime !== 'object' || executeRuntime === null || Array.isArray(executeRuntime) || typeof executeDeployment !== 'object' || executeDeployment === null || Array.isArray(executeDeployment)) throw new Error('Execute runtime or deployment configuration is missing')
 		Reflect.set(executeRuntime, 'execute', true)
 		Reflect.set(executeDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
+		const noSignerEnvelope = structuredClone(executeEnvelope)
+		const noSignerConfiguration = noSignerEnvelope['configuration']
+		if (typeof noSignerConfiguration !== 'object' || noSignerConfiguration === null || Array.isArray(noSignerConfiguration)) throw new Error('No-signer configuration document is missing')
+		Reflect.deleteProperty(noSignerConfiguration, 'privateKey')
+		const noSignerResponse = await fetch(`${origin}/api/configuration`, {
+			body: JSON.stringify(noSignerEnvelope),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(noSignerResponse.status).toBe(400)
+		expect(await noSignerResponse.json()).toEqual({ error: 'Configuration could not be saved. Review the submitted values and protected bot logs.' })
 		const executeResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(executeEnvelope),
 			headers: { 'content-type': 'application/json', origin },
@@ -629,6 +688,19 @@ describe('file-only startup configuration', () => {
 		})
 		expect(executeResponse.status, await executeResponse.clone().text()).toBe(200)
 		const executeSavedEnvelope = (await executeResponse.json()) as Record<string, unknown>
+		const queuedReplacementSigner = await fetch(`${origin}/api/signer`, {
+			body: JSON.stringify({ privateKey: `0x${'44'.repeat(32)}`, rememberSigner: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(queuedReplacementSigner.status, await queuedReplacementSigner.clone().text()).toBe(200)
+		const queuedSignerClear = await fetch(`${origin}/api/signer`, {
+			body: JSON.stringify({ privateKey: null, rememberSigner: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(queuedSignerClear.status).toBe(400)
+		expect(await queuedSignerClear.json()).toEqual({ error: 'Signer settings could not be changed. Review the submitted action and protected bot logs.' })
 		const beforePersistedLiveSwitch = await Bun.file(path).text()
 		const persistedLiveSwitchResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia', rpcQuorum: 2 }),
@@ -658,6 +730,9 @@ describe('file-only startup configuration', () => {
 		const currentRuntime = Reflect.get(currentConfiguration, 'runtime')
 		if (typeof currentRuntime !== 'object' || currentRuntime === null || Array.isArray(currentRuntime)) throw new Error('Current runtime configuration is missing')
 		Reflect.set(currentRuntime, 'lookbackBlocks', '123')
+		const currentRiskLimits = Reflect.get(currentRuntime, 'riskLimits')
+		if (typeof currentRiskLimits !== 'object' || currentRiskLimits === null || Array.isArray(currentRiskLimits)) throw new Error('Current risk limits are missing')
+		Reflect.set(currentRiskLimits, 'maxConcurrentPositions', 2)
 		const replacementPrivateKey = `0x${'33'.repeat(32)}` as Hex
 		Reflect.set(currentConfiguration, 'privateKey', replacementPrivateKey)
 		Reflect.set(currentConfiguration, 'paused', false)
@@ -689,7 +764,19 @@ describe('file-only startup configuration', () => {
 		expect(saved?.privateKey).toBe(replacementPrivateKey)
 		expect(saved?.paused).toBe(false)
 		expect(saved?.strategy.minimumProfitBps).toBe(101n)
-		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(true)
+		const queuedState = await waitForJson(origin, '/api/state')
+		expect(queuedState['paused']).toBe(true)
+		const queuedRisk = queuedState['risk']
+		if (typeof queuedRisk !== 'object' || queuedRisk === null || Array.isArray(queuedRisk)) throw new Error('Queued state risk is missing')
+		const queuedLimits = Reflect.get(queuedRisk, 'limits')
+		if (typeof queuedLimits !== 'object' || queuedLimits === null || Array.isArray(queuedLimits)) throw new Error('Queued state risk limits are missing')
+		expect(Reflect.get(queuedLimits, 'maxConcurrentPositions')).toBe(1)
+		const appliedState = await waitForStateValue(origin, 'paused', false)
+		const appliedRisk = appliedState['risk']
+		if (typeof appliedRisk !== 'object' || appliedRisk === null || Array.isArray(appliedRisk)) throw new Error('Applied state risk is missing')
+		const appliedLimits = Reflect.get(appliedRisk, 'limits')
+		if (typeof appliedLimits !== 'object' || appliedLimits === null || Array.isArray(appliedLimits)) throw new Error('Applied state risk limits are missing')
+		expect(Reflect.get(appliedLimits, 'maxConcurrentPositions')).toBe(2)
 		expect((await waitForJson(origin, '/api/state'))['savedWallet']).toBe(privateKeyToAccount(replacementPrivateKey).address)
 
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
@@ -725,6 +812,31 @@ describe('file-only startup configuration', () => {
 		expect(await networkResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
 		expect(await Bun.file(path).text()).toBe(beforeDryRunSwitch)
 		rpcChainId = '0x1'
+
+		const rememberedBeforeBoundary = `0x${'55'.repeat(32)}` as Hex
+		const rememberBeforeBoundaryResponse = await fetch(`${origin}/api/signer`, {
+			body: JSON.stringify({ privateKey: rememberedBeforeBoundary, rememberSigner: true }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(rememberBeforeBoundaryResponse.status, await rememberBeforeBoundaryResponse.clone().text()).toBe(200)
+		const forgetBeforeBoundaryResponse = await fetch(`${origin}/api/signer`, {
+			body: JSON.stringify({ forgetSavedSigner: true }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(forgetBeforeBoundaryResponse.status, await forgetBeforeBoundaryResponse.clone().text()).toBe(200)
+		expect((await loadOperatorSettings(path))?.privateKey).toBeUndefined()
+		await waitForStateValue(origin, 'wallet', privateKeyToAccount(rememberedBeforeBoundary).address)
+
+		const memoryOnlySigner = `0x${'66'.repeat(32)}` as Hex
+		const memoryOnlySignerResponse = await fetch(`${origin}/api/signer`, {
+			body: JSON.stringify({ privateKey: memoryOnlySigner, rememberSigner: false }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(memoryOnlySignerResponse.status, await memoryOnlySignerResponse.clone().text()).toBe(200)
+		expect((await loadOperatorSettings(path))?.privateKey).toBeUndefined()
 
 		const removalEnvelope = await waitForJson(origin, '/api/configuration')
 		const removalConfiguration = removalEnvelope['configuration']
