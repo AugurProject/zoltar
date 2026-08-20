@@ -158,9 +158,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 			const outcomes = await settledQuorumValue(
 				`staged operation ${pending.operationId.toString()} blocks ${range.fromBlock.toString()}-${range.toBlock.toString()}`,
 				clients.map(async ({ client, endpoint }) => {
-					const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAXIMUM_RECOVERY_LOG_RANGE, subRange =>
-						client.getLogs({ address: pending.coordinator, fromBlock: subRange.fromBlock, toBlock: subRange.toBlock }),
-					)
+					const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAXIMUM_RECOVERY_LOG_RANGE, subRange => client.getLogs({ address: pending.coordinator, fromBlock: subRange.fromBlock, toBlock: subRange.toBlock }))
 					return {
 						endpoint,
 						value: logs.flatMap(log => {
