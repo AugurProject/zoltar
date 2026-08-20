@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getStatoblastScenarioDescription, getStatoblastScenarioLabel, isStatoblastScenario, registerStatoblastSimulationScenarios } from '../simulation/index.js'
+import { getStatoblastScenarioDescription, getStatoblastScenarioLabel, isStatoblastScenario, registerStatoblastSimulationScenarios } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 
 void describe('statoblast simulation scenarios', () => {

@@ -1,10 +1,9 @@
 import * as path from 'path'
-import * as url from 'url'
 import { promises as fs } from 'fs'
+import { getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath } from './bundlerPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
+const appPaths = getUiAppPaths(parseUiAppIdFromProcess('worker build'))
 
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
@@ -21,17 +20,12 @@ globalThis.process ??= process
 globalThis.global ??= globalThis
 `.trim()
 
-const APP_IDS = ['zoltar', 'statoblast'] as const
-const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
-if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for worker build: ${appId}`)
-const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
-const workerEntryPath = path.join(APP_ROOT_PATH, 'ts', 'simulation', 'tevmWorker.ts')
 const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
 
 const result = await Bun.build({
-	entrypoints: [normalizeBundlerPath(workerEntryPath)],
+	entrypoints: [normalizeBundlerPath(appPaths.workerEntrypoint)],
 	naming: { entry: 'tevmWorker.worker.js' },
-	outdir: path.join(APP_ROOT_PATH, 'js', 'simulation'),
+	outdir: path.join(appPaths.appGeneratedJsRoot, 'simulation'),
 	target: 'browser',
 	sourcemap: 'linked',
 })

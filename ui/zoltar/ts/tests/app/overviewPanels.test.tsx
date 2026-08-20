@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
+import { OverviewPanels } from '../../app/components/OverviewPanels.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
@@ -30,6 +30,7 @@ describe('OverviewPanels', () => {
 
 	async function renderOverviewPanels(overrides: Partial<Parameters<typeof OverviewPanels>[0]> = {}) {
 		const baseProps: Parameters<typeof OverviewPanels>[0] = {
+			applicationTitle: 'Zoltar',
 			activeUniverseId: 0n,
 			accountState: {
 				address: undefined,
@@ -147,6 +148,18 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(false)
+	})
+
+	test('identifies the Zoltar application in its operations header', async () => {
+		const documentQueries = await renderOverviewPanels()
+		expect(documentQueries.getByRole('heading', { level: 2, name: 'Zoltar' })).toBeDefined()
+		expect(document.body.textContent).not.toContain('Augur Statoblast')
+	})
+
+	test('uses the application-owned title supplied by a dependent app', async () => {
+		const documentQueries = await renderOverviewPanels({ applicationTitle: 'Augur Statoblast' })
+		expect(documentQueries.getByRole('heading', { level: 2, name: 'Augur Statoblast' })).toBeDefined()
+		expect(document.body.textContent).not.toContain('Zoltar')
 	})
 
 	test('keeps the active Sepolia deployment target visible while disconnected', async () => {

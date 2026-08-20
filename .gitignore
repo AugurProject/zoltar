@@ -7,8 +7,10 @@ node_modules
 solidity/user-config.json
 solidity/ts/types/contractArtifact.ts
 .tsbuildinfo
+*.tsbuildinfo
 /ui/js
 /ui/dist
+/ui/*/dist
 /ui/vendor
 /ui/*/js
 /ui/*/vendor

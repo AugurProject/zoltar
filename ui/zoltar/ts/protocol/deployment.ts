@@ -319,7 +319,7 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 		}
 	})
 	return {
-		augurStatoblastDeployed: deploymentStatuses.every(step => step.deployed),
+		applicationDeploymentComplete: deploymentStatuses.every(step => step.deployed),
 		deploymentStatuses,
 	}
 }

@@ -28,5 +28,5 @@ export function getAppPageTitle({ activeOpenOracleView, activeZoltarView, route 
 }
 
 export function formatAppDocumentTitle(pageTitle: string) {
-	return `${pageTitle} | ${appCopy.appDocumentTitleSuffix}`
+	return `${pageTitle} | ${zoltarCopy.applicationTitle}`
 }

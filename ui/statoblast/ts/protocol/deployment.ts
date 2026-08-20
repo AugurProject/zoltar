@@ -14,45 +14,45 @@ export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
 	const steps: DeploymentStep[] = [
-	// Statoblast replaces the deployment status oracle step: the statoblast oracle
-	// must monitor the four additional statoblast contracts, so it is deployed with
-	// a different constructor argument list (and therefore a different address).
-	...getZoltarDeploymentSteps(profile, wait).map(step =>
-		step.id === 'deploymentStatusOracle'
-			? {
-					...step,
-					address: getDeploymentStatusOracleAddress(profile),
-					deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
-				}
-			: step,
-	),
-	{
-		id: 'securityPoolForker',
-		label: 'Security Pool Forker',
-		address: addresses.securityPoolForker,
-		dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
-		deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
-	},
-	{
-		id: 'escalationGameClaimDelegate',
-		label: 'Escalation Claim Checkpoint Delegate',
-		address: addresses.escalationGameClaimDelegate,
-		dependencies: ['proxyDeployer'],
-		deploy: async client => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
-	},
-	{
-		id: 'escalationGameFactory',
-		label: 'Escalation Game Factory',
-		address: addresses.escalationGameFactory,
-		dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
-		deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
-	},
-	{
-		id: 'securityPoolFactory',
-		label: 'Security Pool Factory',
-		address: addresses.securityPoolFactory,
-		dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
-		deploy: async client =>
+		// Statoblast replaces the deployment status oracle step: the statoblast oracle
+		// must monitor the four additional statoblast contracts, so it is deployed with
+		// a different constructor argument list (and therefore a different address).
+		...getZoltarDeploymentSteps(profile, wait).map(step =>
+			step.id === 'deploymentStatusOracle'
+				? {
+						...step,
+						address: getDeploymentStatusOracleAddress(profile),
+						deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
+					}
+				: step,
+		),
+		{
+			id: 'securityPoolForker',
+			label: 'Security Pool Forker',
+			address: addresses.securityPoolForker,
+			dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
+			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
+		},
+		{
+			id: 'escalationGameClaimDelegate',
+			label: 'Escalation Claim Checkpoint Delegate',
+			address: addresses.escalationGameClaimDelegate,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
+		},
+		{
+			id: 'escalationGameFactory',
+			label: 'Escalation Game Factory',
+			address: addresses.escalationGameFactory,
+			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
+			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
+		},
+		{
+			id: 'securityPoolFactory',
+			label: 'Security Pool Factory',
+			address: addresses.securityPoolFactory,
+			dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
+			deploy: async client =>
 				await deployViaProxy(
 					client,
 					getSecurityPoolFactoryByteCode({
@@ -65,7 +65,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 						zoltar: addresses.zoltar,
 						zoltarQuestionData: addresses.zoltarQuestionData,
 					}),
-			),
+				),
 		},
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
@@ -142,7 +142,7 @@ function getDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedM
 		return { ...step, deployed }
 	})
 	return {
-		augurStatoblastDeployed: deploymentStatuses.every(step => step.deployed),
+		applicationDeploymentComplete: deploymentStatuses.every(step => step.deployed),
 		deploymentStatuses,
 	}
 }

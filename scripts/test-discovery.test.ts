@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
+import { getWeightedTestFiles, KNOWN_FILE_WEIGHTS } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
 import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import { createTestTimingObservation, getHistoricalTestWeights, MAXIMUM_TIMING_SAMPLES, mergeTestTimingHistory, parseJunitTestCaseSeconds, readTestTimingHistory, TEST_TIMING_HISTORY_VERSION, type TestTimingHistory } from './test-timings.mts'
@@ -19,6 +19,14 @@ describe('canonical test discovery', () => {
 		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
 		expect(new Set(canonicalFiles).size).toBe(canonicalFiles.length)
+		for (const weightedPath of KNOWN_FILE_WEIGHTS.keys()) expect(canonicalFiles).toContain(weightedPath)
+	})
+
+	test('Bun default discovery ignores every generated UI test tree', async () => {
+		const bunfig = await readFile('bunfig.toml', 'utf8')
+		for (const packageId of ['coreShared', 'zoltar', 'statoblast']) {
+			expect(bunfig).toContain(`ui/${packageId}/js/tests/**`)
+		}
 	})
 
 	test('bytecode coverage dynamically shards the complete Solidity source set', async () => {

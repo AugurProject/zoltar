@@ -20,6 +20,9 @@ const generatedFixtureFiles = [
 	'solidity/ts/types/contractArtifact.ts',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/coreShared/js/index.js',
+	'ui/zoltar/dist/index.html',
+	'ui/zoltar/tsconfig.tsbuildinfo',
 	'ui/zoltar/vendor/isows/native.js',
 	'ui/statoblast/vendor/isows/native.js',
 ]
@@ -39,7 +42,7 @@ async function createGeneratedArtifactFixture() {
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../../shared/js/foo.js",
+		"@zoltar/shared/foo": "../shared/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -51,7 +54,7 @@ async function createGeneratedArtifactFixture() {
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../../shared/js/foo.js",
+		"@zoltar/shared/foo": "../shared/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -75,16 +78,43 @@ test('generated artifact checker fails when import-map generated outputs are mis
 	}
 })
 
-test('generated artifact checker fails when ignored generated outputs are tracked', async () => {
+test('generated artifact checker resolves shared import-map outputs from the repository package', async () => {
 	const repositoryRoot = await createGeneratedArtifactFixture()
-	const trackedGeneratedPathGit: GitRunner = () => ({
+	try {
+		await rm(path.join(repositoryRoot, 'shared/js/foo.js'))
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('Generated artifact is missing after generation: shared/js/foo.js')
+	} finally {
+		await rm(repositoryRoot, { force: true, recursive: true })
+	}
+})
+
+for (const trackedPath of ['ui/zoltar/vendor/isows/native.js', 'ui/coreShared/js/index.js', 'ui/zoltar/dist/index.html', 'ui/zoltar/tsconfig.tsbuildinfo']) {
+	test(`generated artifact checker rejects tracked ${trackedPath}`, async () => {
+		const repositoryRoot = await createGeneratedArtifactFixture()
+		const trackedGeneratedPathGit: GitRunner = () => ({
+			status: 0,
+			stderr: '',
+			stdout: `${trackedPath}\n`,
+		})
+
+		try {
+			await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedGeneratedPathGit })).rejects.toThrow('Generated artifacts must remain untracked')
+		} finally {
+			await rm(repositoryRoot, { force: true, recursive: true })
+		}
+	})
+}
+
+test('generated artifact checker rejects a tracked generated path missing from the worktree', async () => {
+	const repositoryRoot = await createGeneratedArtifactFixture()
+	const trackedMissingPathGit: GitRunner = () => ({
 		status: 0,
 		stderr: '',
-		stdout: 'ui/zoltar/vendor/isows/native.js\n',
+		stdout: 'ui/statoblast/dist/index.html\n',
 	})
 
 	try {
-		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedGeneratedPathGit })).rejects.toThrow('Generated artifacts must remain untracked')
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedMissingPathGit })).rejects.toThrow('Generated artifacts must remain untracked')
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}

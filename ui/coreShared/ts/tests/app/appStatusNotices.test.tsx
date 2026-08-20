@@ -28,7 +28,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -44,7 +44,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -60,7 +60,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
 			}),
 		)
@@ -76,7 +76,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -99,7 +99,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://query.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -124,7 +124,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://storage.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -153,7 +153,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://ethereum.dark.florist',
 					transportMode: 'provider',
 				},
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -170,7 +170,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: 'Top-level error',
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: true,
+				showApplicationDeploymentWarning: true,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -189,7 +189,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessages: ['Deployment failed', 'Wallet refresh failed'],
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -208,7 +208,7 @@ describe('AppStatusNotices', () => {
 					retryCalls += 1
 				},
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 				zoltarUniverseError: 'Universe service unavailable',
 			}),
@@ -227,7 +227,7 @@ describe('AppStatusNotices', () => {
 				loadingZoltarUniverse: true,
 				onRetryZoltarUniverse: () => undefined,
 				readBackendMessage: undefined,
-				showAugurStatoblastDeploymentWarning: false,
+				showApplicationDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 				zoltarUniverseError: 'Universe service unavailable',
 			}),

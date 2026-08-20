@@ -5,18 +5,21 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { createMarketCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar/features/transactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
 	let restoreDomEnvironment: (() => void) | undefined
+	let restoreRouting: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
+		restoreRouting = installTestRouting()
 	})
 
 	afterEach(async () => {
@@ -24,6 +27,8 @@ describe('GlobalTransactionTray', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+		restoreRouting?.()
+		restoreRouting = undefined
 	})
 
 	test('does not render when there is no submitted transaction', async () => {

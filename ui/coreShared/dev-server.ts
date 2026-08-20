@@ -1,14 +1,10 @@
 import * as http from 'node:http'
 import * as filesystem from 'node:fs/promises'
 import * as path from 'node:path'
-import * as url from 'node:url'
-import * as process from 'node:process'
+import { getUiAppPaths, parseUiAppIdFromProcess } from './build/appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
-if (appId !== 'zoltar' && appId !== 'statoblast') throw new Error(`Unknown UI app identifier '${appId}'; expected zoltar or statoblast`)
-const uiRootDirectory = path.resolve(directoryOfThisFile, '..', appId)
-const repositoryRootDirectory = path.resolve(directoryOfThisFile, '..', '..')
+const appId = parseUiAppIdFromProcess('the development server')
+const { appRoot: uiRootDirectory, repositoryRoot: repositoryRootDirectory } = getUiAppPaths(appId)
 const liveReloadClients = new Set<http.ServerResponse>()
 
 const getServedFilePaths = (requestPath: string) => {

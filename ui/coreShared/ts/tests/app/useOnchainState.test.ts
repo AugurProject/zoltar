@@ -17,7 +17,7 @@ import type { UseOnchainStateDependencies } from '../../app/hooks/useOnchainStat
 const fakeOnchainStateDependencies: UseOnchainStateDependencies = {
 	getDeploymentSteps: () => [],
 	getWethAddress: () => '0x0000000000000000000000000000000000000ee1' as const,
-	loadDeploymentStatusOracleSnapshot: async () => ({ augurStatoblastDeployed: false, deploymentStatuses: [] }),
+	loadDeploymentStatusOracleSnapshot: async () => ({ applicationDeploymentComplete: false, deploymentStatuses: [] }),
 	loadErc20Balance: async () => 0n,
 }
 

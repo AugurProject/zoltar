@@ -56,7 +56,8 @@ After completing [Setup](#setup), start a local chain and launch the app:
 If you are iterating on the app and want rebuilds, use:
 
 ```bash
-bun run app:watch
+bun run app:watch:zoltar
+bun run app:watch:statoblast
 ```
 
 ## RPC Configuration
@@ -214,14 +215,14 @@ Simulation mode details:
 
 ## Common Commands
 
-Run each interface in development mode. Each command includes contract generation and that app's build pipeline:
+Run each interface in development mode. Each command first builds the complete dependency-ordered UI workspace, then serves the selected app:
 
 ```bash
 bun run app:serve:zoltar      # Zoltar on http://localhost:12346
 bun run app:serve:statoblast  # Statoblast on http://localhost:12347
 ```
 
-Watch and rebuild an app's pipeline:
+Watch the selected app and its dependencies after the complete workspace build:
 
 ```bash
 bun run app:watch:zoltar

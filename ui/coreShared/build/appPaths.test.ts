@@ -1,13 +1,18 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
-import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId } from './appPaths.mts'
 
 const repositoryRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', '..')
 
 test('UI_APP_IDS lists exactly the supported applications', () => {
 	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast'])
+})
+
+test('getUiAppDependencyOrder preserves the UI package DAG', () => {
+	expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltar'])
+	expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltar', 'statoblast'])
 })
 
 test('isUiAppId accepts supported applications and rejects unknown values', () => {
@@ -49,4 +54,56 @@ test('getUiCoreSharedPaths resolves the repository root from ui/coreShared/build
 	expect(paths.repositoryRoot).toBe(repositoryRoot)
 	expect(paths.coreSharedTestSourceRoot).toBe(path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'tests'))
 	expect(fs.existsSync(path.join(paths.repositoryRoot, 'package.json'))).toBe(true)
+})
+
+test('vendor and worker builders consume the centralized app path helper', () => {
+	for (const buildScript of ['vendor.mts', 'workers.mts']) {
+		const source = fs.readFileSync(path.join(import.meta.dir, buildScript), 'utf8')
+		expect(source).toContain("from './appPaths.mts'")
+		expect(source).not.toMatch(/const APP_IDS\s*=/)
+	}
+})
+
+async function waitForDevelopmentServer(serverUrl: string) {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		try {
+			const response = await fetch(serverUrl)
+			if (response.ok) return await response.text()
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.includes('Unable to connect')) throw error
+		}
+		await Bun.sleep(20)
+	}
+	throw new Error(`Development server did not start at ${serverUrl}`)
+}
+
+describe('split development server paths', () => {
+	for (const [appId, port] of [
+		['zoltar', 12346],
+		['statoblast', 12347],
+	] as const) {
+		test(`serves the ${appId} application root`, async () => {
+			const paths = getUiAppPaths(appId)
+			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { stderr: 'pipe', stdout: 'pipe' })
+			try {
+				const html = await waitForDevelopmentServer(`http://127.0.0.1:${port.toString()}/`)
+				expect(html).toContain(appId === 'zoltar' ? '<title>Zoltar</title>' : '<title>Augur Statoblast</title>')
+			} finally {
+				processHandle.kill()
+				await processHandle.exited
+			}
+		})
+	}
+
+	for (const [label, args, expected] of [
+		['missing', [], 'Missing UI app ID'],
+		['unknown', ['unknown'], "Unknown UI app ID 'unknown'"],
+	] as const) {
+		test(`rejects a ${label} application ID`, async () => {
+			const processHandle = Bun.spawn([process.execPath, getUiAppPaths('zoltar').devServerScript, ...args], { stderr: 'pipe', stdout: 'pipe' })
+			const stderr = await new Response(processHandle.stderr).text()
+			expect(await processHandle.exited).not.toBe(0)
+			expect(stderr).toContain(expected)
+		})
+	}
 })

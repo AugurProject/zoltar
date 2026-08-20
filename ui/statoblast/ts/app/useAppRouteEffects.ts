@@ -5,7 +5,7 @@ import type { Route } from '../types/app.js'
 
 type Props = {
 	accountAddress: Address | undefined
-	augurStatoblastDeploymentMissing: boolean
+	applicationDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
@@ -52,7 +52,7 @@ export function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSe
 
 export function useAppRouteEffects({
 	accountAddress,
-	augurStatoblastDeploymentMissing,
+	applicationDeploymentMissing,
 	activeEnvironmentNonce,
 	environmentReady,
 	loadOracleReport,
@@ -186,8 +186,8 @@ export function useAppRouteEffects({
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 
 	useEffect(() => {
-		if (!augurStatoblastDeploymentMissing) return
+		if (!applicationDeploymentMissing) return
 		if (route === 'deploy') return
 		navigateRef.current('deploy')
-	}, [augurStatoblastDeploymentMissing, route])
+	}, [applicationDeploymentMissing, route])
 }

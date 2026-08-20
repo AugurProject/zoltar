@@ -28,8 +28,12 @@ const generatedReviewPaths = [
 	'solidity/artifacts',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
+	'ui/coreShared/js',
+	'ui/zoltar/dist',
 	'ui/zoltar/js',
+	'ui/statoblast/dist',
 	'ui/statoblast/js',
+	':(glob)**/*.tsbuildinfo',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
 	'ui/coreShared/ts/deploymentArtifacts.ts',
@@ -111,6 +115,10 @@ async function getUiImportMapGeneratedOutputs(repositoryRoot: string, appId: str
 	for (const [specifier, targetPath] of Object.entries(imports)) {
 		if (typeof targetPath !== 'string') throw new Error(`ui/${appId}/index.html import map target for ${specifier} must be a string`)
 		if (!targetPath.startsWith('./') && !targetPath.startsWith('../')) continue
+		if (/^(?:\.\.\/)+shared\//.test(targetPath)) {
+			outputs.push(targetPath.replace(/^(?:\.\.\/)+/, ''))
+			continue
+		}
 		outputs.push(normalizeRepositoryRelativePath(path.join('ui', appId), targetPath))
 	}
 	return outputs

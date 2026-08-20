@@ -159,7 +159,7 @@ type UseOnchainStateOptions = {
 export type UseOnchainStateDependencies = {
 	getDeploymentSteps: () => ReadonlyArray<DeploymentStep>
 	getWethAddress: () => Address
-	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ augurStatoblastDeployed: boolean; deploymentStatuses: DeploymentStatus[] }>
+	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ applicationDeploymentComplete: boolean; deploymentStatuses: DeploymentStatus[] }>
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
 
@@ -180,7 +180,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const walletStateLoad = useLoadController()
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
-	const augurStatoblastDeployed = useSignal<boolean | undefined>(undefined)
+	const applicationDeploymentComplete = useSignal<boolean | undefined>(undefined)
 	const currentTimestamp = useSignal<bigint | undefined>(getActiveBackend().currentTimestamp)
 	const currentBlockNumber = useSignal<bigint | undefined>(undefined)
 	const environmentBootstrapError = useSignal<string | undefined>(undefined)
@@ -231,7 +231,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
 		deploymentStatuses.value = updated
-		if (updated.every(step => step.deployed)) augurStatoblastDeployed.value = true
+		if (updated.every(step => step.deployed)) applicationDeploymentComplete.value = true
 	}
 	const invalidateDeploymentState = () => {
 		deploymentStatuses.value = dependencies.getDeploymentSteps().map(step => ({
@@ -239,7 +239,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			deployed: false,
 		}))
 		deploymentStatusesLoaded.value = false
-		augurStatoblastDeployed.value = undefined
+		applicationDeploymentComplete.value = undefined
 	}
 	const refreshChainClock = (backend: ChainBackend) => {
 		const activeRequest = chainClockRefreshRef.current
@@ -427,7 +427,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				try {
 					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 					if (!isCurrent()) return
-					augurStatoblastDeployed.value = snapshot.augurStatoblastDeployed
+					applicationDeploymentComplete.value = snapshot.applicationDeploymentComplete
 					deploymentStatuses.value = snapshot.deploymentStatuses
 					deploymentStatusesLoaded.value = true
 				} catch (error) {
@@ -679,7 +679,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		isManagingWallet: isManagingWallet.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
 		isRefreshing: walletStateLoad.isLoading.value,
-		augurStatoblastDeployed: augurStatoblastDeployed.value,
+		applicationDeploymentComplete: applicationDeploymentComplete.value,
 		refreshState,
 		setDeploymentStatuses,
 		disconnectWallet,

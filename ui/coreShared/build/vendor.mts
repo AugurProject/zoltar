@@ -1,6 +1,7 @@
 import * as path from 'path'
-import * as url from 'url'
 import { promises as fs } from 'fs'
+import { fileURLToPath } from 'node:url'
+import { getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'
 type VendorBuildSteps = {
@@ -30,13 +31,9 @@ async function recursiveDirectoryCopy(source: string, destination: string, inclu
 }
 import { copyProjectArtifacts } from './projectArtifacts.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const APP_IDS = ['zoltar', 'statoblast'] as const
-const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
-if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for vendor build: ${appId}`)
-const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
-const VENDOR_OUTPUT_PATH = path.join(APP_ROOT_PATH, 'vendor')
+function getVendorOutputPath() {
+	return path.join(getUiAppPaths(parseUiAppIdFromProcess('vendor build')).appRoot, 'vendor')
+}
 
 type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
@@ -56,7 +53,7 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
 ]
 
-async function vendorDependencies() {
+async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
 	async function inclusionPredicate(path: string, fileType: FileType) {
 		if (path.endsWith('.js')) return true
 		if (path.endsWith('.ts')) return true
@@ -75,7 +72,7 @@ async function vendorDependencies() {
 		for (let segmentIndex = 1; segmentIndex < mainEntrypointSegments; segmentIndex++) {
 			sourceDirectoryPath = path.dirname(sourceDirectoryPath)
 		}
-		const destinationDirectoryPath = path.join(VENDOR_OUTPUT_PATH, packageToVendor || packageName)
+		const destinationDirectoryPath = path.join(vendorOutputPath, packageToVendor || packageName)
 		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate, rewriteSourceMapSourcePath.bind(undefined, packageName))
 	}
 }
@@ -95,8 +92,8 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }
 
-async function bundleTevm() {
-	const tevmOutRoot = path.join(VENDOR_OUTPUT_PATH, 'tevm')
+async function bundleTevm(vendorOutputPath = getVendorOutputPath()) {
+	const tevmOutRoot = path.join(vendorOutputPath, 'tevm')
 	await Promise.all([
 		Bun.build({
 			entrypoints: [resolveBundlerSpecifierPath('tevm')],
@@ -129,11 +126,11 @@ export async function vendor(steps: VendorBuildSteps = defaultVendorBuildSteps) 
 	await steps.copyProjectArtifacts()
 }
 
-export async function clearVendorOutput(vendorOutputPath = VENDOR_OUTPUT_PATH) {
+export async function clearVendorOutput(vendorOutputPath = getVendorOutputPath()) {
 	await fs.rm(vendorOutputPath, { recursive: true, force: true })
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
+const currentScriptPath = fileURLToPath(import.meta.url)
 const invokedScriptPath = process.argv[1]
 
 if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {

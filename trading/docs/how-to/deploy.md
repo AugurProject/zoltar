@@ -21,7 +21,7 @@ Return to the repository root (`cd ..` if you are still in `trading/`) and compl
 bun run anvil -- --chain-id 1 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee
 ```
 
-In another terminal, run `bun run app:serve`, open `http://localhost:12345/?rpcUrl=http://127.0.0.1:8545#/deploy`, connect an Anvil account, and use the root Zoltar deployment screen to install the core contracts. Wait until its deployment plan is complete.
+In another terminal, run `bun run app:serve:statoblast`, open `http://localhost:12347/?rpcUrl=http://127.0.0.1:8545#/deploy`, connect an Anvil account, and use the Statoblast deployment screen to install the core contracts and security pool factory. Wait until its deployment plan is complete.
 
 From the repository root, start the trading Docker UI:
 

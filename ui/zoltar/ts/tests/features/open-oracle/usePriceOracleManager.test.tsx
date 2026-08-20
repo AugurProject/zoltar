@@ -9,7 +9,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createOracleManagerDetails } from '../../../../../statoblast/ts/tests/features/security-pools/workflow/builders.js'
+import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type TestWriteClient = { kind: 'price-oracle-write-client' }
 type UsePriceOracleManagerState = ReturnType<typeof usePriceOracleManager>
@@ -18,6 +18,29 @@ const MANAGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a3')
 const TRANSACTION_HASH = '0x00000000000000000000000000000000000000000000000000000000000000a4' as const
+
+function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
+	return {
+		callbackStateHash: undefined,
+		exactToken1Report: undefined,
+		isPriceValid: true,
+		lastPrice: 1n,
+		lastSettlementTimestamp: 1n,
+		managerAddress: zeroAddress,
+		openOracleAddress: zeroAddress,
+		pendingOperation: undefined,
+		pendingOperationSlotId: 0n,
+		pendingSettlementOperationIds: [],
+		pendingSettlementQueueCapacity: 4n,
+		pendingReportId: 0n,
+		priceValidUntilTimestamp: 1000n,
+		queuedOperationCostAttoEth: 1n,
+		requestPriceCostAttoEth: 1n,
+		token1: zeroAddress,
+		token2: zeroAddress,
+		...overrides,
+	}
+}
 
 function requireHookState(state: UsePriceOracleManagerState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')

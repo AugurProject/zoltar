@@ -25,8 +25,8 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 	return appCopy.pageNotFoundTitle
 }
 
-const statoblastDocumentTitleSuffix = 'Augur Statoblast'
+export const applicationTitle = 'Augur Statoblast'
 
 export function formatAppDocumentTitle(pageTitle: string) {
-	return `${pageTitle} | ${statoblastDocumentTitleSuffix}`
+	return `${pageTitle} | ${applicationTitle}`
 }

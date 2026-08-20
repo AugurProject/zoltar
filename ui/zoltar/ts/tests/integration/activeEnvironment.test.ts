@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/index.js'
+import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
@@ -523,7 +523,7 @@ void describe('simulation backend', () => {
 		expect(wethCode).not.toBe('0x')
 		expect(repBalanceAttoRep > 0n).toBe(true)
 		expect(wethBalanceAttoEth > 0n).toBe(true)
-		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(false)
+		expect(deploymentSnapshot.applicationDeploymentComplete).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
 	}, 30_000)
 

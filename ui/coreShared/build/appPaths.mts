@@ -4,6 +4,11 @@ import * as url from 'node:url'
 
 export const UI_APP_IDS = ['zoltar', 'statoblast'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
+export type UiPackageId = 'coreShared' | UiAppId
+
+export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] {
+	return appId === 'statoblast' ? ['coreShared', 'zoltar', 'statoblast'] : ['coreShared', 'zoltar']
+}
 
 export function isUiAppId(candidate: string): candidate is UiAppId {
 	return (UI_APP_IDS as readonly string[]).includes(candidate)

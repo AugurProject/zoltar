@@ -6,19 +6,52 @@ import * as process from 'node:process'
 import { getChromiumPath } from './chromiumPath.js'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
-const SIMULATION_SCENARIO = 'baseline'
+const SIMULATION_SCENARIO = process.env['UI_SIMULATION_SCENARIO'] ?? 'baseline'
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
 
 type PageIssue = {
-	readonly kind: 'pageerror' | 'console-error' | 'import-map' | 'request-failed' | 'mount'
+	readonly kind: 'pageerror' | 'console-error' | 'import-map' | 'request-failed' | 'worker' | 'mount'
 	readonly detail: string
 }
 
-type ChromiumCommand = (method: string, params?: Record<string, unknown>) => Promise<unknown>
+type NetworkRequest = { readonly resourceType: string; readonly url: string }
 
-async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
+type ChromiumCommand = (method: string, params?: Record<string, unknown>, sessionId?: string) => Promise<unknown>
+
+type BrowserSmokeState = {
+	body: string
+	height: number
+	hasMain: boolean
+	title: string
+	width: number
+}
+
+export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, readyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
+	return (
+		state.hasMain &&
+		state.width === viewport.width &&
+		state.height === viewport.height &&
+		state.body !== '' &&
+		state.body !== 'Loading...' &&
+		state.body.includes(applicationTitle) &&
+		!state.body.includes('BOOTSTRAPPING') &&
+		!state.body.includes('Starting simulation bootstrap') &&
+		(readyText === undefined || state.body.includes(readyText))
+	)
+}
+
+function parseViewport(candidate: string | undefined) {
+	const match = /^(\d+)x(\d+)$/.exec(candidate ?? '1440x900')
+	if (match === null) throw new Error(`Invalid UI_VIEWPORT '${candidate ?? ''}'; expected WIDTHxHEIGHT.`)
+	const width = Number(match[1])
+	const height = Number(match[2])
+	if (width < 1 || height < 1) throw new Error(`Invalid UI_VIEWPORT '${candidate ?? ''}'; dimensions must be positive.`)
+	return { height, width }
+}
+
+async function createDevToolsSession(chromiumPath: string, pageUrl: string, viewport: { readonly height: number; readonly width: number }) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
-	const browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
+	const browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, `--window-size=${viewport.width.toString()},${viewport.height.toString()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
 	let stderrData = ''
 	browser.stderr.on('data', chunk => {
 		stderrData += String(chunk)
@@ -28,7 +61,8 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 		try {
 			devToolsPort = Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
 			break
-		} catch {
+		} catch (error) {
+			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 			await Bun.sleep(50)
 		}
 	}
@@ -39,6 +73,10 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 	}
 
 	const issues: PageIssue[] = []
+	const networkRequests = new Map<string, NetworkRequest>()
+	const workerTargets = new Map<string, string>()
+	let lastNetworkActivity = Date.now()
+	let workerStarted = false
 	let requestId = 0
 	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
 	const socket = await (async () => {
@@ -54,7 +92,8 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 					})
 					return ws
 				}
-			} catch {
+			} catch (error) {
+				if (!(error instanceof TypeError)) throw error
 				// Chromium target list not ready yet.
 			}
 			await Bun.sleep(50)
@@ -67,18 +106,71 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 		const message: unknown = JSON.parse(event.data)
 		if (typeof message !== 'object' || message === null) return
 		if ('method' in message) {
-			const { method, params } = message as { method: string; params?: Record<string, unknown> }
+			const { method, params, sessionId } = message as { method: string; params?: Record<string, unknown>; sessionId?: string }
+			const networkRequestKey = (requestId: unknown) => `${sessionId ?? 'page'}:${String(requestId)}`
 			if (method === 'Runtime.exceptionThrown') {
 				const exceptionDetails = params?.['exceptionDetails'] as { text?: string; exception?: { description?: string } } | undefined
-				issues.push({ kind: 'pageerror', detail: exceptionDetails?.exception?.description ?? exceptionDetails?.text ?? 'Unknown page error' })
+				const detail = exceptionDetails?.exception?.description ?? exceptionDetails?.text ?? 'Unknown page error'
+				issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'pageerror', detail })
 			}
 			if (method === 'Runtime.consoleAPICalled' && params?.['type'] === 'error') {
 				const args = (params['args'] as Array<{ value?: unknown; description?: string }> | undefined) ?? []
-				issues.push({ kind: 'console-error', detail: args.map(arg => String(arg.value ?? arg.description ?? '')).join(' ') || 'console.error()' })
+				const detail = args.map(arg => String(arg.value ?? arg.description ?? '')).join(' ') || 'console.error()'
+				issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'console-error', detail })
+			}
+			if (method === 'Log.entryAdded') {
+				const entry = params?.['entry'] as { level?: string; text?: string; url?: string } | undefined
+				if (entry?.level === 'error') {
+					const detail = `${entry.text ?? 'Browser log error'}${entry.url === undefined ? '' : ` (${entry.url})`}`
+					issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'console-error', detail })
+				}
+			}
+			if (method === 'Network.requestWillBeSent') {
+				const requestId = params?.['requestId']
+				const request = params?.['request'] as { url?: string } | undefined
+				if (typeof requestId === 'string' && typeof request?.url === 'string') networkRequests.set(networkRequestKey(requestId), { resourceType: String(params?.['type'] ?? ''), url: request.url })
+				lastNetworkActivity = Date.now()
+			}
+			if (method === 'Network.responseReceived') {
+				const requestId = params?.['requestId']
+				const response = params?.['response'] as { status?: number; url?: string } | undefined
+				const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
+				const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
+				const resourceUrl = response?.url ?? request?.url ?? 'unknown URL'
+				if (typeof response?.status === 'number' && response.status >= 400 && isRequiredBrowserResource(resourceUrl, resourceType)) issues.push({ kind: 'request-failed', detail: `${response.status.toString()} ${resourceType || 'resource'} ${resourceUrl}` })
+				lastNetworkActivity = Date.now()
 			}
 			if (method === 'Network.loadingFailed') {
-				const blockedReason = params?.['errorText']
-				issues.push({ kind: 'request-failed', detail: String(blockedReason ?? 'request failed') })
+				const requestId = params?.['requestId']
+				const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
+				const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
+				const detail = `${String(params?.['errorText'] ?? 'request failed')} ${resourceType || 'resource'} ${request?.url ?? 'unknown URL'}`
+				const isBenignCanceledImage = params?.['canceled'] === true && resourceType === 'Image'
+				if (!isBenignCanceledImage) issues.push({ kind: 'request-failed', detail })
+				lastNetworkActivity = Date.now()
+			}
+			if (method === 'Target.targetCreated') {
+				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
+				if (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker') {
+					workerStarted = true
+					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+				}
+			}
+			if (method === 'Target.attachedToTarget') {
+				const childSessionId = params?.['sessionId']
+				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
+				if (typeof childSessionId === 'string' && (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker')) {
+					workerStarted = true
+					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+					void Promise.all([send('Network.enable', {}, childSessionId), send('Log.enable', {}, childSessionId), send('Runtime.enable', {}, childSessionId)]).catch(error => {
+						if (!(error instanceof Error) || !error.message.includes('Session with given id not found')) issues.push({ kind: 'worker', detail: error instanceof Error ? error.message : String(error) })
+					})
+				}
+			}
+			if (method === 'Target.targetDestroyed') {
+				const targetId = params?.['targetId']
+				const workerUrl = typeof targetId === 'string' ? workerTargets.get(targetId) : undefined
+				if (workerUrl !== undefined) issues.push({ kind: 'worker', detail: `Worker terminated before smoke completion: ${workerUrl}` })
 			}
 			return
 		}
@@ -90,11 +182,11 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 		else pendingRequest.resolve('result' in message ? message.result : undefined)
 	})
 
-	const send: ChromiumCommand = async (method, params = {}) => {
+	const send: ChromiumCommand = async (method, params = {}, sessionId) => {
 		requestId += 1
 		const id = requestId
 		const response = new Promise<unknown>((resolve, reject) => pending.set(id, { reject, resolve }))
-		socket.send(JSON.stringify({ id, method, params }))
+		socket.send(JSON.stringify({ id, method, params, ...(sessionId === undefined ? {} : { sessionId }) }))
 		return await response
 	}
 
@@ -105,47 +197,78 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string) {
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
 
-	return { close, issues, send, pageUrl }
+	return { close, getLastNetworkActivity: () => lastNetworkActivity, hasWorkerStarted: () => workerStarted, issues, send, pageUrl }
 }
 
-async function runSmoke(appId: UiAppId, baseUrl: string) {
+export function isRequiredBrowserResource(resourceUrl: string, resourceType: string) {
+	return resourceType === 'Script' || resourceType === 'Stylesheet' || /(?:\.m?js|\.css)(?:[?#]|$)/i.test(resourceUrl) || /worker/i.test(resourceUrl)
+}
+
+export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: { readonly mountTimeoutMilliseconds?: number; readonly requireWorker?: boolean } = {}) {
 	const chromiumPath = getChromiumPath()
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the browser smoke check. Set CHROMIUM_PATH or install Chromium.')
-	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&simScenario=${SIMULATION_SCENARIO}`
-	const session = await createDevToolsSession(chromiumPath, pageUrl)
+	const route = process.env['UI_BROWSER_ROUTE'] ?? ''
+	if (route !== '' && !route.startsWith('#')) throw new Error(`Invalid UI_BROWSER_ROUTE '${route}'; expected an empty value or a hash route.`)
+	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&simScenario=${encodeURIComponent(SIMULATION_SCENARIO)}${route}`
+	const viewport = parseViewport(process.env['UI_VIEWPORT'])
+	const session = await createDevToolsSession(chromiumPath, pageUrl, viewport)
 	try {
 		const { send, issues } = session
+		const applicationTitle = appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast'
+		const readyText = process.env['UI_BROWSER_READY_TEXT']
 		await send('Runtime.enable')
 		await send('Page.enable')
 		await send('Network.enable')
+		await send('Log.enable')
+		await send('Target.setDiscoverTargets', { discover: true })
+		await send('Target.setAutoAttach', { autoAttach: true, flatten: true, waitForDebuggerOnStart: false })
+		await send('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: viewport.height, mobile: false, width: viewport.width })
 		await send('Page.navigate', { url: pageUrl })
 
 		const start = Date.now()
 		let mounted = false
-		while (Date.now() - start < MOUNT_TIMEOUT_MILLISECONDS) {
+		const mountTimeoutMilliseconds = options.mountTimeoutMilliseconds ?? MOUNT_TIMEOUT_MILLISECONDS
+		while (Date.now() - start < mountTimeoutMilliseconds) {
 			const result = (await send('Runtime.evaluate', {
-				expression: `JSON.stringify({ body: document.body?.innerText ?? '', hasMain: document.querySelector('main') !== null, title: document.title })`,
+				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, title: document.title, width: window.innerWidth })`,
 				returnByValue: true,
 			})) as { result?: { value?: string } }
 			const raw = result.result?.value
 			if (typeof raw === 'string') {
-				const state = JSON.parse(raw) as { body: string; hasMain: boolean; title: string }
-				if (state.hasMain && state.body !== '' && state.body !== 'Loading...' && !state.body.includes('BOOTSTRAPPING') && !state.body.includes('Starting simulation bootstrap')) {
+				const state = JSON.parse(raw) as BrowserSmokeState
+				if (isBrowserSmokeReady(state, applicationTitle, readyText, viewport)) {
 					mounted = true
 					break
 				}
 			}
 			await Bun.sleep(100)
 		}
-		if (!mounted) issues.push({ kind: 'mount', detail: `The ${appId} application root did not mount within ${(MOUNT_TIMEOUT_MILLISECONDS / 1000).toFixed(0)}s at ${pageUrl}` })
+		if (!mounted) issues.push({ kind: 'mount', detail: `The ${appId} application root did not reach its expected ${applicationTitle}${readyText === undefined ? '' : ` / ${readyText}`} state within ${(mountTimeoutMilliseconds / 1000).toFixed(0)}s at ${pageUrl}` })
 
-		// Import-map errors surface as page errors; surface anything that mentions import maps clearly.
-		const failures = issues.filter(issue => issue.kind !== 'request-failed' || !issue.detail.includes('net::ERR_ABORTED'))
-		if (failures.length > 0) {
-			const summary = failures.map(issue => `  - [${issue.kind}] ${issue.detail}`).join('\n')
+		if (mounted) {
+			const settleDeadline = Date.now() + Math.min(5_000, mountTimeoutMilliseconds)
+			while (Date.now() < settleDeadline && (Date.now() - session.getLastNetworkActivity() < 500 || ((options.requireWorker ?? true) && !session.hasWorkerStarted()))) await Bun.sleep(100)
+			if ((options.requireWorker ?? true) && !session.hasWorkerStarted()) issues.push({ kind: 'worker', detail: `No worker initialized for ${appId} at ${pageUrl}` })
+		}
+
+		const screenshotPath = process.env['UI_SCREENSHOT_PATH']
+		if (screenshotPath !== undefined && screenshotPath !== '') {
+			const scrollSelector = process.env['UI_SCREENSHOT_SCROLL_SELECTOR']
+			if (scrollSelector !== undefined && scrollSelector !== '') {
+				await send('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scrollSelector)})?.scrollIntoView({ block: 'start' })` })
+				await Bun.sleep(100)
+			}
+			const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
+			if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
+			await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
+			await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
+		}
+
+		if (issues.length > 0) {
+			const summary = issues.map(issue => `  - [${issue.kind}] ${issue.detail}`).join('\n')
 			throw new Error(`Browser smoke check failed for ${appId} at ${pageUrl}:\n${summary}`)
 		}
-		console.log(`[browser-smoke] ${appId} mounted cleanly at ${pageUrl}`)
+		console.log(`[browser-smoke] ${appId} mounted cleanly at ${pageUrl} (${viewport.width.toString()}x${viewport.height.toString()})`)
 	} finally {
 		await session.close()
 	}
@@ -160,7 +283,7 @@ async function main() {
 	if (appId !== undefined && explicitBaseUrl === undefined) {
 		throw new Error(`Set UI_DEV_SERVER_URL to the running ${appId} dev server base URL (expected http://localhost:${ports[appId]} from bun run app:serve:${appId}).`)
 	}
-	await runSmoke(appId, explicitBaseUrl ?? `http://localhost:${ports[appId]}`)
+	await runBrowserSmoke(appId, explicitBaseUrl ?? `http://localhost:${ports[appId]}`)
 }
 
 if (import.meta.main) {

@@ -3,13 +3,11 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import * as url from 'node:url'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { UI_APP_IDS, getUiAppPaths, isUiAppId } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId } from './appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
-const repositoryRootPath = path.join(directoryOfThisFile, '..', '..', '..')
+const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
 const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
@@ -41,17 +39,15 @@ beforeAll(async () => {
 			const uiLayoutMatch = /^\/ui\/([a-z]+)\/dist(\/.*)?$/.exec(requestUrl.pathname)
 			const uiLayoutAppId = uiLayoutMatch?.[1]
 			const pathname = uiLayoutMatch?.[2] ?? requestUrl.pathname
-			const matchedAppId =
-				uiLayoutAppId !== undefined && isUiAppId(uiLayoutAppId)
-					? uiLayoutAppId
-					: (UI_APP_IDS.find(appId => pathname === `/${appId}` || pathname.startsWith(`/${appId}/`)) ??
-						(pathname === '/' || pathname.startsWith('/assets/') || pathname.startsWith('/css/') ? 'zoltar' : undefined))
+			const matchedAppId = uiLayoutAppId !== undefined && isUiAppId(uiLayoutAppId) ? uiLayoutAppId : (UI_APP_IDS.find(appId => pathname === `/${appId}` || pathname.startsWith(`/${appId}/`)) ?? (pathname === '/' || pathname.startsWith('/assets/') || pathname.startsWith('/css/') ? 'zoltar' : undefined))
 			if (matchedAppId === undefined) {
 				return new Response('not found', { status: 404 })
 			}
 			const appPaths = appPathsById.get(matchedAppId)
 			if (appPaths === undefined) throw new Error(`No path information recorded for ${matchedAppId}.`)
-			const appRelativePath = pathname === `/${matchedAppId}` || pathname === '/' ? '/' : pathname.startsWith(`/${matchedAppId}/`) ? pathname.slice(`/${matchedAppId}`.length) : pathname
+			let appRelativePath = pathname
+			if (pathname === `/${matchedAppId}` || pathname === '/') appRelativePath = '/'
+			else if (pathname.startsWith(`/${matchedAppId}/`)) appRelativePath = pathname.slice(`/${matchedAppId}`.length)
 			const relativePath = appRelativePath === '/' ? 'index.html' : appRelativePath.replace(/^\/+/, '')
 			const filePath = path.join(appPaths.appDistRoot, relativePath)
 			if (!filePath.startsWith(`${appPaths.appDistRoot}${path.sep}`)) {
@@ -66,7 +62,7 @@ beforeAll(async () => {
 		hostname: '127.0.0.1',
 		port: 0,
 	})
-})
+}, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
 
 afterAll(() => {
 	server?.stop(true)
@@ -88,7 +84,6 @@ for (const appId of UI_APP_IDS) {
 	const expectedTitle = appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast'
 	const otherTitle = appId === 'zoltar' ? 'Augur Statoblast' : 'Zoltar'
 	const expectedRoute = appId === 'zoltar' ? '#/zoltar' : '#/security-pools'
-	const otherRoute = appId === 'zoltar' ? '#/security-pools' : '#/zoltar'
 
 	test(`${appId} production build emits the deployable artifact set`, async () => {
 		const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths]
@@ -147,6 +142,19 @@ for (const appId of UI_APP_IDS) {
 		const otherHtml = await fs.readFile(otherIndexPath, 'utf8')
 		expect(otherHtml).toContain('<title>')
 		expect(distRootPath).not.toBe(otherPaths.appDistRoot)
+	})
+
+	test(`${appId} production output is independent of the invoking working directory`, async () => {
+		const rootBuild = await fs.readFile(appBundlePath)
+		const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
+			cwd: appPaths.appRoot,
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		if (result.exitCode !== 0) {
+			throw new Error(`production build from ${appPaths.appRoot} failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+		}
+		expect(await fs.readFile(appBundlePath)).toEqual(rootBuild)
 	})
 }
 
@@ -767,6 +775,7 @@ for (const scenario of productionBrowserScenarios) {
 		}
 		expect(state.html).toContain('<main')
 		expect(state.body).toContain(scenario.expected)
+		expect(state.body).toContain(scenario.appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast')
 		expect(state.body).toContain('Simulation')
 		expect(state.height).toBe(scenario.viewport.height)
 		expect(state.width).toBe(scenario.viewport.width)

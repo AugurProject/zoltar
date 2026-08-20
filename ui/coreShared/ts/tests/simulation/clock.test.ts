@@ -3,7 +3,7 @@
 import { createMemoryClient } from 'tevm'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, type Hex } from '@zoltar/shared/ethereum'
-import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP, advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../simulation/clock.js'
+import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP, advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
 
 function createSimulationNode(overrides: { blockStateRootHex: Hex; includeStateRoot: boolean; txForHash?: { isFound: boolean; txValue?: unknown } }) {
 	const stateRoot = hexToBytes(overrides.blockStateRootHex)

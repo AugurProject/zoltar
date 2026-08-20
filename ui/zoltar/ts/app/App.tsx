@@ -26,8 +26,7 @@ import { getActiveSimulationController, initializeActiveEnvironment, shouldFollo
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../protocol/index.js'
-import { getWethAddress } from '../protocol/uniswapQuoter.js'
+import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
@@ -96,7 +95,7 @@ export function App() {
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
 	const {
 		accountState,
-		augurStatoblastDeployed,
+		applicationDeploymentComplete,
 		changeWallet,
 		chainClockError,
 		connectWallet,
@@ -126,7 +125,7 @@ export function App() {
 			enableChainClock: route !== 'deploy',
 			...(followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
 		},
-		{ getDeploymentSteps, getWethAddress, loadDeploymentStatusOracleSnapshot, loadErc20Balance },
+		onchainStateDependencies,
 	)
 	const readBackendReady = readBackendValidated && readBackendMessage === undefined
 	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
@@ -235,23 +234,23 @@ export function App() {
 	}
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
-	const augurStatoblastDeploymentMissing = canReadOnchainData && augurStatoblastDeployed === false
-	const showDeployTab = deploymentStatusError !== undefined || augurStatoblastDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
-	const showAugurStatoblastDeploymentWarning = augurStatoblastDeploymentMissing
+	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
+	const showDeployTab = deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
+	const showApplicationDeploymentWarning = applicationDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || augurStatoblastDeploymentMissing || showZoltarUniverseWarning)
+	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || showZoltarUniverseWarning)
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
-		augurStatoblastDeploymentMissing,
+		applicationDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
@@ -429,12 +428,13 @@ export function App() {
 						readBackendMessage={readBackendMessage}
 						readBackendStatus={readBackendStatus}
 						simulationBootstrapError={environmentBootstrapError}
-						showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning}
+						showApplicationDeploymentWarning={showApplicationDeploymentWarning}
 						zoltarUniverseError={zoltarUniverseError}
 					/>
 					<AppHeaderShell
 						overview={
 							<OverviewPanels
+								applicationTitle={zoltarCopy.applicationTitle}
 								activeUniverseId={activeUniverseId}
 								accountState={accountState}
 								isConnectingWallet={isConnectingWallet}

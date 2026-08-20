@@ -2,13 +2,11 @@ import { expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import * as url from 'node:url'
 import * as ts from 'typescript'
 import { sharedBrowserArtifactRelativePaths } from '../../../scripts/sharedBrowserArtifacts.ts'
 import { clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const coreSharedPaths = getUiCoreSharedPaths()
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
 const zoltarPaths = appPathsById.get('zoltar')
@@ -120,7 +118,9 @@ function resolveDevelopmentImport(fromPath: string, specifier: string, imports: 
 		if (vendorFallback !== undefined) return { filePath: vendorFallback, kind: 'vendor' } satisfies ResolvedImport
 		return undefined
 	}
-	const rawResolvedPath = mappedSpecifier.startsWith('/') ? path.join(repositoryRootPath, mappedSpecifier) : mappedSpecifier.startsWith('../shared/') ? path.join(repositoryRootPath, mappedSpecifier.replace(/^\.\.\//, '')) : path.resolve(appRootPath, mappedSpecifier)
+	let rawResolvedPath = path.resolve(appRootPath, mappedSpecifier)
+	if (mappedSpecifier.startsWith('/')) rawResolvedPath = path.join(repositoryRootPath, mappedSpecifier)
+	else if (mappedSpecifier.startsWith('../shared/')) rawResolvedPath = path.join(repositoryRootPath, mappedSpecifier.replace(/^\.\.\//, ''))
 	if (rawResolvedPath.includes(`${path.sep}shared${path.sep}js${path.sep}`)) {
 		return {
 			filePath: rawResolvedPath,
@@ -448,49 +448,49 @@ for (const appId of UI_APP_IDS) {
 		const exportCache = new Map<string, Set<string>>()
 		const unresolvedImports: string[] = []
 
-	while (pendingPaths.length > 0) {
-		const currentPath = pendingPaths.pop()
-		if (currentPath === undefined) continue
-		const withinSharedGeneratedOutput = currentPath.includes(`${path.sep}shared${path.sep}js${path.sep}`)
-		if (!withinSharedGeneratedOutput) {
-			if (visitedPaths.has(currentPath)) continue
-			visitedPaths.add(currentPath)
-		}
+		while (pendingPaths.length > 0) {
+			const currentPath = pendingPaths.pop()
+			if (currentPath === undefined) continue
+			const withinSharedGeneratedOutput = currentPath.includes(`${path.sep}shared${path.sep}js${path.sep}`)
+			if (!withinSharedGeneratedOutput) {
+				if (visitedPaths.has(currentPath)) continue
+				visitedPaths.add(currentPath)
+			}
 
-		if (!fs.existsSync(currentPath)) {
-			unresolvedImports.push(`Missing module ${path.relative(repositoryRootPath, currentPath)}`)
-			continue
-		}
-
-		const source = fs.readFileSync(currentPath, 'utf8')
-		const sourceFile = parseModule(currentPath, source)
-		for (const specifier of collectRuntimeModuleSpecifiers(sourceFile)) {
-			const resolvedPath = resolveDevelopmentImport(currentPath, specifier, imports, appPaths.appRoot)
-			if (resolvedPath === undefined) {
-				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports unmapped bare specifier ${specifier}`)
+			if (!fs.existsSync(currentPath)) {
+				unresolvedImports.push(`Missing module ${path.relative(repositoryRootPath, currentPath)}`)
 				continue
 			}
-			if (!fs.existsSync(resolvedPath.filePath)) {
-				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not exist`)
-				continue
-			}
-			pendingPaths.push(resolvedPath.filePath)
-		}
 
-		for (const reference of collectNamedModuleReferences(sourceFile)) {
-			const resolvedPath = resolveDevelopmentImport(currentPath, reference.specifier, imports, appPaths.appRoot)
-			if (resolvedPath === undefined) {
-				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports named bindings from unmapped bare specifier ${reference.specifier}`)
-				continue
+			const source = fs.readFileSync(currentPath, 'utf8')
+			const sourceFile = parseModule(currentPath, source)
+			for (const specifier of collectRuntimeModuleSpecifiers(sourceFile)) {
+				const resolvedPath = resolveDevelopmentImport(currentPath, specifier, imports, appPaths.appRoot)
+				if (resolvedPath === undefined) {
+					unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports unmapped bare specifier ${specifier}`)
+					continue
+				}
+				if (!fs.existsSync(resolvedPath.filePath)) {
+					unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not exist`)
+					continue
+				}
+				pendingPaths.push(resolvedPath.filePath)
 			}
-			if (!fs.existsSync(resolvedPath.filePath)) continue
-			const exportedNames = getExportedNames(resolvedPath.filePath, imports, exportCache, appPaths.appRoot)
-			for (const name of reference.names) {
-				if (exportedNames.has(name)) continue
-				unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${name} from ${reference.specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not export it`)
+
+			for (const reference of collectNamedModuleReferences(sourceFile)) {
+				const resolvedPath = resolveDevelopmentImport(currentPath, reference.specifier, imports, appPaths.appRoot)
+				if (resolvedPath === undefined) {
+					unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports named bindings from unmapped bare specifier ${reference.specifier}`)
+					continue
+				}
+				if (!fs.existsSync(resolvedPath.filePath)) continue
+				const exportedNames = getExportedNames(resolvedPath.filePath, imports, exportCache, appPaths.appRoot)
+				for (const name of reference.names) {
+					if (exportedNames.has(name)) continue
+					unresolvedImports.push(`${path.relative(repositoryRootPath, currentPath)} imports ${name} from ${reference.specifier}, but ${path.relative(repositoryRootPath, resolvedPath.filePath)} does not export it`)
+				}
 			}
 		}
-	}
 
 		expect(unresolvedImports).toEqual([])
 	})

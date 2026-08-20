@@ -28,6 +28,7 @@
 			"entry": [
 				"ts/tests/**/*.ts",
 				"ts/tests/**/*.tsx",
+				"build/browserSmoke.mts",
 				"build/vendor.mts",
 				"build/tests.mts"
 			],

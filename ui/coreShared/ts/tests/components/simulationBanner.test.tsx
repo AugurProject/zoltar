@@ -1,17 +1,17 @@
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from './testUtils/queries'
+import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
-import { SimulationBanner } from '../components/SimulationBanner.js'
-import type { SimulationController } from '../simulation/controller.js'
-import { serializeSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
-import { registerSimulationScenario } from '../simulation/scenarios.js'
-import { installTestRouting } from './testUtils/testRouting.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { SimulationBanner } from '../../components/SimulationBanner.js'
+import type { SimulationController } from '../../simulation/controller.js'
+import { serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
+import { registerSimulationScenario } from '../../simulation/scenarios.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
+import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 

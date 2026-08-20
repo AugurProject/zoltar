@@ -7,6 +7,11 @@ import { parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPa
 const appId = parseUiAppIdFromProcess('the production build')
 const paths = getUiAppPaths(appId)
 
+// Bun records source paths relative to the current working directory in bundle
+// comments and source maps. Normalize it so root and package scripts produce
+// byte-identical deployable artifacts.
+process.chdir(paths.appRoot)
+
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
 	env: {},

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
-import { getUiCoreSharedPaths } from './appPaths.mts'
+import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
 
 type PackageJson = {
 	scripts?: Record<string, string | undefined>
@@ -36,6 +36,19 @@ describe('UI build dependency direction', () => {
 		expect(appBuild).toContain('ui:build:apps')
 	})
 
+	test('setup scripts emit the complete UI DAG before compiling tests', () => {
+		const scripts = readRootPackageJson().scripts ?? {}
+		for (const name of ['setup', 'ui:setup']) {
+			const script = scripts[name]
+			if (script === undefined) throw new Error(`${name} script is missing`)
+			const appsIndex = script.indexOf('bun run ui:build:apps')
+			const testsIndex = script.indexOf('bun run ui:build:tests')
+			expect(appsIndex).toBeGreaterThan(0)
+			expect(testsIndex).toBeGreaterThan(appsIndex)
+			expect(script).not.toContain('cd ui/coreShared && bun x tsc')
+		}
+	})
+
 	test('package dependency direction stays coreShared <- zoltar <- statoblast', () => {
 		const { uiRoot } = getUiCoreSharedPaths()
 		const coreSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/coreShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
@@ -48,5 +61,20 @@ describe('UI build dependency direction', () => {
 		expect(zoltarPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
+	})
+
+	test('watch mode starts every TypeScript project required by the selected app', () => {
+		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltar'])
+		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltar', 'statoblast'])
+	})
+
+	test('ui:build:tests compiles each package test tree exactly once', () => {
+		const scripts = readRootPackageJson().scripts ?? {}
+		const buildTestsScript = scripts['ui:build:tests']
+		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
+		expect(buildTestsScript.match(/bun run build:tests/g)).toHaveLength(3)
+		expect(buildTestsScript).toContain('cd ui/coreShared')
+		expect(buildTestsScript).toContain('cd ../zoltar')
+		expect(buildTestsScript).toContain('cd ../statoblast')
 	})
 })

@@ -1,5 +1,6 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
+export const applicationTitle = 'Zoltar'
 export const forkZoltar = 'Fork Universe'
 export const viewForkDetails = 'View fork details'
 export const viewForkDetailsTitle = 'View Fork Details'

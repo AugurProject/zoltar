@@ -12,7 +12,7 @@ type AppStatusNoticesProps = {
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
 	simulationBootstrapError: string | undefined
-	showAugurStatoblastDeploymentWarning: boolean
+	showApplicationDeploymentWarning: boolean
 	zoltarUniverseError?: string | undefined
 }
 
@@ -65,11 +65,11 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurStatoblastDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
-	if (showAugurStatoblastDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
+	if (showApplicationDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
 	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
 	if (zoltarUniverseError !== undefined)
 		items.push({

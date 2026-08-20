@@ -561,7 +561,7 @@
 						<tr>
 							<td>Atomic initial report</td>
 							<td>The sponsor funds the ETH bounty and WETH/REP position; the coordinator submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="../explanation/open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
-							<td><a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td><a href="../../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Immediate execution</td>
@@ -581,7 +581,7 @@
 						<tr>
 							<td>Delegated receiver approvals</td>
 							<td><code>LiquidationApprovalRegistry</code> supports direct receiver approvals and EIP-712 permits from EOAs or ERC-1271 wallets. An approval binds pool, receiver, exact operator, exact or wildcard target, cumulative and per-operation ETH debt limits, minimum post-health factor, validity window, and nonce. Revocation blocks new reservations without disturbing pending ones; nonce invalidation blocks stale approvals.</td>
-							<td><a href="../../solidity/contracts/peripherals/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td><a href="../../solidity/contracts/peripherals/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Approval reservation lifecycle</td>

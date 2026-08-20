@@ -5,7 +5,7 @@ import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
-import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '@zoltar/ui-zoltar/app/lib/appPageTitle.js'
+import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '../../app/lib/appPageTitle.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
@@ -54,6 +54,7 @@ describe('app page titles', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.title).toBe(formatAppDocumentTitle('Questions'))
+		expect(document.title).toBe('Questions | Zoltar')
 		const heading = within(document.body).getByRole('heading', { level: 1, name: 'Questions' })
 		expect(heading.classList.contains('visually-hidden')).toBe(true)
 	})

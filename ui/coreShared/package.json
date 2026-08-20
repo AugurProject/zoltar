@@ -32,13 +32,14 @@
 		"ws": "8.21.0"
 	},
 	"scripts": {
+		"build:tests": "bun ./build/tests.mts coreShared",
 		"generate": "bun ./build/projectArtifacts.mts && bun ./build/vendor.mts zoltar && bun ./build/vendor.mts statoblast",
 		"tsc": "bun x tsc --project tsconfig.json",
 		"build:workers": "bun ./build/workers.mts zoltar && bun ./build/workers.mts statoblast"
 	},
 	"types": "./js/index.d.ts",
 	"exports": {
-		"./tests/simulationTestUtils.js": "./ts/tests/simulationTestUtils.ts",
+		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
 		"./tests/testUtils/domEnvironment.js": "./ts/tests/testUtils/domEnvironment.ts",
 		"./tests/testUtils/fakeBackend.js": "./ts/tests/testUtils/fakeBackend.ts",
 		"./tests/testUtils/protocolTestSupport.js": "./ts/tests/testUtils/protocolTestSupport.ts",

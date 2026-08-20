@@ -2,30 +2,29 @@ import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import * as url from 'node:url'
+import { getUiAppDependencyOrder, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const APP_IDS = ['zoltar', 'statoblast'] as const
-const appId = process.argv[2] ?? process.env['UI_APP'] ?? 'zoltar'
-if (!(APP_IDS as readonly string[]).includes(appId)) throw new Error(`Unknown UI app for watch: ${appId}`)
-const APP_ROOT_PATH = path.join(UI_ROOT_PATH, '..', appId)
-const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..', '..')
-const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.ts')
-const INDEX_HTML_PATH = path.join(APP_ROOT_PATH, 'index.html')
+const appId = parseUiAppIdFromProcess('the UI watch process')
+const appPaths = getUiAppPaths(appId)
+const UI_ROOT_PATH = appPaths.coreSharedRoot
+const APP_ROOT_PATH = appPaths.appRoot
+const REPOSITORY_ROOT_PATH = appPaths.repositoryRoot
+const DEV_SERVER_PATH = appPaths.devServerScript
+const INDEX_HTML_PATH = appPaths.appIndexHtml
 const SHARED_SOURCE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')
 const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig.json')
 const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')
 const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
 const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
-const PROJECT_ARTIFACT_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'projectArtifacts.mts')
-const BUNDLER_PATHS_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'bundlerPaths.mts')
-const TYPE_SCRIPT_OUTPUT_PATH = path.join(APP_ROOT_PATH, 'js')
-const TYPE_SCRIPT_SOURCE_PATH = path.join(APP_ROOT_PATH, 'ts')
-const VENDOR_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'vendor.mts')
+const PROJECT_ARTIFACT_BUILD_PATH = appPaths.projectArtifactsScript
+const BUNDLER_PATHS_BUILD_PATH = appPaths.bundlerPathsScript
+const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => path.join(appPaths.uiRoot, packageId))
+const TYPE_SCRIPT_OUTPUT_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'js'))
+const TYPE_SCRIPT_SOURCE_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'ts'))
+const VENDOR_BUILD_PATH = appPaths.vendorBuildScript
 const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
-const WORKER_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'workers.mts')
+const WORKER_BUILD_PATH = appPaths.workersBuildScript
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
 const LIVE_RELOAD_ENDPOINT = appId === 'statoblast' ? 'http://127.0.0.1:12347/__live-reload' : 'http://127.0.0.1:12346/__live-reload'
 const BUN_EXECUTABLE_PATH = process.execPath
@@ -38,7 +37,7 @@ let serverProcess: ManagedProcess | undefined
 let sharedBuildProcess: ManagedProcess | undefined
 let sharedBuildQueued = false
 let sharedBuildRunning = false
-let typeScriptWatchProcess: ManagedProcess | undefined
+const typeScriptWatchProcesses: ManagedProcess[] = []
 let vendorBuildProcess: ManagedProcess | undefined
 let vendorBuildRunning = false
 let vendorBuildQueued = false
@@ -317,23 +316,25 @@ const watchDirectoryForContractSources = (directoryPath: string, refreshWatchers
 
 const refreshTypeScriptOutputWatchers = async () => {
 	clearTypeScriptOutputWatchers()
-	const directories = await getAllDirectories(TYPE_SCRIPT_OUTPUT_PATH)
-	for (const directoryPath of directories) {
-		watchDirectoryForTypeScriptOutputs(directoryPath, () => {
-			void refreshTypeScriptOutputWatchers()
-		})
-	}
-	const files = await getAllFiles(TYPE_SCRIPT_OUTPUT_PATH)
-	for (const filePath of files) {
-		watchFileWithCleanup(
-			filePath,
-			relativePath => {
-				queueLiveReload(relativePath)
-			},
-			callback => {
-				typeScriptOutputUnwatchCallbacks.push(callback)
-			},
-		)
+	for (const outputPath of TYPE_SCRIPT_OUTPUT_PATHS) {
+		const directories = await getAllDirectories(outputPath)
+		for (const directoryPath of directories) {
+			watchDirectoryForTypeScriptOutputs(directoryPath, () => {
+				void refreshTypeScriptOutputWatchers()
+			})
+		}
+		const files = await getAllFiles(outputPath)
+		for (const filePath of files) {
+			watchFileWithCleanup(
+				filePath,
+				relativePath => {
+					queueLiveReload(relativePath)
+				},
+				callback => {
+					typeScriptOutputUnwatchCallbacks.push(callback)
+				},
+			)
+		}
 	}
 }
 
@@ -361,23 +362,25 @@ const refreshSharedSourceWatchers = async () => {
 
 const refreshTypeScriptSourceWatchers = async () => {
 	clearTypeScriptSourceWatchers()
-	const directories = await getAllDirectories(TYPE_SCRIPT_SOURCE_PATH)
-	for (const directoryPath of directories) {
-		watchDirectoryForTypeScriptSources(directoryPath, () => {
-			void refreshTypeScriptSourceWatchers()
-		})
-	}
-	const files = await getAllFiles(TYPE_SCRIPT_SOURCE_PATH)
-	for (const filePath of files) {
-		watchFileWithCleanup(
-			filePath,
-			relativePath => {
-				void runWorkerBuild(relativePath)
-			},
-			callback => {
-				typeScriptSourceUnwatchCallbacks.push(callback)
-			},
-		)
+	for (const sourcePath of TYPE_SCRIPT_SOURCE_PATHS) {
+		const directories = await getAllDirectories(sourcePath)
+		for (const directoryPath of directories) {
+			watchDirectoryForTypeScriptSources(directoryPath, () => {
+				void refreshTypeScriptSourceWatchers()
+			})
+		}
+		const files = await getAllFiles(sourcePath)
+		for (const filePath of files) {
+			watchFileWithCleanup(
+				filePath,
+				relativePath => {
+					void runWorkerBuild(relativePath)
+				},
+				callback => {
+					typeScriptSourceUnwatchCallbacks.push(callback)
+				},
+			)
+		}
 	}
 }
 
@@ -690,35 +693,38 @@ const shutdown = async (exitCode: number) => {
 	await stopProcess(contractBuildProcess)
 	await stopProcess(projectArtifactBuildProcess)
 	await stopProcess(serverProcess)
-	await stopProcess(typeScriptWatchProcess)
+	for (const typeScriptWatchProcess of typeScriptWatchProcesses) await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)
 }
 
 const main = () => {
 	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
-	try {
-		typeScriptWatchProcess = spawn(BUN_EXECUTABLE_PATH, ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
-			cwd: APP_ROOT_PATH,
-			stdio: ['inherit', 'pipe', 'pipe'],
+	for (const projectRoot of TYPE_SCRIPT_PROJECT_ROOT_PATHS) {
+		let typeScriptWatchProcess: ManagedProcess
+		try {
+			typeScriptWatchProcess = spawn(BUN_EXECUTABLE_PATH, ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
+				cwd: projectRoot,
+				stdio: ['inherit', 'pipe', 'pipe'],
+			})
+			typeScriptWatchProcesses.push(typeScriptWatchProcess)
+		} catch (error) {
+			console.error(`[ui:watch] Failed to start TypeScript watch for ${path.basename(projectRoot)}`)
+			console.error(error)
+			void shutdown(1)
+			return
+		}
+		const label = `${path.basename(projectRoot)} TypeScript watch`
+		attachProcessErrorHandler(typeScriptWatchProcess, label)
+		if (typeScriptWatchProcess.stdout === null || typeScriptWatchProcess.stderr === null) throw new Error(`${label} streams are unavailable`)
+		typeScriptWatchProcess.stdout.on('data', onTypeScriptWatchStdout)
+		typeScriptWatchProcess.stderr.on('data', onTypeScriptWatchStderr)
+		typeScriptWatchProcess.on('exit', (exitCode, signalCode) => {
+			if (shuttingDown) return
+			const failureCode = exitCode ?? 1
+			console.error(`[ui:watch] ${label} exited unexpectedly (${signalCode ?? failureCode})`)
+			void shutdown(failureCode)
 		})
-	} catch (error) {
-		console.error('[ui:watch] Failed to start TypeScript watch')
-		console.error(error)
-		void shutdown(1)
-		return
 	}
-	attachProcessErrorHandler(typeScriptWatchProcess, 'TypeScript watch')
-	if (typeScriptWatchProcess.stdout === null || typeScriptWatchProcess.stderr === null) {
-		throw new Error('TypeScript watch streams are unavailable')
-	}
-	typeScriptWatchProcess.stdout.on('data', onTypeScriptWatchStdout)
-	typeScriptWatchProcess.stderr.on('data', onTypeScriptWatchStderr)
-	typeScriptWatchProcess.on('exit', (exitCode, signalCode) => {
-		if (shuttingDown) return
-		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] TypeScript watch exited unexpectedly (${signalCode ?? failureCode})`)
-		void shutdown(failureCode)
-	})
 
 	spawnServer()
 
@@ -802,4 +808,4 @@ const main = () => {
 	})
 }
 
-main()
+if (import.meta.main) main()

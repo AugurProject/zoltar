@@ -10,6 +10,7 @@ import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatu
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
 import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
+import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
 import { useAppRouteEffects } from './useAppRouteEffects.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -31,7 +32,7 @@ import { useSecurityVaultOperations } from '../features/security-pools/hooks/use
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { getActiveSimulationController, initializeActiveEnvironment, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
+import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
@@ -42,15 +43,12 @@ import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chain
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../protocol/index.js'
-import { getWethAddress } from '@zoltar/ui-zoltar/protocol/uniswapQuoter.js'
+import { onchainStateDependencies } from './onchainStateDependencies.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { GlobalTransactionPresentation, RouteTabDefinition, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
-
-const onchainStateDependencies = { getDeploymentSteps, getWethAddress, loadDeploymentStatusOracleSnapshot, loadErc20Balance }
 
 const getRouteHashForRoute = (route: 'deploy' | 'open-oracle' | 'security-pools') => {
 	if (route === 'deploy') return '#/deploy'
@@ -126,7 +124,7 @@ export function App() {
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
-		augurStatoblastDeployed,
+		applicationDeploymentComplete,
 		changeWallet,
 		chainClockError,
 		connectWallet,
@@ -343,9 +341,9 @@ export function App() {
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
-	const augurStatoblastDeploymentMissing = canReadOnchainData && augurStatoblastDeployed === false
-	const showAugurStatoblastDeploymentWarning = augurStatoblastDeploymentMissing
-	const disableRouteContent = route !== 'deploy' && (!readBackendReady || augurStatoblastDeploymentMissing)
+	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
+	const showApplicationDeploymentWarning = applicationDeploymentMissing
+	const disableRouteContent = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing)
 	const isRouteContentDisabled = disableRouteContent
 	const overviewProps = {
 		activeUniverseId,
@@ -439,7 +437,7 @@ export function App() {
 	}, [loadZoltarForkAccess, poolPriceOracleResult])
 	useAppRouteEffects({
 		accountAddress: walletScopedAccountAddress,
-		augurStatoblastDeploymentMissing,
+		applicationDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
@@ -759,8 +757,8 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />
-					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />
-					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
+					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />
+					<AppHeaderShell overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
 						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
 

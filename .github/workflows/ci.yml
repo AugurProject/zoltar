@@ -95,6 +95,11 @@ jobs:
         run: |
           started_at="${SECONDS}"
           set +e
+          bun run ui:build:apps
+          build_status="$?"
+          if [[ "${build_status}" -ne 0 ]]; then
+            exit "${build_status}"
+          fi
           bun run ci:preflight:current
           status="$?"
           set -e
@@ -149,9 +154,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: production-ui
-          path: |
-            ui/zoltar/dist
-            ui/statoblast/dist
+          path: ui
 
       - name: Restore historical test timings
         uses: actions/cache/restore@v5

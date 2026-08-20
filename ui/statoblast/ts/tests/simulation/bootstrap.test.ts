@@ -4,7 +4,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { applyStatoblastScenario, installStatoblastScenarioProtocolForTesting } from '../simulation/statoblastScenarios.js'
+import { applyStatoblastScenario, installStatoblastScenarioProtocolForTesting } from '../../simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/shared/ethereum'
 

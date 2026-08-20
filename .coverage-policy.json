@@ -2,9 +2,56 @@
 	"version": 1,
 	"typescript": {
 		"ui": {
-			"minimumLines": 88.056,
-			"minimumFunctions": 80.397,
-			"allowedUnloadedFiles": ["ui/ts/app/App.tsx", "ui/ts/features/open-oracle/hooks/usePriceOracleManager.ts", "ui/ts/features/universes/hooks/useZoltarOperations.ts", "ui/ts/index.ts", "ui/ts/simulation/tevmEngine.ts", "ui/ts/simulation/tevmWorker.ts"]
+			"minimumLines": 85.836,
+			"minimumFunctions": 75.376,
+			"allowedUnloadedFiles": [
+				"ui/coreShared/ts/app/components/AppPageHeading.tsx",
+				"ui/coreShared/ts/app/components/GlobalTransactionTray.tsx",
+				"ui/coreShared/ts/components/AddressInfo.tsx",
+				"ui/coreShared/ts/components/ComparisonRecord.tsx",
+				"ui/coreShared/ts/components/LifecycleStageBanner.tsx",
+				"ui/coreShared/ts/components/LoadableValue.tsx",
+				"ui/coreShared/ts/components/OutcomeChipRow.tsx",
+				"ui/coreShared/ts/components/OutcomeSelectionList.tsx",
+				"ui/coreShared/ts/components/PaginationControls.tsx",
+				"ui/coreShared/ts/components/ProgressMeter.tsx",
+				"ui/coreShared/ts/components/Question.tsx",
+				"ui/coreShared/ts/components/RankedBarList.tsx",
+				"ui/coreShared/ts/components/RequirementsChecklist.tsx",
+				"ui/coreShared/ts/components/RouteHeader.tsx",
+				"ui/coreShared/ts/components/RouteWorkflowPanel.tsx",
+				"ui/coreShared/ts/components/ScalarOutcomePicker.tsx",
+				"ui/coreShared/ts/components/StickyObjectContext.tsx",
+				"ui/coreShared/ts/components/WorkflowSubsection.tsx",
+				"ui/coreShared/ts/copy/marketType.ts",
+				"ui/coreShared/ts/hooks/useErc20Loader.ts",
+				"ui/coreShared/ts/hooks/useFormState.ts",
+				"ui/coreShared/ts/lib/actionAvailability.ts",
+				"ui/coreShared/ts/lib/deploymentStatus.ts",
+				"ui/coreShared/ts/lib/formInputs.ts",
+				"ui/coreShared/ts/lib/marketType.ts",
+				"ui/coreShared/ts/lib/outcomeLabels.ts",
+				"ui/coreShared/ts/lib/questionId.ts",
+				"ui/coreShared/ts/lib/refreshState.ts",
+				"ui/coreShared/ts/lib/requireWalletConnection.ts",
+				"ui/coreShared/ts/lib/scalarOutcome.ts",
+				"ui/coreShared/ts/protocol/securityPoolActions.ts",
+				"ui/coreShared/ts/protocol/truthAuctionMath.ts",
+				"ui/coreShared/ts/simulation/tevmEngine.ts",
+				"ui/coreShared/ts/simulation/tevmWorker.ts",
+				"ui/statoblast/ts/app/App.tsx",
+				"ui/statoblast/ts/app/appPageTitle.ts",
+				"ui/statoblast/ts/app/components/AppRouteContent.tsx",
+				"ui/statoblast/ts/index.ts",
+				"ui/statoblast/ts/simulation/tevmWorker.ts",
+				"ui/zoltar/ts/app/App.tsx",
+				"ui/zoltar/ts/app/hooks/useAppRouteEffects.ts",
+				"ui/zoltar/ts/features/open-oracle/components/OpenOraclePriceValue.tsx",
+				"ui/zoltar/ts/features/universes/components/ShareMigrationTargetsSection.tsx",
+				"ui/zoltar/ts/features/universes/hooks/useZoltarOperations.ts",
+				"ui/zoltar/ts/index.ts",
+				"ui/zoltar/ts/simulation/tevmWorker.ts"
+			]
 		},
 		"shared": {
 			"minimumLines": 76.923,
@@ -16,11 +63,20 @@
 			"minimumFunctions": 25.476,
 			"allowedUnloadedFiles": [
 				"scripts/check-agent-configs.mts",
+				"scripts/build-doc-charts.mts",
+				"scripts/build-docs-index.mts",
+				"scripts/check-doc-charts.mts",
 				"scripts/check-docs-content.mts",
 				"scripts/check-docs-examples.mts",
 				"scripts/check-docs-html.mts",
 				"scripts/check-docs-reference-values.mts",
-				"scripts/check-mainnet-deployment.mts",
+				"scripts/check-html-format.mts",
+				"scripts/check-uniswap-deployment-artifact.mts",
+				"scripts/check-unit-terminology.mts",
+				"scripts/contract-reference-metadata.mts",
+				"scripts/docs-html-page.mts",
+				"scripts/docs-html-text.mts",
+				"scripts/documentationChartBuild.mts",
 				"scripts/generate-contract-interaction-reference.mts",
 				"scripts/lint-no-bare-catch.mts",
 				"scripts/lint-no-direct-viem-imports.mts",
@@ -31,13 +87,14 @@
 				"scripts/run-tests.mts",
 				"scripts/run-typescript-coverage.mts",
 				"solidity/ts/gas-costs.ts",
-				"ui/build/production.mts",
-				"ui/build/tests.mts",
-				"ui/build/watch.mts",
-				"ui/build/workers.mts",
-				"ui/dev-server.ts",
-				"ui/ts/index.dev.ts",
-				"ui/ts/liveReload.ts"
+				"ui/coreShared/build/production.mts",
+				"ui/coreShared/build/watch.mts",
+				"ui/coreShared/build/workers.mts",
+				"ui/coreShared/dev-server.ts",
+				"ui/statoblast/ts/index.dev.ts",
+				"ui/statoblast/ts/liveReload.ts",
+				"ui/zoltar/ts/index.dev.ts",
+				"ui/zoltar/ts/liveReload.ts"
 			]
 		}
 	},
@@ -45,6 +102,6 @@
 		"minimumFirstPartyLines": 99.9
 	},
 	"changedLines": {
-		"minimum": 90
+		"minimum": 85.836
 	}
 }

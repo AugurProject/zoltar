@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'zoltar'
 
 type Props = {
-	augurStatoblastDeploymentMissing: boolean
+	applicationDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
@@ -17,7 +17,7 @@ export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, url
 	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
 }
 
-export function useAppRouteEffects({ augurStatoblastDeploymentMissing, activeEnvironmentNonce, environmentReady, loadOracleReport, navigate, route, setOpenOracleFormReportId, urlOpenOracleReportId }: Props) {
+export function useAppRouteEffects({ applicationDeploymentMissing, activeEnvironmentNonce, environmentReady, loadOracleReport, navigate, route, setOpenOracleFormReportId, urlOpenOracleReportId }: Props) {
 	const loadOracleReportRef = useRef(loadOracleReport)
 	const navigateRef = useRef(navigate)
 	const lastRequestedOpenOracleReportId = useRef<string | undefined>(undefined)
@@ -50,8 +50,8 @@ export function useAppRouteEffects({ augurStatoblastDeploymentMissing, activeEnv
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
-		if (!augurStatoblastDeploymentMissing) return
+		if (!applicationDeploymentMissing) return
 		if (route === 'deploy') return
 		navigateRef.current('deploy')
-	}, [augurStatoblastDeploymentMissing, route])
+	}, [applicationDeploymentMissing, route])
 }

@@ -14,7 +14,21 @@ import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentStateReady, deploymentStatusError, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isOnActiveAppChain, deploymentCompleteHref, onDeploy, onDeployNextMissing, onRetryDeploymentStatus }: DeploymentRouteContentProps) {
+export function DeploymentRouteContent({
+	accountAddress,
+	busyStepId,
+	deploymentStateReady,
+	deploymentStatusError,
+	deployNextMissingPending,
+	deploymentSections,
+	deploymentStatuses,
+	isLoadingDeploymentStatuses,
+	isOnActiveAppChain,
+	deploymentCompleteHref,
+	onDeploy,
+	onDeployNextMissing,
+	onRetryDeploymentStatus,
+}: DeploymentRouteContentProps) {
 	const deploymentStatusReasonId = useId()
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length

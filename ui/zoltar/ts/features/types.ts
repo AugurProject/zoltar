@@ -45,6 +45,7 @@ export type DeploymentSectionProps = {
 }
 
 export type OverviewPanelsProps = {
+	applicationTitle: string
 	activeUniverseId: bigint
 	accountState: AccountState
 	isConnectingWallet: boolean

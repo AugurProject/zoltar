@@ -2,7 +2,7 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-ARG BUN_VERSION=1.3.13
+ARG BUN_VERSION=1.3.14
 
 FROM oven/bun:${BUN_VERSION}-alpine AS builder
 
@@ -47,9 +47,8 @@ COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
 RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile
-COPY ./ui/coreShared/tsconfig.vendor.json /source/ui/coreShared/tsconfig.vendor.json
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
-RUN cd /source/ui/coreShared && bun run vendor
+RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast
 
 # UI TypeScript source
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
@@ -76,7 +75,7 @@ RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../core
 # Local runtime: Serve the production UI over plain HTTP
 # ----------------------------------------------------
 
-# start.bat selects this target explicitly, so no IPFS layers are built or run.
+# Local runtime builds select this target explicitly, so no IPFS layers are built or run.
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime
 
 WORKDIR /app

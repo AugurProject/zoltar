@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, normalizeSimulationScenario, registerSimulationScenario } from '../simulation/scenarios.js'
+import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, normalizeSimulationScenario, registerSimulationScenario } from '../../simulation/scenarios.js'
 
 void describe('simulation scenarios', () => {
 	void test('normalizes core scenarios and rejects unknown values', () => {
