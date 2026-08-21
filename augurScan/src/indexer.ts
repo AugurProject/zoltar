@@ -6,6 +6,7 @@ import {
 	ChainContinuityError,
 	commitCanonicalRead,
 	confirmCanonicalBlock,
+	contractDeploymentCandidateFrom,
 	contractDeploymentScanDue,
 	createRpcDiagnosticContext,
 	databaseFailureMessage,
@@ -19,7 +20,6 @@ import {
 	isPermanentHistoricalCodeError,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
-	isPrunedHistoricalStateError,
 	isSplittableLogRangeError,
 	jsonEvidence,
 	LeaseLostError,
@@ -27,6 +27,7 @@ import {
 	leaseFailureNames,
 	queryCanonicalLogRange,
 	type RpcProvider,
+	readHistoricalCodeWithPermanentFallback,
 	recordOwnershipEvent,
 	requireLogPosition,
 	requireReceiptPosition,
@@ -210,17 +211,7 @@ export const findContractDeploymentBlock = async (
 		return code !== undefined && code !== '0x'
 	}
 	if (!(await hasCode(observedHead))) return undefined
-	let crossedPrunedHistory = false
-	const historicalHasCode = async (block: bigint): Promise<boolean> => {
-		try {
-			return await hasCode(block)
-		} catch (error) {
-			if (!isPrunedHistoricalStateError(error)) throw error
-			crossedPrunedHistory = true
-			return false
-		}
-	}
-	if (!startBlockKnownAbsent && (await historicalHasCode(startBlock))) {
+	if (!startBlockKnownAbsent && (await hasCode(startBlock))) {
 		// Code at genesis for these manifest contracts is overwhelmingly evidence
 		// that the RPC ignored or could not serve the historical block selector.
 		// A genuine genesis deployment can still be configured explicitly.
@@ -230,10 +221,10 @@ export const findContractDeploymentBlock = async (
 	let upper = observedHead
 	while (lower + 1n < upper) {
 		const middle = lower + (upper - lower) / 2n
-		if (await historicalHasCode(middle)) upper = middle
+		if (await hasCode(middle)) upper = middle
 		else lower = middle
 	}
-	return { block: upper, exact: !crossedPrunedHistory }
+	return { block: upper, exact: true }
 }
 
 const chunks = <T>(items: readonly T[], size: number): T[][] => {
@@ -318,9 +309,21 @@ export const findManifestContractDeployment = async (
 	codeAt: (address: Address, block: bigint) => Promise<Hex | undefined>,
 	timeoutMs = 5_000,
 	now = Date.now,
+	onHistoricalCodeUnavailable: (error: unknown) => void = () => {},
 ): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
 	const readWithinBudget = deploymentReadBudget(timeoutMs, now)
-	return await findContractDeploymentBlock(startBlock, checkpoint, (blockNumber) => readWithinBudget(() => codeAt(address, blockNumber)), startBlockKnownAbsent)
+	try {
+		return await findContractDeploymentBlock(
+			startBlock,
+			checkpoint,
+			(blockNumber) => readWithinBudget(() => codeAt(address, blockNumber)),
+			startBlockKnownAbsent,
+		)
+	} catch (error) {
+		if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
+		onHistoricalCodeUnavailable(error)
+		return { block: startBlock, exact: false }
+	}
 }
 
 export const logScanCursorUpdates = (
@@ -378,6 +381,7 @@ export const planDeploymentAwareLogScan = async (
 	codeAt: (address: Address, block: bigint) => Promise<Hex | undefined>,
 	blockTimestamp: (block: bigint) => Promise<Date>,
 	onDetectionFailure: (contract: ContractMetadata, error: unknown) => void = () => {},
+	historicalCodeUnavailable: ReadonlySet<string> = new Set(),
 ): Promise<DeploymentAwareLogPlan> => {
 	const planned = await mapLimit(contracts, 4, async (contract): Promise<DeploymentAwareLogPlan> => {
 		const knownStart = contract.deploymentBlock ?? contract.discoveryBlock
@@ -386,6 +390,10 @@ export const planDeploymentAwareLogScan = async (
 				inputs: knownStart > toBlock ? [] : [{ address: contract.address, fromBlock: knownStart > fromBlock ? knownStart : fromBlock, startBlock: knownStart }],
 				observations: [],
 			}
+		}
+		if (historicalCodeUnavailable.has(contract.address.toLowerCase())) {
+			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
+			return { inputs: [{ address: contract.address, fromBlock, startBlock: fallbackStart }], observations: [] }
 		}
 		let deployment: { readonly block: bigint; readonly exact: boolean } | undefined
 		try {
@@ -517,6 +525,7 @@ class NetworkIndexer {
 	#progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
 	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	#lastDeploymentScanAt: number | undefined
+	readonly #historicalCodeUnavailable = new Set<string>()
 	readonly #signal: AbortSignal
 	#lease: IndexerLease | undefined
 
@@ -543,6 +552,34 @@ class NetworkIndexer {
 
 	async #getBlockHeader(blockNumber: bigint): Promise<RpcBlockHeader> {
 		return requireRpcBlockHeader(await this.#client.getBlock({ blockNumber }), blockNumber)
+	}
+
+	#rememberHistoricalCodeUnavailable(address: Address, error: unknown): void {
+		const key = address.toLowerCase()
+		if (this.#historicalCodeUnavailable.has(key)) return
+		this.#historicalCodeUnavailable.add(key)
+		console.warn(
+			`[${this.#network.id}] historical contract code unavailable for ${address}; scanning complete available coverage from block #${this.#network.startBlock} instead: ${this.#rpcFailureReason(error)}`,
+		)
+	}
+
+	async #findManifestDeployment(
+		address: Address,
+		startBlock: bigint,
+		indexedBoundary: bigint,
+		startBlockKnownAbsent: boolean,
+	): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> {
+		if (this.#historicalCodeUnavailable.has(address.toLowerCase())) return { block: startBlock, exact: false }
+		return await findManifestContractDeployment(
+			address,
+			startBlock,
+			indexedBoundary,
+			startBlockKnownAbsent,
+			(candidate, blockNumber) => this.#client.getBytecode({ address: candidate, blockNumber }),
+			5_000,
+			Date.now,
+			(error) => this.#rememberHistoricalCodeUnavailable(address, error),
+		)
 	}
 
 	async run(): Promise<void> {
@@ -607,9 +644,7 @@ class NetworkIndexer {
 				this.#configuredStartBlock,
 				observedHead,
 				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
-					findManifestContractDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
-						this.#client.getBytecode({ address: candidate, blockNumber }),
-					),
+					this.#findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent),
 			)
 			this.#network = { ...this.#network, startBlock }
 			console.info(
@@ -634,9 +669,7 @@ class NetworkIndexer {
 				this.#configuredStartBlock,
 				storedStartBlock,
 				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
-					findManifestContractDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
-						this.#client.getBytecode({ address: candidate, blockNumber }),
-					),
+					this.#findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent),
 			),
 		)
 	}
@@ -738,9 +771,7 @@ class NetworkIndexer {
 			checkpoint.number,
 			this.#configuredStartBlock,
 			(address, startBlock, indexedBoundary, startBlockKnownAbsent) =>
-				findManifestContractDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent, (candidate, blockNumber) =>
-					this.#client.getBytecode({ address: candidate, blockNumber }),
-				),
+				this.#findManifestDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent),
 		)
 		if (replayStart === undefined) return
 		const ancestor = manifestReplayAncestor(replayStart, this.#network.startBlock)
@@ -787,7 +818,8 @@ class NetworkIndexer {
 		try {
 			let candidate: ContractMetadata | undefined
 			try {
-				candidate = await this.#database.contractDeploymentCandidate(this.#network.chainId, indexedBoundary, this.#requireLease())
+				const candidates = await this.#database.contractDeploymentCandidates(this.#network.chainId, indexedBoundary, this.#requireLease())
+				candidate = contractDeploymentCandidateFrom(candidates, this.#historicalCodeUnavailable)
 			} catch (error) {
 				if (errorChainIncludes(error, leaseFailureNames)) throw error
 				console.warn(
@@ -799,9 +831,15 @@ class NetworkIndexer {
 			let resolved: ContractDeploymentObservation['deployment']
 			try {
 				const readWithinBudget = deploymentReadBudget()
-				const deployment = await findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
-					readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+				const historicalRead = await readHistoricalCodeWithPermanentFallback(
+					() =>
+						findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
+							readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+						),
+					(error) => this.#rememberHistoricalCodeUnavailable(candidate.address, error),
 				)
+				if (historicalRead.status === 'unavailable') return
+				const deployment = historicalRead.value
 				resolved =
 					deployment === undefined
 						? undefined
@@ -1075,10 +1113,8 @@ class NetworkIndexer {
 							this.#network.startBlock,
 							(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
 							async (blockNumber) => unixSecondsToDate((await this.#getBlockHeader(blockNumber)).timestamp, 'Deployment scan block timestamp'),
-							(contract, error) =>
-								console.warn(
-									`[${this.#network.id}] deployment-aware log scan fell back for ${contract.label} (${contract.address}): ${this.#rpcFailureReason(error)}`,
-								),
+							(contract, error) => this.#rememberHistoricalCodeUnavailable(contract.address, error),
+							this.#historicalCodeUnavailable,
 						)
 						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
 					},
