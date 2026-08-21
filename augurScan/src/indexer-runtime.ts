@@ -1,6 +1,7 @@
 import { type AddressActivity, DatabaseConsistencyError, databaseConsistencyDiagnosticMessage, type IndexerLease, type StoredTransaction } from './database.ts'
 import { errorChainIncludes } from './error-chain.ts'
 import { type Address, type Hash, type Log, type PublicClient, type TransactionReceipt, zeroAddress } from './ethereum.ts'
+import { jsonRpcErrorName } from './logging.ts'
 import { RpcRequestMethodError, rpcQueueSaturationFrom } from './rpc-request-queue.ts'
 import { bigintToSafeNumber } from './time.ts'
 import type { ContractMetadata, StoredLog } from './types.ts'
@@ -389,6 +390,8 @@ const safeErrorNames = new Set([
 	'ResponseBodyTooLargeError',
 	'ResourceUnavailableRpcError',
 	'RpcQueueSaturatedError',
+	'RpcError',
+	'RpcRequestMethodError',
 	'RpcRequestError',
 	'SocketError',
 	'TimeoutError',
@@ -458,6 +461,7 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 	const descriptions: string[] = []
 	let status: number | undefined
 	let code: string | undefined
+	let rpcEndpoint: string | undefined
 	let standardMessage: string | undefined
 	let previousDescriptionName: string | undefined
 	let previousDescriptionMessage: string | undefined
@@ -498,6 +502,7 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 		)
 			status = current.status
 		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
+		if (rpcEndpoint === undefined && current instanceof RpcRequestMethodError) rpcEndpoint = current.endpoint
 		if (standardMessage === undefined && name === 'RpcRequestError' && 'details' in current) standardMessage = safeStandardRpcProviderMessage(current.details)
 		current = 'cause' in current ? current.cause : undefined
 	}
@@ -509,8 +514,13 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 	]
 	const method = rpcRequestMethodFrom(error)
 	if (method !== undefined) details.push(`method ${method}`)
+	if (rpcEndpoint !== undefined) details.push(`RPC ${rpcEndpoint}`)
 	if (status !== undefined) details.push(`HTTP ${status}`)
-	if (code !== undefined) details.push(`code ${code}`)
+	if (code !== undefined) {
+		const numericCode = Number(code)
+		const codeName = Number.isInteger(numericCode) ? jsonRpcErrorName(numericCode) : undefined
+		details.push(`code ${code}${codeName === undefined ? '' : ` (${codeName})`}`)
+	}
 	if (message !== undefined) details.push(`message: ${message}`)
 	return details.join('; ')
 }

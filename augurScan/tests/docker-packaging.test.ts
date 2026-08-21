@@ -5,6 +5,8 @@ import { join } from 'node:path'
 const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '.dockerignore')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
+const composeFile = join(import.meta.dir, '..', 'compose.yaml')
+const rootGitIgnore = join(import.meta.dir, '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
@@ -31,5 +33,16 @@ describe('Docker packaging', () => {
 		expect(runtimeStage).not.toContain('COPY augurScan/migrations')
 		expect(runtimeStage).not.toContain('COPY augurScan/browser')
 		expect(runtimeStage).not.toContain('COPY --from=browser-build /workspace/augurScan/node_modules')
+	})
+
+	test('persists the rotating RPC exchange log in a dedicated writable volume', async () => {
+		const dockerfileSource = await readFile(dockerfile, 'utf8')
+		const composeSource = await readFile(composeFile, 'utf8')
+		const gitIgnorePatterns = (await readFile(rootGitIgnore, 'utf8')).split(/\r?\n/u)
+		expect(dockerfileSource).toContain('mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan')
+		expect(composeSource).toContain('RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl')
+		expect(composeSource).toContain('augurscan-logs:/var/log/augurscan')
+		expect(composeSource).toContain('augurscan-logs:')
+		expect(gitIgnorePatterns).toContain('/augurScan/logs/')
 	})
 })

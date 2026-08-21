@@ -11,7 +11,7 @@
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
 		"qa:serve": "bun run build && bun scripts/serve-demo.ts",
 		"test": "bun test",
-		"test:unit": "bun test tests/api-validation.test.ts tests/api.test.ts tests/chart-values.test.ts tests/config.test.ts tests/demo-fixtures.test.ts tests/docker-packaging.test.ts tests/http.test.ts tests/indexer-lifecycle.test.ts tests/limits.test.ts tests/live-ui.test.ts tests/live.test.ts tests/metadata.test.ts tests/operations.test.ts tests/projections.test.ts tests/schema.test.ts tests/time.test.ts",
+		"test:unit": "bun test tests/api-validation.test.ts tests/api.test.ts tests/chart-values.test.ts tests/config.test.ts tests/demo-fixtures.test.ts tests/docker-packaging.test.ts tests/http.test.ts tests/indexer-lifecycle.test.ts tests/limits.test.ts tests/live-ui.test.ts tests/live.test.ts tests/logging.test.ts tests/metadata.test.ts tests/operations.test.ts tests/projections.test.ts tests/schema.test.ts tests/time.test.ts",
 		"test:integration": "bun test tests/postgres.integration.test.ts",
 		"typecheck": "cd .. && bun install --frozen-lockfile && cd augurScan && bun x tsc --noEmit",
 		"check:ethereum-imports": "bun scripts/check-ethereum-imports.ts",
