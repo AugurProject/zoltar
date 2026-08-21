@@ -10,6 +10,10 @@ const setupActionPath = join(repositoryRoot, 'workflow-changes', 'setup-ci-actio
 const setupComponentActionPath = join(repositoryRoot, 'workflow-changes', 'setup-component-action.yml')
 const ipfsDeployWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ipfs-deploy.yml')
 const versionDeployWorkflowPath = join(repositoryRoot, 'workflow-changes', 'version-deploy.yml')
+const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const stagedCiWorkflowPath = join(repositoryRoot, 'workflows', 'ci.yml')
+const activeSetupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
+const activeSetupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },
@@ -17,16 +21,59 @@ const developerDocumentation = [
 	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
 ]
 
-describe('split UI workflow paths', () => {
-	test('production artifacts preserve both app dist paths when uploaded and restored', async () => {
-		const workflow = await readFile(ciWorkflowPath, 'utf8')
-		expect(workflow).toContain('ui/zoltar/dist\n            ui/statoblast/dist\n            ui/trading/dist')
-		expect(workflow).toContain('uses: actions/download-artifact@v5\n        with:\n          name: production-ui\n          path: ui')
+const getActivatableCiWorkflowPath = async () => {
+	try {
+		await access(stagedCiWorkflowPath)
+		return stagedCiWorkflowPath
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return activeCiWorkflowPath
+		throw error
+	}
+}
 
-		const uploadedPaths = ['ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
+describe('split UI workflow paths', () => {
+	test('the activatable CI file uses the reviewed split-package workflow handoff', async () => {
+		const activatableCiWorkflowPath = await getActivatableCiWorkflowPath()
+		for (const [activePath, handoffPath] of [
+			[activatableCiWorkflowPath, ciWorkflowPath],
+			[activeSetupActionPath, setupActionPath],
+			[activeSetupComponentActionPath, setupComponentActionPath],
+		] as const) {
+			expect(await readFile(activePath, 'utf8')).toBe(await readFile(handoffPath, 'utf8'))
+		}
+	})
+
+	test('split CI remains callable by the version release workflow', async () => {
+		const workflow = await readFile(await getActivatableCiWorkflowPath(), 'utf8')
+		expect(workflow).toContain('on:\n  workflow_call:\n')
+		const releaseWorkflow = await readFile(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'), 'utf8')
+		expect(releaseWorkflow).toContain('uses: ./.github/workflows/ci.yml')
+	})
+
+	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
+		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		expect(workflow).toContain('ui/coreShared/js\n            ui/zoltar/js\n            ui/statoblast/js\n            ui/trading/js\n            ui/zoltar/dist\n            ui/statoblast/dist\n            ui/trading/dist')
+		expect(workflow).toContain('uses: actions/download-artifact@v5\n        with:\n          name: production-ui\n          path: ui')
+		const downloadIndex = workflow.indexOf('name: production-ui\n          path: ui')
+		let previousInstallIndex = downloadIndex
+		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
+			const installIndex = workflow.indexOf(`bun ./scripts/install-frozen.mts ui/${packageId}`, previousInstallIndex)
+			expect(installIndex).toBeGreaterThan(previousInstallIndex)
+			previousInstallIndex = installIndex
+		}
+
+		const uploadedPaths = ['ui/coreShared/js', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/trading/js', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
 		const archiveRoot = 'ui'
 		const restoredPaths = uploadedPaths.map(path => join('ui', path.slice(archiveRoot.length + 1)))
 		expect(restoredPaths).toEqual(uploadedPaths)
+	})
+
+	test('contract caches and transferred inputs include the generated Trading artifact', async () => {
+		const setupAction = await readFile(setupActionPath, 'utf8')
+		expect(setupAction).toContain('ui/trading/ts/generated/contractArtifact.ts')
+
+		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		expect(workflow.match(/ui\/trading\/ts\/generated\/contractArtifact\.ts/g)).toHaveLength(2)
 	})
 
 	test('clean CI and testnet jobs emit the complete UI dependency DAG', async () => {

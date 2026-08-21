@@ -64,6 +64,7 @@ runs:
           solidity/types/contractArtifact.ts
           ui/coreShared/ts/abis.ts
           ui/coreShared/ts/contractArtifact.ts
+          ui/trading/ts/generated/contractArtifact.ts
         key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/coreShared/build/projectArtifacts.mts') }}
 
     - name: Cache UI vendor assets

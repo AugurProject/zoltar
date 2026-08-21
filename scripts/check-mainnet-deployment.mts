@@ -35,8 +35,45 @@ type DeploymentManifest = {
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..')
+const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar', 'js', 'protocol', 'deployment.js')] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
+
+async function pathExists(filePath: string) {
+	try {
+		await fs.access(filePath)
+		return true
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+		throw error
+	}
+}
+
+async function runRepositoryCommand(args: readonly string[], label: string) {
+	const child = Bun.spawn({
+		cmd: [process.execPath, ...args],
+		cwd: repositoryRootPath,
+		stderr: 'inherit',
+		stdin: 'inherit',
+		stdout: 'inherit',
+	})
+	const exitCode = await child.exited
+	if (exitCode !== 0) throw new Error(`${label} exited with code ${exitCode.toString()}`)
+}
+
+async function buildDeploymentRuntimeDependencies() {
+	await runRepositoryCommand(['run', 'ensure-shared-build'], 'Shared TypeScript prerequisite build')
+	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/coreShared/tsconfig.json'], 'coreShared TypeScript prerequisite build')
+	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/zoltar/tsconfig.json'], 'Zoltar TypeScript prerequisite build')
+	await runRepositoryCommand(['./scripts/install-frozen.mts', 'ui/statoblast'], 'Statoblast frozen dependency refresh')
+}
+
+export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () => Promise<boolean> = async () => (await Promise.all(deploymentRuntimeOutputPaths.map(pathExists))).every(Boolean), buildRuntimeDependencies: () => Promise<void> = buildDeploymentRuntimeDependencies) {
+	if (await hasRuntimeOutput()) return
+	console.log('Building missing coreShared JavaScript required by deployment manifest checks')
+	await buildRuntimeDependencies()
+	if (!(await hasRuntimeOutput())) throw new Error(`Deployment manifest prerequisite build did not create ${deploymentRuntimeOutputPaths.map(outputPath => path.relative(repositoryRootPath, outputPath)).join(' and ')}`)
+}
 
 function getManifestPath(manifestId: ManifestId) {
 	return path.join(repositoryRootPath, 'docs', `${manifestId}-deployment-addresses.json`)
@@ -119,6 +156,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {
+		await ensureDeploymentRuntimeDependencies()
 		const deploymentModule = await import(url.pathToFileURL(deploymentModulePath).href)
 		const deploymentHelpersModule = await import(url.pathToFileURL(deploymentHelpersModulePath).href)
 		const networkProfileModule = await import(url.pathToFileURL(networkProfileModulePath).href)
