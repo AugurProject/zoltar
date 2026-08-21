@@ -22,25 +22,27 @@ export {
 export { createExecutionLockManager, persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 
 async function main() {
-	const config = await loadConfiguration()
-	const lockManager = createExecutionLockManager(account => acquireExecutionSignerLock(config.network.chain.id, account))
-	try {
-		if (config.execute || config.ui) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
-		const initialSignerLock = !config.execute || config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
-		let startupFailures = 0
-		for (;;) {
-			try {
-				await runOperator(config, lockManager, initialSignerLock)
-				return
-			} catch (error) {
-				if (config.once || operationalFailureDisposition(error) === 'safety-paused') throw error
-				startupFailures += 1
-				console.error(`startupConnectivityDegraded=${errorMessage(error)}`)
-				await Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, startupFailures))
+	for (;;) {
+		const config = await loadConfiguration()
+		const lockManager = createExecutionLockManager(account => acquireExecutionSignerLock(config.network.chain.id, account))
+		try {
+			if (config.execute || config.ui) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
+			const initialSignerLock = !config.execute || config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
+			let startupFailures = 0
+			for (;;) {
+				try {
+					if (await runOperator(config, lockManager, initialSignerLock)) break
+					return
+				} catch (error) {
+					if (config.once || operationalFailureDisposition(error) === 'safety-paused') throw error
+					startupFailures += 1
+					console.error(`startupConnectivityDegraded=${errorMessage(error)}`)
+					await Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, startupFailures))
+				}
 			}
+		} finally {
+			await lockManager.releaseAll()
 		}
-	} finally {
-		await lockManager.releaseAll()
 	}
 }
 

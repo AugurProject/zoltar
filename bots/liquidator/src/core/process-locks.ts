@@ -141,7 +141,7 @@ export async function acquireLiquidatorProcessLocksForShutdown(settings: Liquida
 	return undefined
 }
 
-export function liquidatorDashboardLifecycle(dashboard: { stop: () => Promise<void> }) {
+export function liquidatorDashboardLifecycle(dashboard: { stop: (closeActiveConnections?: boolean) => Promise<void> }) {
 	return { [Symbol.asyncDispose]: () => dashboard.stop() }
 }
 

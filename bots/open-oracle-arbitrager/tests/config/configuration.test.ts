@@ -2,9 +2,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { privateKeyToAccount, type Hex } from '#ethereum'
-import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { keccak256, privateKeyToAccount, type Hex } from '#ethereum'
+import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
+import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
+import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -111,10 +113,10 @@ async function runToExit(configurationPath: string, arguments_: readonly string[
 	return { exitCode, output: `${stdout}${stderr}` }
 }
 
-function unusedPort() {
+async function unusedPort() {
 	const server = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
 	const port = server.port
-	server.stop(true)
+	await server.stop(true)
 	if (port === undefined) throw new Error('Temporary server did not expose a port')
 	return port
 }
@@ -134,7 +136,7 @@ async function waitForJson(origin: string, path: string) {
 }
 
 async function waitForStateValue(origin: string, key: string, expected: unknown) {
-	for (let attempt = 0; attempt < 150; attempt++) {
+	for (let attempt = 0; attempt < 1_000; attempt++) {
 		const state = await waitForJson(origin, '/api/state')
 		if (state[key] === expected) return state
 		await Bun.sleep(20)
@@ -279,8 +281,8 @@ describe('file-only startup configuration', () => {
 
 	test('keeps the dashboard running when the configured RPC is offline at startup', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = unusedPort()
-		const rpcPort = unusedPort()
+		const dashboardPort = await unusedPort()
+		const rpcPort = await unusedPort()
 		const value = settings(`http://127.0.0.1:${rpcPort.toString()}/`, dashboardPort)
 		value.runtime.historyFile = join(directory, 'history.jsonl')
 		value.runtime.positionFile = join(directory, 'positions.json')
@@ -301,7 +303,7 @@ describe('file-only startup configuration', () => {
 
 	test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = unusedPort()
+		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			async fetch(request) {
 				const body = (await request.json()) as { id: unknown }
@@ -319,6 +321,9 @@ describe('file-only startup configuration', () => {
 		Reflect.set(runtime, 'positionFile', join(directory, 'positions.json'))
 		Reflect.set(runtime, 'priceHistoryFile', join(directory, 'prices.jsonl'))
 		Reflect.set(runtime, 'uiPort', dashboardPort)
+		const strategy = Reflect.get(configuration, 'strategy')
+		if (typeof strategy !== 'object' || strategy === null || Array.isArray(strategy)) throw new Error('Example strategy is missing')
+		Reflect.set(strategy, 'pollMilliseconds', 1_000)
 		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 		const path = join(directory, 'operator.json')
 		await writeFile(path, JSON.stringify(configuration), 'utf8')
@@ -327,27 +332,64 @@ describe('file-only startup configuration', () => {
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
 		const initial = await waitForJson(origin, '/api/configuration')
 		const initialConfiguration = initial['configuration']
-		expect(Reflect.get(initialConfiguration as object, 'network')).toBeUndefined()
+		expect(initialConfiguration).toMatchObject({ network: 'mainnet', networkConfigured: false })
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
+		for (const [endpoint, body] of [
+			['/api/signer', { privateKey: '', rememberSigner: false }],
+			['/api/settings', {}],
+			['/api/deployment', {}],
+			['/api/paused', { paused: false }],
+		] as const) {
+			const blocked = await fetch(`${origin}${endpoint}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+			expect(blocked.status, `${endpoint}: ${await blocked.clone().text()}`).toBe(400)
+		}
+		const deploymentPrivateKey = `0x${'33'.repeat(32)}` as Hex
+		const deploymentAccount = privateKeyToAccount(deploymentPrivateKey)
+		const deploymentSalt = `0x${'44'.repeat(32)}` as Hex
+		const deploymentPlan = executorDeploymentPlan(deploymentSalt)
+		const serializedDeployment = await deploymentAccount.signTransaction({ chainId: 1, data: deploymentPlan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		const deploymentIntentPath = executorDeploymentIntentPath(path)
+		await saveExecutorDeploymentIntent(deploymentIntentPath, { account: deploymentAccount.address, address: deploymentPlan.address, chainId: 1, salt: deploymentSalt, serializedTransaction: serializedDeployment, transactionHash: keccak256(serializedDeployment), version: 1 })
+		const activeBeforeBlockedSwitch = await Bun.file(path).text()
+		const blockedProfile = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(blockedProfile.status).toBe(400)
+		expect(await Bun.file(path).text()).toBe(activeBeforeBlockedSwitch)
+		expect(await Bun.file(operatorProfilePath(path, 'mainnet')).exists()).toBe(false)
+		expect(await Bun.file(operatorProfilePath(path, 'sepolia')).exists()).toBe(false)
+		await clearExecutorDeploymentIntent(deploymentIntentPath)
+		const profileResponse = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(profileResponse.status, await profileResponse.clone().text()).toBe(200)
+		let selectedProfile: Record<string, unknown> | undefined
+		for (let attempt = 0; attempt < 700; attempt++) {
+			selectedProfile = await waitForJson(origin, '/api/configuration')
+			const selected = Reflect.get(selectedProfile, 'configuration')
+			if (typeof selected === 'object' && selected !== null && Reflect.get(selected, 'network') === 'sepolia') break
+			await Bun.sleep(25)
+		}
+		expect(selectedProfile).toMatchObject({ configuration: { network: 'sepolia', networkConfigured: false } })
+		expect(child.exitCode).toBeNull()
+		await waitForStateValue(origin, 'network', 'sepolia')
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 		if (typeof initialConfiguration !== 'object' || initialConfiguration === null || Array.isArray(initialConfiguration)) throw new Error('Initial configuration document is missing')
-		Reflect.set(initialConfiguration, 'network', 'sepolia')
-		Reflect.set(initialConfiguration, 'connectivity', { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl })
-		const initialMarkets = Reflect.get(initialConfiguration, 'centralizedMarkets')
-		if (typeof initialMarkets !== 'object' || initialMarkets === null || Array.isArray(initialMarkets)) throw new Error('Initial centralized-market configuration is missing')
-		Reflect.set(initialMarkets, 'assetChainId', 11_155_111)
-		const response = await fetch(`${origin}/api/configuration`, {
-			body: JSON.stringify(initial),
+		const initialStrategy = Reflect.get(initialConfiguration, 'strategy')
+		if (typeof initialStrategy !== 'object' || initialStrategy === null || Array.isArray(initialStrategy)) throw new Error('Initial strategy document is missing')
+		const initialMinimumProfitBps = Reflect.get(initialStrategy, 'minimumProfitBps')
+		const response = await fetch(`${origin}/api/connectivity`, {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'sepolia', rpcQuorum: 1 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
-		const configuredEnvelopeFromCompleteSave = (await response.json()) as Record<string, unknown>
-		expect(configuredEnvelopeFromCompleteSave['revision']).toEqual(expect.any(String))
+		expect(await response.json()).toMatchObject({ network: 'sepolia', rpcQuorum: 1 })
 		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
-		const queuedState = await waitForJson(origin, '/api/state')
-		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false, status: 'paused' })
-		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
 		await waitForStateValue(origin, 'networkConfigured', true)
 		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		let configuredState = await waitForJson(origin, '/api/state')
@@ -357,6 +399,18 @@ describe('file-only startup configuration', () => {
 			configuredState = await waitForJson(origin, '/api/state')
 		}
 		expect(JSON.stringify(configuredState['rpcEndpointHealth']) ?? '').toContain(rpcOrigin)
+		const configuredEnvelopeForStrategy = await waitForJson(origin, '/api/configuration')
+		const configuredDocumentForStrategy = configuredEnvelopeForStrategy['configuration']
+		if (typeof configuredDocumentForStrategy !== 'object' || configuredDocumentForStrategy === null || Array.isArray(configuredDocumentForStrategy)) throw new Error('Configured strategy document is missing')
+		const configuredStrategy = Reflect.get(configuredDocumentForStrategy, 'strategy')
+		if (typeof configuredStrategy !== 'object' || configuredStrategy === null || Array.isArray(configuredStrategy)) throw new Error('Configured strategy settings are missing')
+		const sepoliaStrategy = { ...configuredStrategy, minimumProfitBps: '901' }
+		const savedSepoliaStrategy = await fetch(`${origin}/api/settings`, {
+			body: JSON.stringify(sepoliaStrategy),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(savedSepoliaStrategy.status, await savedSepoliaStrategy.clone().text()).toBe(200)
 		const resume = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: false }),
 			headers: { 'content-type': 'application/json', origin },
@@ -394,11 +448,46 @@ describe('file-only startup configuration', () => {
 		})
 		expect(removal.status).toBe(400)
 		expect(await Bun.file(path).text()).toBe(configuredContents)
+		const mainnetProfileRequest = fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		await Bun.sleep(5)
+		const racingStrategyRequest = fetch(`${origin}/api/settings`, {
+			body: JSON.stringify(sepoliaStrategy),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		const opposingProfileRequest = fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		const [mainnetProfileResult, racingStrategyResult, opposingProfileResult] = await Promise.allSettled([mainnetProfileRequest, racingStrategyRequest, opposingProfileRequest])
+		if (mainnetProfileResult.status !== 'fulfilled') throw mainnetProfileResult.reason
+		expect(mainnetProfileResult.value.status, await mainnetProfileResult.value.clone().text()).toBe(200)
+		if (racingStrategyResult.status === 'fulfilled') expect(racingStrategyResult.value.status, await racingStrategyResult.value.clone().text()).toBe(400)
+		else expect(racingStrategyResult.reason).toBeInstanceOf(Error)
+		if (opposingProfileResult.status === 'fulfilled') expect(opposingProfileResult.value.status, await opposingProfileResult.value.clone().text()).toBe(400)
+		else expect(opposingProfileResult.reason).toBeInstanceOf(Error)
+		await waitForStateValue(origin, 'network', 'mainnet')
+		let restoredProfile: Record<string, unknown> | undefined
+		for (let attempt = 0; attempt < 700; attempt++) {
+			restoredProfile = await waitForJson(origin, '/api/configuration')
+			const restored = Reflect.get(restoredProfile, 'configuration')
+			if (typeof restored === 'object' && restored !== null && Reflect.get(restored, 'network') === 'mainnet') break
+			await Bun.sleep(25)
+		}
+		expect(restoredProfile).toMatchObject({
+			configuration: { network: 'mainnet', networkConfigured: false, runtime: { historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') }, strategy: { minimumProfitBps: initialMinimumProfitBps } },
+		})
+		expect(child.exitCode).toBeNull()
 	})
 
-	test('applies focused initial network, market chain, and RPC identity together at a scan boundary', async () => {
+	test('rejects RPC settings for a chain other than the selected profile', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = unusedPort()
+		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			async fetch(request) {
 				const body = (await request.json()) as { id: unknown }
@@ -429,20 +518,15 @@ describe('file-only startup configuration', () => {
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
-		expect(response.status, await response.clone().text()).toBe(200)
-		expect(await response.json()).toMatchObject({ network: 'sepolia', rpcQuorum: 1 })
-		expect(await loadOperatorSettings(path)).toMatchObject({ centralizedMarkets: { assetChainId: 11_155_111 }, network: 'sepolia', networkConfigured: true, rpcQuorum: 1 })
-		const queuedState = await waitForJson(origin, '/api/state')
-		expect(queuedState).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
-		expect(JSON.stringify(queuedState['rpcEndpointHealth']) ?? '').not.toContain(new URL(rpcUrl).origin)
-		const activeState = await waitForStateValue(origin, 'networkConfigured', true)
-		expect(activeState).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
-		expect(JSON.stringify(activeState['rpcEndpointHealth']) ?? '').toContain(new URL(rpcUrl).origin)
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({ error: 'Select the chain profile before saving its RPC settings' })
+		expect(await loadOperatorSettings(path)).toMatchObject({ network: 'mainnet', networkConfigured: false })
+		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 1, network: 'mainnet', networkConfigured: false })
 	})
 
 	test('keeps executor deployment guarded while a newly saved quorum applies live', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = unusedPort()
+		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			hostname: '127.0.0.1',
 			port: 0,
@@ -494,7 +578,7 @@ describe('file-only startup configuration', () => {
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = unusedPort()
+		const dashboardPort = await unusedPort()
 		let rpcChainId = '0x1'
 		const rpc = Bun.serve({
 			hostname: '127.0.0.1',
@@ -658,7 +742,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(liveSwitchResponse.status).toBe(400)
-		expect(await liveSwitchResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
+		expect(await liveSwitchResponse.json()).toEqual({ error: 'Switch chain profiles with the Chain selector before editing that profile' })
 		expect(await Bun.file(path).text()).toBe(beforeWrongChainQuorum)
 
 		const executeEnvelope = structuredClone(currentEnvelope)
@@ -708,7 +792,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(persistedLiveSwitchResponse.status).toBe(400)
-		expect(await persistedLiveSwitchResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
+		expect(await persistedLiveSwitchResponse.json()).toEqual({ error: 'Select the chain profile before saving its RPC settings' })
 		expect(await Bun.file(path).text()).toBe(beforePersistedLiveSwitch)
 		const executeSavedConfiguration = executeSavedEnvelope['configuration']
 		if (typeof executeSavedConfiguration !== 'object' || executeSavedConfiguration === null || Array.isArray(executeSavedConfiguration)) throw new Error('Saved execute configuration document is missing')
@@ -809,7 +893,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(networkResponse.status).toBe(400)
-		expect(await networkResponse.json()).toEqual({ error: 'Use a separate operator configuration and durable journal paths to change chains' })
+		expect(await networkResponse.json()).toEqual({ error: 'Select the chain profile before saving its RPC settings' })
 		expect(await Bun.file(path).text()).toBe(beforeDryRunSwitch)
 		rpcChainId = '0x1'
 

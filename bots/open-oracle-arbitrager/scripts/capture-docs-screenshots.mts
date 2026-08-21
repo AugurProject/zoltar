@@ -1694,8 +1694,9 @@ const server = startDashboardServer(0, {
 	getConfiguration: async () => {
 		while (fixtureConfigurationHanging) await Bun.sleep(10)
 		if (fixtureConfigurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
+		const configuration = await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json()
 		return {
-			configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
+			configuration: { ...configuration, connectivity: snapshot.connectivity, network: 'mainnet', networkConfigured: true, rpcQuorum: 2 },
 			revision: 'fixture-revision',
 		}
 	},
@@ -1704,6 +1705,7 @@ const server = startDashboardServer(0, {
 		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')
 		return currentFixtureSnapshot()
 	},
+	isNetworkConfigured: () => true,
 	setPaused: async value => {
 		fixturePauseRequests.push(value)
 		while (fixturePauseHanging) await Bun.sleep(10)

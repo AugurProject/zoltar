@@ -52,6 +52,17 @@ configuration, and resume only after reviewing the saved settings. Run
 `docker compose down` to stop the bot and `docker compose up` to start it again.
 The named volume preserves its configuration, history, and recovery state.
 
+To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector. The bot
+saves the current profile, pauses at a safe scan boundary, releases its current
+chain and state locks, and loads Sepolia without exiting the process or restarting
+the container. The first switch creates a clean profile with a chain-named durable
+state file. Switching back restores the exact mainnet settings and recovery state.
+Only the selected profile is active at one time. In-place switching requires both
+profiles to use the same `runtime.once`, `runtime.ui`, `runtime.uiHost`, and
+`runtime.uiPort` values so the running process and browser retain their operating
+mode and dashboard origin. The bot rejects an incompatible profile before changing
+any file.
+
 Compose restarts the container only while Docker and the host remain available; a
 direct Bun process needs an external supervisor. If the host or state storage is
 lost, restore the complete `.state` directory before resuming live execution with
@@ -83,12 +94,15 @@ The dashboard's **Chain and RPC connectivity** form is the source of network and
 endpoint selection. It chain-checks the read, public-submission, and independent
 quorum RPCs before saving them. An initially unconfigured process remains paused
 with its dashboard available and begins scanning only after a verified selection is
-saved. Same-chain RPC changes apply at the next scan. A configured operator file
-cannot be retargeted to another chain: create a separate paused configuration with
-a separate `runtime.stateFile`, then select its chain and endpoints in the
-dashboard. This boundary prevents transactions, staged operations, and scan state
-from crossing chains. The primary read RPC is sufficient by default; optional
-independent quorum RPCs become mandatory only when `ZOLTAR_BOT_RPC_QUORUM=2`.
+saved. Same-chain RPC changes apply at the next scan. A chain profile includes its
+signer, deployments, markets, selections, strategy, RPCs, and runtime state path.
+Profiles are private sibling files beside the active operator file, and a newly
+created profile receives a separate chain-named recovery state path. This prevents
+transactions, staged operations, and scan state from crossing chains. Docker and
+direct Bun use the same in-process switching behavior.
+
+The primary read RPC is sufficient by default. Independent quorum RPCs become
+mandatory only when `ZOLTAR_BOT_RPC_QUORUM=2`.
 
 A configured bot keeps its dashboard available when retryable RPC transport
 unavailability prevents startup validation. It reports `connectivity-degraded`, shows

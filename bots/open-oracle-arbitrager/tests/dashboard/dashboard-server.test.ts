@@ -51,6 +51,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
 	const server = startDashboardServer(0, {
 		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
+		isNetworkConfigured: () => true,
 		setPaused: paused => {
 			state.paused = paused
 		},
@@ -131,6 +132,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="hedged-profit-value"')
 	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
+	expect(pageSource).toContain('id="settings-chain-scope"')
+	expect(pageSource).toContain('Select a chain profile first')
+	expect(pageSource.indexOf('id="network-connectivity"')).toBeLessThan(pageSource.indexOf('id="strategy-form"'))
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
 	expect(pageSource).toContain('id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span>')
 	expect(pageSource).toContain('id="retry-settings-button"')
@@ -512,6 +516,7 @@ test('returns a structured unavailable response when the initial state read fail
 		getSnapshot: () => {
 			throw new Error('RPC unavailable')
 		},
+		isNetworkConfigured: () => true,
 		setPaused: () => undefined,
 		updateConnectivity: () => {
 			throw new Error('Connectivity unavailable')
@@ -532,6 +537,106 @@ test('returns a structured unavailable response when the initial state read fail
 	expect(await response.json()).toEqual({ error: 'The bot tried to load the latest operator state for the dashboard, but it failed: RPC unavailable. Automatic retry remains active.' })
 })
 
+test('rejects every chain-specific mutation until network connectivity is configured', async () => {
+	let configured = false
+	let chainSpecificMutations = 0
+	let pauseMutations = 0
+	const strategy: MutableStrategy = {
+		maxSpotTwapTicks: 100n,
+		minimumProfitBps: 100n,
+		minimumProfitAttoWeth: 10n ** 16n,
+		minimumRemainingBlocks: 3n,
+		minimumRemainingSeconds: 36n,
+		pollMilliseconds: 12_000,
+		twapSeconds: 1_800,
+	}
+	const server = startDashboardServer(0, {
+		getSnapshot: () => {
+			throw new Error('Not needed')
+		},
+		isNetworkConfigured: () => configured,
+		setPaused: () => {
+			pauseMutations += 1
+		},
+		updateConfiguration: () => {
+			chainSpecificMutations += 1
+			return {}
+		},
+		updateConnectivity: () => {
+			configured = true
+			return {}
+		},
+		updateDeployment: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected deployment update')
+		},
+		deployExecutor: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected executor deployment')
+		},
+		predictExecutor: () => {
+			chainSpecificMutations += 1
+			throw new Error('Unexpected executor prediction')
+		},
+		updateSigner: () => {
+			chainSpecificMutations += 1
+			return { wallet: undefined }
+		},
+		updateSubmission: () => {
+			chainSpecificMutations += 1
+			return validateSubmissionSettings({ mode: 'public', relayUrls: [] })
+		},
+		updateStrategy: () => {
+			chainSpecificMutations += 1
+			return {
+				maxSpotTwapTicks: strategy.maxSpotTwapTicks.toString(),
+				minimumProfitBps: strategy.minimumProfitBps.toString(),
+				minimumProfitWeth: '0.01',
+				minimumRemainingBlocks: strategy.minimumRemainingBlocks.toString(),
+				minimumRemainingSeconds: strategy.minimumRemainingSeconds.toString(),
+				pollMilliseconds: strategy.pollMilliseconds,
+				twapSeconds: strategy.twapSeconds,
+			}
+		},
+		updateTokens: () => {
+			chainSpecificMutations += 1
+			return []
+		},
+	})
+	servers.push(server)
+	const origin = `http://${server.hostname}:${server.port}`
+	const request = async (pathname: string, method: 'POST' | 'PUT' = 'PUT', body: unknown = {}) => {
+		const encoded = JSON.stringify(body)
+		if (encoded === undefined) throw new Error('Test request body must be JSON serializable')
+		return await fetch(`${origin}${pathname}`, {
+			body: encoded,
+			headers: { 'content-type': 'application/json', origin },
+			method,
+		})
+	}
+	for (const [pathname, method, body] of [
+		['/api/configuration', 'PUT', {}],
+		['/api/settings', 'PUT', {}],
+		['/api/submission', 'PUT', {}],
+		['/api/deployment', 'PUT', {}],
+		['/api/executor-deployment', 'POST', {}],
+		['/api/executor-prediction', 'POST', {}],
+		['/api/tokens', 'PUT', []],
+		['/api/signer', 'PUT', {}],
+		['/api/paused', 'PUT', { paused: false }],
+	] as const) {
+		expect((await request(pathname, method, body)).status).toBe(400)
+	}
+	expect(chainSpecificMutations).toBe(0)
+	expect(pauseMutations).toBe(0)
+	expect((await request('/api/paused', 'PUT', { paused: true })).status).toBe(200)
+	expect(pauseMutations).toBe(1)
+	expect((await request('/api/connectivity')).status).toBe(200)
+	expect(configured).toBe(true)
+	expect((await request('/api/tokens', 'PUT', [])).status).toBe(200)
+	expect(chainSpecificMutations).toBe(1)
+})
+
 test('supports a container bind while retaining loopback request authority', async () => {
 	const password = 'correct horse battery staple'
 	expect(() =>
@@ -540,6 +645,7 @@ test('supports a container bind while retaining loopback request authority', asy
 				throw new Error('Not needed')
 			},
 			hostname: '0.0.0.0',
+			isNetworkConfigured: () => true,
 			setPaused: () => undefined,
 			updateConnectivity: () => {
 				throw new Error('Not needed')
@@ -560,6 +666,7 @@ test('supports a container bind while retaining loopback request authority', asy
 			throw new Error('Not needed')
 		},
 		hostname: '0.0.0.0',
+		isNetworkConfigured: () => true,
 		password,
 		setPaused: () => undefined,
 		updateConnectivity: () => {
@@ -590,6 +697,7 @@ test('allows passwordless access through an explicitly loopback-published contai
 			throw new Error('Not needed')
 		},
 		hostname: '0.0.0.0',
+		isNetworkConfigured: () => true,
 		loopbackPublished: true,
 		setPaused: () => undefined,
 		updateConnectivity: () => {

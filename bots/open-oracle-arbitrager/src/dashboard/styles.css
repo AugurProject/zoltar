@@ -229,6 +229,12 @@ h2 {
 	opacity: 0.55;
 }
 
+select:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
+	border-style: dashed;
+}
+
 .button:disabled[aria-busy="true"] {
 	cursor: wait;
 }

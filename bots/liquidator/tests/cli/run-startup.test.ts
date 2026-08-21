@@ -8,7 +8,7 @@ const servers: Bun.Server<unknown>[] = []
 const children: Bun.Subprocess[] = []
 
 async function waitForJson(origin: string, path: string) {
-	for (let attempt = 0; attempt < 100; attempt++) {
+	for (let attempt = 0; attempt < 2_000; attempt++) {
 		try {
 			const response = await fetch(`${origin}${path}`)
 			if (response.ok) return (await response.json()) as Record<string, unknown>
@@ -21,7 +21,7 @@ async function waitForJson(origin: string, path: string) {
 }
 
 async function waitForRpcMethod(methods: string[], method: string) {
-	for (let attempt = 0; attempt < 100; attempt++) {
+	for (let attempt = 0; attempt < 700; attempt++) {
 		if (methods.includes(method)) return
 		await Bun.sleep(20)
 	}
@@ -52,12 +52,13 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
 	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
 	const uiPort = reservation.port
-	reservation.stop(true)
+	await reservation.stop(true)
 	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
 	const configuration = (await Bun.file(join(import.meta.dir, '..', '..', 'config', 'operator.example.json')).json()) as Record<string, unknown>
 	const runtime = Reflect.get(configuration, 'runtime')
 	if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
 	Reflect.set(runtime, 'stateFile', join(directory, 'state.json'))
+	Reflect.set(runtime, 'pollMilliseconds', 1_000)
 	Reflect.set(runtime, 'uiPort', uiPort)
 	const configurationPath = join(directory, 'operator.json')
 	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
@@ -70,8 +71,42 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 	children.push(child)
 	const origin = `http://127.0.0.1:${uiPort.toString()}`
 	const initial = await waitForJson(origin, '/api/configuration')
-	expect(initial['network']).toBeUndefined()
+	expect(initial).toMatchObject({ network: { name: 'mainnet' }, networkConfigured: false })
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(true)
+	for (const [endpoint, body] of [
+		['/api/signer', { privateKey: '', rememberSigner: false }],
+		['/api/strategy', {}],
+		['/api/market-configuration', {}],
+		['/api/paused', { paused: false }],
+	] as const) {
+		const blocked = await fetch(`${origin}${endpoint}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+		expect(blocked.status, `${endpoint}: ${await blocked.clone().text()}`).toBe(400)
+	}
+	if (child.exitCode !== null) throw new Error(`Liquidator exited before profile switch: ${await new Response(child.stderr).text()}`)
+	const profileRequest = fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'sepolia' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	await Bun.sleep(5)
+	const opposingProfileRequest = fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	const [profileResult, opposingProfileResult] = await Promise.allSettled([profileRequest, opposingProfileRequest])
+	if (profileResult.status !== 'fulfilled') throw profileResult.reason
+	expect(profileResult.value.status, await profileResult.value.clone().text()).toBe(200)
+	if (opposingProfileResult.status === 'fulfilled') expect(opposingProfileResult.value.status, await opposingProfileResult.value.clone().text()).toBe(400)
+	else expect(opposingProfileResult.reason).toBeInstanceOf(Error)
+	for (let attempt = 0; attempt < 700; attempt++) {
+		if (child.exitCode !== null) throw new Error(`Liquidator exited during profile switch: ${await new Response(child.stderr).text()}`)
+		const selected = await waitForJson(origin, '/api/configuration')
+		if (Reflect.get(Reflect.get(selected, 'network') as object, 'name') === 'sepolia') break
+		await Bun.sleep(25)
+	}
+	expect(await waitForJson(origin, '/api/configuration')).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false })
+	expect(child.exitCode).toBeNull()
 	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 	const response = await fetch(`${origin}/api/network-connectivity`, {
 		body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }, network: 'sepolia' }),
@@ -80,7 +115,28 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 	})
 	expect(response.status, await response.clone().text()).toBe(200)
 	expect(await response.json()).toMatchObject({ network: { chainId: 11_155_111, name: 'sepolia' } })
+	const signerAfterConnectivity = await fetch(`${origin}/api/signer`, {
+		body: JSON.stringify({ privateKey: '', rememberSigner: false }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(signerAfterConnectivity.status, await signerAfterConnectivity.clone().text()).toBe(200)
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(true)
+	const backToMainnet = await fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(backToMainnet.status, await backToMainnet.clone().text()).toBe(200)
+	let restoredMainnet: Record<string, unknown> | undefined
+	for (let attempt = 0; attempt < 700; attempt++) {
+		restoredMainnet = await waitForJson(origin, '/api/configuration')
+		const network = Reflect.get(restoredMainnet, 'network')
+		if (typeof network === 'object' && network !== null && Reflect.get(network, 'name') === 'mainnet') break
+		await Bun.sleep(25)
+	}
+	expect(restoredMainnet).toMatchObject({ network: { name: 'mainnet' }, networkConfigured: false, runtime: { stateFile: join(directory, 'state.json') } })
+	expect(child.exitCode).toBeNull()
 })
 
 test('stops the dashboard and exits when startup network validation fails', async () => {
@@ -98,7 +154,7 @@ test('stops the dashboard and exits when startup network validation fails', asyn
 	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
 	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
 	const uiPort = reservation.port
-	reservation.stop(true)
+	await reservation.stop(true)
 	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
 	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
 	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {
@@ -151,7 +207,7 @@ test('rejects a wrong-chain private relay during startup validation', async () =
 	if (rpc.port === undefined || relay.port === undefined) throw new Error('Test RPC did not expose a port')
 	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
 	const uiPort = reservation.port
-	reservation.stop(true)
+	await reservation.stop(true)
 	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
 	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
 	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {

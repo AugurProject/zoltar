@@ -8,7 +8,7 @@ import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStop
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { availableExecutionObservations } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
+import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
@@ -71,7 +71,27 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			return next
 		})
 	}
-	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
+	let profileSwitchRequested = false
+	const configurationMutationGate = createConfigurationMutationGate(
+		() => state.scanning,
+		() => profileSwitchRequested,
+	)
+	let wakeProfileSwitchWait: (() => void) | undefined
+	const requestProfileSwitch = () => {
+		profileSwitchRequested = true
+		wakeProfileSwitchWait?.()
+	}
+	const waitForProfileSwitchOrDelay = async (milliseconds: number) => {
+		if (profileSwitchRequested) return
+		await Promise.race([
+			shutdown.wait(milliseconds),
+			new Promise<void>(resolve => {
+				wakeProfileSwitchWait = resolve
+				if (profileSwitchRequested) resolve()
+			}),
+		])
+		wakeProfileSwitchWait = undefined
+	}
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
 			const [token0, token1, reserves] = await Promise.all([
@@ -87,11 +107,28 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				getConfiguration: () => serializedSettings(settings, true),
 				getState: () => {
 					state.rpcEndpointHealth = readPool.snapshot()
-					return operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings))
+					return { ...operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)), network: settings.network.name }
 				},
 				hostname: settings.runtime.uiHost,
+				isNetworkConfigured: () => settings.networkConfigured,
 				loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
+				switchNetworkProfile: value =>
+					configurationMutationGate.run(async () => {
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Chain profile request must be an object')
+						const network = Reflect.get(value, 'network')
+						if (network !== 'mainnet' && network !== 'sepolia') throw new Error('Chain profile must be mainnet or sepolia')
+						if (network === settings.network.name) return serializedSettings(settings, true)
+						state.paused = true
+						requestProfileSwitch()
+						try {
+							const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname)
+							return serializedSettings(switched.settings, true)
+						} catch (error) {
+							profileSwitchRequested = false
+							throw error
+						}
+					}),
 				reconcileTransaction: value =>
 					configurationMutationGate.run(async () => {
 						if (!state.paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -192,7 +229,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					if (!paused && !settings.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
 					if (paused) {
 						state.paused = true
-						await persistSettings(current => ({ ...current, paused: true }))
+						await configurationMutationGate.run(async () => persistSettings(current => ({ ...current, paused: true })))
 					} else {
 						await configurationMutationGate.run(async () => {
 							await persistSettings(current => ({ ...current, paused: false }))
@@ -408,6 +445,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	await pollUntilStopped(
 		async () => {
 			if (shutdown.isRequested()) return true
+			if (profileSwitchRequested) return true
 			if (configurationMutationGate.isActive()) return false
 			if (!settings.networkConfigured) return false
 			state.scanning = true
@@ -618,40 +656,44 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.scanning = false
 			}
 		},
-		consecutiveFailures => shutdown.wait(retryDelayMilliseconds(settings.runtime.pollMilliseconds, consecutiveFailures)),
+		consecutiveFailures => waitForProfileSwitchOrDelay(retryDelayMilliseconds(settings.runtime.pollMilliseconds, consecutiveFailures)),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
 	)
+	return profileSwitchRequested
 }
 
 async function main() {
 	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
-	const loaded = await loadSettings()
 	using shutdown = createLiquidatorShutdownController()
-	let locks: LiquidatorProcessLocks
-	try {
-		const acquired = await acquireLiquidatorProcessLocksForShutdown(
-			{
-				chainId: loaded.settings.network.chainId,
-				execute: loaded.settings.runtime.execute,
-				privateKey: loaded.settings.privateKey,
-				stateFile: loaded.settings.runtime.stateFile,
-			},
-			shutdown,
-		)
-		if (acquired === undefined) return
-		locks = acquired
-	} catch (error) {
-		if (error instanceof LiquidatorProcessLockAcquisitionError) {
-			await error.releaseProcessLocks()
-			throw error.acquisitionCause
+	for (;;) {
+		const loaded = await loadSettings()
+		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
+		let locks: LiquidatorProcessLocks
+		try {
+			const acquired = await acquireLiquidatorProcessLocksForShutdown(
+				{
+					chainId: loaded.settings.network.chainId,
+					execute: loaded.settings.runtime.execute,
+					privateKey: loaded.settings.privateKey,
+					stateFile: loaded.settings.runtime.stateFile,
+				},
+				shutdown,
+			)
+			if (acquired === undefined) return
+			locks = acquired
+		} catch (error) {
+			if (error instanceof LiquidatorProcessLockAcquisitionError) {
+				await error.releaseProcessLocks()
+				throw error.acquisitionCause
+			}
+			throw error
 		}
-		throw error
-	}
-	try {
-		await runOperator(loaded, locks, shutdown)
-	} finally {
-		await locks.release()
+		try {
+			if (!(await runOperator(loaded, locks, shutdown))) return
+		} finally {
+			await locks.release()
+		}
 	}
 }
 

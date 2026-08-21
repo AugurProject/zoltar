@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '../helpers/ethereum.ts'
-import { parseSettings, parseStrategy, saveSettings, serializedSettings, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { assertSettingsProfileIsolation, loadSettings, parseSettings, parseStrategy, saveSettings, serializedSettings, settingsProfilePath, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -83,6 +86,166 @@ const settings = {
 }
 
 describe('liquidator settings', () => {
+	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profiles-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const mainnet = parseSettings({
+				...settings,
+				centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 },
+				network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
+				runtime: { ...settings.runtime, stateFile: join(directory, 'mainnet-state.json') },
+				strategy: { ...settings.strategy, maximumGasCostEth: '0.777' },
+			})
+			await saveSettings(path, mainnet)
+			const sepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
+			expect(sepolia.settings).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false, paused: true, privateKey: undefined })
+			expect(sepolia.settings.runtime.stateFile).toContain('.sepolia.')
+			await saveSettings(path, { ...sepolia.settings, strategy: { ...sepolia.settings.strategy, maximumGasCostAttoEth: 333n } }, sepolia.revision)
+			const restored = await switchSettingsNetworkProfile(path, 'mainnet', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
+			expect(restored.settings.strategy.maximumGasCostAttoEth).toBe(777_000_000_000_000_000n)
+			expect(restored.settings.runtime.stateFile).toBe(mainnet.runtime.stateFile)
+			expect((await loadSettings(path)).settings.network.name).toBe('mainnet')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects a dormant profile that reuses the active chain recovery state', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profile-collision-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: join(directory, 'shared-state.json') } })
+			const sepolia = parseSettings({ ...settings, network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }, runtime: { ...settings.runtime, stateFile: mainnet.runtime.stateFile } })
+			await saveSettings(path, mainnet)
+			await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+			await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
+			expect((await loadSettings(path)).settings).toMatchObject({ network: { name: 'mainnet' }, runtime: { stateFile: mainnet.runtime.stateFile } })
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects cross-chain recovery state reached through symlinked directory aliases', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profile-symlink-'))
+		try {
+			const durableDirectory = join(directory, 'durable')
+			const durableAlias = join(directory, 'durable-alias')
+			await mkdir(durableDirectory)
+			await symlink(durableDirectory, durableAlias, 'dir')
+			const path = join(directory, 'operator.json')
+			const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: join(durableDirectory, 'shared-state.json') } })
+			const sepolia = parseSettings({ ...settings, runtime: { ...settings.runtime, stateFile: join(durableAlias, 'shared-state.json') } })
+			await saveSettings(path, mainnet)
+			await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+			await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
+			expect((await loadSettings(path)).settings.network.name).toBe('mainnet')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects cross-chain recovery state reached through distinct dangling symlinks to one file before writing', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profile-dangling-symlink-'))
+		try {
+			const sharedTarget = join(directory, 'missing-shared-state.json')
+			const mainnetAlias = join(directory, 'mainnet-state-alias.json')
+			const sepoliaAlias = join(directory, 'sepolia-state-alias.json')
+			await symlink(sharedTarget, mainnetAlias)
+			await symlink(sharedTarget, sepoliaAlias)
+			const path = join(directory, 'operator.json')
+			const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: mainnetAlias } })
+			const sepolia = parseSettings({ ...settings, runtime: { ...settings.runtime, stateFile: sepoliaAlias } })
+			await saveSettings(path, mainnet)
+			await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+			const files = [path, settingsProfilePath(path, 'sepolia')]
+			const before = await Promise.all(files.map(file => readFile(file, 'utf8')))
+			await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
+			expect(await Promise.all(files.map(file => readFile(file, 'utf8')))).toEqual(before)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects recovery state that reuses configuration and profile files before writing', async () => {
+		for (const reservedName of ['active', 'mainnet', 'sepolia'] as const) {
+			const directory = await mkdtemp(join(tmpdir(), `zoltar-liquidator-reserved-${reservedName}-`))
+			try {
+				const path = join(directory, 'operator.json')
+				const reservedPath = reservedName === 'active' ? path : settingsProfilePath(path, reservedName)
+				const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: join(directory, 'mainnet-state.json') } })
+				const sepolia = parseSettings({ ...settings, network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }, runtime: { ...settings.runtime, stateFile: reservedPath } })
+				await saveSettings(path, mainnet)
+				await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+				const activeBefore = await readFile(path, 'utf8')
+				const targetBefore = await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')
+				await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('The durable recovery state path must not reuse the active configuration or chain profile files')
+				expect(await readFile(path, 'utf8')).toBe(activeBefore)
+				expect(await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
+			} finally {
+				await rm(directory, { force: true, recursive: true })
+			}
+		}
+	})
+
+	test('does not overwrite a profile file reused by the active chain as recovery state', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-active-reserved-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const mainnetProfile = settingsProfilePath(path, 'mainnet')
+			const active = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: mainnetProfile } })
+			const savedMainnet = { ...active, runtime: { ...active.runtime, stateFile: join(directory, 'mainnet-state.json') } }
+			const sepolia = parseSettings({ ...settings, network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }, runtime: { ...settings.runtime, stateFile: join(directory, 'sepolia-state.json') } })
+			await saveSettings(path, active)
+			await saveSettings(mainnetProfile, savedMainnet)
+			await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+			const files = [path, mainnetProfile, settingsProfilePath(path, 'sepolia')]
+			const before = await Promise.all(files.map(file => readFile(file, 'utf8')))
+			await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('The durable recovery state path must not reuse the active configuration or chain profile files')
+			expect(await Promise.all(files.map(file => readFile(file, 'utf8')))).toEqual(before)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects a sibling profile whose embedded chain identity does not match its filename', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profile-identity-'))
+		try {
+			const path = join(directory, 'operator.json')
+			const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: join(directory, 'mainnet-state.json') } })
+			await saveSettings(path, mainnet)
+			await saveSettings(settingsProfilePath(path, 'sepolia'), mainnet)
+			const activeBefore = await readFile(path, 'utf8')
+			const targetBefore = await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')
+			await expect(assertSettingsProfileIsolation(path, mainnet)).rejects.toThrow('The sepolia profile contains mainnet settings')
+			await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('The sepolia profile contains mainnet settings')
+			expect(await readFile(path, 'utf8')).toBe(activeBefore)
+			expect(await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects an existing profile with a different process mode or dashboard binding before writing', async () => {
+		for (const runtimeOverride of [{ once: true }, { ui: false }, { uiHost: '0.0.0.0' as const }, { uiPort: 4999 }]) {
+			const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profile-process-mode-'))
+			try {
+				const path = join(directory, 'operator.json')
+				const mainnet = parseSettings({ ...settings, centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 }, network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }, runtime: { ...settings.runtime, stateFile: join(directory, 'mainnet-state.json') } })
+				const sepolia = parseSettings({ ...settings, network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }, runtime: { ...settings.runtime, ...runtimeOverride, stateFile: join(directory, 'sepolia-state.json') } })
+				await saveSettings(path, mainnet)
+				await saveSettings(settingsProfilePath(path, 'sepolia'), sepolia)
+				const activeBefore = await readFile(path, 'utf8')
+				const targetBefore = await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')
+				await expect(switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Chain profiles must use the same once mode and dashboard binding to switch in place')
+				expect(await readFile(path, 'utf8')).toBe(activeBefore)
+				expect(await readFile(settingsProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
+			} finally {
+				await rm(directory, { force: true, recursive: true })
+			}
+		}
+	})
+
 	test('round trips the operator configuration without losing decimal precision', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)

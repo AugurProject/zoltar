@@ -99,6 +99,7 @@ type Snapshot = {
 		walletEth: string
 		walletRep: string
 	}
+	network: 'mainnet' | 'sepolia'
 	paused: boolean
 	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
 	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
@@ -119,6 +120,7 @@ type Configuration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
+	networkConfigured?: boolean | undefined
 	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
@@ -138,6 +140,7 @@ const readRpcUrl = element('read-rpc-url', HTMLInputElement)
 const publicRpcUrls = element('public-rpc-urls', HTMLTextAreaElement)
 const quorumRpcUrls = element('quorum-rpc-urls', HTMLTextAreaElement)
 const networkStatus = element('network-status', HTMLSpanElement)
+const networkScopeSummary = element('network-scope-summary', HTMLElement)
 const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
 const centralizedMarketStatus = element('centralized-market-status', HTMLParagraphElement)
 const centralizedMarketPrice = element('centralized-market-price', HTMLElement)
@@ -180,6 +183,7 @@ const poolFilter = element('pool-filter', HTMLInputElement)
 const strategyForm = element('strategy-form', HTMLFormElement)
 const strategyFields = element('strategy-fields', HTMLFieldSetElement)
 const strategyStatus = element('strategy-status', HTMLSpanElement)
+const settingsChainScope = element('settings-chain-scope', HTMLParagraphElement)
 const signerForm = element('signer-form', HTMLFormElement)
 const signerStatus = element('signer-status', HTMLSpanElement)
 const updateSignerButton = element('update-signer', HTMLButtonElement)
@@ -193,6 +197,9 @@ const confirmResume = element('confirm-resume', HTMLButtonElement)
 
 let currentSnapshot: Snapshot | undefined
 let currentConfiguration: Configuration | undefined
+let pendingNetworkProfile: 'mainnet' | 'sepolia' | undefined
+let pendingProfileStateConfirmed = false
+let profileRequestEpoch = 0
 let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
 let pendingPoolMutations = 0
@@ -239,7 +246,8 @@ function renderBlockStatus(snapshot = currentSnapshot) {
 
 function setMutationControlsEnabled(enabled: boolean) {
 	const configurationAvailable = enabled && currentConfiguration !== undefined
-	const resumeAvailable = configurationAvailable && configurationConnected && currentConfiguration?.network !== undefined
+	const chainSettingsAvailable = configurationAvailable && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true
+	const resumeAvailable = configurationAvailable && pendingNetworkProfile === undefined && configurationConnected && currentConfiguration?.networkConfigured === true
 	const paused = currentSnapshot?.paused
 	const pendingLabel = pauseRequestPending === true ? 'Pausing…' : 'Resuming…'
 	pauseButton.textContent = pauseRequestPending === undefined ? (paused === true ? 'Resume' : 'Pause') : pendingLabel
@@ -250,15 +258,15 @@ function setMutationControlsEnabled(enabled: boolean) {
 	confirmResume.disabled = pauseRequestPending !== undefined || !resumeAvailable
 	confirmResume.toggleAttribute('aria-busy', pauseRequestPending === false)
 	if (pauseRequestPending === false) confirmResume.setAttribute('aria-busy', 'true')
-	networkFields.disabled = !configurationAvailable
-	marketConfigurationFields.disabled = !configurationAvailable
-	strategyFields.disabled = !configurationAvailable
+	networkFields.disabled = !configurationAvailable || pendingNetworkProfile !== undefined
+	marketConfigurationFields.disabled = !chainSettingsAvailable
+	strategyFields.disabled = !chainSettingsAvailable
 	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !enabled
-	updateSignerButton.disabled = !enabled || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
-	testMarketSourcesButton.disabled = !enabled
-	recheckRecovery.disabled = !enabled
-	if (!enabled) {
+	for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !chainSettingsAvailable
+	updateSignerButton.disabled = !chainSettingsAvailable || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
+	testMarketSourcesButton.disabled = !chainSettingsAvailable
+	recheckRecovery.disabled = !chainSettingsAvailable
+	if (!chainSettingsAvailable) {
 		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #universe-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
 	}
 }
@@ -433,7 +441,7 @@ function renderRecovery(snapshot: Snapshot) {
 		const button = document.createElement('button')
 		button.type = 'submit'
 		button.textContent = 'Verify & reconcile'
-		button.disabled = !stateConnected || !snapshot.paused
+		button.disabled = pendingNetworkProfile !== undefined || !stateConnected || !snapshot.paused
 		const status = document.createElement('span')
 		status.className = 'action-status'
 		status.setAttribute('role', 'alert')
@@ -456,7 +464,7 @@ function renderRecovery(snapshot: Snapshot) {
 				recoveryActionStates.set(intent.hash.toLowerCase(), { failed: true, message })
 				actionStatus(status, message, true)
 			} finally {
-				button.disabled = !stateConnected || !snapshot.paused
+				button.disabled = pendingNetworkProfile !== undefined || !stateConnected || !snapshot.paused
 			}
 		})
 		card.append(heading, metadata, form)
@@ -641,7 +649,7 @@ function universeChoice(universe: Universe) {
 	input.value = universe.id
 	input.dataset['recordKey'] = `universe:${universe.id}`
 	input.checked = approvedUniverses.has(universe.id)
-	input.disabled = currentConfiguration === undefined || !stateConnected
+	input.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
 	const copy = document.createElement('span')
 	copy.className = 'truth-choice-copy'
 	const title = document.createElement('strong')
@@ -676,7 +684,7 @@ function universeFamily(parent: Universe, children: readonly Universe[]) {
 		toggle.type = 'checkbox'
 		toggle.dataset['recordKey'] = `universe:${parent.id}`
 		toggle.checked = approvedUniverses.has(parent.id)
-		toggle.disabled = currentConfiguration === undefined || !stateConnected
+		toggle.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
 		toggle.setAttribute('aria-label', `Approve root universe ${parent.id}`)
 		toggle.addEventListener('change', () => {
 			const next = new Set(approvedUniverses)
@@ -716,7 +724,7 @@ function universeFamily(parent: Universe, children: readonly Universe[]) {
 	noneInput.value = ''
 	noneInput.dataset['recordKey'] = `universe:none:${parent.id}`
 	noneInput.checked = childIds.every(childId => !approvedUniverses.has(childId))
-	noneInput.disabled = currentConfiguration === undefined || !stateConnected
+	noneInput.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
 	const noneCopy = document.createElement('span')
 	noneCopy.className = 'truth-choice-copy'
 	const noneTitle = document.createElement('strong')
@@ -840,7 +848,7 @@ function renderPools(snapshot: Snapshot) {
 			checkbox.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
 			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
 			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
-			checkbox.disabled = currentConfiguration === undefined || !stateConnected
+			checkbox.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
 			const toggle = document.createElement('label')
 			toggle.className = 'pool-toggle'
 			const toggleText = document.createElement('span')
@@ -1022,11 +1030,11 @@ function render(snapshot: Snapshot) {
 }
 
 function snapshotAttentionCount(snapshot: Snapshot) {
-	return (configurationConnected && currentConfiguration?.network === undefined ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+	return (configurationConnected && currentConfiguration?.networkConfigured !== true ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
 }
 
 function renderAttention(snapshot: Snapshot) {
-	const networkSetupRequired = configurationConnected && currentConfiguration?.network === undefined
+	const networkSetupRequired = configurationConnected && currentConfiguration?.networkConfigured !== true
 	const attentionCount = snapshotAttentionCount(snapshot)
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
@@ -1045,6 +1053,7 @@ function setFormValue(name: string, value: string | number | boolean) {
 }
 
 function populateConfiguration(configuration: Configuration) {
+	if (pendingNetworkProfile !== undefined && configuration.network?.name !== pendingNetworkProfile) return
 	currentConfiguration = configuration
 	configurationConnected = true
 	renderNetworkBadge()
@@ -1053,22 +1062,27 @@ function populateConfiguration(configuration: Configuration) {
 	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(name, value)
 	setFormValue('logLookbackBlocks', configuration.runtime.logLookbackBlocks)
 	setFormValue('historicalLogRecovery', configuration.runtime.historicalLogRecovery)
-	if (configuration.network !== undefined && configuration.connectivity !== undefined) {
+	if (configuration.network !== undefined) {
+		const networkLabel = configuration.network.name === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
+		settingsChainScope.textContent = `Editing the ${networkLabel} profile. Every setting and durable recovery record is retained only for this chain; selecting another chain loads its separate profile.`
+		networkScopeSummary.textContent = `${networkLabel} profile · switchable`
 		networkName.value = configuration.network.name
-		networkName.disabled = true
-		readRpcUrl.value = configuration.connectivity.readRpcUrl
-		publicRpcUrls.value = configuration.connectivity.publicRpcUrls.join('\n')
-		quorumRpcUrls.value = configuration.connectivity.quorumRpcUrls.join('\n')
+		networkName.disabled = false
+		readRpcUrl.value = configuration.connectivity?.readRpcUrl ?? ''
+		publicRpcUrls.value = configuration.connectivity?.publicRpcUrls.join('\n') ?? ''
+		quorumRpcUrls.value = configuration.connectivity?.quorumRpcUrls.join('\n') ?? ''
 	} else {
+		settingsChainScope.textContent = 'Select a chain profile first. Every other setting is locked until its chain is verified, and the saved configuration and recovery state belong only to that chain.'
+		networkScopeSummary.textContent = 'No profile selected'
 		networkName.disabled = false
 		readRpcUrl.value = ''
 		publicRpcUrls.value = ''
 		quorumRpcUrls.value = ''
 	}
-	networkFields.disabled = false
+	networkFields.disabled = pendingNetworkProfile !== undefined
 	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
-	marketConfigurationFields.disabled = false
-	strategyFields.disabled = false
+	marketConfigurationFields.disabled = configuration.networkConfigured !== true
+	strategyFields.disabled = configuration.networkConfigured !== true
 	configurationStatus.classList.add('hidden')
 	configurationStatus.replaceChildren()
 	updateHealthPolicyPreview()
@@ -1079,6 +1093,42 @@ function populateConfiguration(configuration: Configuration) {
 	}
 	setMutationControlsEnabled(stateConnected)
 	if (window.location.hash !== '') syncSectionNavigation(true)
+}
+
+networkName.addEventListener('change', async () => {
+	if (currentConfiguration?.network?.name === networkName.value) return
+	if (networkName.value !== 'mainnet' && networkName.value !== 'sepolia') return
+	const requestedNetwork = networkName.value
+	profileRequestEpoch += 1
+	pendingNetworkProfile = requestedNetwork
+	pendingProfileStateConfirmed = false
+	networkFields.disabled = true
+	setMutationControlsEnabled(stateConnected)
+	actionStatus(networkStatus, `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)
+	try {
+		await put<Configuration>('/api/network-profile', { network: requestedNetwork })
+		networkFields.disabled = true
+		actionStatus(networkStatus, 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
+		await waitForNetworkProfile(requestedNetwork)
+	} catch (error) {
+		if (pendingNetworkProfile === requestedNetwork) {
+			profileRequestEpoch += 1
+			pendingNetworkProfile = undefined
+			pendingProfileStateConfirmed = false
+		}
+		actionStatus(networkStatus, publicFailure(error, 'Could not switch chain profiles.'), true)
+		if (currentConfiguration?.network !== undefined) networkName.value = currentConfiguration.network.name
+		networkFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration === undefined
+	}
+})
+
+async function waitForNetworkProfile(network: string) {
+	for (let attempt = 0; attempt < 40; attempt++) {
+		await new Promise(resolve => setTimeout(resolve, 500))
+		await refresh()
+		if (pendingNetworkProfile === undefined && currentConfiguration?.network?.name === network) return
+	}
+	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. Use Refresh to retry.', true)
 }
 
 networkForm.addEventListener('submit', async event => {
@@ -1100,7 +1150,7 @@ networkForm.addEventListener('submit', async event => {
 	} catch (error) {
 		actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.'), true)
 	} finally {
-		networkFields.disabled = !stateConnected || currentConfiguration === undefined
+		networkFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration === undefined
 	}
 })
 
@@ -1120,7 +1170,7 @@ marketConfigurationForm.addEventListener('submit', async event => {
 	} catch (error) {
 		actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the JSON and retry.'), true)
 	} finally {
-		marketConfigurationFields.disabled = !stateConnected || currentConfiguration === undefined
+		marketConfigurationFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
 })
 
@@ -1147,7 +1197,7 @@ testMarketSourcesButton.addEventListener('click', async () => {
 		if (currentSnapshot !== undefined) renderMarketSources(currentSnapshot.marketSources)
 		actionStatus(marketSourceTestStatus, publicFailure(error, 'Could not test saved market sources. Check the bot logs and retry.'), true)
 	} finally {
-		testMarketSourcesButton.disabled = !stateConnected
+		testMarketSourcesButton.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
 })
 
@@ -1164,7 +1214,7 @@ recheckRecovery.addEventListener('click', async () => {
 	try {
 		await refresh()
 	} finally {
-		recheckRecovery.disabled = !stateConnected
+		recheckRecovery.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
 })
 
@@ -1215,8 +1265,8 @@ function renderNetworkBadge() {
 		networkBadge.className = 'badge warning'
 		return
 	}
-	if (currentConfiguration?.network === undefined) {
-		networkBadge.textContent = 'Network not configured'
+	if (currentConfiguration?.network === undefined || currentConfiguration.networkConfigured !== true) {
+		networkBadge.textContent = currentConfiguration?.network === undefined ? 'Choose chain' : 'RPC setup required'
 		networkBadge.className = 'badge warning'
 		return
 	}
@@ -1296,7 +1346,7 @@ function closeResumePreflight() {
 }
 
 async function changePaused(paused: boolean) {
-	if (pauseRequestPending !== undefined || currentSnapshot === undefined || (!paused && (!stateConnected || !configurationConnected || currentConfiguration?.network === undefined))) return
+	if (pauseRequestPending !== undefined || currentSnapshot === undefined || (!paused && (pendingNetworkProfile !== undefined || !stateConnected || !configurationConnected || currentConfiguration?.networkConfigured !== true))) return
 	pauseRequestPending = paused
 	setMutationControlsEnabled(stateConnected)
 	actionStatus(pauseStatus, '')
@@ -1449,7 +1499,7 @@ signerForm.addEventListener('submit', async event => {
 
 signerForm.addEventListener('input', () => {
 	const privateKeyField = signerForm.elements.namedItem('privateKey')
-	updateSignerButton.disabled = !stateConnected || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
+	updateSignerButton.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true || !(privateKeyField instanceof HTMLInputElement) || privateKeyField.value.trim() === ''
 })
 
 clearSignerButton.addEventListener('click', async () => {
@@ -1466,7 +1516,7 @@ clearSignerButton.addEventListener('click', async () => {
 	} catch (error) {
 		actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.'), true)
 	} finally {
-		clearSignerButton.disabled = !stateConnected
+		clearSignerButton.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration?.networkConfigured !== true
 	}
 })
 
@@ -1502,21 +1552,51 @@ function refresh() {
 }
 
 async function performRefresh() {
+	const requestEpoch = profileRequestEpoch
 	try {
-		render(await api<Snapshot>('/api/state', undefined, STATE_REQUEST_TIMEOUT_MS))
+		const snapshot = await api<Snapshot>('/api/state', undefined, STATE_REQUEST_TIMEOUT_MS)
+		if (requestEpoch !== profileRequestEpoch) return
+		if (pendingNetworkProfile !== undefined && snapshot.network !== pendingNetworkProfile) return
+		render(snapshot)
+		if (pendingNetworkProfile !== undefined) pendingProfileStateConfirmed = true
+		if (pendingNetworkProfile !== undefined) await loadConfiguration()
 	} catch (error) {
+		if (requestEpoch !== profileRequestEpoch) return
 		renderConnectionFailure(error)
 	}
 }
 
 async function loadConfiguration() {
+	const expectedNetwork = pendingNetworkProfile
+	const requestEpoch = profileRequestEpoch
 	strategyFields.disabled = true
-	configurationStatus.classList.remove('hidden')
-	configurationStatus.classList.remove('error')
-	configurationStatus.textContent = 'Loading pool selection and strategy…'
+	if (expectedNetwork === undefined) {
+		configurationStatus.classList.remove('hidden')
+		configurationStatus.classList.remove('error')
+		configurationStatus.textContent = 'Loading pool selection and strategy…'
+	}
 	try {
-		populateConfiguration(await api<Configuration>('/api/configuration'))
+		const configuration = await api<Configuration>('/api/configuration')
+		if (profileRequestEpoch !== requestEpoch || pendingNetworkProfile !== expectedNetwork) return false
+		if (expectedNetwork !== undefined && configuration.network?.name !== expectedNetwork) {
+			networkName.value = expectedNetwork
+			networkFields.disabled = true
+			return false
+		}
+		if (expectedNetwork !== undefined && !pendingProfileStateConfirmed) return false
+		if (expectedNetwork !== undefined) {
+			pendingNetworkProfile = undefined
+			pendingProfileStateConfirmed = false
+		}
+		populateConfiguration(configuration)
+		return true
 	} catch (error) {
+		if (profileRequestEpoch !== requestEpoch || pendingNetworkProfile !== expectedNetwork) return false
+		if (expectedNetwork !== undefined) {
+			networkName.value = expectedNetwork
+			networkFields.disabled = true
+			return false
+		}
 		currentConfiguration = undefined
 		configurationConnected = false
 		networkBadge.textContent = 'Network unavailable'
@@ -1531,6 +1611,7 @@ async function loadConfiguration() {
 		retry.addEventListener('click', loadConfiguration)
 		configurationStatus.replaceChildren(message, retry)
 		setMutationControlsEnabled(stateConnected)
+		return false
 	}
 }
 

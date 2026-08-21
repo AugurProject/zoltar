@@ -7,6 +7,7 @@ const longUniverseId = '45231284858326638837332416019018714005183587760015845327
 let approvedUniverses = ['101', longUniverseId]
 let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
 let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
+let networkConfigured = false
 let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
 const centralizedMarkets = {
 	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -147,7 +148,7 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
+	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
 }
 
 const server = startDashboardServer(4183, {
@@ -254,6 +255,7 @@ const server = startDashboardServer(4183, {
 			'0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb': '2508.19',
 		},
 	}),
+	isNetworkConfigured: () => true,
 	hostname: '127.0.0.1',
 	reconcileTransaction: value => {
 		if (!paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -283,6 +285,15 @@ const server = startDashboardServer(4183, {
 			quorumRpcUrls: ['https://quorum.example'],
 			readRpcUrl: 'https://read.example',
 		}
+		networkConfigured = true
+		return currentConfiguration()
+	},
+	switchNetworkProfile: value => {
+		const requestedNetwork = Reflect.get(value as object, 'network')
+		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
+		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
+		connectivity = undefined
+		networkConfigured = false
 		return currentConfiguration()
 	},
 	setMarketConfiguration: value => {

@@ -222,7 +222,7 @@ try {
 		typeof unconfiguredNetworkState !== 'object' ||
 		unconfiguredNetworkState === null ||
 		!('networkBadge' in unconfiguredNetworkState) ||
-		unconfiguredNetworkState.networkBadge !== 'Network not configured' ||
+		unconfiguredNetworkState.networkBadge !== 'Choose chain' ||
 		!('attentionText' in unconfiguredNetworkState) ||
 		unconfiguredNetworkState.attentionText !== '2 actions' ||
 		!('attentionHref' in unconfiguredNetworkState) ||

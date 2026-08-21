@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, extname, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '#ethereum'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
@@ -10,6 +10,8 @@ import { validateDeploymentSettings, type DeploymentSettings } from '#config/dep
 import type { RiskLimits } from '#core/safety-controls'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
+import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -102,6 +104,7 @@ export type StoredOperatorSettings = {
 	connectivity?: ConnectivitySettings | undefined
 	deployment: DeploymentSettings
 	network?: NetworkName | undefined
+	networkConfigured?: boolean | undefined
 	paused: boolean
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
 	rpcQuorum?: RpcQuorumRequirement | undefined
@@ -118,7 +121,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -172,6 +175,10 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 		historyFile,
 		lookbackBlocks: (() => {
 			const value = nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks')
+			// Version 4 previously shipped 50000 as the Docker default. Migrate only
+			// that known value so existing named volumes can start under the bounded
+			// scanner without accepting arbitrary out-of-range configuration.
+			if (value === 50_000n) return 256n
 			if (value > 256n) throw new Error('Runtime lookbackBlocks must be from 0 through 256')
 			return value
 		})(),
@@ -196,9 +203,11 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const record = requiredRecord(value)
 	validatedKeys(record)
 	if (record['version'] !== 4) throw new Error('Operator configuration uses an unsupported version; expected version 4')
-	const networkConfigured = record['network'] !== undefined || record['connectivity'] !== undefined
-	if ((record['network'] === undefined) !== (record['connectivity'] === undefined)) throw new Error('Operator configuration must set network and connectivity together')
-	if (networkConfigured && record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')
+	const networkConfigured = record['networkConfigured'] === undefined ? record['connectivity'] !== undefined : record['networkConfigured'] === true
+	if (record['networkConfigured'] !== undefined && typeof record['networkConfigured'] !== 'boolean') throw new Error('Operator configuration networkConfigured must be a boolean')
+	if (record['network'] !== undefined && record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')
+	if (networkConfigured && (record['network'] === undefined || record['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
+	if (!networkConfigured && record['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
 	if (typeof record['paused'] !== 'boolean') throw new Error('Operator pause setting must be a boolean')
 	const strategy: MutableStrategy = {
 		maxSpotTwapTicks: 0n,
@@ -247,7 +256,8 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
 		deployment: settings.deployment,
-		network: settings.networkConfigured ? settings.network : undefined,
+		network: settings.network,
+		networkConfigured: settings.networkConfigured,
 		paused: settings.paused,
 		privateKey: redactPrivateKey && settings.privateKey !== undefined ? PRESERVE_PRIVATE_KEY : settings.privateKey,
 		rpcQuorum: settings.rpcQuorum,
@@ -283,6 +293,110 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		tokenAddresses: settings.tokenAddresses,
 		version: 4,
 	}
+}
+
+function chainSpecificPath(path: string, network: NetworkName) {
+	const extension = extname(path)
+	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
+	return `${stem}.${network}${extension}`
+}
+
+export function operatorProfilePath(path: string, network: NetworkName) {
+	return `${path}.${network}.profile`
+}
+
+type OperatorProfileCandidate = { expectedNetwork: NetworkName; settings: PersistedOperatorSettings }
+
+async function persistentPathIdentities(paths: readonly string[]) {
+	return await Promise.all(paths.map(persistentPathIdentity))
+}
+
+async function durableJournalIdentities(settings: PersistedOperatorSettings) {
+	return await persistentPathIdentities([settings.runtime.historyFile, settings.runtime.positionFile, settings.runtime.priceHistoryFile])
+}
+
+function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof persistentPathIdentity>>[], target: Awaited<ReturnType<typeof persistentPathIdentity>>) {
+	return identities.some(identity => persistentPathIdentitiesMatch(identity, target))
+}
+
+async function assertOperatorProfileCandidates(path: string, candidates: readonly OperatorProfileCandidate[]) {
+	const reservedPaths = await persistentPathIdentities([path, operatorProfilePath(path, 'mainnet'), operatorProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path)])
+	const candidatePaths: { candidate: OperatorProfileCandidate; durablePaths: Awaited<ReturnType<typeof persistentPathIdentity>>[] }[] = []
+	for (const candidate of candidates) {
+		if (candidate.settings.network !== candidate.expectedNetwork) throw new Error(`The ${candidate.expectedNetwork} profile contains ${candidate.settings.network} settings`)
+		const durablePaths = await durableJournalIdentities(candidate.settings)
+		if (durablePaths.some((durablePath, index) => identitiesContainMatch(durablePaths.slice(index + 1), durablePath))) throw new Error(`The ${candidate.expectedNetwork} profile must use distinct durable journal paths`)
+		if (durablePaths.some(durablePath => identitiesContainMatch(reservedPaths, durablePath))) throw new Error('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
+		candidatePaths.push({ candidate, durablePaths })
+	}
+	for (let index = 0; index < candidatePaths.length; index += 1) {
+		const current = candidatePaths[index]
+		if (current === undefined) continue
+		for (const target of candidatePaths.slice(index + 1)) {
+			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && target.durablePaths.some(targetPath => identitiesContainMatch(current.durablePaths, targetPath))) throw new Error('Mainnet and Sepolia profiles must use distinct durable journal paths')
+		}
+	}
+}
+
+function assertCompatibleProfileProcessMode(current: PersistedOperatorSettings, target: PersistedOperatorSettings) {
+	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
+		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
+	}
+}
+
+export async function assertOperatorProfileIsolation(path: string, active: PersistedOperatorSettings) {
+	const mainnet = await loadOperatorSettings(operatorProfilePath(path, 'mainnet'))
+	const sepolia = await loadOperatorSettings(operatorProfilePath(path, 'sepolia'))
+	const candidates: OperatorProfileCandidate[] = [{ expectedNetwork: active.network, settings: active }]
+	if (mainnet !== undefined) candidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
+	if (sepolia !== undefined) candidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
+	await assertOperatorProfileCandidates(path, candidates)
+}
+
+export async function switchOperatorNetworkProfile(path: string, network: NetworkName, examplePath: string) {
+	const current = await loadOperatorSettingsWithRevision(path)
+	if (current === undefined) throw new Error('Operator configuration file is missing')
+	const mainnet = await loadOperatorSettings(operatorProfilePath(path, 'mainnet'))
+	const sepolia = await loadOperatorSettings(operatorProfilePath(path, 'sepolia'))
+	const storedCandidates: OperatorProfileCandidate[] = [{ expectedNetwork: current.settings.network, settings: current.settings }]
+	if (mainnet !== undefined) storedCandidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
+	if (sepolia !== undefined) storedCandidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
+	await assertOperatorProfileCandidates(path, storedCandidates)
+	if (current.settings.network === network) return current
+	let target = network === 'mainnet' ? mainnet : sepolia
+	if (target === undefined) {
+		const template = parseOperatorSettings(JSON.parse(await readFile(examplePath, 'utf8')))
+		const chainId = network === 'mainnet' ? 1 : 11_155_111
+		target = {
+			...template,
+			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
+			network,
+			networkConfigured: false,
+			paused: true,
+			privateKey: undefined,
+			runtime: {
+				...template.runtime,
+				execute: false,
+				historyFile: chainSpecificPath(current.settings.runtime.historyFile, network),
+				once: false,
+				positionFile: chainSpecificPath(current.settings.runtime.positionFile, network),
+				priceHistoryFile: chainSpecificPath(current.settings.runtime.priceHistoryFile, network),
+				ui: current.settings.runtime.ui,
+				uiHost: current.settings.runtime.uiHost,
+				uiPort: current.settings.runtime.uiPort,
+			},
+		}
+	}
+	target = { ...target, paused: true }
+	await assertOperatorProfileCandidates(path, [
+		{ expectedNetwork: current.settings.network, settings: current.settings },
+		{ expectedNetwork: network, settings: target },
+	])
+	assertCompatibleProfileProcessMode(current.settings, target)
+	await saveOperatorSettings(operatorProfilePath(path, current.settings.network), { ...current.settings, paused: true })
+	await saveOperatorSettings(operatorProfilePath(path, network), target)
+	const revision = await saveOperatorSettings(path, target, undefined, current.revision)
+	return { revision, settings: target }
 }
 
 function revision(contents: string) {

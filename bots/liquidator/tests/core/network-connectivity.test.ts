@@ -27,10 +27,10 @@ describe('network connectivity updates', () => {
 		settings.runtime.execute = true
 		const next = await updateNetworkConnectivity({
 			apply: () => undefined,
-			checks: { checkConnectivity: async () => healthyChecks(11_155_111), readRpcChainId: async () => 11_155_111 },
+			checks: { checkConnectivity: async () => healthyChecks(1), readRpcChainId: async () => 1 },
 			persist: async update => update(settings),
 			settings,
-			value: request('sepolia', []),
+			value: request('mainnet', []),
 		})
 		expect(next.connectivity.quorumRpcUrls).toEqual([])
 	})
@@ -77,15 +77,15 @@ describe('network connectivity updates', () => {
 				apply: () => {
 					applied = true
 				},
-				checks: { checkConnectivity: async () => healthyChecks(11_155_111), readRpcChainId: async () => 1 },
+				checks: { checkConnectivity: async () => healthyChecks(1), readRpcChainId: async () => 11_155_111 },
 				persist: async () => {
 					persisted = true
 					return settings
 				},
 				settings,
-				value: request('sepolia'),
+				value: request('mainnet'),
 			}),
-		).rejects.toThrow('returned chain 1')
+		).rejects.toThrow('returned chain 11155111')
 		expect(persisted).toBe(false)
 		expect(applied).toBe(false)
 	})
@@ -101,20 +101,20 @@ describe('network connectivity updates', () => {
 					applied = true
 				},
 				checks: {
-					checkConnectivity: async () => healthyChecks(11_155_111),
+					checkConnectivity: async () => healthyChecks(1),
 					checkSubmissionEndpoints: async () => {
-						throw new Error('Expected chain 11155111, received 1')
+						throw new Error('Expected chain 1, received 11155111')
 					},
-					readRpcChainId: async () => 11_155_111,
+					readRpcChainId: async () => 1,
 				},
 				persist: async () => {
 					persisted = true
 					return settings
 				},
 				settings,
-				value: request('sepolia'),
+				value: request('mainnet'),
 			}),
-		).rejects.toThrow('Expected chain 11155111')
+		).rejects.toThrow('Expected chain 1')
 		expect(persisted).toBe(false)
 		expect(applied).toBe(false)
 	})
@@ -143,7 +143,7 @@ describe('network connectivity updates', () => {
 				settings,
 				value: request('mainnet'),
 			}),
-		).rejects.toThrow('separate operator configuration and durable state file')
+		).rejects.toThrow('Select the chain profile before saving its RPC settings')
 		expect(checked).toBe(false)
 		expect(persisted).toBe(false)
 	})
@@ -156,12 +156,12 @@ describe('network connectivity updates', () => {
 				apply: () => {
 					applied = true
 				},
-				checks: { checkConnectivity: async () => healthyChecks(11_155_111), readRpcChainId: async () => 11_155_111 },
+				checks: { checkConnectivity: async () => healthyChecks(1), readRpcChainId: async () => 1 },
 				persist: async () => {
 					throw new Error('disk unavailable')
 				},
 				settings,
-				value: request('sepolia'),
+				value: request('mainnet'),
 			}),
 		).rejects.toThrow('disk unavailable')
 		expect(applied).toBe(false)

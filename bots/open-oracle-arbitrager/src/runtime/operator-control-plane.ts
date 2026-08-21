@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
-import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
@@ -31,6 +31,7 @@ export type PendingOperatorUpdates = {
 	network: Configuration['network'] | undefined
 	operatorSettings: PersistedOperatorSettings | undefined
 	paused: boolean | undefined
+	profileSwitch: boolean
 	privateKey: Hex | undefined
 	persistedPrivateKey: Hex | undefined
 	persistedTokenAddresses: Address[] | undefined
@@ -138,6 +139,15 @@ export async function acquireConfigurationSignerOperation(signerOperationGate: S
 	while (!signerOperationGate.acquire('configuration')) await Bun.sleep(10)
 }
 
+export async function runConfigurationSignerOperation<T>(signerOperationGate: SignerOperationGate, operation: () => Promise<T>) {
+	await acquireConfigurationSignerOperation(signerOperationGate)
+	try {
+		return await operation()
+	} finally {
+		signerOperationGate.release('configuration')
+	}
+}
+
 export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
 	deploymentRecovery.pending = true
 	await saveExecutorDeploymentIntent(path, intent)
@@ -149,6 +159,7 @@ export function startOperatorControlPlane(parameters: {
 	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
 	getCursor: () => SyncCursor | undefined
 	lockManager: ExecutionLockManager | undefined
+	onNetworkProfileSwitch?: () => void
 	signerOperationGate: SignerOperationGate
 	state: OperatorState
 }) {
@@ -163,6 +174,7 @@ export function startOperatorControlPlane(parameters: {
 		network: undefined,
 		operatorSettings: undefined,
 		paused: undefined,
+		profileSwitch: false,
 		privateKey: undefined,
 		persistedPrivateKey: undefined,
 		persistedTokenAddresses: undefined,
@@ -183,8 +195,12 @@ export function startOperatorControlPlane(parameters: {
 		return next
 	}
 	let settingsUpdateQueue = Promise.resolve()
+	let profileSwitchInProgress = false
 	const queueSettingsUpdate = <T>(update: () => Promise<T>) => {
-		const result = settingsUpdateQueue.then(update)
+		const result = settingsUpdateQueue.then(async () => {
+			if (profileSwitchInProgress || pending.profileSwitch) throw new Error('Chain profile switching is in progress; retry after the dashboard reconnects')
+			return await update()
+		})
 		settingsUpdateQueue = result.then(
 			() => undefined,
 			() => undefined,
@@ -202,9 +218,27 @@ export function startOperatorControlPlane(parameters: {
 			}
 		},
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
+		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
+		switchNetworkProfile: value =>
+			queueSettingsUpdate(async () => {
+				if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || (value.network !== 'mainnet' && value.network !== 'sepolia')) throw new Error('Chain profile must be mainnet or sepolia')
+				if (value.network === config.network.name) return { network: config.network.name, networkConfigured: config.networkConfigured }
+				await requireNoPendingExecutorDeployment(config.settingsFile)
+				state.paused = true
+				profileSwitchInProgress = true
+				try {
+					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, value.network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json')))
+					pending.profileSwitch = true
+					if (parameters.onNetworkProfileSwitch !== undefined) setTimeout(parameters.onNetworkProfileSwitch, 0)
+					return { network: switched.settings.network, networkConfigured: switched.settings.networkConfigured }
+				} catch (error) {
+					profileSwitchInProgress = false
+					throw error
+				}
+			}),
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
@@ -213,7 +247,7 @@ export function startOperatorControlPlane(parameters: {
 				if (latest === undefined || latest.revision !== revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
-				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Switch chain profiles with the Chain selector before editing that profile')
 				if (
 					resolve(next.runtime.historyFile) !== config.historyFile ||
 					next.runtime.once !== config.once ||
@@ -331,10 +365,10 @@ export function startOperatorControlPlane(parameters: {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				if (latest.settings.networkConfigured) {
-					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Select the chain profile before saving its RPC settings')
 				}
 				const next = await updateOperatorConnectivity({
-					activeNetwork: config.networkConfigured ? config.network.name : undefined,
+					activeNetwork: latest.settings.network,
 					activeRpcQuorum: config.rpcQuorum,
 					deployment: latest.settings.deployment,
 					endpointState: state,

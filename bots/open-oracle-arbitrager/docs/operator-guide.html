@@ -59,8 +59,8 @@
 install -m 600 config/operator.example.json .state/operator.json
 bun run run</code></pre>
 				<p>Direct file editing is an offline workflow. While the bot is running, use the dashboard so validated changes can apply safely at scan boundaries; do not edit the file concurrently with a dashboard save.</p>
-				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Paused</strong>. In <strong>Chain and RPC connectivity</strong>, select the chain, RPC agreement requirement, and read and public RPC endpoints. The default one-reader policy accepts the primary RPC alone; select two readers to require independent corroboration. The bot verifies every endpoint against the selected chain. Initial chain selection and quorum changes apply automatically at a scan boundary. Then review the deployment and network-specific durable paths in <strong>Complete bot configuration</strong>.</p>
-				<p>For Sepolia, copy the example to a separate operator file, start it with <code>OPEN_ORACLE_ARBITRAGER_CONFIG</code>, and use separate history, price-history, and position paths. A configured operator file cannot be retargeted to another chain because its journals are not chain-tagged. Keep <code>runtime.execute</code> off for the first rehearsal.</p>
+				<p>Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is <strong>Paused</strong>. In <strong>Chain and RPC connectivity</strong>, select a chain profile first, then enter that profile's RPC agreement requirement and read and public RPC endpoints. The default one-reader policy accepts the primary RPC alone; select two readers to require independent corroboration. The bot verifies every endpoint against the selected chain.</p>
+				<p>Mainnet and Sepolia have separate saved settings and automatically separated history, price-history, and position paths. Changing the Chain selector pauses the bot, saves the current profile, and loads the selected profile in the same running process. Both profiles must keep the same <code>runtime.once</code>, <code>runtime.ui</code>, <code>runtime.uiHost</code>, and <code>runtime.uiPort</code> values so the process mode and dashboard origin remain stable; an incompatible profile is rejected before any file changes. Complete any pending executor-deployment recovery before switching. Keep <code>runtime.execute</code> off for the first rehearsal.</p>
 				<div class="callout">
 					<strong>Execution prerequisites</strong>
 					Execution also requires an authenticated manifest, one primary read RPC, exact contract bytecode matches, a coordinator whose immutable configuration matches the chosen OpenOracle and WETH, and all entry and lifecycle allowances before an opportunity is selected. Independent readers are optional by default. When the saved RPC agreement requirement is <code>2</code>, configure two additional independent origins; critical evidence then requires at least two available readers, with every available response agreeing exactly.
@@ -78,7 +78,7 @@ bun run run</code></pre>
 							<tr>
 								<td><code>network</code></td>
 								<td>Selects <code>mainnet</code> or <code>sepolia</code>.</td>
-								<td>Saved through Chain and RPC connectivity on first setup and then locked. Use a separate operator file and durable paths for another chain.</td>
+								<td>Selects the active profile. Switching profiles pauses the bot and loads that chain's settings and durable paths without a process restart.</td>
 							</tr>
 							<tr>
 								<td><code>connectivity</code> and <code>deployment.quorumRpcUrls</code></td>
@@ -336,8 +336,8 @@ bun run run</code></pre>
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>.state/operator.json</code></td>
-								<td>Complete versioned bot configuration, including deployment identities, quorum RPCs, strategy, runtime, risk, endpoints, submission, pause, tokens, and an optional saved signer. <a href="/documentation/reference#persistent-operator-settings">Configuration and deployment procedure</a>.</td>
+								<td><code>.state/operator.json</code><br /><code>.state/operator.json.mainnet.profile</code><br /><code>.state/operator.json.sepolia.profile</code></td>
+								<td>The compatibility file contains the active chain's complete versioned configuration. Private sibling profile files retain Mainnet and Sepolia settings while inactive. Back up all three. <a href="/documentation/reference#persistent-operator-settings">Configuration and deployment procedure</a>.</td>
 								<td>Owner-only; protect integrity as execution policy, and treat as a wallet secret when signer persistence is enabled.</td>
 							</tr>
 							<tr>

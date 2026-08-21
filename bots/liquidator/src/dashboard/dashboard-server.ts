@@ -5,6 +5,7 @@ export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
+	isNetworkConfigured: () => boolean | Promise<boolean>
 	loopbackPublished?: boolean
 	password?: string | undefined
 	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
@@ -16,7 +17,10 @@ export type DashboardController = {
 	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
+	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 }
+
+const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoints before changing chain-specific settings'
 
 function headers(contentType: string) {
 	return {
@@ -33,6 +37,10 @@ function json(value: unknown, status = 200) {
 		headers: headers('application/json; charset=utf-8'),
 		status,
 	})
+}
+
+function closingJson(value: unknown) {
+	return Response.json(value, { headers: { ...headers('application/json; charset=utf-8'), connection: 'close' } })
 }
 
 function errorMessage(error: unknown) {
@@ -166,7 +174,7 @@ function publicRpcEndpointHealth(value: unknown) {
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
+	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
@@ -264,12 +272,17 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			])
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)
 			if (controller.setNetworkConnectivity !== undefined) handlers.set('/api/network-connectivity', controller.setNetworkConnectivity)
+			if (controller.switchNetworkProfile !== undefined) handlers.set('/api/network-profile', controller.switchNetworkProfile)
 			if (controller.reconcileTransaction !== undefined) handlers.set('/api/reconcile-transaction', controller.reconcileTransaction)
 			if (controller.testMarketSources !== undefined) handlers.set('/api/test-market-sources', controller.testMarketSources)
 			const handler = handlers.get(url.pathname)
 			if (request.method === 'PUT' && handler !== undefined) {
 				try {
-					return json(await handler(await boundedDashboardJson(request)))
+					const value = await boundedDashboardJson(request)
+					const emergencyPause = url.pathname === '/api/paused' && typeof value === 'object' && value !== null && !Array.isArray(value) && Reflect.get(value, 'paused') === true
+					if (url.pathname !== '/api/network-connectivity' && url.pathname !== '/api/network-profile' && !emergencyPause && !(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
+					const result = await handler(value)
+					return url.pathname === '/api/network-profile' ? closingJson(result) : json(result)
 				} catch (error) {
 					return publicError(error, 400, `mutation:${url.pathname}`, 'The dashboard change could not be saved. Review the submitted values and protected bot logs.')
 				}

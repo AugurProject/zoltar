@@ -271,31 +271,25 @@ when broader diagnostic event history is operationally important.
 
 ## Run on Sepolia
 
-Use a separate operator configuration and separate history, price, and position
-paths for Sepolia; an existing configured operator file cannot be retargeted to
-another chain. Start the new file paused and unconfigured, then save `sepolia` and
-its RPC URLs in **Chain and RPC connectivity**. Reload the dashboard so **Complete bot
-configuration** contains the persisted network. Replace
-every deployment address with values from the same reviewed test environment, set
-`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
-use separate history, price, and position paths before saving the complete
-configuration:
+Choose Sepolia in **Chain and RPC connectivity**. The bot saves the current chain
+profile, pauses at a safe scan boundary, releases its current chain locks, and loads
+the selected profile without exiting the process or restarting the container. The
+browser reconnects automatically.
 
-```bash
-install -m 600 config/operator.example.json .state/operator-sepolia.json
-OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json bun run run
-```
+The first switch creates a clean Sepolia profile from the reviewed defaults. Its
+settings, signer, deployment addresses, tokens, strategy, submission policy, and
+history, price, and position journals are independent from mainnet. Configure its
+Sepolia RPCs and reviewed deployment addresses, then set
+`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`.
+Switching back to Mainnet restores the exact saved mainnet profile and journals.
 
-Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` in the service
-definition. Before enabling execution, set the file's
-runtime paths to distinct Sepolia-specific files such as
-`.state/history-sepolia.jsonl`, `.state/prices-sepolia.jsonl`, and
-`.state/positions-sepolia.json`.
-
-Deployment addresses can be changed in the complete JSON editor and apply at the
-next scan boundary. The selected chain cannot be changed after initial configuration,
-because durable records do not contain a chain ID. This prevents cached reports,
-transactions, positions, and profit totals from crossing networks.
+Profiles are private sibling files beside the active operator file. Docker keeps
+them in the existing named volume, and direct Bun uses the same behavior. Only the
+selected profile is active at one time. In-place switching requires both profiles
+to use the same `runtime.once`, `runtime.ui`, `runtime.uiHost`, and `runtime.uiPort`
+values so the running process and browser keep their operating mode and dashboard
+origin. The bot rejects an incompatible profile before changing any file. Resolve
+any pending executor-deployment recovery before switching chains.
 
 ## Execute disputes
 
@@ -685,8 +679,8 @@ any value inside the document. This locator is useful for service managers and
 tests. Select the chain and enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
 saved. Initial chain selection applies immediately, while quorum and RPC changes
-apply at the next scan boundary. To operate another chain, follow
-the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
+apply at the next scan boundary. To operate another chain, select its saved chain
+profile in the dashboard. Configure the reader set required
 by the saved RPC agreement requirement with the deployment controls before enabling
 execution. The default policy uses the primary reader alone. Independent quorum
 readers are required only when the saved requirement is `2`.
@@ -733,8 +727,8 @@ bundle or transaction.
 
 ## Profit and history semantics
 
-Successful dispute submissions are appended to `runtime.historyFile`. The example
-uses `.state/history-mainnet.jsonl`; use separate paths for each network.
+Successful dispute submissions are appended to `runtime.historyFile`. New profiles
+automatically receive chain-named history, price, and position paths.
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,

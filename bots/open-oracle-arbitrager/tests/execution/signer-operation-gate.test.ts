@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
+import { runConfigurationSignerOperation } from '../../src/runtime/operator-control-plane.ts'
 
 test('serializes dashboard deployment with scan and lifecycle signer work', () => {
 	const gate = createSignerOperationGate()
@@ -25,4 +26,19 @@ test('serializes configuration persistence with an active scan', () => {
 	expect(gate.acquire('configuration')).toBe(true)
 	expect(gate.acquire('scan')).toBe(false)
 	gate.release('configuration')
+})
+
+test('does not begin profile persistence until an active scan releases the signer-operation gate', async () => {
+	const gate = createSignerOperationGate()
+	expect(gate.acquire('scan')).toBe(true)
+	let profilePersisted = false
+	const persistence = runConfigurationSignerOperation(gate, async () => {
+		profilePersisted = true
+	})
+	await Bun.sleep(25)
+	expect(profilePersisted).toBe(false)
+	gate.release('scan')
+	await persistence
+	expect(profilePersisted).toBe(true)
+	expect(gate.acquire('scan')).toBe(true)
 })
