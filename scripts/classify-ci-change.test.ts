@@ -9,19 +9,19 @@ const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedSco
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
 	[['README.md'], ['docs']],
-	[['trading/README.md'], ['trading']],
-	[['trading/ts/order.ts'], ['trading']],
+	[['shared/ts/trading/math.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan']],
+	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
 	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'arbitrager', 'liquidator']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
 	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan']],
-	[['ui/ts/index.ts'], ['core']],
+	[['ui/zoltar/ts/index.ts'], ['core']],
 	[['solidity/contracts/Zoltar.sol'], ['core', 'trading', 'arbitrager', 'liquidator', 'infrastructure']],
 	[['reth/compose.yaml'], ['infrastructure']],
 	[
-		['trading/ts/order.ts', 'bots/liquidator/src/run.ts'],
-		['trading', 'liquidator'],
+		['solidity/contracts/trading/TwoWayConstantProductPair.sol', 'bots/liquidator/src/run.ts'],
+		['core', 'trading', 'arbitrager', 'liquidator', 'infrastructure'],
 	],
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
@@ -47,15 +47,15 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 	const docs = classifyCiChange(['README.md'])
 	expect(JSON.parse(docs.packageMatrixJson)).toEqual({ include: [] })
 	expect(docs.hasPackages).toBe(false)
-	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'trading/ts/order.ts', 'bots/shared/src/ethereum.ts'])
+	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])
 	expect(JSON.parse(mixed.packageMatrixJson)).toEqual({ include: [...mixed.packageMatrix] })
-	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['trading', 'bot-shared', 'arbitrager', 'liquidator'])
-	expect(classifyCiChange(['trading/ts/order.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
+	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
+	expect(classifyCiChange(['shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
 })
 
 test('shared changes select every verified package consumer', () => {
 	const shared = classifyCiChange(['shared/ts/ethereum.ts'])
-	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
+	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
 	expect(JSON.parse(shared.packageMatrixJson)).toEqual({ include: [...shared.packageMatrix] })
 })
 

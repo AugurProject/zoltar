@@ -103,6 +103,26 @@
 	],
 	"derivedContracts": [
 		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0x3997130491272Bd1B8a3aa84Fcf5d238F2126eb4"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "Escalation Claim Checkpoint Delegate",
+			"address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0x49De932c947343ADb87508280f99251A3b326283"
+		},
+		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
 			"address": "0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505"

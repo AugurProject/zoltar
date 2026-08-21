@@ -41,5 +41,8 @@ runs:
       if: inputs.artifacts == 'true'
       shell: bash
       run: |
-        (cd ui && bun install --frozen-lockfile)
+        (cd ui/coreShared && bun install --frozen-lockfile)
+        (cd ui/zoltar && bun install --frozen-lockfile)
+        (cd ui/statoblast && bun install --frozen-lockfile)
+        (cd ui/trading && bun install --frozen-lockfile)
         (cd solidity && bun install --frozen-lockfile)

@@ -1,0 +1,18 @@
+name: zoltar-trading
+
+services:
+  trading:
+    build:
+      context: ../..
+      dockerfile: ui/Dockerfile
+      target: local-runtime
+    image: zoltar-trading
+    ports:
+      - 127.0.0.1:4163:8080
+    environment:
+      UI_APP: trading
+
+networks:
+  default:
+    name: zoltar
+    external: true

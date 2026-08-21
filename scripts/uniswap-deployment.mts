@@ -1,8 +1,9 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from '../ui/ts/protocol/core.ts'
-import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../ui/ts/protocol/deployment.ts'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../ui/ts/protocol/deploymentHelpers.ts'
-import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
+import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from '../ui/zoltar/ts/protocol/core.ts'
+import type { TransactionReceipt } from '@zoltar/shared/ethereum'
+import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../ui/zoltar/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
+import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
 
 const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('./artifacts/uniswap-deployment.json', import.meta.url)
 const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '4f3d8c4839675fd70102172a2c82eecee6e60d076f7709af264d733631c6efe6'
@@ -220,7 +221,7 @@ function deterministicAddress(initCode: Hex) {
 
 async function deployViaProxy(client: WriteClient, initCode: Hex) {
 	const hash = await client.sendTransaction({ data: initCode, to: PROXY_DEPLOYER_ADDRESS })
-	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
+	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt<TransactionReceipt>(client, hash)
 	return resolvedHash
 }
 
@@ -274,7 +275,7 @@ export async function resolveCanonicalCreate2DeployerForPreflight(client: WriteC
 }
 
 async function waitForCanonicalCreate2Deployer(client: WriteClient, wait?: RpcStateRetryWait) {
-	const { hash } = await waitForSubmittedTransactionReceipt(client, ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH)
+	const { hash } = await waitForSubmittedTransactionReceipt<TransactionReceipt>(client, ARACHNID_CREATE2_DEPLOYER_RAW_TRANSACTION_HASH)
 	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical CREATE2 deployer transaction ${hash} confirmed without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 	return hash
 }
@@ -325,7 +326,7 @@ async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsuf
 		}
 	}
 	client.recordCanonicalRawTransaction?.(ARACHNID_CREATE2_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
-	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
+	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt<TransactionReceipt>(client, hash)
 	if (!(await create2DeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical CREATE2 deployer transaction ${resolvedHash} succeeded without installing code at ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 	return resolvedHash
 }
@@ -375,7 +376,7 @@ async function deployArachnidCreate2Deployer(client: WriteClient, wait?: RpcStat
 
 async function deployPermit2(client: WriteClient, initCode: Hex) {
 	const hash = await client.sendTransaction({ data: concatHex([PERMIT2_SALT, initCode]), to: ARACHNID_CREATE2_DEPLOYER_ADDRESS })
-	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
+	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt<TransactionReceipt>(client, hash)
 	return resolvedHash
 }
 

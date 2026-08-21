@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
 const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url))
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
+const UI_TYPESCRIPT_PROJECTS = ['ui/coreShared/tsconfig.json', 'ui/zoltar/tsconfig.json', 'ui/statoblast/tsconfig.json', 'ui/trading/tsconfig.json'] as const
 
 type NodeOptionToken = {
 	readonly isValid: boolean
@@ -101,20 +102,32 @@ export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessE
 	return childEnvironment
 }
 
-export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined) => [nodeExecutablePath, getApplicationTypeScriptHeapOption(existingNodeOptions), typescriptCliPath, '--noEmit']
+export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath: (typeof UI_TYPESCRIPT_PROJECTS)[number] = UI_TYPESCRIPT_PROJECTS[0]) => [
+	nodeExecutablePath,
+	getApplicationTypeScriptHeapOption(existingNodeOptions),
+	typescriptCliPath,
+	'--project',
+	projectPath,
+	'--noEmit',
+]
 
 export async function runApplicationTypeScript() {
 	const nodeExecutablePath = Bun.which('node')
 	if (nodeExecutablePath === null) throw new Error('Node.js is required to run the application TypeScript check with its configured heap limit.')
 
-	const child = Bun.spawn({
-		cmd: getApplicationTypeScriptCommand(nodeExecutablePath, TYPESCRIPT_CLI_PATH, process.env['NODE_OPTIONS']),
-		env: getApplicationTypeScriptEnvironment(process.env),
-		stderr: 'inherit',
-		stdin: 'inherit',
-		stdout: 'inherit',
-	})
-	return await child.exited
+	const environment = getApplicationTypeScriptEnvironment(process.env)
+	for (const projectPath of UI_TYPESCRIPT_PROJECTS) {
+		const child = Bun.spawn({
+			cmd: getApplicationTypeScriptCommand(nodeExecutablePath, TYPESCRIPT_CLI_PATH, process.env['NODE_OPTIONS'], projectPath),
+			env: environment,
+			stderr: 'inherit',
+			stdin: 'inherit',
+			stdout: 'inherit',
+		})
+		const exitCode = await child.exited
+		if (exitCode !== 0) return exitCode
+	}
+	return 0
 }
 
 if (import.meta.main) {

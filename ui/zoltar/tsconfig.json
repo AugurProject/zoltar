@@ -1,0 +1,24 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@zoltar/shared/*": [
+				"../../shared/js/*"
+			],
+			"@zoltar/ui-core-shared/*": [
+				"../coreShared/js/*"
+			]
+		},
+		"rootDir": "./ts",
+		"outDir": "./js"
+	},
+	"include": [
+		"./ts/**/*.ts",
+		"./ts/**/*.tsx"
+	],
+	"exclude": [
+		"./ts/tests/**/*.ts",
+		"./ts/tests/**/*.tsx"
+	]
+}

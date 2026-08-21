@@ -1,0 +1,39 @@
+import {
+	trading_PredeploymentShareSink_PredeploymentShareSink,
+	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory,
+	trading_TwoWayConstantProductMath_TwoWayConstantProductMath,
+	trading_TwoWayConstantProductPair_TwoWayConstantProductPair,
+	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter,
+	trading_test_TradingProtocolMocks_TradingForceEth,
+	trading_test_TradingProtocolMocks_TradingMockCoreFactory,
+	trading_test_TradingProtocolMocks_TradingMockForker,
+	trading_test_TradingProtocolMocks_TradingMockQuestionData,
+	trading_test_TradingProtocolMocks_TradingMockSecurityPool,
+	trading_test_TradingProtocolMocks_TradingMockShareToken,
+	trading_test_TradingProtocolMocks_TradingMockZoltar,
+	trading_test_TradingProtocolMocks_TradingReentrantRecipient,
+	trading_test_TwoWayConstantProductMathHarness_TwoWayConstantProductMathHarness,
+} from '../../types/contractArtifact'
+
+const tradingContracts = {
+	'contracts/trading/PredeploymentShareSink.sol': { PredeploymentShareSink: trading_PredeploymentShareSink_PredeploymentShareSink },
+	'contracts/trading/TwoWayConstantProductFactory.sol': { TwoWayConstantProductFactory: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory },
+	'contracts/trading/TwoWayConstantProductMath.sol': { TwoWayConstantProductMath: trading_TwoWayConstantProductMath_TwoWayConstantProductMath },
+	'contracts/trading/TwoWayConstantProductPair.sol': { TwoWayConstantProductPair: trading_TwoWayConstantProductPair_TwoWayConstantProductPair },
+	'contracts/trading/TwoWayConstantProductRouter.sol': { TwoWayConstantProductRouter: trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter },
+	'contracts/trading/test/TradingProtocolMocks.sol': {
+		TradingForceEth: trading_test_TradingProtocolMocks_TradingForceEth,
+		TradingMockCoreFactory: trading_test_TradingProtocolMocks_TradingMockCoreFactory,
+		TradingMockForker: trading_test_TradingProtocolMocks_TradingMockForker,
+		TradingMockQuestionData: trading_test_TradingProtocolMocks_TradingMockQuestionData,
+		TradingMockSecurityPool: trading_test_TradingProtocolMocks_TradingMockSecurityPool,
+		TradingMockShareToken: trading_test_TradingProtocolMocks_TradingMockShareToken,
+		TradingMockZoltar: trading_test_TradingProtocolMocks_TradingMockZoltar,
+		TradingReentrantRecipient: trading_test_TradingProtocolMocks_TradingReentrantRecipient,
+	},
+	'contracts/trading/test/TwoWayConstantProductMathHarness.sol': { TwoWayConstantProductMathHarness: trading_test_TwoWayConstantProductMathHarness_TwoWayConstantProductMathHarness },
+} as const
+
+export async function compileArtifactsForTests() {
+	return tradingContracts
+}

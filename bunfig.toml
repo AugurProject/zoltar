@@ -1,4 +1,4 @@
 [test]
 timeout = 300000
 preload = ['./bun-test-setup.ts']
-pathIgnorePatterns = ['solidity/js/tests/**', 'ui/js/tests/**']
+pathIgnorePatterns = ['solidity/js/tests/**', 'ui/coreShared/js/tests/**', 'ui/zoltar/js/tests/**', 'ui/statoblast/js/tests/**', 'ui/trading/js/tests/**']

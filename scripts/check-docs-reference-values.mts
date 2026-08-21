@@ -972,7 +972,7 @@ function assertContractInteractionDistinctions(): void {
 async function assertProductionSolidityInventory(): Promise<void> {
 	const inventoryDocuments = `${contractInteractionReference}\n${operatorReference}`
 	for (const sourcePath of await listSoliditySources('solidity/contracts')) {
-		if (sourcePath.startsWith('solidity/contracts/test/')) continue
+		if (sourcePath.includes('/test/')) continue
 		assert.ok(inventoryDocuments.includes(`../${sourcePath}`), `Contract and operator references must inventory production source ${sourcePath}`)
 	}
 }

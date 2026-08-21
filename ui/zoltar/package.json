@@ -1,0 +1,52 @@
+{
+	"description": "Zoltar oracle operations interface",
+	"name": "@zoltar/ui-zoltar",
+	"private": true,
+	"repository": {},
+	"license": "Unlicense",
+	"type": "module",
+	"devDependencies": {
+		"better-typescript-lib": "2.11.0",
+		"bun-types": "1.3.11",
+		"typescript": "5.8.2",
+		"funtypes": "5.1.1"
+	},
+	"dependencies": {
+		"@preact/signals": "2.0.1",
+		"@noble/curves": "2.2.0",
+		"@noble/hashes": "2.2.0",
+		"@zoltar/shared": "file:../../shared",
+		"@zoltar/ui-core-shared": "file:../coreShared",
+		"buffer": "6.0.3",
+		"micro-eth-signer": "0.18.1",
+		"micro-packed": "0.8.0",
+		"preact": "10.26.4",
+		"source-map": "0.6.1",
+		"tevm": "1.0.0-rc.151"
+	},
+	"overrides": {
+		"@tevm/actions": "1.0.0-rc.151",
+		"@tevm/node": "1.0.0-rc.151",
+		"@tevm/server": "1.0.0-rc.151",
+		"brace-expansion": "5.0.9",
+		"fast-uri": "3.1.5",
+		"nanoid": "3.3.18",
+		"postcss": "8.5.23",
+		"tmp": "0.2.7",
+		"ws": "8.21.0"
+	},
+	"scripts": {
+		"generate": "bun ../coreShared/build/projectArtifacts.mts && bun ../coreShared/build/vendor.mts zoltar",
+		"vendor": "bun ../coreShared/build/vendor.mts zoltar",
+		"build:workers": "bun ../coreShared/build/workers.mts zoltar",
+		"build:tests": "bun ../coreShared/build/tests.mts zoltar",
+		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
+		"build:prod": "bun run generate && bun ../coreShared/build/production.mts zoltar",
+		"watch": "bun ../coreShared/build/watch.mts zoltar",
+		"serve": "bun ../coreShared/dev-server.ts zoltar"
+	},
+	"types": "./js/index.d.ts",
+	"exports": {
+		"./*": "./js/*.js"
+	}
+}

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { diagramBackgroundElements, enforceDiagramBackground, expandDiagramAttributes, isolateDiagramBackground, restoreDiagramAttributes, restoreDiagramBackground } from '../docs/charts/diagramControl.ts'
-import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', value: number) {
 	Object.defineProperty(element, property, {

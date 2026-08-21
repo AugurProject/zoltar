@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from './changed-files.mts'
 
-const UI_TSX_ROOT = path.join('ui', 'ts')
-const UI_COPY_ROOT = path.join(UI_TSX_ROOT, 'copy')
-const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/ts\/.+\.tsx$/
+const UI_TSX_ROOTS = [path.join('ui', 'coreShared', 'ts'), path.join('ui', 'zoltar', 'ts'), path.join('ui', 'statoblast', 'ts'), path.join('ui', 'trading', 'ts')]
+const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\/.+\.tsx$/
 const MAX_COPY_EXPORT_NAME_LENGTH = 48
 const SENTENCE_STYLE_EXPORT_NAME_PATTERN =
 	/^(?:approvalAmountMustBeADecimalNumber$|connectAWalletBefore|connectWalletTo|enterA|failedTo|format[A-Z].*BasedOnValue|formatMissing(?![A-Za-z]*(?:Detail|Error)$)|loadAPoolBefore|loadA[A-Z]|no[A-Z].*Were[A-Z]|selectA(?:n|t)?[A-Z]|selectedTickIsInvalid$|the[A-Z]|this[A-Z]|usesThe[A-Z]|writeThe[A-Z])/u
@@ -46,7 +45,7 @@ const USER_FACING_PROPERTY_NAMES = new Set([
 	'__html',
 	'zeroText',
 ])
-const INTERNAL_STATUS_TOKENS = new Set(['queued', 'executed', 'failed', 'refreshing', 'missing', 'loading', 'unknown'])
+const INTERNAL_STATUS_TOKENS = new Set(['active', 'queued', 'executed', 'failed', 'refreshing', 'missing', 'loading', 'unknown'])
 const ASSIGNMENT_OPERATOR_KINDS = new Set([
 	ts.SyntaxKind.EqualsToken,
 	ts.SyntaxKind.PlusEqualsToken,
@@ -71,7 +70,7 @@ function runGit(args: string[]) {
 }
 
 export function getChangedUiTsxFiles(runGitFn: (args: string[]) => string = runGit) {
-	return getChangedFiles(runGitFn).filter(filePath => UI_TSX_CHANGED_FILE_PATTERN.test(filePath) && !filePath.startsWith(`${UI_TSX_ROOT}/tests/`))
+	return getChangedFiles(runGitFn).filter(filePath => UI_TSX_CHANGED_FILE_PATTERN.test(filePath) && !UI_TSX_ROOTS.some(root => filePath.startsWith(`${root}/tests/`)))
 }
 
 function parseChangedLineNumbers(diffText: string) {
@@ -91,6 +90,15 @@ function parseChangedLineNumbers(diffText: string) {
 export function getChangedLineNumbers(filePath: string, runGitFn: (args: string[]) => string = runGit) {
 	const untrackedPath = runGitFn(['ls-files', '--others', '--exclude-standard', '--', filePath])
 	if (untrackedPath === filePath) return undefined
+	const relocatedTradingPrefix = 'ui/trading/ts/'
+	if (filePath.startsWith(relocatedTradingPrefix)) {
+		const legacyPath = `trading/ui/ts/${filePath.slice(relocatedTradingPrefix.length)}`
+		const legacyCommit = runGitFn(['log', '--diff-filter=AM', '-1', '--format=%H', '--all', '--', legacyPath])
+		if (legacyCommit !== '') {
+			const relocationDiff = runGitFn(['diff', '--find-renames=20%', '--no-color', '--unified=0', legacyCommit, '--', legacyPath, filePath])
+			return parseChangedLineNumbers(relocationDiff)
+		}
+	}
 	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
 	const diffTexts = [runGitFn(['diff', '--no-color', '--unified=0', mergeBase, '--', filePath])]
 	const changedLines = new Set<number>()
@@ -347,7 +355,7 @@ export function lintSourceText(filePath: string, sourceText: string, changedLine
 				ts.forEachChild(node, visit)
 				return
 			}
-			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from a module under ui/ts/copy`)
+			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from a module under a ui/*/ts/copy module`)
 		}
 		ts.forEachChild(node, visit)
 	}
@@ -416,9 +424,12 @@ function lintFile(filePath: string) {
 
 if (import.meta.main) {
 	const changedUiTsxFiles = getChangedUiTsxFiles()
-	const copyModuleFiles = readdirSync(UI_COPY_ROOT, { withFileTypes: true })
-		.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
-		.map(entry => path.join(UI_COPY_ROOT, entry.name))
+	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot => {
+		if (!existsSync(copyRoot)) return []
+		return readdirSync(copyRoot, { withFileTypes: true })
+			.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
+			.map(entry => path.join(copyRoot, entry.name))
+	})
 	const failures = [...changedUiTsxFiles.flatMap(lintFile), ...copyModuleFiles.flatMap(filePath => lintCopySourceText(filePath, readFileSync(filePath, 'utf8')))]
 
 	if (failures.length === 0) {
@@ -426,7 +437,7 @@ if (import.meta.main) {
 		process.exit(0)
 	}
 
-	console.error('UI copy validation failed. Keep user-facing text in clear ownership-based modules under ui/ts/copy.')
+	console.error('UI copy validation failed. Keep user-facing text in clear ownership-based modules under ui/*/ts/copy.')
 	for (const failure of failures) console.error(failure)
 	process.exit(1)
 }

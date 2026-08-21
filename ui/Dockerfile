@@ -2,7 +2,7 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-ARG BUN_VERSION=1.3.13
+ARG BUN_VERSION=1.3.14
 
 FROM oven/bun:${BUN_VERSION}-alpine AS builder
 
@@ -13,7 +13,7 @@ RUN git init
 
 # Copy preinstall hook scripts before running bun install
 COPY ./scripts/ /source/scripts/
-COPY ./ui/scripts/ /source/ui/scripts/
+COPY ./ui/coreShared/scripts/ /source/ui/coreShared/scripts/
 
 # Shared package metadata and source for local package resolution
 COPY ./shared/package.json /source/shared/package.json
@@ -31,47 +31,72 @@ COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
 
 # Solidity contracts and TypeScript source
-COPY ./ui/build/projectArtifacts.mts /source/ui/build/projectArtifacts.mts
+COPY ./ui/coreShared/build/appPaths.mts /source/ui/coreShared/build/appPaths.mts
+COPY ./ui/coreShared/build/projectArtifacts.mts /source/ui/coreShared/build/projectArtifacts.mts
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
-RUN mkdir -p /source/ui/ts && bun run compile-contracts
+RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts && bun run compile-contracts
 
 # Install UI dependencies and vendor browser packages after the cached contract build.
-COPY ./ui/package.json ./ui/bun.lock /source/ui/
-RUN cd /source/ui && bun install --frozen-lockfile
-COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
-COPY ./ui/build/ /source/ui/build/
-RUN bun run ui:vendor
+COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
+COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
+COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
+COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
+COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
+COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
+COPY ./ui/trading/package.json /source/ui/trading/package.json
+COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
+RUN bun ./scripts/install-frozen.mts ui/coreShared && bun ./scripts/install-frozen.mts ui/zoltar && bun ./scripts/install-frozen.mts ui/statoblast && bun ./scripts/install-frozen.mts ui/trading
+COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
+RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast && bun ./ui/coreShared/build/vendor.mts trading
 
 # UI TypeScript source
-COPY ./ui/index.html /source/ui/index.html
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
-COPY ./ui/tsconfig.json /source/ui/tsconfig.json
-COPY ./ui/css/ /source/ui/css/
-COPY ./ui/ts/ /source/ui/ts/
-COPY ./ui/favicon.ico /source/ui/favicon.ico
-COPY ./ui/favicon.svg /source/ui/favicon.svg
+COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
+COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
+COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
+COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
+COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
+COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
+COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
+COPY ./ui/trading/index.html /source/ui/trading/index.html
+COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
+COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
+COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
+COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
+COPY ./ui/trading/ts/ /source/ui/trading/ts/
+COPY ./ui/trading/css/ /source/ui/trading/css/
+COPY ./ui/trading/build/ /source/ui/trading/build/
+COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
+COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 
-# Refresh local packages, type-check, validate deployment data, and build the UI.
-RUN bun run ui:build:prod:prepared
+# Refresh local packages, type-check, validate deployment data, and production-build both apps.
+RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
+RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
+RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
+RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
 
 # ----------------------------------------------------
 # Local runtime: Serve the production UI over plain HTTP
 # ----------------------------------------------------
 
-# start.bat selects this target explicitly, so no IPFS layers are built or run.
+# Local runtime builds select this target explicitly, so no IPFS layers are built or run.
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime
 
 WORKDIR /app
 
-COPY --from=builder --chown=bun:bun /source/ui/dist/ /app/ui/
-COPY --chown=bun:bun ./ui/build/dockerServe.mts /app/dockerServe.mts
+COPY --from=builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
+COPY --from=builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
+COPY --from=builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
+COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
 
 USER bun
 EXPOSE 8080
+# Select the application the runtime serves; override with `docker run -e UI_APP=statoblast`.
+ENV UI_APP=zoltar
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
 
 CMD [ "bun", "/app/dockerServe.mts" ]
@@ -96,11 +121,22 @@ RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
 COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 # Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
-COPY --from=builder /source/ui/dist/index.html /export/index.html
-COPY --from=builder /source/ui/dist/favicon.ico /export/favicon.ico
-COPY --from=builder /source/ui/dist/favicon.svg /export/favicon.svg
-COPY --from=builder /source/ui/dist/assets/ /export/assets/
-COPY --from=builder /source/ui/dist/css/ /export/css/
+COPY --from=builder /source/ui/zoltar/dist/index.html /export/zoltar/index.html
+COPY --from=builder /source/ui/zoltar/dist/favicon.ico /export/zoltar/favicon.ico
+COPY --from=builder /source/ui/zoltar/dist/favicon.svg /export/zoltar/favicon.svg
+COPY --from=builder /source/ui/zoltar/dist/assets/ /export/zoltar/assets/
+COPY --from=builder /source/ui/zoltar/dist/css/ /export/zoltar/css/
+COPY --from=builder /source/ui/statoblast/dist/index.html /export/statoblast/index.html
+COPY --from=builder /source/ui/statoblast/dist/favicon.ico /export/statoblast/favicon.ico
+COPY --from=builder /source/ui/statoblast/dist/favicon.svg /export/statoblast/favicon.svg
+COPY --from=builder /source/ui/statoblast/dist/assets/ /export/statoblast/assets/
+COPY --from=builder /source/ui/statoblast/dist/css/ /export/statoblast/css/
+COPY --from=builder /source/ui/trading/dist/index.html /export/trading/index.html
+COPY --from=builder /source/ui/trading/dist/favicon.ico /export/trading/favicon.ico
+COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.svg
+COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
+COPY --from=builder /source/ui/trading/dist/assets/ /export/trading/assets/
+COPY --from=builder /source/ui/trading/dist/css/ /export/trading/css/
 
 RUN ipfs init
 
@@ -110,7 +146,7 @@ RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_ha
 # Print the hash for visibility
 RUN cat ipfs_hash.txt
 
-COPY --chmod=755 ./ui/scripts/docker-entrypoint.sh /entrypoint.sh
+COPY --chmod=755 ./ui/coreShared/scripts/docker-entrypoint.sh /entrypoint.sh
 
 WORKDIR /temp
 

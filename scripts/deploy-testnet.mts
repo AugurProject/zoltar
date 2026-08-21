@@ -5,21 +5,13 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
-import { getBootstrapDescendantAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
-import {
-	assertStaticDeploymentArtifactRuntimeCodeHashes,
-	CANONICAL_DEPLOYER_RAW_GAS_PRICE,
-	CANONICAL_DEPLOYER_RAW_TRANSACTION_COST,
-	EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	getDeploymentSteps,
-	getProxyDeployerActivity,
-	getProxyDeployerFundingShortfall,
-	PROXY_DEPLOYER_RUNTIME_CODE,
-} from '../ui/ts/protocol/deployment.ts'
-import { PROXY_DEPLOYER_ADDRESS } from '../ui/ts/protocol/deploymentHelpers.ts'
-import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
-import { readWithRpcStateRetries, type RpcStateRetryWait } from '../ui/ts/protocol/core.ts'
+import { getBootstrapDescendantAddresses } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
+import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/zoltar/ts/protocol/deployment.ts'
+import { getDeploymentSteps } from '../ui/statoblast/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_ADDRESS } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
+import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/coreShared/ts/lib/networkProfile.ts'
+import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
+import { readWithRpcStateRetries, type RpcStateRetryWait } from '../ui/zoltar/ts/protocol/core.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, type UniswapDeployment } from './uniswap-deployment.mts'
 
 const DEFAULT_CHAIN_ID = 11_155_111

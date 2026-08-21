@@ -52,6 +52,22 @@
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"
 		},
+		"./trading": {
+			"types": "./ts/trading/index.ts",
+			"default": "./js/trading/index.js"
+		},
+		"./trading/math": {
+			"types": "./ts/trading/math.ts",
+			"default": "./js/trading/math.js"
+		},
+		"./trading/positions": {
+			"types": "./ts/trading/positions.ts",
+			"default": "./js/trading/positions.js"
+		},
+		"./trading/transactions": {
+			"types": "./ts/trading/transactions.ts",
+			"default": "./js/trading/transactions.js"
+		},
 		"./sortStringArrayByKeccak": {
 			"types": "./ts/sortStringArrayByKeccak.ts",
 			"default": "./js/sortStringArrayByKeccak.js"

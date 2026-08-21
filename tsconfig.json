@@ -33,7 +33,11 @@
 	},
 	"include": [
 		"shared/ts/**/*.ts",
-		"ui/ts/**/*.ts",
-		"ui/ts/**/*.tsx",
+		"ui/coreShared/ts/**/*.ts",
+		"ui/coreShared/ts/**/*.tsx",
+		"ui/zoltar/ts/**/*.ts",
+		"ui/zoltar/ts/**/*.tsx",
+		"ui/statoblast/ts/**/*.ts",
+		"ui/statoblast/ts/**/*.tsx",
 	],
 }

@@ -21,7 +21,7 @@ export type CiChangeClassification = {
 const packageEntries: Readonly<Record<CiScope, PackageMatrixEntry | undefined>> = {
 	docs: undefined,
 	core: undefined,
-	trading: { package: 'trading', directory: 'trading', artifacts: true },
+	trading: undefined,
 	'bot-shared': { package: 'bot-shared', directory: 'bots/shared', artifacts: false },
 	arbitrager: { package: 'arbitrager', directory: 'bots/open-oracle-arbitrager', artifacts: true },
 	liquidator: { package: 'liquidator', directory: 'bots/liquidator', artifacts: true },
@@ -36,7 +36,6 @@ const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(sco
 
 function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (rootDocumentation.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
-	if (filePath.startsWith('trading/')) return 'trading'
 	if (filePath.startsWith('bots/shared/')) return 'bot-shared'
 	if (filePath.startsWith('bots/open-oracle-arbitrager/')) return 'arbitrager'
 	if (filePath.startsWith('bots/liquidator/')) return 'liquidator'
