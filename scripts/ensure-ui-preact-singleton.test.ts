@@ -18,7 +18,8 @@ describe('UI Preact dependency topology', () => {
 
 			for (const dependencyPath of preactSingletonDependencyPaths) {
 				const rootDependencyPath = join(temporaryRoot, 'node_modules', dependencyPath)
-				for (const packageId of uiPackageIds) expect(await realpath(join(temporaryRoot, 'ui', packageId, 'node_modules', dependencyPath))).toBe(rootDependencyPath)
+				const canonicalRootDependencyPath = await realpath(rootDependencyPath)
+				for (const packageId of uiPackageIds) expect(await realpath(join(temporaryRoot, 'ui', packageId, 'node_modules', dependencyPath))).toBe(canonicalRootDependencyPath)
 			}
 		} finally {
 			await rm(temporaryRoot, { force: true, recursive: true })
