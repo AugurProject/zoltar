@@ -492,7 +492,7 @@ export async function assertSettingsProfileIsolation(path: string, active: Opera
 	await assertSettingsProfileCandidates(path, candidates)
 }
 
-export async function switchSettingsNetworkProfile(path: string, network: NetworkName, examplePath: string) {
+export async function switchSettingsNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: OperatorSettings) => Promise<void>) {
 	const current = await loadSettings(path)
 	const mainnet = await loadSettingsProfile(path, 'mainnet')
 	const sepolia = await loadSettingsProfile(path, 'sepolia')
@@ -529,6 +529,7 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 		{ expectedNetwork: network, settings: target },
 	])
 	assertCompatibleProfileProcessMode(current.settings, target)
+	await preflight?.(target)
 	await saveSettings(settingsProfilePath(path, current.settings.network.name), { ...current.settings, paused: true })
 	await saveSettings(settingsProfilePath(path, network), target)
 	const savedRevision = await saveSettings(path, target, current.revision)

@@ -7,6 +7,7 @@ import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type P
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquirePositionJournalLock } from '#state/position-store'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -364,7 +365,7 @@ describe('file-only startup configuration', () => {
 		const deploymentSalt = `0x${'44'.repeat(32)}` as Hex
 		const deploymentPlan = executorDeploymentPlan(deploymentSalt)
 		const serializedDeployment = await deploymentAccount.signTransaction({ chainId: 1, data: deploymentPlan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
-		const deploymentIntentPath = executorDeploymentIntentPath(path)
+		const deploymentIntentPath = executorDeploymentIntentPath(path, 'mainnet')
 		await saveExecutorDeploymentIntent(deploymentIntentPath, { account: deploymentAccount.address, address: deploymentPlan.address, chainId: 1, salt: deploymentSalt, serializedTransaction: serializedDeployment, transactionHash: keccak256(serializedDeployment), version: 1 })
 		const activeBeforeBlockedSwitch = await Bun.file(path).text()
 		const blockedProfile = await fetch(`${origin}/api/network-profile`, {
@@ -377,6 +378,19 @@ describe('file-only startup configuration', () => {
 		expect(await Bun.file(operatorProfilePath(path, 'mainnet')).exists()).toBe(false)
 		expect(await Bun.file(operatorProfilePath(path, 'sepolia')).exists()).toBe(false)
 		await clearExecutorDeploymentIntent(deploymentIntentPath)
+		const dormantDeploymentIntentPath = executorDeploymentIntentPath(path, 'sepolia')
+		await saveExecutorDeploymentIntent(dormantDeploymentIntentPath, {
+			account: deploymentAccount.address,
+			address: deploymentPlan.address,
+			chainId: 1,
+			salt: deploymentSalt,
+			serializedTransaction: serializedDeployment,
+			transactionHash: keccak256(serializedDeployment),
+			version: 1,
+		})
+		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
+		expect(child.exitCode).toBeNull()
+		await clearExecutorDeploymentIntent(dormantDeploymentIntentPath)
 		const profileResponse = await fetch(`${origin}/api/network-profile`, {
 			body: JSON.stringify({ network: 'sepolia' }),
 			headers: { 'content-type': 'application/json', origin },
@@ -468,6 +482,20 @@ describe('file-only startup configuration', () => {
 		})
 		expect(mutationAfterRejectedSwitch.status, await mutationAfterRejectedSwitch.clone().text()).toBe(200)
 		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
+		const targetJournalLock = await acquirePositionJournalLock(join(directory, 'positions.json'))
+		try {
+			const lockedSwitch = await fetch(`${origin}/api/network-profile`, {
+				body: JSON.stringify({ network: 'mainnet' }),
+				headers: { 'content-type': 'application/json', origin },
+				method: 'PUT',
+			})
+			expect(lockedSwitch.status, await lockedSwitch.clone().text()).toBe(400)
+			expect(await Bun.file(path).text()).toBe(configuredContents)
+			expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+			expect(child.exitCode).toBeNull()
+		} finally {
+			await targetJournalLock.release()
+		}
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },

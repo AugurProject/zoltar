@@ -320,7 +320,13 @@ function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof p
 }
 
 async function assertOperatorProfileCandidates(path: string, candidates: readonly OperatorProfileCandidate[]) {
-	const reservedPaths = await persistentPathIdentities([path, operatorProfilePath(path, 'mainnet'), operatorProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path)])
+	const reservedPaths = await persistentPathIdentities([
+		path,
+		operatorProfilePath(path, 'mainnet'),
+		operatorProfilePath(path, 'sepolia'),
+		executorDeploymentIntentPath(path, 'mainnet'),
+		executorDeploymentIntentPath(path, 'sepolia'),
+	])
 	const candidatePaths: { candidate: OperatorProfileCandidate; durablePaths: Awaited<ReturnType<typeof persistentPathIdentity>>[] }[] = []
 	for (const candidate of candidates) {
 		if (candidate.settings.network !== candidate.expectedNetwork) throw new Error(`The ${candidate.expectedNetwork} profile contains ${candidate.settings.network} settings`)
@@ -353,7 +359,7 @@ export async function assertOperatorProfileIsolation(path: string, active: Persi
 	await assertOperatorProfileCandidates(path, candidates)
 }
 
-export async function switchOperatorNetworkProfile(path: string, network: NetworkName, examplePath: string) {
+export async function switchOperatorNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: PersistedOperatorSettings) => Promise<void>) {
 	const current = await loadOperatorSettingsWithRevision(path)
 	if (current === undefined) throw new Error('Operator configuration file is missing')
 	const mainnet = await loadOperatorSettings(operatorProfilePath(path, 'mainnet'))
@@ -393,6 +399,7 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 		{ expectedNetwork: network, settings: target },
 	])
 	assertCompatibleProfileProcessMode(current.settings, target)
+	await preflight?.(target)
 	await saveOperatorSettings(operatorProfilePath(path, current.settings.network), { ...current.settings, paused: true })
 	await saveOperatorSettings(operatorProfilePath(path, network), target)
 	const revision = await saveOperatorSettings(path, target, undefined, current.revision)

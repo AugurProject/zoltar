@@ -55,7 +55,7 @@ if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new E
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)
-const intentPath = executorDeploymentIntentPath(settingsFile)
+const intentPath = executorDeploymentIntentPath(settingsFile, networkName)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
 const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 let signerLock: Awaited<ReturnType<typeof acquireExecutionSignerLock>> | undefined

@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { acquireFileProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 
 const directories: string[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -205,6 +206,37 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 		method: 'PUT',
 	})
 	expect(signer.status, await signer.clone().text()).toBe(200)
+
+	Reflect.set(incompatibleRuntime, 'uiPort', uiPort)
+	Reflect.set(incompatibleProfile, 'connectivity', { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 1 })
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	const activeBeforeLockedSwitch = await Bun.file(configurationPath).text()
+	const targetStateLock = await acquireFileProcessLock(join(directory, 'sepolia-state.json'), 'Liquidator state')
+	try {
+		const locked = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(locked.status, await locked.clone().text()).toBe(400)
+		expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		expect(child.exitCode).toBeNull()
+	} finally {
+		await targetStateLock.release()
+	}
+
+	Reflect.set(incompatibleProfile, 'networkConfigured', true)
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	const wrongChain = await fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'sepolia' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(wrongChain.status, await wrongChain.clone().text()).toBe(400)
+	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+	expect(child.exitCode).toBeNull()
 })
 
 test('stops the dashboard and exits when startup network validation fails', async () => {

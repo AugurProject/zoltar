@@ -157,7 +157,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let activeSignerLock = initialSignerLock
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
-	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorDeploymentIntentPath(config.settingsFile))
+	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
+	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorIntentPath)
 	const deploymentRecovery = {
 		pending: pendingExecutorDeployment !== undefined,
 	}
@@ -242,7 +243,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			async consecutiveFailures => {
 				if (pending.profileSwitch) return true
 				state.consecutivePollFailures = consecutiveFailures
-				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorDeploymentIntentPath(config.settingsFile))
+				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath)
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
 				state.retryInProgress = consecutiveFailures > 0

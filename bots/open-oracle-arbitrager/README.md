@@ -317,7 +317,8 @@ PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run 
 When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
-configuration as `<operator-config>.executor-deployment.json`. It also holds the same
+configuration as `<operator-config>.<network>.executor-deployment.json`. Each chain's
+recovery intent is isolated from the other chain. The command also holds the same
 chain-and-signer process lock as the operator. Repeating the command with the same
 signer, chain, and salt recovers or rebroadcasts those exact bytes after a disconnect
 or crash; the journal is removed only after quorum-backed canonical finality. Set

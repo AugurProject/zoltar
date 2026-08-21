@@ -134,7 +134,7 @@ describe('operator settings persistence', () => {
 			const directory = await mkdtemp(join(tmpdir(), `zoltar-arbitrager-reserved-${reservedName}-`))
 			temporaryDirectories.push(directory)
 			const path = join(directory, 'operator.json')
-			const reservedPath = reservedName === 'active' ? path : reservedName === 'executor' ? executorDeploymentIntentPath(path) : operatorProfilePath(path, reservedName)
+			const reservedPath = reservedName === 'active' ? path : reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
 			const mainnet = settings(undefined)
 			mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
 			mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')

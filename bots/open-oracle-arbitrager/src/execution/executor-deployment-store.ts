@@ -15,8 +15,8 @@ export type ExecutorDeploymentIntent = {
 	version: 1
 }
 
-export function executorDeploymentIntentPath(settingsFile: string) {
-	return `${settingsFile}.executor-deployment.json`
+export function executorDeploymentIntentPath(settingsFile: string, network: 'mainnet' | 'sepolia') {
+	return `${settingsFile}.${network}.executor-deployment.json`
 }
 
 export function acquireExecutorDeploymentIntentLock(path: string) {

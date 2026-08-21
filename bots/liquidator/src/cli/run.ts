@@ -18,7 +18,7 @@ import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUni
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
+import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -37,6 +37,28 @@ const constantProductPairAbi = [
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
+}
+
+async function preflightNetworkProfile(target: OperatorSettings) {
+	if (target.networkConfigured) {
+		await checkConnectivity(target.connectivity, target.network.chainId)
+		for (const rpcUrl of target.connectivity.quorumRpcUrls) {
+			const chainId = await readRpcChainId(rpcUrl)
+			if (chainId !== target.network.chainId) throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+		}
+		await checkSubmissionEndpoints(target.submission, target.network.chainId)
+	}
+	const locks = await acquireLiquidatorProcessLocks({
+		chainId: target.network.chainId,
+		execute: target.runtime.execute,
+		privateKey: target.privateKey,
+		stateFile: target.runtime.stateFile,
+	})
+	try {
+		await loadDurableState(target.runtime.stateFile)
+	} finally {
+		await locks.release()
+	}
 }
 
 async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks, shutdown: LiquidatorShutdownController) {
@@ -118,7 +140,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						const network = Reflect.get(value, 'network')
 						if (network !== 'mainnet' && network !== 'sepolia') throw new Error('Chain profile must be mainnet or sepolia')
 						if (network === settings.network.name) return serializedSettings(settings, true)
-						const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname)
+						const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname, preflightNetworkProfile)
 						state.paused = true
 						requestProfileSwitch()
 						return serializedSettings(switched.settings, true)

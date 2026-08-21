@@ -13,13 +13,14 @@ import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
-import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import type { ExclusiveProcessLock, PositionRecord } from '#state/position-store'
+import { loadExecutionHistory, operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { networkConfiguration } from '#config/network'
 import { positionConsumesRisk, type RiskLimits } from '#core/safety-controls'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { loadPriceHistory } from '#monitoring/market-monitor'
 
 export type PendingOperatorUpdates = {
 	centralizedMarkets: CentralizedMarketSettings | undefined
@@ -109,8 +110,37 @@ export function requirePausedExecutorDeployment(execute: boolean, paused: boolea
 	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
 
-export async function requireNoPendingExecutorDeployment(settingsFile: string) {
-	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+export async function requireNoPendingExecutorDeployment(settingsFile: string, network: PersistedOperatorSettings['network']) {
+	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile, network))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+}
+
+async function preflightOperatorProfile(target: PersistedOperatorSettings) {
+	const chain = networkConfiguration(target.network, {
+		factory: target.deployment.uniswapFactory,
+		quoter: target.deployment.uniswapQuoter,
+		rep: target.deployment.rep,
+		weth: target.deployment.weth,
+	}).chain
+	if (target.networkConfigured) {
+		await checkConnectivity(target.connectivity, chain.id)
+		await checkIndependentRpcChains(target.deployment.quorumRpcUrls, chain.id)
+		await checkSubmissionEndpoints(target.submission, chain.id)
+	}
+	let journalLock: ExclusiveProcessLock | undefined
+	let signerLock: ExclusiveProcessLock | undefined
+	try {
+		if (target.runtime.execute || target.runtime.ui) journalLock = await acquirePositionJournalLock(target.runtime.positionFile)
+		if (target.runtime.execute) {
+			if (target.privateKey === undefined) throw new Error('Execution requires an active signer')
+			signerLock = await acquireExecutionSignerLock(chain.id, privateKeyToAccount(target.privateKey).address)
+		}
+		await Promise.all([loadPositionJournal(target.runtime.positionFile), loadExecutionHistory(target.runtime.historyFile), loadPriceHistory(target.runtime.priceHistoryFile)])
+	} finally {
+		const releases = [signerLock, journalLock].filter(lock => lock !== undefined).map(lock => lock.release())
+		const results = await Promise.allSettled(releases)
+		const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
+		if (errors.length !== 0) throw new AggregateError(errors, 'Failed to release target chain profile preflight locks')
+	}
 }
 
 export type DeploymentRecoveryState = { pending: boolean }
@@ -225,11 +255,12 @@ export function startOperatorControlPlane(parameters: {
 		switchNetworkProfile: value =>
 			queueSettingsUpdate(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || (value.network !== 'mainnet' && value.network !== 'sepolia')) throw new Error('Chain profile must be mainnet or sepolia')
-				if (value.network === config.network.name) return { network: config.network.name, networkConfigured: config.networkConfigured }
-				await requireNoPendingExecutorDeployment(config.settingsFile)
+				const network = value.network
+				if (network === config.network.name) return { network: config.network.name, networkConfigured: config.networkConfigured }
+				await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				profileSwitchInProgress = true
 				try {
-					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, value.network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json')))
+					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json'), preflightOperatorProfile))
 					state.paused = true
 					pending.profileSwitch = true
 					if (parameters.onNetworkProfileSwitch !== undefined) setTimeout(parameters.onNetworkProfileSwitch, 0)
@@ -264,7 +295,7 @@ export function startOperatorControlPlane(parameters: {
 					await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
 					await checkSubmissionEndpoints(next.submission, expectedChainId)
 				}
-				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile)
+				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				const signer = next.privateKey === undefined ? { address: undefined, privateKey: undefined } : signerCandidate(next.privateKey)
 				if (next.runtime.execute && signer.address === undefined) throw new Error('Execution requires an active signer')
 				const keepsActiveSigner = fixedState.execute && signer.address !== undefined && fixedState.wallet !== undefined && signer.address.toLowerCase() === fixedState.wallet.toLowerCase()
@@ -344,7 +375,7 @@ export function startOperatorControlPlane(parameters: {
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
 				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
-				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile)
+				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				pending.paused = paused
 				if (paused) {
@@ -458,7 +489,7 @@ export function startOperatorControlPlane(parameters: {
 			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(value['salt'])
 			return await queueSettingsUpdate(async () => {
-				const intentPath = executorDeploymentIntentPath(config.settingsFile)
+				const intentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
 				const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 				let deploymentSignerLock: ExclusiveProcessLock | undefined
 				let signerOperationAcquired = false
