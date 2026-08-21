@@ -80,7 +80,7 @@ describe('split UI workflow paths', () => {
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}
-		expect(dockerfile.match(/bun install --frozen-lockfile/g)?.length).toBeGreaterThanOrEqual(3)
+		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(dockerfile).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
 	})
 
 	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {

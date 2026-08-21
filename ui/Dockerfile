@@ -48,7 +48,7 @@ COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
-RUN cd /source/ui/coreShared && bun install --frozen-lockfile && cd ../zoltar && bun install --frozen-lockfile && cd ../statoblast && bun install --frozen-lockfile && cd ../trading && bun install --frozen-lockfile
+RUN bun ./scripts/install-frozen.mts ui/coreShared && bun ./scripts/install-frozen.mts ui/zoltar && bun ./scripts/install-frozen.mts ui/statoblast && bun ./scripts/install-frozen.mts ui/trading
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
 RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast && bun ./ui/coreShared/build/vendor.mts trading
 

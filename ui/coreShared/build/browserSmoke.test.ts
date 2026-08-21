@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getChromiumPath } from './chromiumPath.js'
-import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, waitForBrowserExit } from './browserSmoke.mts'
+import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, terminateBrowserProcess, waitForBrowserExit } from './browserSmoke.mts'
 
 const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
@@ -14,6 +15,18 @@ const mountedState = {
 	width: 390,
 }
 const viewport = { height: 844, width: 390 }
+
+const getAvailablePort = async (): Promise<number> => {
+	const server = createServer()
+	await new Promise<void>((resolve, reject) => {
+		server.once('error', reject)
+		server.listen(0, '127.0.0.1', () => resolve())
+	})
+	const address = server.address()
+	if (address === null || typeof address === 'string') throw new Error('Expected the test server to use a TCP port')
+	await new Promise<void>((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
+	return address.port
+}
 
 test('browser smoke readiness requires the selected application identity', () => {
 	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', undefined, viewport)).toBe(true)
@@ -75,18 +88,71 @@ test('browser commands bound a stalled DevTools response', async () => {
 	await waitForBrowserExit(browser)
 })
 
+const listBrowserProfiles = async () => (await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
+
+test('browser launch failure removes the temporary profile', async () => {
+	const profilesBefore = new Set(await listBrowserProfiles())
+	await expect(createDevToolsSession(join(tmpdir(), `missing-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, { pollMilliseconds: 1 })).rejects.toThrow(/launch Chromium|ENOENT/)
+	expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
+})
+
+test.skipIf(process.platform === 'win32')('browser cleanup escalates when Chromium ignores SIGTERM', async () => {
+	const profilePath = await mkdtemp(join(tmpdir(), 'zoltar-browser-smoke-'))
+	const browser = spawn(process.execPath, ['--eval', "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1_000)"])
+	await new Promise<void>((resolve, reject) => {
+		browser.once('error', reject)
+		browser.stdout.once('data', () => resolve())
+	})
+	const pid = browser.pid
+	if (pid === undefined) throw new Error('Expected the cleanup fixture to have a process ID')
+	await expect(terminateBrowserProcess(browser, profilePath, { forceTimeoutMilliseconds: 1_000, gracefulTimeoutMilliseconds: 10 })).resolves.toBeUndefined()
+	expect(() => process.kill(pid, 0)).toThrow()
+	expect(await Bun.file(profilePath).exists()).toBe(false)
+	await expect(withChromiumTestLock(async () => 'released', { port: await getAvailablePort() })).resolves.toBe('released')
+})
+
+test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out and reaps Chromium', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-stall-fixture-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const pidPath = join(fixtureRoot, 'pid')
+	const sockets = new Set<Socket>()
+	const server = createServer(socket => {
+		sockets.add(socket)
+		socket.once('close', () => sockets.delete(socket))
+	})
+	await new Promise<void>((resolve, reject) => {
+		server.once('error', reject)
+		server.listen(0, '127.0.0.1', () => resolve())
+	})
+	const address = server.address()
+	if (address === null || typeof address === 'string') throw new Error('Expected the DevTools stall fixture to use a TCP port')
+	const profilesBefore = new Set(await listBrowserProfiles())
+	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '${address.port.toString()}\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
+	await chmod(executablePath, 0o755)
+	try {
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 50, pollMilliseconds: 1 })).rejects.toThrow(/timed out/)
+		const pid = Number((await readFile(pidPath, 'utf8')).trim())
+		expect(() => process.kill(pid, 0)).toThrow()
+		expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
+	} finally {
+		for (const socket of sockets) socket.destroy()
+		await new Promise<void>((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
 test.skipIf(process.platform === 'win32')('browser initialization failure reaps Chromium and removes its profile', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-fixture-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
 	const pidPath = join(fixtureRoot, 'pid')
-	const profilesBefore = new Set((await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-')))
+	const profilesBefore = new Set(await listBrowserProfiles())
 	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '9\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
 		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { pollMilliseconds: 1, targetAttempts: 1 })).rejects.toThrow(/connect/i)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
-		const profilesAfter = (await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
+		const profilesAfter = await listBrowserProfiles()
 		expect(profilesAfter.filter(entry => !profilesBefore.has(entry))).toEqual([])
 	} finally {
 		await rm(fixtureRoot, { force: true, recursive: true })

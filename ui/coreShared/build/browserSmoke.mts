@@ -8,6 +8,8 @@ import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
 const DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS = 15_000
+const DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS = 15_000
+const BROWSER_TERMINATION_TIMEOUT_MILLISECONDS = 2_000
 
 type PageIssue = {
 	readonly kind: 'pageerror' | 'console-error' | 'import-map' | 'request-failed' | 'worker' | 'mount'
@@ -33,6 +35,73 @@ export async function waitForBrowserExit(browser: ChildProcess): Promise<void> {
 		browser.once('error', reject)
 		browser.once('exit', () => resolve())
 	})
+}
+
+const waitForBrowserExitWithin = async (browser: ChildProcess, timeoutMilliseconds: number): Promise<boolean> => {
+	if (browser.exitCode !== null || browser.signalCode !== null || browser.pid === undefined) return true
+	return await new Promise(resolve => {
+		const finish = (exited: boolean) => {
+			clearTimeout(timeoutId)
+			browser.off('error', handleTermination)
+			browser.off('exit', handleTermination)
+			resolve(exited)
+		}
+		const handleTermination = () => finish(true)
+		const timeoutId = setTimeout(() => finish(false), timeoutMilliseconds)
+		browser.once('error', handleTermination)
+		browser.once('exit', handleTermination)
+	})
+}
+
+export async function terminateBrowserProcess(
+	browser: ChildProcess,
+	profilePath: string,
+	{ forceTimeoutMilliseconds = BROWSER_TERMINATION_TIMEOUT_MILLISECONDS, gracefulTimeoutMilliseconds = BROWSER_TERMINATION_TIMEOUT_MILLISECONDS }: { readonly forceTimeoutMilliseconds?: number; readonly gracefulTimeoutMilliseconds?: number } = {},
+): Promise<void> {
+	try {
+		if (browser.exitCode === null && browser.signalCode === null && browser.pid !== undefined) browser.kill('SIGTERM')
+		if (await waitForBrowserExitWithin(browser, gracefulTimeoutMilliseconds)) return
+		browser.kill('SIGKILL')
+		if (!(await waitForBrowserExitWithin(browser, forceTimeoutMilliseconds))) throw new Error(`Chromium did not exit after SIGKILL within ${forceTimeoutMilliseconds.toString()}ms`)
+	} finally {
+		await fs.rm(profilePath, { force: true, recursive: true })
+	}
+}
+
+const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline: number, description: string, action: Promise<TValue>, cancel: () => void): Promise<TValue> => {
+	const remainingMilliseconds = deadline - Date.now()
+	if (remainingMilliseconds <= 0) {
+		cancel()
+		throw new Error(`Chromium initialization timed out while ${description}`)
+	}
+	let completed = false
+	let succeeded = false
+	try {
+		const value = await new Promise<TValue>((resolve, reject) => {
+			const finish = (result: { readonly error: Error } | { readonly value: TValue }) => {
+				if (completed) return
+				completed = true
+				clearTimeout(timeoutId)
+				browser.off('error', handleError)
+				browser.off('exit', handleExit)
+				if ('error' in result) reject(result.error)
+				else resolve(result.value)
+			}
+			const handleError = (error: Error) => finish({ error: new Error(`Chromium failed while ${description}: ${error.message}`) })
+			const handleExit = (exitCode: number | null, signalCode: NodeJS.Signals | null) => finish({ error: new Error(`Chromium exited with ${signalCode === null ? `code ${String(exitCode)}` : `signal ${signalCode}`} while ${description}`) })
+			const timeoutId = setTimeout(() => finish({ error: new Error(`Chromium initialization timed out while ${description}`) }), remainingMilliseconds)
+			browser.once('error', handleError)
+			browser.once('exit', handleExit)
+			action.then(
+				value => finish({ value }),
+				error => finish({ error: error instanceof Error ? error : new Error(String(error)) }),
+			)
+		})
+		succeeded = true
+		return value
+	} finally {
+		if (!succeeded) cancel()
+	}
 }
 
 export function createBrowserSmokeCommandSender(socket: ChromiumCommandSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): ChromiumCommand {
@@ -115,30 +184,43 @@ export async function createDevToolsSession(
 	chromiumPath: string,
 	pageUrl: string,
 	viewport: { readonly height: number; readonly width: number },
-	{ devToolsPortAttempts = 300, pollMilliseconds = 50, targetAttempts = 200 }: { readonly devToolsPortAttempts?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
+	{
+		devToolsPortAttempts = 300,
+		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
+		pollMilliseconds = 50,
+		targetAttempts = 200,
+	}: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
 ) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
-	const browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, `--window-size=${viewport.width.toString()},${viewport.height.toString()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
+	let browser: ChildProcess | undefined
 	let socket: WebSocket | undefined
 	let cleanedUp = false
 	const cleanup = async () => {
 		if (cleanedUp) return
 		cleanedUp = true
 		socket?.close()
-		browser.kill()
-		try {
-			await waitForBrowserExit(browser)
-		} finally {
-			await fs.rm(profilePath, { force: true, recursive: true })
-		}
+		if (browser === undefined) await fs.rm(profilePath, { force: true, recursive: true })
+		else await terminateBrowserProcess(browser, profilePath)
 	}
 	let stderrData = ''
-	browser.stderr.on('data', chunk => {
-		stderrData += String(chunk)
-	})
 	try {
+		browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, `--window-size=${viewport.width.toString()},${viewport.height.toString()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
+		let launchError: Error | undefined
+		browser.once('error', error => {
+			launchError = error
+		})
+		browser.stderr?.on('data', chunk => {
+			stderrData += String(chunk)
+		})
+		const initializationDeadline = Date.now() + initializationTimeoutMilliseconds
+		const assertBrowserAvailable = () => {
+			if (launchError !== undefined) throw new Error(`Could not launch Chromium: ${launchError.message}`)
+			if (browser?.exitCode !== null || browser.signalCode !== null) throw new Error(`Chromium exited before DevTools initialized. stderr: ${stderrData.trim()}`)
+			if (Date.now() >= initializationDeadline) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
+		}
 		let devToolsPort: number | undefined
 		for (let attempt = 0; attempt < devToolsPortAttempts; attempt++) {
+			assertBrowserAvailable()
 			try {
 				devToolsPort = Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
 				break
@@ -147,6 +229,7 @@ export async function createDevToolsSession(
 				await Bun.sleep(pollMilliseconds)
 			}
 		}
+		assertBrowserAvailable()
 		if (devToolsPort === undefined) throw new Error(`Chromium DevTools port did not open. stderr: ${stderrData.trim()}`)
 
 		const issues: PageIssue[] = []
@@ -157,14 +240,28 @@ export async function createDevToolsSession(
 		socket = await (async () => {
 			for (let attempt = 0; attempt < targetAttempts; attempt++) {
 				try {
-					const targets = (await (await fetch(`http://127.0.0.1:${devToolsPort}/json/list`)).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>
+					assertBrowserAvailable()
+					const fetchController = new AbortController()
+					const targets = (await awaitInitializationStep(
+						browser,
+						initializationDeadline,
+						'requesting the DevTools target list',
+						fetch(`http://127.0.0.1:${devToolsPort}/json/list`, { signal: fetchController.signal }).then(async response => (await response.json()) as Array<{ type: string; webSocketDebuggerUrl: string }>),
+						() => fetchController.abort(),
+					)) as Array<{ type: string; webSocketDebuggerUrl: string }>
 					const page = targets.find(target => target.type === 'page')
 					if (page !== undefined) {
 						const ws = new WebSocket(page.webSocketDebuggerUrl)
-						await new Promise((resolve, reject) => {
-							ws.addEventListener('open', resolve, { once: true })
-							ws.addEventListener('error', reject, { once: true })
-						})
+						await awaitInitializationStep(
+							browser,
+							initializationDeadline,
+							'opening the DevTools WebSocket',
+							new Promise<void>((resolve, reject) => {
+								ws.addEventListener('open', () => resolve(), { once: true })
+								ws.addEventListener('error', () => reject(new Error('Could not open the Chromium DevTools WebSocket')), { once: true })
+							}),
+							() => ws.close(),
+						)
 						return ws
 					}
 				} catch (error) {

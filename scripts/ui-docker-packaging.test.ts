@@ -22,6 +22,8 @@ describe('UI Docker packaging', () => {
 		expect(source).not.toContain('ui/coreShared/tsconfig.vendor.json')
 		expect(source).not.toContain('bun run vendor')
 		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast')
+		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(source).toContain(`bun ./scripts/install-frozen.mts ui/${packageId}`)
+		expect(source).not.toMatch(/cd \/source\/ui\/\w+ && bun install/)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('ui/coreShared/build')
 	})
 
